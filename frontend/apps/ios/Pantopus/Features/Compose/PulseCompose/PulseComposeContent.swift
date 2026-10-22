@@ -1088,11 +1088,13 @@ public struct PulseComposeContent: View {
 
     // MARK: - Date helpers
 
+    /// The Last seen date field's `yyyy-MM-dd` is the day the picker shows, in the phone's
+    /// time zone: in UTC, an evening pick in the Americas stored the next day.
     private static func makeISOFormatter() -> DateFormatter {
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .iso8601)
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.timeZone = .current
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter
     }

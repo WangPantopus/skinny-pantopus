@@ -44,7 +44,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+import java.util.Locale
 import javax.inject.Inject
 
 /**
@@ -1113,9 +1117,11 @@ class PulseComposeViewModel
                     seedField(PulseComposeField.EventLocation, post.eventVenue.orEmpty())
                 }
                 PulseComposeIntent.Lost -> {
-                    val (location, body) = unwrapLostBody(post.content)
+                    val (lastSeen, body) = unwrapLostBody(post.content)
+                    val (location, lastSeenDate) = splitLastSeenLine(lastSeen.orEmpty())
                     seedField(PulseComposeField.Body, body)
-                    seedField(PulseComposeField.LostLastSeenLocation, location.orEmpty())
+                    seedField(PulseComposeField.LostLastSeenLocation, location)
+                    seedField(PulseComposeField.LostLastSeenDate, lastSeenDate)
                     post.lostFoundType
                         ?.let { raw -> PulseLostFoundKind.entries.firstOrNull { it.key == raw } }
                         ?.let { _lostFoundKind.value = it }
@@ -1171,6 +1177,17 @@ class PulseComposeViewModel
             val location = afterPrefix.substring(0, newlineIdx)
             val body = afterPrefix.substring(newlineIdx).trimStart('\n')
             return location to body
+        }
+
+        /**
+         * Splits the Last seen line `prefixLastSeen` wrote, "<loc> · <date>", into the
+         * location and the picker's `yyyy-MM-dd`. A last part that isn't a date in this
+         * phone's locale (an older post, or another locale's) stays in the location.
+         */
+        private fun splitLastSeenLine(line: String): Pair<String, String> {
+            val lastPart = line.substringAfterLast(LAST_SEEN_SEPARATOR)
+            val day = runCatching { LocalDate.parse(lastPart, lastSeenDayFormatter()) }.getOrNull() ?: return line to ""
+            return line.substringBeforeLast(LAST_SEEN_SEPARATOR, missingDelimiterValue = "") to day.toString()
         }
 
         /**
@@ -1233,7 +1250,7 @@ class PulseComposeViewModel
                 PulseComposeIntent.Lost -> {
                     val lastSeen = trimmedValue(PulseComposeField.LostLastSeenLocation)
                     PostUpdateRequest(
-                        content = prefixLastSeen(bodyValue, lastSeen),
+                        content = prefixLastSeen(bodyValue, lastSeen, trimmedValue(PulseComposeField.LostLastSeenDate)),
                         lostFoundType = _lostFoundKind.value.key,
                     )
                 }
@@ -1305,7 +1322,7 @@ class PulseComposeViewModel
                         val lastSeen = trimmedValue(PulseComposeField.LostLastSeenLocation)
                         val phone = trimmedValue(PulseComposeField.ContactPhone)
                         PostCreateRequest(
-                            content = prefixLastSeen(bodyValue, lastSeen),
+                            content = prefixLastSeen(bodyValue, lastSeen, trimmedValue(PulseComposeField.LostLastSeenDate)),
                             postType = postType,
                             visibility = vis,
                             postAs = postAs,
@@ -1442,10 +1459,23 @@ class PulseComposeViewModel
             return if (body.isEmpty()) row else "$row\n\n$body"
         }
 
+        /**
+         * "Last seen: <loc> · <date>\n\n<body>", the date in the poster's own
+         * locale. [date] is the picker's `yyyy-MM-dd`; an empty one leaves just the place.
+         */
         private fun prefixLastSeen(
             body: String,
             location: String,
-        ): String = if (location.isEmpty()) body else "Last seen: $location\n\n$body"
+            date: String,
+        ): String {
+            val day = runCatching { LocalDate.parse(date).format(lastSeenDayFormatter()) }.getOrNull()
+            val line = listOf(location, day.orEmpty()).filter { it.isNotEmpty() }.joinToString(LAST_SEEN_SEPARATOR)
+            return if (line.isEmpty()) body else "Last seen: $line\n\n$body"
+        }
+
+        /** The day as the post shows it, in the poster's own locale ("Oct 20, 2026"). */
+        private fun lastSeenDayFormatter(): DateTimeFormatter =
+            DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(Locale.getDefault())
 
         /**
          * Normalize an event date to ISO-8601. Accepts the picker-emitted
@@ -1505,6 +1535,7 @@ class PulseComposeViewModel
             private const val PHONE_MAX_DIGITS = 15
             private const val DEAL_DEFAULT_EXPIRY_DAYS = 7L
             private const val GPS_REFRESH_TIMEOUT_MS = 3_000L
+            private const val LAST_SEEN_SEPARATOR = " · "
             private val PICKER_DATE_TIME_PATTERN = Regex("""^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$""")
             private val ISO_DATE_ONLY_PATTERN = Regex("""^\d{4}-\d{2}-\d{2}$""")
         }

@@ -927,9 +927,11 @@ public final class PulseComposeViewModel {
             seedField(.eventDate, value: formatEventDateForPicker(post.eventDate))
             seedField(.eventLocation, value: post.eventVenue ?? "")
         case .lost:
-            let (location, body) = unwrapLostBody(post.content)
+            let (lastSeen, body) = unwrapLostBody(post.content)
+            let (location, lastSeenDate) = splitLastSeenLine(lastSeen ?? "")
             seedField(.body, value: body)
-            seedField(.lostLastSeenLocation, value: location ?? "")
+            seedField(.lostLastSeenLocation, value: location)
+            seedField(.lostLastSeenDate, value: lastSeenDate)
             if let raw = post.lostFoundType, let mapped = PulseLostFoundKind(rawValue: raw) {
                 lostFoundKind = mapped
             }
@@ -976,6 +978,16 @@ public final class PulseComposeViewModel {
         let location = String(afterPrefix[..<newlineRange.lowerBound])
         let bodyStart = afterPrefix[newlineRange.upperBound...].drop { $0 == "\n" }
         return (location, String(bodyStart))
+    }
+
+    /// Splits the Last seen line `prefixLastSeen` wrote, "<loc> · <date>", into the
+    /// location and the picker's `yyyy-MM-dd`. A last part that isn't a date in this
+    /// phone's locale (an older post, or another locale's) stays in the location.
+    private func splitLastSeenLine(_ line: String) -> (location: String, date: String) {
+        let separator = line.range(of: Self.lastSeenSeparator, options: .backwards)
+        let lastPart = separator.map { String(line[$0.upperBound...]) } ?? line
+        guard let day = Self.lastSeenDayFormatter().date(from: lastPart) else { return (line, "") }
+        return (separator.map { String(line[..<$0.lowerBound]) } ?? "", Self.pickerDayFormatter().string(from: day))
     }
 
     /// Convert an ISO-8601 wire date into the `yyyy-MM-dd HH:mm` shape
@@ -1058,7 +1070,7 @@ public final class PulseComposeViewModel {
             let lastSeen = trimmedValue(.lostLastSeenLocation)
             let phone = trimmedValue(.contactPhone)
             base = PostCreateRequest(
-                content: prefixLastSeen(body: bodyValue, location: lastSeen),
+                content: prefixLastSeen(body: bodyValue, location: lastSeen, date: trimmedValue(.lostLastSeenDate)),
                 postType: postType,
                 visibility: vis,
                 postAs: postAs,
@@ -1338,7 +1350,7 @@ public final class PulseComposeViewModel {
         case .lost:
             let lastSeen = trimmedValue(.lostLastSeenLocation)
             return PostUpdateRequest(
-                content: prefixLastSeen(body: bodyValue, location: lastSeen),
+                content: prefixLastSeen(body: bodyValue, location: lastSeen, date: trimmedValue(.lostLastSeenDate)),
                 lostFoundType: lostFoundKind.rawValue
             )
         case .announce:
@@ -1362,9 +1374,35 @@ public final class PulseComposeViewModel {
         return body.isEmpty ? row : "\(row)\n\n\(body)"
     }
 
-    private func prefixLastSeen(body: String, location: String) -> String {
-        guard !location.isEmpty else { return body }
-        return "Last seen: \(location)\n\n\(body)"
+    /// "Last seen: <loc> · <date>\n\n<body>", the date in the poster's own
+    /// locale. `date` is the picker's `yyyy-MM-dd`; an empty one leaves just the place.
+    private func prefixLastSeen(body: String, location: String, date: String) -> String {
+        let day = Self.pickerDayFormatter().date(from: date).map { Self.lastSeenDayFormatter().string(from: $0) }
+        let line = [location, day ?? ""].filter { !$0.isEmpty }.joined(separator: Self.lastSeenSeparator)
+        guard !line.isEmpty else { return body }
+        return "Last seen: \(line)\n\n\(body)"
+    }
+
+    private static let lastSeenSeparator = " · "
+
+    /// The Last seen date field's `yyyy-MM-dd`: a calendar day where the poster is.
+    private static func pickerDayFormatter() -> DateFormatter {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .iso8601)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }
+
+    /// The day as the post shows it, in the poster's own locale ("Oct 20, 2026").
+    private static func lastSeenDayFormatter() -> DateFormatter {
+        let formatter = DateFormatter()
+        formatter.locale = .current
+        formatter.timeZone = .current
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        return formatter
     }
 
     /// Normalize an event date string to ISO-8601 (yyyy-MM-dd'T'HH:mm:ssZ).

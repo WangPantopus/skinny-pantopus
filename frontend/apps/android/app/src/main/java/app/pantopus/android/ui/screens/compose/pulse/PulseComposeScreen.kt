@@ -91,8 +91,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.time.LocalDate
 import java.time.LocalDateTime
-import java.util.Calendar
 import java.util.UUID
 
 /**
@@ -1720,17 +1720,17 @@ private fun DateRow(
                         color = if (snapshot.error != null) PantopusColors.error else PantopusColors.appBorder,
                         shape = RoundedCornerShape(Radii.md),
                     ).clickable {
-                        val cal = Calendar.getInstance()
+                        // Opens on the field's day when it has one (a post being edited), else today.
+                        val shown = runCatching { LocalDate.parse(snapshot.value) }.getOrNull() ?: LocalDate.now()
                         DatePickerDialog(
                             context,
                             { _, year, month, day ->
-                                val formatted =
-                                    "%04d-%02d-%02d".format(year, month + 1, day)
-                                onUpdate(field, formatted)
+                                // ISO digits whatever the phone's language, as the field and validator expect.
+                                onUpdate(field, LocalDate.of(year, month + 1, day).toString())
                             },
-                            cal.get(Calendar.YEAR),
-                            cal.get(Calendar.MONTH),
-                            cal.get(Calendar.DAY_OF_MONTH),
+                            shown.year,
+                            shown.monthValue - 1,
+                            shown.dayOfMonth,
                         ).apply {
                             if (!allowFuture) datePicker.maxDate = System.currentTimeMillis()
                             if (!allowPast) datePicker.minDate = System.currentTimeMillis()
