@@ -53,8 +53,13 @@ const {
   serializeGigAuthorForViewer,
   serializeLocalProfileForViewer,
   serializeUserAsLocalIdentity,
-  serializeUserIdentityForViewer,
 } = require('../serializers/identitySerializers');
+const {
+  hydrateListingCreatorIdentities,
+  loadTaskPosterFields,
+  serializeTaskPoster,
+  withoutAccountPoster,
+} = require('../utils/listingCreatorIdentity');
 
 // ============ HELPERS ============
 
@@ -492,7 +497,7 @@ function serializeGigForViewer(gig, { canViewPrivateWork = false, viewerId = nul
     ...safe,
     ...(canViewPrivateWork ? { completion_review: paidGigAcceptance.completionReview(gig) } : {}),
     creator: creator
-      ? serializeUserIdentityForViewer(creator)
+      ? serializeTaskPoster(creator)
       : serializeGigAuthorForViewer({
           identity_context_type: 'local',
           creator: {
@@ -507,15 +512,22 @@ function serializeGigForViewer(gig, { canViewPrivateWork = false, viewerId = nul
 }
 
 // On a business's task the answers are the business's: `business` (the task's owner) is named as the answerer, never
-// the team member who wrote the answer.
+// the team member who wrote the answer. On a person's task the answerer is the poster (hydrateGigAnswerers).
 function serializeGigQuestionForViewer(question, { business = null } = {}) {
   if (!question) return null;
   const { asker, answerer, ...safe } = question;
   return {
     ...safe,
     asker: serializeUserAsLocalIdentity(asker),
-    answerer: serializeUserIdentityForViewer(business && answerer ? business : answerer),
+    answerer: serializeTaskPoster(business && answerer ? business : answerer),
   };
+}
+
+// The poster answers their own task's questions: give each answerer the Local Profile the task names its poster by.
+async function hydrateGigAnswerers(questions) {
+  const answered = questions.filter((question) => question?.answerer).map((question) => ({ question, creator: question.answerer }));
+  await hydrateListingCreatorIdentities(answered);
+  for (const { question, creator } of answered) question.answerer = creator;
 }
 
 function serializeGigBidForViewer(bid) {
@@ -1450,7 +1462,7 @@ router.get('/nearby', async (req, res) => {
     }
 
     res.json({
-      gigs: limitedGigs,
+      gigs: limitedGigs.map(withoutAccountPoster),
       total: limitedGigs.length,
       searchCenter: { latitude: lat, longitude: lon },
       radiusMeters,
@@ -1532,6 +1544,7 @@ router.get('/assignments/me', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch your assignments' });
     }
 
+    await hydrateListingCreatorIdentities((assignments || []).map((assignment) => assignment.gig).filter(Boolean));
     res.json({
       assignments: (assignments || []).map((assignment) => ({
         ...assignment,
@@ -2189,6 +2202,7 @@ router.get('/search', verifyToken, async (req, res) => {
         }
       }
 
+      const posterFields = await loadTaskPosterFields(rows);
       const result = rows.map((g) => ({
         id: g.id,
         title: g.title,
@@ -2201,9 +2215,7 @@ router.get('/search', verifyToken, async (req, res) => {
         status: g.status,
         accepted_by: g.accepted_by,
         created_at: g.created_at,
-        poster_display_name: g.creator_name || g.creator_username || 'Anonymous',
-        poster_username: g.creator_username || null,
-        poster_profile_picture_url: g.profile_picture_url || null,
+        ...posterFields(g),
         bidsCount: bidCountsByGigId[String(g.id)] || 0,
         distance_meters: g.distance_meters,
         exact_city: g.exact_city,
@@ -2253,17 +2265,7 @@ router.get('/search', verifyToken, async (req, res) => {
         remote_details,
         urgent_details,
         event_details,
-        User:user_id (
-          id,
-          username,
-          name,
-          first_name,
-          last_name,
-          profile_picture_url,
-          city,
-          state,
-          account_type
-        )
+        User:user_id ( account_type )
       `
     );
 
@@ -2310,13 +2312,6 @@ router.get('/search', verifyToken, async (req, res) => {
     // Score and rank results
     const ranked = rows
       .map((g) => {
-        const poster = g.User || null;
-        const posterDisplayName =
-          poster?.name ||
-          [poster?.first_name, poster?.last_name].filter(Boolean).join(' ') ||
-          chosenUsernameOrNull(poster?.username) ||
-          'Anonymous';
-
         const title = String(g.title || '').toLowerCase();
         const description = String(g.description || '').toLowerCase();
         const cat = String(g.category || '').toLowerCase();
@@ -2345,10 +2340,7 @@ router.get('/search', verifyToken, async (req, res) => {
           status: g.status,
           accepted_by: g.accepted_by,
           created_at: g.created_at,
-          poster_display_name: posterDisplayName,
-          poster_username: poster?.username || null,
-          poster_profile_picture_url: poster?.profile_picture_url || null,
-          poster_account_type: poster?.account_type || null,
+          poster_account_type: g.User?.account_type || null,
           bidsCount: bidCountsByGigId[String(g.id)] || 0,
           _score: score,
           _searchable: searchable,
@@ -2361,9 +2353,9 @@ router.get('/search', verifyToken, async (req, res) => {
       });
 
     const total = ranked.length;
-    const result = ranked
-      .slice(safeOffset, safeOffset + safeLimit)
-      .map(({ _score, _searchable, ...rest }) => rest);
+    const page = ranked.slice(safeOffset, safeOffset + safeLimit);
+    const posterFields = await loadTaskPosterFields(page);
+    const result = page.map(({ _score, _searchable, ...rest }) => ({ ...rest, ...posterFields(rest) }));
 
     return res.json({ gigs: result, total });
   } catch (err) {
@@ -2619,9 +2611,8 @@ router.get('/', optionalAuth, async (req, res) => {
         }
       }
 
+      const posterFields = await loadTaskPosterFields(rows);
       const gigsWithCounts = rows.map((g) => {
-        const posterDisplayName = g.creator_name || g.creator_username || 'Anonymous';
-
         // Apply per-viewer location privacy
         const { resolveGigPrecision, applyLocationPrecision } = require('../utils/locationPrivacy');
         const { precision, isOwner, locationUnlocked } = resolveGigPrecision(g, currentUserId);
@@ -2662,9 +2653,7 @@ router.get('/', optionalAuth, async (req, res) => {
           status: g.status,
           accepted_by: g.accepted_by,
           created_at: g.created_at,
-          poster_display_name: posterDisplayName,
-          poster_username: g.creator_username || null,
-          poster_profile_picture_url: g.profile_picture_url || null,
+          ...posterFields(g),
           bid_count: bidCountsByGigId[String(g.id)] || 0,
           bidsCount: bidCountsByGigId[String(g.id)] || 0,
           viewer_has_saved: savedGigIds.has(String(g.id)),
@@ -2756,18 +2745,7 @@ router.get('/', optionalAuth, async (req, res) => {
         logistics_details,
         remote_details,
         urgent_details,
-        event_details,
-        User:user_id (
-          id,
-          username,
-          name,
-          first_name,
-          last_name,
-          profile_picture_url,
-          city,
-          state,
-          account_type
-        )
+        event_details
       `,
       { count: 'exact' }
     );
@@ -2878,19 +2856,11 @@ router.get('/', optionalAuth, async (req, res) => {
 
     const savedGigIds = await getViewerSavedGigIds(currentUserId, gigIdsFromGigs);
 
+    const posterFields = await loadTaskPosterFields(gigs);
     const gigsWithCounts = (gigs || []).map((g) => {
-      const poster = g.User || null;
-      const posterDisplayName =
-        poster?.name ||
-        [poster?.first_name, poster?.last_name].filter(Boolean).join(' ') ||
-        chosenUsernameOrNull(poster?.username) ||
-        'Anonymous';
-
       return {
         ...redactGigTracking(g, Boolean(currentUserId) && (g.user_id === currentUserId || g.accepted_by === currentUserId), currentUserId),
-        poster_display_name: posterDisplayName,
-        poster_username: poster?.username || null,
-        poster_profile_picture_url: poster?.profile_picture_url || null,
+        ...posterFields(g),
         bid_count: bidCountsByGigId[String(g.id)] || 0,
         bidsCount: bidCountsByGigId[String(g.id)] || 0,
         viewer_has_saved: savedGigIds.has(String(g.id)),
@@ -2989,21 +2959,17 @@ router.get('/in-bounds', optionalAuth, async (req, res) => {
       }
     }
 
-    // v2 RPC already joins User for creator_name/creator_username/profile_picture_url
+    const posterFields = await loadTaskPosterFields(rows);
     const { resolveGigPrecision: _resolveBounds, applyLocationPrecision: _applyBounds } = require('../utils/locationPrivacy');
     const enriched = rows.map((gig) => {
-      const posterDisplayName = gig.creator_name || gig.creator_username || 'Anonymous';
-
       // Apply location privacy per viewer
       const { precision, isOwner, locationUnlocked } = _resolveBounds(gig, currentUserId);
       _applyBounds(gig, precision, isOwner);
 
       const exactCoords = locationUnlocked ? exactCoordsByGigIdBounds.get(String(gig.id)) : null;
       const out = {
-        ...gig,
-        poster_display_name: posterDisplayName,
-        poster_username: gig.creator_username || null,
-        poster_profile_picture_url: gig.profile_picture_url || null,
+        ...withoutAccountPoster(gig),
+        ...posterFields(gig),
         viewer_has_saved: savedGigIds.has(String(gig.id)),
         locationUnlocked,
       };
@@ -3120,17 +3086,7 @@ router.get('/saved', verifyToken, async (req, res) => {
           remote_details,
           urgent_details,
           event_details,
-          User:user_id (
-            id,
-            username,
-            name,
-            first_name,
-            last_name,
-            profile_picture_url,
-            city,
-            state,
-            account_type
-          )
+          User:user_id ( account_type )
         `
       )
       .in('id', savedGigIds);
@@ -3162,20 +3118,12 @@ router.get('/saved', verifyToken, async (req, res) => {
     }
 
     const savedOrder = new Map(savedGigIds.map((gigId, index) => [String(gigId), index]));
+    const posterFields = await loadTaskPosterFields(gigs);
     const enriched = (gigs || [])
-      .map((gig) => {
-        const poster = gig.User || null;
-        const posterDisplayName =
-          poster?.name ||
-          [poster?.first_name, poster?.last_name].filter(Boolean).join(' ') ||
-          chosenUsernameOrNull(poster?.username) ||
-          'Anonymous';
-
+      .map(({ User: poster, ...gig }) => {
         return {
           ...redactGigTracking(gig, gig.user_id === userId || gig.accepted_by === userId, userId),
-          poster_display_name: posterDisplayName,
-          poster_username: poster?.username || null,
-          poster_profile_picture_url: poster?.profile_picture_url || null,
+          ...posterFields(gig),
           poster_account_type: poster?.account_type || null,
           bid_count: bidCountsByGigId[String(gig.id)] || 0,
           bidsCount: bidCountsByGigId[String(gig.id)] || 0,
@@ -3733,7 +3681,7 @@ router.get('/browse', optionalAuth, async (req, res) => {
     // Enrich gigs with first_image for thumbnails
     const addFirstImage = (gigs) =>
       gigs.map((g) => ({
-        ...g,
+        ...withoutAccountPoster(g),
         first_image: extractFirstImage(g.attachments),
       }));
 
@@ -3944,6 +3892,8 @@ router.get('/:id', optionalAuth, async (req, res) => {
       String(gig.accepted_by) === String(currentUserId)
       || (await getGigOwnerAccess(gig.user_id, currentUserId, 'gigs.manage')).allowed
     );
+    // The poster is named by their Local Profile, as on their listings and posts.
+    await hydrateListingCreatorIdentities(gig);
     res.json({ gig: serializeGigForViewer(gig, { canViewPrivateWork, viewerId: currentUserId }) });
   } catch (err) {
     logger.error('Gig fetch error', { error: err.message, gigId: req.params.id });
@@ -6881,6 +6831,7 @@ router.get('/:gigId/questions', async (req, res) => {
       [owner?.first_name, owner?.last_name].filter(Boolean).join(' ') ||
       owner?.username ||
       'Business';
+    if (!ownerIsBusiness) await hydrateGigAnswerers(questions || []);
 
     const normalized = (questions || []).map((q) => ({
       ...serializeGigQuestionForViewer(q, { business: ownerIsBusiness ? owner : null }),
@@ -7077,6 +7028,7 @@ router.post('/:gigId/questions/:questionId/answer', verifyToken, async (req, res
       [owner?.first_name, owner?.last_name].filter(Boolean).join(' ') ||
       owner?.username ||
       'Business';
+    if (!ownerIsBusiness) await hydrateGigAnswerers([updated]);
 
     emitGigUpdate(req, gigId, 'qa-update');
     res.json({
