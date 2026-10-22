@@ -72,6 +72,7 @@ const reconcileHomeHouseholdResolution = require('./reconcileHomeHouseholdResolu
 // Chat jobs
 const chatRedactionJob = require('./chatRedactionJob');
 const aiChatPhotoSweep = require('./aiChatPhotoSweep');
+const assistantAgentPurge = require('./assistantAgentPurge');
 // Assistant suggestions about homes: waiting tasks, papers ending, radon follow-through
 const { runHomeNudges } = require('../services/ai/nudges/home');
 // Business cleanup
@@ -547,6 +548,14 @@ function startJobs(options = {}) {
   // Runs every 15 minutes at :04/:19/:34/:49.
   // Deletes photos uploaded for the assistant that no request read within an hour.
   scheduleCron('4,19,34,49 * * * *', wrapJob('aiChatPhotoSweep', aiChatPhotoSweep), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+
+  // ─── Assistant record purge ───
+  // Daily at 04:45 UTC. Deletes the assistant's tool and push steps after 90 days, and chat-turn
+  // requests left with no steps (cards live as long as their conversation).
+  scheduleCron('45 4 * * *', wrapJob('assistantAgentPurge', assistantAgentPurge), {
     scheduled: true,
     timezone: 'UTC',
   });

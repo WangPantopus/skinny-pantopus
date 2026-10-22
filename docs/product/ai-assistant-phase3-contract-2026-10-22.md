@@ -78,7 +78,7 @@ One migration, `<timestamp>_assistant_agent_tables.sql`, sorted after master's n
 | `id` | `uuid` PK | |
 | `user_id` | `uuid NOT NULL` → `"User"(id) ON DELETE CASCADE` | The person. |
 | `conversation_id` | `uuid NULL` → `"AIConversation"(id) ON DELETE CASCADE` | The conversation it belongs to. Deleting the conversation deletes the request, its steps and any follow-up still waiting. |
-| `home_id` | `uuid NULL` → `"Home"(id) ON DELETE SET NULL` | The home it is about, when there is one: the screen context's home for a chat turn, or a task's home for a follow-up. |
+| `home_id` | `uuid NULL`, no foreign key | The home it is about, when there is one: the screen context's home for a chat turn, or a task's home for a follow-up. No foreign key, as `Plan.place_home_id`: Home deletion is governed by `home_delete_eligibility`, and the schema test requires every table with a foreign key to `Home` to be named in it. Readers check the person still sees the home. |
 | `origin` | `text NOT NULL`: `chat` \| `nudge` \| `follow_up` | `chat` is a chat turn; `nudge` is a brief or nudge the server sent; `follow_up` is a check-back the person set. |
 | `kind` | `text NULL`, at most 40 characters | For `nudge`, the nudge kind (`brief`, `plan_weather`, …, `plan_you_like`). For follow-ups, `follow_up`. Null for chat turns. |
 | `status` | `text NOT NULL`: `working` \| `waiting` \| `done` \| `couldnt` \| `cancelled` | The October 4 design's states. A chat turn is `working` until it ends, then `done` (or `couldnt` on an error). A follow-up is `waiting` until it is due. `needs_you` isn't stored, because "Needs you" is worked out when it is read (§6). |
@@ -138,7 +138,7 @@ One migration, `<timestamp>_assistant_agent_tables.sql`, sorted after master's n
 |---|---|---|
 | `id` | `uuid` PK | |
 | `user_id` | `uuid NOT NULL` → `"User"(id) ON DELETE CASCADE` | The person. Nobody else reads it. |
-| `home_id` | `uuid NULL` → `"Home"(id) ON DELETE CASCADE` | The home it is about. It is used only while the person can still see that home. |
+| `home_id` | `uuid NULL`, no foreign key (as `AgentRequest.home_id`) | The home it is about. It is used only while the person can still see that home; once the home is gone or they left it, the item shows as not in use until they delete it. |
 | `kind` | `text NOT NULL DEFAULT 'fact'`: `fact` \| `plan_alert` | A remembered fact or preference, or a "Plans you'd like" alert (§10.1). |
 | `topic` | `text NOT NULL`: `you` \| `household` \| `home` \| `plans` \| `nearby` \| `other` | Decides when it is relevant (§5.3). |
 | `fact` | `text NOT NULL`, 3 to 280 characters | The sentence the list shows and the model reads: "Our furnace filter is 16x25x1." |
@@ -211,8 +211,11 @@ The coordinator decided this on October 22 (D1). Each card becomes an `AgentStep
 4. **Each brief or nudge gets one request.** The nudge engine (`deliver` in `nudges/engine.js`) creates:
    - an `AgentRequest` with `origin: nudge`, `kind`, `subject` and `outcome.notification_id`;
    - one `proposal` step per card;
-   - one `notify` step: `sent` or `held`, and later `dropped` if `releaseHeldNudges` drops the push.
+   - one `notify` step: `sent` or `held`. When quiet hours end, `releaseHeldNudges` turns a `held` step into `sent`, or `dropped` if it drops the push. The row's `metadata.agent_request_id` names the request.
 5. **Recording never blocks.** If a write fails, the turn or nudge goes on as today, logged as `agent.record_failed`. Its card simply has no server state.
+   - A card bigger than 32,000 characters of JSON isn't recorded, for the same reason.
+   - A chat turn's request names a home only when the screen context's home is one the person lives in.
+   - A turn that ends without an answer closes as `couldnt` with a short code: `cancelled` (the app left), `timeout`, `error`, `refusal`, `max_tokens`, `empty_reply`, `tool_limit` or `unreadable_photos`.
 
 ### 4.2 Reporting: `POST /api/ai/cards/:cardId/state`
 
@@ -230,9 +233,12 @@ or `{ "status": "dismissed" }` for "Not now".
   - It needs an `action_id` that the stored envelope has: at the top level, or in the item named by `item_id`. Otherwise it answers `400 CARD_ACTION_UNKNOWN`.
   - A `link` is kept only when it matches the action's `done.link`: the same text, with each `{{…}}` placeholder filled by a uuid. Any other link is dropped.
   - It adds `{ item_id, action_id, at, link }` to `result.done`, unless that pair is already there. The first report is kept.
-  - The step's `status` becomes `done` once the top-level action has run, or once every item has a done action. Until then it stays `open`, with its `done` entries.
-- **`dismissed`.** It sets `dismissed` only while nothing on the card is done.
+  - The step's `status` becomes `done` once a top-level action has run, or once every item has a done action. Until then it stays `open`, with its `done` entries.
+  - "Fewer like this" (`fewer`, which the engine adds to a nudge's last card) is kept in `done` but doesn't make the card done by itself, so its own buttons stay.
+- **`dismissed`.** It sets `dismissed` only while nothing on the card is done. A card that was dismissed and then has an action reported (from another phone) is `open` or `done` again.
 - **The answer** is `200 { "state": State }` (§4.3). Repeating a report changes nothing. A report that arrives after the card expired is still accepted, because the action ran before it expired.
+- **Errors** are `{ error, code }`. Two reports at once never lose one: each write goes only over what it read, three tries, then `409 CARD_BUSY` (retry later).
+- **Limits.** `verifyToken` applies the per-person write limit (60 a minute) to every write, so the route adds none of its own.
 
 ### 4.3 History
 
@@ -245,6 +251,7 @@ When `cards` lists `"state"`, each action-card item in `GET /api/ai/conversation
 }
 ```
 
+- `state` sits on the item, next to its `draft`: `{ "role": "assistant", "draft": { "type": "action", "draft": { … } }, "at": …, "state": { … } }`.
 - `status` is one of `open`, `done`, `dismissed` or `expired`. `expired` means the card's `expires_at` has passed and nothing on it was done.
 - A card with no recorded step carries no `state`. The app keeps using its own record for it.
 - The server reads every state for the page in one query (`idempotency_key IN (…)`), not one query per card.
