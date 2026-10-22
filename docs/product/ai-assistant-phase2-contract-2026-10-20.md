@@ -276,6 +276,26 @@ Run against a local backend and database with the live model, on the iOS simulat
 8. **Old builds.** A 2.0.1 build (no `action` in `cards`, Suggestions never set) sees no change at all.
 9. **Attacks.** A post, a plan note or a document carrying instructions changes nothing (the attack set).
 
+### Results (October 22)
+
+All nine items pass. The server checks ran on October 20 against a local backend and database with the live model (the PR bodies of #2504, #2518, #2525, #2507 and #2517); item 6 ran again on master `a65661ee6` on October 22. The phone checks ran on October 22 on builds whose app code equals master `2fc6ec5ed`, against the same kind of backend with the live model. Where an item has a push, the phone opened it from a real APNs or FCM push.
+
+| Item | Server | iOS simulator | Android emulator |
+|---|---|---|---|
+| 1. No switch, no change | Passed | Passed (October 20, and again on the merged heads on October 21) | Passed (October 20) |
+| 2. The brief | Passed | Passed: the row and the push open the assistant at the brief; Send reached the plan chat and the guest saw it; Mark done finished the task; after "Fewer like this" the next brief was the plain briefing, whose push opens Today | Passed: the push opens it; Send; "Fewer like this" from the card, then the plain briefing |
+| 3. Weather watch | Passed | Passed: one nudge; Save changes moved the game and the guest answered "Still coming?"; a second check sends nothing | Passed |
+| 4. Lost and found | Passed | Passed: both authors, about a mile apart, and nothing for the blocked pair; Reply, and the card then opens the other post | Passed |
+| 5. Question answered | Passed | Passed: Mark solved, and the other person sees it solved | Passed |
+| 6. Documents | Passed | Passed (October 20, and again on October 22) | Passed (October 20, and again on October 22) |
+| 7. Limits | Passed | Passed: a third nudge in a day is refused, the list shows two, and a nudge that expired in quiet hours keeps its row and sends no push | Covered by the server and iOS |
+| 8. Old builds | Passed | Passed (2.0.1) | Passed (2.0.1) |
+| 9. Attacks | Passed | Passed: the post and the document | Passed: the post and the plan note |
+
+Not checked: a brief sent by the scheduler at its set time (every brief here went through the same route by hand, with jobs off), a push held through quiet hours arriving on a phone, physical phones, and staging or production.
+
+Found while checking, not fixed here: "Fewer like this" goes away once the brief's last card is used, as it does on an expired card.
+
 Sources for this contract:
 - `backend/routes/internalBriefing.js`, `backend/services/notificationService.js`, `backend/services/plans/planJobs.js` and `planNotifications.js`
 - `backend/services/context/weatherProvider.js`, `backend/services/feedService.js`, `backend/services/pulse/seen.js` and `lifecycle.js`
