@@ -180,6 +180,8 @@ export function useAIChat() {
       }
       setError("Couldn't delete the conversation. Try again.");
     } catch (err) {
+      // The displayed thread goes only once it is the last one listed, so after its delete only the check failed.
+      if (activeId && deleted.has(activeId)) return true;
       const status = (err as { statusCode?: number } | null)?.statusCode;
       setError(status === 429
         ? "Couldn't delete it all yet. Try again in a minute."

@@ -1483,11 +1483,15 @@ public final class ChatConversationViewModel {
                     if id == activeId { startNewAIConversation() }
                 }
             }
-        } catch let APIError.clientError(status, _) where status == 429 {
-            actionFailure = "Couldn\u{2019}t delete it all yet. Try again in a minute."
-            return
         } catch {
             logger.warning("AI conversation delete failed: \(error)")
+            // The one on screen goes only once it is the last one listed, so after its delete only the check failed.
+            if let activeId, deleted.contains(activeId) {
+                cleared = true
+            } else if case let APIError.clientError(status, _) = error, status == 429 {
+                actionFailure = "Couldn\u{2019}t delete it all yet. Try again in a minute."
+                return
+            }
         }
         guard cleared else {
             actionFailure = "Couldn\u{2019}t delete the conversation. Try again."
