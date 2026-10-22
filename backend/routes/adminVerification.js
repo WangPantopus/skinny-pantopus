@@ -18,7 +18,8 @@ const { requireAdmin } = require('../middleware/verifyToken');
 const logger = require('../utils/logger');
 const { writeAuditLog } = require('../utils/businessPermissions');
 const { calculateAndStoreCompleteness } = require('../utils/businessCompleteness');
-const { setEntityFeeOverride } = require('../services/businessEntityService');
+const { feeOnApproval, grantVerifiedTypeFee } = require('../services/businessEntityService');
+const stripeService = require('../stripe/stripeService');
 const s3 = require('../services/s3Service');
 const businessVerificationStorage = require('../services/businessVerificationStorage');
 
@@ -65,13 +66,27 @@ router.get('/queue', async (req, res) => {
     let businessMap = {};
 
     if (bizIds.length > 0) {
-      const { data: businesses } = await supabaseAdmin
-        .from('User')
-        .select('id, username, name, profile_picture_url')
-        .in('id', bizIds);
+      // The type the business says it is, which approving verifies (it sets a reduced rate's fee).
+      const [{ data: businesses }, { data: profiles }] = await Promise.all([
+        supabaseAdmin
+          .from('User')
+          .select('id, username, name, profile_picture_url')
+          .in('id', bizIds),
+        supabaseAdmin
+          .from('BusinessProfile')
+          .select('business_user_id, business_type')
+          .in('business_user_id', bizIds),
+      ]);
+      const typeById = Object.fromEntries((profiles || []).map(p => [p.business_user_id, p.business_type]));
 
       for (const b of (businesses || [])) {
-        businessMap[b.id] = { id: b.id, username: b.username, name: b.name, profile_picture_url: b.profile_picture_url };
+        businessMap[b.id] = {
+          id: b.id,
+          username: b.username,
+          name: b.name,
+          profile_picture_url: b.profile_picture_url,
+          business_type: typeById[b.id] || null,
+        };
       }
     }
 
@@ -111,6 +126,8 @@ router.get('/queue', async (req, res) => {
       file_id: e.file_id,
       document_url: documentLinks[e.file_id]?.url || null,
       document_mime_type: documentLinks[e.file_id]?.mime_type || null,
+      // The platform fee approving this document sets for the business, or null when it sets none.
+      fee_on_approval_pct: feeOnApproval(businessMap[e.business_user_id]?.business_type, e.evidence_type),
       metadata: e.metadata,
       created_at: e.created_at,
     }));
@@ -244,7 +261,15 @@ async function reviewEvidence(evidenceId, decision, adminUserId, notes) {
 
     verificationStatus = 'document_verified';
 
-    // Nonprofit EIN/tax-exempt approval: set fee to 0% and clear awaiting flag
+    // The business is now verified as the type it has: one that earns a reduced rate gets it (a nonprofit's 0%
+    // needs its EIN or tax-exempt letter).
+    try {
+      await grantVerifiedTypeFee(businessId, evidence.evidence_type, adminUserId);
+    } catch (feeErr) {
+      logger.error('Verified type fee not set after admin review', { error: feeErr.message, businessId });
+    }
+
+    // Nonprofit EIN/tax-exempt approval: clear awaiting flag
     if (evidence.evidence_type === 'ein_verification' || evidence.evidence_type === 'tax_exempt_letter') {
       const { data: bizProfile } = await supabaseAdmin
         .from('BusinessProfile')
@@ -253,9 +278,6 @@ async function reviewEvidence(evidenceId, decision, adminUserId, notes) {
         .maybeSingle();
 
       if (bizProfile?.business_type === 'nonprofit_501c3') {
-        // Set fee to 0% for verified nonprofits
-        await setEntityFeeOverride(businessId, 0, { actorUserId: adminUserId, force: true });
-
         // Clear awaiting_nonprofit_verification flag
         const attrs = bizProfile.attributes || {};
         delete attrs.awaiting_nonprofit_verification;
@@ -354,7 +376,8 @@ router.get('/businesses/:businessId/fee-override', async (req, res) => {
     res.json({
       business_user_id: businessId,
       fee_override_pct: profile.fee_override_pct,
-      effective_fee_pct: profile.fee_override_pct !== null ? Number(profile.fee_override_pct) : 15,
+      // What payments are priced at: a reduced rate applies only once the business's type is verified.
+      effective_fee_pct: await stripeService.getEffectiveFeeRate(businessId),
     });
   } catch (err) {
     logger.error('Admin get fee override error', { error: err.message });
@@ -409,7 +432,7 @@ router.patch('/businesses/:businessId/fee-override', async (req, res) => {
       message: newValue !== null ? `Fee override set to ${newValue}%` : 'Fee override cleared (using platform default)',
       business_user_id: businessId,
       fee_override_pct: newValue,
-      effective_fee_pct: newValue !== null ? newValue : 15,
+      effective_fee_pct: await stripeService.getEffectiveFeeRate(businessId),
     });
   } catch (err) {
     logger.error('Admin set fee override error', { error: err.message });

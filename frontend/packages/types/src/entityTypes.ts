@@ -26,6 +26,11 @@ export type PaymentMode = 'charge' | 'donation' | 'dues';
 
 export interface EntityTypeConfig {
   label: string;
+  /**
+   * The type's platform fee. A rate under 10% applies only once Pantopus has verified the business as this type
+   * (backend getEffectiveFeeRate); until then it pays 15%, or 10% with a founding slot. Don't show it as the
+   * business's fee.
+   */
   defaultFeePct: number;
   allowedPaymentModes: PaymentMode[];
   catalogKindsAllowed: CatalogItemKind[];
