@@ -142,11 +142,10 @@ export default async function PublicPostPage({
 
   const creatorName = displayNameForUser(post.creator, 'Pantopus neighbor');
   const image = pickPreviewImage(post.media_urls, post.media_live_urls);
-  const location = formatLocationLine(
-    post.location_name,
-    post.creator?.city,
-    post.creator?.state
-  );
+  // The public author has no city or state; the post's own place name is its location. A Home post's place is its
+  // city, which is also the Home's public name, so the byline says it once.
+  const placeName = formatLocationLine(post.location_name);
+  const location = placeName !== creatorName ? placeName : null;
   const shareRef = {
     id,
     ref_task_id: post.ref_task_id ?? null,

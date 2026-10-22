@@ -89,11 +89,8 @@ export default async function PublicGigPage({
   );
   const budget = formatMoney(gig.price);
   const budgetMax = formatMoney(gig.budget_max);
-  const location = formatLocationLine(
-    gig.location_name,
-    gig.creator?.city,
-    gig.creator?.state
-  );
+  // The public author has no city or state; the task's own place name is its location.
+  const location = formatLocationLine(gig.location_name);
   const category = gig.category || gig.task_archetype || null;
 
   return (
