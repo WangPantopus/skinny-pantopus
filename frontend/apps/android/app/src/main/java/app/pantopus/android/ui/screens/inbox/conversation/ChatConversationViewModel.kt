@@ -58,6 +58,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import timber.log.Timber
 import java.io.File
+import java.io.IOException
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -593,14 +594,26 @@ class ChatConversationViewModel
         /** An action card as this phone left it: the buttons that succeeded, or "Not now". */
         private fun withSavedRuns(draft: ChatAIDraftCard): ChatAIDraftCard {
             val card = draft.action ?: return draft
-            val runs = aiCards.done(card.id).associate { it.scope to ChatAICardRun.Done(it.actionId, it.link, it.note) }
+            val fewerId = card.fewerLikeThis?.id
+            val runs =
+                aiCards.done(card.id).associate { saved ->
+                    // "Fewer like this" stands apart from the card's other buttons; an earlier version saved it with them.
+                    val scope =
+                        if (saved.scope == ChatAIActionCard.CARD_SCOPE && saved.actionId == fewerId) {
+                            ChatAIActionCard.FEWER_SCOPE
+                        } else {
+                            saved.scope
+                        }
+                    scope to ChatAICardRun.Done(saved.actionId, saved.link, saved.note)
+                }
             return draft.copy(action = card.copy(runs = card.runs + runs, dismissed = aiCards.isDismissed(card.id)))
         }
 
         /**
          * An action card's button (AI assistant phase 1 contract, section 4.3): the request goes out only if
-         * it is on the allowlist, through the signed-in client. [scope] is [ChatAIActionCard.CARD_SCOPE] or the
-         * row's id. The card's buttons wait while it runs; a success is remembered on this phone.
+         * it is on the allowlist, through the signed-in client. [scope] is [ChatAIActionCard.CARD_SCOPE], the
+         * row's id or [ChatAIActionCard.FEWER_SCOPE]. The card's buttons wait while it runs; a success is remembered
+         * on this phone. "Fewer like this" stays usable on an expired or finished card until it's used.
          */
         fun runAIAction(
             draft: ChatAIDraftCard,
@@ -608,14 +621,14 @@ class ChatConversationViewModel
             action: ChatAICardAction,
         ) {
             val card = draft.action ?: return
-            val usable = !card.isRunning && !card.dismissed && !card.isExpired()
-            if (!usable || card.runs[scope] is ChatAICardRun.Done) return
-            updateActionCard(draft.id) { it.copy(runs = it.runs + (scope to ChatAICardRun.Running(action.id))) }
+            if (!card.canRun(scope, action)) return
+            val runScope = card.runScope(scope, action)
+            updateActionCard(draft.id) { it.copy(runs = it.runs + (runScope to ChatAICardRun.Running(action.id))) }
             viewModelScope.launch {
                 val run =
                     when (val outcome = aiActions.run(action)) {
                         is AIActionRunner.Outcome.Done -> {
-                            aiCards.markDone(card.id, AIActionCardStore.Done(scope, action.id, outcome.link, outcome.note))
+                            aiCards.markDone(card.id, AIActionCardStore.Done(runScope, action.id, outcome.link, outcome.note))
                             ChatAICardRun.Done(action.id, outcome.link, outcome.note)
                         }
                         is AIActionRunner.Outcome.Failed -> ChatAICardRun.Failed(action.id, outcome.message)
@@ -624,7 +637,7 @@ class ChatConversationViewModel
                         AIActionRunner.Outcome.SessionChanged ->
                             ChatAICardRun.Failed(action.id, "This card is from an earlier sign-in. Ask again.")
                     }
-                updateActionCard(draft.id) { it.copy(runs = it.runs + (scope to run)) }
+                updateActionCard(draft.id) { it.copy(runs = it.runs + (runScope to run)) }
             }
         }
 
@@ -1431,20 +1444,13 @@ class ChatConversationViewModel
         }
 
         private suspend fun streamAiMessage(text: String) {
+            // A refusal shown for the last Send.
+            _sendLimitNotice.value = null
             // What the upload sends, taken before it starts: where each photo is on the phone, and each PDF's name and size.
             val queued = _queuedAttachments.value.filter { it.bytes != null }
             val photos = queued.filter { it.mimeType.startsWith("image/") }.mapNotNull { it.sourceUri }
             val files = queued.filter { it.mimeType == PDF_MIME }.map { ChatSentFile(it.filename, it.bytes?.size?.let(::fileSizeLabel)) }
-            val imageUrls =
-                when (val upload = uploadQueuedAIMediaIfNeeded()) {
-                    is NetworkResult.Success -> upload.data
-                    is NetworkResult.Failure -> {
-                        // Nothing went: the words and the files stay for another try, and the server says why.
-                        if (_composerText.value.isEmpty()) _composerText.value = text
-                        _actionFailure.value = upload.error.displayMessage("Couldn't send your files. Try again.")
-                        return
-                    }
-                }
+            val imageUrls = uploadAIMessageFiles(text, queued) ?: return
             val userMessage =
                 localMessage(
                     id = "ai_user_${UUID.randomUUID()}",
@@ -1460,10 +1466,13 @@ class ChatConversationViewModel
             streamingAssistantId = assistantId
             messages.add(userMessage)
             messages.add(localMessage(id = assistantId, text = "", userId = "ai", type = "ai_reply"))
-            _queuedAttachments.value = emptyList()
+            // Files picked while the upload ran stay.
+            _queuedAttachments.value = _queuedAttachments.value.filterNot { attachment -> queued.any { it.id == attachment.id } }
             rebuild()
 
             var streamedText = ""
+            // A turn ends with `done` or an `error`; a stream that just stops was cut off (the server went away mid-turn).
+            var ended = false
             runCatching {
                 aiRepo.streamChat(
                     message =
@@ -1503,13 +1512,18 @@ class ChatConversationViewModel
                             rebuild()
                         }
                         is AIChatStreamEvent.Error -> {
+                            ended = true
                             aiStatus = null
                             giveBackIfUnanswered(assistantId, text, queued)
                             replaceLocalMessage(assistantId, event.message, "ai_reply", "ai")
                         }
-                        AIChatStreamEvent.Done -> aiStatus = null
+                        AIChatStreamEvent.Done -> {
+                            ended = true
+                            aiStatus = null
+                        }
                     }
                 }
+                if (!ended) throw IOException("The reply stream stopped before it was done")
             }.onFailure { error ->
                 // A user-initiated stop is not a connection failure —
                 // [cancelAiStream] already finalized the row.
@@ -2618,12 +2632,40 @@ class ChatConversationViewModel
         }
 
         /**
-         * The queued photos and PDFs through `POST /api/upload/ai-media`, as the references the chat's `images` carries
-         * (AI assistant phase 2 §7.1); nothing queued needs no request.
+         * The person's photos and PDFs, uploaded first: their references, or null when the upload failed. Then nothing
+         * went, and the composer keeps the words and the files for another try, except a file the server refused: that
+         * one leaves, and the server's reason stays above the composer.
          */
-        private suspend fun uploadQueuedAIMediaIfNeeded(): NetworkResult<List<String>> {
+        private suspend fun uploadAIMessageFiles(
+            text: String,
+            queued: List<ChatQueuedAttachment>,
+        ): List<String>? {
+            val error =
+                when (val upload = uploadAIMedia(queued)) {
+                    is NetworkResult.Success -> return upload.data
+                    is NetworkResult.Failure -> upload.error
+                }
+            if (_composerText.value.isEmpty()) _composerText.value = text
+            val refusal = aiUploadRefusal(error)
+            if (refusal == null) {
+                _actionFailure.value = error.displayMessage("Couldn't send your files. Try again.")
+                return null
+            }
+            // Sent again, it would be refused again: it leaves the queue. A snackbar would be gone before the reason is read.
+            refusedAIFile(refusal, queued)?.let { refused ->
+                _queuedAttachments.value = _queuedAttachments.value.filterNot { it.id == refused.id }
+            }
+            _sendLimitNotice.value = refusal.message
+            return null
+        }
+
+        /**
+         * [attachments]' photos and PDFs through `POST /api/upload/ai-media`, as the references the chat's `images`
+         * carries (AI assistant phase 2 §7.1); nothing to send needs no request.
+         */
+        private suspend fun uploadAIMedia(attachments: List<ChatQueuedAttachment>): NetworkResult<List<String>> {
             val files =
-                _queuedAttachments.value.mapNotNull { attachment ->
+                attachments.mapNotNull { attachment ->
                     val bytes = attachment.bytes ?: return@mapNotNull null
                     if (!attachment.mimeType.startsWith("image/") && attachment.mimeType != PDF_MIME) return@mapNotNull null
                     UploadFile(
@@ -3188,6 +3230,40 @@ private const val AI_DELETE_FAILED = "Couldn't delete the conversation. Try agai
 private const val AI_DELETE_TOO_MANY = "Couldn't delete it all yet. Try again in a minute."
 
 private const val HTTP_TOO_MANY_REQUESTS = 429
+
+private const val HTTP_REQUEST_TIMEOUT = 408
+
+/**
+ * `ai-media` turning the upload down for what was sent (a locked PDF, a file that isn't what it says), not a lost
+ * connection, a busy server or too many uploads, which another Send may get past.
+ */
+private class AIUploadRefusal(
+    /** The server's own sentence. */
+    val message: String,
+    /** `PDF_ENCRYPTED`, … */
+    val code: String?,
+    /** Its `error` text, which names the file when the refusal is about one. */
+    val error: String?,
+)
+
+private fun aiUploadRefusal(error: NetworkError): AIUploadRefusal? {
+    if (error !is NetworkError.ClientError || error.code == HTTP_REQUEST_TIMEOUT || error.code == HTTP_TOO_MANY_REQUESTS) return null
+    val json = error.body?.let { runCatching { JSONObject(it) }.getOrNull() }
+    return AIUploadRefusal(message = error.message, code = json?.optStringValue("code"), error = json?.optStringValue("error"))
+}
+
+/**
+ * The file a refusal is about: the one it names (`File "name" …`), else, for a PDF the server can't read (`PDF_…`),
+ * the only PDF sent; null when it can't tell (two PDFs, say), and then every file stays.
+ */
+private fun refusedAIFile(
+    refusal: AIUploadRefusal,
+    among: List<ChatQueuedAttachment>,
+): ChatQueuedAttachment? {
+    val named = refusal.error?.let { error -> among.firstOrNull { error.contains("File \"${it.filename}\"") } }
+    if (named != null || refusal.code?.startsWith("PDF_") != true) return named
+    return among.filter { it.mimeType == PDF_MIME }.singleOrNull()
+}
 
 /** The body, or the failure thrown, for a run of calls that stops at the first one. */
 private fun <T> NetworkResult<T>.orThrow(): T =

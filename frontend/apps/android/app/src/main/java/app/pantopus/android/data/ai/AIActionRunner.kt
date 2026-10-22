@@ -63,6 +63,15 @@ internal object AIActionAllowlist {
     /** A follow-up whose placeholders aren't filled yet: its shape must already be on the list. */
     fun allowsTemplate(request: ChatAICardRequest): Boolean =
         allows(request.copy(path = AIPlaceholders.PATTERN.replace(request.path, PLACEHOLDER_STAND_IN)))
+
+    private val FEWER_LIKE_THIS = Regex("^/api/ai/nudges/$UUID/fewer$")
+
+    /**
+     * A nudge's or the brief's "Fewer like this" (`POST /api/ai/nudges/:id/fewer`), which the server takes on an
+     * expired nudge too (phase 2 contract §3.6).
+     */
+    fun isFewerLikeThis(request: ChatAICardRequest?): Boolean =
+        request != null && request.method == "POST" && FEWER_LIKE_THIS.matches(request.path)
 }
 
 /** `{{response.a.b}}`: the value at that dot path in the JSON reply of the request just sent. */
