@@ -31,6 +31,8 @@ This file is the contract three sessions build against: the backend, iOS and And
 
 The history request (`GET /api/ai/conversations/:id/messages`) takes the same `cards` list as a comma-separated query: `?cards=pickup_schedule,action,link` (at most 20 names of at most 40 characters; unknown names are ignored). Sections 4.1 and 5 say what it changes.
 
+Every history item carries `at`, when it was said (ISO 8601, UTC, such as `"2026-10-20T10:35:12.345Z"`), whatever `cards` lists. The server stores it with each message it saves since this was added (October 2026): a person's message has the time the chat request arrived, a reply the time it finished, a brief or nudge the time it was sent. It is never sent to the model. An item saved before then has the time of the item before it, or the conversation's start (`created_at`) for the first ones, so the times never go backwards. The apps date restored messages with it, so a conversation from an earlier day shows that day after a relaunch; builds that don't know the field ignore it and date restored messages when they load, as before.
+
 ## 4. Action cards
 
 ### 4.1 Event
@@ -41,7 +43,7 @@ An action card arrives as the existing `draft` event:
 { "type": "action", "draft": { ...envelope... }, "valid": true }
 ```
 
-and in history (`GET /api/ai/conversations/:id/messages?cards=pickup_schedule,action,link`) as `{ "role": "assistant", "draft": { "type": "action", "draft": { ...envelope... } } }`. History includes action cards only when `cards` lists `"action"`, as the chat does. A build that sends no list, like the 2.0.1 store apps, gets the words of those turns without the card, even when another build of the same account made it. As with today's drafts, a card ends the assistant's turn; the line under it arrives as `text_delta`.
+and in history (`GET /api/ai/conversations/:id/messages?cards=pickup_schedule,action,link`) as `{ "role": "assistant", "draft": { "type": "action", "draft": { ...envelope... } }, "at": "2026-10-20T10:35:20.118Z" }` (`at` as in section 3). History includes action cards only when `cards` lists `"action"`, as the chat does. A build that sends no list, like the 2.0.1 store apps, gets the words of those turns without the card, even when another build of the same account made it. As with today's drafts, a card ends the assistant's turn; the line under it arrives as `text_delta`.
 
 ### 4.2 Envelope
 

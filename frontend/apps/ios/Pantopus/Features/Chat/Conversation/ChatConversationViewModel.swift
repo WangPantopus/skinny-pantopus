@@ -949,7 +949,7 @@ public final class ChatConversationViewModel {
                 if item.role == "user" {
                     openReplyId = nil
                     let shown = Self.sentText(item.text ?? "", photos: item.photos ?? 0, documents: item.documents ?? 0)
-                    restored.append(localMessage(id: id, text: shown, userId: currentUserId, type: "text"))
+                    restored.append(localMessage(id: id, text: shown, userId: currentUserId, type: "text", createdAt: item.at))
                     continue
                 }
                 // A brief or nudge starts its own reply, and its cards join it.
@@ -957,7 +957,7 @@ public final class ChatConversationViewModel {
                 var replyId = openReplyId ?? id
                 if let draft = item.draft {
                     if openReplyId == nil {
-                        restored.append(localMessage(id: replyId, text: "", userId: "ai", type: "ai_reply"))
+                        restored.append(localMessage(id: replyId, text: "", userId: "ai", type: "ai_reply", createdAt: item.at))
                         openReplyId = replyId
                         openReplyHasText = false
                     }
@@ -971,11 +971,11 @@ public final class ChatConversationViewModel {
                     }
                 } else if let text = item.text, !text.isEmpty {
                     if let open = openReplyId, !openReplyHasText, let at = restored.firstIndex(where: { $0.id == open }) {
-                        restored[at] = localMessage(id: open, text: text, userId: "ai", type: "ai_reply")
+                        restored[at] = localMessage(id: open, text: text, userId: "ai", type: "ai_reply", createdAt: item.at)
                         openReplyId = nil
                     } else {
                         replyId = id
-                        restored.append(localMessage(id: id, text: text, userId: "ai", type: "ai_reply"))
+                        restored.append(localMessage(id: id, text: text, userId: "ai", type: "ai_reply", createdAt: item.at))
                         openReplyId = item.nudge != nil ? id : nil
                         openReplyHasText = item.nudge != nil
                     }
@@ -2892,7 +2892,8 @@ public final class ChatConversationViewModel {
         )
     }
 
-    private func localMessage(id: String, text: String, userId: String, type: String) -> ChatMessageDTO {
+    /// An assistant-thread message, dated now unless it was restored with its time.
+    private func localMessage(id: String, text: String, userId: String, type: String, createdAt: String? = nil) -> ChatMessageDTO {
         ChatMessageDTO(
             id: id,
             roomId: "ai",
@@ -2902,7 +2903,7 @@ public final class ChatConversationViewModel {
             metadata: nil,
             replyToId: nil,
             clientMessageId: nil,
-            createdAt: ISO8601DateFormatter().string(from: Date()),
+            createdAt: createdAt ?? ISO8601DateFormatter().string(from: Date()),
             editedAt: nil,
             deletedAt: nil,
             deliveredAt: nil,

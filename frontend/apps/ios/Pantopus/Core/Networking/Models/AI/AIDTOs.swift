@@ -57,6 +57,8 @@ public struct AIConversationMessageDTO: Decodable, Sendable, Hashable {
     /// On the first item of a brief or nudge Pantopus sent
     /// (`docs/product/ai-assistant-phase2-contract-2026-10-20.md` §3.3).
     public let nudge: AIConversationNudgeDTO?
+    /// When it was said (ISO 8601). Older servers leave it out.
+    public let at: String?
 }
 
 /// A brief or nudge in the assistant's history: its Notification row's id,

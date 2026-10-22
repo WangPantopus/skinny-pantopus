@@ -433,6 +433,8 @@ async function streamChat({
   const systemMessages = supportsSystemMessages(CHAT_MODEL);
   const history = sanitizeHistory(conversation.messages).filter((m) => systemMessages || m.role !== 'system');
   const newContext = context.text && context.text !== lastContextText(history) ? context.text : null;
+  // When they sent it, kept with the transcript for the apps' history (never sent to the model).
+  const sentAt = new Date(startTime).toISOString();
   const messages = [
     ...history,
     {
@@ -446,8 +448,9 @@ async function streamChat({
         coarseLocation,
         contextText: systemMessages ? null : newContext,
       }),
+      at: sentAt,
     },
-    ...(systemMessages && newContext ? [{ role: 'system', content: newContext }] : []),
+    ...(systemMessages && newContext ? [{ role: 'system', content: newContext, at: sentAt }] : []),
   ];
 
   // The tools this deployment offers, and the cards this app can show; a call to any
@@ -614,8 +617,12 @@ async function streamChat({
     ? message.slice(0, 60) + (message.length > 60 ? '…' : '')
     : undefined;
 
-  // A turn that ran out of tool rounds has no answer to remember.
-  const saved = turn.outcome === 'complete' ? compactForStorage(turn.messages) : undefined;
+  // A turn that ran out of tool rounds has no answer to remember. The reply is dated when it
+  // finished, as the apps date it while it streams; the messages before it keep their times.
+  const answeredAt = new Date().toISOString();
+  const saved = turn.outcome === 'complete'
+    ? compactForStorage(turn.messages.map((m, i) => (i < messages.length ? m : { ...m, at: answeredAt })))
+    : undefined;
   await updateConversation(conversation.id, {
     messages: saved && await withNudgesSentMeanwhile(conversation, saved),
     messageCount: newMessageCount,
@@ -1430,12 +1437,15 @@ function storedResults(messages) {
  * The stored transcript as the apps show it: the person's messages, the replies, and the drafts as cards.
  * Action cards and link buttons go only to apps that list them in `cards` ("action", "link"), as in the
  * chat stream; an app without them sees those turns' words only, as it did before they existed.
+ * Each item says when it was said (`at`): its message's time, or for a turn saved before times were
+ * kept, the time of the item before it or else `startedAt`, the conversation's start.
  */
-function displayMessages(stored, { cards = [] } = {}) {
+function displayMessages(stored, { cards = [], startedAt } = {}) {
   const shown = new Set(cards);
   const items = [];
   const history = sanitizeHistory(stored);
   const results = storedResults(history);
+  let at = startedAt;
   // Link buttons (show_link) go on the last reply text of their turn, whichever round made them.
   let turnStart = 0;
   let turnLinks = [];
@@ -1443,7 +1453,7 @@ function displayMessages(stored, { cards = [] } = {}) {
     if (!turnLinks.length) return;
     const own = items.slice(turnStart).reverse().find((item) => item.role === 'assistant' && typeof item.text === 'string');
     if (own) own.links = [...(own.links || []), ...turnLinks];
-    else items.push({ role: 'assistant', text: '', links: turnLinks });
+    else items.push({ role: 'assistant', text: '', links: turnLinks, at });
     turnLinks = [];
   };
   for (const message of history) {
@@ -1452,6 +1462,7 @@ function displayMessages(stored, { cards = [] } = {}) {
     if (message.role === 'user') {
       if (!blocks.some((block) => block.type !== 'tool_result')) continue;
       flushLinks();
+      at = message.at || at;
       turnStart = items.length;
       let photos = 0;
       let documents = 0;
@@ -1468,9 +1479,10 @@ function displayMessages(stored, { cards = [] } = {}) {
       // Only app lines (a nudge's): nothing the person said.
       if (!said && !photos && !documents) continue;
       const onlyAttached = (photos || documents) && ONLY_ATTACHED_QUESTIONS.has(said);
-      items.push({ role: 'user', text: onlyAttached ? '' : said, photos, ...(documents ? { documents } : {}) });
+      items.push({ role: 'user', text: onlyAttached ? '' : said, photos, ...(documents ? { documents } : {}), at });
       continue;
     }
+    at = message.at || at;
     // A nudge or brief Pantopus sent: its first item carries the notification id, which the
     // notification's link (pantopus://assistant?nudge=<id>) scrolls to.
     const nudge = blocks.map((block) => block.type === 'tool_use' && results.get(block.id)?.nudge).find((value) => value?.id);
@@ -1485,13 +1497,13 @@ function displayMessages(stored, { cards = [] } = {}) {
       // An action card is what its tool returned: the exact request the app sends.
       if (result?.draftType === 'action' && result.draft?.card) {
         if (!shown.has('action')) continue;
-        if (text.trim()) items.push({ role: 'assistant', text: text.trim() });
+        if (text.trim()) items.push({ role: 'assistant', text: text.trim(), at });
         text = '';
-        items.push({ role: 'assistant', draft: { type: 'action', draft: result.draft } });
+        items.push({ role: 'assistant', draft: { type: 'action', draft: result.draft }, at });
         continue;
       }
       if (!DRAFT_TYPES[block.name]) continue;
-      if (text.trim()) items.push({ role: 'assistant', text: text.trim() });
+      if (text.trim()) items.push({ role: 'assistant', text: text.trim(), at });
       text = '';
       const { note: _note, ...fields } = block.input || {};
       let draft = fields;
@@ -1502,9 +1514,9 @@ function displayMessages(stored, { cards = [] } = {}) {
         draft = refreshPickupDraft(results.get(block.id)?.draft);
         if (!draft) continue;
       }
-      items.push({ role: 'assistant', draft: { type: DRAFT_TYPES[block.name], draft } });
+      items.push({ role: 'assistant', draft: { type: DRAFT_TYPES[block.name], draft }, at });
     }
-    if (text.trim()) items.push({ role: 'assistant', text: text.trim() });
+    if (text.trim()) items.push({ role: 'assistant', text: text.trim(), at });
     if (nudge && items[firstItem]) items[firstItem].nudge = { id: nudge.id, kind: nudge.kind };
   }
   flushLinks();
@@ -1520,7 +1532,7 @@ function displayMessages(stored, { cards = [] } = {}) {
 async function getConversationMessages(userId, conversationId, { cards = [] } = {}) {
   const { data, error } = await supabaseAdmin
     .from('AIConversation')
-    .select('id, title, messages')
+    .select('id, title, messages, created_at')
     .eq('id', conversationId)
     .eq('user_id', userId)
     .maybeSingle();
@@ -1532,7 +1544,8 @@ async function getConversationMessages(userId, conversationId, { cards = [] } = 
     return row ? { conversationId: row.id, title: row.title, messages: [] } : null;
   }
   if (!data) return null;
-  return { conversationId: data.id, title: data.title, messages: displayMessages(data.messages, { cards }) };
+  const startedAt = new Date(data.created_at).toISOString();
+  return { conversationId: data.id, title: data.title, messages: displayMessages(data.messages, { cards, startedAt }) };
 }
 
 async function deleteConversation(userId, conversationId) {

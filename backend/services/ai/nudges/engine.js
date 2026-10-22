@@ -230,16 +230,20 @@ async function check(nudge, { now = new Date() } = {}) {
 
 // ─── The conversation ──────────────────────────────────────────────────────
 
-/** The nudge as stored messages: a line saying Pantopus sent it, then the shape a card tool call leaves. */
+/**
+ * The nudge as stored messages: a line saying Pantopus sent it, then the shape a card tool call leaves,
+ * each dated when it was sent (`at`, which the apps' history shows).
+ */
 function transcriptOf({ notificationId, kind, message, cards, sentAt, timeZone }) {
   const base = `toolu_nudge_${notificationId.replace(/-/g, '')}`;
   const uses = cards.map((envelope, i) => ({
     type: 'tool_use', id: `${base}_${i}`, name: NUDGE_TOOL, input: { kind, card: envelope.card },
   }));
+  const at = sentAt.toISOString();
   return [
     // A turn starts with a user message, and this one also says when the nudge came.
-    { role: 'user', content: [{ type: 'text', text: `[Suggestion from Pantopus, sent as a notification: ${describeNow(timeZone, sentAt)}. Not a message from the person.]` }] },
-    { role: 'assistant', content: [{ type: 'text', text: message }, ...uses] },
+    { role: 'user', content: [{ type: 'text', text: `[Suggestion from Pantopus, sent as a notification: ${describeNow(timeZone, sentAt)}. Not a message from the person.]` }], at },
+    { role: 'assistant', content: [{ type: 'text', text: message }, ...uses], at },
     {
       role: 'user',
       content: uses.map((use, i) => ({
@@ -247,6 +251,7 @@ function transcriptOf({ notificationId, kind, message, cards, sentAt, timeZone }
         tool_use_id: use.id,
         content: JSON.stringify({ draftType: 'action', draft: cards[i], valid: true, nudge: { id: notificationId, kind } }),
       })),
+      at,
     },
   ];
 }
