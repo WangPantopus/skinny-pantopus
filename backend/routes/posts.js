@@ -637,6 +637,22 @@ async function serializePostForViewer(post, viewerUserId) {
   return serialized || post;
 }
 
+// A reader who isn't signed in (the web's public post page and its link preview,
+// frontend/apps/web/src/app/posts/[id]/page.tsx) gets what that page shows and nothing else. The rest of the row
+// is for signed-in readers who may see the post: a Lost & Found contact (phone|<digits> when the poster asked for
+// calls), replies and who wrote them, account, home and place ids, audience settings, geocoding, the GPS fix time,
+// counts and moderation notes.
+const SIGNED_OUT_POST_FIELDS = ['id', 'title', 'content', 'post_type', 'state', 'media_urls', 'media_live_urls',
+  'ref_task_id', 'ref_listing_id', 'location_name', 'created_at'];
+
+function signedOutPostView(post) {
+  const view = Object.fromEntries(SIGNED_OUT_POST_FIELDS.map((field) => [field, post[field] ?? null]));
+  // The author as the post shows them, without the profile or home id behind it.
+  const { id: _creatorId, ...creator } = post.creator || {};
+  view.creator = post.creator ? creator : null;
+  return view;
+}
+
 
 
 const POST_VISIBILITY_SELECT = POST_READ_SELECT;
@@ -2542,6 +2558,19 @@ router.get('/:id', optionalAuth, async (req, res) => {
     const { id } = req.params;
     const userId = req.user?.id || null;
 
+    // A signed-in reader gets more of the post than anyone else (SIGNED_OUT_POST_FIELDS). A rejected token
+    // (expired, invalid or revoked) or the web's session flag without its access cookie gets a 401, as verifyToken
+    // would, so the client refreshes and asks again instead of showing them the signed-out view; a sign-in that
+    // couldn't be checked gets a retry.
+    const staleWebSession = req.cookies?.pantopus_session === '1'
+      && !req.cookies?.pantopus_access && !req.headers.authorization;
+    if (!userId && (req.authRejected || staleWebSession)) {
+      return res.status(401).json({ error: 'Invalid or expired token', code: 'SESSION_REFRESH_REQUIRED' });
+    }
+    if (!userId && req.authUnavailable) {
+      return res.status(503).json({ error: 'Could not check your sign-in right now. Please try again.' });
+    }
+
     const { data: post, error } = await supabaseAdmin
       .from('Post')
       .select(`*, creator:user_id (${SAFE_CREATOR_SELECT}), home:home_id (id, address, city, state)`)
@@ -2556,6 +2585,17 @@ router.get('/:id', optionalAuth, async (req, res) => {
 
     const hasAccess = await canViewPost(post, userId);
     if (!hasAccess) return res.status(403).json({ error: 'You do not have access to this post' });
+
+    if (!userId) {
+      applyPostLocationPrivacy(post, null);
+      return res.json({
+        post: signedOutPostView(await serializePostForViewer({
+          ...post,
+          media_urls: normalizeMediaUrls(post.media_urls),
+          media_live_urls: normalizeAlignedMediaUrls(post.media_live_urls),
+        }, null)),
+      });
+    }
 
     const { data: comments } = await onlyShownReplies(supabaseAdmin
       .from('PostComment')
