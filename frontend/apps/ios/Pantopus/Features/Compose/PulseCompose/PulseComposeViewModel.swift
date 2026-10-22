@@ -315,6 +315,22 @@ public final class PulseComposeViewModel {
     /// mirroring RN's `precheckDone` flag.
     private var precheckDone = false
 
+    // MARK: - Before you ask, and the check before posting (AI phase 2 §6.5, §6.6)
+
+    /// Earlier questions and recommendations nearby that match the
+    /// question being written, each with its best reply. Empty hides them.
+    public private(set) var earlierAnswers: [BeforeYouAskResponse.EarlierPost] = []
+    private var earlierAnswersQuery = ""
+    private var earlierAnswersTask: Task<Void, Never>?
+
+    /// What the kindness and safety check found after Post was tapped.
+    /// Non-nil shows "Before you post" with Edit and Post anyway.
+    public var postCheckFindings: [PostPrecheckResponse.Finding]?
+    /// True while that check runs; the Post button shows it is working.
+    public private(set) var isCheckingPost = false
+    /// The draft "Post anyway" was tapped for: that exact draft posts without another check.
+    private var postAnywayDraft: String?
+
     /// Announce audience chip selection.
     public var announceAudience: PulseAnnounceAudience = .neighbors
 
@@ -530,6 +546,7 @@ public final class PulseComposeViewModel {
         // RN re-arms the precheck whenever the body text changes
         // (`PostComposerModal.tsx:789`).
         if field == .body, changed { precheckDone = false }
+        if field == .title || field == .body, changed { scheduleEarlierAnswers() }
     }
 
     /// Switch active intent without losing draft text — only refreshes
@@ -538,6 +555,7 @@ public final class PulseComposeViewModel {
     public func selectIntent(_ intent: PulseComposeIntent) {
         guard !isIntentLocked, intent != activeIntent else { return }
         activeIntent = intent
+        scheduleEarlierAnswers()
     }
 
     /// Replace the current photo set. Callers must respect
@@ -616,7 +634,7 @@ public final class PulseComposeViewModel {
 
     public var isSubmitting: Bool {
         if case .submitting = state { return true }
-        return false
+        return isCheckingPost
     }
 
     // swiftlint:disable cyclomatic_complexity
@@ -763,7 +781,10 @@ public final class PulseComposeViewModel {
     /// Send the create or update body. Returns true on success.
     @discardableResult
     public func submit() async -> Bool {
-        if case .submitting = state { return false }
+        if isSubmitting { return false }
+        // Earlier answers still on their way would only arrive behind the post.
+        earlierAnswersTask?.cancel()
+        earlierAnswersQuery = ""
         if let invalidField = validateAll() {
             shakeTrigger &+= 1
             toast = ToastMessage(text: "Fix the highlighted field.", kind: .error)
@@ -781,7 +802,8 @@ public final class PulseComposeViewModel {
             Analytics.track(.formPulseComposeSubmit(intent: activeIntent.rawValue, result: .error))
             return false
         }
-        if isBlockedByPrecheck() { return false }
+        // A live posting restriction refuses the draft; the check before posting may hold it for Edit or Post anyway.
+        guard !isBlockedByPrecheck(), await !needsSecondLook() else { return false }
         state = .submitting
         if editingPostId == nil {
             await refreshGPSFixIfNeeded()
@@ -1269,6 +1291,101 @@ public final class PulseComposeViewModel {
             // Fail open — never block the composer on a precheck error.
             precheckDone = true
         }
+    }
+
+    // MARK: - Before you ask (`GET /api/posts/before-you-ask`)
+
+    /// A new question going to a place nearby: the only draft that looks for earlier answers.
+    private var isWritingQuestion: Bool {
+        !isEditing && effectivePostType == "ask_local" && (postingTarget?.isPlaceTarget ?? true)
+    }
+
+    /// Looks for earlier answers once the question has 3 words, 600 ms
+    /// after it stops changing; a shorter question or another kind of
+    /// post clears them.
+    private func scheduleEarlierAnswers() {
+        let query = isWritingQuestion
+            ? "\(trimmedValue(.title)) \(trimmedValue(.body))".trimmingCharacters(in: .whitespacesAndNewlines)
+            : ""
+        guard query.split(whereSeparator: \.isWhitespace).count >= 3 else {
+            earlierAnswersTask?.cancel()
+            earlierAnswersQuery = ""
+            earlierAnswers = []
+            return
+        }
+        guard query != earlierAnswersQuery else { return }
+        earlierAnswersQuery = query
+        earlierAnswersTask?.cancel()
+        earlierAnswersTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 600_000_000)
+            guard !Task.isCancelled else { return }
+            await self?.loadEarlierAnswers(for: query)
+        }
+    }
+
+    private func loadEarlierAnswers(for query: String) async {
+        let coords = precheckCoordinates()
+        do {
+            let response: BeforeYouAskResponse = try await api.request(
+                PostPrecheckEndpoints.beforeYouAsk(query: query, latitude: coords.latitude, longitude: coords.longitude)
+            )
+            guard !Task.isCancelled, query == earlierAnswersQuery else { return }
+            earlierAnswers = response.posts
+        } catch {
+            // Nothing is shown when the look fails; the question posts as usual.
+        }
+    }
+
+    // MARK: - The check before posting (`POST /api/posts/precheck`, `stage: "post"`)
+
+    /// The draft as the check reads it; "Post anyway" approves exactly this.
+    private func postCheckDraft(_ request: PostCreateRequest) -> String {
+        [request.postType, request.safetyAlertKind ?? "", request.title ?? "", request.content].joined(separator: "\u{1F}")
+    }
+
+    /// Runs the kindness and safety check when Post is tapped on a new
+    /// post to a place nearby. True when it found something: the post
+    /// waits for Edit or Post anyway. A failed or slow check posts as usual.
+    private func needsSecondLook() async -> Bool {
+        guard !isEditing, businessAuthorId == nil, postingTarget?.isPlaceTarget ?? true else { return false }
+        let request = buildRequest()
+        let draft = postCheckDraft(request)
+        guard draft != postAnywayDraft else { return false }
+        isCheckingPost = true
+        defer { isCheckingPost = false }
+        let coords = precheckCoordinates()
+        do {
+            let response: PostPrecheckResponse = try await api.request(
+                PostPrecheckEndpoints.postCheck(body: PostPrecheckRequest(
+                    content: request.content,
+                    postType: request.postType,
+                    purpose: request.purpose,
+                    surface: "place",
+                    latitude: coords.latitude,
+                    longitude: coords.longitude,
+                    stage: "post",
+                    title: request.title,
+                    safetyAlertKind: request.safetyAlertKind
+                ))
+            )
+            guard let findings = response.findings, !findings.isEmpty else { return false }
+            postCheckFindings = findings
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    /// "Post anyway": posts this draft as it is.
+    public func postAnyway() async {
+        postAnywayDraft = postCheckDraft(buildRequest())
+        postCheckFindings = nil
+        await submit()
+    }
+
+    /// "Edit": back to the composer, the words kept.
+    public func editAfterPostCheck() {
+        postCheckFindings = nil
     }
 
     /// The precheck runs on body blur (RN `PostComposerModal.tsx:801`).

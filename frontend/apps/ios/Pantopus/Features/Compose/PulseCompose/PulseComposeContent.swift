@@ -46,6 +46,8 @@ public struct PulseComposeContentState: Equatable {
     public var postingTargetLabel: String?
     /// Composing a new post to the Connections target: the general form reads "Post" and speaks of connections.
     public var isNetworkTarget: Bool
+    /// "Before you ask": earlier questions and recommendations nearby matching the question being written.
+    public var earlierAnswers: [BeforeYouAskResponse.EarlierPost]
 
     public init(
         activeIntent: PulseComposeIntent,
@@ -69,7 +71,8 @@ public struct PulseComposeContentState: Equatable {
         isFlowMode: Bool = false,
         composePurpose: PulseComposePurpose? = nil,
         postingTargetLabel: String? = nil,
-        isNetworkTarget: Bool = false
+        isNetworkTarget: Bool = false,
+        earlierAnswers: [BeforeYouAskResponse.EarlierPost] = []
     ) {
         self.activeIntent = activeIntent
         self.identity = identity
@@ -93,6 +96,7 @@ public struct PulseComposeContentState: Equatable {
         self.composePurpose = composePurpose
         self.postingTargetLabel = postingTargetLabel
         self.isNetworkTarget = isNetworkTarget
+        self.earlierAnswers = earlierAnswers
     }
 }
 
@@ -123,6 +127,8 @@ public struct PulseComposeContentActions {
     public var onAddLocation: () -> Void
     /// ✕ on the filled location row.
     public var onClearLocation: () -> Void
+    /// A "Before you ask" row: opens that earlier post.
+    public var onOpenEarlierPost: (String) -> Void
 
     public init(
         onSelectIntent: @escaping (PulseComposeIntent) -> Void = { _ in },
@@ -143,7 +149,8 @@ public struct PulseComposeContentActions {
         onBodyEditingEnded: @escaping () -> Void = {},
         onDismissPrecheckNudge: @escaping () -> Void = {},
         onAddLocation: @escaping () -> Void = {},
-        onClearLocation: @escaping () -> Void = {}
+        onClearLocation: @escaping () -> Void = {},
+        onOpenEarlierPost: @escaping (String) -> Void = { _ in }
     ) {
         self.onSelectIntent = onSelectIntent
         self.onSelectIdentity = onSelectIdentity
@@ -164,6 +171,7 @@ public struct PulseComposeContentActions {
         self.onDismissPrecheckNudge = onDismissPrecheckNudge
         self.onAddLocation = onAddLocation
         self.onClearLocation = onClearLocation
+        self.onOpenEarlierPost = onOpenEarlierPost
     }
 }
 
@@ -193,6 +201,7 @@ public struct PulseComposeContent: View {
             }
             precheckBanners
             intentSpecificSection
+            beforeYouAskSection
             photosSection
             // Place tags are create-only (PostUpdateRequest carries no
             // location fields), so hide the row in edit mode — offering a
@@ -311,6 +320,76 @@ public struct PulseComposeContent: View {
             .padding(.horizontal, Spacing.s4)
             .accessibilityIdentifier("composePulsePrecheckNudge")
         }
+    }
+
+    /// "Before you ask" (AI phase 2 contract §6.5): what neighbors already
+    /// said about the question being written. A tap opens that post.
+    @ViewBuilder
+    private var beforeYouAskSection: some View {
+        if !state.earlierAnswers.isEmpty {
+            VStack(alignment: .leading, spacing: Spacing.s2) {
+                HStack(spacing: Spacing.s2) {
+                    Icon(.lightbulb, size: 16, strokeWidth: 2, color: Theme.Color.primary600)
+                    Text("Before you ask, neighbors already said")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Theme.Color.appText)
+                }
+                .accessibilityAddTraits(.isHeader)
+                ForEach(state.earlierAnswers) { post in
+                    Button { actions.onOpenEarlierPost(post.postId) } label: {
+                        earlierAnswerRow(post)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("composePulseEarlierAnswer")
+                }
+            }
+            .padding(Spacing.s3)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Theme.Color.primary50)
+            .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
+            .padding(.horizontal, Spacing.s4)
+            .accessibilityIdentifier("composePulseBeforeYouAsk")
+        }
+    }
+
+    private func earlierAnswerRow(_ post: BeforeYouAskResponse.EarlierPost) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.s1) {
+            Text(post.title ?? "")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Theme.Color.appText)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+            if let reply = post.bestReply?.text {
+                Text(reply)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.Color.appText)
+                    .lineLimit(3)
+                    .multilineTextAlignment(.leading)
+            } else if let body = post.body {
+                Text(body)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+            }
+            Text(earlierAnswerMeta(post))
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Theme.Color.appTextSecondary)
+        }
+        .padding(Spacing.s3)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.Color.appSurface)
+        .clipShape(RoundedRectangle(cornerRadius: Radii.sm, style: .continuous))
+        .contentShape(Rectangle())
+    }
+
+    /// "Solved · 3 replies", "Recommendation", "1 reply".
+    private func earlierAnswerMeta(_ post: BeforeYouAskResponse.EarlierPost) -> String {
+        var parts: [String] = []
+        if post.type == "recommendation" { parts.append("Recommendation") }
+        if post.solved == true { parts.append("Solved") }
+        if let count = post.replyCount, count > 0 { parts.append(count == 1 ? "1 reply" : "\(count) replies") }
+        return parts.joined(separator: " · ")
     }
 
     private func purposeFlowIcon(_ purpose: PulseComposePurpose) -> PantopusIcon {
