@@ -133,7 +133,10 @@ function planSentence(plan, config) {
 
 const untilLabel = (config, endsMs) => `${lastBy(config, endsMs).toFormat('ccc, LLL d')} (${WEEKS} weeks)`;
 
-/** The next week's plan, copied from the latest occurrence with new times (the host's edits carry forward). */
+/**
+ * The next week's plan, copied from the latest occurrence with new times (the host's edits carry forward).
+ * No hosted_again_from: the funnel's "hosted again" counts a host choosing to host again, not a rule's repost.
+ */
 function repostInput(latest, start, end) {
   const details = { ...(latest.details || {}) };
   // A watch party's game moves with the party.
@@ -158,7 +161,6 @@ function repostInput(latest, start, end) {
     auto_rules: Array.isArray(latest.auto_rules) ? latest.auto_rules : [],
     join_requirement: latest.join_requirement,
     details,
-    hosted_again_from: latest.post_id,
   };
 }
 
