@@ -1353,10 +1353,10 @@ class ChatConversationViewModel
         }
 
         /** Null once none is left, else what to tell the person. */
-        private suspend fun deleteEveryAiConversation(): String? =
-            try {
-                val deleted = mutableSetOf<String>()
-                val activeId = aiConversationId
+        private suspend fun deleteEveryAiConversation(): String? {
+            val deleted = mutableSetOf<String>()
+            val activeId = aiConversationId
+            return try {
                 var listed = aiRepo.conversations(oldestFirst = true).orThrow().conversations.map { it.id }
                 var rounds = 1
                 // Oldest first across every page. Keep the displayed thread until it is the only one left.
@@ -1374,8 +1374,14 @@ class ChatConversationViewModel
                 if (listed.isEmpty()) null else AI_DELETE_FAILED
             } catch (error: NetworkError) {
                 Timber.w("AI conversation delete failed: ${error.message}")
-                if (error.code == HTTP_TOO_MANY_REQUESTS) AI_DELETE_TOO_MANY else AI_DELETE_FAILED
+                when {
+                    // The one on screen goes only once it is the last one listed, so after its delete only the check failed.
+                    activeId != null && activeId in deleted -> null
+                    error.code == HTTP_TOO_MANY_REQUESTS -> AI_DELETE_TOO_MANY
+                    else -> AI_DELETE_FAILED
+                }
             }
+        }
 
         private suspend fun deleteAiConversation(
             id: String,

@@ -42,7 +42,8 @@ public struct BusinessLegalView: View {
             .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
             .accessibilityIdentifier("businessLegal.screen")
             .task { await viewModel.load() }
-            .refreshable { await viewModel.refresh() }
+            // Weakly: the keyboard's AutoFill can keep a field below, and this action with it, after the screen closes.
+            .refreshable { [weak viewModel] in await viewModel?.refresh() }
             .onDisappear { viewModel.clearSensitive() }
             .fileImporter(
                 isPresented: $showsFilePicker,
