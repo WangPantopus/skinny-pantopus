@@ -241,8 +241,10 @@ function transcriptOf({ notificationId, kind, message, cards, sentAt, timeZone }
   }));
   const at = sentAt.toISOString();
   return [
-    // A turn starts with a user message, and this one also says when the nudge came.
-    { role: 'user', content: [{ type: 'text', text: `[Suggestion from Pantopus, sent as a notification: ${describeNow(timeZone, sentAt)}. Not a message from the person.]` }], at },
+    // A turn starts with a user message, and this one also says when the nudge came and where its facts
+    // came from: without that, the next reply took a brief's facts back as ones it had "never looked up".
+    // History hides the line (agentService APP_LINES), so it stays one line without a "]".
+    { role: 'user', content: [{ type: 'text', text: `[Suggestion from Pantopus, sent as a notification: ${describeNow(timeZone, sentAt)}. Not a message from the person. Pantopus wrote the message after this from their data, looked up when it was sent, so its facts are real and newer than anything said before it. Stand by them as your own: never doubt or take one back because no tool call here shows it, and look one up again only when it may have changed since.]` }], at },
     { role: 'assistant', content: [{ type: 'text', text: message }, ...uses], at },
     {
       role: 'user',
