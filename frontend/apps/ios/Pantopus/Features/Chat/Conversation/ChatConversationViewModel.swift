@@ -1925,7 +1925,8 @@ public final class ChatConversationViewModel {
     public func scheduleMarkRead() {
         guard selectedTopicId == nil else { return }
         let pending = visibleReadBoundaries.filter { lastReadBoundaries[$0.key] != $0.value }
-        let boundaries = Dictionary(uniqueKeysWithValues: pending.sorted { $0.key < $1.key }.prefix(500))
+        var boundaries: [String: String] = [:]
+        for roomId in pending.keys.sorted().prefix(500) { boundaries[roomId] = pending[roomId] }
         guard !boundaries.isEmpty, boundaries != scheduledReadBoundaries else { return }
         markReadTask?.cancel()
         scheduledReadBoundaries = boundaries
