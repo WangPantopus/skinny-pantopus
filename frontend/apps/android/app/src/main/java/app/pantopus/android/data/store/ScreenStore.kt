@@ -246,8 +246,12 @@ class ScreenStore
             _changes.update { it + 1 }
         }
 
-        /** An own write without a full replacement: retire earlier reads and saved copies before revalidation. */
-        fun markEdited(topic: String) {
+        /** An own write retires earlier reads. Ordinary chat writes can retain the encrypted inbox for offline navigation. */
+        fun markEdited(
+            topic: String,
+            retainChatList: Boolean = false,
+        ) {
+            require(!retainChatList || topic == StoreTopics.CHAT_LIST)
             synchronized(slots) {
                 slots.values.filter { it.key.matches(topic) }.forEach { slot ->
                     slot.edits++
@@ -256,9 +260,9 @@ class ScreenStore
                     slot.inFlight?.cancel()
                     slot.inFlight = null
                     slot.state.value = slot.state.value.copy(refreshing = false)
-                    deleteSaved(slot.key.id)
+                    if (!retainChatList || slot.key.kind != StoreKind.MESSAGES_LIST) deleteSaved(slot.key.id)
                 }
-                queueDiskMarkLocked(SavedCopies.Mark(topic = topic, edited = true))
+                queueDiskMarkLocked(SavedCopies.Mark(topic = topic, edited = true, retainChatList = retainChatList))
             }
             _changes.update { it + 1 }
         }
@@ -498,10 +502,13 @@ class ScreenStore
             }
             val marks = pendingDiskMarks.filter { it.account == account && it.covers(slot.key, copy) }
             val edited = marks.any { it.mark.edited }
+            val retired = marks.any { it.mark.edited && !(it.mark.retainChatList && slot.key.kind == StoreKind.MESSAGES_LIST) }
             // A queued own edit retires a current-format copy (its disk work is deleting the file): it is not shown.
-            if (!edited || copy.legacy) {
+            if (!retired || copy.legacy) {
                 slot.etag = copy.etag.takeUnless { edited }
-                slot.stale = copy.stale || marks.isNotEmpty()
+                // A process can end before its queued disk mark finishes. Always revalidate a restored inbox
+                // online while keeping its encrypted rows available when the connection is down.
+                slot.stale = copy.stale || marks.isNotEmpty() || slot.key.kind == StoreKind.MESSAGES_LIST
                 slot.persist = true
                 slot.state.value = Stored(copy.data, fetchedAt = copy.fetchedAt)
             }

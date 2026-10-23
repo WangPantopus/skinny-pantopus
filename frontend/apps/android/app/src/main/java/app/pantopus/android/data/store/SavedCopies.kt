@@ -110,6 +110,7 @@ class SavedCopies
             val kinds: Set<StoreKind> = emptySet(),
             val edited: Boolean = false,
             val upTo: Long = Long.MAX_VALUE,
+            val retainChatList: Boolean = false,
         )
 
         @JsonClass(generateAdapter = true)
@@ -225,7 +226,8 @@ class SavedCopies
                     // A copy saved after the mark came from a later read and keeps its own state.
                     if (envelope.fetchedAt > mark.upTo) return@use
                     if (!envelope.legacy && !envelope.matches(mark.topic, mark.kinds)) return@use
-                    if (edited && !envelope.legacy) {
+                    val retainChatList = mark.retainChatList && envelope.kind == StoreKind.MESSAGES_LIST
+                    if (edited && !envelope.legacy && !retainChatList) {
                         target.delete()
                     } else if (!envelope.stale || (edited && envelope.etag != null)) {
                         // Older schema-2 copies lack topics. Keep their offline content, but require a check.

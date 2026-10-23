@@ -84,7 +84,7 @@ class ChatRepository
         private fun <T> NetworkResult<T>.chatsChanged(): NetworkResult<T> =
             also {
                 if (it is NetworkResult.Success) {
-                    store.markEdited(StoreTopics.CHAT_LIST)
+                    store.markEdited(StoreTopics.CHAT_LIST, retainChatList = true)
                     // Reading/sending a message must not cancel a history access check already in flight.
                     store.markStale(StoreTopics.CHATS)
                 }
