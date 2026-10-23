@@ -63,6 +63,7 @@ import app.pantopus.android.data.api.services.HomeVerificationApi
 import app.pantopus.android.data.api.services.HomesApi
 import app.pantopus.android.data.api.services.HubApi
 import app.pantopus.android.data.api.services.IdentityCenterApi
+import app.pantopus.android.data.api.services.LinkPreviewApi
 import app.pantopus.android.data.api.services.ListingOffersApi
 import app.pantopus.android.data.api.services.ListingsMutationApi
 import app.pantopus.android.data.api.services.ListingsReadApi
@@ -596,6 +597,10 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideGeoApi(retrofit: Retrofit): GeoApi = retrofit.create(GeoApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideLinkPreviewApi(retrofit: Retrofit): LinkPreviewApi = retrofit.create(LinkPreviewApi::class.java)
 
     @Provides
     @Singleton

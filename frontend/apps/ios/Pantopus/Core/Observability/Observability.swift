@@ -44,12 +44,19 @@ final class Observability {
             options.attachScreenshot = false
             options.sendDefaultPii = false
             options.beforeSend = { event in
+                // A link preview the server couldn't load is routine, and its
+                // failed-request event would carry the chat link.
+                if Self.isLinkPreview(event.request?.url) { return nil }
                 Self.scrubPII(from: event)
                 return event
             }
             options.beforeBreadcrumb = { breadcrumb in
                 Self.scrubPII(from: breadcrumb)
                 return breadcrumb
+            }
+            options.beforeSendSpan = { span in
+                if Self.isLinkPreview(span.data["url"] as? String) { span.removeData(key: "http.query") }
+                return span
             }
         }
 
@@ -79,6 +86,12 @@ final class Observability {
 
     private nonisolated static let redacted = "[redacted]"
 
+    /// `GET /api/link-preview?url=` carries a chat message's link in its
+    /// query string, which never leaves the device.
+    private nonisolated static func isLinkPreview(_ url: String?) -> Bool {
+        url?.split(separator: "?").first?.hasSuffix("/api/link-preview") == true
+    }
+
     private nonisolated static func scrubPII(from event: Event) {
         if var extra = event.extra {
             scrubInPlace(&extra)
@@ -91,6 +104,7 @@ final class Observability {
 
     private nonisolated static func scrubPII(from breadcrumb: Breadcrumb) {
         if var data = breadcrumb.data {
+            if isLinkPreview(data["url"] as? String) { data["http.query"] = nil }
             scrubInPlace(&data)
             breadcrumb.data = data
         }
