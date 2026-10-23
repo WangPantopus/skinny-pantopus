@@ -389,14 +389,19 @@ async function stop() {
 
 // Best-effort, content-free typing signals reuse the live LISTEN connection.
 // Bound pg's pending query queue; stale typing is dropped rather than replayed.
-let typingPublishes = 0;
-function publishChatTyping(change) {
-  if (!live || !client || typingPublishes >= 32 || change?.t !== 'ChatTyping') return;
-  typingPublishes += 1;
-  client.query({ text: 'SELECT pg_notify($1, $2)', values: [CHANNEL, JSON.stringify(change)], query_timeout: 2000 })
+let ephemeralPublishes = 0;
+function publishChatSignal(change) {
+  if (!live || !client || ephemeralPublishes >= 32
+    || !['ChatTyping', 'ChatPresence', 'ChatPresenceQuery'].includes(change?.t)) return Promise.resolve();
+  const payload = JSON.stringify(change);
+  if (Buffer.byteLength(payload) > 7500) return Promise.resolve();
+  ephemeralPublishes += 1;
+  return client.query({ text: 'SELECT pg_notify($1, $2)', values: [CHANNEL, payload], query_timeout: 2000 })
     .catch(() => { /* Typing expires; durable message delivery is independent. */ })
-    .finally(() => { typingPublishes -= 1; });
+    .finally(() => { ephemeralPublishes -= 1; });
 }
+
+function publishChatTyping(change) { return publishChatSignal(change); }
 
 /** True while the LISTEN connection is up, so every committed change is being heard. */
 function isLive() {
@@ -408,4 +413,4 @@ function currentEpoch() {
   return epoch;
 }
 
-module.exports = { init, start, stop, onChange, isLive, currentEpoch, handleNotification, flush, RULES, publishChatTyping };
+module.exports = { init, start, stop, onChange, isLive, currentEpoch, handleNotification, flush, RULES, publishChatTyping, publishChatSignal };

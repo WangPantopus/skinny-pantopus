@@ -17,8 +17,11 @@ A local 1,031-room fixture reproduced the loss: the old query returned 1,000
 rows and omitted the new shared room. Real API history/search recovered its
 message, preferences covered both shared rooms, mute/unmute persisted, and
 bounded read updated both rooms. The temporary rooms were removed afterward.
-Syntax and the four existing identity-select guards passed; final app checks
-against this exact backend revision remain in progress.
+Syntax and the four existing identity-select guards passed. Actual web person
+mute/unmute survived reloads, and send/read passed. Android sent and received,
+showed the sender's Read receipt, and retained both messages after relaunch.
+iOS send/peer reply passed; a later visible-message acknowledgement gap was
+found in iOS and is being repaired in its owning client PR.
 
 ## Typing across API processes
 
@@ -36,8 +39,10 @@ Real Socket.IO clients on two local API processes received one start and one
 stop each. Blocked/revoked members received none. A business owner received the
 customer indicator, their own typing emitted nothing, and revoking staff
 permission suppressed subsequent indicators. Temporary fixture rows were
-removed. Syntax and all four identity-select guards pass. App UI checks against
-this revision are pending; online/offline presence is still process-local.
+removed. Syntax and all four identity-select guards pass. Actual web typing
+passed in both directions with three-second refreshes and clear/send/idle stop.
+iOS showed continuous incoming typing for 29 seconds; Android for 54 seconds,
+then both cleared it on stop.
 
 ## Preference changes on another device
 
@@ -54,7 +59,31 @@ application-function lint before being applied. Real two-process API/socket
 checks observed exactly two own-account signals for mute/unmute, zero peer
 signals, and no additional signal for reading. Business-owner receipt and
 revocation suppression passed. Syntax, migration policy and identity-select
-guards passed. Real app icon synchronization is being verified next.
+guards passed. Two actual browser tabs of the same account updated their mute
+icons live in both directions; native adoption is in the client follow-ups.
+
+## Presence across API processes
+
+Online status now uses the existing Postgres notification connection with
+per-process leases, combined across a person's devices. Opening a room asks for
+already-connected peers; the existing `user:online`/`user:offline` events remain
+the client contract. Normal last-device disconnects update immediately. A
+crashed process expires after 45 seconds, checked every 15 seconds; presence
+is approximate, never proof of message delivery. No last-seen activity is stored.
+
+Only room subscribers receive status, after current membership,
+blocks, task eligibility and business authority checks shared with typing.
+Business staff never broadcast their personal identity in a customer's room.
+Work queues, tracked leases and subscribed rooms are bounded, and messages do
+not wait for presence. Native clients clear stale online state on their own
+connection loss. The current presentation is preserved.
+
+Two real local API processes passed initial already-online discovery, remote
+reconnect, one-device disconnect without a false offline, last-device offline,
+blocked-peer suppression and revoked-member suppression. Abruptly stopping the
+isolated source process cleared its online status after 52 seconds. Actual
+native header checks are pending. Syntax and four identity-select checks
+passed. No test code was added or modified.
 
 ## Bounded latency observations
 

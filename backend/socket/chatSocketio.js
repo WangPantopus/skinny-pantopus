@@ -10,7 +10,8 @@ const badgeService = require('../services/badgeService');
 const notificationService = require('../services/notificationService');
 const syncChangedService = require('../services/syncChangedService');
 const chatRealtime = require('../services/chatRealtime');
-const { isBlocked, blockedUserIds } = require('../services/blockService');
+const chatPresence = require('../services/chatPresence');
+const { isBlocked } = require('../services/blockService');
 const { closedGigRoomIds, gigRoomRecipients, isGigRoomClosedTo, isRoomClosedForWrites } = require('../services/chatGigRoomAccess');
 const { chatAccessUnavailable, actingBusinessInRoom, UNPUBLISHED_BUSINESS_REFUSAL } = require('../services/chatBusinessAccess');
 const { unpublishedBusinessIds } = require('../utils/visibilityPolicy');
@@ -213,31 +214,13 @@ async function buildSocketReactionSummaryMap(messageIds, requestingUserId) {
 // Store user rooms: { userId: Set([roomId1, roomId2]) }
 const userRooms = new Map();
 
-// ============ PRESENCE ============
-// `user:online` / `user:offline` reach only the people who share a
-// conversation with the user (the chat rooms their sockets joined), and never
-// anyone either of them has blocked. Everyone else never learns when someone
-// comes and goes. A failed block read sends nothing; this never throws.
-async function emitPresence(socket, event, userId, roomIds) {
-  const rooms = Array.from(roomIds || []).filter(Boolean);
-  if (rooms.length === 0) return;
-  try {
-    const blockedSocketIds = [];
-    for (const otherUserId of await blockedUserIds(userId)) {
-      for (const socketId of connectedUsers.get(otherUserId) || []) blockedSocketIds.push(socketId);
-    }
-    socket.to(rooms).except(blockedSocketIds).emit(event, { userId });
-  } catch (err) {
-    logger.warn('Presence not sent', { userId, event, error: err.message });
-  }
-}
-
 // Membership, blocks and task assignment can change after room:join. Resolve
 // only locally connected subscribers, before emitting even an ephemeral signal.
 async function emitTyping(io, change) {
   const targets = [...(io.sockets.adapter.rooms.get(change.r) || [])]
     .map((id) => io.sockets.sockets.get(id)).filter((socket) => socket?.connected
-    && socket.userId !== change.u && socket.rooms.has(change.r));
+    && socket.userId !== change.u && socket.rooms.has(change.r)
+    && (!change.socketId || socket.id === change.socketId));
   if (!targets.length) return;
   const [roomResult, senderResult] = await Promise.all([
     supabaseAdmin.from('ChatRoom').select('id, type, gig_id, is_active').eq('id', change.r).maybeSingle(),
@@ -275,9 +258,12 @@ async function emitTyping(io, change) {
       if (block.count === 0) permitted.add(id);
     }
   }
-  if (Date.now() - change.at > 5000) return;
+  if (Date.now() - change.at > 5000 || (change.isCurrent && !change.isCurrent())) return;
   for (const socket of targets) if (socket.connected && socket.rooms.has(change.r) && permitted.has(socket.userId)) {
-    socket.emit(change.typing ? 'typing:user' : 'typing:stopped', { userId: change.u, roomId: change.r });
+    const event = typeof change.online === 'boolean'
+      ? (change.online ? 'user:online' : 'user:offline')
+      : (change.typing ? 'typing:user' : 'typing:stopped');
+    socket.emit(event, { userId: change.u, roomId: change.r });
   }
 }
 
@@ -289,6 +275,7 @@ module.exports = (io) => {
   syncChangedService.init(io, connectedUsers);
   chatRealtime.setTypingHandler(emitTyping);
   chatRealtime.init(io);
+  chatPresence.init(io, emitTyping);
   syncChangedService.start();
   // Persistent login: disconnect sockets of revoked sessions
   subscribeSessionRevocation(io);
@@ -372,6 +359,7 @@ module.exports = (io) => {
       connectedUsers.set(userId, new Set());
     }
     connectedUsers.get(userId).add(socket.id);
+    if (!wasOnline) chatPresence.updateLocal(userId, true);
     emitSocketGauges();
 
     // Load user's rooms and join them. Started here but awaited only at the end of
@@ -396,6 +384,7 @@ module.exports = (io) => {
             closedRoomIds = new Set(rooms.filter((r) => r.room_type === 'gig').map((r) => String(r.id)));
           }
           const openRooms = rooms.filter((r) => !closedRoomIds.has(String(r.id)));
+          if (!socket.connected) return;
 
           for (const room of openRooms) {
             // get_user_chat_rooms returns the room id as `id`.
@@ -411,12 +400,6 @@ module.exports = (io) => {
           // Send initial room list, without the other person's account name and username that get_user_chat_rooms
           // also returns: the chat list names people by their Local Profile (routes/chats.js), and no app reads them here.
           socket.emit('rooms:list', openRooms.map(({ other_participant_name, other_participant_username, ...room }) => room));
-
-          // Notify user is online only when first active socket connects, and
-          // only to the conversations it just joined (see emitPresence).
-          if (!wasOnline && socket.connected) {
-            await emitPresence(socket, 'user:online', userId, openRooms.map((room) => room.id));
-          }
         }
       } catch (err) {
         logger.error('Error loading user rooms', { sessionId, userId, error: err.message });
@@ -482,6 +465,7 @@ module.exports = (io) => {
         if (await isGigRoomClosedTo(roomId, userId, actingFor ? [actingFor] : [])) {
           return callback({ error: 'Access denied' });
         }
+        if (!socket.connected) return;
 
         socket.join(roomId);
 
@@ -531,6 +515,7 @@ module.exports = (io) => {
           })),
           roomId
         });
+        chatPresence.watch(socket, roomId).catch(() => {});
         if (actingFor) return;
 
         // Joining subscribes to updates; the client marks only rendered messages read.
@@ -806,6 +791,7 @@ module.exports = (io) => {
     // ============ DISCONNECTION ============
     
     socket.on('disconnect', async () => {
+      chatPresence.unwatch(socket);
       cleanupSocketCounters(socket.id);
       const socketIds = connectedUsers.get(userId);
       if (socketIds) {
@@ -823,8 +809,6 @@ module.exports = (io) => {
         socketId: socket.id,
       });
       
-      // The conversations to tell, captured before the user's rooms are forgotten.
-      const presenceRooms = stillOnline ? null : userRooms.get(userId);
       if (!stillOnline) {
         userRooms.delete(userId);
       }
@@ -832,7 +816,7 @@ module.exports = (io) => {
       // Typing is ephemeral and expires in each client. Disconnect has no
       // database write on the path to announcing the user's offline state.
       if (!stillOnline && !connectedUsers.has(userId)) {
-        await emitPresence(socket, 'user:offline', userId, presenceRooms);
+        chatPresence.updateLocal(userId, false);
       }
     });
     
