@@ -13,6 +13,7 @@ const { getHealthScore, canReadHealthScore } = require('./homeHealthService');
 const { describeHomeActivity } = require('../utils/homeActivityLabels');
 const { isLaunchFeatureEnabled, excludeHiddenHomeActivity } = require('../utils/featureFlags');
 const { localDisplayNames } = require('../utils/identityProfiles');
+const { loadChatPeople } = require('./chatPeople');
 
 const MESSAGES = {
   HOME_DASHBOARD_UNAVAILABLE: 'Could not load the Home summary. Please retry.',
@@ -228,16 +229,20 @@ async function read({ homeId, actorId, includeHealthScore = false }) {
 
   // Pending, future, ended and unknown-role rows are not active household members.
   const members = rawMembers.filter(member => currentOccupancy(member) && resolveHomeRole(member));
-  // Members show by the name they show neighbors (a made-up username never stands in for it).
-  const [ownerRows, memberNames] = members.length ? await Promise.all([
+  // Members show by the name they show neighbors (a made-up username never stands in for it), with the handle and photo
+  // they show neighbors (services/chatPeople.js: their Local Profile's, or the account's).
+  const [ownerRows, memberNames, memberPeople] = members.length ? await Promise.all([
     rows(db.from('HomeOwner').select('subject_id, owner_status, verification_tier')
       .eq('home_id', homeId).eq('subject_type', 'user').in('subject_id', members.map(member => member.user_id)).neq('owner_status', 'revoked')),
     localDisplayNames(members.map(member => member.user_id)).catch(() => { throw failure(); }),
-  ]) : [[], new Map()];
+    loadChatPeople(members.map(member => member.user_id)),
+  ]) : [[], new Map(), new Map()];
   const owners = new Map(ownerRows.map(owner => [owner.subject_id, owner]));
   const enrichedMembers = members.map(member => {
     const owner = owners.get(member.user_id);
-    const user = member.user && { ...member.user, display_name: memberNames.get(String(member.user_id)) || 'Household member' };
+    const person = memberPeople.get(String(member.user_id));
+    const user = member.user && { ...member.user, display_name: memberNames.get(String(member.user_id)) || 'Household member',
+      ...(person && { handle: person.handle || member.user.username, avatar_url: person.avatarUrl || null }) };
     return { user_id: member.user_id, role: member.role, role_base: member.role_base, is_active: member.is_active, user: serializeUserAsLocalIdentity(user),
       display_role: ({ verified: 'owner', pending: 'pending_owner', disputed: 'disputed_owner' })[owner?.owner_status] || member.role,
       ownership_status: owner?.owner_status || null, verification_tier: owner?.verification_tier || null };

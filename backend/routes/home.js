@@ -11,7 +11,6 @@ const { homeOutboundLimiter } = require('../middleware/rateLimiter');
 const validate = require('../middleware/validate');
 const Joi = require('joi');
 const logger = require('../utils/logger');
-const { chosenUsernameOrNull, nameUnlessMadeUp } = require('../utils/personalUsername');
 const { escapeIlike } = require('../utils/escapeIlike');
 const { computeAddressHash } = require('../utils/normalizeAddress');
 const homeAuthorityService = require('../services/homeAuthorityService');
@@ -24,6 +23,7 @@ const homeResidencyReviewService = require('../services/homeResidencyReviewServi
 const homeInvitationService = require('../services/homeInvitationService');
 const homeInvitationDecisions = require('../services/homeInvitationDecisionService');
 const homeInvitationSender = require('../services/homeInvitationSenderService');
+const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
 const homeAccessSecretService = require('../services/homeAccessSecretService');
 const homeRecordService = require('../services/homeRecordService');
 const { getRequestSessionScope, requireExpectedSessionScope } = require('../utils/requestSessionScope');
@@ -1673,6 +1673,9 @@ router.get('/discover', verifyToken, async (req, res) => {
     const ownerMap = new Map((ownersRes.data || []).map((o) => [o.id, o]));
     const memberSet = new Set((membershipRes.data || []).map((m) => m.home_id));
     const claimMap = new Map((claimsRes.data || []).map((c) => [c.home_id, c.status]));
+    // A member sees the owner by the Local Profile they show neighbors (services/chatPeople.js).
+    const ownerPeople = await loadChatPeople(rows
+      .filter((h) => memberSet.has(h.id) || h.owner_id === userId).map((h) => h.owner_id));
 
     const ranked = rows
       .map((h) => {
@@ -1725,7 +1728,7 @@ router.get('/discover', verifyToken, async (req, res) => {
           home_type: h.home_type || null,
           visibility: h.visibility,
           // Knowing an address is not permission to link its resident's account.
-          owner: serializeOwnerForViewer(owner, { reveal: member }),
+          owner: serializeOwnerForViewer(chatPersonRow(owner, ownerPeople), { reveal: member }),
           is_member: memberSet.has(h.id),
           claim_status: claimMap.get(h.id) || null,
           _score: score,
@@ -1823,7 +1826,9 @@ router.get('/:id/public-profile', verifyToken, async (req, res) => {
 
     // One projection for outsiders, shared with the privacy mirror
     // (identity-center view-as?surface=home) so the two can never drift.
-    const owner = serializeOwnerForViewer(ownerRes.data, { reveal });
+    // Household members see the owner by the Local Profile they show neighbors (services/chatPeople.js).
+    const owner = serializeOwnerForViewer(reveal && ownerRes.data
+      ? chatPersonRow(ownerRes.data, await loadChatPeople([ownerRes.data.id])) : ownerRes.data, { reveal });
 
     res.json({
       home: serializeHomeForViewer(home, { reveal }),
@@ -1848,7 +1853,7 @@ router.post('/:id/request-household-from-owner', verifyToken, validate(requestHo
       action: 'request', payload: { requested_identity: req.body.requested_identity } });
     try {
       await require('../services/notificationService').notifyHouseholdAccessRequest({
-        ownerUserIds: result.notify_user_ids, requesterName: nameUnlessMadeUp(result.actor_name, 'Someone'), homeLabel: result.home_label,
+        ownerUserIds: result.notify_user_ids, requesterName: await homeInvitationService.personName(req.user.id, 'Someone'), homeLabel: result.home_label,
         homeId: req.params.id, requesterUserId: req.user.id, requestedIdentity: req.body.requested_identity,
         requestId: result.request_id,
       });
@@ -1893,7 +1898,8 @@ router.post('/:id/household-access-requests/:requestId/reject', verifyToken, asy
     if (!result.replayed) {
       try {
         await require('../services/notificationService').notifyHouseholdAccessRequestRejected({
-          requesterUserId: result.target_id, homeLabel: result.home_label, resolverName: nameUnlessMadeUp(result.actor_name, 'Someone'),
+          requesterUserId: result.target_id, homeLabel: result.home_label,
+          resolverName: await homeInvitationService.personName(req.user.id, 'A home manager'),
         });
       } catch (err) { logger.error('Household rejection notification failed after commit', { errorCode: err.code }); }
     }
@@ -2068,10 +2074,12 @@ router.post('/:id/attach', verifyToken, validate(attachDetachSchema), async (req
   try {
     const result = await homeResidencyService.review({ homeId: req.params.id, actorId: req.user.id,
       action: 'attach', targetId: req.body.userId });
+    // The SQL names the person by the account; they go by their Local Profile (services/chatPeople.js).
+    const user = chatPersonRow(result.user, await loadChatPeople([result.target_id]));
     res.json({
-      message: result.replayed ? 'User is already attached to this home' : `${result.user.name} attached to home successfully`,
+      message: result.replayed ? 'User is already attached to this home' : `${user.name} attached to home successfully`,
       occupancy: { id: result.occupancy.id, homeId: req.params.id, userId: result.target_id,
-        username: result.user.username, name: result.user.name, attachedAt: result.occupancy.created_at },
+        username: user.username, name: user.name, attachedAt: result.occupancy.created_at },
     });
   } catch (err) {
     logger.error('Attach user error', { errorCode: err.code, homeId: req.params.id });
@@ -2108,9 +2116,7 @@ router.post('/:id/move-out', verifyToken, async (req, res) => {
     // the current recipients returned by that transaction after it succeeds.
     if (result.notify_user_ids?.length) {
       try {
-        const { data: user } = await supabaseAdmin.from('User').select('username, name, first_name')
-          .eq('id', req.user.id).single();
-        const userName = user?.name || user?.first_name || chosenUsernameOrNull(user?.username) || 'A member';
+        const userName = await homeInvitationService.personName(req.user.id, 'A member');
         await require('../services/notificationService').createBulkNotifications(result.notify_user_ids.map(userId => ({
           userId, type: 'member_moved_out', title: 'Member moved out', body: `${userName} has moved out.`,
           link: `/homes/${req.params.id}/members`, metadata: { home_id: req.params.id, moved_out_user_id: req.user.id },
@@ -2984,7 +2990,9 @@ router.get('/:id/bills/:billId/splits', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch bill splits' });
     }
 
-    res.json({ splits: data || [] });
+    // Each member goes by the Local Profile they show neighbors (services/chatPeople.js).
+    const people = await loadChatPeople((data || []).map(split => split.user?.id));
+    res.json({ splits: (data || []).map(split => ({ ...split, user: chatPersonRow(split.user, people) })) });
   } catch (err) {
     logger.error('Bill splits fetch error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch bill splits' });
@@ -3508,13 +3516,15 @@ router.get('/:id/documents', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch documents' });
     }
 
-    // The apps' "Uploaded by" reads `uploaded_by_name`, the uploader's display name (never the raw user id). Only the
-    // name leaves the server, as the Home timeline's `actor_name` does; a deleted account leaves it null.
+    // The apps' "Uploaded by" reads `uploaded_by_name`, the uploader's display name (never the raw user id): the Local
+    // Profile name they show neighbors (services/chatPeople.js). Only the name leaves the server, as the Home timeline's
+    // `actor_name` does; a deleted account leaves it null.
+    const people = await loadChatPeople((data || []).map(document => document.uploader?.id));
     res.json({
       permissions: (access.permissions || []).filter(permission => ['docs.view', 'docs.upload', 'docs.manage'].includes(permission)),
       documents: (data || []).map(({ uploader, ...document }) => ({
         ...serializeHomeDocument(document),
-        uploaded_by_name: uploader ? displayNameFromUser(uploader) : null,
+        uploaded_by_name: uploader ? people.get(String(uploader.id))?.displayName || displayNameFromUser(uploader) : null,
       })),
     });
   } catch (err) {
@@ -5337,12 +5347,14 @@ router.get('/:id/timeline', verifyToken, async (req, res) => {
     }
     const rows = (dataRes.status === 'fulfilled' ? dataRes.value.data : null) || [];
     const total = (countRes.status === 'fulfilled' ? countRes.value.count : null) ?? 0;
+    // Actors go by the Local Profile name they show neighbors (services/chatPeople.js).
+    const people = await loadChatPeople(rows.map(row => row.actor?.id));
     const items = rows.map(row => ({
       id: row.id,
       action: row.action,
       description: describeHomeActivity(row),
       actor_id: row.actor_user_id || null,
-      actor_name: row.actor ? displayNameFromUser(row.actor) : null,
+      actor_name: row.actor ? people.get(String(row.actor.id))?.displayName || displayNameFromUser(row.actor) : null,
       metadata: row.metadata || {},
       created_at: row.created_at,
     }));

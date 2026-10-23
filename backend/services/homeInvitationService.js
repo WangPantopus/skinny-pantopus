@@ -2,7 +2,8 @@ const crypto = require('crypto');
 const db = require('../config/supabaseAdmin');
 const verificationAge = require('../utils/verificationAge');
 const logger = require('../utils/logger');
-const { chosenUsernameOrNull, nameUnlessMadeUp } = require('../utils/personalUsername');
+const { nameUnlessMadeUp } = require('../utils/personalUsername');
+const { loadChatPeople, chatPersonRow } = require('./chatPeople');
 const MESSAGES = {
   INVITE_SENDER_NOT_FOUND: 'This invitation attempt has not been found. Retry or cancel its original attempt.',
   INVITE_SENDER_CONFLICT: 'This attempt has different details. Recover its original invitation command.',
@@ -55,6 +56,35 @@ async function rpc(name,args) {
   }
   return result;
 }
+// People in invitations, requests to join and their notices (and the invite email) go by the name neighbors see on
+// their posts and in chats (services/chatPeople.js): their Local Profile's name, handle and photo, or the account's for
+// a business or anyone without one. The SQL names them by the account, so they are named here from its account ids.
+async function personName(userId, fallback) {
+  return (await loadChatPeople([userId])).get(String(userId))?.displayName || fallback;
+}
+// A person as the SQL returns them (an id and some of username, name, profile_picture_url), named that way in the keys
+// it has, so each response keeps its shape. Anyone loadChatPeople can't read keeps the SQL's values.
+function namedPerson(person, people) {
+  const named = chatPersonRow(person, people);
+  return Object.fromEntries(Object.keys(person).map((key) => [key, named[key]]));
+}
+async function inviterId(invitationId) {
+  try {
+    const { data, error } = await db.from('HomeInvite').select('invited_by').eq('id', invitationId).maybeSingle();
+    return error ? null : data?.invited_by || null;
+  } catch (_) { return null; }
+}
+// A preview's inviter ({ name, username, profilePicture }) carries no id; it is the invitation's invited_by. The SQL
+// names them coalesce(name, first_name, username, 'Someone'), and a made-up username isn't a name.
+async function namePreview(preview) {
+  if (!preview?.inviter || typeof preview.inviter.name !== 'string') return preview;
+  const invitedBy = await inviterId(preview.invitation?.id);
+  const person = invitedBy ? (await loadChatPeople([invitedBy])).get(String(invitedBy)) : null;
+  const inviter = person
+    ? { ...preview.inviter, name: person.displayName, username: person.handle || null, profilePicture: person.avatarUrl || null }
+    : { ...preview.inviter, name: nameUnlessMadeUp(preview.inviter.name, 'Someone') };
+  return { ...preview, inviter };
+}
 async function write({ homeId, actorId, action, payload = {} }) {
   const result = await rpc('write_home_invitation', { p_home_id: homeId, p_actor_id: actorId, p_action: action,
     p_payload: payload, p_token: ['create','approve_request'].includes(action) ? crypto.randomBytes(32).toString('hex') : null });
@@ -71,49 +101,50 @@ async function act({ actorId = null, invitationId = null, token = null, action }
   if (action==='accept' && (result.kind==='claim_merge' ? !result.invitation?.id
     : (!result.occupancy?.id || !result.homeId || typeof result.replayed!=='boolean'))) throw failure();
   if (action==='decline' && typeof result.replayed!=='boolean') throw failure();
-  // The SQL names the inviter coalesce(name, first_name, username, 'Someone'); a made-up username isn't a name.
-  if (result.inviter && typeof result.inviter.name === 'string') {
-    return { ...result, inviter: { ...result.inviter, name: nameUnlessMadeUp(result.inviter.name, 'Someone') } };
-  }
-  return result;
+  return namePreview(result);
 }
 async function list(actorId,homeId=null) {
   const result = await rpc('list_home_invitations', { p_actor_id: actorId, p_home_id: homeId });
   if (!Array.isArray(result.invitations)) throw failure();
-  return result.invitations;
+  const people = await loadChatPeople(result.invitations.map((invite) => invite?.inviter?.id));
+  return result.invitations.map((invite) => (invite?.inviter ? { ...invite, inviter: namedPerson(invite.inviter, people) } : invite));
 }
 async function listRequests(homeId,actorId,status='pending') {
   const result=await rpc('list_home_household_requests',{p_home_id:homeId,p_actor_id:actorId,p_status:status});
   if (!Array.isArray(result.requests)) throw failure();
-  return result.requests;
+  const people = await loadChatPeople(result.requests.map((request) => request?.requester?.id));
+  return result.requests.map((request) => (request?.requester ? { ...request, requester: namedPerson(request.requester, people) } : request));
 }
 async function notifyCreated(result,message) {
   if (result.replayed) return false;
   const invite = result.invitation;
+  const inviterName = await personName(invite.invited_by, 'Someone');
   let emailSent = false;
   if (result.delivery_email) {
     try {
       const delivery = await require('./emailService').sendHomeInviteEmail({ toEmail: result.delivery_email,
-        inviterName: nameUnlessMadeUp(result.actor_name, 'Someone'), homeName: result.home_label, homeCity: result.home_city,
+        inviterName, homeName: result.home_label, homeCity: result.home_city,
         role: invite.proposed_role, token: invite.token, message: message || null, isExistingUser: !!invite.invitee_user_id });
       emailSent = delivery?.success === true && delivery?.preview !== true;
     } catch (err) { logger.error('Home invitation email failed after commit', { errorCode: err.code, inviteId: invite.id }); }
   }
   if (invite.invitee_user_id) {
     try { await require('./notificationService').notifyHomeInvite({ inviteeUserId: invite.invitee_user_id,
-      inviterName: nameUnlessMadeUp(result.actor_name, 'Someone'), homeName: result.home_label, homeId: invite.home_id, inviteToken: invite.token });
+      inviterName, homeName: result.home_label, homeId: invite.home_id, inviteToken: invite.token });
     } catch (err) { logger.error('Home invitation notification failed after commit', { errorCode: err.code, inviteId: invite.id }); }
   }
   return emailSent;
 }
 async function notifySenderDelivery(result, message) {
   const invite = result.invitation;
+  // A resend goes out in the original inviter's name, who may be another manager than the one resending.
+  const inviterName = await personName(await inviterId(invite.id), 'Someone');
   const proof = { email: result.delivery_email ? 'unconfirmed' : 'not_requested',
     in_app: invite.invitee_user_id ? 'unconfirmed' : 'not_requested' };
   if (result.delivery_email) {
     try {
       const delivery = await require('./emailService').sendHomeInviteEmail({ toEmail:result.delivery_email,
-        inviterName:nameUnlessMadeUp(result.actor_name, 'Someone'), homeName:result.home_label, homeCity:result.home_city,
+        inviterName, homeName:result.home_label, homeCity:result.home_city,
         role:invite.proposed_role, token:invite.token, message:message || null, isExistingUser:!!invite.invitee_user_id });
       if (delivery?.success === true && delivery?.preview !== true) proof.email = 'provider_accepted';
     } catch { logger.warn('Home invitation email handoff unconfirmed', { inviteId:invite.id }); }
@@ -121,7 +152,7 @@ async function notifySenderDelivery(result, message) {
   if (invite.invitee_user_id) {
     try {
       const notification = await require('./notificationService').notifyHomeInvite({ inviteeUserId:invite.invitee_user_id,
-        inviterName:nameUnlessMadeUp(result.actor_name, 'Someone'), homeName:result.home_label, homeId:invite.home_id, inviteToken:invite.token });
+        inviterName, homeName:result.home_label, homeId:invite.home_id, inviteToken:invite.token });
       if (typeof notification?.id === 'string' && notification.id.length > 0 && notification.user_id === invite.invitee_user_id) proof.in_app = 'saved';
     } catch { logger.warn('Home invitation notification save unconfirmed', { inviteId:invite.id }); }
   }
@@ -130,11 +161,9 @@ async function notifySenderDelivery(result, message) {
 async function notifyAccepted(result,actorId) {
   if (result.replayed) return;
   try {
-    const { data: actor, error } = await db.from('User').select('name,username,first_name').eq('id',actorId).maybeSingle();
-    if (error) throw error;
     await require('./notificationService').notifyHomeInviteAccepted({ inviterUserId: result.inviter_id,
-      accepterName: actor?.name || actor?.first_name || chosenUsernameOrNull(actor?.username) || 'Someone',
-      homeName: result.home_label, homeId: result.homeId });
+      accepterName: await personName(actorId, 'Someone'), homeName: result.home_label, homeId: result.homeId });
   } catch (err) { logger.error('Home invite acceptance notification failed after commit', { errorCode: err.code }); }
 }
-module.exports = { write, act, list, listRequests, notifyCreated, notifySenderDelivery, notifyAccepted, failure };
+module.exports = { write, act, list, listRequests, notifyCreated, notifySenderDelivery, notifyAccepted, failure,
+  personName, namePreview };
