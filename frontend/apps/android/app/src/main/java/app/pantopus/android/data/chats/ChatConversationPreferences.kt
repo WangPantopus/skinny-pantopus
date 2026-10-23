@@ -146,7 +146,7 @@ object ChatUnreadBadgeMath {
     ): Int {
         val mutedUnread =
             rows
-                .filter { mutedKeys.contains(it.storageKey) }
+                .filter { it.isMuted || mutedKeys.contains(it.storageKey) }
                 .sumOf { it.unread }
         return (serverTotal - mutedUnread).coerceAtLeast(0)
     }

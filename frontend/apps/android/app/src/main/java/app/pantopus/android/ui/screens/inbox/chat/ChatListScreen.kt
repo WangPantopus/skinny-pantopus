@@ -23,6 +23,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -75,6 +76,7 @@ fun ChatListScreen(
     val unreadByFilter by viewModel.unreadByFilter.collectAsStateWithLifecycle()
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val actionError by viewModel.actionError.collectAsStateWithLifecycle()
+    val paging by viewModel.paging.collectAsStateWithLifecycle()
     actionError?.let { message ->
         AlertDialog(
             onDismissRequest = viewModel::dismissActionError,
@@ -128,6 +130,8 @@ fun ChatListScreen(
                         onHide = viewModel::hideConversation,
                         emptyFilter = s.emptyFilter,
                         onViewAll = { viewModel.selectFilter(ChatFilter.All) },
+                        paging = paging,
+                        onLoadMore = viewModel::loadMore,
                     )
                 }
             is ChatListUiState.Error -> ErrorFrame(message = s.message, onRetry = viewModel::refresh)
@@ -453,6 +457,7 @@ private fun EmptyMessage(
 }
 
 @Composable
+@Suppress("LongParameterList") // Existing row actions and the paging footer share this list.
 internal fun PopulatedFrame(
     rows: List<ConversationRowContent>,
     onTap: (ConversationRowContent) -> Unit,
@@ -460,9 +465,11 @@ internal fun PopulatedFrame(
     onHide: (String) -> Unit = {},
     emptyFilter: ChatFilter? = null,
     onViewAll: () -> Unit = {},
+    paging: ChatListPaging = ChatListPaging(),
+    onLoadMore: () -> Unit = {},
 ) {
     LazyColumn(modifier = Modifier.fillMaxSize().testTag("chatListContent")) {
-        items(items = rows, key = { it.id }) { row ->
+        items(items = rows, key = { it.storageKey }) { row ->
             if (row.variant == ConversationRowVariant.AiAssistant) {
                 ConversationRow(content = row, onTap = { onTap(row) })
             } else {
@@ -474,7 +481,21 @@ internal fun PopulatedFrame(
                 )
             }
         }
-        if (emptyFilter != null) {
+        if (paging.hasMore) {
+            item(key = "loadMore") {
+                LaunchedEffect(rows.size, paging.loading, paging.error) {
+                    if (!paging.loading && paging.error == null) onLoadMore()
+                }
+                Box(Modifier.fillMaxWidth().padding(Spacing.s3), contentAlignment = Alignment.Center) {
+                    if (paging.error != null) {
+                        TextButton(onClick = onLoadMore) { Text("Couldn't load more. Try again") }
+                    } else {
+                        CircularProgressIndicator(Modifier.size(24.dp))
+                    }
+                }
+            }
+        }
+        if (emptyFilter != null && !paging.hasMore) {
             item(key = "filterEmpty") { FilterEmptyLine(filter = emptyFilter, onViewAll = onViewAll) }
         }
     }

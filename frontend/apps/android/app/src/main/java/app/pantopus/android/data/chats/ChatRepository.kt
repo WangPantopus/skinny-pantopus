@@ -87,6 +87,12 @@ class ChatRepository
             return stored.data?.let { NetworkResult.Success(it.copy(conversations = it.conversations.take(limit))) } ?: stored.asResult()
         }
 
+        suspend fun conversationsPage(
+            before: String? = null,
+            query: String? = null,
+        ): NetworkResult<UnifiedConversationsResponse> =
+            safeApiCall { api.unifiedConversations(limit = CONVERSATIONS_LIMIT, before = before, query = query) }
+
         suspend fun stats(): NetworkResult<ChatStatsResponse> = safeApiCall { api.stats() }
 
         suspend fun room(

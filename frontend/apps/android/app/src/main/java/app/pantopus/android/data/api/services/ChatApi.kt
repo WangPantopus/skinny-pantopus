@@ -38,9 +38,12 @@ import retrofit2.http.Streaming
 @Suppress("TooManyFunctions") // declarative Retrofit endpoint list — one function per route
 interface ChatApi {
     /** `GET /api/chat/unified-conversations`. */
+    @Headers("Cache-Control: no-store")
     @GET("api/chat/unified-conversations")
     suspend fun unifiedConversations(
         @Query("limit") limit: Int = 100,
+        @Query("before") before: String? = null,
+        @Query("q") query: String? = null,
     ): UnifiedConversationsResponse
 
     /** [unifiedConversations] for the screens' store: sends the stored ETag; a 304 means the copy is current. */

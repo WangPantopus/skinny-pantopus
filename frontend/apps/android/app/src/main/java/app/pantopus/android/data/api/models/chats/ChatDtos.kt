@@ -84,6 +84,7 @@ data class UnifiedConversationDto(
     @Json(name = "home_id") val homeId: String? = null,
     // shared
     @Json(name = "total_unread") val totalUnread: Int = 0,
+    @Json(name = "unmuted_unread") val unmutedUnread: Int? = null,
     @Json(name = "last_message_at") val lastMessageAt: String? = null,
     @Json(name = "last_message_preview") val lastMessagePreview: String? = null,
     @Json(name = "notifications_enabled") val notificationsEnabled: Boolean? = null,
@@ -95,6 +96,9 @@ data class UnifiedConversationsResponse(
     val conversations: List<UnifiedConversationDto>,
     val total: Int? = null,
     val totalUnread: Int? = null,
+    val totalUnmutedUnread: Int? = null,
+    val hasMore: Boolean = false,
+    val nextCursor: String? = null,
 )
 
 @JsonClass(generateAdapter = true)
@@ -115,6 +119,7 @@ data class ChatStats(
     @Json(name = "total_chats") val totalChats: Int = 0,
     @Json(name = "total_messages") val totalMessages: Int = 0,
     @Json(name = "total_unread") val totalUnread: Int = 0,
+    @Json(name = "total_unmuted_unread") val totalUnmutedUnread: Int? = null,
     @Json(name = "direct_chats") val directChats: Int = 0,
     @Json(name = "gig_chats") val gigChats: Int = 0,
     @Json(name = "home_chats") val homeChats: Int = 0,

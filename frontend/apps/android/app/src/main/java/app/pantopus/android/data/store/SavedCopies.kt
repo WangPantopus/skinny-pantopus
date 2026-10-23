@@ -39,8 +39,8 @@ private const val SCHEMA = 3
  * no account id, home id or token appears in them.
  *
  * At most 20 MB, the least recently used first; nothing older than 7 days, from another app build or in another format
- * is read, and a file that doesn't decode is deleted. Recent conversations use Keystore-encrypted `.enc` files within
- * a separate 5 MB / 20-window budget; schema-compatible chat copies survive app updates. Their authenticated scope
+ * is read, and a file that doesn't decode is deleted. Recent conversations and inbox previews use Keystore-encrypted `.enc` files within
+ * a shared 5 MB / 20-copy budget; schema-compatible chat copies survive app updates. Their authenticated scope
  * includes the account and key hashes. Sign-out, an account switch and Clear cache delete everything.
  */
 @Singleton
@@ -78,17 +78,19 @@ class SavedCopies
                         runCatching {
                             file.bufferedReader().use { reader -> reader.readLine()?.let { envelopes.fromJson(it) } }
                         }.getOrNull()
-                    if (!usable(envelope, now)) file.delete()
+                    if (isChat(envelope?.kind) || !usable(envelope, now)) file.delete()
                 }
             }
         }
+
+        private fun isChat(kind: StoreKind?): Boolean = kind == StoreKind.CONVERSATION || kind == StoreKind.MESSAGES_LIST
 
         private fun usable(
             envelope: Envelope?,
             now: Long,
         ): Boolean {
             if (envelope == null) return false
-            val compatible = envelope.kind == StoreKind.CONVERSATION || envelope.build == build
+            val compatible = isChat(envelope.kind) || envelope.build == build
             return envelope.schema == SCHEMA && compatible && now - envelope.fetchedAt in 0 until MAX_AGE_MS
         }
 
@@ -143,7 +145,8 @@ class SavedCopies
             now: Long = System.currentTimeMillis(),
             kind: StoreKind? = null,
         ): Copy<T>? {
-            val file = file(account, keyId, kind == StoreKind.CONVERSATION)
+            if (isChat(kind)) file(account, keyId).delete()
+            val file = file(account, keyId, isChat(kind))
             if (!file.isFile) return null
             return try {
                 val text = read(file)
@@ -178,7 +181,8 @@ class SavedCopies
             stale: Boolean,
         ) {
             val type = key.type ?: return
-            val target = file(account, key.id, key.kind == StoreKind.CONVERSATION)
+            if (isChat(key.kind)) file(account, key.id).delete()
+            val target = file(account, key.id, isChat(key.kind))
             try {
                 val envelope = Envelope(SCHEMA, build, fetchedAt, etag, key.topics, key.kind, stale)
                 write(target, envelope, moshi.adapter<T>(type).toJson(data))

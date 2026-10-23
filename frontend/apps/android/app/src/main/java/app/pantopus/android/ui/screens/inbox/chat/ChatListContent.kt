@@ -109,3 +109,10 @@ sealed interface ChatListUiState {
 
     data class Error(val message: String) : ChatListUiState
 }
+
+@Immutable
+data class ChatListPaging(
+    val hasMore: Boolean = false,
+    val loading: Boolean = false,
+    val error: String? = null,
+)

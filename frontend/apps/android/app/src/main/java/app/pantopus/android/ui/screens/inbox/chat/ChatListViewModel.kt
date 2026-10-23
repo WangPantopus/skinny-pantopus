@@ -13,6 +13,7 @@ import app.pantopus.android.data.chats.ChatRepository
 import app.pantopus.android.data.chats.ChatUnreadBadgeMath
 import app.pantopus.android.data.realtime.SocketManager
 import app.pantopus.android.ui.screens.inbox.conversation.isTopicLaunchAvailable
+import app.pantopus.android.ui.screens.root.badgeUnmutedUnreadCount
 import app.pantopus.android.ui.screens.root.badgeUnreadCount
 import app.pantopus.android.ui.theme.PantopusIcon
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -51,6 +52,14 @@ class ChatListViewModel
 
         private var allRows: List<ConversationRowContent> = emptyList()
         private var serverTotalUnread: Int = 0
+        private var serverUnmutedUnread: Int? = null
+        private var badgeRevision = 0L
+        private var nextCursor: String? = null
+        private var pageGeneration = 0L
+        private var pageJob: Job? = null
+        private val refreshedKeys = mutableSetOf<String>()
+        private val _paging = MutableStateFlow(ChatListPaging())
+        val paging: StateFlow<ChatListPaging> = _paging.asStateFlow()
         private var hiddenKeys: Set<String> = emptySet()
         private var mutedKeys: Set<String> = emptySet()
         private val pendingMutes = mutableSetOf<String>()
@@ -160,6 +169,10 @@ class ChatListViewModel
 
         fun teardown() {
             visibleGeneration++
+            pageGeneration++
+            pageJob?.cancel()
+            pageJob = null
+            _paging.value = _paging.value.copy(loading = false)
             fetchJob?.cancel()
             fetchJob = null
             followUpRead = false
@@ -185,6 +198,7 @@ class ChatListViewModel
                 return
             }
             val revision = muteRevision
+            val badgesAtStart = badgeRevision
             val messagesAtStart = messageRevision
             val generation = visibleGeneration
             fetchJob =
@@ -197,7 +211,12 @@ class ChatListViewModel
                         when {
                             response != null -> {
                                 val live = allRows.filter { (rowRevisions[it.storageKey] ?: 0) > messagesAtStart }
-                                show(response, syncMutes = stored.failure == null && revision == muteRevision, liveRows = live)
+                                show(
+                                    response,
+                                    syncMutes = stored.failure == null && revision == muteRevision,
+                                    liveRows = live,
+                                    updateTotals = badgesAtStart == badgeRevision,
+                                )
                             }
                             _state.value is ChatListUiState.Loaded || _state.value == ChatListUiState.Empty -> Unit
                             else -> _state.value = ChatListUiState.Error(stored.failure?.message ?: "Couldn't load conversations.")
@@ -221,28 +240,28 @@ class ChatListViewModel
             response: UnifiedConversationsResponse,
             syncMutes: Boolean = true,
             liveRows: List<ConversationRowContent> = emptyList(),
+            updateTotals: Boolean = true,
         ) {
-            if (syncMutes) {
-                val known =
-                    response.conversations.mapNotNull { dto ->
-                        val enabled = dto.notificationsEnabled ?: return@mapNotNull null
-                        val key =
-                            if (dto.type == "room") {
-                                dto.id?.let { ChatConversationPreferences.roomKey(it) }
-                            } else {
-                                dto.otherParticipantId?.let { ChatConversationPreferences.personKey(it) }
-                            } ?: return@mapNotNull null
-                        key to !enabled
-                    }.toMap()
-                preferences.syncMuted(known)
-            }
+            if (syncMutes) syncMutePreferences(response)
             loadPreferences()
-            serverTotalUnread = response.totalUnread ?: response.conversations.sumOf { it.totalUnread }
-            allRows = response.conversations.map { project(it, mutedKeys) }
+            if (updateTotals) {
+                serverTotalUnread = response.totalUnread ?: response.conversations.sumOf { it.totalUnread }
+                serverUnmutedUnread = response.totalUnmutedUnread
+            }
+            pageGeneration++
+            pageJob?.cancel()
+            pageJob = null
+            val fresh = response.conversations.map { project(it, mutedKeys) }
+            refreshedKeys.clear()
+            refreshedKeys.addAll(fresh.map { it.storageKey })
+            nextCursor = response.nextCursor
+            _paging.value = ChatListPaging(hasMore = response.hasMore && nextCursor != null)
+            val retained = if (_paging.value.hasMore) allRows.filter { it.storageKey !in refreshedKeys } else emptyList()
+            allRows = fresh + retained
             liveRows.forEach { live ->
                 val fetched = allRows.firstOrNull { it.storageKey == live.storageKey }
                 if (fetched != null && messageTime(live.lastMessageAt) >= messageTime(fetched.lastMessageAt)) {
-                    serverTotalUnread += live.unread - fetched.unread
+                    if (updateTotals && serverUnmutedUnread == null) serverTotalUnread += live.unread - fetched.unread
                     allRows = allRows.filterNot { it.storageKey == live.storageKey } + live.copy(isMuted = live.storageKey in mutedKeys)
                 }
             }
@@ -252,8 +271,70 @@ class ChatListViewModel
             publishBadgeSnapshot()
         }
 
+        private fun syncMutePreferences(response: UnifiedConversationsResponse) {
+            val known =
+                response.conversations.mapNotNull { dto ->
+                    val enabled = dto.notificationsEnabled ?: return@mapNotNull null
+                    val key =
+                        if (dto.type == "room") {
+                            dto.id?.let { ChatConversationPreferences.roomKey(it) }
+                        } else {
+                            dto.otherParticipantId?.let { ChatConversationPreferences.personKey(it) }
+                        } ?: return@mapNotNull null
+                    key to !enabled
+                }.toMap()
+            preferences.syncMuted(known)
+        }
+
+        fun loadMore() {
+            val cursor = nextCursor ?: return
+            if (!_paging.value.hasMore || pageJob?.isActive == true || fetchJob?.isActive == true) return
+            val generation = pageGeneration
+            val mutesAtStart = muteRevision
+            val messagesAtStart = messageRevision
+            _paging.value = _paging.value.copy(loading = true, error = null)
+            pageJob =
+                viewModelScope.launch {
+                    when (val result = repo.conversationsPage(before = cursor)) {
+                        is NetworkResult.Success -> {
+                            if (generation != pageGeneration) return@launch
+                            pageJob = null
+                            if (mutesAtStart == muteRevision) syncMutePreferences(result.data)
+                            loadPreferences()
+                            mergePage(result.data, messagesAtStart)
+                        }
+                        is NetworkResult.Failure -> {
+                            if (generation != pageGeneration) return@launch
+                            pageJob = null
+                            _paging.value = _paging.value.copy(loading = false, error = result.error.message)
+                        }
+                    }
+                }
+        }
+
+        private fun mergePage(
+            response: UnifiedConversationsResponse,
+            messagesAtStart: Long,
+        ) {
+            val rows = allRows.associateBy { it.storageKey }.toMutableMap()
+            response.conversations.map { project(it, mutedKeys) }.forEach { row ->
+                refreshedKeys.add(row.storageKey)
+                if ((rowRevisions[row.storageKey] ?: 0) <= messagesAtStart) rows[row.storageKey] = row
+            }
+            val oldCursor = nextCursor
+            nextCursor = response.nextCursor
+            val hasMore = response.hasMore && nextCursor != null && nextCursor != oldCursor
+            _paging.value = ChatListPaging(hasMore = hasMore)
+            allRows =
+                rows.values.filter {
+                    hasMore || it.storageKey in refreshedKeys || (rowRevisions[it.storageKey] ?: 0) > messagesAtStart
+                }.sortedByDescending { messageTime(it.lastMessageAt) }
+            applyFilter()
+            publishBadgeSnapshot()
+        }
+
         private fun publishBadgeSnapshot() {
-            badgeCoordinator.publish(serverTotalUnread, allRows)
+            badgeCoordinator.publish(serverTotalUnread, allRows, serverUnmutedUnread)
         }
 
         private fun loadPreferences() {
@@ -263,7 +344,7 @@ class ChatListViewModel
 
         private fun updateUnreadByFilter() {
             val adjustedUnread =
-                ChatUnreadBadgeMath.adjustedTotal(
+                serverUnmutedUnread?.coerceAtLeast(0) ?: ChatUnreadBadgeMath.adjustedTotal(
                     serverTotal = serverTotalUnread,
                     rows = allRows,
                     mutedKeys = mutedKeys,
@@ -288,7 +369,8 @@ class ChatListViewModel
                     ChatFilter.Market -> visibleRows.filter { it.topicKinds.contains("marketplace") }
                 }
             val filter = _activeFilter.value
-            if (filtered.isEmpty() && filter == ChatFilter.All) {
+            updateUnreadByFilter()
+            if (filtered.isEmpty() && filter == ChatFilter.All && !_paging.value.hasMore) {
                 _state.value = ChatListUiState.Empty
                 return
             }
@@ -328,8 +410,11 @@ class ChatListViewModel
                     viewModelScope.launch {
                         socket.eventsOf("badge:update").collect { json ->
                             json.badgeUnreadCount()?.let { total ->
+                                badgeRevision++
                                 serverTotalUnread = total
+                                serverUnmutedUnread = json.badgeUnmutedUnreadCount()
                                 updateUnreadByFilter()
+                                publishBadgeSnapshot()
                             }
                         }
                     }
@@ -372,7 +457,9 @@ class ChatListViewModel
             allRows =
                 (listOf(updated) + allRows.filterNot { it.storageKey == updated.storageKey })
                     .sortedByDescending { messageTime(it.lastMessageAt) }
-            serverTotalUnread = (serverTotalUnread + unreadFor - original.unread).coerceAtLeast(0)
+            if (serverUnmutedUnread == null) {
+                serverTotalUnread = (serverTotalUnread + unreadFor - original.unread).coerceAtLeast(0)
+            }
             applyFilter()
             publishBadgeSnapshot()
         }
