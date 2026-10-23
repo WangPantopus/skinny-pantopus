@@ -47,7 +47,8 @@ export function markTopic(client: QueryClient, topic: string): void {
       mark(client, ['place', 'intelligence']);
       break;
     case 'chats':
-      mark(client, queryKeys.conversations());
+      void client.invalidateQueries({ queryKey: queryKeys.conversations(),
+        refetchType: navigator.onLine && document.visibilityState === 'visible' ? 'active' : 'none' });
       break;
     case 'chat':
       if (id) { mark(client, queryKeys.chatMessages(id)); mark(client, ['chat', 'room', id]); }
@@ -72,9 +73,14 @@ export function useSyncChanged(): void {
 
   useEffect(() => {
     if (!socket) return;
+    let inboxRefresh: ReturnType<typeof setTimeout> | undefined;
     const changed = (payload: { topics?: unknown } | null) => {
       const topics = Array.isArray(payload?.topics) ? payload.topics.filter((t): t is string => typeof t === 'string') : [];
-      topics.forEach((topic) => markTopic(client, topic));
+      topics.filter((topic) => topic !== 'chats').forEach((topic) => markTopic(client, topic));
+      if (topics.includes('chats') && !inboxRefresh) inboxRefresh = setTimeout(() => {
+        inboxRefresh = undefined;
+        markTopic(client, 'chats');
+      }, 500);
       emitSyncTopics(topics);
     };
     // A reconnect may have missed signals: Household, Messages and Notifications are marked.
@@ -84,7 +90,7 @@ export function useSyncChanged(): void {
         mark(client, ['homes']);
         mark(client, queryKeys.placePrimaryHome());
         mark(client, queryKeys.placeMyHomes());
-        mark(client, queryKeys.conversations());
+        markTopic(client, 'chats');
         mark(client, ['chat']);
         mark(client, queryKeys.notifications());
         emitSyncTopics([RECONNECTED]);
@@ -93,7 +99,7 @@ export function useSyncChanged(): void {
     };
     socket.on('sync:changed', changed);
     socket.on('connect', connected);
-    return () => { socket.off('sync:changed', changed); socket.off('connect', connected); };
+    return () => { if (inboxRefresh) clearTimeout(inboxRefresh); socket.off('sync:changed', changed); socket.off('connect', connected); };
   }, [socket, client]);
 
   useEffect(() => {

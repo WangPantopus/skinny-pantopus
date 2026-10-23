@@ -440,17 +440,23 @@ export async function getArchivedRooms(): Promise<{ rooms: ChatRoomWithDetails[]
  */
 export async function getUnifiedConversations(params?: {
   limit?: number;
+  before?: string;
+  since?: string;
 }): Promise<{
   conversations: UnifiedConversationItem[];
   total: number;
   totalUnread: number;
   totalMessages: number;
+  hasMore: boolean;
+  nextCursor: string | null;
 }> {
   return get<{
     conversations: UnifiedConversationItem[];
     total: number;
     totalUnread: number;
     totalMessages: number;
+    hasMore: boolean;
+    nextCursor: string | null;
   }>('/api/chat/unified-conversations', params);
 }
 

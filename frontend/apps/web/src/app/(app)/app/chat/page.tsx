@@ -13,13 +13,12 @@ import PageHeader from '@/components/PageHeader';
 import SearchInput from '@/components/SearchInput';
 import { ChatSearchResults } from '@/components/chat/ChatSearch';
 import { useSocketEvent, useSocketConnected } from '@/hooks/useSocket';
-import { useBadges } from '@/contexts/BadgeContext';
 import { queryKeys } from '@/lib/query-keys';
 import type { UnifiedConversationItem, ConversationTopic, Relationship, RelationshipUser, User } from '@pantopus/types';
 import { launchFeatures } from '@/lib/featureFlags';
 import { chosenUsername, usernameHandle } from '@pantopus/utils';
 import { fetchMe } from '@/lib/me';
-import { conversationsQuery as conversationsListQuery, type ConversationsReply } from '@/lib/conversations';
+import { useConversationPages, conversationKey, compareConversationTime, type ConversationsReply } from '@/lib/conversations';
 
 type IncomingChatMessage = {
   id?: string;
@@ -30,6 +29,9 @@ type IncomingChatMessage = {
   user_id?: string;
   sender_id?: string;
   sender?: { id?: string };
+  preview?: string;
+  unread_for?: number;
+  other_user_id?: string;
 };
 
 type ConversationsResponse = ConversationsReply;
@@ -124,21 +126,16 @@ export default function ChatListPage() {
   const [newChatError, setNewChatError] = useState<string | null>(null);
   const [startingChatUserId, setStartingChatUserId] = useState<string | null>(null);
   const connected = useSocketConnected();
-  const { setUnreadMessages, setTotalMessages } = useBadges();
 
   // Refs for batching badge syncs and throttling reload
-  const badgeSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastReloadTimeRef = useRef(0);
   const seenMessageEvents = useRef(new Set<string>());
 
   // ── Conversations via useQuery ─────────────────────────────
   const conversationsKey = queryKeys.conversations();
-  const conversationsQuery = useQuery<ConversationsResponse>(conversationsListQuery());
-
-  const conversations = useMemo<UnifiedConversationItem[]>(
-    () => conversationsQuery.data?.conversations ?? [],
-    [conversationsQuery.data],
-  );
+  const pages = useConversationPages();
+  const conversationsQuery = pages.query;
+  const conversations = pages.conversations;
   const totalUnread = Number(conversationsQuery.data?.totalUnread || 0);
   const loading = conversationsQuery.isPending;
   // A failed first read has no list to describe: no count, no empty-inbox card.
@@ -175,7 +172,7 @@ export default function ChatListPage() {
 
   // Shim for imperative refetch calls (fallback polling, reload after new message from unknown room)
   const load = useCallback(async () => {
-    await conversationsQuery.refetch();
+    await conversationsQuery.refetch({ cancelRefetch: false });
   }, [conversationsQuery]);
 
   // ── setQueryData helpers ───────────────────────────────────
@@ -197,18 +194,6 @@ export default function ChatListPage() {
     [queryClient, conversationsKey],
   );
 
-  // Batch badge syncs: collapse rapid changes into a single BadgeContext update
-  useEffect(() => {
-    if (badgeSyncTimerRef.current) clearTimeout(badgeSyncTimerRef.current);
-    badgeSyncTimerRef.current = setTimeout(() => {
-      setUnreadMessages(totalUnread);
-      badgeSyncTimerRef.current = null;
-    }, 500);
-    return () => {
-      if (badgeSyncTimerRef.current) clearTimeout(badgeSyncTimerRef.current);
-    };
-  }, [totalUnread, setUnreadMessages]);
-
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -223,7 +208,7 @@ export default function ChatListPage() {
   useEffect(() => {
     if (connected) return;
     const timer = setInterval(() => {
-      void load();
+      if (navigator.onLine && document.visibilityState === 'visible') void load();
     }, 15000);
     return () => clearInterval(timer);
   }, [connected, load]);
@@ -267,16 +252,15 @@ export default function ChatListPage() {
   }, [newChatOpen, newChatQuery]);
 
   const handleIncomingListMessage = useCallback((msg: IncomingChatMessage) => {
-    if (!msg?.room_id || !msg.id || seenMessageEvents.current.has(String(msg.id))) return;
+    if (!currentUserId || !msg?.room_id || !msg.id || seenMessageEvents.current.has(String(msg.id))) return;
     seenMessageEvents.current.add(String(msg.id));
     if (seenMessageEvents.current.size > 1000) seenMessageEvents.current.delete(seenMessageEvents.current.values().next().value!);
     const roomId = String(msg.room_id);
-    const preview = msg.message || msg.message_text || '';
+    const preview = msg.preview || msg.message || msg.message_text || '';
     const timestamp = msg.created_at || new Date().toISOString();
     const senderId = String(msg.user_id || msg.sender_id || msg?.sender?.id || '');
     const isOwn = !!currentUserId && senderId === String(currentUserId);
     let shouldReload = false;
-    setTotalMessages((prev) => prev + 1);
 
     // Reorder and bump the conversation in the cache via setQueryData.
     // The O(n) findIndex + splice + unshift is preserved — just moved here.
@@ -284,7 +268,7 @@ export default function ChatListPage() {
       const idx = prev.findIndex(conv =>
         conv._type === 'room'
           ? String(conv.id) === roomId
-          : (conv.room_ids || []).map(String).includes(roomId)
+          : String(conv.other_participant_id) === msg.other_user_id || (conv.room_ids || []).map(String).includes(roomId)
       );
 
       if (idx === -1) {
@@ -294,17 +278,19 @@ export default function ChatListPage() {
 
       const updated = [...prev];
       const conv = { ...updated[idx] };
-      if (!conv.last_message_at || Date.parse(timestamp) >= Date.parse(conv.last_message_at)) {
+      if (!conv.last_message_at || compareConversationTime(timestamp, conv.last_message_at) >= 0) {
         conv.last_message_preview = String(preview);
         conv.last_message_at = timestamp;
       }
-      if (!isOwn) conv.total_unread = (conv.total_unread || 0) + 1;
+      const oldUnread = Number(conv.total_unread) || 0;
+      conv.total_unread = typeof msg.unread_for === 'number' ? msg.unread_for : oldUnread + (isOwn ? 0 : 1);
+      if (conv._type !== 'room') conv.room_ids = [...new Set([...(conv.room_ids || []), roomId])];
 
       updated[idx] = conv as UnifiedConversationItem;
-      updated.sort((a, b) => Date.parse(b.last_message_at || '1970-01-01') - Date.parse(a.last_message_at || '1970-01-01'));
+      updated.sort((a, b) => compareConversationTime(b.last_message_at, a.last_message_at));
       return {
         conversations: updated,
-        totalUnread: (!isOwn) ? prevTotalUnread + 1 : prevTotalUnread,
+        totalUnread: Math.max(0, prevTotalUnread + conv.total_unread - oldUnread),
       };
     });
     // Throttle full reload to at most once per 10 seconds
@@ -315,7 +301,7 @@ export default function ChatListPage() {
         void load();
       }
     }
-  }, [currentUserId, load, setTotalMessages, updateConversations]);
+  }, [currentUserId, load, updateConversations]);
 
   // ── Real-time: update conversation list when a new message arrives ──
   useSocketEvent('message:new', handleIncomingListMessage);
@@ -375,6 +361,7 @@ export default function ChatListPage() {
   const virtualizer = useVirtualizer({
     count: filteredConversations.length,
     getScrollElement: () => listScrollRef.current,
+    getItemKey: (index) => conversationKey(filteredConversations[index]),
     estimateSize: () => 72,
     overscan: 8,
   });
@@ -396,7 +383,7 @@ export default function ChatListPage() {
         <PageHeader
           title="Messages"
           // No count until the list has loaded: it read "0 conversations" while loading.
-          subtitle={loading || listFailed ? undefined : totalUnread > 0 ? `${totalUnread} unread` : `${conversations.length} ${conversations.length === 1 ? 'conversation' : 'conversations'}`}
+          subtitle={loading || listFailed ? undefined : totalUnread > 0 ? `${totalUnread} unread` : `${conversationsQuery.data?.total ?? conversations.length} ${(conversationsQuery.data?.total ?? conversations.length) === 1 ? 'conversation' : 'conversations'}`}
           ctaLabel="New message"
           ctaOnClick={openNewChat}
         >
@@ -460,7 +447,7 @@ export default function ChatListPage() {
           <div className="bg-surface rounded-2xl border border-app shadow-sm p-10 text-center mt-4">
             <div className="mb-3 flex justify-center"><Search className="w-8 h-8 text-app-muted" /></div>
             <div className="text-app font-semibold text-lg">No matches</div>
-            <div className="text-sm text-app-text-secondary mt-1">No conversations match &ldquo;{search}&rdquo;</div>
+            <div className="text-sm text-app-text-secondary mt-1">No {pages.hasMore ? 'loaded ' : ''}conversations match &ldquo;{search}&rdquo;</div>
           </div>
         ) : (
           <div className="bg-surface rounded-xl border border-app shadow-sm overflow-hidden">
@@ -470,6 +457,8 @@ export default function ChatListPage() {
             {/* Virtualized conversation list */}
             <div
               ref={listScrollRef}
+              aria-label="Conversations"
+              tabIndex={0}
               className="overflow-y-auto"
               style={{ maxHeight: 'calc(100vh - 280px)' }}
             >
@@ -583,6 +572,9 @@ export default function ChatListPage() {
             </div>
           </div>
         )}
+        {pages.moreError && <p role="alert" className="mt-3 text-sm text-red-600">{pages.moreError}</p>}
+        {pages.hasMore && <button className="mt-3 w-full rounded-lg border border-app px-3 py-2 text-sm text-app hover-bg-app disabled:opacity-50"
+          disabled={pages.loadingMore} onClick={() => void pages.loadMore()}>{pages.loadingMore ? 'Loading conversations…' : 'Load more conversations'}</button>}
       </div>
 
       {/* On document.body: AppShell's <main> is its own stacking context, so from inside it this dialog's backdrop
