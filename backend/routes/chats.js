@@ -415,29 +415,16 @@ function getVisibleMessagePreview(message) {
 // task room the two share, including earlier unseen incoming messages in the
 // room just written to. Sending does not mark that room read.
 async function personRowUnread(userId, otherUserId) {
-  const { data: mine, error } = await supabaseAdmin
-    .from('ChatParticipant')
-    .select('room_id, unread_count, room:room_id!inner(id, type, gig_id)')
-    .eq('user_id', userId)
-    .eq('is_active', true)
-    .in('room.type', ['direct', 'gig']);
-  if (error || !Array.isArray(mine)) throw new Error(error?.message || 'rooms unavailable');
-  const candidates = mine;
-  if (candidates.length === 0) return 0;
-  const [{ data: shared, error: sharedError }, closed] = await Promise.all([
-    supabaseAdmin
-      .from('ChatParticipant')
-      .select('room_id')
-      .eq('user_id', otherUserId)
-      .eq('is_active', true)
-      .in('room_id', candidates.map((row) => row.room_id)),
-    closedGigRoomIds(candidates.map((row) => row.room), userId),
-  ]);
-  if (sharedError || !Array.isArray(shared)) throw new Error(sharedError?.message || 'rooms unavailable');
-  const sharedIds = new Set(shared.map((row) => String(row.room_id)));
-  return candidates
-    .filter((row) => sharedIds.has(String(row.room_id)) && !closed.has(String(row.room_id)))
-    .reduce((sum, row) => sum + (Number(row.unread_count) || 0), 0);
+  const roomIds = await personChatRoomIds(userId, otherUserId);
+  let unread = 0;
+  for (let offset = 0; offset < roomIds.length; offset += 200) {
+    const { data, error } = await supabaseAdmin.from('ChatParticipant')
+      .select('unread_count').eq('user_id', userId).eq('is_active', true)
+      .in('room_id', roomIds.slice(offset, offset + 200));
+    if (error) throw chatAccessUnavailable();
+    unread += (data || []).reduce((sum, row) => sum + (Number(row.unread_count) || 0), 0);
+  }
+  return unread;
 }
 
 // The owner and staff of a business in the room aren't members themselves, so their open business inbox hears its

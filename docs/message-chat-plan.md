@@ -6,7 +6,7 @@ Ownership: `codex/chat-reliability-backend` owns backend/database integration; `
 
 ## Full person-conversation scope
 
-Person history, changes, search, mute and read now share a room lookup that
+Person history, changes, search, mute, read and sender unread echoes now share a room lookup that
 filters both active members before paging by room ID. Intersecting two capped
 membership lists could omit a conversation after 1,000 unrelated rooms. The
 new lookup also keeps assigned-task access checks and rejects a self pair.
