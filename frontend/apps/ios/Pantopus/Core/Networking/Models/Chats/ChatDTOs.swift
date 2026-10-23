@@ -278,7 +278,7 @@ public struct ChatMessageEvent: Decodable, Sendable, Hashable {
 
 /// One sender row inline on a `ChatMessageDTO`. Only the fields the
 /// conversation view actually reads.
-public struct ChatMessageSender: Decodable, Sendable, Hashable, Identifiable {
+public struct ChatMessageSender: Codable, Sendable, Hashable, Identifiable {
     public let id: String
     public let username: String?
     public let name: String?
@@ -297,7 +297,7 @@ public struct ChatMessageSender: Decodable, Sendable, Hashable, Identifiable {
 
 /// One message row in a chat thread. Backed by the `ChatMessage` row
 /// joined with its sender (`user_id` → `sender`).
-public struct ChatMessageDTO: Decodable, Sendable, Hashable, Identifiable {
+public struct ChatMessageDTO: Codable, Sendable, Hashable, Identifiable {
     public let id: String
     public let roomId: String
     public let userId: String?
@@ -371,6 +371,28 @@ public struct ChatMessageDTO: Decodable, Sendable, Hashable, Identifiable {
         reactions = try c.decodeIfPresent([ChatReactionSummary].self, forKey: .reactions) ?? []
         attachments = try c.decodeIfPresent([ChatAttachmentDTO].self, forKey: .attachments) ?? []
         actorUserId = try c.decodeIfPresent(String.self, forKey: .actorUserId)
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(roomId, forKey: .roomId)
+        try c.encodeIfPresent(userId, forKey: .userId)
+        try c.encodeIfPresent(messageText, forKey: .messageText)
+        try c.encode(messageType, forKey: .messageType)
+        try c.encodeIfPresent(metadata, forKey: .metadata)
+        try c.encodeIfPresent(replyToId, forKey: .replyToId)
+        try c.encodeIfPresent(topicId, forKey: .topicId)
+        try c.encodeIfPresent(clientMessageId, forKey: .clientMessageId)
+        try c.encode(createdAt, forKey: .createdAt)
+        try c.encodeIfPresent(editedAt, forKey: .editedAt)
+        try c.encodeIfPresent(deletedAt, forKey: .deletedAt)
+        try c.encodeIfPresent(deliveredAt, forKey: .deliveredAt)
+        try c.encodeIfPresent(readAt, forKey: .readAt)
+        try c.encodeIfPresent(sender, forKey: .sender)
+        try c.encode(reactions, forKey: .reactions)
+        try c.encode(attachments, forKey: .attachments)
+        try c.encodeIfPresent(actorUserId, forKey: .actorUserId)
     }
 
     /// Edit responses carry the changed text, not hydrated files or viewer reactions.
@@ -451,7 +473,7 @@ public struct ChatMessageDTO: Decodable, Sendable, Hashable, Identifiable {
     }
 }
 
-public struct ChatAttachmentDTO: Decodable, Sendable, Hashable, Identifiable {
+public struct ChatAttachmentDTO: Codable, Sendable, Hashable, Identifiable {
     public let id: String
     public let fileURL: String?
     public let originalFilename: String?
@@ -496,7 +518,7 @@ public struct AIMediaUploadResponse: Decodable, Sendable, Hashable {
     public let images: [Image]
 }
 
-public struct ChatReactionSummary: Decodable, Sendable, Hashable, Identifiable {
+public struct ChatReactionSummary: Codable, Sendable, Hashable, Identifiable {
     public var id: String {
         reaction
     }
@@ -504,9 +526,33 @@ public struct ChatReactionSummary: Decodable, Sendable, Hashable, Identifiable {
     public let reaction: String
     public let count: Int
     public let reactedByMe: Bool
+    public let users: [User]?
+
+    public struct User: Codable, Sendable, Hashable {
+        public let id: String
+    }
+
+    public init(reaction: String, count: Int, reactedByMe: Bool, users: [User]? = nil) {
+        self.reaction = reaction
+        self.count = count
+        self.reactedByMe = reactedByMe
+        self.users = users
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        reaction = try container.decode(String.self, forKey: .reaction)
+        count = try container.decode(Int.self, forKey: .count)
+        reactedByMe = try container.decodeIfPresent(Bool.self, forKey: .reactedByMe) ?? false
+        users = try container.decodeIfPresent([User].self, forKey: .users)
+    }
+
+    public func includes(_ viewerId: String) -> Bool {
+        users.map { $0.contains { $0.id == viewerId } } ?? reactedByMe
+    }
 
     private enum CodingKeys: String, CodingKey {
-        case reaction, count
+        case reaction, count, users
         case reactedByMe = "reacted_by_me"
     }
 }

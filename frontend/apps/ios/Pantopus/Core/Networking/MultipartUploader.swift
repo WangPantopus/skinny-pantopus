@@ -79,7 +79,8 @@ public final class MultipartUploader: @unchecked Sendable {
     private func performUpload(
         to url: URL,
         boundary: String,
-        body: Data,
+        body: Data = Data(),
+        bodyFile: URL? = nil,
         headers: [String: String] = [:]
     ) async throws -> (Data, HTTPURLResponse) {
         let sessionOwner = auth
@@ -121,7 +122,7 @@ public final class MultipartUploader: @unchecked Sendable {
 
         let deviceId = sessionOwner.deviceId
         let token = sessionOwner.accessToken
-        var (data, response) = try await session.upload(for: makeRequest(token: token, deviceId: deviceId), from: body)
+        var (data, response) = try await uploadPayload(makeRequest(token: token, deviceId: deviceId), body: body, file: bodyFile)
         try checkSession()
         guard var http = response as? HTTPURLResponse else { throw APIError.invalidResponse }
 
@@ -131,7 +132,7 @@ public final class MultipartUploader: @unchecked Sendable {
             switch outcome {
             case .rotated:
                 let refreshed = sessionOwner.accessToken
-                (data, response) = try await session.upload(for: makeRequest(token: refreshed, deviceId: deviceId), from: body)
+                (data, response) = try await uploadPayload(makeRequest(token: refreshed, deviceId: deviceId), body: body, file: bodyFile)
                 try checkSession()
                 guard let retryHTTP = response as? HTTPURLResponse else { throw APIError.invalidResponse }
                 http = retryHTTP
@@ -153,6 +154,11 @@ public final class MultipartUploader: @unchecked Sendable {
             await sessionOwner.handleUnauthorized()
         }
         return (data, http)
+    }
+
+    private func uploadPayload(_ request: URLRequest, body: Data, file: URL?) async throws -> (Data, URLResponse) {
+        if let file { return try await session.upload(for: request, fromFile: file) }
+        return try await session.upload(for: request, from: body)
     }
 
     /// Upload a single file to `POST /api/files/upload`. Optional form
@@ -429,6 +435,17 @@ public final class MultipartUploader: @unchecked Sendable {
             fields: fields
         )
         let (data, http) = try await performUpload(to: url, boundary: boundary, body: body)
+        return try decodeChatMedia(data, response: http)
+    }
+
+    func uploadChatMedia(roomId: String, prepared: ChatOutboxUpload) async throws -> ChatMediaUploadResponse {
+        defer { try? FileManager.default.removeItem(at: prepared.url) }
+        let url = environment.apiBaseURL.appendingPathComponent("/api/upload/chat-media/\(roomId)")
+        let (data, http) = try await performUpload(to: url, boundary: prepared.boundary, bodyFile: prepared.url)
+        return try decodeChatMedia(data, response: http)
+    }
+
+    private func decodeChatMedia(_ data: Data, response http: HTTPURLResponse) throws -> ChatMediaUploadResponse {
         switch http.statusCode {
         case 200..<300:
             do {

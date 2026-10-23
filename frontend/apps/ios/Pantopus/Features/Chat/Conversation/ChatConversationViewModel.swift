@@ -590,9 +590,8 @@ public final class ChatConversationViewModel {
     }
 
     private let api: APIClient
-    /// The thread as last seen this session, kept in memory only (messages
-    /// never reach the phone's storage, contract choice 4) and wiped with
-    /// the store at sign-out.
+    /// The thread as last seen this session, with a bounded encrypted recent
+    /// copy for relaunch. Both are cleared when the account changes.
     private let store: ScreenStore
     private let socket: SocketClient
     private let uploader: MultipartUploader
@@ -646,6 +645,10 @@ public final class ChatConversationViewModel {
     private var historyGeneration = 0
     private var historyRequestId: UUID?
     private var historyTouchedIds: Set<String> = []
+    private var historyConfirmedAt: Date?
+    private var historySaveTask: Task<Void, Never>?
+    private var savedHistorySnapshot: ChatThreadMemory?
+    private var savedHistoryKey: String?
     private var refreshInProgress = false
     private var fallbackRefreshTask: Task<Void, Never>?
     private var topicsRefreshTask: Task<Void, Never>?
@@ -702,6 +705,12 @@ public final class ChatConversationViewModel {
     /// `clientMessageId`. Survives refetches so retry resends the same
     /// payload under the same idempotency key.
     private var sendContextsByClientId: [String: PendingSendContext] = [:]
+    private var outboxTask: Task<Void, Never>?
+    private var outboxIds: Set<String> = []
+    private var outboxNotice: String?
+    private var usesDurableOutbox: Bool {
+        api === APIClient.shared && mode != .ai
+    }
 
     /// Inputs needed to (re)send one optimistic message. Captured at
     /// send time so retry doesn't re-read mutated composer state.
@@ -835,6 +844,7 @@ public final class ChatConversationViewModel {
     // MARK: - Public API
 
     public func load() async {
+        observeOutbox()
         if case .loaded = state {
             // Back on screen after `teardown()` (a pushed screen, a tab
             // switch): listen again and catch up on what arrived meanwhile.
@@ -847,7 +857,8 @@ public final class ChatConversationViewModel {
         await restoreAIConversationIfNeeded()
         // Reopening a thread seen earlier this session: its messages at once,
         // then the newest page merged in quietly.
-        let recalled = recallThread()
+        let recalled = await recallThread()
+        guard !Task.isCancelled else { return }
         await loadTopicsIfNeeded()
         await fetch(recalled ? .merge : .reload)
         subscribeToSockets()
@@ -1182,6 +1193,10 @@ public final class ChatConversationViewModel {
         // The sending bubble quotes the original now, and a retry keeps the reply.
         replyingTo = nil
         rebuild()
+        if usesDurableOutbox {
+            await enqueuePending(clientId: clientId)
+            return
+        }
         await performSend(clientId: clientId)
     }
 
@@ -1192,13 +1207,136 @@ public final class ChatConversationViewModel {
     public func retry(clientId rawId: String) async {
         guard roomClosedNote == nil, !isSending else { return }
         let clientId = Self.bareClientId(rawId)
+        if usesDurableOutbox, outboxIds.contains(clientId) {
+            await ChatOutbox.shared.retry(clientId)
+            return
+        }
         guard pendingByClientId[clientId] != nil, sendContextsByClientId[clientId] != nil,
               !refusedClientIds.contains(clientId) else { return }
         failedClientIds.remove(clientId)
         isSending = true
         defer { isSending = false }
         rebuild()
+        if usesDurableOutbox {
+            await enqueuePending(clientId: clientId)
+            return
+        }
         await performSend(clientId: clientId)
+    }
+
+    private func enqueuePending(clientId: String) async {
+        guard let context = sendContextsByClientId[clientId], let pending = pendingByClientId[clientId] else { return }
+        let destination: ChatOutboxMessage.Destination
+        let target: String
+        switch mode {
+        case let .person(id): destination = .person
+            target = id
+        case let .room(id): destination = .room
+            target = id
+        case .ai: return
+        }
+        ChatOutbox.shared.start(account: currentUserId)
+        let attachments = context.attachments.filter { $0.data != nil }
+        let message = ChatOutboxMessage(
+            id: clientId,
+            destination: destination,
+            targetId: target,
+            businessUserId: asBusinessUserId,
+            roomId: knownRoomIdHint().isEmpty ? nil : knownRoomIdHint(),
+            text: context.text,
+            messageType: context.messageType,
+            metadata: context.metadata,
+            replyToId: context.replyToId,
+            replyRoomId: messages.first { $0.id == context.replyToId }?.roomId,
+            topicId: context.topicId,
+            createdAt: pending.createdAt,
+            queuedAt: Date(),
+            attachments: attachments.map(ChatOutboxAttachment.init),
+            fileIds: context.fileIds
+        )
+        do {
+            try await ChatOutbox.shared.enqueue(message, attachments: attachments)
+            let capturedIds = Set(attachments.map(\.id))
+            queuedAttachments.removeAll { capturedIds.contains($0.id) }
+            sendLimitNotice = nil
+            applyOutboxSnapshot()
+        } catch {
+            failedClientIds.insert(clientId)
+            sendLimitNotice = error.localizedDescription
+            rebuild()
+        }
+    }
+
+    private func observeOutbox() {
+        guard usesDurableOutbox, outboxTask == nil else { return }
+        ChatOutbox.shared.start(account: currentUserId)
+        let stream = ChatOutbox.shared.events()
+        outboxTask = Task { [weak self] in
+            for await event in stream {
+                guard let self, !Task.isCancelled else { return }
+                if case let .accepted(message) = event, let clientId = message.clientMessageId,
+                   pendingByClientId[clientId] != nil {
+                    retireConfirmedSend(clientId: clientId)
+                    if case .person = mode { directRoomId = message.roomId }
+                    activeRoomIds.insert(message.roomId)
+                    activeThreadTracker.setActiveRooms(activeRoomIds, owner: ObjectIdentifier(self))
+                    joinActiveRoomsIfPossible()
+                    upsert(message)
+                    scheduleMarkRead()
+                }
+                applyOutboxSnapshot()
+            }
+        }
+    }
+
+    private func applyOutboxSnapshot() {
+        let held = ChatOutbox.shared.messages.filter { message in
+            guard message.businessUserId == asBusinessUserId else { return false }
+            switch mode {
+            case let .person(id): return message.destination == .person && message.targetId == id
+            case let .room(id): return message.destination == .room && message.targetId == id
+            case .ai: return false
+            }
+        }
+        let heldIds = Set(held.map(\.id))
+        for id in outboxIds.subtracting(heldIds) {
+            retireConfirmedSend(clientId: id)
+        }
+        outboxIds = heldIds
+        for message in held {
+            pendingByClientId[message.id] = ChatMessageDTO(
+                id: "client_\(message.id)",
+                roomId: message.roomId ?? "",
+                userId: sendingIdentityId,
+                messageText: message.text.isEmpty ? "Attachment" : message.text,
+                messageType: message.messageType ?? "text",
+                metadata: message.metadata.map(JSONValue.object),
+                replyToId: message.replyToId,
+                topicId: message.topicId,
+                clientMessageId: message.id,
+                createdAt: message.createdAt,
+                editedAt: nil,
+                deletedAt: nil,
+                deliveredAt: nil,
+                readAt: nil,
+                sender: nil
+            )
+            sendContextsByClientId[message.id] = PendingSendContext(
+                text: message.text,
+                attachments: [],
+                fileIds: message.fileIds,
+                replyToId: message.replyToId,
+                topicId: message.topicId,
+                messageType: message.messageType,
+                metadata: message.metadata
+            )
+            if message.status == .queued { failedClientIds.remove(message.id) } else { failedClientIds.insert(message.id) }
+            if message.status == .refused { refusedClientIds.insert(message.id) } else { refusedClientIds.remove(message.id) }
+        }
+        let failure = ChatOutbox.shared.restoreFailure ?? held.last { $0.status != .queued }?.failure
+        if let failure { sendLimitNotice = failure } else if sendLimitNotice == outboxNotice { sendLimitNotice = nil }
+        outboxNotice = failure
+        rebuild()
     }
 
     /// Shared send/retry tail. Resolves the destination room (creating
@@ -1612,7 +1750,7 @@ public final class ChatConversationViewModel {
     /// instead of undoing it.
     public func react(messageId: String, reaction: String) async {
         let reacted = messages.first { $0.id == messageId }.map { message in
-            !message.reactions.contains { $0.reaction == reaction && $0.reactedByMe }
+            !message.reactions.contains { $0.reaction == reaction && $0.includes(currentUserId) }
         }
         do {
             let response: ReactToChatMessageResponse = try await api.request(
@@ -1788,6 +1926,8 @@ public final class ChatConversationViewModel {
     }
 
     public func teardown() {
+        outboxTask?.cancel()
+        outboxTask = nil
         setVisibleReadBoundary(nil)
         historyGeneration += 1
         historyRequestId = nil
@@ -2170,6 +2310,11 @@ public final class ChatConversationViewModel {
         )
         replyingTo = nil
         rebuild()
+        if usesDurableOutbox {
+            await enqueuePending(clientId: clientId)
+            if topicForPerson != nil { await loadTopicsIfNeeded() }
+            return
+        }
         let succeeded = await performSend(clientId: clientId)
         if succeeded, topicForPerson != nil {
             await loadTopicsIfNeeded()
@@ -2417,6 +2562,7 @@ public final class ChatConversationViewModel {
                 let allowedRooms = Set(roomIds)
                 messages.removeAll { !allowedRooms.contains($0.roomId) }
             }
+            historyConfirmedAt = Date()
             apply(response: response, kind: kind, fetchedMessages: fetched)
             scheduleMarkRead()
             if case let .room(roomId) = mode, before == nil {
@@ -2493,6 +2639,15 @@ public final class ChatConversationViewModel {
     }
 
     private func handleFetchFailure(_ error: any Error, kind: FetchKind) {
+        if let apiError = error as? APIError {
+            switch apiError {
+            case .forbidden, .notFound, .unauthorized:
+                discardSavedThread()
+                state = .error(message: friendlyMessage(error))
+                return
+            default: break
+            }
+        }
         if case .reload = kind {
             state = .error(message: friendlyMessage(error))
         } else {
@@ -2532,6 +2687,11 @@ public final class ChatConversationViewModel {
     /// socket refetch ran) — retire every trace of the optimistic
     /// copy so a delivered message can never linger as "failed".
     private func retireConfirmedClientIds(in messages: [ChatMessageDTO]) {
+        if usesDurableOutbox {
+            for message in messages {
+                ChatOutbox.shared.confirm(message)
+            }
+        }
         for clientId in messages.compactMap(\.clientMessageId)
             where pendingByClientId[clientId] != nil
             || sendContextsByClientId[clientId] != nil
@@ -2908,6 +3068,11 @@ public final class ChatConversationViewModel {
     // MARK: - Projection
 
     private func rebuild() {
+        rebuildTimeline()
+        scheduleHistorySave()
+    }
+
+    private func rebuildTimeline() {
         let combined = combinedMessages()
         let messagesById = Dictionary(uniqueKeysWithValues: combined.map { ($0.id, $0) })
         if combined.isEmpty {
@@ -2976,7 +3141,7 @@ public final class ChatConversationViewModel {
             let body = bubbleBody(for: message)
             let replyPreview = Self.replyPreview(for: message, in: messagesById, currentUserId: sendingIdentityId)
             let reactions = message.reactions.map {
-                ChatBubbleReaction(id: $0.reaction, reaction: $0.reaction, count: $0.count, reactedByMe: $0.reactedByMe)
+                ChatBubbleReaction(id: $0.reaction, reaction: $0.reaction, count: $0.count, reactedByMe: $0.includes(currentUserId))
             }
             rows.append(.bubble(ChatBubbleContent(
                 id: message.id,
@@ -3405,11 +3570,12 @@ public final class ChatConversationViewModel {
 // MARK: - The thread kept in memory (Instant Screens)
 
 /// The newest messages of a thread and its paging position, as the screen
-/// last showed them. Memory only: never written to the phone's storage.
-struct ChatThreadMemory {
+/// last showed them. The optional encrypted recent copy shares this snapshot.
+struct ChatThreadMemory: Codable, Equatable {
     let messages: [ChatMessageDTO]
     let oldestCursor: String?
     let hasMore: Bool
+    var confirmedAt: Date?
 }
 
 extension ChatConversationViewModel {
@@ -3431,13 +3597,22 @@ extension ChatConversationViewModel {
     }
 
     /// Shows the kept thread, if there is one. True when it did.
-    private func recallThread() -> Bool {
-        guard let endpoint = threadMemoryEndpoint,
-              let memory = store.seeded(endpoint, as: ChatThreadMemory.self), !memory.messages.isEmpty
-        else { return false }
+    private func recallThread() async -> Bool {
+        guard let endpoint = threadMemoryEndpoint, let key = store.key(for: endpoint), key.account == currentUserId else { return false }
+        let generation = historyGeneration
+        var recalled = store.seeded(endpoint, as: ChatThreadMemory.self)
+        if recalled == nil, api === APIClient.shared {
+            recalled = await ChatLocalStore.shared.history(
+                scope: ChatLocalStore.scope(server: key.server, account: key.account), thread: key.description
+            )
+        }
+        guard generation == historyGeneration, store.key(for: endpoint) == key, !Task.isCancelled,
+              let memory = recalled, !memory.messages.isEmpty else { return false }
         messages = memory.messages
         oldestCursor = memory.oldestCursor
         hasMore = memory.hasMore
+        historyConfirmedAt = memory.confirmedAt
+        activeRoomIds = Set(messages.map(\.roomId))
         rebuild()
         return true
     }
@@ -3452,16 +3627,52 @@ extension ChatConversationViewModel {
 
     /// Keeps the newest messages for the next opening (leaving the screen).
     private func rememberThread() {
-        guard let endpoint = threadMemoryEndpoint, !messages.isEmpty else { return }
+        historySaveTask?.cancel()
+        historySaveTask = nil
+        guard let endpoint = threadMemoryEndpoint, let key = store.key(for: endpoint), key.account == currentUserId else { return }
         let kept = Array(messages.suffix(Self.rememberedMessages))
         let trimmed = kept.count < messages.count
-        store.seed(
-            ChatThreadMemory(
-                messages: kept,
-                oldestCursor: trimmed ? Self.paginationCursor(for: kept.first) : oldestCursor,
-                hasMore: trimmed || hasMore
-            ),
-            for: endpoint
+        let memory = ChatThreadMemory(
+            messages: kept,
+            oldestCursor: trimmed ? Self.paginationCursor(for: kept.first) : oldestCursor,
+            hasMore: trimmed || hasMore,
+            confirmedAt: historyConfirmedAt
+        )
+        store.seed(memory, for: endpoint)
+        guard api === APIClient.shared, historyConfirmedAt != nil else { return }
+        guard memory != savedHistorySnapshot || key.description != savedHistoryKey else { return }
+        savedHistorySnapshot = memory
+        savedHistoryKey = key.description
+        let version = ChatLocalStore.shared.version
+        Task {
+            await ChatLocalStore.shared.saveHistory(
+                memory, scope: ChatLocalStore.scope(server: key.server, account: key.account), thread: key.description, version: version
+            )
+        }
+    }
+
+    private func scheduleHistorySave() {
+        historySaveTask?.cancel()
+        historySaveTask = Task { [weak self] in
+            do { try await Task.sleep(nanoseconds: 250_000_000) } catch { return }
+            self?.rememberThread()
+        }
+    }
+
+    private func discardSavedThread() {
+        historySaveTask?.cancel()
+        historySaveTask = nil
+        historyConfirmedAt = nil
+        savedHistorySnapshot = nil
+        savedHistoryKey = nil
+        messages = []
+        oldestCursor = nil
+        hasMore = false
+        guard let endpoint = threadMemoryEndpoint, let key = store.key(for: endpoint), key.account == currentUserId else { return }
+        store.removeSeeds(for: endpoint)
+        guard api === APIClient.shared else { return }
+        ChatLocalStore.shared.removeHistory(
+            scope: ChatLocalStore.scope(server: key.server, account: key.account), thread: key.description
         )
     }
 }

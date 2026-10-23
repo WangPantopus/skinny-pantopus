@@ -44,6 +44,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         try? HomeDocumentTemporaryFiles.clearPreviousLaunch()
         // Files opened from chats and copies of photos sent to the assistant that an earlier run left.
         ChatMediaURL.removeLocalFiles()
+        ChatLocalStore.shared.clearTemporaryUploads()
         APIClient.removeLegacyDiskCache()
         MainActor.assumeIsolated {
             Observability.shared.start(environment: AppEnvironment.current)

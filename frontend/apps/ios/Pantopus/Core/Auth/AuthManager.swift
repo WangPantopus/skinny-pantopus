@@ -306,16 +306,6 @@ final class AuthManager {
         }
     }
 
-    /// Apply the side effects of a confirmed signed-in session: publish
-    /// state, identify analytics, and (re)connect the realtime socket.
-    func finishSignedIn(_ user: UserDTO, token: String) {
-        PlacePendingStore.bind(to: user.id)
-        state = .signedIn(user)
-        Observability.shared.identify(userId: user.id, email: user.email)
-        Analytics.identify(userId: user.id)
-        SocketClient.shared.connect(token: token)
-    }
-
     /// Persist a JSON snapshot of the session user so a future cold launch
     /// can render the signed-in shell before (or without) a network round-trip.
     func persistCachedUser(_ user: UserDTO) {

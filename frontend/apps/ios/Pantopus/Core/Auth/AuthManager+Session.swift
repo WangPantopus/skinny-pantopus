@@ -70,6 +70,17 @@ enum ResumeOutcome: Equatable {
 }
 
 extension AuthManager {
+    /// Apply the side effects of a confirmed signed-in session: publish
+    /// state, identify analytics, and (re)connect the realtime socket.
+    func finishSignedIn(_ user: UserDTO, token: String) {
+        PlacePendingStore.bind(to: user.id)
+        setState(.signedIn(user))
+        Observability.shared.identify(userId: user.id, email: user.email)
+        Analytics.identify(userId: user.id)
+        SocketClient.shared.connect(token: token)
+        if apiClient === APIClient.shared { ChatOutbox.shared.start(account: user.id) }
+    }
+
     // MARK: - Session restore (cold start)
 
     /// Cold-start decision tree (design §3):
@@ -590,6 +601,8 @@ extension AuthManager {
         AIConversationStore.shared.clear()
         SupportTrainReservationsStore.shared.reset()
         ChatConversationPreferences.shared.clear()
+        ChatOutbox.shared.stop()
+        ChatLocalStore.shared.clear()
         // And the files opened from its chats, with the copies of photos it sent the assistant,
         // and its exported Home documents, emergency card and residency letters.
         ChatMediaURL.removeLocalFiles()
