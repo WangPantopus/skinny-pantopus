@@ -24,6 +24,7 @@ const { ownershipClaimLimiter } = require('../middleware/rateLimiter');
 const landlordAuthorityService = require('../services/addressValidation/landlordAuthorityService');
 const { assertCallerOwnsLease, resolveVerifiedAuthorityForActor } = require('../utils/authorityResolution');
 const { requireExpectedSessionScope } = require('../utils/requestSessionScope');
+const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
 
 // ============================================================
 // VALIDATION SCHEMAS
@@ -274,7 +275,7 @@ router.get(
         .in('state', ['active', 'pending', 'ended', 'canceled'])
         .order('created_at', { ascending: false });
       if (leasesErr) throw leasesErr;
-      const displayLeases = (leases || []).map(lease => ({ ...lease, metadata: leaseRequestMetadata(lease.metadata) }));
+      const displayLeases = await namedResidents((leases || []).map(lease => ({ ...lease, metadata: leaseRequestMetadata(lease.metadata) })));
 
       // Fetch pending tenant requests (leases sourced from tenant)
       const pendingRequests = displayLeases.filter(
@@ -521,13 +522,24 @@ router.get(
 
       if (error) throw error;
 
-      res.json({ requests: (requests || []).map(lease => ({ ...lease, metadata: leaseRequestMetadata(lease.metadata) })) });
+      res.json({ requests: await namedResidents((requests || []).map(lease => ({ ...lease, metadata: leaseRequestMetadata(lease.metadata) }))) });
     } catch (err) {
       logger.error('GET /landlord/properties/:homeId/requests failed', { error: err.message });
       res.status(500).json({ error: 'Failed to fetch requests' });
     }
   },
 );
+
+// A lease's tenant goes by the name and handle they show neighbors (services/chatPeople.js), in the keys the lease
+// row already has.
+async function namedResidents(leases) {
+  const people = await loadChatPeople(leases.map(lease => lease.primary_resident?.id));
+  return leases.map((lease) => {
+    if (!lease.primary_resident) return lease;
+    const { username, name } = chatPersonRow(lease.primary_resident, people);
+    return { ...lease, primary_resident: { ...lease.primary_resident, username, name } };
+  });
+}
 
 // ============================================================
 // ═══════════════════════════════════════════════════════════════

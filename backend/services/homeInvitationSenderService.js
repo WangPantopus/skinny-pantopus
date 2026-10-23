@@ -1,6 +1,7 @@
 const db = require('../config/supabaseAdmin');
 const invitations = require('./homeInvitationService');
 const decisions = require('./homeInvitationDecisionService');
+const { loadChatPeople, chatPersonRow } = require('./chatPeople');
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const HASH = /^[a-f0-9]{64}$/;
 const ACTIONS = ['create', 'resend', 'withdraw'];
@@ -60,6 +61,7 @@ async function prepare({ actorId, intent }) {
     invitation = Object.fromEntries(INVITATION_FIELDS.filter(key => Object.hasOwn(r.invitation,key)).map(key => [key,r.invitation[key]]));
   }
   if (invitation) validateInvitee(invitation);
+  if (invitation?.invitee) nameInvitees([invitation], await loadChatPeople([invitation.invitee.id]));
   return { home_id: r.home_id, action: r.action, decision_token: r.decision_token, invitation };
 }
 function validateInvitee(invitation) {
@@ -70,6 +72,15 @@ function validateInvitee(invitation) {
     || !(invitee.name === null || typeof invitee.name === 'string')) throw failure();
   invitation.invitee = { id:invitee.id, username:invitee.username, name:invitee.name };
 }
+// Invitees go by their Local Profile's name and handle, as everywhere else in invitations (homeInvitationService);
+// the SQL names them by the account.
+function nameInvitees(invitations, people) {
+  for (const invitation of invitations) {
+    if (!invitation.invitee) continue;
+    const named = chatPersonRow(invitation.invitee, people);
+    invitation.invitee = { id:named.id, username:named.username, name:named.name };
+  }
+}
 async function list({ actorId, homeId }) {
   if (!uuid(homeId)) throw failure('INVITE_INVALID',400);
   const r = await rpc('list_home_invitation_sender',{...identity(actorId),p_home_id:homeId.toLowerCase()});
@@ -78,6 +89,7 @@ async function list({ actorId, homeId }) {
     if (!uuid(invitation?.id) || invitation.home_id !== homeId.toLowerCase() || invitation.status !== 'pending') throw failure();
     validateInvitee(invitation);
   }
+  nameInvitees(r.invitations, await loadChatPeople(r.invitations.map(invitation => invitation.invitee?.id)));
   return r.invitations.map(invitation => Object.fromEntries(INVITATION_FIELDS.filter(key => Object.hasOwn(invitation,key)).map(key => [key,invitation[key]])));
 }
 async function read({ actorId, requestId }) {

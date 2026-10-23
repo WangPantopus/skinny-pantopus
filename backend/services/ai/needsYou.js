@@ -125,13 +125,15 @@ async function taskItems(ctx) {
 async function inviteItems(ctx) {
   const invitations = await homeInvitationService.list(ctx.userId);
   const now = Date.now();
-  return invitations
+  const pending = invitations
     .filter((invite) => String(invite.invitee_user_id || '') === String(ctx.userId) && invite.status === 'pending'
-      && (!invite.expires_at || Date.parse(invite.expires_at) > now))
+      && (!invite.expires_at || Date.parse(invite.expires_at) > now));
+  const names = await namesOf(pending.map((invite) => invite.inviter?.id));
+  return pending
     .map((invite) => ({
       id: `home_invite:${invite.id}`, type: 'home_invite',
       title: `Join ${clip(invite.home?.name, 50) || `a home in ${invite.home?.city || 'your area'}`}`,
-      subtitle: joined(invite.inviter?.name ? `From ${clip(invite.inviter.name, 40)}` : null, invite.expires_at ? `Until ${day(invite.expires_at, ctx.timeZone)}` : null),
+      subtitle: joined(invite.inviter?.id ? `From ${names.get(String(invite.inviter.id))}` : null, invite.expires_at ? `Until ${day(invite.expires_at, ctx.timeZone)}` : null),
       due_at: invite.expires_at || null,
       // The apps open an invitation from its own notification.
       link: 'pantopus://notifications', subject: { type: 'home', id: invite.home_id },
