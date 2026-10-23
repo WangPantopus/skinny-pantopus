@@ -3,7 +3,12 @@
  *
  * GET /api/link-preview?url=https://example.com/article
  *
- * Returns: { title, description, image, siteName, url }
+ * Returns: { title, description, siteName, url }
+ *
+ * Previews are text only. A page's og:image is chosen by whoever controls the
+ * link: loading it in viewers' apps would show that host every viewer's IP
+ * address, and proxying it would have this server fetch and serve unreviewed
+ * images into every feed. So no image is offered.
  *
  * Requires authentication (verifyToken) to prevent abuse.
  * Results are cached in-memory for 1 hour.
@@ -11,12 +16,13 @@
 
 const express = require('express');
 const router = express.Router();
-const cheerio = require('cheerio');
+const { Parser } = require('htmlparser2');
 const http = require('node:http');
 const https = require('node:https');
 const dns = require('node:dns');
 const net = require('node:net');
 const zlib = require('node:zlib');
+const { StringDecoder } = require('node:string_decoder');
 const ipaddr = require('ipaddr.js');
 const rateLimit = require('express-rate-limit');
 const verifyToken = require('../middleware/verifyToken');
@@ -51,7 +57,9 @@ function setCache(url, entry, ttl = CACHE_TTL) {
   cache.set(url, { ...entry, ts: Date.now(), ttl });
 }
 
-const MAX_BODY_BYTES = 512 * 1024;
+// Bytes read per page. Nothing is buffered, so this bounds work, not memory;
+// YouTube's tags sit about 825 KB in.
+const MAX_BODY_BYTES = 2 * 1024 * 1024;
 const MAX_URL_LENGTH = 2048;
 const FETCH_DEADLINE_MS = 5000;
 const previewLimiter = rateLimit({
@@ -169,6 +177,71 @@ const DECODERS = {
   br: () => zlib.createBrotliDecompress(),
 };
 
+// The <meta> tags a preview reads, best first; <title> is the title's fallback.
+const PREVIEW_TAGS = {
+  title: ['og:title', 'twitter:title'],
+  description: ['og:description', 'twitter:description', 'description'],
+  siteName: ['og:site_name'],
+};
+const PREVIEW_TAG_NAMES = new Set(Object.values(PREVIEW_TAGS).flat());
+
+// Reads preview tags as the page streams and keeps nothing else. Script and
+// style text passes through unstored, so a head that is mostly script
+// (YouTube's carries ~760 KB of it before its <title>) still previews.
+function previewReader() {
+  const tags = new Map();
+  const pick = names => names.map(name => tags.get(name)).find(Boolean) || null;
+  let pageTitle = null;
+  let titleText = null; // while inside the page's <title>
+  let svgDepth = 0; // an <svg> <title> names an icon, not the page
+  // Preview tags belong in <head>, but some pages (YouTube channels) put them
+  // in <body>. A head that ends without a title doesn't end the reading.
+  let headEnded = false;
+  let headHadTitle = false;
+  const endHead = () => {
+    if (headEnded) return;
+    headEnded = true;
+    headHadTitle = Boolean(pick(PREVIEW_TAGS.title) || pageTitle);
+  };
+  const parser = new Parser({
+    onopentag(name, attrs) {
+      if (name === 'svg') svgDepth += 1;
+      else if (name === 'body') endHead();
+      else if (name === 'title' && pageTitle === null && titleText === null && !svgDepth) titleText = '';
+      else if (name === 'meta') {
+        const content = (attrs.content || attrs.value || '').trim();
+        for (const key of [attrs.property, attrs.name]) {
+          const tag = key?.trim().toLowerCase();
+          if (content && PREVIEW_TAG_NAMES.has(tag) && !tags.has(tag)) tags.set(tag, content);
+        }
+      }
+    },
+    ontext(text) {
+      if (titleText !== null && titleText.length < 1000) titleText += text;
+    },
+    onclosetag(name) {
+      if (name === 'svg' && svgDepth) svgDepth -= 1;
+      else if (name === 'head') endHead();
+      else if (name === 'title' && titleText !== null) {
+        pageTitle = titleText.trim();
+        titleText = null;
+      }
+    },
+  }, { decodeEntities: true });
+  const fields = () => ({
+    title: (pick(PREVIEW_TAGS.title) || pageTitle || titleText?.trim() || null)?.slice(0, 300) ?? null,
+    description: pick(PREVIEW_TAGS.description)?.slice(0, 500) ?? null,
+    siteName: pick(PREVIEW_TAGS.siteName)?.slice(0, 200) ?? null,
+  });
+  return {
+    write: text => parser.write(text),
+    fields,
+    // Done when the head has ended with a title, or every field has its
+    // first-choice tag (YouTube lists og:site_name before og:title).
+    done: () => headHadTitle || Object.values(PREVIEW_TAGS).every(([best]) => tags.has(best)),
+  };
+}
+
 function fetchHtml(url, signal) {
   return new Promise((resolve, reject) => {
     let decoder = null;
@@ -191,19 +264,19 @@ function fetchHtml(url, signal) {
       }
       const encoding = String(response.headers['content-encoding'] || 'identity').trim().toLowerCase();
       if (encoding !== 'identity' && !DECODERS[encoding]) return stop(previewError('Unsupported preview encoding', 422));
-      // Preview tags live in <head>: read until it closes or the byte ceiling,
-      // whichever comes first, and cancel the rest. Big pages (video, news,
-      // code hosts) still preview; nothing past the ceiling is ever buffered.
-      const chunks = [];
+      // Read until the preview tags are in or the byte ceiling, whichever
+      // comes first, and cancel the rest. Big pages (video, news, code hosts)
+      // still preview; the page itself is never buffered.
+      const reader = previewReader();
+      const text = new StringDecoder('utf8');
       let size = 0;
-      let tail = '';
       let done = false;
       const finish = () => {
         if (done) return;
         done = true;
         response.destroy();
         decoder?.destroy();
-        resolve({ html: Buffer.concat(chunks, size).toString('utf8') });
+        resolve({ preview: reader.fields() });
       };
       let body = response;
       if (encoding !== 'identity') {
@@ -220,69 +293,18 @@ function fetchHtml(url, signal) {
       body.on('data', chunk => {
         if (done) return;
         const kept = chunk.subarray(0, MAX_BODY_BYTES - size);
-        chunks.push(kept);
         size += kept.length;
-        const text = tail + kept.toString('latin1');
-        if (size >= MAX_BODY_BYTES || /<\/head[\s>]/i.test(text)) return finish();
-        tail = text.slice(-8);
+        reader.write(text.write(kept));
+        if (size >= MAX_BODY_BYTES || reader.done()) finish();
       });
-      body.on('end', finish);
+      body.on('end', () => {
+        if (!done) reader.write(text.end());
+        finish();
+      });
     });
     request.on('error', fail);
     request.on('upgrade', (_response, socket) => { socket.destroy(); fail(previewError('Failed to fetch URL')); });
   });
-}
-
-// ── Extract OG metadata from HTML ────────────────────────────
-function extractMetadata(html, requestedUrl) {
-  const $ = cheerio.load(html);
-
-  const get = (selectors) => {
-    for (const sel of selectors) {
-      const val = $(sel).attr('content') || $(sel).attr('value');
-      if (val && val.trim()) return val.trim();
-    }
-    return null;
-  };
-
-  const title = get([
-    'meta[property="og:title"]',
-    'meta[name="twitter:title"]',
-  ]) || $('title').text().trim() || null;
-
-  const description = get([
-    'meta[property="og:description"]',
-    'meta[name="twitter:description"]',
-    'meta[name="description"]',
-  ]) || null;
-
-  const image = get([
-    'meta[property="og:image"]',
-    'meta[name="twitter:image"]',
-    'meta[name="twitter:image:src"]',
-  ]) || null;
-
-  const siteName = get([
-    'meta[property="og:site_name"]',
-  ]) || null;
-
-  // Resolve relative image URLs
-  let resolvedImage = null;
-  if (image && image.length <= MAX_URL_LENGTH) {
-    try {
-      resolvedImage = parsePublicUrl(new URL(image, requestedUrl).href).href;
-    } catch {
-      resolvedImage = null;
-    }
-  }
-
-  return {
-    title: title ? title.slice(0, 300) : null,
-    description: description ? description.slice(0, 500) : null,
-    image: resolvedImage,
-    siteName: siteName ? siteName.slice(0, 200) : null,
-    url: requestedUrl,
-  };
 }
 
 async function loadPreview(url, target, userId) {
@@ -299,11 +321,11 @@ async function loadPreview(url, target, userId) {
       let result;
       for (let redirects = 0; redirects <= 3; redirects += 1) {
         result = await fetchHtml(target, controller.signal);
-        if (result.html !== undefined) break;
+        if (result.preview) break;
         if (!result.location || redirects === 3) throw previewError('Too many or invalid redirects');
         target = parsePublicUrl(new URL(result.location, target).href);
       }
-      const metadata = { ...extractMetadata(result.html, target.href), url };
+      const metadata = { ...result.preview, url };
       setCache(url, { data: metadata });
       return metadata;
     } catch (err) {
