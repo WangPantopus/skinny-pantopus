@@ -186,6 +186,28 @@ refusal and successful send after local fixture publication. Temporary backend
 fixtures were removed. Syntax and all four identity-select guards passed.
 The original group browser recheck remains pending; no test code was changed.
 
+## Reconnect and history across many shared rooms
+
+History and compact sync/read-receipt lookups now query at most 100 room IDs per
+URL. Person history merges these batches into only the requested global page,
+preserving microsecond timestamp/UUID ordering. Compact state reads run at most
+four requests at once. A missing snapshot room returns retryable unavailability
+instead of silently advancing an incomplete cache.
+
+Both existing `/changes` routes also accept POST with JSON `cursor` and optional
+`until` maps, `limit` and `asBusinessUserId`. GET and JSON-string cursors remain
+compatible. Maps accept up to 10,000 rooms, with UUID and safe revision validation;
+the earlier 500-room cap was smaller than valid history responses. POST avoids
+placing these maps in an HTTP request URL. Responses remain unchanged.
+
+A synthetic pair sharing 531 rooms reproduced old history HTTP 500 and cursor
+GET HTTP 431. New actual API history returned 200/200/131 messages in exact
+microsecond order without duplicates, with all 531 snapshot cursors. After edits
+and one deletion, POST changes returned 200/200/131 changes exactly once; the
+next delta was empty and malformed cursors returned 400. Fixture rooms and the
+temporary person were removed. Client POST adoption and actual screen reconnect
+verification remain pending. No schema or test-code changes.
+
 ## Immediate contract
 
 - REST message history uses `(created_at, id)` for both `before` and `after`; both bounds can be combined. `nextCursor` pages backward and `hasMore` comes from an extra row.

@@ -6,12 +6,18 @@ function parseSyncCursor(raw, { optional = false } = {}) {
   if (raw == null && optional) return null;
   let value;
   try {
-    if (typeof raw !== 'string' || raw.length > 32000) throw new Error();
-    value = JSON.parse(raw);
-    if (!value || Array.isArray(value) || typeof value !== 'object' || Object.keys(value).length > 500) throw new Error();
+    // POST readers send a JSON object so room maps do not overflow HTTP URLs.
+    // Keep GET/string compatibility and a bounded body for malformed requests.
+    if (typeof raw === 'string' && raw.length > 1024 * 1024) throw new Error();
+    value = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    if (!value || Array.isArray(value) || typeof value !== 'object' || Object.keys(value).length > 10000) throw new Error();
+    const normalized = {};
     for (const [roomId, version] of Object.entries(value)) {
-      if (!UUID.test(roomId) || !Number.isSafeInteger(version) || version < 0) throw new Error();
+      if (!UUID.test(roomId) || !Number.isSafeInteger(version) || version < 0
+        || Object.hasOwn(normalized, roomId.toLowerCase())) throw new Error();
+      normalized[roomId.toLowerCase()] = version;
     }
+    value = normalized;
   } catch {
     const error = new Error('Invalid chat sync cursor');
     error.status = 400;
@@ -20,11 +26,29 @@ function parseSyncCursor(raw, { optional = false } = {}) {
   return value;
 }
 
+// Bounded URLs and four requests at a time. Callers only use this for compact
+// room/participant state, never for unbounded message bodies.
+async function readChatRoomBatches(roomIds, query) {
+  const rows = [];
+  for (let offset = 0; offset < roomIds.length; offset += 400) {
+    const batch = [];
+    for (let start = offset; start < Math.min(roomIds.length, offset + 400); start += 100) {
+      batch.push(query(roomIds.slice(start, start + 100)));
+    }
+    const results = await Promise.all(batch);
+    for (const result of results) {
+      if (result.error) throw result.error;
+      rows.push(...(result.data || []));
+    }
+  }
+  return rows;
+}
+
 async function chatSyncSnapshot(roomIds) {
   if (!roomIds.length) return { cursors: {}, resets: {} };
-  const { data, error } = await supabaseAdmin.from('ChatRoom')
-    .select('id, message_revision, history_reset_revision').in('id', roomIds);
-  if (error) throw error;
+  const data = await readChatRoomBatches(roomIds, (ids) => supabaseAdmin.from('ChatRoom')
+    .select('id, message_revision, history_reset_revision').in('id', ids));
+  if (data.length !== new Set(roomIds).size) throw new Error('Chat sync scope changed; retry');
   return {
     cursors: Object.fromEntries((data || []).map((row) => [row.id, row.message_revision])),
     resets: Object.fromEntries((data || []).map((row) => [row.id, row.history_reset_revision])),
@@ -57,14 +81,13 @@ async function chatChanges({ roomIds, identityUserId, cursor, until, limit }) {
 
 async function chatReadReceipts(roomIds) {
   if (!roomIds.length) return [];
-  const { data, error } = await supabaseAdmin.from('ChatParticipant')
+  const data = await readChatRoomBatches(roomIds, (ids) => supabaseAdmin.from('ChatParticipant')
     .select('user_id, room_id, last_read_at, last_read_message_id, last_read_message_at, room:room_id!inner(type)')
-    .in('room_id', roomIds).eq('room.type', 'direct').eq('is_active', true)
-    .not('last_read_message_id', 'is', null);
-  if (error) throw error;
+    .in('room_id', ids).eq('room.type', 'direct').eq('is_active', true)
+    .not('last_read_message_id', 'is', null));
   return (data || []).map((row) => ({ userId: row.user_id, roomId: row.room_id,
     readAt: row.last_read_at, throughMessageId: row.last_read_message_id,
     throughCreatedAt: row.last_read_message_at }));
 }
 
-module.exports = { parseSyncCursor, chatSyncSnapshot, chatChanges, chatReadReceipts };
+module.exports = { parseSyncCursor, chatSyncSnapshot, chatChanges, chatReadReceipts, readChatRoomBatches };

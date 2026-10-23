@@ -42,7 +42,7 @@ const {
   isRoomClosedForWrites,
 } = require('../services/chatGigRoomAccess');
 const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
-const { markChatRead, applyDirectReadReceipts } = require('../services/chatReadState');
+const { markChatRead, applyDirectReadReceipts, timestampMicros } = require('../services/chatReadState');
 const { parseSyncCursor, chatSyncSnapshot, chatChanges, chatReadReceipts } = require('../services/chatSync');
 const chatRealtime = require('../services/chatRealtime');
 const { incCounter, recordHistogram, getSnapshot } = require('../services/chatMetrics');
@@ -908,9 +908,10 @@ async function personChatRoomIds(userId, otherUserId, asBusinessUserId) {
 }
 
 async function respondWithChatChanges(req, res, roomIds, identityUserId) {
-  const cursor = parseSyncCursor(req.query.cursor);
-  const until = parseSyncCursor(req.query.until, { optional: true });
-  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 200, 1), 200);
+  const params = req.method === 'POST' ? (req.body || {}) : req.query;
+  const cursor = parseSyncCursor(params.cursor);
+  const until = parseSyncCursor(params.until, { optional: true });
+  const limit = Math.min(Math.max(parseInt(params.limit, 10) || 200, 1), 200);
   const changes = await chatChanges({ roomIds, identityUserId, cursor, until, limit });
   const visible = changes.messages.filter((message) => !message.deleted);
   const [reactions, people, readReceipts] = await Promise.all([
@@ -1831,23 +1832,26 @@ router.get(['/rooms/:roomId/messages/:messageId/context', '/conversations/:other
   });
 
 /**
- * GET /api/chat/{rooms/:roomId,conversations/:otherUserId}/changes
+ * GET/POST /api/chat/{rooms/:roomId,conversations/:otherUserId}/changes
  * All-topic changes since the cached room revisions, including tombstones.
+ * POST accepts cursor objects without placing potentially large maps in URLs.
  */
-router.get('/conversations/:otherUserId/changes', verifyToken, async (req, res) => {
+async function personChatChanges(req, res) {
   try {
-    const asBusinessUserId = req.query.asBusinessUserId ? String(req.query.asBusinessUserId) : null;
+    const params = req.method === 'POST' ? (req.body || {}) : req.query;
+    const asBusinessUserId = params.asBusinessUserId ? String(params.asBusinessUserId) : null;
     const roomIds = await personChatRoomIds(req.user.id, req.params.otherUserId, asBusinessUserId);
     return await respondWithChatChanges(req, res, roomIds, asBusinessUserId || req.user.id);
   } catch (error) {
     return chatChangesFailure(req, res, error);
   }
-});
+}
 
-router.get('/rooms/:roomId/changes', verifyToken, async (req, res) => {
+async function roomChatChanges(req, res) {
   try {
     const { roomId } = req.params;
-    const asBusinessUserId = req.query.asBusinessUserId ? String(req.query.asBusinessUserId) : null;
+    const params = req.method === 'POST' ? (req.body || {}) : req.query;
+    const asBusinessUserId = params.asBusinessUserId ? String(params.asBusinessUserId) : null;
     if (asBusinessUserId && !await canActAsBusiness(asBusinessUserId, req.user.id)) {
       return res.status(403).json({ error: 'Access denied' });
     }
@@ -1860,7 +1864,11 @@ router.get('/rooms/:roomId/changes', verifyToken, async (req, res) => {
   } catch (error) {
     return chatChangesFailure(req, res, error);
   }
-});
+}
+router.route('/conversations/:otherUserId/changes')
+  .get(verifyToken, personChatChanges).post(verifyToken, personChatChanges);
+router.route('/rooms/:roomId/changes')
+  .get(verifyToken, roomChatChanges).post(verifyToken, roomChatChanges);
 
 /**
  * GET /api/chat/conversations/:otherUserId/messages
@@ -1883,9 +1891,13 @@ router.get('/conversations/:otherUserId/messages', verifyToken, async (req, res)
     }
 
     const runQuery = async ({ senderKey }) => {
-      let q = supabaseAdmin
-        .from('ChatMessage')
-        .select(`
+      let newest = [];
+      // Bound each URL and retain only the requested global page while merging
+      // room batches. Sorting keeps PostgreSQL's microsecond timestamp/UUID order.
+      for (let offset = 0; offset < sharedRoomIds.length; offset += 100) {
+        let q = supabaseAdmin
+          .from('ChatMessage')
+          .select(`
           *,
           sender:${senderKey}(
             id,
@@ -1894,15 +1906,24 @@ router.get('/conversations/:otherUserId/messages', verifyToken, async (req, res)
             profile_picture_url
           )
         `)
-        .in('room_id', sharedRoomIds)
-        .eq('deleted', false)
-        .order('created_at', { ascending: false })
-        .order('id', { ascending: false })
-        .limit(lim + 1);
+          .in('room_id', sharedRoomIds.slice(offset, offset + 100))
+          .eq('deleted', false)
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
+          .limit(lim + 1);
 
-      if (topicId) q = q.eq('topic_id', topicId);
-      q = applyCursorPagination(q, before, after);
-      return q;
+        if (topicId) q = q.eq('topic_id', topicId);
+        q = applyCursorPagination(q, before, after);
+        const { data, error } = await q;
+        if (error) return { error };
+        newest = newest.concat(data || []).sort((left, right) => {
+          const a = timestampMicros(left.created_at) ?? 0n;
+          const b = timestampMicros(right.created_at) ?? 0n;
+          if (a !== b) return a > b ? -1 : 1;
+          return left.id === right.id ? 0 : left.id > right.id ? -1 : 1;
+        }).slice(0, lim + 1);
+      }
+      return { data: newest };
     };
 
     let messages = null;

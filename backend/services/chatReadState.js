@@ -1,6 +1,7 @@
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const chatRealtime = require('./chatRealtime');
+const { readChatRoomBatches } = require('./chatSync');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -61,10 +62,12 @@ async function applyDirectReadReceipts(messages, viewerId) {
     || String(m.actor_user_id) === String(viewerId));
   const roomIds = [...new Set(own.map((m) => m.room_id))];
   if (!roomIds.length) return;
-  const { data, error } = await supabaseAdmin.from('ChatParticipant')
-    .select('room_id, user_id, last_read_at, last_read_message_at, last_read_message_id, room:room_id!inner(type)')
-    .in('room_id', roomIds).eq('room.type', 'direct').eq('is_active', true);
-  if (error) {
+  let data;
+  try {
+    data = await readChatRoomBatches(roomIds, (ids) => supabaseAdmin.from('ChatParticipant')
+      .select('room_id, user_id, last_read_at, last_read_message_at, last_read_message_id, room:room_id!inner(type)')
+      .in('room_id', ids).eq('room.type', 'direct').eq('is_active', true));
+  } catch (error) {
     logger.warn('chat_read_receipts_unavailable', { code: error.code });
     return;
   }
@@ -85,4 +88,4 @@ async function applyDirectReadReceipts(messages, viewerId) {
   }
 }
 
-module.exports = { markChatRead, applyDirectReadReceipts };
+module.exports = { markChatRead, applyDirectReadReceipts, timestampMicros };
