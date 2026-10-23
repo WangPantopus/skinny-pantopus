@@ -374,7 +374,8 @@ function applyLocalProfilePublicOverlay(userData, localProfile) {
     name: (isKnownMadeUpUsername(localProfile.display_name) ? null : localProfile.display_name) || userData.name,
     bio: localProfile.bio ?? userData.bio,
     tagline: localProfile.tagline ?? userData.tagline,
-    profile_picture_url: localProfile.avatar_url || userData.profile_picture_url,
+    // The photo neighbors see, or none: someone who removed it there doesn't show the account's.
+    profile_picture_url: localProfile.avatar_url || null,
     city: showLocality ? (localProfile.public_city || null) : null,
     state: showLocality ? (localProfile.public_state || null) : null,
   };
@@ -2964,6 +2965,23 @@ router.patch('/profile', verifyToken, validate(updateProfileSchema), async (req,
 
     updates.updated_at = new Date().toISOString();
 
+    // The name and bio as they were: the Local Profile's copies of them follow the edit, a name the person chose to
+    // show neighbors stays (syncLocalProfileFromAccount below).
+    const localProfileChanges = ['name', 'bio'].filter((column) => updates[column] !== undefined);
+    let previousAccount = null;
+    if (localProfileChanges.length > 0) {
+      const { data: previous, error: previousErr } = await supabaseAdmin
+        .from('User')
+        .select('id, username, name, first_name, middle_name, last_name, bio')
+        .eq('id', userId)
+        .single();
+      if (previousErr) {
+        logger.error('Profile update read error', { error: previousErr.message, userId });
+        return res.status(500).json({ error: 'Failed to update profile' });
+      }
+      previousAccount = previous;
+    }
+
     const { data: userData, error } = await supabaseAdmin
       .from('User')
       .update(updates)
@@ -3000,9 +3018,8 @@ router.patch('/profile', verifyToken, validate(updateProfileSchema), async (req,
 
     // Posts, comments and search show the LocalProfile's copy of the name and bio, and of the city and state.
     const { syncLocalProfileFromAccount, syncLocalProfileLocality } = require('../utils/identityProfiles');
-    const localProfileChanges = ['name', 'bio'].filter((column) => updates[column] !== undefined);
     try {
-      await syncLocalProfileFromAccount(userData, localProfileChanges);
+      await syncLocalProfileFromAccount(userData, localProfileChanges, previousAccount);
       if (updates.city !== undefined || updates.state !== undefined) await syncLocalProfileLocality(userId);
     } catch (syncErr) {
       logger.error('Profile update local profile sync error', { error: syncErr.message, userId });

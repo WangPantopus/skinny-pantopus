@@ -3,6 +3,7 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('./logger');
 const verificationAge = require('./verificationAge');
 const { chosenUsernameOrNull, isKnownMadeUpUsername } = require('./personalUsername');
+const { serializeLocalProfileForViewer } = require('../serializers/identitySerializers');
 
 /**
  * Which of these users are verified residents, for the public "verified_resident" badge: an ACTIVE HomeOccupancy
@@ -282,15 +283,73 @@ async function ensureLocalProfile(userId) {
   return created;
 }
 
-// ensureLocalProfile copies the account's name, photo and bio into the LocalProfile, and no app edits them there, so
-// an account edit has to move the copies too; otherwise posts, comments, search and the privacy preview keep the old
-// ones. `changed` lists the account columns the edit wrote (name, bio, profile_picture_url); only their copies move.
-// A user without a LocalProfile is left alone: it is created from the current account when first needed.
-async function syncLocalProfileFromAccount(user, changed) {
+// What ensureLocalProfile copies from an account into its LocalProfile: the name, bio and photo.
+function localProfileCopyOfAccount(user) {
+  return {
+    display_name: displayNameFromUser(user),
+    bio: user?.bio || null,
+    avatar_url: user?.profile_picture_url || null,
+  };
+}
+
+// Which of a LocalProfile's name, bio and photo are still the account's copy. The others are what the person chose to
+// show neighbors (How neighbors see you: PATCH /api/local-profiles/me, POST /api/upload/local-profile-picture). A
+// value that equals the account's counts as a copy, and so does a name that isn't one (blank, or a username the
+// server made up). `user` is the account as the copies were made from it.
+function localProfileFollowsAccount(profile, user) {
+  const copy = localProfileCopyOfAccount(user);
+  return {
+    display_name: !nameText(profile?.display_name) || cleanIdentityText(profile.display_name) === copy.display_name,
+    bio: (profile?.bio || null) === copy.bio,
+    avatar_url: (profile?.avatar_url || null) === copy.avatar_url,
+  };
+}
+
+// The person's own Local Profile as How neighbors see you shows it (GET and PATCH /api/local-profiles/me, POST
+// /api/upload/local-profile-picture): what neighbors see, the account's name and photo (for "Use my account name"
+// and "Use my account photo"), and which of the two still follow account edits.
+async function ownLocalProfileView(profile, userId) {
+  const { data: account, error } = await supabaseAdmin
+    .from('User')
+    .select('id, username, name, first_name, middle_name, last_name, bio, profile_picture_url')
+    .eq('id', userId)
+    .maybeSingle();
+  if (error) throw error;
+  const copy = localProfileCopyOfAccount(account);
+  const follows = localProfileFollowsAccount(profile, account);
+  return {
+    profile: serializeLocalProfileForViewer(profile, { includeLegacyUserId: true }),
+    account: { displayName: copy.display_name, avatarUrl: copy.avatar_url },
+    followsAccount: { displayName: follows.display_name, avatarUrl: follows.avatar_url },
+  };
+}
+
+// ensureLocalProfile copies the account's name, photo and bio into the LocalProfile, so an account edit has to move
+// the copies too; otherwise posts, comments, search and the privacy preview keep the old ones. A name or photo the
+// person chose for neighbors is theirs: it stays. `changed` lists the account columns the edit wrote (name, bio,
+// profile_picture_url) and `previous` is the account as it was before the edit (null if it couldn't be read: then
+// nothing that isn't plainly a copy moves). A user without a LocalProfile is left alone: it is created from the
+// current account when first needed.
+async function syncLocalProfileFromAccount(user, changed, previous) {
+  const fields = [
+    changed.includes('name') && 'display_name',
+    changed.includes('bio') && 'bio',
+    changed.includes('profile_picture_url') && 'avatar_url',
+  ].filter(Boolean);
+  if (fields.length === 0) return;
+  const { data: profile, error: readError } = await supabaseAdmin
+    .from('LocalProfile')
+    .select('display_name, bio, avatar_url')
+    .eq('user_id', user.id)
+    .maybeSingle();
+  if (readError) throw readError;
+  if (!profile) return;
+  const follows = localProfileFollowsAccount(profile, previous);
+  const copy = localProfileCopyOfAccount(user);
   const updates = {};
-  if (changed.includes('name')) updates.display_name = displayNameFromUser(user);
-  if (changed.includes('bio')) updates.bio = user.bio || null;
-  if (changed.includes('profile_picture_url')) updates.avatar_url = user.profile_picture_url || null;
+  for (const field of fields) {
+    if (follows[field]) updates[field] = copy[field];
+  }
   if (Object.keys(updates).length === 0) return;
   updates.updated_at = new Date().toISOString();
   const { error } = await supabaseAdmin
@@ -683,6 +742,9 @@ module.exports = {
   displayNameFromUser,
   localDisplayNames,
   ensureLocalProfile,
+  localProfileCopyOfAccount,
+  localProfileFollowsAccount,
+  ownLocalProfileView,
   syncLocalProfileFromAccount,
   localProfileVisibilityFor,
   getLocalProfileByUserId,

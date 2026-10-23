@@ -36,13 +36,6 @@ function fullNameFromUserParts(user) {
   return parts.length ? parts.join(' ') : null;
 }
 
-function sameDisplayValue(a, b) {
-  const left = cleanIdentityText(a);
-  const right = cleanIdentityText(b);
-  if (!left || !right) return false;
-  return left.toLowerCase() === right.toLowerCase();
-}
-
 // A display name, unless it is a username the server made up (a Local Profile made while its account had no name
 // holds one as its display name). A made-up username is never shown as the person's name.
 function nameText(value) {
@@ -66,24 +59,13 @@ function displayNameFromUser(user) {
   );
 }
 
+// The name the person shows neighbors, as they set it (How neighbors see you), even when it is their handle: the
+// account name is private. Only a blank one, or a username the server made up, falls back to the account's.
 function displayNameFromLocalProfile(profile, user, handle) {
-  const explicit = nameText(profile.display_name);
-  const userDisplayName = user ? displayNameFromUser(user) : null;
-  const looksLikeHandleDefault =
-    explicit && (
-      sameDisplayValue(explicit, handle) ||
-      sameDisplayValue(explicit, user?.username)
-    );
-
-  if (explicit && looksLikeHandleDefault && userDisplayName && !sameDisplayValue(explicit, userDisplayName)) {
-    return userDisplayName;
-  }
-
-  if (explicit) {
-    return explicit;
-  }
-
-  return userDisplayName || chosenUsernameOrNull(handle) || 'Pantopus member';
+  return nameText(profile.display_name)
+    || (user ? displayNameFromUser(user) : null)
+    || chosenUsernameOrNull(handle)
+    || 'Pantopus member';
 }
 
 // Whole-month difference between two Dates, never negative. Used by
@@ -194,7 +176,9 @@ function serializeLocalProfileForViewer(profile, options = {}) {
     id: profile.id,
     handle,
     displayName,
-    avatarUrl: profile.avatar_url || user?.profile_picture_url || null,
+    // The photo the person shows neighbors, or none if they removed it. Only a caller that didn't read the
+    // profile's photo gets the account's.
+    avatarUrl: (profile.avatar_url === undefined ? user?.profile_picture_url : profile.avatar_url) || null,
     bio: profile.bio || user?.bio || null,
     tagline: profile.tagline || null,
     href: handle ? `/${handle}` : null,
