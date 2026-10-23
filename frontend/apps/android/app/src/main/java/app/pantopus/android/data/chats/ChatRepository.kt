@@ -80,11 +80,11 @@ class ChatRepository
         /** A remote mute change only affects the list; it must not refetch message history. */
         fun conversationPreferencesChanged() = store.markStale(StoreTopics.CHAT_LIST)
 
-        /** An own edit to a conversation (contract §8: a message sent or read, a chat created): the list reads again. */
-        private fun <T> NetworkResult<T>.chatsChanged(): NetworkResult<T> =
+        /** Successful mutations revalidate the inbox; replaced or deleted content also retires its saved preview. */
+        private fun <T> NetworkResult<T>.chatsChanged(retainChatList: Boolean = true): NetworkResult<T> =
             also {
                 if (it is NetworkResult.Success) {
-                    store.markEdited(StoreTopics.CHAT_LIST, retainChatList = true)
+                    store.markEdited(StoreTopics.CHAT_LIST, retainChatList = retainChatList)
                     // Reading/sending a message must not cancel a history access check already in flight.
                     store.markStale(StoreTopics.CHATS)
                 }
@@ -286,9 +286,10 @@ class ChatRepository
             messageId: String,
             messageText: String,
         ): NetworkResult<SendChatMessageResponse> =
-            safeApiCall { api.editMessage(messageId, EditChatMessageBody(messageText)) }.chatsChanged()
+            safeApiCall { api.editMessage(messageId, EditChatMessageBody(messageText)) }.chatsChanged(retainChatList = false)
 
-        suspend fun deleteMessage(messageId: String): NetworkResult<Unit> = safeApiCall { api.deleteMessage(messageId) }.chatsChanged()
+        suspend fun deleteMessage(messageId: String): NetworkResult<Unit> =
+            safeApiCall { api.deleteMessage(messageId) }.chatsChanged(retainChatList = false)
 
         /** Streams a chat attachment into [destination], so it can be opened in another app. */
         suspend fun downloadFile(
