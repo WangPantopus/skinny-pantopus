@@ -21,9 +21,11 @@ public struct BusinessInboxRoomsResponse: Decodable, Sendable {
     public let rooms: [BusinessInboxRoomDTO]
     public let total: Int?
     public let totalUnread: Int?
+    public let hasMore: Bool?
+    public let nextCursor: String?
 
     enum CodingKeys: String, CodingKey {
-        case rooms, total, totalUnread
+        case rooms, total, totalUnread, hasMore, nextCursor
     }
 }
 
