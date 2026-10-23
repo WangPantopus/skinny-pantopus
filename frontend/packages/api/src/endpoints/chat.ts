@@ -227,6 +227,7 @@ export interface ChatChanges {
   removedRoomIds: string[];
   resetRequired: boolean;
   readReceipts: ChatReadReceipt[];
+  messageReadReceipts?: Array<{ messageId: string; readAt: string | null }>;
 }
 
 /** Resume a captured history snapshot; all topics share the same room revision. */
@@ -235,6 +236,7 @@ export async function getMessageChanges(target: { roomId?: string; otherUserId?:
   until?: ChatSyncCursors;
   limit?: number;
   asBusinessUserId?: string;
+  readMessageIds?: string[];
 }): Promise<ChatChanges> {
   const path = target.roomId ? `rooms/${target.roomId}` : `conversations/${target.otherUserId}`;
   const url = `/api/chat/${path}/changes`;
@@ -267,10 +269,13 @@ export async function getMessageChanges(target: { roomId?: string; otherUserId?:
  */
 export async function markConversationAsRead(
   otherUserId: string,
-  options?: { asBusinessUserId?: string; throughMessageId?: string; throughMessageIds?: Record<string, string> }
-): Promise<{ unreadCount: number; updatedRooms: number }> {
-  return post<{ unreadCount: number; updatedRooms: number }>(
-    `/api/chat/conversations/${otherUserId}/read`,
+  options?: { asBusinessUserId?: string; throughMessageId?: string; throughMessageIds?: Record<string, string>; topicId?: string }
+): Promise<{ unreadCount: number; updatedRooms: number; topicId?: string; readScope?: 'topic' }> {
+  // A selected topic has its own endpoint. Never retry against the legacy
+  // route: an older server would acknowledge every topic in the room.
+  const scope = options?.topicId ? `/topics/${encodeURIComponent(options.topicId)}` : '';
+  return post<{ unreadCount: number; updatedRooms: number; topicId?: string; readScope?: 'topic' }>(
+    `/api/chat/conversations/${otherUserId}${scope}/read`,
     {
       ...(options?.asBusinessUserId ? { asBusinessUserId: options.asBusinessUserId } : {}),
       ...(options?.throughMessageId ? { throughMessageId: options.throughMessageId } : {}),
@@ -327,9 +332,10 @@ export async function markMessagesAsRead(roomId: string, messageId?: string): Pr
 
 export async function markMessagesAsReadForIdentity(
   roomId: string,
-  options: { messageId?: string; asBusinessUserId?: string; throughMessageId?: string; throughMessageIds?: Record<string, string> }
-): Promise<{ unreadCount: number }> {
-  return post<{ unreadCount: number }>(`/api/chat/rooms/${roomId}/read`, {
+  options: { messageId?: string; asBusinessUserId?: string; throughMessageId?: string; throughMessageIds?: Record<string, string>; topicId?: string }
+): Promise<{ unreadCount: number; topicId?: string; readScope?: 'topic' }> {
+  const scope = options?.topicId ? `/topics/${encodeURIComponent(options.topicId)}` : '';
+  return post<{ unreadCount: number; topicId?: string; readScope?: 'topic' }>(`/api/chat/rooms/${roomId}${scope}/read`, {
     ...(options?.messageId ? { messageId: options.messageId } : {}),
     ...(options?.throughMessageId ? { throughMessageId: options.throughMessageId } : {}),
     ...(options?.throughMessageIds ? { throughMessageIds: options.throughMessageIds } : {}),
