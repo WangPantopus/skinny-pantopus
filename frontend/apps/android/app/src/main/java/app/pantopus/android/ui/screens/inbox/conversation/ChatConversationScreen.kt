@@ -79,6 +79,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -2867,15 +2868,23 @@ internal fun PopulatedFrame(
         derivedStateOf { initialScrollDone && listState.firstVisibleItemIndex <= 1 }
     }
     val loadOlderAnchored: () -> Unit = {
-        val firstBubble = listState.layoutInfo.visibleItemsInfo.firstOrNull { rowsByKey[it.key] is ChatTimelineRow.Bubble }
+        val visibleBubbles = listState.layoutInfo.visibleItemsInfo.filter { rowsByKey[it.key] is ChatTimelineRow.Bubble }
+        // The oldest bubble can lose its sender heading when its preceding bubble arrives. Anchor a
+        // following visible bubble, whose contents keep the same height, whenever one is available.
+        val firstBubble = visibleBubbles.firstOrNull { it.key != oldestMessageId } ?: visibleBubbles.firstOrNull()
         prependAnchor =
             firstBubble?.let { bubble ->
                 oldestMessageId?.let { ChatPrependAnchor(bubble.key.toString(), -bubble.offset, it) }
             }
         onLoadOlder()
     }
-    LaunchedEffect(shouldLoadOlder) {
-        if (shouldLoadOlder) loadOlderAnchored()
+    LaunchedEffect(shouldLoadOlder, oldestMessageId) {
+        if (shouldLoadOlder) {
+            // A gesture can reach the top while the prior cursor is still in flight. Reconsider after
+            // its page changes, but let the prepend anchor settle before deciding whether to fetch again.
+            withFrameNanos { }
+            if (initialScrollDone && listState.firstVisibleItemIndex <= 1 && !olderPageFailed) loadOlderAnchored()
+        }
     }
     // Chat Search deep-link: animate to the matched row once it lands in
     // the list, then clear the target. The [headerCount] offset skips the
