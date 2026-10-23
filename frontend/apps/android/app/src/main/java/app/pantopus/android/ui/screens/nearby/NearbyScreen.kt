@@ -125,18 +125,22 @@ object NearbySegmentRequests {
  * Neighborhood switch and the side menu over the two segments. [pulse] is the October 13 feed, built by the nav host
  * with its routes; [neighborhood] the density window and meter ([NeighborhoodScreen]). Each segment keeps its saved
  * state (the feed's place, filters and List / Map mode) while the other shows. Connections is in the side menu.
+ *
+ * Over Neighborhood the switch row stays above the page. The Pulse segment gets it as its header row (the slot
+ * [pulse] is handed): the feed draws it first in its collapsible header, so it slides away with the rest of the
+ * header while the map or the posts fill the screen (founder request 2026-10-22; iOS passes it the same way).
  */
 @Composable
 fun NearbyTab(
     onOpenMenu: () -> Unit,
-    pulse: @Composable () -> Unit,
+    pulse: @Composable (header: @Composable () -> Unit) -> Unit,
     neighborhood: @Composable () -> Unit,
 ) {
     var segment by rememberSaveable { mutableStateOf(NearbySegment.Pulse) }
     val requested by NearbySegmentRequests.pending.collectAsStateWithLifecycle()
     LaunchedEffect(requested) { NearbySegmentRequests.take()?.let { segment = it } }
     val segments = rememberSaveableStateHolder()
-    Column(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg).testTag("nearbyTab")) {
+    val segmentRow: @Composable () -> Unit = {
         Row(
             modifier = Modifier.fillMaxWidth().padding(start = Spacing.s4, end = Spacing.s1, top = Spacing.s1, bottom = Spacing.s1),
             verticalAlignment = Alignment.CenterVertically,
@@ -153,10 +157,13 @@ fun NearbyTab(
             )
             NavigationMenuButton(onClick = onOpenMenu, testTag = "nearby.menu")
         }
+    }
+    Column(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg).testTag("nearbyTab")) {
+        if (segment == NearbySegment.Neighborhood) segmentRow()
         Box(modifier = Modifier.weight(1f)) {
             segments.SaveableStateProvider(segment.key) {
                 when (segment) {
-                    NearbySegment.Pulse -> pulse()
+                    NearbySegment.Pulse -> pulse(segmentRow)
                     NearbySegment.Neighborhood -> neighborhood()
                 }
             }

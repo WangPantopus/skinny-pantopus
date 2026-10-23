@@ -1316,6 +1316,10 @@ struct GigChangesCard: View {
                     .foregroundStyle(Theme.Color.appTextStrong)
                     .lineLimit(3)
             }
+            Text(requesterLine(order))
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Theme.Color.appTextSecondary)
+                .accessibilityIdentifier("gigDetail.change_\(order.id).requester")
             if status == "pending" {
                 pendingActions(order, inFlight: inFlight)
             }
@@ -1329,6 +1333,15 @@ struct GigChangesCard: View {
         .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
         .opacity(["rejected", "withdrawn"].contains(status) ? 0.55 : 1)
         .accessibilityIdentifier("gigDetail.change_\(order.id)")
+    }
+
+    /// Who asked for the change, named as the task names its people (`displayName`: their Local Profile, or the
+    /// business; older servers sent only the account name).
+    private func requesterLine(_ order: GigChangeOrderDTO) -> String {
+        if isOwnOrder(order) { return "From you" }
+        // No requester means the person has deleted their account.
+        guard let requester = order.requester else { return "From a former member" }
+        return "From \(requester.resolvedDisplayName)"
     }
 
     private func pendingActions(_ order: GigChangeOrderDTO, inFlight: Bool) -> some View {

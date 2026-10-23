@@ -19,6 +19,7 @@ import type {
   GigFilters,
   ApiResponse,
   BrowseResponse,
+  PublicAuthorIdentity,
 } from '@pantopus/types';
 
 type GigRecord = Record<string, unknown> & Partial<GigListItem & GigWithDetails>;
@@ -1296,14 +1297,8 @@ export interface RebookableGig {
   category: string;
   price: number;
   completedAt: string;
-  worker: {
-    id: string;
-    firstName: string | null;
-    lastName: string | null;
-    username: string;
-    avatarUrl: string | null;
-    rating: number;
-  };
+  /** Named by their Local Profile (or as the business), as the task names them; `id` is the account id. */
+  worker: (PublicAuthorIdentity & { rating: number | null }) | null;
   myReview: { rating: number; comment: string | null } | null;
   city: string | null;
   state: string | null;

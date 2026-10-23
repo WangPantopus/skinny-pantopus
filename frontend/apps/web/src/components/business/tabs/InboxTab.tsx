@@ -81,7 +81,7 @@ export default function InboxTab({ businessId }: Props) {
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center py-16"><div className="animate-spin h-8 w-8 border-3 border-violet-600 border-t-transparent rounded-full" /></div>
+        <div className="flex items-center justify-center py-16"><div className="animate-spin h-8 w-8 border-2 border-violet-600 border-t-transparent rounded-full" /></div>
       ) : section === 'messages' && roomsFailure ? (
         <div className="text-center py-16">
           <p className="text-sm font-medium text-app-text mb-1">

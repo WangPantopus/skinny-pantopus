@@ -169,7 +169,9 @@ public struct RebookRailView: View {
     }
 
     public var body: some View {
-        Group {
+        // A stack, not a Group: the rail is empty until it has loaded, and a Group with no content never appears, so
+        // the .task below (the load) never ran. The empty stack takes no space.
+        VStack(spacing: Spacing.s0) {
             // Launch cut #4 (Open gigs): "Rebook" opens the open-task composer,
             // the rail's only action, so the rail is hidden for the first launch.
             if LaunchFeatures.openGigs, viewModel.isVisible {

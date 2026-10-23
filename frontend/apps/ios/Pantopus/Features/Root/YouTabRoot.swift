@@ -1700,6 +1700,10 @@ public struct YouTabRoot: View {
                     },
                     onRepost: { _ in
                         path.append(.composeTask)
+                    },
+                    // This stack's composer route takes no category, so a rebook opens it unfilled.
+                    onRebook: { _ in
+                        path.append(.composeTask)
                     }
                 )
             )

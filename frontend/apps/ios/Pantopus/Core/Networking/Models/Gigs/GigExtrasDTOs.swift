@@ -64,9 +64,14 @@ public struct GigStartReminderResponse: Decodable, Sendable, Hashable {
 
 // MARK: - Rebook
 
-/// The worker inlined on a rebookable gig (gigs.js:2960).
+/// The worker inlined on a rebookable gig (gigs.js `/rebookable`). The server
+/// names them by their Local Profile (`displayName`, photo in `avatarUrl`), as
+/// the task does; older servers sent the account's `firstName` / `lastName` /
+/// `username`, read only as fallbacks.
 public struct RebookableWorkerDTO: Decodable, Sendable, Hashable, Identifiable {
     public let id: String
+    /// The worker's Local Profile name, or the business (wire key `displayName`).
+    public let localName: String?
     public let firstName: String?
     public let lastName: String?
     public let username: String?
@@ -75,6 +80,7 @@ public struct RebookableWorkerDTO: Decodable, Sendable, Hashable, Identifiable {
 
     enum CodingKeys: String, CodingKey {
         case id, username, rating
+        case localName = "displayName"
         case firstName
         case lastName
         case avatarUrl
@@ -82,6 +88,7 @@ public struct RebookableWorkerDTO: Decodable, Sendable, Hashable, Identifiable {
 
     public init(
         id: String,
+        localName: String? = nil,
         firstName: String? = nil,
         lastName: String? = nil,
         username: String? = nil,
@@ -89,6 +96,7 @@ public struct RebookableWorkerDTO: Decodable, Sendable, Hashable, Identifiable {
         rating: Double? = nil
     ) {
         self.id = id
+        self.localName = localName
         self.firstName = firstName
         self.lastName = lastName
         self.username = username
@@ -96,15 +104,22 @@ public struct RebookableWorkerDTO: Decodable, Sendable, Hashable, Identifiable {
         self.rating = rating
     }
 
-    /// "Ana" — first name, else username, else a neutral fallback.
+    /// "Ana R." — the Local Profile name, else the first name, else the
+    /// username, else a neutral fallback.
     public var displayName: String {
+        if let localName, !localName.isEmpty { return localName }
         if let firstName, !firstName.isEmpty { return firstName }
         if let username, !username.isEmpty { return username }
         return "Helper"
     }
 
-    /// "AL" — first+last initials, else the username initial.
+    /// "AR" — the Local Profile name's first two initials, else first+last
+    /// initials, else the username initial.
     public var initials: String {
+        if let localName, !localName.isEmpty {
+            let words = localName.split(separator: " ").prefix(2)
+            return words.compactMap { $0.first.map(String.init) }.joined().uppercased()
+        }
         let first = firstName?.first.map(String.init) ?? ""
         let last = lastName?.first.map(String.init) ?? ""
         let pair = (first + last).uppercased()

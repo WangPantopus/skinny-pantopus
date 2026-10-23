@@ -76,7 +76,7 @@ function InvoiceContent() {
   const canPay = invoice && ['sent', 'viewed', 'overdue'].includes(invoice.status);
   const sc = invoice ? (STATUS_BADGE[invoice.status] || STATUS_BADGE.sent) : STATUS_BADGE.sent;
 
-  if (loading) return <div className="flex items-center justify-center min-h-[50vh]"><div className="animate-spin h-8 w-8 border-3 border-emerald-600 border-t-transparent rounded-full" /></div>;
+  if (loading) return <div className="flex items-center justify-center min-h-[50vh]"><div className="animate-spin h-8 w-8 border-2 border-emerald-600 border-t-transparent rounded-full" /></div>;
 
   if (!invoice) {
     return (
