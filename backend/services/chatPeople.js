@@ -10,11 +10,12 @@
  * Shared by routes/chats.js and socket/chatSocketio.js so the REST routes and the socket name people
  * the same way. Post comments (routes/posts.js) name their writers with it too, post and connection notices
  * (routes/posts.js, routes/relationships.js) the person who acted, and the Connections lists (routes/relationships.js)
- * the people in them.
+ * and follower lists (routes/users.js, listedPerson below) the people in them.
  */
 
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
+const { chosenUsernameOrNull } = require('../utils/personalUsername');
 const {
   serializeLocalProfileForViewer,
   serializeUserAsLocalIdentity,
@@ -95,8 +96,55 @@ function reviewerRow(user, people) {
   };
 }
 
+/**
+ * The area each of these people's Local Profiles shows, by account id: its public city and state while their
+ * Neighborhood setting shows them to everyone, otherwise none (the rule the Connections lists, the Local Profile overlay
+ * on profiles and user search follow). Businesses go by the account and get no entry. Throws on a failed read, so a
+ * list fails rather than show what a Local Profile hides.
+ */
+async function loadLocalProfileAreas(userIds) {
+  const ids = [...new Set((userIds || []).filter(Boolean).map(String))];
+  if (ids.length === 0) return new Map();
+  const { data, error } = await supabaseAdmin
+    .from('LocalProfile')
+    .select('user_id, public_city, public_state, show_neighborhood, owner:user_id (account_type)')
+    .in('user_id', ids);
+  if (error) throw new Error(error.message);
+  return new Map((data || [])
+    .filter((profile) => profile.owner?.account_type !== 'business')
+    .map((profile) => {
+      const shown = profile.show_neighborhood === true;
+      return [String(profile.user_id), {
+        city: shown ? (profile.public_city || null) : null,
+        state: shown ? (profile.public_state || null) : null,
+      }];
+    }));
+}
+
+/** What a list of people needs to show them as neighbors see them: their names and their Local Profiles' areas. */
+async function loadListedPeople(userIds) {
+  const [people, areas] = await Promise.all([loadChatPeople(userIds), loadLocalProfileAreas(userIds)]);
+  return { people, areas };
+}
+
+/**
+ * A person in a list of people (an account row with id, username, name, first_name, last_name, profile_picture_url,
+ * city, state), as neighbors see them. Someone with a Local Profile goes by it: its name, handle and photo, only the
+ * area it shows, and no first or last name, which belong to the private account. A business, or anyone without one,
+ * goes by the account. Only a username the person chose is kept (a made-up one can show part of an email address).
+ * Anyone `listed` lacks keeps the account row. `id` stays the account id.
+ */
+function listedPerson(user, { people, areas }) {
+  const named = chatPersonRow(user, people);
+  const row = named ? { ...named, username: chosenUsernameOrNull(named.username) } : named;
+  const area = row?.id ? areas.get(String(row.id)) : null;
+  return area ? { ...row, first_name: null, last_name: null, city: area.city, state: area.state } : row;
+}
+
 module.exports = {
   loadChatPeople,
   chatPersonRow,
   reviewerRow,
+  loadListedPeople,
+  listedPerson,
 };

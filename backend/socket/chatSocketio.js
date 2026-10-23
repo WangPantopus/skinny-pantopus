@@ -362,8 +362,9 @@ module.exports = (io) => {
 
           userRooms.set(userId, roomIds);
 
-          // Send initial room list
-          socket.emit('rooms:list', openRooms);
+          // Send initial room list, without the other person's account name and username that get_user_chat_rooms
+          // also returns: the chat list names people by their Local Profile (routes/chats.js), and no app reads them here.
+          socket.emit('rooms:list', openRooms.map(({ other_participant_name, other_participant_username, ...room }) => room));
 
           // Notify user is online only when first active socket connects, and
           // only to the conversations it just joined (see emitPresence).
