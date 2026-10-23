@@ -26,6 +26,7 @@ final class ChatLocalStore: @unchecked Sendable {
     private struct HistoryEpoch: Codable {
         let id: String
         let retiredAt: Date
+        var scope: String?
     }
 
     let root: URL
@@ -215,6 +216,7 @@ final class ChatLocalStore: @unchecked Sendable {
             draftReservations.removeAll()
             consumedDraftIds.removeAll()
             try? secure.delete("encryption-key")
+            try? secure.delete("history-retirement")
             if FileManager.default.fileExists(atPath: root.path) {
                 try? FileManager.default.moveItem(at: root, to: aside)
             }
@@ -265,6 +267,7 @@ final class ChatLocalStore: @unchecked Sendable {
         if let previous = try? String(contentsOf: marker, encoding: .utf8), previous != scope {
             try FileManager.default.removeItem(at: root)
             try secure.delete("encryption-key")
+            try secure.delete("history-retirement")
             historyRetirementFailed = false
         }
         try FileManager.default.createDirectory(
@@ -322,17 +325,25 @@ extension ChatLocalStore {
     /// writes in this process; a directory rename is the durable fallback.
     private func retireHistory() {
         let directory = root.appendingPathComponent("history", isDirectory: true)
+        let scope = try? String(contentsOf: root.appendingPathComponent("scope"), encoding: .utf8)
+        let epoch = HistoryEpoch(id: UUID().uuidString, retiredAt: Date(), scope: scope)
         do {
-            let epoch = HistoryEpoch(id: UUID().uuidString, retiredAt: Date())
             try JSONEncoder().encode(epoch).write(
                 to: root.appendingPathComponent("history-epoch"), options: [.atomic, .completeFileProtection]
             )
+            try secure.delete("history-retirement")
             historyRetirementFailed = false
             // Interrupted deletion is harmless: every prior envelope fails its
             // epoch check, including inbox previews and all topic query keys.
             try? FileManager.default.removeItem(at: directory)
         } catch {
             historyRetirementFailed = true
+            // The existing device-only Keychain is an independent durable
+            // fallback if the filesystem cannot record retirement. It contains
+            // only an opaque epoch and hashed scope, never messages or keys.
+            if let encoded = try? JSONEncoder().encode(epoch) {
+                try? secure.setData(encoded, for: "history-retirement")
+            }
             let aside = root.appendingPathComponent("retired-history-\(UUID().uuidString)", isDirectory: true)
             do {
                 try FileManager.default.moveItem(at: directory, to: aside)
@@ -345,6 +356,10 @@ extension ChatLocalStore {
 
     private func historyEpoch() throws -> HistoryEpoch? {
         guard !historyRetirementFailed else { throw CocoaError(.fileReadNoPermission) }
+        if let data = try secure.readData("history-retirement") {
+            let retired = try JSONDecoder().decode(HistoryEpoch.self, from: data)
+            if retired.scope == nil || retired.scope == preparedScope { throw CocoaError(.fileReadNoPermission) }
+        }
         let marker = root.appendingPathComponent("history-epoch")
         guard FileManager.default.fileExists(atPath: marker.path) else { return nil }
         return try JSONDecoder().decode(HistoryEpoch.self, from: Data(contentsOf: marker))
