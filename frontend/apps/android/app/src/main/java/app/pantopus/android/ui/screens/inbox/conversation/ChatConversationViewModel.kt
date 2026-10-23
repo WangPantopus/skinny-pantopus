@@ -262,6 +262,9 @@ class ChatConversationViewModel
         private var scrollToLatestOnLoad = false
         private var contextMessageId: String? = null
         private var contextHasNewer = false
+        private val _olderPageFailed = MutableStateFlow(false)
+        val olderPageFailed: StateFlow<Boolean> = _olderPageFailed.asStateFlow()
+
         private val _showLatestMessages = MutableStateFlow(false)
         val showLatestMessages: StateFlow<Boolean> = _showLatestMessages.asStateFlow()
         private var messages: MutableList<ChatMessageDto> = mutableListOf()
@@ -838,6 +841,7 @@ class ChatConversationViewModel
         }
 
         private fun clearContextWindow() {
+            _olderPageFailed.value = false
             scrollToLatestOnLoad = false
             contextMessageId = null
             contextHasNewer = false
@@ -2398,6 +2402,7 @@ class ChatConversationViewModel
             val context = historyContext()
             val requestKey = context to before
             if (!historyReadsInFlight.add(requestKey)) return
+            _olderPageFailed.value = false
             if (initial || context != historyCopyContext) followHistoryCopy(context)
             val copied = initial && !quiet && contextMessageId == null && showHistoryCopy()
             val keepMessages = quiet || copied || pendingByClientId.isNotEmpty()
@@ -2496,6 +2501,7 @@ class ChatConversationViewModel
                     } else if (initial && !keepMessages && pendingByClientId.isEmpty()) {
                         _state.value = ChatConversationUiState.Error(response.error.message)
                     } else {
+                        _olderPageFailed.value = !firstPage
                         Timber.w("chat refresh or pagination failed: ${response.error.message}")
                     }
                 }
@@ -2503,6 +2509,7 @@ class ChatConversationViewModel
         }
 
         private fun refuseHistory(error: NetworkError) {
+            _olderPageFailed.value = false
             historyGeneration++
             historyRefusal = error.message
             historyPage = null

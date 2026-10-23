@@ -201,6 +201,7 @@ fun ChatConversationScreen(
     val queuedAttachments by viewModel.queuedAttachments.collectAsStateWithLifecycle()
     val pendingScroll by viewModel.pendingScrollTarget.collectAsStateWithLifecycle()
     val showLatestMessages by viewModel.showLatestMessages.collectAsStateWithLifecycle()
+    val olderPageFailed by viewModel.olderPageFailed.collectAsStateWithLifecycle()
     val sendLimitNotice by viewModel.sendLimitNotice.collectAsStateWithLifecycle()
     val composerClosedNote by viewModel.composerClosedNote.collectAsStateWithLifecycle()
     val isSelectionMode by viewModel.isSelectionMode.collectAsStateWithLifecycle()
@@ -501,6 +502,7 @@ fun ChatConversationScreen(
                             rows = s.rows,
                             onRetry = viewModel::retry,
                             onLoadOlder = viewModel::loadOlder,
+                            olderPageFailed = olderPageFailed,
                             onVisibleMessage = viewModel::markVisibleMessageRead,
                             onViewport = viewModel::observeTimelineViewport,
                             scrollToRowId = pendingScroll,
@@ -2732,6 +2734,7 @@ internal fun PopulatedFrame(
     rows: List<ChatTimelineRow>,
     onRetry: (String) -> Unit,
     onLoadOlder: () -> Unit,
+    olderPageFailed: Boolean = false,
     onVisibleMessage: (String) -> Unit = {},
     onViewport: (String?, Boolean) -> Unit = { _, _ -> },
     scrollToRowId: String? = null,
@@ -2863,15 +2866,16 @@ internal fun PopulatedFrame(
     val shouldLoadOlder by remember {
         derivedStateOf { initialScrollDone && listState.firstVisibleItemIndex <= 1 }
     }
+    val loadOlderAnchored: () -> Unit = {
+        val firstBubble = listState.layoutInfo.visibleItemsInfo.firstOrNull { rowsByKey[it.key] is ChatTimelineRow.Bubble }
+        prependAnchor =
+            firstBubble?.let { bubble ->
+                oldestMessageId?.let { ChatPrependAnchor(bubble.key.toString(), -bubble.offset, it) }
+            }
+        onLoadOlder()
+    }
     LaunchedEffect(shouldLoadOlder) {
-        if (shouldLoadOlder) {
-            val firstBubble = listState.layoutInfo.visibleItemsInfo.firstOrNull { rowsByKey[it.key] is ChatTimelineRow.Bubble }
-            prependAnchor =
-                firstBubble?.let { bubble ->
-                    oldestMessageId?.let { ChatPrependAnchor(bubble.key.toString(), -bubble.offset, it) }
-                }
-            onLoadOlder()
-        }
+        if (shouldLoadOlder) loadOlderAnchored()
     }
     // Chat Search deep-link: animate to the matched row once it lands in
     // the list, then clear the target. The [headerCount] offset skips the
@@ -2893,7 +2897,13 @@ internal fun PopulatedFrame(
             contentPadding = PaddingValues(horizontal = Spacing.s3, vertical = Spacing.s3),
         ) {
             item(key = "chat_pagination_top_spacer") {
-                Spacer(modifier = Modifier.size(1.dp))
+                if (olderPageFailed) {
+                    TextButton(onClick = loadOlderAnchored, modifier = Modifier.fillMaxWidth()) {
+                        Text("Couldn't load earlier messages. Retry")
+                    }
+                } else {
+                    Spacer(modifier = Modifier.size(1.dp))
+                }
             }
             // A15.5's "Auto-welcome · free" card is omitted: no persona
             // welcome-message exists on the wire, and the design's copy is
