@@ -123,6 +123,22 @@ were stable, type filtering preceded the limit, malformed cursors returned 400,
 and a nonowner received 403. Fixtures were removed. Real client pagination
 adoption and screen verification remain in progress; no test code was changed.
 
+## Delayed insert timestamps
+
+A local concurrent-transaction check reproduced a new message incorrectly
+falling behind the read boundary: PostgreSQL's `now()` default used the old
+transaction start time, and the message arrived with unread count zero. The
+existing revision trigger now fills omitted creation times with the database
+clock after acquiring its room lock. No extra history scan or lock is added.
+Explicit historical timestamps remain unchanged, including microseconds.
+
+The additive migration passed full function lint and transaction rehearsal
+before local application. Repeating the delayed transaction kept the new
+message after the read boundary with unread count one. Its synthetic rows were
+removed. Existing app send and receive flows are being rechecked. Separately,
+person conversations spanning several rooms need a visible boundary per room;
+the current global timestamp can acknowledge another room's unseen history.
+
 ## Immediate contract
 
 - REST message history uses `(created_at, id)` for both `before` and `after`; both bounds can be combined. `nextCursor` pages backward and `hasMore` comes from an extra row.
