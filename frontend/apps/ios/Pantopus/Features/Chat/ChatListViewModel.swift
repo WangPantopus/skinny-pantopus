@@ -1,12 +1,4 @@
-//
-//  ChatListViewModel.swift
-//  Pantopus
-//
-//  Loads `GET /api/chat/unified-conversations` + `/stats` and reacts to
-//  socket events (`badge:update`, `message:new`). Projects the
-//  hetero DTO into a homogeneous list of `ConversationRowContent` plus
-//  a synthetic, pinned "Pantopus AI" assistant row.
-//
+// Inbox projection, encrypted offline snapshot, and live message updates.
 
 import Foundation
 import Logging
@@ -36,9 +28,7 @@ public final class ChatListViewModel {
     public private(set) var unreadByFilter: [ChatFilter: Int] = [:]
 
     private let api: APIClient
-    /// The screen store (Instant Screens): the list shows its stored copy in the
-    /// first frame and is re-read once out of date (30 seconds); live messages
-    /// patch rows in place meanwhile.
+    /// Reuse the memory store and its request coalescing; disk previews are encrypted separately.
     private let store: ScreenStore
     private let socket: SocketClient
     private let preferences: ChatConversationPreferences
@@ -87,23 +77,23 @@ public final class ChatListViewModel {
         }
     }
 
-    // The view cancels subscriptions through `teardown()` on disappearance.
-
     // MARK: - Public API
 
-    /// First load, and every return to the list. `teardown()` cancels the
-    /// live subscriptions whenever the list is covered (opening a
-    /// conversation pushes over it), so a return re-subscribes and merges
-    /// in what changed meanwhile: the conversation just read, and messages
-    /// that arrived while it was open.
+    /// Restore offline navigation, then reconcile every return to the inbox.
     public func load() async {
-        if case .loaded = state {
-            subscribeToSockets()
-            await fetch(force: false)
-            return
+        subscribeToSockets()
+        if allRows.isEmpty, let scope = localCacheScope {
+            let session = AuthManager.shared.requestSessionGeneration
+            let cached = await ChatLocalStore.shared.inbox(scope: scope)
+            guard session == AuthManager.shared.requestSessionGeneration, !Task.isCancelled else { return }
+            if allRows.isEmpty, let cached { apply(cached.response, stats: cached.stats) }
         }
         await fetch(force: false)
-        subscribeToSockets()
+    }
+
+    private var localCacheScope: String? {
+        guard api === APIClient.shared, case let .signedIn(user) = AuthManager.shared.state else { return nil }
+        return ChatLocalStore.scope(server: api.apiBaseURL.absoluteString, account: user.id)
     }
 
     /// Pull-to-refresh / retry.
@@ -163,14 +153,18 @@ public final class ChatListViewModel {
     // MARK: - Fetch
 
     private func fetch(force: Bool) async {
-        async let conversationsTask: UnifiedConversationsResponse? = optional {
-            try await self.store.load(
+        let session = AuthManager.shared.requestSessionGeneration
+        let cacheVersion = ChatLocalStore.shared.version
+        let scope = localCacheScope
+        async let conversationsTask: (response: UnifiedConversationsResponse, confirmedAt: Date)? = optional(refuseInbox: true) {
+            let snapshot = try await self.store.load(
                 ChatEndpoints.unifiedConversations(),
                 as: UnifiedConversationsResponse.self,
                 kind: .messagesList,
                 topics: [ScreenTopic.chats],
                 force: force
-            ).value
+            )
+            return (snapshot.value, snapshot.fetchedAt)
         }
         async let statsTask: ChatStatsResponse? = optional {
             try await self.store.load(
@@ -191,7 +185,16 @@ public final class ChatListViewModel {
             }
             return
         }
-        await apply(response, stats: statsTask?.stats)
+        let stats = await statsTask?.stats
+        guard session == AuthManager.shared.requestSessionGeneration, !Task.isCancelled else { return }
+        apply(response.response, stats: stats)
+        if let scope {
+            await ChatLocalStore.shared.saveInbox(
+                ChatInboxMemory(response: response.response, stats: stats, confirmedAt: response.confirmedAt),
+                scope: scope,
+                version: cacheVersion
+            )
+        }
     }
 
     private func apply(_ response: UnifiedConversationsResponse, stats: ChatStatsResponse.Stats?) {
@@ -236,11 +239,18 @@ public final class ChatListViewModel {
         )
     }
 
-    private func optional<T: Sendable>(_ operation: @Sendable () async throws -> T) async -> T? {
+    private func optional<T: Sendable>(
+        refuseInbox: Bool = false, _ operation: @Sendable () async throws -> T
+    ) async -> T? {
         do {
             return try await operation()
         } catch {
             logger.warning("Chat-list fetch failed: \(error)")
+            if refuseInbox, ScreenStore.isRefusal(error) {
+                if let scope = localCacheScope { ChatLocalStore.shared.removeInbox(scope: scope) }
+                allRows = []
+                state = .error(message: "Couldn't load conversations.")
+            }
             return nil
         }
     }
@@ -471,13 +481,7 @@ public final class ChatListViewModel {
     }
 
     private static func relative(timestamp: String) -> String {
-        let parsers: [ISO8601DateFormatter] = {
-            let withFraction = ISO8601DateFormatter()
-            withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            let plain = ISO8601DateFormatter()
-            return [withFraction, plain]
-        }()
-        guard let date = parsers.lazy.compactMap({ $0.date(from: timestamp) }).first else {
+        guard let date = parseISO(timestamp) else {
             return timestamp
         }
         // A message can be a hair ahead of the phone's clock; "in 0 sec." reads as a bug.

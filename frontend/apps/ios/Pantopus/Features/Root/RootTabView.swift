@@ -721,6 +721,18 @@ final class ChatBadgeStore {
 
     func start() async {
         subscribeIfNeeded()
+        if api === APIClient.shared, !hasAuthoritativeCount,
+           case let .signedIn(user) = AuthManager.shared.state {
+            let generation = countGeneration
+            let scope = ChatLocalStore.scope(server: api.apiBaseURL.absoluteString, account: user.id)
+            let cached = await ChatLocalStore.shared.inbox(scope: scope)
+            if generation == countGeneration, !Task.isCancelled, let cached {
+                let rows = cached.response.conversations.map {
+                    Self.snapshotRow(from: $0, mutedKeys: preferences.mutedKeys())
+                }
+                applyListSnapshot(totalUnread: cached.stats?.totalUnread ?? cached.response.totalUnread ?? 0, rows: rows)
+            }
+        }
         await refresh()
     }
 

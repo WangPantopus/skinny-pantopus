@@ -10,6 +10,11 @@ final class ChatLocalStore: @unchecked Sendable {
     static let threadLimit = 20
     static let historyLifetime: TimeInterval = 7 * 24 * 3600
 
+    private struct SavedInbox: Codable {
+        let schema: Int
+        let memory: ChatInboxMemory
+    }
+
     private struct SavedHistory: Codable {
         let schema: Int
         let savedAt: Date
@@ -106,6 +111,77 @@ final class ChatLocalStore: @unchecked Sendable {
         }
     }
 
+    /// Last-message previews use the same encrypted account store as history.
+    /// Keep only the most recent twenty rows for offline navigation.
+    func inbox(scope: String) async -> ChatInboxMemory? {
+        let started = version
+        return await withCheckedContinuation { continuation in
+            queue.async { [self] in
+                let memory: ChatInboxMemory? = try? lock.withLock {
+                    guard generation == started else { throw CancellationError() }
+                    let key = try prepare(scope: scope, generation: started)
+                    let url = root.appendingPathComponent("history/inbox.sealed")
+                    let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+                    guard (attributes[.size] as? Int ?? 0) <= Self.historyLimit else { return nil }
+                    let bytes = try AES.GCM.open(
+                        AES.GCM.SealedBox(combined: Data(contentsOf: url)),
+                        using: key,
+                        authenticating: Data("\(scope)|inbox".utf8)
+                    )
+                    let saved = try JSONDecoder().decode(SavedInbox.self, from: bytes)
+                    guard saved.schema == 1,
+                          Date().timeIntervalSince(saved.memory.confirmedAt) <= Self.historyLifetime
+                    else {
+                        try? FileManager.default.removeItem(at: url)
+                        return nil
+                    }
+                    try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: url.path)
+                    return saved.memory
+                }
+                continuation.resume(returning: memory)
+            }
+        }
+    }
+
+    func saveInbox(_ memory: ChatInboxMemory, scope: String, version started: Int) async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            queue.async { [self] in
+                defer { continuation.resume() }
+                try? lock.withLock {
+                    guard generation == started else { throw CancellationError() }
+                    let key = try prepare(scope: scope, generation: started)
+                    let response = UnifiedConversationsResponse(
+                        conversations: Array(memory.response.conversations.prefix(Self.threadLimit)),
+                        total: memory.response.total,
+                        totalUnread: memory.response.totalUnread
+                    )
+                    let bounded = ChatInboxMemory(response: response, stats: memory.stats, confirmedAt: memory.confirmedAt)
+                    let bytes = try JSONEncoder().encode(SavedInbox(schema: 1, memory: bounded))
+                    guard bytes.count <= Self.historyLimit else { return }
+                    let sealed = try AES.GCM.seal(bytes, using: key, authenticating: Data("\(scope)|inbox".utf8))
+                    guard let combined = sealed.combined else { return }
+                    let directory = root.appendingPathComponent("history", isDirectory: true)
+                    try FileManager.default.createDirectory(
+                        at: directory,
+                        withIntermediateDirectories: true,
+                        attributes: [.protectionKey: FileProtectionType.complete]
+                    )
+                    try combined.write(to: directory.appendingPathComponent("inbox.sealed"), options: [.atomic, .completeFileProtection])
+                    trimHistory()
+                }
+            }
+        }
+    }
+
+    func removeInbox(scope: String) {
+        lock.withLock {
+            let marker = root.appendingPathComponent("scope")
+            guard (try? String(contentsOf: marker, encoding: .utf8)) == scope else { return }
+            generation += 1
+            try? FileManager.default.removeItem(at: root.appendingPathComponent("history/inbox.sealed"))
+        }
+    }
+
     /// Called synchronously by every sign-out/account-switch path. In-flight
     /// reads and writes fail their generation check and cannot recreate old data.
     func clear() {
@@ -150,6 +226,8 @@ final class ChatLocalStore: @unchecked Sendable {
             let marker = root.appendingPathComponent("scope")
             guard (try? String(contentsOf: marker, encoding: .utf8)) == scope else { return }
             let directory = root.appendingPathComponent("history")
+            // A stale inbox preview must not survive a permission refusal.
+            try? FileManager.default.removeItem(at: directory.appendingPathComponent("inbox.sealed"))
             let prefix = ScreenStoreDisk.hashed(thread.components(separatedBy: "?")[0]) + "-"
             let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
             for file in files where file.lastPathComponent.hasPrefix(prefix) {
@@ -204,14 +282,20 @@ final class ChatLocalStore: @unchecked Sendable {
             return SavedFile(url: url, size: values.fileSize ?? 0, used: values.contentModificationDate ?? .distantPast)
         }
         .sorted { $0.used < $1.used }
-        var count = entries.count
+        var count = entries.filter { $0.url.lastPathComponent != "inbox.sealed" }.count
         var bytes = entries.reduce(0) { $0 + $1.size }
         for file in entries {
             guard count > Self.threadLimit || bytes > Self.historyLimit || Date().timeIntervalSince(file.used) > Self.historyLifetime
             else { continue }
             try? FileManager.default.removeItem(at: file.url)
             bytes -= file.size
-            count -= 1
+            if file.url.lastPathComponent != "inbox.sealed" { count -= 1 }
         }
     }
+}
+
+struct ChatInboxMemory: Codable {
+    let response: UnifiedConversationsResponse
+    let stats: ChatStatsResponse.Stats?
+    let confirmedAt: Date
 }

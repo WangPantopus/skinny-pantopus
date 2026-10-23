@@ -21,7 +21,7 @@ import Foundation
 /// One entry in the unified conversations list. The backend tags rows
 /// with `_type: "conversation" | "room"`; we map both into one struct
 /// so the view can render either with a `ConversationRow`.
-public struct UnifiedConversation: Decodable, Sendable, Hashable, Identifiable {
+public struct UnifiedConversation: Codable, Sendable, Hashable, Identifiable {
     public enum Kind: String, Sendable, Hashable {
         case conversation, room
     }
@@ -72,6 +72,7 @@ public struct UnifiedConversation: Decodable, Sendable, Hashable, Identifiable {
         case lastMessageAt = "last_message_at"
         case lastMessagePreview = "last_message_preview"
         case topics
+        case cachedTopicKinds = "cached_topic_kinds"
         // .room keys
         case id, roomType = "room_type"
         case roomName = "room_name"
@@ -98,7 +99,9 @@ public struct UnifiedConversation: Decodable, Sendable, Hashable, Identifiable {
         lastMessagePreview = try c.decodeIfPresent(String.self, forKey: .lastMessagePreview)
 
         // Topics → kinds. Each topic object has a `topic_type`.
-        if let topics = try? c.decode([[String: JSONValue]].self, forKey: .topics) {
+        if let savedKinds = try c.decodeIfPresent([String].self, forKey: .cachedTopicKinds) {
+            topicKinds = savedKinds
+        } else if let topics = try? c.decode([[String: JSONValue]].self, forKey: .topics) {
             topicKinds = topics.compactMap { dict in
                 if case let .string(value) = dict["topic_type"] ?? .null { return value }
                 return nil
@@ -140,6 +143,33 @@ public struct UnifiedConversation: Decodable, Sendable, Hashable, Identifiable {
             isVerified = nil
         }
     }
+
+    /// Preserve the API representation and every projected topic when saving
+    /// the encrypted inbox, including minimal topic objects from older servers.
+    public func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: RootKeys.self)
+        try c.encode(kind.rawValue, forKey: .type)
+        try c.encode(totalUnread, forKey: .totalUnread)
+        try c.encodeIfPresent(lastMessageAt, forKey: .lastMessageAt)
+        try c.encodeIfPresent(lastMessagePreview, forKey: .lastMessagePreview)
+        try c.encode(topics, forKey: .topics)
+        try c.encode(topicKinds, forKey: .cachedTopicKinds)
+        switch kind {
+        case .conversation:
+            try c.encode(id, forKey: .otherParticipantId)
+            try c.encodeIfPresent(name, forKey: .otherParticipantName)
+            try c.encodeIfPresent(avatarURL, forKey: .otherParticipantAvatar)
+            var identity = c.nestedContainer(keyedBy: IdentityKeys.self, forKey: .otherParticipantIdentity)
+            try identity.encodeIfPresent(identityKind, forKey: .identityKind)
+            try identity.encodeIfPresent(isVerified, forKey: .verified)
+        case .room:
+            try c.encode(id, forKey: .id)
+            try c.encodeIfPresent(name, forKey: .roomName)
+            try c.encodeIfPresent(roomType, forKey: .roomType)
+            try c.encodeIfPresent(gigId, forKey: .gigId)
+            try c.encodeIfPresent(homeId, forKey: .homeId)
+        }
+    }
 }
 
 /// `GET /api/chat/rooms/:roomId` — room availability and participants.
@@ -175,7 +205,7 @@ public struct ChatRoomDetailResponse: Decodable, Sendable {
     public let room: Room
 }
 
-public struct ConversationTopicDTO: Decodable, Sendable, Hashable, Identifiable {
+public struct ConversationTopicDTO: Codable, Sendable, Hashable, Identifiable {
     public let id: String
     public let topicType: String
     public let topicRefId: String?
@@ -203,7 +233,7 @@ public struct FindOrCreateTopicResponse: Decodable, Sendable, Hashable {
 }
 
 /// `GET /api/chat/unified-conversations` envelope.
-public struct UnifiedConversationsResponse: Decodable, Sendable, Hashable {
+public struct UnifiedConversationsResponse: Codable, Sendable, Hashable {
     public let conversations: [UnifiedConversation]
     public let total: Int?
     public let totalUnread: Int?
@@ -216,10 +246,10 @@ public struct UnifiedConversationsResponse: Decodable, Sendable, Hashable {
 // MARK: - Stats
 
 /// `GET /api/chat/stats` envelope.
-public struct ChatStatsResponse: Decodable, Sendable, Hashable {
+public struct ChatStatsResponse: Codable, Sendable, Hashable {
     public let stats: Stats
 
-    public struct Stats: Decodable, Sendable, Hashable {
+    public struct Stats: Codable, Sendable, Hashable {
         public let totalUnread: Int
         public let totalChats: Int?
         public let totalMessages: Int?
