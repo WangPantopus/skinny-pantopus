@@ -24,7 +24,7 @@ const logger = require('../utils/logger');
 const notificationService = require('../services/notificationService');
 const blockService = require('../services/blockService');
 const { pendingReceived } = require('../services/connectionRequests');
-const { loadChatPeople } = require('../services/chatPeople');
+const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
 const { isBlocked, getRelationshipStatus } = require('../utils/visibilityPolicy');
 const { invalidateFilterCache } = require('../services/feedService');
 const marketplaceService = require('../services/marketplace/marketplaceService');
@@ -118,6 +118,14 @@ const USER_SELECT = 'id, username, name, first_name, last_name, profile_picture_
 // email kind shows part of their email address, so the lists send null instead (clients link by id then).
 function withChosenUsername(user) {
   return user ? { ...user, username: chosenUsernameOrNull(user.username) } : user;
+}
+
+// A person in one of the lists below, named as neighbors see them on posts, in chats and in connection notices
+// (services/chatPeople.js): by their Local Profile's name, handle and photo, or, for a business or anyone without one,
+// by the account. `people` comes from loadChatPeople; anyone it lacks (the caller's own entry included) keeps the
+// account row. `id` stays the account id.
+function listedPerson(user, people) {
+  return withChosenUsername(chatPersonRow(user, people));
 }
 
 // Blocks hide content in both directions (the feed and marketplace filters read them
@@ -793,10 +801,12 @@ router.get('/', verifyToken, async (req, res) => {
     }
 
     // Enrich with role info (who is the "other" user relative to current user)
+    const people = await loadChatPeople((relationships || [])
+      .map(rel => (rel.requester?.id === userId ? rel.addressee?.id : rel.requester?.id)));
     const enriched = (relationships || []).map(rel => {
       const isRequester = rel.requester?.id === userId;
-      const requester = withChosenUsername(rel.requester);
-      const addressee = withChosenUsername(rel.addressee);
+      const requester = listedPerson(rel.requester, people);
+      const addressee = listedPerson(rel.addressee, people);
       return {
         ...rel,
         requester,
@@ -829,7 +839,8 @@ router.get('/requests/pending', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch pending requests' });
     }
 
-    res.json({ requests: requests.map(r => ({ ...r, requester: withChosenUsername(r.requester) })) });
+    const people = await loadChatPeople(requests.map(r => r.requester?.id));
+    res.json({ requests: requests.map(r => ({ ...r, requester: listedPerson(r.requester, people) })) });
   } catch (err) {
     if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return connectionReadUnavailable(res);
     logger.error('Pending requests error', { error: err.message });
@@ -862,7 +873,8 @@ router.get('/requests/sent', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch sent requests' });
     }
 
-    res.json({ requests: (requests || []).map(r => ({ ...r, addressee: withChosenUsername(r.addressee) })) });
+    const people = await loadChatPeople((requests || []).map(r => r.addressee?.id));
+    res.json({ requests: (requests || []).map(r => ({ ...r, addressee: listedPerson(r.addressee, people) })) });
   } catch (err) {
     if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return connectionReadUnavailable(res);
     logger.error('Sent requests error', { error: err.message });
@@ -893,9 +905,11 @@ router.get('/blocked', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch blocked users' });
     }
 
+    const people = await loadChatPeople((blocked || [])
+      .map(rel => (rel.requester?.id === userId ? rel.addressee?.id : rel.requester?.id)));
     const enriched = (blocked || []).map(rel => {
-      const requester = withChosenUsername(rel.requester);
-      const addressee = withChosenUsername(rel.addressee);
+      const requester = listedPerson(rel.requester, people);
+      const addressee = listedPerson(rel.addressee, people);
       const blockedUser = rel.requester?.id === userId ? addressee : requester;
       return { ...rel, requester, addressee, blocked_user: blockedUser };
     });
