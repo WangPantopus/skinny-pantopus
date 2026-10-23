@@ -260,6 +260,14 @@ data class ChatReadReceipt(
 )
 
 @JsonClass(generateAdapter = true)
+data class ChatChangesBody(
+    val cursor: Map<String, Long>,
+    val until: Map<String, Long>? = null,
+    val asBusinessUserId: String? = null,
+    val limit: Int = 200,
+)
+
+@JsonClass(generateAdapter = true)
 data class ChatChangesResponse(
     val messages: List<ChatMessageDto> = emptyList(),
     val syncCursors: Map<String, Long> = emptyMap(),

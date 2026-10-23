@@ -1,5 +1,6 @@
 package app.pantopus.android.data.api.services
 
+import app.pantopus.android.data.api.models.chats.ChatChangesBody
 import app.pantopus.android.data.api.models.chats.ChatChangesResponse
 import app.pantopus.android.data.api.models.chats.ChatMessagesResponse
 import app.pantopus.android.data.api.models.chats.ChatNotificationPreferencesBody
@@ -161,6 +162,20 @@ interface ChatApi {
         @Query("cursor") cursor: String,
         @Query("until") until: String? = null,
         @Query("limit") limit: Int = 200,
+    ): ChatChangesResponse
+
+    @Headers("Cache-Control: no-store")
+    @POST("api/chat/rooms/{roomId}/changes")
+    suspend fun roomChangesPost(
+        @Path("roomId") roomId: String,
+        @Body body: ChatChangesBody,
+    ): ChatChangesResponse
+
+    @Headers("Cache-Control: no-store")
+    @POST("api/chat/conversations/{otherUserId}/changes")
+    suspend fun conversationChangesPost(
+        @Path("otherUserId") otherUserId: String,
+        @Body body: ChatChangesBody,
     ): ChatChangesResponse
 
     /**

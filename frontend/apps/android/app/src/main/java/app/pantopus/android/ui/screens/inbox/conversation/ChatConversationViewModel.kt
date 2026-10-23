@@ -2991,11 +2991,9 @@ class ChatConversationViewModel
             cursor: Map<String, Long>,
             until: Map<String, Long>?,
         ): NetworkResult<ChatChangesResponse> {
-            val encodedCursor = JSONObject(cursor).toString()
-            val encodedUntil = until?.let { JSONObject(it).toString() }
             return when (val target = context.mode) {
-                is ChatThreadMode.Room -> repo.roomChanges(target.id, encodedCursor, encodedUntil, target.asBusinessUserId)
-                is ChatThreadMode.Person -> repo.conversationChanges(target.otherUserId, encodedCursor, encodedUntil)
+                is ChatThreadMode.Room -> repo.roomChanges(target.id, cursor, until, target.asBusinessUserId)
+                is ChatThreadMode.Person -> repo.conversationChanges(target.otherUserId, cursor, until)
                 ChatThreadMode.Ai -> NetworkResult.Success(ChatChangesResponse())
             }
         }

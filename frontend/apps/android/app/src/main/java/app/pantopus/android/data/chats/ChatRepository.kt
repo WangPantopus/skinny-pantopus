@@ -1,5 +1,6 @@
 package app.pantopus.android.data.chats
 
+import app.pantopus.android.data.api.models.chats.ChatChangesBody
 import app.pantopus.android.data.api.models.chats.ChatChangesResponse
 import app.pantopus.android.data.api.models.chats.ChatMessagesResponse
 import app.pantopus.android.data.api.models.chats.ChatNotificationPreferencesBody
@@ -32,9 +33,13 @@ import app.pantopus.android.data.store.Stored
 import app.pantopus.android.data.store.asResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import retrofit2.HttpException
 import java.io.File
 import java.io.IOException
+import java.net.HttpURLConnection.HTTP_BAD_METHOD
+import java.net.HttpURLConnection.HTTP_NOT_FOUND
+import java.net.URLEncoder
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -44,6 +49,8 @@ private const val CHAT_FILE_MAX_BYTES = 100L * 1024 * 1024
 /** The Messages list's first page (the route's default). */
 private const val CONVERSATIONS_LIMIT = 100
 private const val HISTORY_LIMIT = 100
+private const val LEGACY_SYNC_QUERY_LIMIT = 6000
+private const val REQUEST_HEADERS_TOO_LARGE = 431
 
 /** Wraps the chat endpoints in the [NetworkResult] taxonomy. */
 @Singleton
@@ -225,16 +232,49 @@ class ChatRepository
 
         suspend fun roomChanges(
             roomId: String,
-            cursor: String,
-            until: String?,
+            cursor: Map<String, Long>,
+            until: Map<String, Long>?,
             asBusinessUserId: String?,
-        ): NetworkResult<ChatChangesResponse> = safeApiCall { api.roomChanges(roomId, cursor, until, asBusinessUserId) }
+        ): NetworkResult<ChatChangesResponse> =
+            readChanges(
+                ChatChangesBody(cursor, until, asBusinessUserId),
+                post = { api.roomChangesPost(roomId, it) },
+                legacy = { encodedCursor, encodedUntil -> api.roomChanges(roomId, encodedCursor, encodedUntil, asBusinessUserId) },
+            )
 
         suspend fun conversationChanges(
             otherUserId: String,
-            cursor: String,
-            until: String?,
-        ): NetworkResult<ChatChangesResponse> = safeApiCall { api.conversationChanges(otherUserId, cursor, until) }
+            cursor: Map<String, Long>,
+            until: Map<String, Long>?,
+        ): NetworkResult<ChatChangesResponse> =
+            readChanges(
+                ChatChangesBody(cursor, until),
+                post = { api.conversationChangesPost(otherUserId, it) },
+                legacy = { encodedCursor, encodedUntil -> api.conversationChanges(otherUserId, encodedCursor, encodedUntil) },
+            )
+
+        private suspend fun readChanges(
+            body: ChatChangesBody,
+            post: suspend (ChatChangesBody) -> ChatChangesResponse,
+            legacy: suspend (String, String?) -> ChatChangesResponse,
+        ): NetworkResult<ChatChangesResponse> {
+            val result = safeApiCall { post(body) }
+            if (result !is NetworkResult.Failure || result.error.code !in listOf(HTTP_NOT_FOUND, HTTP_BAD_METHOD)) return result
+            val cursor = JSONObject(body.cursor).toString()
+            val until = body.until?.let { JSONObject(it).toString() }
+            val encodedSize = URLEncoder.encode(cursor, "UTF-8").length + (until?.let { URLEncoder.encode(it, "UTF-8").length } ?: 0)
+            // A server without POST support can still recover small maps. Larger maps use the existing
+            // bounded history reconciliation instead of repeating an oversized GET or truncating rooms.
+            if (encodedSize > LEGACY_SYNC_QUERY_LIMIT) return NetworkResult.Success(ChatChangesResponse(resetRequired = true))
+            val fallback = safeApiCall { legacy(cursor, until) }
+            return if (fallback is NetworkResult.Failure &&
+                fallback.error.code in listOf(HTTP_NOT_FOUND, HTTP_BAD_METHOD, REQUEST_HEADERS_TOO_LARGE)
+            ) {
+                NetworkResult.Success(ChatChangesResponse(resetRequired = true))
+            } else {
+                fallback
+            }
+        }
 
         suspend fun createDirectChat(otherUserId: String): NetworkResult<CreateDirectChatResponse> =
             safeApiCall { api.createDirectChat(CreateDirectChatBody(otherUserId)) }.chatsChanged()
