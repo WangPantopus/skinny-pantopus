@@ -645,6 +645,7 @@ public final class ChatConversationViewModel {
     private var historyRequestId: UUID?
     private var historyTouchedIds: Set<String> = []
     private var historyConfirmedAt: Date?
+    private var syncCursors: [String: Int64]?
     private var historySaveTask: Task<Void, Never>?
     private var savedHistorySnapshot: ChatThreadMemory?
     private var savedHistoryKey: String?
@@ -2542,6 +2543,7 @@ public final class ChatConversationViewModel {
             messages = []
             oldestCursor = nil
             hasMore = false
+            syncCursors = nil
         } else if historyRequestId != nil {
             return
         }
@@ -2557,6 +2559,10 @@ public final class ChatConversationViewModel {
         }
         let before: String? = if case let .older(cursor) = kind { cursor } else { nil }
         do {
+            if case .merge = kind, topicId == nil, let cursor = syncCursors,
+               try await fetchChanges(cursor: cursor, requestId: requestId, generation: generation) {
+                return
+            }
             let response = try await requestHistory(before: before, topicId: topicId)
             guard generation == historyGeneration, historyRequestId == requestId, !Task.isCancelled else { return }
             var fetched = response.messages
@@ -2587,6 +2593,7 @@ public final class ChatConversationViewModel {
                 messages.removeAll { !allowedRooms.contains($0.roomId) }
             }
             historyConfirmedAt = Date()
+            if before == nil { syncCursors = topicId == nil ? response.syncCursors : nil }
             apply(response: response, kind: kind, fetchedMessages: fetched)
             scheduleMarkRead()
             if case let .room(roomId) = mode, before == nil {
@@ -2596,6 +2603,79 @@ public final class ChatConversationViewModel {
             guard generation == historyGeneration, historyRequestId == requestId, !Task.isCancelled else { return }
             handleFetchFailure(error, kind: kind)
         }
+    }
+
+    /// Drain one fixed server snapshot before applying rows or committing its
+    /// cursor. A failed later page leaves the displayed history and cursor intact.
+    private func fetchChanges(cursor: [String: Int64], requestId: UUID, generation: Int) async throws -> Bool {
+        guard cursor.count <= 10000 else { return false }
+        var next = cursor
+        var until: [String: Int64]?
+        var changes: [ChatMessageChange] = []
+        var finalPage: ChatChangesResponse?
+        do {
+            repeat {
+                let endpoint: Endpoint
+                switch mode {
+                case let .room(roomId):
+                    endpoint = ChatEndpoints.changes(
+                        conversationId: roomId,
+                        isRoom: true,
+                        cursor: next,
+                        until: until,
+                        asBusinessUserId: asBusinessUserId
+                    )
+                case let .person(otherUserId):
+                    endpoint = ChatEndpoints.changes(conversationId: otherUserId, isRoom: false, cursor: next, until: until)
+                case .ai: return false
+                }
+                let page: ChatChangesResponse = try await api.request(endpoint)
+                guard generation == historyGeneration, historyRequestId == requestId, !Task.isCancelled else { return true }
+                guard !page.resetRequired else { return false }
+                if let until, until != page.untilCursors { throw APIError.invalidResponse }
+                if page.hasMore, page.syncCursors == next { throw APIError.invalidResponse }
+                changes.append(contentsOf: page.messages)
+                next = page.syncCursors
+                until = page.untilCursors
+                finalPage = page
+            } while finalPage?.hasMore == true
+        } catch APIError.notFound {
+            // An older server can still reconcile the loaded history window.
+            return false
+        } catch APIError.clientError(status: 400, message: _) {
+            return false
+        }
+        guard let finalPage else { return false }
+        let rooms = Set(finalPage.roomIds)
+        let oldest = messages.first
+        var byId = Dictionary(uniqueKeysWithValues: messages.filter { rooms.contains($0.roomId) }.map { ($0.id, $0) })
+        for change in changes where !historyTouchedIds.contains(change.id) {
+            guard let message = change.message else {
+                byId.removeValue(forKey: change.id)
+                continue
+            }
+            guard rooms.contains(message.roomId), byId[message.id] != nil
+                || oldest.map({ !Self.messagePrecedes(message, $0) }) != false else { continue }
+            if message.readAt == nil, let readAt = byId[message.id]?.readAt {
+                byId[message.id] = message.replacingReadAt(readAt)
+            } else {
+                byId[message.id] = message
+            }
+        }
+        messages = byId.values.sorted(by: Self.messagePrecedes)
+        retireConfirmedClientIds(in: changes.compactMap(\.message))
+        activeRoomIds = rooms
+        activeThreadTracker.setActiveRooms(rooms, owner: ObjectIdentifier(self))
+        syncCursors = next
+        historyConfirmedAt = Date()
+        for receipt in finalPage.readReceipts ?? [] {
+            handleRead(receipt)
+        }
+        rebuild()
+        joinActiveRoomsIfPossible()
+        scheduleMarkRead()
+        if case let .room(roomId) = mode { await refreshRoomAvailability(roomId: roomId) }
+        return true
     }
 
     private func requestHistory(before: String?, topicId: String?) async throws -> ChatMessagesResponse {
@@ -3063,12 +3143,15 @@ public final class ChatConversationViewModel {
     private func handleRead(_ event: ChatRealtimeRead) {
         // A group's single reader must never imply that everyone has read it.
         guard case let .person(otherUserId) = mode, event.userId == otherUserId, event.roomId == directRoomId,
-              let throughMessageId = event.throughMessageId, let readAt = event.readAt,
-              let boundary = messages.first(where: { $0.id == throughMessageId && $0.roomId == event.roomId }) else { return }
+              let throughMessageId = event.throughMessageId, let readAt = event.readAt else { return }
+        let boundary = messages.first { $0.id == throughMessageId && $0.roomId == event.roomId }
+        guard let createdAt = boundary?.createdAt ?? event.throughCreatedAt,
+              let boundaryDate = Self.parseISO(createdAt) else { return }
         for index in messages.indices {
             let message = messages[index]
             guard message.roomId == event.roomId, message.userId == sendingIdentityId,
-                  !Self.messagePrecedes(boundary, message) else { continue }
+                  let messageDate = Self.parseISO(message.createdAt),
+                  (messageDate, message.id) <= (boundaryDate, throughMessageId) else { continue }
             historyTouchedIds.insert(message.id)
             messages[index] = message.replacingReadAt(readAt)
         }
@@ -3606,6 +3689,7 @@ struct ChatThreadMemory: Codable, Equatable {
     let oldestCursor: String?
     let hasMore: Bool
     var confirmedAt: Date?
+    var syncCursors: [String: Int64]?
 }
 
 extension ChatConversationViewModel {
@@ -3642,6 +3726,7 @@ extension ChatConversationViewModel {
         oldestCursor = memory.oldestCursor
         hasMore = memory.hasMore
         historyConfirmedAt = memory.confirmedAt
+        syncCursors = memory.syncCursors
         activeRoomIds = Set(messages.map(\.roomId))
         rebuild()
         return true
@@ -3666,7 +3751,8 @@ extension ChatConversationViewModel {
             messages: kept,
             oldestCursor: trimmed ? Self.paginationCursor(for: kept.first) : oldestCursor,
             hasMore: trimmed || hasMore,
-            confirmedAt: historyConfirmedAt
+            confirmedAt: historyConfirmedAt,
+            syncCursors: syncCursors
         )
         store.seed(memory, for: endpoint)
         guard api === APIClient.shared, historyConfirmedAt != nil else { return }
@@ -3693,6 +3779,7 @@ extension ChatConversationViewModel {
         historySaveTask?.cancel()
         historySaveTask = nil
         historyConfirmedAt = nil
+        syncCursors = nil
         savedHistorySnapshot = nil
         savedHistoryKey = nil
         messages = []

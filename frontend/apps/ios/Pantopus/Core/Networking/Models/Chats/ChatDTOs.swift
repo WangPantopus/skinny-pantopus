@@ -617,10 +617,35 @@ public struct ChatMessagesResponse: Decodable, Sendable, Hashable {
     /// with a draft or closed business (`code` NOT_PUBLISHED). Nil from
     /// older servers, which leave the key out.
     public var sendRefusal: ChatSendRefusal?
+    public var syncCursors: [String: Int64]?
 
     private enum CodingKeys: String, CodingKey {
-        case messages, hasMore, nextCursor, roomIds, sendRefusal
+        case messages, hasMore, nextCursor, roomIds, sendRefusal, syncCursors
     }
+}
+
+/// A delta row is either a complete accepted message or a deletion tombstone.
+public struct ChatMessageChange: Decodable, Sendable {
+    public let id: String
+    public let message: ChatMessageDTO?
+
+    private enum CodingKeys: String, CodingKey { case id, deleted }
+
+    public init(from decoder: any Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(String.self, forKey: .id)
+        message = try values.decodeIfPresent(Bool.self, forKey: .deleted) == true ? nil : ChatMessageDTO(from: decoder)
+    }
+}
+
+public struct ChatChangesResponse: Decodable, Sendable {
+    public let messages: [ChatMessageChange]
+    public let roomIds: [String]
+    public let resetRequired: Bool
+    public let hasMore: Bool
+    public let syncCursors: [String: Int64]
+    public let untilCursors: [String: Int64]
+    public let readReceipts: [ChatRealtimeRead]?
 }
 
 /// Why a conversation takes no messages, as the server words it (`backend/routes/chats.js`
@@ -805,6 +830,7 @@ public struct ChatRealtimeRead: Decodable, Sendable, Hashable {
     public let roomId: String
     public let readAt: String?
     public let throughMessageId: String?
+    public var throughCreatedAt: String?
 }
 
 /// `typing:user` / `typing:stopped` socket payloads — broadcast to a

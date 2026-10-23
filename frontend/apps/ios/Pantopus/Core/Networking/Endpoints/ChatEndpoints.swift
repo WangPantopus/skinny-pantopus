@@ -91,6 +91,23 @@ public enum ChatEndpoints {
         )
     }
 
+    /// Keep per-room cursors in the POST body, including large person threads.
+    public static func changes(
+        conversationId: String,
+        isRoom: Bool,
+        cursor: [String: Int64],
+        until: [String: Int64]?,
+        asBusinessUserId: String? = nil
+    ) -> Endpoint {
+        let collection = isRoom ? "rooms" : "conversations"
+        return Endpoint(
+            method: .post,
+            path: "/api/chat/\(collection)/\(conversationId)/changes",
+            body: ChatChangesBody(cursor: cursor, until: until, asBusinessUserId: asBusinessUserId),
+            cachePolicy: .reloadIgnoringLocalCacheData
+        )
+    }
+
     /// `POST /api/chat/direct` — find-or-create the 1:1 direct room
     /// with another user. Idempotent server-side
     /// (`get_or_create_direct_chat`), so safe to call before every
@@ -176,6 +193,13 @@ public enum ChatEndpoints {
     public static func findOrCreateTopic(otherUserId: String, body: FindOrCreateTopicBody) -> Endpoint {
         Endpoint(method: .post, path: "/api/chat/conversations/\(otherUserId)/topics", body: body)
     }
+}
+
+private struct ChatChangesBody: Encodable {
+    let cursor: [String: Int64]
+    let until: [String: Int64]?
+    let asBusinessUserId: String?
+    let limit = 200
 }
 
 /// `POST /api/chat/direct` body. Matches the Joi validator at
