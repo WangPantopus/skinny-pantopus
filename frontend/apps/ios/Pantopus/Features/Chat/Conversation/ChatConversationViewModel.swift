@@ -403,8 +403,7 @@ public final class ChatConversationViewModel {
 
     /// Live presence override for the person counterparty, driven by the
     /// `user:online` / `user:offline` socket events. `nil` until the
-    /// first presence event arrives; the header falls back to the static
-    /// flag the route carried.
+    /// first presence event arrives. Unknown presence never displays Active now.
     public private(set) var counterpartyOnline: Bool?
 
     /// The other person's id in a person DM (for the header's profile link),
@@ -418,7 +417,7 @@ public final class ChatConversationViewModel {
     /// `online` flag replaced by the live presence override when one has
     /// arrived.
     public var headerCounterparty: ChatCounterparty {
-        guard case let .person(name, initials, locality, verified, online) = counterparty else {
+        guard case let .person(name, initials, locality, verified, _) = counterparty else {
             return counterparty
         }
         return .person(
@@ -426,7 +425,7 @@ public final class ChatConversationViewModel {
             initials: initials,
             locality: locality,
             verified: verified,
-            online: counterpartyOnline ?? online
+            online: counterpartyOnline == true
         )
     }
 
@@ -666,10 +665,8 @@ public final class ChatConversationViewModel {
     /// Auto-clears `isCounterpartyTyping` ~5s after the last typing event.
     private var typingClearTask: Task<Void, Never>?
     /// Last `typing:start` emit — throttles outgoing typing signals to
-    /// one per ≥6s, bounding sustained typing at 10 emits/min (the
-    /// backend silently drops `typing:start` past 10/min,
-    /// `backend/socket/chatSocketio.js:23`). Agreed cross-platform
-    /// value: 6 000 ms on both clients.
+    /// one per 3s, refreshing before the recipient's 5s expiry while
+    /// leaving room for stops within the backend's 30/min typing budget.
     private var lastTypingEmitAt: Date?
     /// Whether we owe the room a `typing:stop` (a start was emitted).
     private var didEmitTypingStart = false
@@ -1949,6 +1946,8 @@ public final class ChatConversationViewModel {
         topicsRefreshTask = nil
         rememberThread()
         emitTypingStopIfNeeded()
+        counterpartyOnline = nil
+        isCounterpartyTyping = false
         markReadTask?.cancel()
         typingClearTask?.cancel()
         aiStreamTask?.cancel()
@@ -2064,7 +2063,7 @@ public final class ChatConversationViewModel {
 
     // MARK: - Typing (A15)
 
-    /// Composer text changed — emit `typing:start` at most once per ≥6s
+    /// Composer text changed — emit `typing:start` at most once per 3s
     /// while non-empty, and `typing:stop` when cleared. Emits only when
     /// a room id is already known (never creates rooms for typing).
     private func handleComposerTextChange() {
@@ -2072,9 +2071,9 @@ public final class ChatConversationViewModel {
             emitTypingStopIfNeeded()
             return
         }
-        guard let roomId = typingRoomId() else { return }
+        guard socket.connectionState == .connected, let roomId = typingRoomId() else { return }
         let now = Date()
-        if let last = lastTypingEmitAt, now.timeIntervalSince(last) < 6 { return }
+        if let last = lastTypingEmitAt, now.timeIntervalSince(last) < 3 { return }
         lastTypingEmitAt = now
         didEmitTypingStart = true
         socket.emit("typing:start", payload: ["roomId": roomId])
@@ -2083,7 +2082,7 @@ public final class ChatConversationViewModel {
     /// Write `composerText` without feeding the typing emitter — for
     /// programmatic seeds (beginEdit, edit-failure restore, capability
     /// chips), which must not broadcast "typing…" before the user has
-    /// touched the keyboard, nor burn the backend's 10/min typing budget.
+    /// touched the keyboard, nor spend the backend's typing budget.
     private func setComposerTextSilently(_ text: String) {
         isProgrammaticComposerWrite = true
         composerText = text
@@ -2844,12 +2843,7 @@ public final class ChatConversationViewModel {
             guard let stream = self?.socket.connectionStates() else { return }
             for await state in stream {
                 guard let self else { return }
-                if state == .connected {
-                    joinedRoomIds.removeAll()
-                    joinActiveRoomsIfPossible()
-                    scheduleFallbackRefresh()
-                }
-                updateFallbackPolling(isConnected: state == .connected)
+                handleConnectionState(state)
             }
         })
         socketTasks.append(Task { [weak self] in
@@ -2918,6 +2912,21 @@ public final class ChatConversationViewModel {
         joinActiveRoomsIfPossible()
     }
 
+    private func handleConnectionState(_ state: SocketClient.ConnectionState) {
+        if state == .connected {
+            joinedRoomIds.removeAll()
+            joinActiveRoomsIfPossible()
+            scheduleFallbackRefresh()
+        } else {
+            counterpartyOnline = nil
+            isCounterpartyTyping = false
+            typingClearTask?.cancel()
+            didEmitTypingStart = false
+            lastTypingEmitAt = nil
+        }
+        updateFallbackPolling(isConnected: state == .connected)
+    }
+
     private func subscribeToReadReceipts() {
         socketTasks.append(Task { [weak self] in
             guard let stream = self?.socket.events(named: "messages:read", as: ChatRealtimeRead.self) else { return }
@@ -2932,7 +2941,8 @@ public final class ChatConversationViewModel {
     /// thread's counterparty matters — room/group/AI threads have no
     /// single presence subject.
     private func handlePresence(_ event: ChatRealtimePresence, online: Bool) {
-        guard case let .person(otherUserId) = mode, event.userId == otherUserId else { return }
+        guard socket.connectionState == .connected, case let .person(otherUserId) = mode,
+              event.userId == otherUserId else { return }
         counterpartyOnline = online
     }
 
