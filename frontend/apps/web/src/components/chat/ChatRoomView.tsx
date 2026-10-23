@@ -54,9 +54,6 @@ export default function ChatRoomView({
   const [showListingPicker, setShowListingPicker] = useState(false);
   const [lightboxImage, setLightboxImage] = useState<{ url: string; title?: string } | null>(null);
 
-  // ── Shared chat hook ──────────────────────────────────
-  const chat = useChatMessages({ roomId, asBusinessUserId, currentUserId, initialMessageId });
-
   // ── Load current user ─────────────────────────────────
   useEffect(() => {
     let cancelled = false;
@@ -84,6 +81,16 @@ export default function ChatRoomView({
     retry: false,
   });
   const roomInfo: ChatRoomWithDetails | null = roomQuery.data ?? null;
+  const receiptPeerId = useMemo(() => {
+    if (roomInfo?.type !== 'direct' || !currentUserId) return null;
+    const identity = asBusinessUserId || currentUserId;
+    const participants = (roomInfo.participants || []).filter((participant) => participant.is_active !== false);
+    const peers = participants.filter((participant) => (participant.user_id || participant.user?.id) !== identity);
+    return participants.length === 2 && peers.length === 1 ? peers[0].user_id || peers[0].user?.id : null;
+  }, [roomInfo, currentUserId, asBusinessUserId]);
+
+  const chat = useChatMessages({ roomId, asBusinessUserId, currentUserId, initialMessageId, receiptPeerId });
+
 
   // ── Business identity resolution ──────────────────────
   const isRepresented = useCallback(

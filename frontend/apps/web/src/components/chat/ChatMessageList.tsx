@@ -228,9 +228,17 @@ export default function ChatMessageList({
     const visible = new Set<string>();
     const report = () => {
       if (document.visibilityState !== 'visible') return;
-      let newest: string | undefined;
-      for (const id of visible) if (newest === undefined || (order.get(id) ?? -1) > (order.get(newest) ?? -1)) newest = id;
-      if (newest) onVisibleMessage(newest);
+      // Report each actually visible room boundary. A person conversation can
+      // span several rooms; its globally newest bubble cannot acknowledge the others.
+      const newest = new Map<string, string>();
+      for (const id of visible) {
+        const index = order.get(id);
+        const message = index === undefined ? undefined : messages[index];
+        if (!message?.room_id) continue;
+        const previous = newest.get(message.room_id);
+        if (!previous || index! > (order.get(previous) ?? -1)) newest.set(message.room_id, id);
+      }
+      newest.forEach((id) => onVisibleMessage(id));
     };
     const observer = new IntersectionObserver((entries) => {
       for (const entry of entries) {

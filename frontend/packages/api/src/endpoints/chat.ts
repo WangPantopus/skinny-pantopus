@@ -250,13 +250,14 @@ export function getMessageChanges(target: { roomId?: string; otherUserId?: strin
  */
 export async function markConversationAsRead(
   otherUserId: string,
-  options?: { asBusinessUserId?: string; throughMessageId?: string }
+  options?: { asBusinessUserId?: string; throughMessageId?: string; throughMessageIds?: Record<string, string> }
 ): Promise<{ unreadCount: number; updatedRooms: number }> {
   return post<{ unreadCount: number; updatedRooms: number }>(
     `/api/chat/conversations/${otherUserId}/read`,
     {
       ...(options?.asBusinessUserId ? { asBusinessUserId: options.asBusinessUserId } : {}),
       ...(options?.throughMessageId ? { throughMessageId: options.throughMessageId } : {}),
+      ...(options?.throughMessageIds ? { throughMessageIds: options.throughMessageIds } : {}),
     }
   );
 }
@@ -309,11 +310,12 @@ export async function markMessagesAsRead(roomId: string, messageId?: string): Pr
 
 export async function markMessagesAsReadForIdentity(
   roomId: string,
-  options: { messageId?: string; asBusinessUserId?: string; throughMessageId?: string }
+  options: { messageId?: string; asBusinessUserId?: string; throughMessageId?: string; throughMessageIds?: Record<string, string> }
 ): Promise<{ unreadCount: number }> {
   return post<{ unreadCount: number }>(`/api/chat/rooms/${roomId}/read`, {
     ...(options?.messageId ? { messageId: options.messageId } : {}),
     ...(options?.throughMessageId ? { throughMessageId: options.throughMessageId } : {}),
+    ...(options?.throughMessageIds ? { throughMessageIds: options.throughMessageIds } : {}),
     ...(options?.asBusinessUserId ? { asBusinessUserId: options.asBusinessUserId } : {}),
   });
 }

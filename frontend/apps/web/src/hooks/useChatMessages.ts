@@ -201,6 +201,8 @@ export interface UseChatMessagesOptions {
   roomId?: string;
   /** Person-based mode (ConversationView) */
   otherUserId?: string;
+  /** A verified sole peer for a direct room; groups never infer aggregate receipts. */
+  receiptPeerId?: string | null;
   /** Topic filter for person-based mode */
   topicId?: string | null;
   /** Open an authorized search match with a bounded surrounding window. */
@@ -294,6 +296,7 @@ function replyTargetIn(messages: ChatMessage[], replyToId: string | null | undef
 export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesReturn {
   const { roomId, otherUserId, topicId, asBusinessUserId, currentUserId, initialMessageId } = opts;
   const isRoomMode = Boolean(roomId);
+  const receiptPeerId = otherUserId || opts.receiptPeerId;
 
   const queryClient = useQueryClient();
   const cacheKey = useMemo(() => conversationCacheKey(roomId, otherUserId, topicId, asBusinessUserId, currentUserId), [roomId, otherUserId, topicId, asBusinessUserId, currentUserId]);
@@ -404,25 +407,36 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     }
   }, [isRoomMode, otherUserId]);
 
-  const visibleThroughRef = useRef<ChatMessage | null>(null);
-  const readAcknowledgedRef = useRef<string | null>(null);
+  const visibleThroughRef = useRef(new Map<string, ChatMessage>());
+  const readAcknowledgedRef = useRef(new Map<string, ChatMessage>());
   const markRead = useCallback(async () => {
-    if (!isCurrentScope() || !contextReadyRef.current || topicId || document.visibilityState !== 'visible') return;
-    const through = visibleThroughRef.current;
-    if (!through || isUnsent(through) || readAcknowledgedRef.current === through.id) return;
+    if (!isCurrentScope() || !contextReadyRef.current || topicId || document.visibilityState !== 'visible' || !navigator.onLine) return;
+    const currentIds = new Set(messagesRef.current.filter((message) => !isUnsent(message)).map((message) => String(message.id)));
+    const boundaries = [...visibleThroughRef.current.values()].filter((message) => {
+      const acknowledged = readAcknowledgedRef.current.get(message.room_id);
+      return currentIds.has(String(message.id)) && !isUnsent(message) && (!acknowledged || compareMessages(message, acknowledged) > 0);
+    }).slice(0, 500);
+    if (!boundaries.length) return;
+    const through = boundaries.reduce((latest, message) => compareMessages(message, latest) > 0 ? message : latest);
     try {
-      const options = { throughMessageId: String(through.id), ...(asBusinessUserId ? { asBusinessUserId } : {}) };
+      const options = { throughMessageId: String(through.id),
+        throughMessageIds: Object.fromEntries(boundaries.map((message) => [message.room_id, String(message.id)])),
+        ...(asBusinessUserId ? { asBusinessUserId } : {}) };
       if (isRoomMode && roomId) await api.chat.markMessagesAsReadForIdentity(roomId, options);
       else if (otherUserId) await api.chat.markConversationAsRead(otherUserId, options);
-      if (isCurrentScope()) readAcknowledgedRef.current = String(through.id);
+      if (isCurrentScope()) for (const boundary of boundaries) {
+        const previous = readAcknowledgedRef.current.get(boundary.room_id);
+        if (!previous || compareMessages(boundary, previous) > 0) readAcknowledgedRef.current.set(boundary.room_id, boundary);
+      }
     } catch {}
   }, [isRoomMode, roomId, otherUserId, asBusinessUserId, topicId, isCurrentScope]);
 
   const onVisibleMessage = useCallback((messageId: string) => {
     if (!isCurrentScope() || !contextReadyRef.current || topicId) return;
     const message = messagesRef.current.find((m) => String(m.id) === messageId);
-    if (!message || isUnsent(message)) return;
-    if (!visibleThroughRef.current || compareMessages(message, visibleThroughRef.current) > 0) visibleThroughRef.current = message;
+    if (!message?.room_id || isUnsent(message)) return;
+    const previous = visibleThroughRef.current.get(message.room_id);
+    if (!previous || compareMessages(message, previous) > 0) visibleThroughRef.current.set(message.room_id, message);
     if (markReadTimerRef.current) clearTimeout(markReadTimerRef.current);
     markReadTimerRef.current = setTimeout(() => {
       void markRead();
@@ -461,8 +475,8 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
           const page = await api.chat.getMessageContext({ roomId, otherUserId }, initialMessageId, { asBusinessUserId });
           if (!current()) return;
           setMessages((previous) => mergeMessages(previous.filter(isUnsent), page.messages.filter(survivesDeletion)));
-          visibleThroughRef.current = null;
-          readAcknowledgedRef.current = null;
+          visibleThroughRef.current.clear();
+          readAcknowledgedRef.current.clear();
           contextReadyRef.current = true;
           setContextAnchorId(page.anchorMessageId);
           applyPage(page);
@@ -540,8 +554,8 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
           && (known.has(String(message.id)) || (contextWindowRef.current
             ? oldest && newest && compareMessages(message, oldest) >= 0 && compareMessages(message, newest) <= 0
             : !oldest || !hasMore || compareMessages(message, oldest) >= 0))));
-        if (otherUserId) for (const receipt of receipts) {
-          if (receipt.userId !== otherUserId || !receipt.throughCreatedAt || !receipt.throughMessageId) continue;
+        if (receiptPeerId) for (const receipt of receipts) {
+          if (receipt.userId !== receiptPeerId || !receipt.throughCreatedAt || !receipt.throughMessageId) continue;
           const boundary = { id: receipt.throughMessageId, created_at: receipt.throughCreatedAt } as ChatMessage;
           merged = merged.map((message) => !isUnsent(message) && message.room_id === receipt.roomId
             && (message.user_id || message.sender_id) === (asBusinessUserId || currentUserId)
@@ -573,7 +587,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     });
     refreshInFlightRef.current = { scope: scopeGeneration, promise };
     return promise;
-  }, [scopeGeneration, fetchMessages, applyPage, isCurrentScope, cacheKey, cacheKeyId, currentUserId, queryClient, roomId, otherUserId, asBusinessUserId, isRoomMode, belongsToTopic, survivesDeletion, hasMore, initialMessageId]);
+  }, [scopeGeneration, fetchMessages, applyPage, isCurrentScope, cacheKey, cacheKeyId, currentUserId, queryClient, roomId, otherUserId, receiptPeerId, asBusinessUserId, isRoomMode, belongsToTopic, survivesDeletion, hasMore, initialMessageId]);
 
   // ── Tab/window foreground resume ──────────────────────────
   // When the tab becomes visible again, refresh messages to catch anything
@@ -669,8 +683,8 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     liveChangesRef.current.clear();
     reactionRequestsRef.current.clear();
     pendingReactionsRef.current.clear();
-    visibleThroughRef.current = null;
-    readAcknowledgedRef.current = null;
+    visibleThroughRef.current.clear();
+    readAcknowledgedRef.current.clear();
     void (async () => {
       if (!kept && currentUserId && loadAttempt === 0) {
         try {
@@ -911,8 +925,8 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
 
   const handleMessagesRead = useCallback((data: { userId?: string; roomId?: string; readAt?: string; throughMessageId?: string }) => {
     // A group member reading is not a receipt from every recipient. Person
-    // conversations only show Read when that particular peer acknowledges it.
-    if (!otherUserId || data.userId !== otherUserId || !data.roomId || !data.readAt || !isCurrentScope()) return;
+    // and verified direct-room views show Read only for that particular peer.
+    if (!receiptPeerId || data.userId !== receiptPeerId || !data.roomId || !data.readAt || !isCurrentScope()) return;
     const through = messagesRef.current.find((message) => message.id === data.throughMessageId);
     if (data.throughMessageId && !through) return;
     setMessages((previous) => previous.map((message) => {
@@ -922,7 +936,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
       noteLiveChange(String(message.id));
       return { ...message, read_at: data.readAt };
     }));
-  }, [otherUserId, asBusinessUserId, currentUserId, isCurrentScope, noteLiveChange]);
+  }, [receiptPeerId, asBusinessUserId, currentUserId, isCurrentScope, noteLiveChange]);
   useSocketEvent('messages:read', handleMessagesRead);
 
   useEffect(() => {
