@@ -78,7 +78,7 @@ export function useConversationPages(search = '') {
     try {
       const page = await api.chat.getUnifiedConversations({ limit: CONVERSATIONS_LIMIT, before: nextCursor, ...(q ? { q } : {}) });
       if (ownRequest !== request.current || current.current !== scope || marker !== api.authSessionMarker()) return;
-      client.setQueryData<ConversationsReply>(conversationsQuery(q).queryKey, (previous) => previous?.refreshId === generation ? ({ ...previous,
+      client.setQueryData<ConversationsReply>(conversationsQuery(q).queryKey, (previous) => previous && previous.refreshId === generation ? ({ ...previous,
         keptTail: { generation, rows: [...(validTail?.rows || []), ...page.conversations],
           nextCursor: page.nextCursor, hasMore: page.hasMore } }) : previous);
     } catch (error) {
