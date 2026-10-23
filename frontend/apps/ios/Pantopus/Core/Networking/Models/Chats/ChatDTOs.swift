@@ -327,6 +327,8 @@ public struct ChatPreferencesResponse: Decodable, Sendable {
 /// A read response describes only the requested room/person scope.
 struct ChatReadResponse: Decodable {
     let unreadCount: Int?
+    let readScope: String?
+    let topicId: String?
 }
 
 /// `message:new` socket event payload — just the fields the chat list
@@ -692,6 +694,12 @@ public struct ChatChangesResponse: Decodable, Sendable {
     public let syncCursors: [String: Int64]
     public let untilCursors: [String: Int64]
     public let readReceipts: [ChatRealtimeRead]?
+    public let messageReadReceipts: [ChatMessageReadReceipt]?
+}
+
+public struct ChatMessageReadReceipt: Decodable, Sendable {
+    public let messageId: String
+    public let readAt: String?
 }
 
 /// Why a conversation takes no messages, as the server words it (`backend/routes/chats.js`
@@ -877,6 +885,16 @@ public struct ChatRealtimeRead: Decodable, Sendable, Hashable {
     public let readAt: String?
     public let throughMessageId: String?
     public var throughCreatedAt: String?
+}
+
+/// Topic boundaries never imply reads outside this room and topic.
+public struct ChatRealtimeTopicRead: Decodable, Sendable {
+    public let userId: String
+    public let roomId: String
+    public let topicId: String
+    public let readAt: String?
+    public let throughMessageId: String?
+    public let throughCreatedAt: String?
 }
 
 /// `typing:user` / `typing:stopped` socket payloads — broadcast to a

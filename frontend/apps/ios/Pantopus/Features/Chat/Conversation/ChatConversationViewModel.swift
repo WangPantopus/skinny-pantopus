@@ -460,7 +460,13 @@ public final class ChatConversationViewModel {
 
     public private(set) var topics: [ChatConversationTopic] = []
     public private(set) var selectedTopicId: String? {
-        didSet { if oldValue != selectedTopicId { scheduleDraftSave() } }
+        didSet {
+            if oldValue != selectedTopicId {
+                lastReadBoundaries = [:]
+                activeThreadTracker.setActiveRooms(activeRoomIds, owner: ObjectIdentifier(self), topicId: selectedTopicId)
+                scheduleDraftSave()
+            }
+        }
     }
 
     /// User-facing notice set when the backend rejects a send with the
@@ -1441,7 +1447,7 @@ public final class ChatConversationViewModel {
                     retireConfirmedSend(clientId: clientId)
                     if case .person = mode { directRoomId = message.roomId }
                     activeRoomIds.insert(message.roomId)
-                    activeThreadTracker.setActiveRooms(activeRoomIds, owner: ObjectIdentifier(self))
+                    activeThreadTracker.setActiveRooms(activeRoomIds, owner: ObjectIdentifier(self), topicId: selectedTopicId)
                     joinActiveRoomsIfPossible()
                     upsert(message)
                     scheduleMarkRead()
@@ -2113,7 +2119,8 @@ public final class ChatConversationViewModel {
     /// can combine several rooms; each room needs its own visible boundary.
     public var latestAcceptedMessageIds: Set<String> {
         var latest: [String: ChatMessageDTO] = [:]
-        for message in messages where message.deletedAt == nil && UUID(uuidString: message.id) != nil {
+        for message in messages where message.deletedAt == nil && UUID(uuidString: message.id) != nil
+            && (selectedTopicId == nil || message.topicId == selectedTopicId) {
             if let previous = latest[message.roomId], !Self.messagePrecedes(previous, message) { continue }
             latest[message.roomId] = message
         }
@@ -2137,7 +2144,6 @@ public final class ChatConversationViewModel {
     }
 
     public func scheduleMarkRead() {
-        guard selectedTopicId == nil else { return }
         let pending = visibleReadBoundaries.filter { lastReadBoundaries[$0.key] != $0.value }
         var boundaries: [String: String] = [:]
         for roomId in pending.keys.sorted().prefix(500) {
@@ -2149,14 +2155,16 @@ public final class ChatConversationViewModel {
         let requestId = UUID()
         markReadRequestId = requestId
         let generation = historyGeneration
+        let topicId = selectedTopicId
         markReadTask = Task { [weak self] in
             do { try await Task.sleep(nanoseconds: 600_000_000) } catch { return }
             guard let self else { return }
-            await performMarkRead(boundaries: boundaries, generation: generation)
+            await performMarkRead(boundaries: boundaries, generation: generation, topicId: topicId)
             if markReadRequestId == requestId {
                 markReadRequestId = nil
                 scheduledReadBoundaries = [:]
                 markReadTask = nil
+                if boundaries.allSatisfy({ lastReadBoundaries[$0.key] == $0.value }) { scheduleMarkRead() }
             }
         }
     }
@@ -2832,6 +2840,9 @@ public final class ChatConversationViewModel {
             if case let .room(roomId) = mode, before == nil {
                 await refreshRoomAvailability(roomId: roomId)
             }
+            if let cursor = response.syncCursors {
+                await refreshMessageReadReceipts(cursor: cursor, requestId: requestId, generation: generation)
+            }
         } catch {
             guard generation == historyGeneration, historyRequestId == requestId, !Task.isCancelled else { return }
             handleFetchFailure(error, kind: kind)
@@ -2898,7 +2909,7 @@ public final class ChatConversationViewModel {
         messages = byId.values.sorted(by: Self.messagePrecedes)
         retireConfirmedClientIds(in: Array(confirmations.values))
         activeRoomIds = rooms
-        activeThreadTracker.setActiveRooms(rooms, owner: ObjectIdentifier(self))
+        activeThreadTracker.setActiveRooms(rooms, owner: ObjectIdentifier(self), topicId: selectedTopicId)
         syncCursors = next
         historyConfirmedAt = Date()
         for receipt in finalPage.readReceipts ?? [] {
@@ -2908,10 +2919,11 @@ public final class ChatConversationViewModel {
         joinActiveRoomsIfPossible()
         scheduleMarkRead()
         if case let .room(roomId) = mode { await refreshRoomAvailability(roomId: roomId) }
+        await refreshMessageReadReceipts(cursor: next, requestId: requestId, generation: generation)
         return true
     }
 
-    private func changesEndpoint(cursor: [String: Int64], until: [String: Int64]?) throws -> Endpoint {
+    private func changesEndpoint(cursor: [String: Int64], until: [String: Int64]?, readMessageIds: [String]? = nil) throws -> Endpoint {
         switch mode {
         case let .room(roomId):
             return ChatEndpoints.changes(
@@ -2919,12 +2931,60 @@ public final class ChatConversationViewModel {
                 isRoom: true,
                 cursor: cursor,
                 until: until,
-                asBusinessUserId: asBusinessUserId
+                asBusinessUserId: asBusinessUserId,
+                readMessageIds: readMessageIds
             )
         case let .person(otherUserId):
-            return ChatEndpoints.changes(conversationId: otherUserId, isRoom: false, cursor: cursor, until: until)
+            return ChatEndpoints.changes(
+                conversationId: otherUserId,
+                isRoom: false,
+                cursor: cursor,
+                until: until,
+                readMessageIds: readMessageIds
+            )
         case .ai: throw ChatSendError.noRoom
         }
+    }
+
+    /// Receipt-only snapshots do not alter the message delta cursor. Positive
+    /// confirmations can apply independently; nil never clears a known Read.
+    private func refreshMessageReadReceipts(cursor: [String: Int64], requestId: UUID, generation: Int) async {
+        guard cursor.count <= 10000 else { return }
+        let ids = messages.filter {
+            $0.userId == sendingIdentityId && $0.readAt == nil && $0.deletedAt == nil && UUID(uuidString: $0.id) != nil
+        }
+        .map(\.id)
+        for start in stride(from: 0, to: ids.count, by: 500) {
+            guard generation == historyGeneration, historyRequestId == requestId, !Task.isCancelled else { return }
+            let batch = Array(ids[start..<min(start + 500, ids.count)])
+            do {
+                let response: ChatChangesResponse = try await api.request(
+                    changesEndpoint(cursor: cursor, until: cursor, readMessageIds: batch),
+                    expectedSessionGeneration: roomJoinAccountSession
+                )
+                guard generation == historyGeneration, historyRequestId == requestId, !Task.isCancelled,
+                      !response.resetRequired, let receipts = response.messageReadReceipts else { return }
+                applyMessageReadReceipts(receipts, requested: Set(batch))
+            } catch {
+                logger.warning("chat receipt recovery failed: \(error)")
+                return
+            }
+        }
+    }
+
+    private func applyMessageReadReceipts(_ receipts: [ChatMessageReadReceipt], requested: Set<String>) {
+        let confirmed = receipts.reduce(into: [String: String]()) { result, receipt in
+            if requested.contains(receipt.messageId), let readAt = receipt.readAt, Self.parseISO(readAt) != nil {
+                result[receipt.messageId] = readAt
+            }
+        }
+        for index in messages.indices {
+            let message = messages[index]
+            guard message.userId == sendingIdentityId, message.readAt == nil, let readAt = confirmed[message.id] else { continue }
+            historyTouchedIds.insert(message.id)
+            messages[index] = message.replacingReadAt(readAt)
+        }
+        if !confirmed.isEmpty { rebuild() }
     }
 
     private func requestHistory(before: String?, topicId: String?) async throws -> ChatMessagesResponse {
@@ -3103,30 +3163,25 @@ public final class ChatConversationViewModel {
         activeRoomIds = ids
         // Keep the push layer's "currently viewing" registry in sync so
         // foreground chat pushes for this thread don't show a banner.
-        activeThreadTracker.setActiveRooms(ids, owner: ObjectIdentifier(self))
+        activeThreadTracker.setActiveRooms(ids, owner: ObjectIdentifier(self), topicId: selectedTopicId)
     }
 
     // MARK: - Mark-read
 
-    private func performMarkRead(boundaries: [String: String], generation: Int) async {
-        guard !Task.isCancelled, selectedTopicId == nil, historyGeneration == generation,
+    private func performMarkRead(boundaries: [String: String], generation: Int, topicId: String?) async {
+        guard !Task.isCancelled, selectedTopicId == topicId, historyGeneration == generation,
               !boundaries.isEmpty,
               boundaries.allSatisfy({ visibleReadBoundaries[$0.key] == $0.value }) else { return }
-        let endpoint: Endpoint
-        switch mode {
-        case let .person(otherUserId):
-            endpoint = ChatEndpoints.markConversationRead(otherUserId: otherUserId, throughMessageIds: boundaries)
-        case let .room(roomId):
-            guard let messageId = boundaries[roomId] else { return }
-            endpoint = ChatEndpoints.markRoomRead(roomId: roomId, asBusinessUserId: asBusinessUserId, throughMessageId: messageId)
-        case .ai:
-            return
-        }
+        guard let endpoint = readEndpoint(boundaries: boundaries, topicId: topicId) else { return }
         let session = AuthManager.shared.requestSessionGeneration
         let checkpoint = ChatLocalStore.shared.inboxCheckpoint
         do {
-            let response = try await api.request(endpoint, as: ChatReadResponse.self)
-            guard historyGeneration == generation, session == AuthManager.shared.requestSessionGeneration else { return }
+            let response = try await api.request(
+                endpoint, as: ChatReadResponse.self, expectedSessionGeneration: roomJoinAccountSession
+            )
+            guard historyGeneration == generation, session == AuthManager.shared.requestSessionGeneration,
+                  selectedTopicId == topicId else { return }
+            if let topicId, response.readScope != "topic" || response.topicId != topicId { return }
             lastReadBoundaries.merge(boundaries) { _, confirmed in confirmed }
             guard api === APIClient.shared, asBusinessUserId == nil, let count = response.unreadCount,
                   case let .signedIn(user) = AuthManager.shared.state, user.id == currentUserId else { return }
@@ -3146,6 +3201,32 @@ public final class ChatConversationViewModel {
             )
         } catch {
             logger.warning("markRead failed: \(error)")
+        }
+    }
+
+    private func readEndpoint(boundaries: [String: String], topicId: String?) -> Endpoint? {
+        if let topicId {
+            switch mode {
+            case let .person(id):
+                return ChatEndpoints.markTopicRead(conversationId: id, isRoom: false, topicId: topicId, throughMessageIds: boundaries)
+            case let .room(id):
+                guard let messageId = boundaries[id] else { return nil }
+                return ChatEndpoints.markTopicRead(
+                    conversationId: id,
+                    isRoom: true,
+                    topicId: topicId,
+                    throughMessageIds: [id: messageId],
+                    asBusinessUserId: asBusinessUserId
+                )
+            case .ai: return nil
+            }
+        }
+        switch mode {
+        case let .person(id): return ChatEndpoints.markConversationRead(otherUserId: id, throughMessageIds: boundaries)
+        case let .room(id):
+            guard let messageId = boundaries[id] else { return nil }
+            return ChatEndpoints.markRoomRead(roomId: id, asBusinessUserId: asBusinessUserId, throughMessageId: messageId)
+        case .ai: return nil
         }
     }
 
@@ -3183,7 +3264,7 @@ public final class ChatConversationViewModel {
             // `message:new` for replies that land in it.
             if !activeRoomIds.contains(roomId) {
                 activeRoomIds.insert(roomId)
-                activeThreadTracker.setActiveRooms(activeRoomIds, owner: ObjectIdentifier(self))
+                activeThreadTracker.setActiveRooms(activeRoomIds, owner: ObjectIdentifier(self), topicId: selectedTopicId)
                 joinActiveRoomsIfPossible()
             }
             return roomId
@@ -3300,6 +3381,13 @@ public final class ChatConversationViewModel {
             for await event in stream {
                 guard let self else { return }
                 handleRead(event)
+            }
+        })
+        socketTasks.append(Task { [weak self] in
+            guard let stream = self?.socket.events(named: "messages:topic_read", as: ChatRealtimeTopicRead.self) else { return }
+            for await event in stream {
+                guard let self else { return }
+                handleTopicRead(event)
             }
         })
     }
@@ -3482,7 +3570,7 @@ public final class ChatConversationViewModel {
         if case let .person(otherUserId) = mode, event.otherUserId == otherUserId,
            activeRoomIds.insert(message.roomId).inserted {
             // A new direct/task room can belong to an already-open person thread.
-            activeThreadTracker.setActiveRooms(activeRoomIds, owner: ObjectIdentifier(self))
+            activeThreadTracker.setActiveRooms(activeRoomIds, owner: ObjectIdentifier(self), topicId: selectedTopicId)
             joinActiveRoomsIfPossible()
         }
         guard activeRoomIds.contains(message.roomId) else { return }
@@ -3531,6 +3619,25 @@ public final class ChatConversationViewModel {
             guard message.roomId == event.roomId, message.userId == sendingIdentityId,
                   let messageDate = Self.parseISO(message.createdAt),
                   (messageDate, message.id) <= (boundaryDate, throughMessageId) else { continue }
+            historyTouchedIds.insert(message.id)
+            messages[index] = message.replacingReadAt(readAt)
+        }
+        rebuild()
+    }
+
+    private func handleTopicRead(_ event: ChatRealtimeTopicRead) {
+        guard !historyAccessRefused, roomJoinAccountSession == AuthManager.shared.requestSessionGeneration,
+              case let .person(peerId) = mode, event.userId == peerId,
+              activeRoomIds.contains(event.roomId), selectedTopicId == nil || selectedTopicId == event.topicId,
+              let throughId = event.throughMessageId, let readAt = event.readAt else { return }
+        let boundary = messages.first { $0.id == throughId && $0.roomId == event.roomId && $0.topicId == event.topicId }
+        guard let createdAt = boundary?.createdAt ?? event.throughCreatedAt,
+              let boundaryDate = Self.parseISO(createdAt), Self.parseISO(readAt) != nil else { return }
+        for index in messages.indices {
+            let message = messages[index]
+            guard message.roomId == event.roomId, message.topicId == event.topicId,
+                  message.userId == sendingIdentityId, message.readAt == nil,
+                  let date = Self.parseISO(message.createdAt), (date, message.id) <= (boundaryDate, throughId) else { continue }
             historyTouchedIds.insert(message.id)
             messages[index] = message.replacingReadAt(readAt)
         }

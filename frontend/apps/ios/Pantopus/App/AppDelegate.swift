@@ -161,6 +161,7 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         let userInfo = notification.request.content.userInfo
         let type = userInfo["type"] as? String
         let roomId = userInfo["room_id"] as? String
+        let topicId = userInfo["topic_id"] as? String ?? userInfo["topicId"] as? String
         let recipient = userInfo["recipient_user_id"] as? String
         let belongsToCurrentAccount = await MainActor.run {
             Self.permitsNotification(type: type, recipient: recipient, allowSignedOut: false)
@@ -168,7 +169,7 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         guard belongsToCurrentAccount else { return [] }
         if type == "chat_message" || type == "business_message", let roomId {
             let isViewingThread = await MainActor.run {
-                ActiveChatThreadTracker.shared.isViewingRoom(roomId)
+                ActiveChatThreadTracker.shared.isViewingRoom(roomId, topicId: topicId)
             }
             if isViewingThread { return [] }
         }

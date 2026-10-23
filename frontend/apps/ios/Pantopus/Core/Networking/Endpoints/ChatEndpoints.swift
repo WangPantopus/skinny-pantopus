@@ -100,13 +100,14 @@ public enum ChatEndpoints {
         isRoom: Bool,
         cursor: [String: Int64],
         until: [String: Int64]?,
-        asBusinessUserId: String? = nil
+        asBusinessUserId: String? = nil,
+        readMessageIds: [String]? = nil
     ) -> Endpoint {
         let collection = isRoom ? "rooms" : "conversations"
         return Endpoint(
             method: .post,
             path: "/api/chat/\(collection)/\(conversationId)/changes",
-            body: ChatChangesBody(cursor: cursor, until: until, asBusinessUserId: asBusinessUserId),
+            body: ChatChangesBody(cursor: cursor, until: until, asBusinessUserId: asBusinessUserId, readMessageIds: readMessageIds),
             cachePolicy: .reloadIgnoringLocalCacheData
         )
     }
@@ -207,6 +208,25 @@ public enum ChatEndpoints {
         )
     }
 
+    /// A distinct route prevents an older server from treating a filtered
+    /// boundary as a whole-conversation acknowledgement.
+    public static func markTopicRead(
+        conversationId: String,
+        isRoom: Bool,
+        topicId: String,
+        throughMessageIds: [String: String],
+        asBusinessUserId: String? = nil
+    ) -> Endpoint {
+        let collection = isRoom ? "rooms" : "conversations"
+        return Endpoint(
+            method: .post,
+            path: "/api/chat/\(collection)/\(conversationId)/topics/\(topicId)/read",
+            body: ChatReadBoundariesBody(
+                throughMessageId: nil, throughMessageIds: throughMessageIds, asBusinessUserId: asBusinessUserId
+            )
+        )
+    }
+
     /// `GET /api/chat/conversations/:otherUserId/topics` — list topic chips.
     /// Route `backend/routes/chats.js:2466`.
     public static func conversationTopics(otherUserId: String) -> Endpoint {
@@ -225,6 +245,7 @@ private struct ChatChangesBody: Encodable {
     let cursor: [String: Int64]
     let until: [String: Int64]?
     let asBusinessUserId: String?
+    let readMessageIds: [String]?
     let limit = 200
 }
 
@@ -309,4 +330,5 @@ public struct EditChatMessageBody: Encodable, Sendable {
 private struct ChatReadBoundariesBody: Encodable {
     let throughMessageId: String?
     let throughMessageIds: [String: String]?
+    var asBusinessUserId: String?
 }
