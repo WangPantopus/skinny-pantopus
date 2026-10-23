@@ -19,10 +19,13 @@ const notificationService = require('../services/notificationService');
 const emailService = require('../services/emailService');
 const smsService = require('../services/smsService');
 const { skipForLaunchCut, areLaunchFeaturesEnabled } = require('../utils/featureFlags');
-const { chosenUsernameOrNull } = require('../utils/personalUsername');
+// Other people are named the way neighbors see them: by their Local Profile (a business by the business).
+const { loadChatPeople } = require('../services/chatPeople');
+const { localDisplayNames } = require('../utils/identityProfiles');
 const { maskContact } = require('../jobs/mailEscrowExpiry');
 // A letter sent as a business names the business to everyone it reaches, never the person who sent it.
-const { presentMailSender, presentMailSenders, objectForRecipient, payloadForRecipient, sentAsBusiness, claimPageSender } = require('../utils/mailSenderView');
+const { presentMailSender, presentMailSenders, nameMailSender, nameMailSenders, objectForRecipient, payloadForRecipient,
+  sentAsBusiness, claimPageSender } = require('../utils/mailSenderView');
 
 // ============ VALIDATION SCHEMAS ============
 
@@ -1546,7 +1549,7 @@ router.get('/', verifyToken, async (req, res) => {
     }
 
     res.json({
-      mail: presentMailSenders(mail || [], userId),
+      mail: presentMailSenders(await nameMailSenders(mail || [], userId), userId),
       summary,
       pagination: {
         limit: parseInt(limit),
@@ -1670,20 +1673,13 @@ router.get('/deleted', verifyToken, async (req, res) => {
       return res.status(500).json({ error: "Couldn't load recently deleted mail." });
     }
 
-    const deleterIds = [...new Set((rows || []).map((row) => row.deleted_by).filter(Boolean))];
-    const names = new Map();
-    if (deleterIds.length) {
-      const { data: users } = await supabaseAdmin
-        .from('User')
-        .select('id, name, first_name, username')
-        .in('id', deleterIds);
-      for (const user of users || []) names.set(user.id, user.name || user.first_name || chosenUsernameOrNull(user.username) || null);
-    }
+    // Who deleted each one, by the name they show their household (a failed read names no one).
+    const names = await localDisplayNames((rows || []).map((row) => row.deleted_by)).catch(() => new Map());
 
     res.json({
-      mail: presentMailSenders(rows || [], userId).map((row) => ({
+      mail: presentMailSenders(await nameMailSenders(rows || [], userId), userId).map((row) => ({
         ...row,
-        deleted_by_name: names.get(row.deleted_by) || null,
+        deleted_by_name: names.get(String(row.deleted_by)) || null,
         deleted_by_me: row.deleted_by === userId,
         restorable_until: new Date(Date.parse(row.deleted_at) + MAIL_RESTORE_DAYS * 24 * 60 * 60 * 1000).toISOString(),
       })),
@@ -1761,7 +1757,7 @@ router.get('/:id', verifyToken, async (req, res) => {
 
     mail.links = await getMailLinksSafely(mail.id);
 
-    res.json({ mail: presentMailSender(mail, userId) });
+    res.json({ mail: presentMailSender(await nameMailSender(mail, userId), userId) });
 
   } catch (err) {
     logger.error('Mail fetch error', { error: err.message, mailId: req.params.id });
@@ -1932,21 +1928,14 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
     } = normalizedPayload;
 
     // Resolve sender identity once for consistent storage/display.
-    const { data: senderProfile } = await supabaseAdmin
-      .from('User')
-      .select('name, username')
-      .eq('id', senderId)
-      .maybeSingle();
     // The client's senderBusinessName is only a request: see resolveSenderBusiness.
     const senderBusiness = await resolveSenderBusiness(senderId, requestedSenderBusinessName);
     const senderBusinessName = senderBusiness ? senderBusiness.name : null;
     objectPayload.envelope.senderBusinessName = senderBusinessName;
-    const senderDisplayName = (
-      senderBusinessName ||
-      senderProfile?.name ||
-      senderProfile?.username ||
-      'Someone'
-    ).trim();
+    // A letter in the sender's own name names them as neighbors see them (their Local Profile), in the email or text
+    // and the notices it sends and in sender_display; the mailbox names the sender again whenever the letter is read.
+    const senderPerson = senderBusinessName ? null : (await loadChatPeople([senderId])).get(String(senderId));
+    const senderDisplayName = (senderBusinessName || senderPerson?.displayName || 'Someone').trim();
     const senderTrust = senderBusiness?.verified ? 'verified_business' : 'pantopus_user';
 
     // ── Non-user escrow path ──────────────────────────────────
@@ -2462,13 +2451,10 @@ router.get('/claim/:mailId', async (req, res) => {
     if (sentAsBusiness(mail)) {
       sender = { ...claimPageSender(mail), senderKind: 'business' };
     } else {
-      const { data: person } = await supabaseAdmin
-        .from('User')
-        .select('name, first_name, username')
-        .eq('id', mail.sender_user_id)
-        .maybeSingle();
+      // The sender as neighbors see them (their Local Profile), like the email that brought the person here.
+      const person = (await loadChatPeople([mail.sender_user_id])).get(String(mail.sender_user_id));
       sender = {
-        senderName: person?.name || person?.first_name || chosenUsernameOrNull(person?.username) || mail.sender_display || 'A neighbor',
+        senderName: person?.displayName || mail.sender_display || 'A neighbor',
         // A personal letter needs a verified home to be sent (POST /send); this says whether the sender still has one.
         senderVerified: await hasVerifiedSenderHome(mail.sender_user_id),
         senderKind: 'person',
@@ -2553,7 +2539,7 @@ router.post('/claim/:mailId', verifyToken, async (req, res) => {
     // Sign-in needs a confirmed email, so a matching email shows the claimer reads that inbox.
     const { data: claimer, error: claimerError } = await supabaseAdmin
       .from('User')
-      .select('email, phone_number, name, first_name, username')
+      .select('email, phone_number')
       .eq('id', claimerId)
       .maybeSingle();
     if (claimerError || !claimer) {
@@ -2609,7 +2595,8 @@ router.post('/claim/:mailId', verifyToken, async (req, res) => {
     // Notify the sender that their mail was claimed
     (async () => {
       try {
-        const claimerName = claimer.name || claimer.first_name || chosenUsernameOrNull(claimer.username) || 'Someone';
+        // The person who opened it, as neighbors see them (their Local Profile).
+        const claimerName = (await loadChatPeople([claimerId])).get(String(claimerId))?.displayName || 'Someone';
 
         await notificationService.createNotification({
           userId: mail.sender_user_id,

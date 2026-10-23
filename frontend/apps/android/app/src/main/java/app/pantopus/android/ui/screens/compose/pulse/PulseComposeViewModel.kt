@@ -1228,6 +1228,7 @@ class PulseComposeViewModel
                     seedField(PulseComposeField.Title, post.title.orEmpty())
                     seedField(PulseComposeField.Body, post.content)
                     seedField(PulseComposeField.EventDate, formatEventDateForPicker(post.eventDate))
+                    seedField(PulseComposeField.EventEndDate, formatEventDateForPicker(post.eventEndDate))
                     seedField(PulseComposeField.EventLocation, post.eventVenue.orEmpty())
                 }
                 PulseComposeIntent.Lost -> {
@@ -1369,10 +1370,14 @@ class PulseComposeViewModel
                 PulseComposeIntent.Event -> {
                     val venue = trimmedValue(PulseComposeField.EventLocation)
                     val dateRaw = trimmedValue(PulseComposeField.EventDate)
+                    val endRaw = trimmedValue(PulseComposeField.EventEndDate)
                     PostUpdateRequest(
                         content = bodyValue,
                         title = titleValue.ifEmpty { null },
                         eventDate = dateRaw.ifEmpty { null }?.let { isoDateTime(it) },
+                        eventEndDate = endRaw.ifEmpty { null }?.let { isoDateTime(it) },
+                        // A cleared End field removes the saved end.
+                        clearEventEndDate = endRaw.isEmpty() && _fields.value[PulseComposeField.EventEndDate]?.isDirty == true,
                         eventVenue = venue.ifEmpty { null },
                     )
                 }

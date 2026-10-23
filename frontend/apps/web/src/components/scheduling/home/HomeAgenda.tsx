@@ -137,7 +137,7 @@ export default function HomeAgenda({
     if (occRes.status === "fulfilled") {
       const ms = (occRes.value.occupants || [])
         .filter((o) => o.user)
-        .map((o) => toMember(o.user));
+        .map((o) => toMember(o.user, o.display_name));
       const map = new Map<string, HomeMember>();
       for (const m of ms) map.set(m.id, m);
       setMembers(ms);

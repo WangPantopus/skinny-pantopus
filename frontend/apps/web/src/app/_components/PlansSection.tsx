@@ -6,8 +6,7 @@
 // acceptance only the area and the time are shown, as in the app.
 
 import { useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
-import { getStoreDownloadCta, type StoreDownloadCta } from '@/lib/publicShare';
+import { phoneStore, usePlatform } from './AppDownload';
 import TimeMark from './TimeMark';
 import { useInViewOnce } from './useInViewOnce';
 import styles from './home.module.css';
@@ -60,11 +59,8 @@ export default function PlansSection() {
   const ref = useRef<HTMLElement | null>(null);
   const seen = useInViewOnce(ref);
   const [phase, setPhase] = useState<Phase>('idle');
-  const [store, setStore] = useState<StoreDownloadCta | null>(null);
-
-  useEffect(() => {
-    setStore(getStoreDownloadCta(navigator.userAgent));
-  }, []);
+  const platform = usePlatform();
+  const store = phoneStore(platform);
 
   // Seen for the first time: the example asks to join on its own.
   useEffect(() => {
@@ -132,13 +128,12 @@ export default function PlansSection() {
 
           <div className={styles.ctaRow}>
             {store ? (
-              <a href={store.href} className={styles.btnInk} rel="noopener">{store.label}</a>
+              <a href={store.href} className={styles.btnInk} target="_blank" rel="noopener noreferrer">{store.label}</a>
             ) : (
-              <>
-                <Link href="/start" className={styles.btnInk}>Start with your place</Link>
-                <span className={styles.note} style={{ color: '#5E5866' }}>Plans is in the Pantopus app for iPhone and Android.</span>
-              </>
+              // A computer gets the QR code in the closing section instead of a store it can't install from.
+              <a href="#get-the-app" className={styles.btnInk}>Get the app</a>
             )}
+            <span className={styles.note} style={{ color: '#5E5866' }}>Plans is in the Pantopus app for iPhone and Android.</span>
           </div>
         </div>
 

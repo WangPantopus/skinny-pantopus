@@ -151,6 +151,8 @@ public final class ReceivedReviewsViewModel {
     }
 
     static func displayName(for reviewer: TransactionReviewerDTO?) -> String {
+        // The name the server gives (a person's Local Profile name), else the account's first and last name.
+        if let name = reviewer?.name, !name.isEmpty { return name }
         if let first = reviewer?.firstName, !first.isEmpty {
             if let last = reviewer?.lastName, !last.isEmpty {
                 return "\(first) \(last)"

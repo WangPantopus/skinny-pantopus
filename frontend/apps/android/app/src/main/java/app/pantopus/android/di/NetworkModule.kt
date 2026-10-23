@@ -178,6 +178,8 @@ object NetworkModule {
             .add(app.pantopus.android.data.api.models.homes.BillDecimalAdapter())
             .add(app.pantopus.android.data.api.models.homes.MaintenanceCostJsonAdapter())
             .add(app.pantopus.android.data.api.models.homes.UpdateMaintenanceRequestJsonAdapter())
+            // A post edit's cleared event end goes out as explicit JSON null.
+            .add(app.pantopus.android.data.api.models.posts.PostUpdateRequestJsonAdapter())
             .add(app.pantopus.android.data.api.models.homes.PollOptionAdapter())
             .add(app.pantopus.android.data.api.models.gigs.GigStopJsonAdapterFactory)
             // `gig.items` stored as a JSON string by older writers reads as the list inside it.

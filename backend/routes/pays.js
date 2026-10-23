@@ -17,6 +17,33 @@ const { serverUtcForm } = require('../utils/echoedTimestamps');
 const logger = require('../utils/logger');
 const { PAYMENT_STATES } = require('../stripe/paymentStateMachine');
 const { getRequestSessionScope, requireExpectedSessionScope } = require('../utils/requestSessionScope');
+const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
+
+// The other person on a payment goes by their Local Profile, as on the task or in the chat; a business, or anyone
+// without one, by the account (services/chatPeople.js). The caller's own side keeps the account row.
+//
+// A customer who paid a business's invoice paid the business, even when the money went to its owner's wallet (a
+// business without a payout account): they see the business as the payee, never the person behind it (identity
+// firewall design §9.3).
+function paidBusinessId(payment, userId) {
+  const businessId = payment?.metadata?.type === 'invoice_payment' ? payment.metadata.business_user_id : null;
+  return businessId && String(payment.payer_id) === String(userId) ? businessId : null;
+}
+async function paymentPeople(payments, userId) {
+  return loadChatPeople((payments || []).map((p) => (String(p?.payer_id) === String(userId)
+    ? paidBusinessId(p, userId) || p?.payee_id
+    : p?.payer_id)));
+}
+function withNamedParties(visible, people, payment, userId) {
+  const businessId = paidBusinessId(payment, userId);
+  return {
+    ...visible,
+    payer: chatPersonRow(visible.payer, people),
+    ...(businessId
+      ? { payee_id: businessId, payee: chatPersonRow({ id: businessId }, people) }
+      : { payee: chatPersonRow(visible.payee, people) }),
+  };
+}
 
 const paymentHistoryReadLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -723,11 +750,12 @@ router.get('/', verifyToken, paymentHistoryReadLimiter, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch payments' });
     }
     
+    const people = await paymentPeople(payments, userId);
     const enrichedPayments = (payments || []).map((payment) => {
       const isSender = String(payment?.payer_id || '') === String(userId);
       const { payerCents: payerAmount, payeeCents: payeeAmount } = paymentRowAmounts(payment);
       return {
-        ...(isSender ? publicPayment(payment) : payeePayment(payment)),
+        ...withNamedParties(isSender ? publicPayment(payment) : payeePayment(payment), people, payment, userId),
         amount_cents: isSender ? payerAmount : payeeAmount,
         _isSender: isSender,
         direction: isSender ? 'debit' : 'credit',
@@ -829,13 +857,14 @@ router.get('/history', verifyToken, paymentHistoryReadLimiter, async (req, res) 
       return res.status(500).json({ error: 'Failed to fetch history' });
     }
 
+    const people = await paymentPeople(paymentsRes.data, userId);
     const paymentRows = (paymentsRes.data || []).map((payment) => {
       const isSender = String(payment?.payer_id || '') === String(userId);
       const { payerCents: payerAmount, payeeCents: payeeAmount } = paymentRowAmounts(payment);
       // metadata is read only to recognize a charged fee; this stream never returned it.
       const { metadata: _metadata, ...visible } = publicPayment(payment);
       return {
-        ...visible,
+        ...withNamedParties(visible, people, payment, userId),
         id: payment.id,
         entry_type: 'payment',
         amount_cents: isSender ? payerAmount : payeeAmount,
@@ -1260,7 +1289,8 @@ router.get('/:paymentId', verifyToken, async (req, res) => {
 
     // A charged poster-fault fee: the fee, the released rest and the worker share.
     const visible = payment.payer_id === userId ? publicPayment(payment) : payeePayment(payment);
-    res.json({ payment: { ...visible, gig_fee: publicGigFee(payment) } });
+    const people = await paymentPeople([payment], userId);
+    res.json({ payment: { ...withNamedParties(visible, people, payment, userId), gig_fee: publicGigFee(payment) } });
 
   } catch (err) {
     logger.error('Get payment error', { error: err.message });

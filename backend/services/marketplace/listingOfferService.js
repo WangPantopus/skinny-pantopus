@@ -13,6 +13,7 @@ const notificationService = require('../notificationService');
 const { PAYMENT_STATES } = require('../../stripe/paymentStateMachine');
 const stripeService = require('../../stripe/stripeService');
 const { assertListingInteractionAllowed } = require('./listingBlocks');
+const { loadTaskPersonName } = require('../../utils/listingCreatorIdentity');
 
 // ─── Helpers ─────────────────────────────────────────────────
 
@@ -36,19 +37,11 @@ async function fetchOffer(offerId) {
 }
 
 /**
- * Fetch a user's display name for notification bodies.
+ * The name notification bodies give a person: the name the listing's offers show them by (their Local Profile; a
+ * business is the business; the account name only without a Local Profile name).
  */
-async function getUserName(userId) {
-  const { data } = await supabaseAdmin
-    .from('User')
-    .select('first_name, last_name, username')
-    .eq('id', userId)
-    .single();
-
-  if (!data) return 'Someone';
-  if (data.first_name) return data.first_name;
-  if (data.username) return data.username;
-  return 'Someone';
+function getUserName(userId) {
+  return loadTaskPersonName(userId, 'Someone');
 }
 
 // Safe display state for the buyer's existing checkout. Intent creation still

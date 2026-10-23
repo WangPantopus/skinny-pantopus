@@ -33,8 +33,8 @@ async function findActiveSeat(businessUserId, userId) {
 }
 
 // A seat is named as migration 20260930184000 names the seats it backfills: by the member's team title (a
-// manager's "Front Desk", or "Owner" for the business's creator), else by their first name. display_name is
-// required.
+// manager's "Front Desk", or "Owner" for the business's creator), else by their first name. Someone with a Local
+// Profile goes by its name instead, as teammates see them everywhere else. display_name is required.
 async function seatDisplayName(businessUserId, userId, title) {
   let teamTitle = (title || '').trim();
   if (!teamTitle) {
@@ -47,12 +47,12 @@ async function seatDisplayName(businessUserId, userId, title) {
     teamTitle = (team?.title || '').trim();
   }
   if (teamTitle) return teamTitle;
-  const { data: user } = await supabaseAdmin
-    .from('User')
-    .select('first_name, name')
-    .eq('id', userId)
-    .maybeSingle();
-  return (user?.first_name || '').trim() || (user?.name || '').trim().split(/\s+/)[0] || 'Team Member';
+  const [{ data: user }, { data: profile }] = await Promise.all([
+    supabaseAdmin.from('User').select('first_name, name').eq('id', userId).maybeSingle(),
+    supabaseAdmin.from('LocalProfile').select('display_name').eq('user_id', userId).maybeSingle(),
+  ]);
+  return (profile?.display_name || '').trim()
+    || (user?.first_name || '').trim() || (user?.name || '').trim().split(/\s+/)[0] || 'Team Member';
 }
 
 /**

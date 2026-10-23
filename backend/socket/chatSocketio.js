@@ -11,7 +11,8 @@ const notificationService = require('../services/notificationService');
 const syncChangedService = require('../services/syncChangedService');
 const { isBlocked, blockedUserIds } = require('../services/blockService');
 const { closedGigRoomIds, isGigRoomClosedTo, isRoomClosedForWrites } = require('../services/chatGigRoomAccess');
-const { actingBusinessInRoom } = require('../services/chatBusinessAccess');
+const { actingBusinessInRoom, UNPUBLISHED_BUSINESS_REFUSAL } = require('../services/chatBusinessAccess');
+const { unpublishedBusinessIds } = require('../utils/visibilityPolicy');
 const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
 const { setGauge } = require('../services/chatMetrics');
 // Persistent login (design §6.4): the same JWT decode helper verifyToken
@@ -743,6 +744,10 @@ module.exports = (io) => {
         if (await isBlocked(userId, otherUserId)) {
           return callback({ error: 'Unable to message this user' });
         }
+        // As POST /api/chat/direct: a draft or closed business neither starts a conversation as itself nor is reached.
+        const unpublished = await unpublishedBusinessIds([userId, otherUserId]);
+        if (unpublished.has(String(userId))) return callback(UNPUBLISHED_BUSINESS_REFUSAL);
+        if (unpublished.has(String(otherUserId))) return callback({ error: 'User not found' });
 
         const { data: roomId, error } = await supabaseAdmin.rpc('get_or_create_direct_chat', {
           p_user_id_1: userId,
