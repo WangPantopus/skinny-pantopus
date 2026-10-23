@@ -87,12 +87,12 @@ describe('handshake session policy', () => {
     expect(socket.authSessionId).toBe(SID);
   });
 
-  test('legacy opaque token (no session_id): accepted, authSessionId null', async () => {
+  test('opaque token without a verifiable expiry is refused', async () => {
     const socket = fakeSocket({ id: 's1' });
     socket.handshake.auth.token = 'token-user-1';
     const err = await runAuth(socket);
-    expect(err).toBeNull();
-    expect(socket.authSessionId).toBeNull();
+    expect(err.message).toBe('Invalid token');
+    expect(socket.userId).toBeUndefined();
   });
 
   test('revoked AuthSession → handshake refused', async () => {
@@ -165,7 +165,9 @@ describe('direct creation block authorization', () => {
   afterEach(() => jest.restoreAllMocks());
   async function connect() {
     const handlers = {};
+    seedTable('AuthSession', [{ id: SID, user_id: UID, revoked_at: null }]);
     const socket = { id: 'block-socket', userId: UID, userEmail: 'fixture@example.invalid',
+      connected: true, authSessionId: SID, authIssuedAt: NOW * 1000, authExpiresAt: (NOW + 3600) * 1000,
       join: jest.fn(), emit: jest.fn(), broadcast: { emit: jest.fn() }, on: (name, fn) => { handlers[name] = fn; } };
     db.setRpcMock(async () => ({ data: [], error: null }));
     await io._handlers.connection(socket);

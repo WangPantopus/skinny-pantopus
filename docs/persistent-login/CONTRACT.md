@@ -50,12 +50,37 @@ Body: `{ scope: "local"|"others"|"global", deviceId?, refreshToken? }`. Optional
 - `local`: cookie clearing + revoke presented access JWT (today) ALWAYS; row side effects (revoke that session row, clear device binding, delete PushToken rows for `deviceId`, revoke that device's resume grants) ONLY when proof present: valid Bearer whose session is bound to `deviceId`, OR `refreshToken` whose hash resolves to a session bound to a device whose key verifies the `DPoP` (with `rth`).
 - `others` / `global`: require verifyToken (+CSRF on cookie transport) AND `X-Step-Up` (purpose `revoke_sessions`).
 Response `{ success:true, revoked?: n }`.
+Revocation writes must succeed before this response. A storage/provider outage returns
+503 `AUTH_UNAVAILABLE`; local cookies are still cleared, but clients must not interpret
+that response as confirmed server revocation. A signed access token can retry its own
+registry cleanup even when the provider session has already been removed (auth-js
+reports GoTrue's `session_not_found` as `AuthSessionMissingError`, status 400; it
+counts as already signed out, like 401/403/404).
 
 ### `POST /api/users/reauthenticate`
 Response adds `{ stepUpToken, expiresAt, purpose:"generic" }` — token is valid for any purpose EXCEPT it is still refused for `restored` sessions on `delete_account`/`revoke_*` (they must present password — which reauthenticate does, so this is fine) — i.e. reauthenticate == step-up method `password`, purpose wildcard.
 
 ### `POST /api/users/password`, `POST /api/users/reset-password`, `DELETE /api/users/account`
 As design §6.3. `DELETE /account` requires `X-Step-Up` (purpose `delete_account` or wildcard from reauthenticate). If the user has no password (OAuth-only), `device_key` step-up from an interactive session is accepted.
+The backend forwards the verified `currentPassword` as GoTrue's `current_password`.
+The hosted Email provider must also enable **Require current password when changing
+password**, so direct provider requests enforce the same requirement. This is separate
+from the recent-login/nonce setting; see [Supabase password security](https://supabase.com/docs/guides/auth/password-security#require-current-password-when-changing-password).
+When the new password is saved but signing out the other sessions fails, `/password` and
+`/reset-password` answer 503 `SIGN_OUT_INCOMPLETE` and say the password changed. A
+registry outage before anything changes still answers 503 `AUTH_BUSY` (the reset link
+keeps working). A failed sign-out hook never stops `DELETE /account`: the auth user is
+still deleted, and the missing `User` row already refuses the old sessions.
+
+### Live connections
+Sockets close at access-token expiry, checked before every event. The session row and
+account watermark are read on connect, when an AuthSession or `sessions_valid_after`
+change is signalled for the user (database notifications reach every API process), and
+before an event or on a 5-second tick once the last read is older than about 30 s (5 s
+while the notification listener is down or for a session without a registry row). The same signal drops other
+processes' cached session state and watermark for REST. Unreadable policy closes the
+transport so the client can retry. Existing `auth:session_revoked` listeners confirm the
+signal with refresh before signing out.
 
 ## New router `/api/auth` (backend/routes/authDevices.js)
 | Method/path | Auth | Body → Response |

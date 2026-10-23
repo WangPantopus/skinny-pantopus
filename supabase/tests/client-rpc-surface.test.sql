@@ -7,7 +7,7 @@ SELECT plan(1);
 SELECT lives_ok($contract$
 -- The SECURITY DEFINER functions clients can call through PostgREST RPC are exactly the reviewed
 -- caller-bound helpers below. Clients hold no table privileges (anon since 20260930181000,
--- authenticated since 20260930182000), so RPC is their only direct path, and a DEFINER function
+-- authenticated since 20260930182000; extension write guards checked below), and a DEFINER function
 -- runs as its owner past row-level security. Adding a function here needs a review that it
 -- answers only for the caller (check-migrations CALLER_BOUND_HELPERS). A parameter that defaults
 -- to auth.uid() doesn't make it so: business_get_user_permissions answered for anyone until
@@ -44,6 +44,25 @@ BEGIN
   END IF;
 END $$;
 SET LOCAL ROLE anon;
+-- Extension-owned objects may retain grants even when blanket REVOKE warns.
+-- Verify the effective write boundary, including statements matching no rows.
+DO $$
+DECLARE statement text;
+BEGIN
+  FOREACH statement IN ARRAY ARRAY[
+    'INSERT INTO public.spatial_ref_sys(srid) VALUES (998875)',
+    'UPDATE public.spatial_ref_sys SET srtext=srtext WHERE false',
+    'DELETE FROM public.spatial_ref_sys WHERE false',
+    'TRUNCATE public.spatial_ref_sys'
+  ] LOOP
+    BEGIN
+      EXECUTE statement;
+      RAISE EXCEPTION 'Client role % wrote spatial-reference metadata', current_user;
+    EXCEPTION WHEN insufficient_privilege THEN NULL;
+    END;
+  END LOOP;
+END $$;
+
 DO $$ BEGIN
   BEGIN
     PERFORM public.business_get_user_permissions(gen_random_uuid(), gen_random_uuid());
@@ -52,6 +71,25 @@ DO $$ BEGIN
 END $$;
 RESET ROLE;
 SET LOCAL ROLE authenticated;
+-- Extension-owned objects may retain grants even when blanket REVOKE warns.
+-- Verify the effective write boundary, including statements matching no rows.
+DO $$
+DECLARE statement text;
+BEGIN
+  FOREACH statement IN ARRAY ARRAY[
+    'INSERT INTO public.spatial_ref_sys(srid) VALUES (998875)',
+    'UPDATE public.spatial_ref_sys SET srtext=srtext WHERE false',
+    'DELETE FROM public.spatial_ref_sys WHERE false',
+    'TRUNCATE public.spatial_ref_sys'
+  ] LOOP
+    BEGIN
+      EXECUTE statement;
+      RAISE EXCEPTION 'Client role % wrote spatial-reference metadata', current_user;
+    EXCEPTION WHEN insufficient_privilege THEN NULL;
+    END;
+  END LOOP;
+END $$;
+
 SELECT set_config('request.jwt.claim.sub', gen_random_uuid()::text, true);
 DO $$ BEGIN
   BEGIN
@@ -63,6 +101,10 @@ DO $$ BEGIN
     RAISE EXCEPTION 'Signed-in caller applied a business role preset directly';
   EXCEPTION WHEN insufficient_privilege THEN NULL; END;
 END $$;
+RESET ROLE;
+SET LOCAL ROLE service_role;
+UPDATE public.spatial_ref_sys SET srtext=srtext WHERE false;
+SELECT public.ST_AsText(public.ST_Transform(public.ST_SetSRID(public.ST_MakePoint(10,20),4326),3857));
 RESET ROLE;
 SELECT 'PASS: client RPC surface is the reviewed caller-bound helpers; business permission RPCs are service-only' AS result;
 

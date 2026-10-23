@@ -588,7 +588,7 @@ async function revokeSessionByAccessToken(accessToken, context = {}) {
     const { error } = await supabaseAdmin.auth.admin.signOut(accessToken, 'local');
     if (error) {
       const status = Number(error.status);
-      if ([401, 403, 404].includes(status)) {
+      if (authSessionService.sessionAlreadyEnded(error)) {
         logger.info('auth.session_revoke_already_invalid', {
           ...context,
           status,
@@ -715,12 +715,13 @@ async function isRecoveryAccessToken(token) {
   return { ok: true };
 }
 
-/** Best-effort persistent-login hook: registry failures never fail the auth route. */
+/** Optional bookkeeping may fail; security revocation must never report false success. */
 async function safeHook(name, fn) {
   try {
     return await fn();
   } catch (err) {
     logger.error(`auth.hook.${name}_failed`, { error: err.message, stack: err.stack });
+    if (['password_reset', 'refresh_reuse', 'refresh_foreign', 'oauth_token_mismatch'].includes(name)) throw err;
     return null;
   }
 }
@@ -2368,7 +2369,7 @@ router.get('/auth-methods', verifyToken, async (req, res) => {
  * Change the password with the caller's own access token (GoTrue PUT /user). Returns false,
  * so the caller falls back to the admin update, when there's no token or GoTrue refuses.
  */
-async function updatePasswordWithOwnSession(accessToken, newPassword, userId) {
+async function updatePasswordWithOwnSession(accessToken, newPassword, userId, currentPassword) {
   const baseUrl = String(process.env.SUPABASE_URL || '').replace(/\/+$/, '');
   const anonKey = process.env.SUPABASE_ANON_KEY;
   if (!accessToken || !baseUrl || !anonKey) return false;
@@ -2376,7 +2377,7 @@ async function updatePasswordWithOwnSession(accessToken, newPassword, userId) {
     const response = await fetch(`${baseUrl}/auth/v1/user`, {
       method: 'PUT',
       headers: { apikey: anonKey, Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: newPassword }),
+      body: JSON.stringify({ password: newPassword, current_password: currentPassword }),
       signal: AbortSignal.timeout(10000),
     });
     if (response.ok) return true;
@@ -2495,7 +2496,7 @@ router.post('/password', verifyToken, reauthLimiter, reauthAccountLimiter, valid
     // Through the caller's own session, GoTrue keeps that session and ends the others, as the
     // design below says. admin.updateUserById ends every session, the caller's too, so the
     // next request 401s and the apps sign the person out; it stays as the fallback.
-    if (!(await updatePasswordWithOwnSession(accessTokenFromRequest(req), newPassword, userId))) {
+    if (!(await updatePasswordWithOwnSession(accessTokenFromRequest(req), newPassword, userId, currentPassword))) {
       const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
         password: newPassword,
       });
@@ -2518,13 +2519,23 @@ router.post('/password', verifyToken, reauthLimiter, reauthAccountLimiter, valid
 
     // Persistent login (design §6.3 /password): every OTHER session/device is
     // signed out (GoTrue scope 'others' + registry rows + grants) and the user
-    // is told; the current session stays.
-    await safeHook('password_changed', () => authDeviceService.onPasswordChanged({
-      userId,
-      currentSessionId: currentSessionId(req),
-      accessToken: accessTokenFromRequest(req),
-      req,
-    }));
+    // is told; the current session stays. The password has already changed, so
+    // a sign-out that didn't finish is reported as that, not as a failed change.
+    try {
+      await authDeviceService.onPasswordChanged({
+        userId,
+        currentSessionId: currentSessionId(req),
+        accessToken: accessTokenFromRequest(req),
+        req,
+      });
+    } catch (hookErr) {
+      logger.error('auth.hook.password_changed_failed', { userId, error: hookErr.message, stack: hookErr.stack });
+      return res.status(503).json({
+        error: 'Your password was changed, but signing out your other devices didn\'t finish. Choose "Sign out other devices" in Security settings.',
+        code: 'SIGN_OUT_INCOMPLETE',
+        hasPassword: true,
+      });
+    }
 
     return res.status(200).json({
       message: hasPassword ? 'Password updated successfully' : 'Password set successfully',
@@ -2716,6 +2727,8 @@ router.post('/refresh', refreshLimiter, refreshDpop, async (req, res) => {
     res.status(200).json({ ok: true, ...tokenFields, ...registryFields });
   } catch (err) {
     logger.error('Refresh token error', { error: err.message });
+    // A reuse/mismatch revocation that couldn't be saved: the apps retry a 503.
+    if (err.authBusy) return res.status(503).json({ error: 'Could not verify this session right now. Please try again.', code: 'AUTH_UNAVAILABLE' });
     res.status(500).json({ error: 'Failed to refresh session' });
   }
 });
@@ -4277,6 +4290,8 @@ const RESET_BUSY_LINK_USED = 'Password reset is busy right now. Please request a
  * Reset password using recovery token (token_hash) or access token
  */
 router.post('/reset-password', resetPasswordLimiter, validate(resetPasswordSchema), async (req, res) => {
+  // Set once the new password is saved: a later failure must not say the link still works.
+  let passwordChanged = false;
   try {
     const { token, newPassword } = req.body;
     const isJwtAccessToken = token.split('.').length === 3;
@@ -4322,6 +4337,7 @@ router.post('/reset-password', resetPasswordLimiter, validate(resetPasswordSchem
         }
         return res.status(400).json({ error: 'Unable to reset password' });
       }
+      passwordChanged = true;
 
       // Persistent login (design §6.3 /reset-password): everything is signed
       // out — GoTrue global sign-out, registry rows, devices, grants, push
@@ -4383,6 +4399,7 @@ router.post('/reset-password', resetPasswordLimiter, validate(resetPasswordSchem
         }
         return res.status(400).json({ error: 'Unable to reset password' });
       }
+      passwordChanged = true;
 
       // Persistent login: revoke ALL sessions/devices/grants + watermark
       // (global sign-out through the recovery session's JWT), then drop the
@@ -4404,10 +4421,18 @@ router.post('/reset-password', resetPasswordLimiter, validate(resetPasswordSchem
     startSignInCountsAgain(resetEmail);
     return res.json({ message: 'Password reset successful. You can now sign in.' });
   } catch (err) {
-    // Only the recovery-token check reads the session registry, before anything changes.
-    if (err.authBusy) {
+    // The recovery check reads the session registry before anything changes (the
+    // link still works); the sign-out-everywhere step runs after the new password is saved.
+    if (err.authBusy && !passwordChanged) {
       logger.warn('Reset password unavailable - session registry unreadable', { code: err.code });
       return res.status(503).json({ error: RESET_BUSY_LINK_KEPT, code: 'AUTH_BUSY' });
+    }
+    if (err.authBusy) {
+      logger.warn('Reset password saved, sign-out everywhere incomplete', { code: err.code });
+      return res.status(503).json({
+        error: 'Your new password was saved, but signing out your other devices didn\'t finish. Sign in with it, then choose "Sign out everywhere" in Security settings.',
+        code: 'SIGN_OUT_INCOMPLETE',
+      });
     }
     logger.error('Reset password error', { error: err.message });
     return res.status(500).json({ error: 'Failed to reset password' });
@@ -5752,6 +5777,9 @@ router.delete('/account', verifyToken, requireStepUp('delete_account'), requireS
     // of an account that still exists. Revoke every session/device/grant,
     // delete PushToken rows, kick sockets, record `account_deleted`. These
     // rows are FK'd to auth.users, so this runs before admin.deleteUser.
+    // A failure here must not skip that deletion: with the User row gone
+    // verifyToken already refuses these sessions, and deleting the auth user
+    // ends their refresh tokens.
     await safeHook('account_deleted', () => authDeviceService.onAccountDeleted({
       userId,
       accessToken: accessTokenFromRequest(req),
@@ -5760,7 +5788,8 @@ router.delete('/account', verifyToken, requireStepUp('delete_account'), requireS
 
     // ── 5. Delete Supabase Auth user ─────────────────────────────
     try {
-      await supabaseAdmin.auth.admin.deleteUser(userId);
+      const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
+      if (authDeleteError) throw authDeleteError;
       logger.info('Supabase auth user deleted', { userId });
     } catch (authErr) {
       // User row is already gone — log but don't fail the request
@@ -5949,7 +5978,7 @@ router.post(
         return res.json({ success: true, revoked: result.revoked });
       } catch (err) {
         logger.error('Logout scope error', { userId, scope, error: err.message, stack: err.stack });
-        return res.status(500).json({ error: 'Could not sign out other devices', code: 'INTERNAL' });
+        return res.status(err.authBusy ? 503 : 500).json({ error: 'Could not sign out other devices', code: err.authBusy ? 'AUTH_UNAVAILABLE' : 'INTERNAL' });
       }
     }
 
@@ -5960,55 +5989,47 @@ router.post(
 
     const accessToken = getLogoutAccessToken(req);
 
-    // Proof (a) MUST be established BEFORE the JWT is revoked. GoTrue's
-    // `admin.signOut(jwt,'local')` deletes the session row, after which
-    // `auth.getUser(jwt)` answers 403 session_not_found — so resolving the
-    // caller afterwards would silently forfeit every registry side effect
-    // (session row revoke, that device's push tokens, its resume grants) for
-    // web and for any session without a DPoP proof.
+    // Verify the signed token even when GoTrue already removed its session in a
+    // previous partial attempt. The registry must still be revocable on retry.
     let proofUserId = null;
     let proofSessionId = null;
-    if (accessToken && typeof accessToken === 'string') {
-      const { data, error } = await supabase.auth.getUser(accessToken);
-      if (!error && data?.user?.id) {
-        proofUserId = data.user.id;
-        proofSessionId = authSessionService.sessionClaimsFromAccessToken(accessToken)?.id || null;
+    try {
+      if (accessToken && typeof accessToken === 'string') {
+        const { verifyAccessToken } = require('../services/accessTokenVerifier');
+        const verified = await verifyAccessToken(accessToken, { authClient: supabase, allowExpiredForRevocation: true });
+        if (!verified.ok && verified.reason === 'busy') throw authSessionService.authUnavailableError(verified.error);
+        if (verified.ok) {
+          proofUserId = verified.user.id;
+          proofSessionId = authSessionService.sessionClaimsFromAccessToken(accessToken)?.id || null;
+        }
       }
-    }
-
-    const sessionRevoked = await revokeSessionByAccessToken(accessToken, {
-      source: 'logout',
-      transport: getBearerToken(req) ? 'bearer' : accessToken ? 'cookie_or_body' : 'none',
-    });
-
-    // Registry side effects only with proof (best effort; never fails the logout).
-    await safeHook('logout_local', async () => {
       const refreshToken = req.body?.refreshToken || req.body?.refresh_token || null;
       const deviceId = typeof req.body?.deviceId === 'string' && req.body.deviceId ? req.body.deviceId : undefined;
-
-      // Proof (b): DPoP (rth over the refresh token) — verified when present,
-      // never required (a missing/invalid proof only forfeits the side effects).
       let dpop = null;
       if (getHeader(req, 'dpop')) {
         const result = await verifyDpop(req, refreshToken ? { refreshToken } : {});
         if (result.ok) dpop = result.dpop;
-        else logger.warn('auth.logout.dpop_invalid', { errorCode: result.code, ip: req.ip });
+        else logger.warn('auth.logout.dpop_invalid', { errorCode: result.code });
       }
-
-      if (!proofUserId && !(refreshToken && dpop)) return null;
-      return authDeviceService.logoutLocal({
-        userId: proofUserId,
-        bearerSessionId: proofSessionId,
-        deviceId,
-        refreshToken,
-        dpop,
-        req,
-      });
-    });
+      if (proofUserId || (refreshToken && dpop)) {
+        await authDeviceService.logoutLocal({
+          userId: proofUserId, bearerSessionId: proofSessionId, deviceId, refreshToken, dpop, req,
+        });
+      }
+      // Commit application revocation before removing the provider session.
+      // Invalid/missing credentials still allow idempotent local cookie clearing.
+      if (accessToken && !(await revokeSessionByAccessToken(accessToken, { source: 'logout' }))) {
+        throw authSessionService.authUnavailableError();
+      }
+    } catch (err) {
+      logger.warn('auth.logout.incomplete', { code: err.code || 'AUTH_UNAVAILABLE' });
+      return res.status(503).json({ code: 'AUTH_UNAVAILABLE',
+        error: 'Local sign-in data was cleared, but server sign-out could not be confirmed. Please try again.' });
+    }
 
     logger.info('Logout completed', {
       hasAccessToken: Boolean(accessToken),
-      sessionRevoked,
+      sessionRevoked: Boolean(accessToken),
     });
 
     res.json({ success: true });

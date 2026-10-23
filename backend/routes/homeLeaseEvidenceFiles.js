@@ -21,7 +21,7 @@ const contextSchema = Joi.object({
 }).required();
 const formSchema = Joi.object({ upload_id: uuid, request_context: contextSchema });
 const multipart = multer({ storage: multer.memoryStorage(),
-  limits: { fileSize: storage.MAX_DOCUMENT_BYTES, files: 1, fields: 2, fieldSize: 2048 },
+  limits: { fieldNameSize: 100, fieldNestingDepth: 3, fieldArrayIndexLimit: 32, fileSize: storage.MAX_DOCUMENT_BYTES, files: 1, fields: 2, fieldSize: 2048 },
 }).single('file');
 const sessionGuard = (req, res, next) => { if (requireExpectedSessionScope(req, res)) next(); };
 
