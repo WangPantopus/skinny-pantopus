@@ -51,6 +51,36 @@ and Docker build pass. Its existing Jest suite fails five assertions tied to
 the old read/typing/pagination behavior or its old mocked RPC surface. No tests
 were modified under the founder's instruction; the PR remains draft.
 
+## Incremental cache reconciliation
+
+The next backend slice adds optional `?sync=true` to room/person history. It
+returns `syncCursors`, a map from room ID to revision captured **before** the
+history query. Clients retain the first-page anchor with the cached window;
+loading older pages must not advance it.
+
+`GET /api/chat/rooms/:roomId/changes` and
+`GET /api/chat/conversations/:otherUserId/changes` accept `cursor` (a JSON map),
+optional `until` (the preceding page's `untilCursors`), `limit` (up to 200), and
+the existing `asBusinessUserId`. The response contains `messages`,
+`syncCursors`, `untilCursors`, `hasMore`, `roomIds`, `removedRoomIds`,
+`resetRequired`, and direct-room `readReceipts`. Changes cover **all topics**;
+clients filter only after merging. Soft deletions contain only ID, room ID,
+`deleted: true` and `sync_version`. New/missing room cursors, future cursors or
+hard deletion request a full replacement. Removed rooms are purged from that
+conversation's cache. Access errors must never be interpreted as an empty
+successful update.
+
+The existing room row allocates each message/reaction revision under its
+transaction lock. A later writer cannot commit a revision ahead of an earlier
+one. Room activity and topic activity now commit with the message, removing
+two follow-up writes from the send path. No new database table is introduced.
+
+Local observations: paged changes recovered an edit, reaction and deletion;
+an unchanged cursor returned no rows; concurrent inserts waited and committed
+in revision order; malformed cursors returned 400, nonmembers 403, and hard
+deletion requested replacement. Public client roles cannot call the new RPC.
+Client integration and app verification of this slice remain in progress.
+
 ## Remaining repair sequence
 
 | Area | Work remaining after immediate repairs |

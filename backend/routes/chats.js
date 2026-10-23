@@ -42,6 +42,7 @@ const {
 } = require('../services/chatGigRoomAccess');
 const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
 const { markChatRead, applyDirectReadReceipts } = require('../services/chatReadState');
+const { parseSyncCursor, chatSyncSnapshot, chatChanges, chatReadReceipts } = require('../services/chatSync');
 const { incCounter, recordHistogram, getSnapshot } = require('../services/chatMetrics');
 const pushService = require('../services/pushService');
 const notificationService = require('../services/notificationService');
@@ -565,10 +566,6 @@ async function deliverNewMessage(io, { room, message, actorUserId, senderUserId 
       });
   }
 
-  const stamp = new Date().toISOString();
-  // Sending is not evidence that the sender has viewed incoming messages.
-  await supabaseAdmin.from('ChatRoom').update({ updated_at: stamp }).eq('id', roomId);
-
   // Push fresh badge counts (including total message count) immediately.
   const { data: participantRows } = await supabaseAdmin
     .from('ChatParticipant')
@@ -784,6 +781,51 @@ function serializeChatMessageForViewer(message, options = {}) {
 // The people who wrote these messages (loadChatPeople).
 function loadMessageSenders(messages) {
   return loadChatPeople((messages || []).map((message) => message?.sender?.id || message?.user_id));
+}
+
+async function personChatRoomIds(userId, otherUserId, asBusinessUserId) {
+  if (asBusinessUserId && !await canActAsBusiness(asBusinessUserId, userId)) {
+    const error = new Error('Access denied');
+    error.status = 403;
+    throw error;
+  }
+  const identityUserId = asBusinessUserId || userId;
+  const [mine, other] = await Promise.all([
+    supabaseAdmin.from('ChatParticipant').select('room_id, room:room_id!inner(type)')
+      .in('room.type', ['direct', 'gig']).eq('user_id', identityUserId).eq('is_active', true),
+    supabaseAdmin.from('ChatParticipant').select('room_id')
+      .eq('user_id', otherUserId).eq('is_active', true),
+  ]);
+  if (mine.error || other.error) throw mine.error || other.error;
+  const mineIds = new Set((mine.data || []).map((row) => row.room_id));
+  const candidates = (other.data || []).map((row) => row.room_id).filter((id) => mineIds.has(id));
+  const closed = await closedGigRoomIdsByRoomId(candidates, userId, [identityUserId]);
+  return candidates.filter((id) => !closed.has(id));
+}
+
+async function respondWithChatChanges(req, res, roomIds, identityUserId) {
+  const cursor = parseSyncCursor(req.query.cursor);
+  const until = parseSyncCursor(req.query.until, { optional: true });
+  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 200, 1), 200);
+  const changes = await chatChanges({ roomIds, identityUserId, cursor, until, limit });
+  const visible = changes.messages.filter((message) => !message.deleted);
+  const [reactions, people, readReceipts] = await Promise.all([
+    buildReactionSummary(visible.map((message) => message.id), req.user.id),
+    loadMessageSenders(visible),
+    chatReadReceipts(roomIds),
+    applyDirectReadReceipts(visible, req.user.id),
+  ]);
+  res.set('Cache-Control', 'private, no-store');
+  return res.json({ ...changes, readReceipts, messages: changes.messages.map((message) => message.deleted
+    ? { id: message.id, room_id: message.room_id, deleted: true, sync_version: message.sync_version }
+    : { ...serializeChatMessageForViewer(message, { people, viewerId: req.user.id }),
+      reactions: reactions.get(message.id) || [] }) });
+}
+
+function chatChangesFailure(req, res, error) {
+  if (error.status) return res.status(error.status).json({ error: error.message });
+  logger.warn('chat_changes_unavailable', { requestId: req.requestId, code: error.code });
+  return res.status(503).json({ error: 'Chat updates are temporarily unavailable', code: 'CHAT_UNAVAILABLE' });
 }
 
 /**
@@ -1591,6 +1633,38 @@ router.get('/rooms/:roomId/pre-bid-status', verifyToken, async (req, res) => {
 });
 
 /**
+ * GET /api/chat/{rooms/:roomId,conversations/:otherUserId}/changes
+ * All-topic changes since the cached room revisions, including tombstones.
+ */
+router.get('/conversations/:otherUserId/changes', verifyToken, async (req, res) => {
+  try {
+    const asBusinessUserId = req.query.asBusinessUserId ? String(req.query.asBusinessUserId) : null;
+    const roomIds = await personChatRoomIds(req.user.id, req.params.otherUserId, asBusinessUserId);
+    return await respondWithChatChanges(req, res, roomIds, asBusinessUserId || req.user.id);
+  } catch (error) {
+    return chatChangesFailure(req, res, error);
+  }
+});
+
+router.get('/rooms/:roomId/changes', verifyToken, async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const asBusinessUserId = req.query.asBusinessUserId ? String(req.query.asBusinessUserId) : null;
+    if (asBusinessUserId && !await canActAsBusiness(asBusinessUserId, req.user.id)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    const participant = await roomMembership(roomId, req.user.id, asBusinessUserId);
+    if (!participant || (participant.is_active === false && !participant.left_at)
+      || await gigRoomClosed(roomId, req.user.id, asBusinessUserId)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    return await respondWithChatChanges(req, res, [roomId], participant.user_id);
+  } catch (error) {
+    return chatChangesFailure(req, res, error);
+  }
+});
+
+/**
  * GET /api/chat/conversations/:otherUserId/messages
  * Person-conversation feed across shared direct and task rooms.
  */
@@ -1602,49 +1676,12 @@ router.get('/conversations/:otherUserId/messages', verifyToken, async (req, res)
     const asBusinessUserId = req.query.asBusinessUserId ? String(req.query.asBusinessUserId) : null;
 
     const lim = Math.min(Math.max(parseInt(limit, 10) || 100, 1), 400);
-    let identityUserIds = new Set([String(userId)]);
-
-    if (asBusinessUserId) {
-      const canAct = await canActAsBusiness(asBusinessUserId, userId);
-      if (!canAct) return res.status(403).json({ error: 'Access denied' });
-      // Acting for a business reads the business's conversations with this person, never the actor's own.
-      identityUserIds = new Set([String(asBusinessUserId)]);
-    }
-
-    // Only rooms the caller is still in: a former member reads their history in the room itself.
-    const { data: mineRows, error: mineErr } = await supabaseAdmin
-      .from('ChatParticipant')
-      .select('room_id, room:room_id!inner(type)')
-      .in('room.type', ['direct', 'gig'])
-      .in('user_id', Array.from(identityUserIds))
-      .eq('is_active', true);
-
-    if (mineErr) {
-      logger.error('Error loading actor conversation rooms', { requestId: req.requestId, userId, otherUserId, error: mineErr.message });
-      return res.status(500).json({ error: 'Failed to fetch conversation rooms' });
-    }
-
-    const { data: otherRows, error: otherErr } = await supabaseAdmin
-      .from('ChatParticipant')
-      .select('room_id')
-      .eq('user_id', otherUserId)
-      .eq('is_active', true);
-
-    if (otherErr) {
-      logger.error('Error loading target conversation rooms', { requestId: req.requestId, userId, otherUserId, error: otherErr.message });
-      return res.status(500).json({ error: 'Failed to fetch conversation rooms' });
-    }
-
-    const myRoomSet = new Set((mineRows || []).map((r) => String(r.room_id)));
-    const candidateRoomIds = (otherRows || [])
-      .map((r) => String(r.room_id))
-      .filter((rid) => myRoomSet.has(rid));
-    // An assigned task's gig room isn't merged in for a leftover member.
-    const closedRoomIds = await closedGigRoomIdsByRoomId(candidateRoomIds, userId, Array.from(identityUserIds));
-    const sharedRoomIds = candidateRoomIds.filter((rid) => !closedRoomIds.has(rid));
-
+    const sharedRoomIds = await personChatRoomIds(userId, otherUserId, asBusinessUserId);
+    // Read the watermark first. A commit during the history query is replayed
+    // harmlessly next time; a watermark captured afterward could skip it.
+    const sync = req.query.sync === 'true' ? await chatSyncSnapshot(sharedRoomIds) : null;
     if (sharedRoomIds.length === 0) {
-      return res.json({ messages: [], hasMore: false, roomIds: [] });
+      return res.json({ messages: [], hasMore: false, roomIds: [], ...(sync ? { syncCursors: sync.cursors } : {}) });
     }
 
     const runQuery = async ({ senderKey }) => {
@@ -1709,9 +1746,11 @@ router.get('/conversations/:otherUserId/messages', verifyToken, async (req, res)
       hasMore,
       nextCursor: hasMore ? buildNextCursor(visibleMessages) : null,
       roomIds: sharedRoomIds,
+      ...(sync ? { syncCursors: sync.cursors } : {}),
       sendRefusal,
     });
   } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
     logger.error('Canonical conversation fetch error', { requestId: req.requestId, userId: req.user?.id, error: err.message });
     res.status(500).json({ error: 'Failed to fetch conversation messages' });
   }
@@ -1825,6 +1864,8 @@ router.get('/rooms/:roomId/messages', verifyToken, async (req, res) => {
 
     const lim = Math.min(Math.max(parseInt(limit) || 50, 1), 200);
 
+    const sync = req.query.sync === 'true' ? await chatSyncSnapshot([roomId]) : null;
+
     const runQuery = async ({ senderKey }) => {
       let q = supabaseAdmin
         .from('ChatMessage')
@@ -1891,6 +1932,7 @@ router.get('/rooms/:roomId/messages', verifyToken, async (req, res) => {
       hasMore,
       nextCursor: hasMore ? buildNextCursor(visibleMessages) : null,
       sendRefusal,
+      ...(sync ? { syncCursors: sync.cursors } : {}),
     });
 
   } catch (err) {
@@ -2261,15 +2303,7 @@ router.post('/messages', verifyToken, messageSendLimiter, messageBurstLimiter, v
     }
 
     const people = await senderPeople;
-    await Promise.all([
-      deliverNewMessage(req.app.get('io'), { room, message, actorUserId: userId, senderUserId, requestId, people }),
-      topicId
-        ? supabaseAdmin
-            .from('ConversationTopic')
-            .update({ last_activity_at: new Date().toISOString() })
-            .eq('id', topicId)
-        : Promise.resolve(),
-    ]);
+    await deliverNewMessage(req.app.get('io'), { room, message, actorUserId: userId, senderUserId, requestId, people });
 
     const sendDurationMs = Date.now() - sendStartMs;
     incCounter('chat.message.sent', { room_type: room?.type || 'unknown' });
@@ -2404,13 +2438,13 @@ router.delete('/messages/:messageId', verifyToken, messageDeleteLimiter, async (
       return res.json({ message: 'Message deleted successfully' });
     }
 
-    const { error: softDeleteErr } = await supabaseAdmin
+    const { data: deletedMessage, error: softDeleteErr } = await supabaseAdmin
       .from('ChatMessage')
       .update({
         deleted: true,
         deleted_at: new Date().toISOString()
       })
-      .eq('id', messageId);
+      .eq('id', messageId).select('sync_version').single();
 
     if (softDeleteErr) {
       logger.error('Chat message soft-delete failed', { requestId: req.requestId, userId: req.user?.id, messageId, error: softDeleteErr.message });
@@ -2423,10 +2457,12 @@ router.delete('/messages/:messageId', verifyToken, messageDeleteLimiter, async (
     // Broadcast via socket
     const io = req.app.get('io');
     if (io && message.room_id) {
-      io.to(message.room_id).emit('message:deleted', { messageId });
+      io.to(message.room_id).emit('message:deleted', {
+        messageId, roomId: message.room_id, sync_version: deletedMessage.sync_version,
+      });
     }
 
-    res.json({ message: 'Message deleted successfully' });
+    res.json({ message: 'Message deleted successfully', sync_version: deletedMessage.sync_version });
     
   } catch (err) {
     logger.error('Message delete error', { requestId: req.requestId, userId: req.user?.id, messageId: req.params.messageId, error: err.message });
@@ -3122,7 +3158,8 @@ async function buildReactionSummary(messageIds, requestingUserId) {
     .select('message_id, reaction, user_id')
     .in('message_id', messageIds);
 
-  if (error || !reactions || reactions.length === 0) return new Map();
+  if (error) throw error;
+  if (!reactions || reactions.length === 0) return new Map();
 
   // The people who reacted, as the chat list names them
   const people = await loadChatPeople(reactions.map((r) => r.user_id));
@@ -3200,25 +3237,29 @@ router.post('/messages/:messageId/react', verifyToken, reactionLimiter, validate
       return res.status(403).json({ error: 'This chat has closed.', code: 'ROOM_INACTIVE' });
     }
 
-    const { data: existing } = await supabaseAdmin
+    const { data: existing, error: existingError } = await supabaseAdmin
       .from('MessageReaction')
       .select('id')
       .eq('message_id', messageId)
       .eq('user_id', userId)
       .eq('reaction', reaction)
       .maybeSingle();
+    if (existingError) throw existingError;
 
     // A repeat of the same request (a retry after a lost reply) leaves the asked-for state in place.
     const wanted = typeof reacted === 'boolean' ? reacted : !existing;
     if (existing && !wanted) {
-      await supabaseAdmin
+      const { error } = await supabaseAdmin
         .from('MessageReaction')
         .delete()
         .eq('id', existing.id);
+      if (error) throw error;
     } else if (!existing && wanted) {
-      await supabaseAdmin
+      const { error } = await supabaseAdmin
         .from('MessageReaction')
         .insert({ message_id: messageId, user_id: userId, reaction });
+      // A concurrent repeat may have inserted the requested reaction already.
+      if (error && error.code !== '23505') throw error;
     }
 
     incCounter('chat.reaction.toggled');

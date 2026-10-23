@@ -149,10 +149,11 @@ function emitSocketGauges() {
  *   [{ reaction, count, users: [{ id, name }], reacted_by_me }]
  */
 async function buildSocketReactionSummary(messageId, requestingUserId) {
-  const { data: reactions } = await supabaseAdmin
+  const { data: reactions, error } = await supabaseAdmin
     .from('MessageReaction')
     .select('reaction, user_id')
     .eq('message_id', messageId);
+  if (error) throw error;
 
   if (!reactions || reactions.length === 0) return [];
 
@@ -177,10 +178,11 @@ async function buildSocketReactionSummaryMap(messageIds, requestingUserId) {
   const ids = Array.from(new Set((messageIds || []).map((id) => String(id)).filter(Boolean)));
   if (ids.length === 0) return new Map();
 
-  const { data: reactions } = await supabaseAdmin
+  const { data: reactions, error } = await supabaseAdmin
     .from('MessageReaction')
     .select('message_id, reaction, user_id')
     .in('message_id', ids);
+  if (error) throw error;
 
   if (!reactions || reactions.length === 0) return new Map();
 
@@ -614,21 +616,23 @@ module.exports = (io) => {
           return callback({ error: 'This chat has closed.', code: 'ROOM_INACTIVE' });
         }
 
-        const { data: existing } = await supabaseAdmin
+        const { data: existing, error: existingError } = await supabaseAdmin
           .from('MessageReaction')
           .select('id')
           .eq('message_id', messageId)
           .eq('user_id', userId)
           .eq('reaction', reaction)
           .maybeSingle();
+        if (existingError) throw existingError;
 
         // A repeat of the same request (a retry after a lost reply) leaves the asked-for state in place.
         const wanted = typeof reacted === 'boolean' ? reacted : !existing;
         if (existing && !wanted) {
-          await supabaseAdmin
+          const { error } = await supabaseAdmin
             .from('MessageReaction')
             .delete()
             .eq('id', existing.id);
+          if (error) throw error;
         } else if (!existing && wanted) {
           const { error: insertErr } = await supabaseAdmin
             .from('MessageReaction')
@@ -671,10 +675,11 @@ module.exports = (io) => {
           return callback({ error: 'Reaction not found' });
         }
 
-        await supabaseAdmin
+        const { error: deleteError } = await supabaseAdmin
           .from('MessageReaction')
           .delete()
           .eq('id', reactionId);
+        if (deleteError) throw deleteError;
 
         // Get room ID for broadcast
         const { data: message } = await supabaseAdmin
