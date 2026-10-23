@@ -92,8 +92,10 @@ public final class ChatSearchViewModel {
             }
         }
         do {
-            async let names = fetchNames(query: text, enabled: !append || namesCursor != nil)
-            async let bodies = fetchMessages(query: text, enabled: !append || messagesCursor != nil)
+            let fetchNamesEnabled = !append || namesCursor != nil
+            let fetchMessagesEnabled = !append || messagesCursor != nil
+            async let names = fetchNames(query: text, enabled: fetchNamesEnabled)
+            async let bodies = fetchMessages(query: text, enabled: fetchMessagesEnabled)
             let (namePage, messagePage) = try await (names, bodies)
             guard expected == generation, session == AuthManager.shared.requestSessionGeneration, !Task.isCancelled else { return }
             if let page = namePage, page.hasMore == true,
