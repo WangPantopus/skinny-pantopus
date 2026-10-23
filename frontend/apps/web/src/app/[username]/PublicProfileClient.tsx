@@ -707,20 +707,37 @@ export default function PublicProfileClient({ username, initialProfile }: Public
   // ── Derived state ──
 
   const isOwnProfile = currentUser?.id === profile.id || currentUser?.username === profile.username;
-  // The server says when the username was made up (user_…, or the pre-October-7 kind built from the email).
-  const chosenHandle = profile.usernameIsGenerated ? null : chosenUsername(profile.username);
-  const realName = profile.firstName && profile.lastName
-    ? `${profile.firstName} ${profile.lastName}`
-    : profile.name || chosenHandle;
-  const fullName = realName || 'Pantopus member';
-
-  const displayRating = reviewStats.average || profile.average_rating || 0;
-  const displayReviewCount = reviewStats.total || profile.review_count || 0;
   const effectiveViewer: ViewerContext = isOwnProfile
     ? ownerPreviewContext
     : (connectionState === 'connected' ? 'follower' : 'public');
 
   const showOwnerOnly = effectiveViewer === 'owner';
+  // The page is read signed out, which names the person as other people see them: by their Local Profile's name,
+  // handle and photo. The owner's own view keeps their account's, as in the apps; Preview shows the others' view.
+  const shownProfile: PublicProfileData = showOwnerOnly && currentUser?.id === profile.id
+    ? {
+      ...profile,
+      username: currentUser.username,
+      usernameIsGenerated: currentUser.usernameIsGenerated,
+      name: currentUser.name,
+      firstName: currentUser.firstName,
+      lastName: currentUser.lastName,
+      profile_picture_url: currentUser.profile_picture_url,
+      profilePicture: currentUser.profilePicture,
+      avatar_url: currentUser.avatar_url,
+    }
+    : profile;
+  // The server says when the username was made up (user_…, or the pre-October-7 kind built from the email).
+  const chosenHandle = shownProfile.usernameIsGenerated ? null : chosenUsername(shownProfile.username);
+  const realName = shownProfile.firstName && shownProfile.lastName
+    ? `${shownProfile.firstName} ${shownProfile.lastName}`
+    : shownProfile.name || chosenHandle;
+  const fullName = realName || 'Pantopus member';
+  // Other people get no first name, so "You blocked …" uses the name's first word, as the apps do.
+  const shownFirstName = realName?.split(' ')[0] || null;
+
+  const displayRating = reviewStats.average || profile.average_rating || 0;
+  const displayReviewCount = reviewStats.total || profile.review_count || 0;
   // Someone you blocked can't be messaged (the block says so); the menu or Settings unblocks.
   const canMessage = connectionState !== 'blocked';
 
@@ -776,7 +793,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
         entityType="user"
       />
       <ProfileHeader
-        profile={profile}
+        profile={shownProfile}
         fullName={fullName}
         hasName={Boolean(realName)}
         handle={chosenHandle}
@@ -871,7 +888,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
             reviews={reviews}
             loading={gigsLoading || reviewsLoading || postsLoading}
             blocked={connectionState === 'blocked'}
-            firstName={profile.firstName || null}
+            firstName={shownFirstName}
           />
         )}
         {activeTab === 'insights' && showOwnerOnly && (
