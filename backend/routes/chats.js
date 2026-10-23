@@ -1426,7 +1426,7 @@ router.get('/rooms/:roomId', verifyToken, async (req, res) => {
     // Embedded membership reads inherit the row cap independently of the room.
     // Preserve the existing member fields while reading every membership page.
     const membersPage = await readChatParticipants([roomId],
-      'user_id, role, unread_count, last_read_at, joined_at, user:user_id(id, username, name, first_name, last_name, profile_picture_url)',
+      'user_id, role, unread_count, last_read_at, joined_at, is_active, left_at, user:user_id(id, username, name, first_name, last_name, profile_picture_url)',
       { activeOnly: false }).catch(() => { throw chatAccessUnavailable(); });
     room.participants = membersPage.map(({ id, room_id, ...member }) => member);
 
