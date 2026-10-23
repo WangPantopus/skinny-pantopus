@@ -3,7 +3,7 @@ const db = require('../config/supabaseAdmin');
 const verificationAge = require('../utils/verificationAge');
 const logger = require('../utils/logger');
 const { nameUnlessMadeUp } = require('../utils/personalUsername');
-const { loadChatPeople, chatPersonRow } = require('./chatPeople');
+const { loadChatPeople, chatPersonRow, reviewerRow } = require('./chatPeople');
 const MESSAGES = {
   INVITE_SENDER_NOT_FOUND: 'This invitation attempt has not been found. Retry or cancel its original attempt.',
   INVITE_SENDER_CONFLICT: 'This attempt has different details. Recover its original invitation command.',
@@ -112,8 +112,10 @@ async function list(actorId,homeId=null) {
 async function listRequests(homeId,actorId,status='pending') {
   const result=await rpc('list_home_household_requests',{p_home_id:homeId,p_actor_id:actorId,p_status:status});
   if (!Array.isArray(result.requests)) throw failure();
+  // A requester with a Local Profile goes by it alone, with no first or last name: those belong to the private account
+  // (chatPeople.reviewerRow, the same row shape and rule as review lists). Anyone else keeps the account row.
   const people = await loadChatPeople(result.requests.map((request) => request?.requester?.id));
-  return result.requests.map((request) => (request?.requester ? { ...request, requester: namedPerson(request.requester, people) } : request));
+  return result.requests.map((request) => (request?.requester ? { ...request, requester: reviewerRow(request.requester, people) } : request));
 }
 async function notifyCreated(result,message) {
   if (result.replayed) return false;
