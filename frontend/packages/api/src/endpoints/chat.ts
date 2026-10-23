@@ -3,7 +3,7 @@
 // Real-time chat rooms and messages
 // ============================================================
 
-import { get, post, put, patch, del } from '../client';
+import { get, post, put, patch, del, ApiRequestError } from '../client';
 import type { ApiRequestConfig } from '../client';
 import type {
   ChatRoom,
@@ -230,19 +230,36 @@ export interface ChatChanges {
 }
 
 /** Resume a captured history snapshot; all topics share the same room revision. */
-export function getMessageChanges(target: { roomId?: string; otherUserId?: string }, params: {
+export async function getMessageChanges(target: { roomId?: string; otherUserId?: string }, params: {
   cursor: ChatSyncCursors;
   until?: ChatSyncCursors;
   limit?: number;
   asBusinessUserId?: string;
 }): Promise<ChatChanges> {
   const path = target.roomId ? `rooms/${target.roomId}` : `conversations/${target.otherUserId}`;
-  return get<ChatChanges>(`/api/chat/${path}/changes`, {
+  const url = `/api/chat/${path}/changes`;
+  try {
+    return await post<ChatChanges>(url, { ...params, limit: params.limit ?? 200 });
+  } catch (error) {
+    const status = (error as { statusCode?: number })?.statusCode;
+    if (status !== 404 && status !== 405) throw error;
+  }
+  // Older servers only accept GET. A large cursor map must fall back to the
+  // authorized history refresh rather than overflowing a proxy's URL limit.
+  const legacyParams = {
     cursor: JSON.stringify(params.cursor),
     ...(params.until ? { until: JSON.stringify(params.until) } : {}),
-    limit: params.limit ?? 200,
+    limit: String(params.limit ?? 200),
     ...(params.asBusinessUserId ? { asBusinessUserId: params.asBusinessUserId } : {}),
-  });
+  };
+  if (url.length + 1 + new URLSearchParams(legacyParams).toString().length > 1900) {
+    throw new ApiRequestError({
+      message: 'Refresh conversation history to continue recovery.',
+      code: 'CHAT_SYNC_REFRESH_REQUIRED',
+      statusCode: 404,
+    });
+  }
+  return get<ChatChanges>(url, legacyParams);
 }
 
 /**

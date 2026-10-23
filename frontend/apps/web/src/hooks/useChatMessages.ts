@@ -327,6 +327,8 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
   const contextReadyRef = useRef(!initialMessageId);
   const historyViewRef = useRef(0);
   const [hasMore, setHasMore] = useState(() => initialSnapshot?.hasMore ?? false);
+  const hasMoreRef = useRef(hasMore);
+  hasMoreRef.current = hasMore;
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [resolvedRoomId, setResolvedRoomId] = useState<string | null>(() => roomId || initialSnapshot?.resolvedRoomId || null);
   const [directChatPeer, setDirectChatPeer] = useState<User | null>(() => initialSnapshot?.peer ?? null);
@@ -367,7 +369,6 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
   const markReadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const joinedRoomsRef = useRef<Set<string>>(new Set());
   const prevConnectedRef = useRef(connected);
-  const [roomJoinGeneration, setRoomJoinGeneration] = useState(0);
 
   // ── Fetch functions ─────────────────────────────────────
 
@@ -785,13 +786,12 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     }
   }, [connected, refresh]);
 
-  // When the room we're viewing changes, force re-join so we're definitely in the right room
-  // (fixes mobile→web messages/reactions not arriving when web wasn't in room)
+  // A fresh cursor/history response can return the same rooms in a new array.
+  // It must not cancel and repeat every pending join in a large conversation.
   const activeRoomIdsKey = activeRoomIds.slice().sort().join(',');
   useEffect(() => {
     joinedRoomsRef.current.clear();
-    setRoomJoinGeneration((g) => g + 1);
-  }, [activeRoomIdsKey]);
+  }, [cacheKeyId]);
 
   useEffect(() => {
     if (!currentUserId) return;
@@ -812,37 +812,62 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
   }, [currentUserId, asBusinessUserId, isRoomMode, roomId, otherUserId, activeRoomIds, belongsToTopic, isCurrentScope, noteLiveChange, survivesDeletion, queryClient]);
 
   useEffect(() => {
-    if (!socket || !connected || activeRoomIds.length === 0) return;
+    if (!socket || !connected || !activeRoomIdsKey) return;
     let cancelled = false;
-    const timers = new Set<ReturnType<typeof setTimeout>>();
-    const join = (activeRoomId: string) => {
-      if (cancelled || !socket.connected || !isCurrentScope()) return;
-      let answered = false;
-      const startedVersion = changeVersionRef.current;
-      const timeout = setTimeout(() => {
-        timers.delete(timeout);
-        if (!answered) { answered = true; join(activeRoomId); }
-      }, 5000);
-      timers.add(timeout);
-      emit('room:join', { roomId: activeRoomId }, (response: { success?: boolean; messages?: ChatMessage[] }) => {
-        if (answered) return;
-        answered = true;
-        clearTimeout(timeout);
-        timers.delete(timeout);
-        if (cancelled || !isCurrentScope()) return;
+    const active = () => !cancelled && socket.connected && isCurrentScope();
+    const rooms = activeRoomIdsKey.split(',');
+    const roomSet = new Set(rooms);
+    for (const id of joinedRoomsRef.current) if (!roomSet.has(id)) joinedRoomsRef.current.delete(id);
+    const pending = rooms.filter((id) => !joinedRoomsRef.current.has(id));
+    const timers = new Map<ReturnType<typeof setTimeout>, () => void>();
+    const wait = (ms: number) => new Promise<void>((resolve) => {
+      const timer = setTimeout(() => { timers.delete(timer); resolve(); }, ms);
+      timers.set(timer, resolve);
+    });
+    type JoinResponse = { success?: boolean; messages?: ChatMessage[]; code?: string; retryable?: boolean; retryAfterMs?: number };
+    const join = async (activeRoomId: string) => {
+      for (let attempt = 0; attempt < 3 && active(); attempt += 1) {
+        const startedVersion = changeVersionRef.current;
+        const response = await new Promise<JoinResponse | undefined>((resolve) => {
+          // Socket.IO's timeout also releases the acknowledgement callback when
+          // a reply is lost; our previous recursive timer retained it forever.
+          socket.timeout(10_000).emit('room:join', { roomId: activeRoomId },
+            (error: Error | null, result: JoinResponse) => resolve(error ? undefined : result));
+        });
+        if (!active()) return;
         if (response?.success) {
           joinedRoomsRef.current.add(activeRoomId);
+          const loaded = messagesRef.current;
+          const oldest = loaded.find((message) => !isUnsent(message));
           const backfill = (response.messages || []).filter((message) => belongsToTopic(message) && survivesDeletion(message)
-            && (liveChangesRef.current.get(String(message.id)) || 0) <= startedVersion);
-          const unseen = contextWindowRef.current ? [] : backfill.filter((message) => !messagesRef.current.some((existing) => String(existing.id) === String(message.id)));
+            && (liveChangesRef.current.get(String(message.id)) || 0) <= startedVersion
+            && (!hasMoreRef.current || !oldest || compareMessages(message, oldest) >= 0));
+          const unseen = contextWindowRef.current ? [] : backfill.filter((message) => !loaded.some((existing) => String(existing.id) === String(message.id)));
           unseen.forEach((message) => noteLiveChange(String(message.id)));
-          setMessages((previous) => mergeMessages(previous, unseen));
+          if (unseen.length) setMessages((previous) => mergeMessages(previous, unseen));
+          return;
         }
-      });
+        // Access failures are terminal. Busy/transport failures get a bounded
+        // retry; authoritative delta recovery continues even without a join.
+        if (response && response.code !== 'CHAT_BUSY' && !response.retryable) return;
+        if (attempt < 2) await wait(Math.min(10_000, Math.max(1000, Number(response?.retryAfterMs) || 1000 * 2 ** attempt)));
+      }
     };
-    for (const id of activeRoomIds) if (!joinedRoomsRef.current.has(id)) join(id);
-    return () => { cancelled = true; timers.forEach(clearTimeout); };
-  }, [socket, connected, activeRoomIds, emit, roomJoinGeneration, belongsToTopic, isCurrentScope, noteLiveChange, survivesDeletion]);
+    const worker = async () => {
+      while (active()) {
+        const id = pending.shift();
+        if (!id) return;
+        await join(id);
+      }
+    };
+    const workerCount = Math.min(4, pending.length);
+    for (let i = 0; i < workerCount; i += 1) void worker();
+    return () => {
+      cancelled = true;
+      timers.forEach((resolve, timer) => { clearTimeout(timer); resolve(); });
+      timers.clear();
+    };
+  }, [socket, connected, activeRoomIdsKey, belongsToTopic, isCurrentScope, noteLiveChange, survivesDeletion]);
 
   const handleIncomingMessage = useCallback((msg: ChatMessage) => {
     if (activeRoomIds.length === 0) return;
