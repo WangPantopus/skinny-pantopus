@@ -3084,6 +3084,7 @@ router.get('/unified-conversations', verifyToken, async (req, res) => {
     const conversations = page.entries.map((entry) => {
       const common = {
         total_unread: Number(entry.total_unread) || 0,
+        unmuted_unread: Number(entry.unmuted_unread) || 0,
         notifications_enabled: entry.notifications_enabled && !muted.has(entry.other_id),
         last_message_at: entry.last_message_at,
         last_message_preview: getVisibleMessagePreview(entry.last_message),
@@ -3115,6 +3116,7 @@ router.get('/unified-conversations', verifyToken, async (req, res) => {
     recordHistogram('chat.unified_conversations.load_latency_ms', Date.now() - ucStartMs);
     res.set('Cache-Control', 'private, no-store');
     res.json({ conversations, total: Number(page.total), totalUnread: Number(page.totalUnread),
+      totalUnmutedUnread: Number(page.totalUnmutedUnread),
       hasMore: page.hasMore, nextCursor });
   } catch (err) {
     logger.error('Unified conversations list error', { requestId: req.requestId, userId: req.user?.id, error: err.message });

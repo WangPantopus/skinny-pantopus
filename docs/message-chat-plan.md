@@ -229,6 +229,24 @@ and matched the public alias while rejecting a distinct private account name.
 Function lint, migration policy and syntax passed. Browser/native search checks
 are pending; existing design and navigation are unchanged.
 
+## Authoritative muted badge totals
+
+Both native apps currently subtract muted row counts from the all-unread total.
+That calculation becomes incomplete once the inbox is paginated. The server now
+adds `total_unmuted_unread` to chat statistics, `unmutedUnreadMessages` to badge
+updates, and `totalUnmutedUnread` plus per-row `unmuted_unread` to unified inbox
+responses. Existing all-unread fields and message-row indicators remain intact.
+The new totals cover the complete authorized inbox regardless of page or search;
+room mute and persistent person mute both apply. Preference changes invalidate
+chat counters across API processes.
+
+Local database checks passed for mute/unmute, preserved actual unread, persistent
+person mute despite an enabled room, and filtered/paginated totals. A real API
+send/retry saved one message; its muted recipient received an authoritative live
+badge with one actual unread and zero unmuted unread, matching HTTP statistics
+and the filtered inbox. The server-only delivery flag remained absent from the
+message DTO. Native/web consumption is the next client slice; no tests were added.
+
 ## Durable push delivery storage — approved October 23
 
 A message can commit and the API process can exit before its current in-memory

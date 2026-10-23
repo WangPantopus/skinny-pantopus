@@ -47,7 +47,7 @@ function getUserSocketIds(userId) {
 /** Read all chat counters in one database snapshot without fetching history. */
 async function getChatStatistics(userId) {
   const { data, error } = await supabaseAdmin.rpc('get_chat_statistics', { p_user_id: userId });
-  const fields = ['total_chats', 'total_messages', 'total_unread', 'direct_chats', 'gig_chats', 'home_chats'];
+  const fields = ['total_chats', 'total_messages', 'total_unread', 'total_unmuted_unread', 'direct_chats', 'gig_chats', 'home_chats'];
   if (error || !data || fields.some((key) => !Number.isSafeInteger(data[key]) || data[key] < 0)) {
     throw Object.assign(new Error('Chat statistics are temporarily unavailable'), { status: 503, code: 'CHAT_UNAVAILABLE' });
   }
@@ -75,7 +75,7 @@ async function computeBadgeCounts(userId) {
       .select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('is_read', false)))),
   ]);
   if (notifications.error || notifications.count == null) throw new Error('Notification badges unavailable');
-  return { unreadMessages: stats.total_unread, totalMessages: stats.total_messages,
+  return { unreadMessages: stats.total_unread, unmutedUnreadMessages: stats.total_unmuted_unread, totalMessages: stats.total_messages,
     pendingOffers: offers.count, notifications: notifications.count };
 }
 
