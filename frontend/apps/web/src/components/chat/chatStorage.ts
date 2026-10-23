@@ -5,6 +5,7 @@ const DATABASE = 'pantopus-private-chat-v1';
 const HISTORY_TTL = 7 * 24 * 60 * 60 * 1000;
 const HISTORY_BYTES = 5 * 1024 * 1024;
 const OUTBOX_BYTES = 100 * 1024 * 1024;
+const OUTBOX_FULL = 'Your pending messages are full (100 messages or 100 MB). Send or remove a pending message before adding more.';
 type Kind = 'history' | 'outbox' | 'media';
 interface Metadata { id: string; account: string; kind: Kind; key: string; at: number; bytes: number }
 interface Envelope { iv: ArrayBuffer; ciphertext: ArrayBuffer }
@@ -128,10 +129,17 @@ export async function readChatRecord<T>(scope: ChatStorageScope, kind: Kind, key
 export async function readChatBytes(scope: ChatStorageScope, kind: Kind, key: string): Promise<ArrayBuffer | null> {
   const db = await open();
   const id = recordId(scope, kind, key);
-  const meta = await readTaskRecoveryValue<Metadata>(db, 'metadata', id);
-  if (!meta || (kind === 'history' && Date.now() - meta.at > HISTORY_TTL)) return null;
-  const sealed = await readTaskRecoveryValue<Envelope>(db, 'payloads', id);
-  const secret = await readTaskRecoveryValue<CryptoKey>(db, 'keys', scope.account);
+  // Read the envelope and key in one snapshot: another tab may accept/remove
+  // the pending message or clear its account while this read is in flight.
+  const { meta, sealed, secret } = await new Promise<{ meta?: Metadata; sealed?: Envelope; secret?: CryptoKey }>((resolve, reject) => {
+    const transaction = db.transaction(['metadata', 'payloads', 'keys']);
+    const metaRequest = transaction.objectStore('metadata').get(id);
+    const payloadRequest = transaction.objectStore('payloads').get(id);
+    const keyRequest = transaction.objectStore('keys').get(scope.account);
+    transaction.oncomplete = () => resolve({ meta: metaRequest.result, sealed: payloadRequest.result, secret: keyRequest.result });
+    transaction.onabort = transaction.onerror = () => reject(new Error('Chat recovery could not be read.'));
+  });
+  if (!isChatStorageCurrent(scope) || !meta || (kind === 'history' && Date.now() - meta.at > HISTORY_TTL)) return null;
   if (!sealed || !secret) throw new Error('Saved chat recovery could not be opened.');
   const bytes = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: sealed.iv,
     additionalData: new TextEncoder().encode(id) }, secret, sealed.ciphertext);
@@ -151,6 +159,19 @@ export async function deleteChatRecords(scope: ChatStorageScope, records: Array<
       transaction.objectStore('payloads').delete(id);
     }
   });
+}
+
+/** Reject over-capacity selections before loading/encrypting their bytes.
+ * The write transaction repeats this check for concurrent tabs. */
+export async function assertChatOutboxCapacity(scope: ChatStorageScope, records: Array<{ kind: 'outbox' | 'media'; key: string; bytes: number }>): Promise<void> {
+  const replaced = new Set(records.map((record) => recordId(scope, record.kind, record.key)));
+  const existing = (await metadata(await open())).filter((entry) => entry.account === scope.account
+    && entry.kind !== 'history' && !replaced.has(entry.id));
+  if (!isChatStorageCurrent(scope)) throw new Error('This chat session ended.');
+  if (existing.reduce((sum, entry) => sum + entry.bytes, 0) + records.reduce((sum, entry) => sum + entry.bytes + 16, 0) > OUTBOX_BYTES
+    || existing.filter((entry) => entry.kind === 'outbox').length + records.filter((entry) => entry.kind === 'outbox').length > 100) {
+    throw new Error(OUTBOX_FULL);
+  }
 }
 
 /** Metadata and original attachment bytes commit together, before a send starts. */
@@ -175,7 +196,7 @@ export async function writeChatRecords(scope: ChatStorageScope, records: Array<{
       const outgoing = [...entries, ...prepared.map((entry) => entry.meta)].filter((entry) => entry.kind !== 'history');
       if (outgoing.reduce((sum, entry) => sum + entry.bytes, 0) > OUTBOX_BYTES
         || outgoing.filter((entry) => entry.kind === 'outbox').length > 100) {
-        reason = 'Your pending messages are full (100 messages or 100 MB). Send or remove a pending message before adding more.';
+        reason = OUTBOX_FULL;
         transaction.abort(); return;
       }
       const history = [...entries, ...prepared.map((entry) => entry.meta)].filter((entry) => entry.kind === 'history').sort((a, b) => b.at - a.at);

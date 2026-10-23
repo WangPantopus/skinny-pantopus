@@ -1,6 +1,6 @@
 import * as api from '@pantopus/api';
 import type { ChatMessage } from '@pantopus/types';
-import { activateChatStorage, deleteChatRecords, isChatStorageCurrent, listChatRecordKeys, readChatBytes,
+import { activateChatStorage, assertChatOutboxCapacity, deleteChatRecords, isChatStorageCurrent, listChatRecordKeys, readChatBytes,
   readChatRecord, suspendChatStorage, writeChatRecords, type ChatStorageScope } from './chatStorage';
 
 interface PendingFile { key: string; name: string; type: string; lastModified: number }
@@ -33,6 +33,7 @@ let running = false;
 let timer: ReturnType<typeof setTimeout> | undefined;
 let pending: PendingChatSend[] = [];
 let enqueueTime = 0;
+let readVersion = 0;
 let storageWrites = Promise.resolve();
 const listeners = new Set<Listener>();
 
@@ -41,9 +42,10 @@ const current = (saved: ChatStorageScope | null): saved is ChatStorageScope => !
 const save = (saved: ChatStorageScope, message: PendingChatSend) => writeChatRecords(saved, [{ kind: 'outbox', key: message.clientMessageId, value: message }]);
 
 async function readPending(saved: ChatStorageScope) {
+  const version = ++readVersion;
   const ids = await listChatRecordKeys(saved, 'outbox');
   const messages = await Promise.all(ids.map((id) => readChatRecord<PendingChatSend>(saved, 'outbox', id)));
-  if (!current(saved)) return;
+  if (!current(saved) || version !== readVersion) return;
   pending = messages.filter((message): message is PendingChatSend => !!message && typeof message.clientMessageId === 'string'
     && typeof message.roomId === 'string' && Array.isArray(message.files)).sort((a, b) => a.createdAt.localeCompare(b.createdAt)
       || a.clientMessageId.localeCompare(b.clientMessageId));
@@ -63,21 +65,30 @@ export function suspendChatOutbox(): void {
   scope = null;
   starting = null;
   pending = [];
+  readVersion++;
   suspendChatStorage();
   publish();
 }
 function wake() { void resumeChatOutbox(); }
 
+async function withOutboxLock<T>(saved: ChatStorageScope, work: () => Promise<T>): Promise<T> {
+  return navigator.locks ? await navigator.locks.request(`pantopus-chat-outbox:${saved.account}`, work) : await work();
+}
+
 export async function resumeChatOutbox(): Promise<void> {
   const saved = scope;
   if (!current(saved)) return;
   try {
-    for (const message of pending) if (message.state === 'queued' && message.lastStatus !== 429 && message.nextAttemptAt > Date.now()) {
-      await save(saved, { ...message, nextAttemptAt: 0 });
-    }
-    await readPending(saved);
-    schedule();
-  } catch { schedule(5000); }
+    await withOutboxLock(saved, async () => {
+      await readPending(saved);
+      if (!current(saved)) return;
+      for (const message of pending) if (message.state === 'queued' && message.lastStatus !== 429 && message.nextAttemptAt > Date.now()) {
+        await save(saved, { ...message, nextAttemptAt: 0 });
+      }
+      await readPending(saved);
+      schedule();
+    });
+  } catch { if (current(saved)) schedule(5000); }
 }
 
 export function startChatOutbox(actorId: string): Promise<void> {
@@ -92,7 +103,7 @@ export function startChatOutbox(actorId: string): Promise<void> {
     if (!current(saved)) return;
     window.addEventListener('online', wake);
     window.addEventListener('focus', wake);
-    await resumeChatOutbox();
+    void resumeChatOutbox();
   }).catch((error: unknown) => {
     if (starting === attempt) { accountId = null; scope = null; }
     throw error;
@@ -117,6 +128,11 @@ export async function enqueueChatSend(actorId: string, input: Omit<PendingChatSe
       name: file.name, type: file.type, lastModified: file.lastModified })) };
   // Serialize disk commits so rapid sends retain the same order after a crash.
   const write = storageWrites.catch(() => {}).then(async () => {
+    // File.size is available without allocating or encrypting the attachment.
+    await assertChatOutboxCapacity(saved, [
+      { kind: 'outbox', key: message.clientMessageId, bytes: new TextEncoder().encode(JSON.stringify(message)).byteLength },
+      ...files.map((file, index) => ({ kind: 'media' as const, key: message.files[index].key, bytes: file.size })),
+    ]);
     const media = await Promise.all(files.map(async (file, index) => ({ kind: 'media' as const, key: message.files[index].key, bytes: await file.arrayBuffer() })));
     await writeChatRecords(saved, [{ kind: 'outbox', key: message.clientMessageId, value: message }, ...media]);
     if (!current(saved)) return;
@@ -130,16 +146,20 @@ export async function enqueueChatSend(actorId: string, input: Omit<PendingChatSe
 async function discard(saved: ChatStorageScope, message: PendingChatSend) {
   await deleteChatRecords(saved, [{ kind: 'outbox', key: message.clientMessageId },
     ...message.files.map((file) => ({ kind: 'media' as const, key: file.key }))]);
-  if (current(saved)) { pending = pending.filter((entry) => entry.clientMessageId !== message.clientMessageId); publish(); }
+  if (current(saved)) { readVersion++; pending = pending.filter((entry) => entry.clientMessageId !== message.clientMessageId); publish(); }
 }
 
 export async function retryChatSend(id: string): Promise<void> {
   const saved = scope;
-  const message = pending.find((entry) => entry.clientMessageId === id);
-  if (!message || !current(saved) || message.state === 'refused') return;
-  await save(saved, { ...message, state: 'queued', nextAttemptAt: 0, attempts: 0, error: undefined });
-  await readPending(saved);
-  schedule();
+  if (!current(saved)) return;
+  await withOutboxLock(saved, async () => {
+    await readPending(saved);
+    const message = pending.find((entry) => entry.clientMessageId === id);
+    if (!message || !current(saved) || message.state === 'refused') return;
+    await save(saved, { ...message, state: 'queued', nextAttemptAt: 0, attempts: 0, error: undefined });
+    await readPending(saved);
+    schedule();
+  });
 }
 
 export async function removeChatSend(id: string): Promise<void> {
@@ -150,8 +170,7 @@ export async function removeChatSend(id: string): Promise<void> {
     const message = pending.find((entry) => entry.clientMessageId === id);
     if (message && current(saved)) await discard(saved, message);
   };
-  if (navigator.locks) await navigator.locks.request(`pantopus-chat-outbox:${saved.account}`, remove);
-  else await remove();
+  await withOutboxLock(saved, remove);
 }
 
 async function drain(): Promise<void> {
@@ -223,8 +242,7 @@ async function drain(): Promise<void> {
   try {
     // One worker across same-origin tabs; server client IDs are the fallback
     // for browsers without Web Locks or a tab that closes during a request.
-    if (navigator.locks) await navigator.locks.request(`pantopus-chat-outbox:${saved.account}`, work);
-    else await work();
+    await withOutboxLock(saved, work);
   } finally { running = false; if (saved !== scope && current(scope)) schedule(); }
 }
 
