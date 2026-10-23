@@ -3288,9 +3288,10 @@ public final class ChatConversationViewModel {
     }
 
     private static func stampLabel(for message: ChatMessageDTO, currentUserId: String) -> String? {
-        guard let date = parseISO(message.createdAt) else { return nil }
-        let time = stampFormatter.string(from: date)
         let isOutgoing = message.userId == currentUserId
+        let timestamp = isOutgoing ? (message.readAt ?? message.createdAt) : message.createdAt
+        guard let date = parseISO(timestamp) else { return nil }
+        let time = stampFormatter.string(from: date)
         let sender = senderName(of: message)
         if isOutgoing {
             return time
