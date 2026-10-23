@@ -17,7 +17,7 @@ const { sendGuestReservationReminderEmail, sendGuestSignupReleasedEmail } = requ
 const { inferTimezone } = require('./context/locationResolver');
 const { DateTime } = require('luxon');
 const logger = require('../utils/logger');
-const { chosenUsernameOrNull } = require('../utils/personalUsername');
+const { loadChatPeople } = require('./chatPeople');
 
 const DEEP_LINK_PREFIX = '/app/support-trains';
 
@@ -487,16 +487,11 @@ async function emitSupportTrainEvent({ event, supportTrainId, actorUserId, paylo
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
-// A signed-in request carries no display name (req.user is the id, email and role),
-// so name whoever acted from their profile, as the signups list does.
+// A signed-in request carries no display name (req.user is the id, email and role), so name whoever acted
+// as the train's lists do (services/chatPeople.js): a person by their Local Profile, a business by the business.
 async function _getDisplayName(userId) {
   if (!userId) return null;
-  const { data } = await supabaseAdmin
-    .from('User')
-    .select('name, username')
-    .eq('id', userId)
-    .maybeSingle();
-  return data?.name || chosenUsernameOrNull(data?.username) || null;
+  return (await loadChatPeople([userId])).get(String(userId))?.displayName || null;
 }
 
 async function _getOrganizers(supportTrainId, excludeUserId) {
