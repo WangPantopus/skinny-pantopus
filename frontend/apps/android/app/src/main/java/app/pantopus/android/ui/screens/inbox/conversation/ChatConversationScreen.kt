@@ -4990,6 +4990,7 @@ private fun StampRow(
             // Delivered is conveyed by the small check icon, not a loud word (RN).
             ChatDeliveryState.Sent, ChatDeliveryState.Delivered -> stamp
             ChatDeliveryState.Sending -> "Sending..."
+            ChatDeliveryState.Queued -> "Queued · retrying"
             ChatDeliveryState.Failed -> "Failed to send"
             ChatDeliveryState.Refused -> "Not sent"
             null -> stamp
@@ -5012,7 +5013,7 @@ private fun StampRow(
         }
         if (content.side == ChatMessageSide.Outgoing && content.deliveryState != ChatDeliveryState.Read) {
             when (content.deliveryState) {
-                ChatDeliveryState.Read -> Unit
+                ChatDeliveryState.Read, ChatDeliveryState.Queued -> Unit
                 ChatDeliveryState.Sent, ChatDeliveryState.Delivered ->
                     PantopusIconImage(
                         icon = PantopusIcon.Check,

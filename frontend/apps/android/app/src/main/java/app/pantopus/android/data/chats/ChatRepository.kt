@@ -70,6 +70,9 @@ class ChatRepository
         /** Marks the Messages list out of date (a new conversation arrived, the live connection came back). */
         fun conversationsChanged() = store.markStale(StoreTopics.CHATS)
 
+        /** A remote mute change only affects the list; it must not refetch message history. */
+        fun conversationPreferencesChanged() = store.markStale(StoreTopics.CHAT_LIST)
+
         /** An own edit to a conversation (contract §8: a message sent or read, a chat created): the list reads again. */
         private fun <T> NetworkResult<T>.chatsChanged(): NetworkResult<T> =
             also {

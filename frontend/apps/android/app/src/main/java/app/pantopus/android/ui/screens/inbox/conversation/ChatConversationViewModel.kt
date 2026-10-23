@@ -3349,6 +3349,9 @@ class ChatConversationViewModel
                     ),
                 )
             }
+            val queuedClientIds =
+                outbox?.entries?.value.orEmpty()
+                    .filter { it.error != null && !it.terminal }.mapTo(mutableSetOf()) { it.clientId }
             val combined = messages + pendingByClientId.values.filter(::matchesTopicFilter)
             val messagesById = combined.associateBy { it.id }
             if (combined.isEmpty()) {
@@ -3392,6 +3395,8 @@ class ChatConversationViewModel
                 val deliveryState =
                     if (side != ChatMessageSide.Outgoing) {
                         null
+                    } else if (message.id.startsWith("client_") && message.clientMessageId in queuedClientIds) {
+                        ChatDeliveryState.Queued
                     } else if (message.clientMessageId != null && failedClientIds.contains(message.clientMessageId)) {
                         if (refusedClientIds.contains(message.clientMessageId)) {
                             ChatDeliveryState.Refused
@@ -3410,10 +3415,10 @@ class ChatConversationViewModel
                 // and failed sends even when a same-sender follow-up strips
                 // the group tail. Tail visuals stay driven by [hasTail].
                 val showStamp =
-                    hasTail ||
-                        deliveryState == ChatDeliveryState.Failed ||
-                        deliveryState == ChatDeliveryState.Refused ||
-                        deliveryState == ChatDeliveryState.Sending
+                    hasTail || deliveryState in
+                        setOf(
+                            ChatDeliveryState.Failed, ChatDeliveryState.Refused, ChatDeliveryState.Sending, ChatDeliveryState.Queued,
+                        )
                 val stamp = if (showStamp) stampLabel(message) else null
                 val body = bodyOf(message)
                 val replyPreview = replyPreviewOf(message, messagesById)

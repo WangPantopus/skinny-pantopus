@@ -34,6 +34,7 @@ class ChatBadgeViewModel
         private var serverUnmutedUnread: Int? = null
         private var badgeRevision = 0L
         private var refreshJob: kotlinx.coroutines.Job? = null
+        private var refreshAgain = false
 
         init {
             // A cold start shows the saved list's count at once (Instant Screens); the read below confirms it.
@@ -48,16 +49,27 @@ class ChatBadgeViewModel
          * shows: one request at launch instead of the list and the stats, and none when the copy is fresh.
          */
         fun refresh() {
-            if (refreshJob?.isActive == true) return
+            if (refreshJob?.isActive == true) {
+                refreshAgain = true
+                return
+            }
             val revision = badgeRevision
             refreshJob =
                 viewModelScope.launch {
-                    val response =
-                        repo.conversationsStored().data ?: run {
+                    try {
+                        val response = repo.conversationsStored().data
+                        if (response == null) {
                             Timber.w("Chat badge refresh failed: the Messages list is unavailable")
-                            return@launch
+                        } else if (revision == badgeRevision) {
+                            show(response)
                         }
-                    if (revision == badgeRevision) show(response)
+                    } finally {
+                        refreshJob = null
+                        if (refreshAgain) {
+                            refreshAgain = false
+                            refresh()
+                        }
+                    }
                 }
         }
 
@@ -110,6 +122,12 @@ class ChatBadgeViewModel
 
         private fun subscribeToSocket() {
             viewModelScope.launch {
+                socket.eventsOf("chat:preferences_changed").collect {
+                    repo.conversationPreferencesChanged()
+                    refresh()
+                }
+            }
+            viewModelScope.launch {
                 socket.eventsOf("badge:update").collect { json ->
                     json.badgeUnreadCount()?.let { total ->
                         badgeRevision++
@@ -142,6 +160,11 @@ class ChatBadgeViewModel
                         serverTotalUnread = snapshot.serverTotalUnread
                         serverUnmutedUnread = snapshot.serverUnmutedUnread
                         applyAdjustedUnread(snapshot.rows)
+                    } else {
+                        badgeRevision++
+                        serverTotalUnread = 0
+                        serverUnmutedUnread = null
+                        _unreadMessages.value = 0
                     }
                 }
             }
