@@ -502,6 +502,7 @@ fun ChatConversationScreen(
                             onRetry = viewModel::retry,
                             onLoadOlder = viewModel::loadOlder,
                             onVisibleMessage = viewModel::markVisibleMessageRead,
+                            onViewport = viewModel::observeTimelineViewport,
                             scrollToRowId = pendingScroll,
                             onScrollConsumed = viewModel::consumePendingScroll,
                             showLatestMessages = showLatestMessages,
@@ -2730,6 +2731,7 @@ internal fun PopulatedFrame(
     onRetry: (String) -> Unit,
     onLoadOlder: () -> Unit,
     onVisibleMessage: (String) -> Unit = {},
+    onViewport: (String?, Boolean) -> Unit = { _, _ -> },
     scrollToRowId: String? = null,
     onScrollConsumed: () -> Unit = {},
     showLatestMessages: Boolean = false,
@@ -2807,11 +2809,15 @@ internal fun PopulatedFrame(
     }
     val rowsByKey = remember(rows) { rows.associateBy { it.rowId } }
     LaunchedEffect(listState, rowsByKey) {
-        snapshotFlow { listState.layoutInfo.visibleItemsInfo.map { it.key } }.collect { visibleKeys ->
-            visibleKeys.asReversed().firstNotNullOfOrNull { key ->
-                (rowsByKey[key] as? ChatTimelineRow.Bubble)?.content?.id?.takeUnless { it.startsWith("client_") }
-            }?.let(onVisibleMessage)
-        }
+        snapshotFlow { listState.layoutInfo.visibleItemsInfo.map { it.key } to !listState.canScrollForward }
+            .collect { (visibleKeys, atBottom) ->
+                val visibleMessages =
+                    visibleKeys.mapNotNull { key ->
+                        (rowsByKey[key] as? ChatTimelineRow.Bubble)?.content?.id?.takeUnless { it.startsWith("client_") }
+                    }
+                if (initialScrollDone) onViewport(visibleMessages.firstOrNull(), atBottom)
+                visibleMessages.lastOrNull()?.let(onVisibleMessage)
+            }
     }
     LaunchedEffect(listState) {
         snapshotFlow { !listState.canScrollForward }.collect { atBottom ->

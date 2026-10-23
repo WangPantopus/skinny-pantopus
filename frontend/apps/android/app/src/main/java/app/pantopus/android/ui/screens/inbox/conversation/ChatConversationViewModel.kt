@@ -365,6 +365,8 @@ class ChatConversationViewModel
         private var markReadJob: Job? = null
         private var isForeground = true
         private var visibleReadThroughId: String? = null
+        private var visibleTimelineAnchor: String? = null
+        private var viewingLatest = true
         private var lastReadMessageId: String? = null
         private var readReceiptJob: Job? = null
         private var connectionJob: Job? = null
@@ -448,6 +450,8 @@ class ChatConversationViewModel
                 directRoomId = null
                 activeRoomIds = emptySet()
                 visibleReadThroughId = null
+                visibleTimelineAnchor = null
+                viewingLatest = true
                 lastReadMessageId = null
                 _selectedTopicId.value = null
                 _topics.value = emptyList()
@@ -2107,6 +2111,7 @@ class ChatConversationViewModel
         fun exitSelectionMode() {
             _isSelectionMode.value = false
             _selectedMessageIds.value = emptySet()
+            if (messages.size > MAX_TIMELINE_MESSAGES) rebuild()
         }
 
         /**
@@ -2168,6 +2173,14 @@ class ChatConversationViewModel
             if (previous != null && messageOrder.compare(visible, previous) < 0) return
             visibleReadThroughId = messageId
             scheduleMarkRead()
+        }
+
+        fun observeTimelineViewport(
+            anchorId: String?,
+            atBottom: Boolean,
+        ) {
+            if (anchorId != null) visibleTimelineAnchor = anchorId
+            viewingLatest = atBottom
         }
 
         fun scheduleMarkRead() {
@@ -3485,6 +3498,7 @@ class ChatConversationViewModel
                 _state.value = ChatConversationUiState.Error(it)
                 return
             }
+            boundTimelineWindow()
             if (contextMessageId == null && historyCopyContext == historyContext()) {
                 // In the server's shape (no cursor without older messages, its room list), so unchanged is equal.
                 val page = historyPage
@@ -3608,6 +3622,30 @@ class ChatConversationViewModel
             }
             _state.value = ChatConversationUiState.Loaded(rows)
             resolveScrollTarget(rows)
+        }
+
+        /** Keep scrolling and live projection bounded without discarding the reader's visible message. */
+        private fun boundTimelineWindow() {
+            if (messages.size <= MAX_TIMELINE_MESSAGES || mode is ChatThreadMode.Ai || _isSelectionMode.value) return
+            val anchorIndex = messages.indexOfFirst { it.id == visibleTimelineAnchor }
+            val start =
+                if (viewingLatest || anchorIndex < 0) {
+                    messages.size - MAX_TIMELINE_MESSAGES
+                } else {
+                    (anchorIndex - MAX_TIMELINE_MESSAGES / 2).coerceIn(0, messages.size - MAX_TIMELINE_MESSAGES)
+                }
+            val end = start + MAX_TIMELINE_MESSAGES
+            if (end < messages.size) {
+                // This is now a historical window. The existing Latest messages control returns to the live tail.
+                contextMessageId = visibleTimelineAnchor ?: messages[start].id
+                contextHasNewer = true
+                _showLatestMessages.value = true
+            }
+            messages = messages.subList(start, end).toMutableList()
+            if (start > 0) {
+                hasMore = true
+                oldestCursor = paginationCursor(messages.firstOrNull())
+            }
         }
 
         /**
@@ -4103,3 +4141,4 @@ private fun <T> NetworkResult<T>.orThrow(): T =
 
 private const val MAX_CHANGE_PAGES = 100
 private const val MAX_TOMBSTONES = 2000
+private const val MAX_TIMELINE_MESSAGES = 500
