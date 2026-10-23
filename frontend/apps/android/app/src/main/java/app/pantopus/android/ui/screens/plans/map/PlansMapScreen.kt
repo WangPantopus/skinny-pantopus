@@ -40,7 +40,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -90,6 +89,7 @@ import app.pantopus.android.ui.screens.plans.PlansGateViewModel
 import app.pantopus.android.ui.screens.plans.components.PlanPinBadge
 import app.pantopus.android.ui.screens.plans.components.PlanScopeChip
 import app.pantopus.android.ui.screens.plans.components.PlanSheet
+import app.pantopus.android.ui.screens.plans.components.PlanSheetState
 import app.pantopus.android.ui.screens.plans.components.PlanSheetStop
 import app.pantopus.android.ui.screens.plans.components.PlanSwatch
 import app.pantopus.android.ui.screens.plans.components.aboveSheet
@@ -166,7 +166,8 @@ fun PlansMapScreen(
     fun askLocation() = permission.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
 
     var stop by rememberSaveable { mutableStateOf(PlanSheetStop.Peek) }
-    var sheetHeight by remember { mutableFloatStateOf(0f) }
+    // The sheet's live position: the Host button follows it in layout, so a drag frame recomposes nothing here.
+    val sheet = remember { PlanSheetState() }
     var recenter by remember { mutableIntStateOf(0) }
     var zoomOutMiles by remember { mutableIntStateOf(0) }
     // The area pill and the chips cover the top of the map: the map keeps its center below them.
@@ -175,9 +176,15 @@ fun PlansMapScreen(
         if (state.selectedId != null) viewModel.select(null) else stop = PlanSheetStop.Peek
     }
     LaunchedEffect(state.selectedId) { if (state.selectedId != null) stop = PlanSheetStop.Half }
-    // The no-location (F5), empty (F4) and posted (H8) sheets rest at their own middle height.
-    val restsHalf = state.locationStatus == PlansLocationStatus.Missing || state.isEmpty || state.postedId != null
+    // The no-location (F5) and posted (H8) sheets rest at their own middle height. "Nothing planned yet" (F4) opens
+    // low like the list, its title and suggestion over the map (founder, 2026-10-23: the map leads).
+    val restsHalf = state.locationStatus == PlansLocationStatus.Missing || state.postedId != null
     LaunchedEffect(restsHalf) { stop = if (restsHalf) PlanSheetStop.Half else PlanSheetStop.Peek }
+    // The map keeps its center above the sheet where the sheet rests for the map: the card or message in the middle,
+    // otherwise the lowest stop. Raising the list doesn't move the map under it.
+    val mapStop = if (restsHalf || state.selectedId != null) PlanSheetStop.Half else PlanSheetStop.Peek
+    val mapBottomPx = sheet.tops?.visible(mapStop) ?: 0f
+    val fullTopPx = if (chromeHeight > 0) chromeHeight + with(LocalDensity.current) { Spacing.s2.toPx() } else 0f
 
     Box(modifier = Modifier.fillMaxSize().testTag("plansMap")) {
         PlansMap(
@@ -185,14 +192,14 @@ fun PlansMapScreen(
             recenter = recenter,
             zoomOutMiles = zoomOutMiles,
             onZoomedOut = { zoomOutMiles = 0 },
-            sheetHeightPx = sheetHeight,
+            bottomPaddingPx = mapBottomPx,
             topPaddingPx = chromeHeight,
             reduceMotion = reduceMotion,
             onViewport = viewModel::setViewport,
             onPin = { viewModel.select(it) },
         )
-        // The full list (F2) covers the map: its controls go, for TalkBack too.
-        if (state.postedId == null && stop != PlanSheetStop.Full) {
+        // The controls stay at every stop: the sheet pulled all the way up stops under them (F2).
+        if (state.postedId == null) {
             PlansTopChrome(
                 offline = !online,
                 state = state,
@@ -224,14 +231,15 @@ fun PlansMapScreen(
                     Modifier
                         .align(Alignment.BottomEnd)
                         .padding(end = Spacing.s4)
-                        .aboveSheet(sheetHeight, with(LocalDensity.current) { 18.dp.toPx() }),
+                        .aboveSheet(sheet, with(LocalDensity.current) { 18.dp.toPx() }),
             )
         }
         PlansSheetHost(
             state = state,
             stop = stop,
             onStop = { stop = it },
-            onHeight = { sheetHeight = it },
+            sheet = sheet,
+            fullTopPx = fullTopPx,
             reduceMotion = reduceMotion,
             viewModel = viewModel,
             actions = actions,
@@ -246,7 +254,8 @@ private fun PlansSheetHost(
     state: PlansMapUiState,
     stop: PlanSheetStop,
     onStop: (PlanSheetStop) -> Unit,
-    onHeight: (Float) -> Unit,
+    sheet: PlanSheetState,
+    fullTopPx: Float,
     reduceMotion: Boolean,
     viewModel: PlansMapViewModel,
     actions: PlansMapActions,
@@ -255,24 +264,18 @@ private fun PlansSheetHost(
 ) {
     val selected = state.selected
     val context = LocalContext.current
-    val half =
-        when {
-            state.postedId != null -> 0.55f
-            state.locationStatus == PlansLocationStatus.Missing -> 0.56f
-            state.selectedId != null -> 0.5f
-            state.isEmpty -> 0.6f
-            else -> PlanSheetStop.Half.fraction
-        }
-    // The plan card's own height: on a small screen the middle stop grows so its buttons show.
-    var cardPx by remember(state.selectedId) { mutableFloatStateOf(0f) }
-    val showsCard = state.postedId == null && state.locationStatus != PlansLocationStatus.Missing && selected != null
+    val missing = state.locationStatus == PlansLocationStatus.Missing
     PlanSheet(
         stop = stop,
         onStop = onStop,
-        halfFraction = half,
-        halfContentPx = if (showsCard && state.selectedId != null) cardPx else 0f,
+        state = sheet,
+        fullTopPx = fullTopPx,
+        // A plan's card (F3), "Nothing planned yet" (F4), the location question (F5) and "Your plan is on the map"
+        // (H8) take their own height in the middle; the list about half.
+        fits = state.postedId != null || missing || state.selectedId != null || state.isEmpty,
+        // The location question and the posted plan hold buttons: they never go below the middle.
+        lowest = if (state.postedId != null || missing) PlanSheetStop.Half else PlanSheetStop.Peek,
         reduceMotion = reduceMotion,
-        onHeight = onHeight,
         modifier = Modifier.fillMaxSize(),
     ) { current ->
         when {
@@ -299,7 +302,6 @@ private fun PlansSheetHost(
                     plan = selected,
                     onClose = { viewModel.select(null) },
                     onDetails = { actions.onOpenPlan(selected.id) },
-                    onContentHeight = { cardPx = it },
                     onPrimary = {
                         if (mainAction(selected)?.asks == true) actions.onAsk(selected.id) else actions.onOpenPlan(selected.id)
                     },
@@ -328,7 +330,6 @@ private fun PlansSheetHost(
                     onOpenPulse = actions.onOpenPulse,
                     onOpenConnections = actions.onOpenConnections,
                     onRetry = viewModel::refresh,
-                    onAskPantopus = actions.onAskPantopus?.let { ask -> { ask(AIScreenContext.plans()) } },
                 )
         }
     }
@@ -342,7 +343,7 @@ private fun PlansMap(
     recenter: Int,
     zoomOutMiles: Int,
     onZoomedOut: () -> Unit,
-    sheetHeightPx: Float,
+    bottomPaddingPx: Float,
     topPaddingPx: Int,
     reduceMotion: Boolean,
     onViewport: (Double, Double, Double, Double) -> Unit,
@@ -369,16 +370,6 @@ private fun PlansMap(
             val point = map.projection.toScreenLocation(now.target)
             if (point != liveTargetPoint) liveTargetPoint = point
             delay(CAMERA_POLL_MS)
-        }
-    }
-    // The map keeps its center above the sheet, but only where the sheet comes to rest: following every frame of a
-    // drag would slide the whole map under the person's finger.
-    val currentSheet by rememberUpdatedState(sheetHeightPx)
-    var restingSheetPx by remember { mutableFloatStateOf(sheetHeightPx) }
-    LaunchedEffect(Unit) {
-        snapshotFlow { currentSheet }.collectLatest { height ->
-            delay(SHEET_REST_MS)
-            restingSheetPx = height
         }
     }
     val viewport by rememberUpdatedState(onViewport)
@@ -490,7 +481,8 @@ private fun PlansMap(
         remember {
             MapUiSettings(myLocationButtonEnabled = false, zoomControlsEnabled = false, compassEnabled = false, mapToolbarEnabled = false)
         }
-    val bottomPadding = with(density) { restingSheetPx.toDp() }
+    // Where the sheet rests for the map (never a drag frame: that would slide the whole map under the finger).
+    val bottomPadding = with(density) { bottomPaddingPx.toDp() }
     val topPadding = with(density) { topPaddingPx.toDp() }
     val dim = state.locationStatus == PlansLocationStatus.Missing || state.isEmpty
     Box(modifier = Modifier.fillMaxSize()) {
@@ -561,7 +553,6 @@ private const val SELECT_MS = 350
 private const val CLUSTER_MS = 400
 private const val ANIMATE_GRACE_MS = 400L
 private const val CAMERA_POLL_MS = 120L
-private const val SHEET_REST_MS = 150L
 private const val ZOOM_OUT_MS = 500
 private const val RECENTER_MS = 400
 

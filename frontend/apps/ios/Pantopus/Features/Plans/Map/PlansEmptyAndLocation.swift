@@ -15,7 +15,7 @@ struct PlansEmptyCard: View {
     @State private var flags = PlansFlags.shared
 
     var body: some View {
-        ScrollView {
+        PlansSheetScroll {
             VStack(alignment: .leading, spacing: Spacing.s3) {
                 VStack(alignment: .leading, spacing: Spacing.s1) {
                     Text("Nothing planned yet")
@@ -27,7 +27,8 @@ struct PlansEmptyCard: View {
                         .foregroundStyle(Theme.Color.appTextSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                watchNudge
+                // The lowest stop shows down to here: the title and the suggestion over the map.
+                watchNudge.plansSheetPeekEnd(.empty)
                 Text("Or start something else")
                     .planFont(.small)
                     .foregroundStyle(Theme.Color.appTextSecondary)
@@ -58,8 +59,9 @@ struct PlansEmptyCard: View {
                 .accessibilityIdentifier("plansInviteNeighbor")
             }
             .padding(.bottom, Spacing.s4)
+            // One drag up shows all of it: the middle stop fits the whole message.
+            .plansSheetFit(.empty)
         }
-        .scrollIndicators(.hidden)
         .accessibilityIdentifier("plansEmpty")
     }
 
@@ -123,7 +125,7 @@ struct PlansLocationCard: View {
     @State private var isAsking = false
 
     var body: some View {
-        ScrollView {
+        PlansSheetScroll {
             VStack(alignment: .leading, spacing: Spacing.s4) {
                 RoundedRectangle(cornerRadius: 15, style: .continuous)
                     .fill(Theme.Color.primary100)
@@ -178,8 +180,9 @@ struct PlansLocationCard: View {
             }
             .padding(.top, Spacing.s1)
             .padding(.bottom, Spacing.s4)
+            // The question and its buttons all show at the middle stop when they fit.
+            .plansSheetFit(.location)
         }
-        .scrollIndicators(.hidden)
         .accessibilityIdentifier("plansNeedsLocation")
     }
 }

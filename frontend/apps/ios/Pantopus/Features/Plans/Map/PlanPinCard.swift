@@ -31,7 +31,7 @@ struct PlanPinCard: View {
     }
 
     private func content(_ card: PlanCardDTO) -> some View {
-        ScrollView {
+        PlansSheetScroll {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     PlanTypeTag(kind: card.kind)
@@ -52,6 +52,8 @@ struct PlanPinCard: View {
                     .monospacedDigit()
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .fixedSize(horizontal: false, vertical: true)
+                    // Pulled down, the card keeps its type, title, when and where over the map.
+                    .plansSheetPeekEnd(.card(planId))
                 PlanHostRow(host: card.host, kind: card.kind)
                 // Someone already in (or hosting) doesn't need to hear how to get in.
                 PlanSpotsBlock(
@@ -63,9 +65,9 @@ struct PlanPinCard: View {
                     .padding(.top, 2)
             }
             .padding(.bottom, Spacing.s4)
-            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { viewModel.cardHeight = $0 }
+            // The card's sheet takes its height in the middle, up to a little over half (board F3).
+            .plansSheetFit(.card(planId))
         }
-        .scrollIndicators(.hidden)
     }
 
     private var closeButton: some View {
@@ -107,6 +109,10 @@ struct PlanPinCard: View {
             Shimmer(width: 220, height: 14, cornerRadius: Radii.xs)
             Shimmer(width: nil, height: 40, cornerRadius: Radii.lg)
         }
+        .padding(.bottom, Spacing.s4)
+        .plansSheetPeekEnd(.card(planId))
+        .plansSheetFit(.card(planId))
+        .plansSheetDragArea()
         .accessibilityElement()
         .accessibilityLabel("Loading the plan")
     }
@@ -124,6 +130,10 @@ struct PlanPinCard: View {
                 .planFont(.small)
                 .foregroundStyle(Theme.Color.appTextSecondary)
         }
+        .padding(.bottom, Spacing.s4)
+        .plansSheetPeekEnd(.card(planId))
+        .plansSheetFit(.card(planId))
+        .plansSheetDragArea()
     }
 }
 

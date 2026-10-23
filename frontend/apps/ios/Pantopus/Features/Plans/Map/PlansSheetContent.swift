@@ -71,12 +71,16 @@ struct PlansSheetContent: View {
                 PlanRow(model: rowModel(card).withTrailing(.chevron), showsDivider: index > 0) {
                     actions.openPlan(card, card.id, .view)
                 }
+                // The lowest stop shows the title and the soonest plan over the map;
+                // the next one waits just below it, one drag away.
+                .plansSheetPeekEnd(.list, isOn: index == 0)
             }
             if first.isEmpty {
                 Text("Nothing within 5 miles \(windowPhrase). Plans farther away show on the map.")
                     .planFont(.small)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .padding(.vertical, Spacing.s3)
+                    .plansSheetPeekEnd(.list)
             }
         }
         // Whole lines even when the stop is too short for them (the largest
@@ -142,6 +146,8 @@ struct PlansSheetContent: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .plansSheetPeekEnd(.status)
+        .plansSheetDragArea()
         .accessibilityElement()
         .accessibilityLabel("Loading plans")
     }
@@ -159,6 +165,8 @@ struct PlansSheetContent: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.top, Spacing.s3)
+        .plansSheetPeekEnd(.status)
+        .plansSheetDragArea()
     }
 }
 
@@ -177,8 +185,9 @@ struct PlansListSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
-            ScrollView {
+            // The header never scrolls: a drag on it moves the sheet at every stop.
+            header.plansSheetDragArea()
+            PlansSheetScroll {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     if !viewModel.visibleYourPlans.isEmpty {
                         section("Your plans", cards: viewModel.visibleYourPlans, mine: true)
@@ -198,8 +207,6 @@ struct PlansListSheet: View {
                 }
                 .padding(.bottom, Spacing.s6)
             }
-            .refreshable { await viewModel.refresh() }
-            .scrollIndicators(.hidden)
         }
     }
 
@@ -215,13 +222,7 @@ struct PlansListSheet: View {
                     .foregroundStyle(Theme.Color.appTextSecondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            if let ask = actions.ask {
-                AskPantopusButton(accessibilityIdentifier: "plansListAskPantopus", action: ask) {
-                    AskPantopusGlyph()
-                        .frame(width: 44, height: 44)
-                        .background(Circle().fill(Theme.Color.appSurfaceSunken))
-                }
-            }
+            // Ask is the chrome's sparkle just above: the list stops under it now.
             Button { onStop(.peek) } label: {
                 Icon(.map, size: 20, color: Theme.Color.appText)
                     .frame(width: 44, height: 44)
