@@ -2543,51 +2543,39 @@ private struct ChatBroadcastReferenceCard: View {
 }
 
 /// A15.2 `.link-bubble` preview card — white surface, 1px hairline,
-/// 12pt radius, optional image strip, host overline + title +
-/// description. Tap opens the URL in the system browser.
+/// 12pt radius, site overline + title + description. Text only: the
+/// page's own image would load from a host the sender picked, showing it
+/// the recipient's IP address. Tap opens the URL in the system browser.
 private struct ChatLinkPreviewCard: View {
     let metadata: LinkPreviewMetadata
     @Environment(\.openURL) private var openURL
 
     var body: some View {
         Button { openURL(metadata.url) } label: {
-            VStack(alignment: .leading, spacing: Spacing.s0) {
-                if let imageURL = metadata.imageURL {
-                    CachedAsyncImage(url: imageURL) { phase in
-                        switch phase {
-                        case let .success(image):
-                            image.resizable().scaledToFill()
-                        default:
-                            Theme.Color.appSurfaceSunken
-                        }
-                    }
-                    .frame(height: 88)
-                    .frame(maxWidth: .infinity)
-                    .clipped()
-                }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(metadata.host)
-                        .font(.system(size: 9.5, weight: .bold))
-                        .tracking(0.4)
-                        .textCase(.uppercase)
-                        .foregroundStyle(Theme.Color.appTextMuted)
-                        .lineLimit(1)
-                    Text(metadata.title)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(metadata.site)
+                    .font(.system(size: 9.5, weight: .bold))
+                    .tracking(0.4)
+                    .textCase(.uppercase)
+                    .foregroundStyle(Theme.Color.appTextMuted)
+                    .lineLimit(1)
+                if let title = metadata.title {
+                    Text(title)
                         .font(.system(size: 12.5, weight: .bold))
                         .foregroundStyle(Theme.Color.appText)
                         .multilineTextAlignment(.leading)
                         .lineLimit(2)
-                    if let description = metadata.description {
-                        Text(description)
-                            .font(.system(size: 11))
-                            .foregroundStyle(Theme.Color.appTextSecondary)
-                            .multilineTextAlignment(.leading)
-                            .lineLimit(2)
-                    }
                 }
-                .padding(Spacing.s3)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                if let description = metadata.description {
+                    Text(description)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                        .multilineTextAlignment(.leading)
+                        .lineLimit(2)
+                }
             }
+            .padding(Spacing.s3)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(Theme.Color.appSurface)
             .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
             .overlay(
@@ -2596,7 +2584,7 @@ private struct ChatLinkPreviewCard: View {
             )
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Link preview: \(metadata.title)")
+        .accessibilityLabel("Link preview: \(metadata.title ?? metadata.description ?? metadata.site)")
         .accessibilityIdentifier("chatLinkPreview_\(metadata.url.absoluteString)")
     }
 }

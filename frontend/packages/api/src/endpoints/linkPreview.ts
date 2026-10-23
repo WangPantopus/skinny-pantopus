@@ -5,10 +5,10 @@
 
 import { get } from '../client';
 
+/** Text only: the linked page's image is never loaded (see backend/routes/linkPreview.js). */
 export interface LinkPreviewData {
   title: string | null;
   description: string | null;
-  image: string | null;
   siteName: string | null;
   url: string;
 }
@@ -18,5 +18,6 @@ export interface LinkPreviewData {
  * Results are cached server-side for 1 hour.
  */
 export function getLinkPreview(url: string): Promise<LinkPreviewData> {
-  return get(`/link-preview?url=${encodeURIComponent(url)}`);
+  // A link that can't preview is routine, not an error worth a dev overlay.
+  return get(`/api/link-preview?url=${encodeURIComponent(url)}`, undefined, { suppressDevErrorOverlay: true });
 }
