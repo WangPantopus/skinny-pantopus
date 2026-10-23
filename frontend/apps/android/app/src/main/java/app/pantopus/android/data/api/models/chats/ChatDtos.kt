@@ -101,6 +101,10 @@ data class UnifiedConversationsResponse(
     val nextCursor: String? = null,
 )
 
+/** The authoritative unread count for the room or person scope acknowledged by the read request. */
+@JsonClass(generateAdapter = true)
+data class ChatReadResponse(val unreadCount: Int? = null)
+
 @JsonClass(generateAdapter = true)
 data class ChatNotificationPreferencesBody(
     val notificationsEnabled: Boolean,

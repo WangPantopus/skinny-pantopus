@@ -5,6 +5,7 @@ import app.pantopus.android.data.api.models.chats.ChatChangesResponse
 import app.pantopus.android.data.api.models.chats.ChatMessagesResponse
 import app.pantopus.android.data.api.models.chats.ChatNotificationPreferencesBody
 import app.pantopus.android.data.api.models.chats.ChatNotificationPreferencesResponse
+import app.pantopus.android.data.api.models.chats.ChatReadResponse
 import app.pantopus.android.data.api.models.chats.ChatRoomDetailResponse
 import app.pantopus.android.data.api.models.chats.ChatSearchResponse
 import app.pantopus.android.data.api.models.chats.ChatStatsResponse
@@ -231,14 +232,14 @@ interface ChatApi {
     suspend fun markRoomRead(
         @Path("roomId") roomId: String,
         @Body body: Map<String, String> = emptyMap(),
-    ): Unit
+    ): ChatReadResponse
 
     /** `POST /api/chat/conversations/:otherUserId/read` — route `chats.js:1265`. */
     @POST("api/chat/conversations/{otherUserId}/read")
     suspend fun markConversationRead(
         @Path("otherUserId") otherUserId: String,
         @Body body: Map<String, @JvmSuppressWildcards Any> = emptyMap(),
-    ): Unit
+    ): ChatReadResponse
 
     /** `GET /api/chat/conversations/:otherUserId/topics` — route `chats.js:2466`. */
     @GET("api/chat/conversations/{otherUserId}/topics")

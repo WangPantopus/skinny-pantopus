@@ -3343,6 +3343,7 @@ class ChatConversationViewModel
             // when the broadcast echoes a message we already hold.
             val id = decoded?.id ?: json.optStringValue("id")
             if (id != null && messages.any { it.id == id }) return
+            repo.inboxChanged()
             if (decoded != null) {
                 // A topic-filtered person view only shows that topic's
                 // messages — the old filtered refetch excluded the rest,

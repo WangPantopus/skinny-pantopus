@@ -440,6 +440,7 @@ class ChatListViewModel
             val otherUserId = json.optString("other_user_id").takeIf { it.isNotEmpty() }
             val roomId = json.optString("room_id").takeIf { it.isNotEmpty() }
             val targetId = otherUserId ?: roomId ?: return
+            repo.inboxChanged()
             val index = allRows.indexOfFirst { it.id == targetId }
             if (index < 0) {
                 // A conversation the list doesn't have yet: read it now.

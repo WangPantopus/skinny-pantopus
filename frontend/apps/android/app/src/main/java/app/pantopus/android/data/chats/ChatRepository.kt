@@ -5,6 +5,7 @@ import app.pantopus.android.data.api.models.chats.ChatChangesResponse
 import app.pantopus.android.data.api.models.chats.ChatMessagesResponse
 import app.pantopus.android.data.api.models.chats.ChatNotificationPreferencesBody
 import app.pantopus.android.data.api.models.chats.ChatNotificationPreferencesResponse
+import app.pantopus.android.data.api.models.chats.ChatReadResponse
 import app.pantopus.android.data.api.models.chats.ChatRoomDetailResponse
 import app.pantopus.android.data.api.models.chats.ChatSearchResponse
 import app.pantopus.android.data.api.models.chats.ChatStatsResponse
@@ -18,6 +19,7 @@ import app.pantopus.android.data.api.models.chats.ReactToChatMessageBody
 import app.pantopus.android.data.api.models.chats.ReactToChatMessageResponse
 import app.pantopus.android.data.api.models.chats.SendChatMessageBody
 import app.pantopus.android.data.api.models.chats.SendChatMessageResponse
+import app.pantopus.android.data.api.models.chats.UnifiedConversationDto
 import app.pantopus.android.data.api.models.chats.UnifiedConversationsResponse
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.conditionalApiCall
@@ -77,8 +79,8 @@ class ChatRepository
         /** Marks the Messages list out of date (a new conversation arrived, the live connection came back). */
         fun conversationsChanged() = store.markStale(StoreTopics.CHATS)
 
-        /** A remote mute change only affects the list; it must not refetch message history. */
-        fun conversationPreferencesChanged() = store.markStale(StoreTopics.CHAT_LIST)
+        /** A live inbox change invalidates saved previews/counts without refetching message history. */
+        fun inboxChanged() = store.markStale(StoreTopics.CHAT_LIST)
 
         /** Successful mutations revalidate the inbox; replaced or deleted content also retires its saved preview. */
         private fun <T> NetworkResult<T>.chatsChanged(retainChatList: Boolean = true): NetworkResult<T> =
@@ -336,7 +338,11 @@ class ChatRepository
             asBusinessUserId: String? = null,
             throughMessageId: String? = null,
         ): NetworkResult<Unit> =
-            safeApiCall {
+            readWithInboxProjection(
+                matches = { row ->
+                    asBusinessUserId == null && (row.id == roomId || row.roomIds == listOf(roomId))
+                },
+            ) {
                 api.markRoomRead(
                     roomId,
                     buildMap {
@@ -344,14 +350,14 @@ class ChatRepository
                         throughMessageId?.let { put("throughMessageId", it) }
                     },
                 )
-            }.chatsChanged()
+            }
 
         suspend fun markConversationRead(
             otherUserId: String,
             throughMessageId: String? = null,
             throughMessageIds: Map<String, String>? = null,
         ): NetworkResult<Unit> =
-            safeApiCall {
+            readWithInboxProjection(matches = { it.otherParticipantId == otherUserId }) {
                 api.markConversationRead(
                     otherUserId,
                     buildMap {
@@ -359,7 +365,34 @@ class ChatRepository
                             ?: throughMessageId?.let { put("throughMessageId", it) }
                     },
                 )
-            }.chatsChanged()
+            }
+
+        private suspend fun readWithInboxProjection(
+            matches: (UnifiedConversationDto) -> Boolean,
+            read: suspend () -> ChatReadResponse,
+        ): NetworkResult<Unit> {
+            val update = store.chatReadUpdater(StoreKeys.conversations)
+            return when (val result = safeApiCall { read() }) {
+                is NetworkResult.Failure -> result
+                is NetworkResult.Success -> {
+                    val count = result.data.unreadCount?.takeIf { it >= 0 }
+                    update { copy ->
+                        // A scoped count cannot establish global totals or mixed-muted unread counts.
+                        if (count == null) {
+                            copy
+                        } else {
+                            copy.copy(
+                                conversations =
+                                    copy.conversations.map { row ->
+                                        if (matches(row)) row.copy(totalUnread = count) else row
+                                    },
+                            )
+                        }
+                    }
+                    NetworkResult.Success(Unit)
+                }
+            }
+        }
 
         suspend fun setConversationNotifications(
             otherUserId: String,

@@ -123,7 +123,7 @@ class ChatBadgeViewModel
         private fun subscribeToSocket() {
             viewModelScope.launch {
                 socket.eventsOf("chat:preferences_changed").collect {
-                    repo.conversationPreferencesChanged()
+                    repo.inboxChanged()
                     refresh()
                 }
             }

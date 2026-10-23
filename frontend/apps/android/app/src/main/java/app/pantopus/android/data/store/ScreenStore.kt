@@ -100,6 +100,9 @@ class ScreenStore
             /** Topic marks: a reply to a read that started before one is kept but stays out of date. */
             var marks = 0L
 
+            /** Inbox message/preference changes are distinct from a read's own generic chat sync signal. */
+            var chatListRevision = 0L
+
             /** Live memory updates must not hide an access refusal from a read already in flight. */
             @Volatile
             var memoryEdits = 0L
@@ -240,7 +243,12 @@ class ScreenStore
          */
         fun markStale(topic: String) {
             synchronized(slots) {
-                slots.values.forEach { if (it.key.matches(topic)) it.markStaleLocked() }
+                slots.values.forEach {
+                    if (it.key.matches(topic)) {
+                        if (topic == StoreTopics.CHAT_LIST) it.chatListRevision++
+                        it.markStaleLocked()
+                    }
+                }
                 queueDiskMarkLocked(SavedCopies.Mark(topic = topic))
             }
             _changes.update { it + 1 }
@@ -341,6 +349,39 @@ class ScreenStore
             }
         }
 
+        /** Apply a confirmed scoped read to the existing encrypted inbox without overwriting a newer reply. */
+        fun <T : Any> chatReadUpdater(key: StoreKey<T>): ((T) -> T) -> Unit {
+            require(key.kind == StoreKind.MESSAGES_LIST)
+            val account = accountId() ?: return {}
+            return synchronized(slots) {
+                val slot = slotLocked(key, account)
+                val ticket = Ticket(generation, identity(account), slot.edits, slot.marks, slot.memoryEdits)
+                val refusals = slot.refusals
+                val inboxRevision = slot.chatListRevision
+                val before = slot.state.value.data
+                val update: ((T) -> T) -> Unit = { project ->
+                    synchronized(slots) live@{
+                        val active = ticket.generation == generation && ticket.identity == identity()
+                        if (!active || slots["$account|${key.id}"] !== slot || refusals != slot.refusals) return@live
+                        val unchanged =
+                            ticket.edits == slot.edits && ticket.memoryEdits == slot.memoryEdits &&
+                                inboxRevision == slot.chatListRevision && before === slot.state.value.data
+                        markEdited(StoreTopics.CHAT_LIST, retainChatList = true)
+                        if (unchanged && before != null) {
+                            @Suppress("UNCHECKED_CAST")
+                            val data = project(before as T)
+                            slot.memoryEdits++
+                            val now = System.currentTimeMillis()
+                            slot.state.value = slot.state.value.copy(data = data, fetchedAt = now)
+                            writeSaved(data, slot, now, etag = null)
+                        }
+                        markStale(StoreTopics.CHATS)
+                    }
+                }
+                update
+            }
+        }
+
         /** A list item tapped now can seed a detail's first frame. It stays in the same bounded, wiped memory store. */
         fun <T : Any> seed(
             key: StoreKey<T>,
@@ -388,7 +429,12 @@ class ScreenStore
         /** Marks every entry of [kinds] out of date, e.g. the household ones after a socket reconnect. */
         fun markStale(kinds: Set<StoreKind>) {
             synchronized(slots) {
-                slots.values.forEach { if (it.key.kind in kinds) it.markStaleLocked() }
+                slots.values.forEach {
+                    if (it.key.kind in kinds) {
+                        if (it.key.kind == StoreKind.MESSAGES_LIST) it.chatListRevision++
+                        it.markStaleLocked()
+                    }
+                }
                 queueDiskMarkLocked(SavedCopies.Mark(kinds = kinds))
             }
             _changes.update { it + 1 }
