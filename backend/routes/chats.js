@@ -365,9 +365,9 @@ function getVisibleMessagePreview(message) {
 // outside the room's active members hears it.
 
 // The sender's unread count on their row for `otherUserId`: every open direct and
-// task room the two share, as the unified list adds them up, without the room
-// just written to (the sender's own message is never unread to them).
-async function personRowUnread(userId, otherUserId, sentRoomId) {
+// task room the two share, including earlier unseen incoming messages in the
+// room just written to. Sending does not mark that room read.
+async function personRowUnread(userId, otherUserId) {
   const { data: mine, error } = await supabaseAdmin
     .from('ChatParticipant')
     .select('room_id, unread_count, room:room_id!inner(id, type, gig_id)')
@@ -375,7 +375,7 @@ async function personRowUnread(userId, otherUserId, sentRoomId) {
     .eq('is_active', true)
     .in('room.type', ['direct', 'gig']);
   if (error || !Array.isArray(mine)) throw new Error(error?.message || 'rooms unavailable');
-  const candidates = mine.filter((row) => String(row.room_id) !== String(sentRoomId));
+  const candidates = mine;
   if (candidates.length === 0) return 0;
   const [{ data: shared, error: sharedError }, closed] = await Promise.all([
     supabaseAdmin
@@ -512,10 +512,10 @@ async function emitNewMessage(io, { room, message, actorUserId, identityUserId }
   }
   let own = base;
   if (!personChat) {
-    own = { ...base, unread_for: 0 };
+    own = { ...base, unread_for: Number(members.find((row) => String(row.user_id) === actor)?.unread_count) || 0 };
   } else if (identity === actor && recipients.size === 1) {
     const [counterpart] = recipients;
-    const unread = await personRowUnread(actor, counterpart, room.id).catch(() => null);
+    const unread = await personRowUnread(actor, counterpart).catch(() => null);
     if (unread !== null) own = { ...base, other_user_id: counterpart, unread_for: unread };
   }
   emitTo(actor, own);
@@ -534,7 +534,7 @@ async function emitNewMessage(io, { room, message, actorUserId, identityUserId }
 // A message just written to `room` (with its `sender`) goes out the same way
 // wherever it was written: every member hears it (message:new, without the
 // internal actor_user_id), the room moves up the lists, the sender's own row
-// stays read, and the other members get a badge update and a device push.
+// retains its read boundary, and the other members get a badge update and a device push.
 // POST /messages and an organizer's Support Train reminder
 // (routes/supportTrains.js) both deliver through here. `people` names the
 // sender (loadChatPeople); without it they're looked up here.
