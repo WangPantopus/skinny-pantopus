@@ -44,8 +44,7 @@ final class Observability {
             options.attachScreenshot = false
             options.sendDefaultPii = false
             options.beforeSend = { event in
-                // A link preview the server couldn't load is routine, and its
-                // failed-request event would carry the chat link.
+                // A link the server couldn't preview answers 502, which is routine.
                 if Self.isLinkPreview(event.request?.url) { return nil }
                 Self.scrubPII(from: event)
                 return event
@@ -55,7 +54,7 @@ final class Observability {
                 return breadcrumb
             }
             options.beforeSendSpan = { span in
-                if Self.isLinkPreview(span.data["url"] as? String) { span.removeData(key: "http.query") }
+                Self.urlQueryKeys.forEach { span.removeData(key: $0) }
                 return span
             }
         }
@@ -86,13 +85,23 @@ final class Observability {
 
     private nonisolated static let redacted = "[redacted]"
 
-    /// `GET /api/link-preview?url=` carries a chat message's link in its
-    /// query string, which never leaves the device.
+    /// Sentry's keys for a request URL's query string and fragment (HTTP
+    /// breadcrumbs and spans). Queries carry typed addresses, coordinates,
+    /// search terms and signed-URL tokens, so only the path leaves the device.
+    private nonisolated static let urlQueryKeys = ["http.query", "http.fragment"]
+
+    /// `GET /api/link-preview?url=` answers 502 for a link that won't load.
     private nonisolated static func isLinkPreview(_ url: String?) -> Bool {
         url?.split(separator: "?").first?.hasSuffix("/api/link-preview") == true
     }
 
     private nonisolated static func scrubPII(from event: Event) {
+        // A failed-request event keeps the method, path and status: no query,
+        // fragment or request headers. The SDK drops only a short list of
+        // headers, so the device id, DPoP proof and step-up token would leave.
+        event.request?.queryString = nil
+        event.request?.fragment = nil
+        event.request?.headers = nil
         if var extra = event.extra {
             scrubInPlace(&extra)
             event.extra = extra
@@ -104,7 +113,9 @@ final class Observability {
 
     private nonisolated static func scrubPII(from breadcrumb: Breadcrumb) {
         if var data = breadcrumb.data {
-            if isLinkPreview(data["url"] as? String) { data["http.query"] = nil }
+            for key in urlQueryKeys {
+                data[key] = nil
+            }
             scrubInPlace(&data)
             breadcrumb.data = data
         }
