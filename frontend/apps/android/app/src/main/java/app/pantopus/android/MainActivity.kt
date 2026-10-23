@@ -235,7 +235,7 @@ class MainActivity : FragmentActivity() {
             OAuthSessionStore.deliver(uri)
             return
         }
-        if (forwardWebOnlyLink(intent, uri) || forwardReminderAction(intent, uri) || forwardAssistantNudge(intent, uri)) return
+        if (forwardWebOnlyLink(intent, uri) || forwardReminderAction(intent, uri) || forwardAccountScopedPush(intent, uri)) return
         DeepLinkRouter.handle(uri)
     }
 
@@ -252,8 +252,8 @@ class MainActivity : FragmentActivity() {
         return true
     }
 
-    /** A brief or nudge opens only for the account it was sent to; signed out, it waits for that account's sign-in. */
-    private fun forwardAssistantNudge(
+    /** A chat, brief or nudge opens only for its recipient; signed out, it waits for that account's sign-in. */
+    private fun forwardAccountScopedPush(
         intent: Intent,
         uri: Uri,
     ): Boolean {
