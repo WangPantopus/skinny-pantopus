@@ -15,8 +15,10 @@ const { escapeIlike } = require('../utils/escapeIlike');
 // verification state. A pending claim (anyone can file one on any Home) is not a household member.
 const { getAccessibleHomeIds, MAIL_TRUSTED_VERIFICATION_STATUSES } = require('../utils/homeMailAccess');
 const { unpublishedBusinessIds, isSearchable, isScopedBlocked, isConnected } = require('../utils/visibilityPolicy');
-const { localProfileVisibilityFor } = require('../utils/identityProfiles');
+const { localProfileVisibilityFor, localDisplayNames } = require('../utils/identityProfiles');
 const { hasBlocked } = require('../services/blockService');
+// Other people are named the way neighbors see them: by their Local Profile (a business by the business).
+const { loadChatPeople } = require('../services/chatPeople');
 
 // ─── Helpers ───────────────────────────────────────────────
 
@@ -307,7 +309,16 @@ router.get('/recipients', verifyToken, async (req, res) => {
 
     // Sort by rank, limit to 10
     results.sort((a, b) => a._rank - b._rank);
-    const recipients = results.slice(0, 10).map(({ _rank, ...rest }) => rest);
+    // Each person by their Local Profile's name and handle, as neighbors see them (a business, or anyone without one,
+    // by the account); someone who can't be read keeps the account row's name.
+    const shown = results.slice(0, 10);
+    const people = await loadChatPeople(shown.map((result) => result.userId));
+    const recipients = shown.map(({ _rank, ...rest }) => {
+      const person = people.get(String(rest.userId));
+      if (!person) return rest;
+      const { displayName, handle } = person;
+      return { ...rest, name: displayName, username: handle || null };
+    });
 
     res.json({ recipients });
   } catch (err) {
@@ -396,9 +407,12 @@ router.get('/home-context/:homeId', verifyToken, async (req, res) => {
       .eq('is_active', true)
       .in('verification_status', MAIL_TRUSTED_VERIFICATION_STATUSES);
 
+    // Members by the name they show their household (their Local Profile's); no name, or a failed read, reads
+    // "Household member", as on the Home page (services/homeDetailService.js).
+    const names = await localDisplayNames((occupants || []).map((o) => o.User.id)).catch(() => new Map());
     const members = (occupants || []).map((o) => ({
       userId: o.User.id,
-      name: o.User.name || o.User.username,
+      name: names.get(String(o.User.id)) || 'Household member',
       role: o.role || 'member',
     }));
 

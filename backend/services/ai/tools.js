@@ -11,6 +11,7 @@ const supabaseAdmin = require('../../config/supabaseAdmin');
 const noaa = require('../external/noaa');
 const logger = require('../../utils/logger');
 const { getAuthorizedMail } = require('./mailAccess');
+const { nameMailSender } = require('../../utils/mailSenderView');
 const { listEffectivelyOpenSlots } = require('../supportTrainSlotAvailability');
 const { resolveLocation } = require('../context/locationResolver');
 const { escapeIlike } = require('../../utils/escapeIlike');
@@ -772,11 +773,12 @@ async function _primaryPlace(userId) {
 
 async function _getMailItem(userId, mailItemId) {
   try {
-    const item = await getAuthorizedMail({
+    // A person who sent it is named as neighbors see them (their Local Profile).
+    const item = await nameMailSender(await getAuthorizedMail({
       mailItemId,
       userId,
-      select: 'id, subject, content, preview_text, sender_display, sender_trust, category, type, urgency, due_date, key_facts, lifecycle',
-    });
+      select: 'id, subject, content, preview_text, sender_display, sender_user_id, sender_entity_id, sender_business_name, sender_trust, category, type, urgency, due_date, key_facts, lifecycle',
+    }), userId);
 
     if (!item) {
       return { error: 'Mail item not found or access denied.' };
