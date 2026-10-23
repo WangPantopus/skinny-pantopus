@@ -61,7 +61,7 @@ public enum ChatEndpoints {
         after: String? = nil,
         asBusinessUserId: String? = nil
     ) -> Endpoint {
-        var query: [String: String] = ["limit": String(limit)]
+        var query: [String: String] = ["limit": String(limit), "sync": "true"]
         if let before { query["before"] = before }
         if let after { query["after"] = after }
         if let asBusinessUserId { query["asBusinessUserId"] = asBusinessUserId }
@@ -82,7 +82,7 @@ public enum ChatEndpoints {
         after: String? = nil,
         topicId: String? = nil
     ) -> Endpoint {
-        var query: [String: String] = ["limit": String(limit)]
+        var query: [String: String] = ["limit": String(limit), "sync": "true"]
         if let before { query["before"] = before }
         if let after { query["after"] = after }
         if let topicId { query["topicId"] = topicId }
