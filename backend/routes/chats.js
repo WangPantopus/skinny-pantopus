@@ -1377,24 +1377,7 @@ router.get('/rooms/:roomId', verifyToken, async (req, res) => {
     // Get room details
     const { data: room, error } = await supabaseAdmin
       .from('ChatRoom')
-      .select(`
-        *,
-        participants:ChatParticipant!room_id(
-          user_id,
-          role,
-          unread_count,
-          last_read_at,
-          joined_at,
-          user:user_id(
-            id,
-            username,
-            name,
-            first_name,
-            last_name,
-            profile_picture_url
-          )
-        )
-      `)
+      .select('*')
       .eq('id', roomId)
       .single();
     
@@ -1402,6 +1385,13 @@ router.get('/rooms/:roomId', verifyToken, async (req, res) => {
       if (error) logger.error('Error fetching room', { requestId: req.requestId, userId: req.user?.id, roomId, error: error.message });
       return res.status(404).json({ error: 'Room not found' });
     }
+
+    // Embedded membership reads inherit the row cap independently of the room.
+    // Preserve the existing member fields while reading every membership page.
+    const membersPage = await readChatParticipants([roomId],
+      'user_id, role, unread_count, last_read_at, joined_at, user:user_id(id, username, name, first_name, last_name, profile_picture_url)',
+      { activeOnly: false }).catch(() => { throw chatAccessUnavailable(); });
+    room.participants = membersPage.map(({ id, room_id, ...member }) => member);
 
     // The owner and the worker don't see leftover members listed in an assigned task's room.
     if (Array.isArray(room.participants) && room.participants.length > 0) {
