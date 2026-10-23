@@ -299,6 +299,7 @@ export default function FeedPage() {
       area.viewingLat ?? '', area.viewingLng ?? '', area.radiusMiles ?? '', area.showAreaPicker ? 'search' : '',
     ].join('|'),
     listScrollRef: feedScrollRef,
+    reducedMotion,
   });
   const headerElement = useRef<HTMLDivElement | null>(null);
   const quickHeaderRef = quick.headerRef;
@@ -317,13 +318,14 @@ export default function FeedPage() {
     requestAnimationFrame(() => headerElement.current?.focus({ preventScroll: true }));
   }, [showHeader]);
 
-  // Slide normally; cross-fade with Reduce Motion. Hidden, it takes no clicks.
+  // Slide normally; cross-fade with Reduce Motion. Hidden, it takes no clicks. Shown over the map,
+  // a drag on it moves it with the pointer (--pulse-header-drag) until it tucks away.
   const headerMotionClass = `pulse-header-motion duration-200 ease-out outline-none ${
     reducedMotion ? 'transition-opacity' : 'transition-transform'
   } ${quick.hidden ? '[&_*]:!pointer-events-none' : ''}`;
   const headerMotionStyle: CSSProperties = reducedMotion
     ? { opacity: quick.hidden ? 0 : 1 }
-    : { transform: quick.hidden ? 'translateY(calc(-100% - 12px))' : 'translateY(0)' };
+    : { transform: quick.hidden ? 'translateY(calc(-100% - 12px))' : 'translateY(var(--pulse-header-drag, 0px))' };
 
   const rootClassName = viewMode === 'map'
     // The map fills the content area: under the top bar, beside the sidebar, above the phone tab bar.
@@ -479,12 +481,13 @@ export default function FeedPage() {
             onUserPan={quick.mapPan}
           />
 
+          {/* Flicked up, it tucks away (usePulseQuickReturn listens on it). */}
           <div
             ref={setHeaderElement}
             data-testid="pulseHeader"
             tabIndex={-1}
             {...quick.headerFocusProps}
-            className={`absolute inset-x-0 top-0 z-[1100] pointer-events-none ${headerMotionClass}`}
+            className={`pulse-header-flick absolute inset-x-0 top-0 z-[1100] pointer-events-none ${headerMotionClass}`}
             style={headerMotionStyle}
           >
             {/* Phones: full width. Wider screens: the centred card, hanging from the top bar. */}
@@ -500,7 +503,9 @@ export default function FeedPage() {
               data-testid="pulseHeaderReveal"
               aria-label="Show the Pulse header"
               onClick={revealHeader}
-              className="absolute left-1/2 top-2 z-[1100] flex h-8 -translate-x-1/2 items-center gap-1.5 rounded-full border border-app bg-app-surface/80 px-3 text-xs font-semibold text-app shadow-md backdrop-blur-md animate-fade-in hover-bg-app"
+              // Pulled down, it brings the header back too.
+              onPointerDown={(event) => quick.onRevealPointerDown(event, revealHeader)}
+              className="absolute left-1/2 top-2 z-[1100] flex h-8 -translate-x-1/2 touch-none items-center gap-1.5 rounded-full border border-app bg-app-surface/80 px-3 text-xs font-semibold text-app shadow-md backdrop-blur-md animate-fade-in hover-bg-app"
             >
               <ChevronDown className="h-4 w-4" aria-hidden="true" />
               <span>Pulse · {mapFilterLabel(feed.surface === 'place' ? feed.filter : 'all')}</span>

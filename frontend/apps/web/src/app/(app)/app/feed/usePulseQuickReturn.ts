@@ -2,10 +2,20 @@
 
 // Quick return for the Pulse header (founder request 2026-10-22, spec §3), as in Facebook:
 // scrolling the list down, or dragging the map's content up, slides the header away; scrolling
-// back up, or a deliberate drag down, brings it back. It never hides while there is nothing to
-// scroll, while the keyboard or the area search is inside it, or on a surface that keeps it.
+// back up, or a deliberate drag down, brings it back. Over the map the header itself can be
+// flicked up out of the way, and the reveal capsule pulled down (or clicked) to bring it back.
+// It never hides while there is nothing to scroll, while the keyboard or the area search is
+// inside it, or on a surface that keeps it.
 
-import { useCallback, useEffect, useRef, useState, type FocusEvent, type RefObject } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type FocusEvent,
+  type PointerEvent as ReactPointerEvent,
+  type RefObject,
+} from 'react';
 
 /** List mode: scroll travel in one direction before the header toggles. */
 const SCROLL_HYSTERESIS_PX = 12;
@@ -16,6 +26,19 @@ const PAN_SHOW_PX = 48;
 /** Scrolls this soon after the screen opens or the view changes are the page settling (a
  *  restored scroll position, a list growing), not the reader. */
 const SETTLE_MS = 400;
+/** Map mode: a press that moves this far is a drag, not a click. */
+const DRAG_SLOP_PX = 6;
+/** A drag on the header this far up tucks it away… */
+const FLICK_HIDE_PX = 24;
+/** …and a quick flick sooner: once it has gone this far at this speed (px per ms). */
+const FLICK_MIN_PX = 10;
+const FLICK_SPEED = 0.9;
+/** Pulling the reveal capsule down this far brings the header back. */
+const REVEAL_PULL_PX = 16;
+/** The header's follow-the-finger offset (px, up is negative), read by its transform. */
+const DRAG_VAR = '--pulse-header-drag';
+/** A drag that starts in one of these is for the field: typing and selecting text. */
+const TEXT_ENTRY = 'input, textarea, select, [contenteditable]:not([contenteditable="false"])';
 
 interface Options {
   mode: 'list' | 'map';
@@ -25,6 +48,60 @@ interface Options {
   resetKey: string;
   /** The list's own scroll area; the window scrolls too. */
   listScrollRef: RefObject<HTMLElement | null>;
+  /** Reduce Motion: a flick fades the header out instead of the header following the finger. */
+  reducedMotion: boolean;
+}
+
+/** A drag that starts in a text field, or in a list that scrolls up and down inside the header
+ *  (the area search's suggestions), is that element's own. */
+function isOwnDrag(target: EventTarget | null, header: HTMLElement): boolean {
+  if (!(target instanceof Element)) return false;
+  if (target.closest(TEXT_ENTRY)) return true;
+  for (let el: Element | null = target; el && el !== header; el = el.parentElement) {
+    // A sideways chip row computes overflow-y: auto too, and may overflow by a shadow's pixels.
+    const { overflowY } = getComputedStyle(el);
+    if ((overflowY === 'auto' || overflowY === 'scroll') && el.scrollHeight - el.clientHeight > 8) return true;
+  }
+  return false;
+}
+
+/** The click a drag ends with (on whatever is under the pointer) isn't a click on that control. */
+function swallowNextClick() {
+  const swallow = (event: MouseEvent) => {
+    event.stopPropagation();
+    event.preventDefault();
+  };
+  window.addEventListener('click', swallow, { capture: true, once: true });
+  window.setTimeout(() => window.removeEventListener('click', swallow, { capture: true }), 400);
+}
+
+/** Follows one pointer from its press until it lifts: `onMove` with its travel, `onEnd` with
+ *  whether it was lifted (not cancelled). Returns the function that stops following it. */
+function followPointer(
+  press: Pick<PointerEvent, 'pointerId' | 'clientX' | 'clientY'>,
+  onMove: (dx: number, dy: number, event: PointerEvent) => void,
+  onEnd: (lifted: boolean, dy: number) => void,
+): () => void {
+  const { pointerId, clientX, clientY } = press;
+  const stop = () => {
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', up);
+    window.removeEventListener('pointercancel', cancel);
+  };
+  const move = (event: PointerEvent) => {
+    if (event.pointerId === pointerId) onMove(event.clientX - clientX, event.clientY - clientY, event);
+  };
+  const finish = (lifted: boolean) => (event: PointerEvent) => {
+    if (event.pointerId !== pointerId) return;
+    stop();
+    onEnd(lifted, event.clientY - clientY);
+  };
+  const up = finish(true);
+  const cancel = finish(false);
+  window.addEventListener('pointermove', move);
+  window.addEventListener('pointerup', up);
+  window.addEventListener('pointercancel', cancel);
+  return stop;
 }
 
 /** Keyboard focus (or the area search field) inside the header keeps it on screen. */
@@ -37,7 +114,7 @@ function isKeyboardOrTextFocus(el: Element): boolean {
   }
 }
 
-export function usePulseQuickReturn({ mode, canHide, resetKey, listScrollRef }: Options) {
+export function usePulseQuickReturn({ mode, canHide, resetKey, listScrollRef, reducedMotion }: Options) {
   const [hideRequested, setHideRequested] = useState(false);
   const [focusInside, setFocusInside] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(0);
@@ -70,18 +147,106 @@ export function usePulseQuickReturn({ mode, canHide, resetKey, listScrollRef }: 
     settleUntil.current = Date.now() + SETTLE_MS;
   }, [resetKey]);
 
+  // Map mode: the header itself, dragged up by a finger or the mouse, follows it (not with Reduce
+  // Motion) and tucks away once it has gone FLICK_HIDE_PX or been flicked; let go sooner, it
+  // springs back. A sideways drag is left to the chip rows, and a drag that starts in a text
+  // field is the field's. The flick hides it as a map drag would, so the map's drags carry on.
+  const headerEl = useRef<HTMLElement | null>(null);
+  const flickAllowed = mode === 'map' && hideAllowed && !hidden;
+  const flickAllowedRef = useRef(flickAllowed);
+  flickAllowedRef.current = flickAllowed;
+  const reducedMotionRef = useRef(reducedMotion);
+  reducedMotionRef.current = reducedMotion;
+  const stopFollowing = useRef<(() => void) | null>(null);
+  useEffect(() => () => stopFollowing.current?.(), []);
+  // Hidden, the header's transform no longer reads the drag; clear it before it shows again.
+  useEffect(() => {
+    if (hidden) headerEl.current?.style.removeProperty(DRAG_VAR);
+  }, [hidden]);
+
+  // A native listener on the header element: the map's chip row is portalled into it, and React
+  // sends a portal's events to its React parent (the map), not to the header around it.
+  const onHeaderPointerDown = useCallback((press: PointerEvent) => {
+    const el = headerEl.current;
+    if (!el || !flickAllowedRef.current || !press.isPrimary || press.button !== 0) return;
+    if (isOwnDrag(press.target, el)) return;
+    stopFollowing.current?.();
+    let vertical: boolean | null = null;
+    let tucked = false;
+    let speed = 0; // px per ms, smoothed; < 0 going up
+    let lastY = press.clientY;
+    let lastT = press.timeStamp;
+    const springBack = () => el.style.removeProperty(DRAG_VAR);
+    const tuck = () => {
+      tucked = true;
+      el.removeAttribute('data-pulse-dragging'); // its slide (or fade) eases it the rest of the way
+      if (!hideAllowedRef.current) {
+        springBack();
+        return;
+      }
+      panAcc.current = { x: 0, y: 0 };
+      setHideRequested(true);
+    };
+    stopFollowing.current = followPointer(
+      press,
+      (dx, dy, event) => {
+        if (vertical === null) {
+          if (Math.hypot(dx, dy) < DRAG_SLOP_PX) return;
+          vertical = Math.abs(dy) > Math.abs(dx);
+          if (!vertical) {
+            stopFollowing.current?.();
+            stopFollowing.current = null;
+            return;
+          }
+          el.setAttribute('data-pulse-dragging', '');
+          // Text the mouse began selecting in the header before the drag took over.
+          const selection = window.getSelection();
+          if (selection?.anchorNode && el.contains(selection.anchorNode)) selection.removeAllRanges();
+        }
+        const dt = event.timeStamp - lastT;
+        if (dt > 0) speed = 0.8 * ((event.clientY - lastY) / dt) + 0.2 * speed;
+        lastY = event.clientY;
+        lastT = event.timeStamp;
+        if (tucked) return;
+        if (!reducedMotionRef.current) el.style.setProperty(DRAG_VAR, `${Math.min(0, dy)}px`);
+        if (dy <= -FLICK_HIDE_PX || (dy <= -FLICK_MIN_PX && speed <= -FLICK_SPEED)) tuck();
+      },
+      (lifted, dy) => {
+        stopFollowing.current = null;
+        if (!vertical) return;
+        el.removeAttribute('data-pulse-dragging');
+        if (lifted) swallowNextClick();
+        if (tucked) return;
+        if (lifted && dy <= -FLICK_MIN_PX && speed <= -FLICK_SPEED) tuck();
+        else springBack();
+      },
+    );
+  }, []);
+
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
+  // Over the map a drag that starts on a link or an image doesn't drag it out of the page.
+  const onHeaderDragStart = useCallback((event: DragEvent) => {
+    if (modeRef.current === 'map') event.preventDefault();
+  }, []);
+
   // The header's own height (offsetHeight ignores the slide), for the map's top items and the list's top.
   const observer = useRef<ResizeObserver | null>(null);
   const headerRef = useCallback((el: HTMLElement | null) => {
     observer.current?.disconnect();
     observer.current = null;
+    headerEl.current?.removeEventListener('pointerdown', onHeaderPointerDown);
+    headerEl.current?.removeEventListener('dragstart', onHeaderDragStart);
+    headerEl.current = el;
     if (!el) return;
+    el.addEventListener('pointerdown', onHeaderPointerDown);
+    el.addEventListener('dragstart', onHeaderDragStart);
     setHeaderHeight(el.offsetHeight);
     if (typeof ResizeObserver !== 'undefined') {
       observer.current = new ResizeObserver(() => setHeaderHeight(el.offsetHeight));
       observer.current.observe(el);
     }
-  }, []);
+  }, [onHeaderPointerDown, onHeaderDragStart]);
   useEffect(() => () => observer.current?.disconnect(), []);
 
   // List mode: the window scrolls the header's flow space, the posts and the cards above them;
@@ -149,6 +314,25 @@ export function usePulseQuickReturn({ mode, canHide, resetKey, listScrollRef }: 
     else if (acc.y >= PAN_SHOW_PX) setHideRequested(false);
   }, [hideIfAllowed]);
 
+  /** The reveal capsule pulled down REVEAL_PULL_PX (mostly vertically): `onReveal`, as its click does. */
+  const onRevealPointerDown = useCallback((press: ReactPointerEvent<HTMLElement>, onReveal: () => void) => {
+    if (!press.isPrimary || press.button !== 0) return;
+    stopFollowing.current?.();
+    stopFollowing.current = followPointer(
+      press,
+      (dx, dy) => {
+        if (dy < REVEAL_PULL_PX || dy <= Math.abs(dx)) return;
+        stopFollowing.current?.();
+        stopFollowing.current = null;
+        swallowNextClick();
+        onReveal();
+      },
+      () => {
+        stopFollowing.current = null;
+      },
+    );
+  }, []);
+
   // The keyboard (or a screen reader moving focus) inside the header shows it and keeps it.
   const onFocus = useCallback((event: FocusEvent<HTMLElement>) => {
     setHideRequested(false);
@@ -167,5 +351,6 @@ export function usePulseQuickReturn({ mode, canHide, resetKey, listScrollRef }: 
     mapPanStart,
     mapPan,
     headerFocusProps: { onFocus, onBlur },
+    onRevealPointerDown,
   };
 }

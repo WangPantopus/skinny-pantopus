@@ -5,6 +5,8 @@ package app.pantopus.android.ui.screens.feed
 import android.content.Context
 import android.view.accessibility.AccessibilityManager
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.EaseOut
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -13,6 +15,8 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -32,6 +36,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -43,7 +49,14 @@ import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.pointer.AwaitPointerEventScope
+import androidx.compose.ui.input.pointer.PointerId
+import androidx.compose.ui.input.pointer.PointerInputChange
+import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.input.pointer.util.addPointerInputChange
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
@@ -63,15 +76,20 @@ import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
+import kotlin.math.abs
+import kotlin.math.min
 import kotlin.math.roundToInt
 
 /*
  * The Pulse page's collapsible header (founder request 2026-10-22: the list or map fills the screen, and nothing on it
  * is removed). Every header item — the Nearby segment row when the tab hands it over, the title row, Nearby |
  * Connections, search, the area bar and the chip rows — is one block over the content. It slides out of view as the
- * person scrolls into the content or drags the map up, and back as they scroll back (Facebook's quick return). iOS
- * draws the same block (`pulseHeader`) and the same reveal capsule (`pulseHeaderReveal`).
+ * person scrolls into the content or drags the map up, and back as they scroll back (Facebook's quick return). Over the
+ * map the block itself can be flicked up out of the way, and the reveal capsule pulled down (or tapped) to bring it
+ * back. iOS draws the same block (`pulseHeader`) and the same reveal capsule (`pulseHeaderReveal`).
  */
 
 /** How long the header takes to slide (or, with Reduce motion, fade) in or out. */
@@ -79,6 +97,16 @@ internal const val PULSE_HEADER_MS = 220
 
 /** A scroll has to keep one direction this far before the header follows it. */
 internal val PULSE_HEADER_HYSTERESIS = 12.dp
+
+/** A drag on the header this far up tucks it away… */
+private val FLICK_DISTANCE = 24.dp
+
+/** …and a quick flick sooner: once it has gone this far at this speed (per second). */
+private val FLICK_MIN_DISTANCE = 10.dp
+private val FLICK_SPEED = 900.dp
+
+/** Pulling the reveal capsule down this far brings the header back. */
+private val REVEAL_PULL_DISTANCE = 16.dp
 
 /** The reveal capsule's height, until it has been measured. */
 private val REVEAL_HEIGHT = 36.dp
@@ -228,7 +256,9 @@ private enum class PulseHeaderSlot { Header, Content }
  * The [headerItems] block pinned over the full-size [content]. The header is measured first, so the content is laid out
  * with its height from the first frame (a list's top inset, a state's top padding). Hiding translates the block up
  * by its own height (with [reduceMotion], fades it and then moves it out of the way); it never relayouts, so the map
- * under it never resizes.
+ * under it never resizes. With [flickEnabled] (the map, where the header may hide), a mostly vertical drag on the
+ * block follows the finger up and tucks it away once it has gone [FLICK_DISTANCE] or been flicked; let go sooner, it
+ * springs back. Over the list it stays put: hidden at the top of the posts it would leave a blank band.
  */
 @Composable
 internal fun PulseHeaderLayout(
@@ -238,7 +268,12 @@ internal fun PulseHeaderLayout(
     headerItems: @Composable ColumnScope.() -> Unit,
     content: @Composable (headerHeight: Dp) -> Unit,
     modifier: Modifier = Modifier,
+    flickEnabled: Boolean = false,
 ) {
+    // How far up a finger has pulled the header, in px (≤ 0): it eases back to 0 as the header slides away or back.
+    val drag = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(flickEnabled) { if (!flickEnabled) drag.snapTo(0f) }
     SubcomposeLayout(modifier = modifier.fillMaxSize()) { constraints ->
         val width = constraints.maxWidth
         val height = constraints.maxHeight
@@ -249,11 +284,30 @@ internal fun PulseHeaderLayout(
                         Modifier
                             .fillMaxWidth()
                             .onSizeChanged { state.heightPx = it.height }
-                            .graphicsLayer { headerMotion(progress(), reduceMotion) }
+                            .graphicsLayer { headerMotion(progress(), reduceMotion, drag.value) }
                             .background(PantopusColors.appBg)
                             // A touch between the header's controls stays on the header, as it did when the header
                             // sat above the content: it doesn't pan the map or scroll the posts underneath.
-                            .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent() } }
+                            .pointerInput(flickEnabled, reduceMotion) {
+                                if (flickEnabled) {
+                                    val settle = tween<Float>(PULSE_HEADER_MS, easing = EaseOut)
+                                    detectHeaderFlick(
+                                        onDrag = { up ->
+                                            if (!reduceMotion) {
+                                                scope.launch(start = CoroutineStart.UNDISPATCHED) { drag.snapTo(up) }
+                                            }
+                                        },
+                                        onFlick = {
+                                            state.hide()
+                                            // Eases off as the slide takes over, the same curve: one movement.
+                                            scope.launch { drag.animateTo(0f, settle) }
+                                        },
+                                        onRelease = { scope.launch { drag.animateTo(0f, settle) } },
+                                    )
+                                } else {
+                                    awaitPointerEventScope { while (true) awaitPointerEvent() }
+                                }
+                            }
                             .testTag("pulseHeader"),
                     content = headerItems,
                 )
@@ -273,19 +327,112 @@ internal fun PulseHeaderLayout(
 private fun GraphicsLayerScope.headerMotion(
     progress: Float,
     reduceMotion: Boolean,
+    drag: Float,
 ) {
     if (reduceMotion) {
         alpha = 1f - progress
         // Faded out, it moves away too, so it stops taking touches.
         translationY = if (progress >= 1f) -size.height else 0f
     } else {
-        translationY = -progress * size.height
+        translationY = -progress * size.height + drag
     }
 }
 
 /**
+ * A mostly vertical drag on the header: [onDrag] with how far up it has gone (px, ≤ 0) while it follows the finger,
+ * then [onFlick] once it is [FLICK_DISTANCE] up or flicked up fast, or [onRelease] if the finger lets go first (a fast
+ * upward flick at the release still counts). A drag that a control under the finger takes first, such as a chip row
+ * scrolling sideways, stays with it; once this takes the drag it consumes it, which cancels the press on the button
+ * the finger started on.
+ */
+private suspend fun PointerInputScope.detectHeaderFlick(
+    onDrag: (Float) -> Unit,
+    onFlick: () -> Unit,
+    onRelease: () -> Unit,
+) {
+    val flick = FlickThresholds(FLICK_DISTANCE.toPx(), FLICK_MIN_DISTANCE.toPx(), FLICK_SPEED.toPx())
+    try {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            val velocity = VelocityTracker().apply { addPointerInputChange(down) }
+            val moved = awaitVerticalSlop(down.id, velocity) ?: return@awaitEachGesture
+            if (!followHeaderDrag(down.id, moved, velocity, flick, onDrag, onFlick)) onRelease()
+        }
+    } finally {
+        // Cancelled mid-drag (the map closed, the search took focus): the header settles back.
+        onRelease()
+    }
+}
+
+/** How far up (px) a drag on the header tucks it away, and the shorter, faster flick (px, px per second) that does. */
+private class FlickThresholds(
+    val hide: Float,
+    val minimum: Float,
+    val speed: Float,
+) {
+    fun isFlick(
+        moved: Offset,
+        velocityY: Float,
+    ): Boolean = moved.y <= -minimum && velocityY <= -speed
+}
+
+/**
+ * Waits for pointer [id] to move past the touch slop and returns how far it has gone if that is mostly up or down (the
+ * drag is the header's from then on). Null when it lifts first, goes sideways, or a control under it takes the drag.
+ */
+private suspend fun AwaitPointerEventScope.awaitVerticalSlop(
+    id: PointerId,
+    velocity: VelocityTracker,
+): Offset? {
+    var moved = Offset.Zero
+    var change: PointerInputChange
+    do {
+        change = awaitPointerEvent().changes.firstOrNull { it.id == id } ?: return null
+        if (!change.pressed || change.isConsumed) return null
+        moved += change.positionChange()
+        velocity.addPointerInputChange(change)
+    } while (moved.getDistance() < viewConfiguration.touchSlop)
+    if (abs(moved.y) <= abs(moved.x)) return null
+    change.consume()
+    return moved
+}
+
+/**
+ * Follows the header's drag by pointer [id], [moved] so far, until it lifts: [onDrag] while it follows the finger, and
+ * [onFlick] once [flick] says it has gone far or fast enough (or at the release, for a fast flick). Returns whether it
+ * was flicked away.
+ */
+private suspend fun AwaitPointerEventScope.followHeaderDrag(
+    id: PointerId,
+    moved: Offset,
+    velocity: VelocityTracker,
+    flick: FlickThresholds,
+    onDrag: (Float) -> Unit,
+    onFlick: () -> Unit,
+): Boolean {
+    var travel = moved
+    var flicked = false
+    var pressed = true
+    while (pressed) {
+        val change = awaitPointerEvent().changes.firstOrNull { it.id == id } ?: return flicked
+        pressed = change.pressed
+        travel += change.positionChange()
+        velocity.addPointerInputChange(change)
+        change.consume()
+        if (flicked) continue
+        if (flick.isFlick(travel, velocity.calculateVelocity().y) || (pressed && travel.y <= -flick.hide)) {
+            flicked = true
+            onFlick()
+        } else if (pressed) {
+            onDrag(min(0f, travel.y))
+        }
+    }
+    return flicked
+}
+
+/**
  * Map mode, header hidden: a small capsule at the top — a chevron and "Pulse · <the active intent or topic>" — that
- * brings the header back. List mode doesn't need it: a small scroll back shows the header.
+ * brings the header back when tapped or pulled down. List mode doesn't need it: a small scroll back shows the header.
  */
 @Composable
 internal fun PulseHeaderReveal(
@@ -297,6 +444,7 @@ internal fun PulseHeaderReveal(
     modifier: Modifier = Modifier,
 ) {
     val spec = tween<Float>(PULSE_HEADER_MS)
+    val reveal by rememberUpdatedState(onReveal)
     AnimatedVisibility(
         visible = visible,
         modifier = modifier,
@@ -323,6 +471,8 @@ internal fun PulseHeaderReveal(
                     .clip(shape)
                     .background(PantopusColors.appSurface.copy(alpha = 0.94f))
                     .border(1.dp, PantopusColors.appBorder, shape)
+                    // Pulled down, it brings the header back too, as a tap does.
+                    .pointerInput(Unit) { detectRevealPull { reveal() } }
                     .clickable(role = Role.Button, onClick = onReveal)
                     .heightIn(min = REVEAL_HEIGHT)
                     .padding(horizontal = Spacing.s3)
@@ -345,6 +495,32 @@ internal fun PulseHeaderReveal(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+        }
+    }
+}
+
+/** A mostly downward drag on the reveal capsule: [onPull] once it has gone [REVEAL_PULL_DISTANCE]. */
+private suspend fun PointerInputScope.detectRevealPull(onPull: () -> Unit) {
+    val pullDistance = REVEAL_PULL_DISTANCE.toPx()
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false)
+        if (awaitPull(down.id, pullDistance)) onPull()
+    }
+}
+
+/** Whether pointer [id] is pulled [distance] px down, mostly vertically, before it lifts (that move is consumed). */
+private suspend fun AwaitPointerEventScope.awaitPull(
+    id: PointerId,
+    distance: Float,
+): Boolean {
+    var moved = Offset.Zero
+    while (true) {
+        val change = awaitPointerEvent().changes.firstOrNull { it.id == id }
+        if (change == null || !change.pressed) return false
+        moved += change.positionChange()
+        if (moved.y >= distance && moved.y > abs(moved.x)) {
+            change.consume()
+            return true
         }
     }
 }

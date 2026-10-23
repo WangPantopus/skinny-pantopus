@@ -296,6 +296,8 @@ fun FeedScreen(
             state = headerState,
             progress = { headerProgress.value },
             reduceMotion = reduceMotion,
+            // Over the map the header can be flicked up out of the way (founder request 2026-10-22).
+            flickEnabled = mapMode && headerCanHide,
             headerItems = {
                 header?.invoke()
                 TopBar(
