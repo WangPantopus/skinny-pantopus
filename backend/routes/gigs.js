@@ -316,29 +316,18 @@ function summarizeGigBids(bids) {
 // `+N` overflow tile next to the status chip. To avoid an N+1 fetch
 // from the client, the `/api/gigs/my-gigs` handler inlines the top-3
 // bidders per gig as a `top_bidders[≤3]: {id, initials, color}` array
-// derived from the GigBid → User join. Initials and tone are computed
+// derived from the GigBid rows. Initials and tone are computed
 // server-side so iOS, Android, and web all render identical avatars
 // without each platform reinventing the derivation.
 
 const BIDDER_TONES = ['sky', 'teal', 'amber', 'rose', 'violet', 'slate'];
 
-function bidderInitialsFromUser(user) {
-  if (!user) return '?';
-  const first = (user.first_name || '').trim();
-  const last = (user.last_name || '').trim();
-  if (first && last) {
-    return `${first[0]}${last[0]}`.toUpperCase();
-  }
-  const name = (user.name || '').trim();
-  if (name) {
-    const parts = name.split(/\s+/);
-    if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-    return name.slice(0, 2).toUpperCase();
-  }
-  const username = chosenUsernameOrNull(user.username) || '';
-  if (username) {
-    return username.slice(0, 2).toUpperCase();
-  }
+// The initials of the name the bid list shows a bidder by (their Local Profile's), never their account's first and
+// last name. Split by code point, so a name that starts with an emoji keeps it whole.
+function bidderInitials(displayName) {
+  const parts = String(displayName || '').trim().split(/\s+/).filter(Boolean).map((part) => Array.from(part));
+  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  if (parts.length === 1) return parts[0].slice(0, 2).join('').toUpperCase();
   return '?';
 }
 
@@ -367,7 +356,7 @@ async function topBiddersByGig(gigIds) {
   // before truncating to 3 per gig.
   const { data: bidRows, error: bidsError } = await supabaseAdmin
     .from('GigBid')
-    .select('gig_id, user_id, created_at, User:user_id(id, first_name, last_name, name, username)')
+    .select('gig_id, user_id, created_at')
     .in('gig_id', gigIds)
     .order('created_at', { ascending: false });
 
@@ -390,13 +379,19 @@ async function topBiddersByGig(gigIds) {
     const userId = String(row?.user_id || '');
     if (!userId) continue;
     if (byGigId[gigId].some((b) => b.id === userId)) continue;
-    const user = row.User || {};
     byGigId[gigId].push({
       id: userId,
-      initials: bidderInitialsFromUser(user),
+      initials: '?',
       color: bidderToneFromId(userId),
     });
   }
+
+  // Each bidder is named by their Local Profile, as on the task's bid list. A bidder whose account can't be read
+  // keeps '?'.
+  const bidders = [...new Set(Object.values(byGigId).flat().map((b) => b.id))].map((id) => ({ user_id: id }));
+  await hydrateListingCreatorIdentities(bidders);
+  const initialsById = new Map(bidders.map((b) => [b.user_id, bidderInitials(serializeTaskPerson(b.creator)?.displayName)]));
+  for (const bidder of Object.values(byGigId).flat()) bidder.initials = initialsById.get(bidder.id) || '?';
   return byGigId;
 }
 
@@ -3177,20 +3172,22 @@ router.get('/rebookable', verifyToken, async (req, res) => {
     }
     const limited = deduped.slice(0, 10);
 
-    // 3. Fetch worker profiles
+    // 3. Fetch workers: each is named by their Local Profile, as the task names them, with their rating
     const workerIds = [...new Set(limited.map(g => g.accepted_by))];
     const { data: workers, error: workersErr } = await supabaseAdmin
       .from('User')
-      .select('id, first_name, last_name, username, profile_picture_url, average_rating')
+      .select('id, average_rating')
       .in('id', workerIds);
 
     if (workersErr) {
       logger.error('Rebookable workers query error', { error: workersErr.message });
     }
 
+    const workerRows = (workers || []).map(w => ({ creator: w }));
+    await hydrateListingCreatorIdentities(workerRows);
     const workerMap = {};
-    for (const w of (workers || [])) {
-      workerMap[w.id] = w;
+    for (const { creator } of workerRows) {
+      workerMap[creator.id] = creator;
     }
 
     // 4. Fetch poster's reviews for these gigs (batch)
@@ -3219,14 +3216,7 @@ router.get('/rebookable', verifyToken, async (req, res) => {
         category: gig.category,
         price: gig.price,
         completedAt: gig.owner_confirmed_at,
-        worker: w ? {
-          id: w.id,
-          firstName: w.first_name,
-          lastName: w.last_name,
-          username: w.username,
-          avatarUrl: w.profile_picture_url,
-          rating: w.average_rating,
-        } : null,
+        worker: w ? { ...serializeTaskPerson(w), rating: w.average_rating } : null,
         myReview: reviewMap[gig.id] || null,
         city: gig.exact_city,
         state: gig.exact_state,
