@@ -3087,10 +3087,11 @@ class ChatConversationViewModel
                 val page = (result as NetworkResult.Success).data
                 val newlyRemoved = page.removedRoomIds.toSet() - removedRooms
                 if (newlyRemoved.isNotEmpty()) {
-                    retireAccess(newlyRemoved)
-                    if (context != historyContext()) return true
+                    // Block delayed/topic-switch projections before suspending for durable retirement.
                     removedRooms.addAll(newlyRemoved)
                     retireRemovedRooms(newlyRemoved)
+                    retireAccess(newlyRemoved)
+                    if (context != historyContext()) return true
                 }
                 if (page.resetRequired) return false
                 collectChanges(page, changes, receipts)
