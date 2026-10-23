@@ -894,17 +894,29 @@ async function personChatRoomIds(userId, otherUserId, asBusinessUserId) {
     throw error;
   }
   const identityUserId = asBusinessUserId || userId;
-  const [mine, other] = await Promise.all([
-    supabaseAdmin.from('ChatParticipant').select('room_id, room:room_id!inner(type)')
-      .in('room.type', ['direct', 'gig']).eq('user_id', identityUserId).eq('is_active', true),
-    supabaseAdmin.from('ChatParticipant').select('room_id')
-      .eq('user_id', otherUserId).eq('is_active', true),
-  ]);
-  if (mine.error || other.error) throw mine.error || other.error;
-  const mineIds = new Set((mine.data || []).map((row) => row.room_id));
-  const candidates = (other.data || []).map((row) => row.room_id).filter((id) => mineIds.has(id));
-  const closed = await closedGigRoomIdsByRoomId(candidates, userId, [identityUserId]);
-  return candidates.filter((id) => !closed.has(id));
+  if (String(identityUserId) === String(otherUserId)) {
+    throw Object.assign(new Error('Cannot open a conversation with yourself'), { status: 400 });
+  }
+  const ids = [];
+  let after;
+  // Filter both members in SQL before paging. Intersecting two capped lists of
+  // unrelated rooms silently loses older conversations for long-lived accounts.
+  for (;;) {
+    let query = supabaseAdmin.from('ChatRoom')
+      .select('id, type, gig_id, mine:ChatParticipant!inner(user_id), other:ChatParticipant!inner(user_id)')
+      .in('type', ['direct', 'gig'])
+      .eq('mine.user_id', identityUserId).eq('mine.is_active', true)
+      .eq('other.user_id', otherUserId).eq('other.is_active', true)
+      .order('id').limit(200);
+    if (after) query = query.gt('id', after);
+    const { data, error } = await query;
+    if (error) throw chatAccessUnavailable();
+    const rooms = data || [];
+    const closed = await closedGigRoomIds(rooms, userId, [identityUserId]);
+    ids.push(...rooms.filter((room) => !closed.has(room.id)).map((room) => room.id));
+    if (rooms.length < 200) return ids;
+    after = rooms[rooms.length - 1].id;
+  }
 }
 
 async function respondWithChatChanges(req, res, roomIds, identityUserId) {
@@ -2001,53 +2013,8 @@ router.post('/conversations/:otherUserId/read', verifyToken, async (req, res) =>
     const userId = req.user.id;
     const { otherUserId } = req.params;
     const asBusinessUserId = req.body?.asBusinessUserId ? String(req.body.asBusinessUserId) : null;
-    let identityUserIds = new Set([String(userId)]);
-    let readTargetUserId = userId;
-
-    if (asBusinessUserId) {
-      const canAct = await canActAsBusiness(asBusinessUserId, userId);
-      if (!canAct) return res.status(403).json({ error: 'Access denied' });
-      // Reading for a business marks the business's conversations with this person read, never the reader's own.
-      identityUserIds = new Set([String(asBusinessUserId)]);
-      readTargetUserId = asBusinessUserId;
-    }
-
-    // Same rule as starting a chat: a "conversation with yourself" (or with the business you read for) would
-    // match every room the reader is in and mark them all read.
-    if (String(otherUserId) === String(readTargetUserId)) {
-      return res.status(400).json({ error: 'Cannot mark a conversation with yourself as read' });
-    }
-
-    const { data: mineRows, error: mineErr } = await supabaseAdmin
-      .from('ChatParticipant')
-      .select('room_id, room:room_id!inner(type)')
-      .in('room.type', ['direct', 'gig'])
-      .in('user_id', Array.from(identityUserIds))
-      .eq('is_active', true);
-
-    if (mineErr) {
-      logger.error('Error loading actor rooms for conversation read', { requestId: req.requestId, userId, otherUserId, error: mineErr.message });
-      return res.status(500).json({ error: 'Failed to mark conversation as read' });
-    }
-
-    const { data: otherRows, error: otherErr } = await supabaseAdmin
-      .from('ChatParticipant')
-      .select('room_id')
-      .eq('user_id', otherUserId)
-      .eq('is_active', true);
-
-    if (otherErr) {
-      logger.error('Error loading target rooms for conversation read', { requestId: req.requestId, userId, otherUserId, error: otherErr.message });
-      return res.status(500).json({ error: 'Failed to mark conversation as read' });
-    }
-
-    const myRoomSet = new Set((mineRows || []).map((r) => String(r.room_id)));
-    const candidateRoomIds = (otherRows || [])
-      .map((r) => String(r.room_id))
-      .filter((rid) => myRoomSet.has(rid));
-    // An assigned task's gig room isn't merged in for a leftover member.
-    const closedRoomIds = await closedGigRoomIdsByRoomId(candidateRoomIds, userId, Array.from(identityUserIds));
-    const sharedRoomIds = candidateRoomIds.filter((rid) => !closedRoomIds.has(rid));
+    const readTargetUserId = asBusinessUserId || userId;
+    const sharedRoomIds = await personChatRoomIds(userId, otherUserId, asBusinessUserId);
 
     if (sharedRoomIds.length === 0) {
       return res.json({ unreadCount: 0, updatedRooms: 0 });
@@ -2066,7 +2033,7 @@ router.post('/conversations/:otherUserId/read', verifyToken, async (req, res) =>
     return res.json({ unreadCount: result.unreadCount, updatedRooms: result.data.length });
   } catch (err) {
     logger.error('Conversation read error', { requestId: req.requestId, userId: req.user?.id, error: err.message });
-    return res.status(500).json({ error: 'Failed to mark conversation as read' });
+    return res.status(err.status || 500).json({ error: err.status ? err.message : 'Failed to mark conversation as read' });
   }
 });
 
@@ -2805,16 +2772,7 @@ router.patch('/conversations/:otherUserId/preferences', verifyToken, validate(ch
     const targetUserId = asBusinessUserId || req.user.id;
     if (asBusinessUserId && !await canActAsBusiness(asBusinessUserId, req.user.id)) return res.status(403).json({ error: 'Access denied' });
     if (targetUserId === otherUserId) return res.status(400).json({ error: 'Invalid person' });
-    const [mine, theirs] = await Promise.all([
-      supabaseAdmin.from('ChatParticipant').select('room_id, room:room_id!inner(type)')
-        .eq('user_id', targetUserId).eq('is_active', true).in('room.type', ['direct', 'gig']),
-      supabaseAdmin.from('ChatParticipant').select('room_id').eq('user_id', otherUserId).eq('is_active', true),
-    ]);
-    if (mine.error || theirs.error) throw mine.error || theirs.error;
-    const ownIds = new Set((mine.data || []).map((row) => row.room_id));
-    const candidates = (theirs.data || []).map((row) => row.room_id).filter((id) => ownIds.has(id));
-    const closed = await closedGigRoomIdsByRoomId(candidates, req.user.id, [targetUserId]);
-    const roomIds = candidates.filter((id) => !closed.has(String(id)));
+    const roomIds = await personChatRoomIds(req.user.id, otherUserId, asBusinessUserId);
     if (!roomIds.length) return res.status(404).json({ error: 'Conversation not found' });
     const { error } = await supabaseAdmin.rpc('set_chat_notifications', {
       p_user_id: targetUserId, p_room_ids: roomIds, p_enabled: notificationsEnabled, p_other_user_id: otherUserId,
@@ -2823,7 +2781,7 @@ router.patch('/conversations/:otherUserId/preferences', verifyToken, validate(ch
     return res.json({ notificationsEnabled, roomIds });
   } catch (error) {
     logger.warn('chat_preferences_failed', { requestId: req.requestId, code: error.code });
-    return res.status(error.code === '42501' ? 403 : 500).json({ error: 'Could not save chat preferences' });
+    return res.status(error.status || (error.code === '42501' ? 403 : 500)).json({ error: 'Could not save chat preferences' });
   }
 });
 

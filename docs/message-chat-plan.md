@@ -4,6 +4,22 @@ The founder requested repairs in the real web, iOS and Android apps, preserving 
 
 Ownership: `codex/chat-reliability-backend` owns backend/database integration; `codex/chat-web-reliability`, `codex/chat-ios-reliability` and `codex/chat-android-reliability` own their clients. Shared TypeScript chat API changes belong to the web session. Other open LocalProfile/security work is preserved. No hosted configuration or database changes are part of local verification.
 
+## Full person-conversation scope
+
+Person history, changes, search, mute and read now share a room lookup that
+filters both active members before paging by room ID. Intersecting two capped
+membership lists could omit a conversation after 1,000 unrelated rooms. The
+new lookup also keeps assigned-task access checks and rejects a self pair.
+Database lookup failures remain retryable rather than masquerading as an empty
+conversation.
+
+A local 1,031-room fixture reproduced the loss: the old query returned 1,000
+rows and omitted the new shared room. Real API history/search recovered its
+message, preferences covered both shared rooms, mute/unmute persisted, and
+bounded read updated both rooms. The temporary rooms were removed afterward.
+Syntax and the four existing identity-select guards passed; final app checks
+against this exact backend revision remain in progress.
+
 ## Immediate contract
 
 - REST message history uses `(created_at, id)` for both `before` and `after`; both bounds can be combined. `nextCursor` pages backward and `hasMore` comes from an extra row.
