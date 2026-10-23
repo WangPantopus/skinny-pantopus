@@ -166,6 +166,26 @@ lint and transaction rehearsal before local application; migration policy,
 JavaScript syntax and four identity-select checks passed. Actual client map
 adoption and screen verification remain pending. No test code was changed.
 
+## Explicit business sender in group conversations
+
+Actual business-inbox browser verification found that sending in a group as a
+business displayed the staff member's personal name. Business access was valid,
+but sender selection only honored the explicit business for direct rooms.
+Every explicit business send now applies the same current permission and active
+business-membership checks before selecting its public sender. The human actor
+remains internal except in their own author response. Task chats retain their
+existing owner identity and reject a conflicting explicit business. Personal
+sends do not automatically switch to a business that happens to be in the room.
+
+Explicit non-task business sends also refuse an unpublished sender using the
+existing `NOT_PUBLISHED` response, since that identity cannot be shown publicly.
+Real local API checks passed business sender/private actor persistence, peer
+history without actor disclosure, same-key retry once, unauthorized and revoked
+staff rejection, personal identity preservation, author edit/delete, unpublished
+refusal and successful send after local fixture publication. Temporary backend
+fixtures were removed. Syntax and all four identity-select guards passed.
+The original group browser recheck remains pending; no test code was changed.
+
 ## Immediate contract
 
 - REST message history uses `(created_at, id)` for both `before` and `after`; both bounds can be combined. `nextCursor` pages backward and `hasMore` comes from an extra row.

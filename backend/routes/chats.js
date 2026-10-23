@@ -2161,19 +2161,21 @@ router.post('/messages', verifyToken, messageSendLimiter, messageBurstLimiter, v
       directMemberIds = otherParticipants.map((participant) => participant.user_id);
     }
 
-    // ─── Business Identity for Direct Chats ───
+    // ─── Explicit business identity ───
     // Business identity requires an explicit asBusinessUserId from the client.
     // We intentionally do NOT auto-detect business identity by scanning room
     // participants. Auto-detection caused a privacy bug where team members'
     // personal messages were silently sent as the business identity whenever
     // the business happened to be a participant in the room. The client must
     // opt-in to business identity on each message send.
-    if (room && room.type === 'direct' && asBusinessUserId) {
+    // Every supported room can contain a business membership. Never silently
+    // replace an explicitly chosen business sender with its staff member.
+    if (asBusinessUserId) {
       const canAct = await canActAsBusiness(asBusinessUserId, userId);
       if (!canAct) {
         return res.status(403).json({ error: 'You do not have permission to message as this business' });
       }
-      const { data: businessParticipant } = await supabaseAdmin
+      const { data: businessParticipant, error: businessParticipantError } = await supabaseAdmin
         .from('ChatParticipant')
         .select('id')
         .eq('room_id', roomId)
@@ -2181,6 +2183,7 @@ router.post('/messages', verifyToken, messageSendLimiter, messageBurstLimiter, v
         .eq('is_active', true)
         .maybeSingle();
 
+      if (businessParticipantError) throw chatAccessUnavailable();
       if (!businessParticipant) {
         return res.status(400).json({ error: 'This business is not a participant in the chat room' });
       }
@@ -2191,6 +2194,11 @@ router.post('/messages', verifyToken, messageSendLimiter, messageBurstLimiter, v
     // staff) or a person writes to it in a conversation they already have.
     if (room && room.type === 'direct') {
       const refusal = await unpublishedDirectRoomRefusal(senderUserId, directMemberIds);
+      if (refusal) return res.status(403).json(refusal);
+    } else if (asBusinessUserId && room.type !== 'gig') {
+      // A group must not emit an unresolvable private business as its sender.
+      // Existing task-owner messaging retains its separate task access rules.
+      const refusal = await unpublishedDirectRoomRefusal(senderUserId, []);
       if (refusal) return res.status(403).json(refusal);
     }
 
@@ -2206,6 +2214,9 @@ router.post('/messages', verifyToken, messageSendLimiter, messageBurstLimiter, v
         ? await getGigOwnerMessagingContext(gig.user_id, userId)
         : { isOwnerActor: false, messageSenderUserId: userId };
       const isGigOwner = ownerCtx.isOwnerActor;
+      if (asBusinessUserId && String(asBusinessUserId) !== String(ownerCtx.messageSenderUserId || userId)) {
+        return res.status(403).json({ error: 'This business cannot send in this task chat' });
+      }
       senderUserId = ownerCtx.messageSenderUserId || userId;
       const isAcceptedWorker = gig && gig.accepted_by && String(gig.accepted_by) === String(userId);
 
@@ -2469,6 +2480,7 @@ router.post('/messages', verifyToken, messageSendLimiter, messageBurstLimiter, v
     
   } catch (err) {
     if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
+    if (err.code === 'CHAT_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
     logger.error('Message send error', { requestId: req.requestId, roomId: req.body.roomId, userId: req.user?.id, error: err.message });
     res.status(500).json({ error: 'Failed to send message' });
   }
