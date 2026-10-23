@@ -27,6 +27,7 @@ const { verifyAccessToken } = require('../services/accessTokenVerifier');
 
 // Store connected users: { userId: Set<socketId> }
 const connectedUsers = new Map();
+const CHAT_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // Backfill reads share the API's database pool with sends and uploads. Bound
 // admission instead of retaining an unbounded queue when a client reconnects.
 let activeRoomJoins = 0;
@@ -293,7 +294,11 @@ module.exports = (io) => {
     // Rooms this socket joined for a business inbox (room:join), where the user isn't a member.
     const businessRooms = new Set();
     socket.chatBusinessRooms = businessRooms;
-    const pendingRoomJoins = new Set();
+    const pendingRoomJoins = new Map();
+    const roomSubscriptions = new Map();
+    const startupLeaves = new Set();
+    let startupPending = true;
+    let skipStartupJoins = false;
 
     logger.info('User connected to chat', {
       sessionId,
@@ -361,6 +366,7 @@ module.exports = (io) => {
 
         for (const room of openRooms) {
           const roomId = room.id;
+          if (skipStartupJoins || startupLeaves.has(roomId) || pendingRoomJoins.has(roomId)) continue;
           socket.join(roomId);
           roomIds.add(roomId);
 
@@ -371,9 +377,12 @@ module.exports = (io) => {
 
         // The chat list names people through its authenticated REST reader;
         // this compatibility event contains room metadata, never raw names.
-        socket.emit('rooms:list', openRooms);
+        socket.emit('rooms:list', openRooms.filter((room) => !startupLeaves.has(room.id)));
       } catch (err) {
         logger.error('Error loading user rooms', { sessionId, userId, error: err.message });
+      } finally {
+        startupPending = false;
+        startupLeaves.clear();
       }
     })();
 
@@ -411,18 +420,56 @@ module.exports = (io) => {
 
     // ============ EVENT HANDLERS ============
 
+    // Leaving is a subscription change for this socket, never a membership write.
+    // A per-attempt token prevents a late cancelled ACK from leaving a newer join.
+    on('room:leave', async ({ roomId: requestedRoomId, subscriptionId }, callback) => {
+      if (typeof requestedRoomId !== 'string' || !CHAT_UUID.test(requestedRoomId)
+        || (subscriptionId !== undefined && (typeof subscriptionId !== 'string' || !CHAT_UUID.test(subscriptionId)))) {
+        return callback({ error: 'Invalid room subscription' });
+      }
+      const roomId = requestedRoomId.toLowerCase();
+      const token = subscriptionId?.toLowerCase();
+      const pending = pendingRoomJoins.get(roomId);
+      const cancelPending = pending && (token === undefined || pending.token === token);
+      const leaveActive = token === undefined || roomSubscriptions.get(roomId) === token;
+      if (cancelPending) pending.cancelled = true;
+      if (!cancelPending && !leaveActive) return callback({ success: true, left: false, roomId });
+      if (startupPending) {
+        // Bound even an untrusted client's early leave burst. Overflow skips only
+        // this socket's automatic startup subscriptions; explicit joins still work.
+        if (startupLeaves.size < 1000) startupLeaves.add(roomId); else skipStartupJoins = true;
+      }
+      if (leaveActive) {
+        roomSubscriptions.delete(roomId);
+        businessRooms.delete(roomId);
+        chatPresence.unwatch(socket, roomId);
+        await socket.leave(roomId);
+        const anotherSocket = [...(connectedUsers.get(userId) || [])].some((id) => id !== socket.id
+          && io.sockets.sockets.get(id)?.rooms.has(roomId));
+        if (!anotherSocket) userRooms.get(userId)?.delete(roomId);
+      }
+      callback({ success: true, left: Boolean(cancelPending || leaveActive), roomId, ...(token ? { subscriptionId: token } : {}) });
+    });
+
     /**
      * Join a specific room
      */
-    on('room:join', async ({ roomId }, callback) => {
-      if (typeof roomId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(roomId)) {
-        return callback({ error: 'Invalid room' });
+    on('room:join', async ({ roomId: requestedRoomId, subscriptionId, includeBackfill }, callback) => {
+      if (typeof requestedRoomId !== 'string' || !CHAT_UUID.test(requestedRoomId)
+        || (subscriptionId !== undefined && (typeof subscriptionId !== 'string' || !CHAT_UUID.test(subscriptionId)))
+        || (includeBackfill !== undefined && typeof includeBackfill !== 'boolean')) {
+        return callback({ error: 'Invalid room subscription' });
       }
+      const roomId = requestedRoomId.toLowerCase();
       if (pendingRoomJoins.has(roomId) || pendingRoomJoins.size >= 4 || activeRoomJoins >= 32) {
         return callback({ error: 'Chat is busy. Please retry.', code: 'CHAT_BUSY', retryable: true, retryAfterMs: 1000 });
       }
-      pendingRoomJoins.add(roomId);
+      const operation = { token: subscriptionId?.toLowerCase(), cancelled: false };
+      pendingRoomJoins.set(roomId, operation);
+      startupLeaves.delete(roomId);
       activeRoomJoins++;
+      const cancelled = () => !socket.connected || operation.cancelled;
+      const cancelledAck = () => callback({ error: 'Room join cancelled', code: 'CHAT_JOIN_CANCELLED', retryable: false });
       try {
         // Verify user has access to room
         const { data: participant, error: participantError } = await supabaseAdmin
@@ -444,9 +491,14 @@ module.exports = (io) => {
         if (await isGigRoomClosedTo(roomId, userId, actingFor ? [actingFor] : [])) {
           return callback({ error: 'Access denied' });
         }
-        if (!socket.connected) return;
+        if (cancelled()) return cancelledAck();
 
-        socket.join(roomId);
+        roomSubscriptions.set(roomId, operation.token);
+        await socket.join(roomId);
+        if (cancelled()) {
+          await socket.leave(roomId);
+          return cancelledAck();
+        }
 
         // Track room
         if (actingFor) {
@@ -460,8 +512,10 @@ module.exports = (io) => {
 
         logger.info('User joined room', { sessionId, userId, roomId, forBusiness: Boolean(actingFor) });
         
-        // Load recent messages
-        const { data: messages, error: historyError } = await supabaseAdmin
+        // Clients recovering through canonical REST can skip unused legacy
+        // backfill. Omission preserves the existing ACK contract for older apps.
+        const { data: messages, error: historyError } = includeBackfill === false
+          ? { data: [], error: null } : await supabaseAdmin
           .from('ChatMessage')
           .select(`
             *,
@@ -484,8 +538,11 @@ module.exports = (io) => {
           loadChatPeople(backfill.map((message) => message.sender?.id || message.user_id)),
         ]);
 
+        if (cancelled()) return cancelledAck();
+
         callback({
           success: true,
+          ...(operation.token ? { subscriptionId: operation.token } : {}),
           // Without actor_user_id, as the API serves messages: who wrote for a business stays internal.
           // Each sender is named as the chat list names them (services/chatPeople).
           messages: backfill.map(({ actor_user_id: _actor, push_delivery_requested: _pushDelivery, ...message }) => ({
