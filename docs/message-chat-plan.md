@@ -229,6 +229,59 @@ and matched the public alias while rejecting a distinct private account name.
 Function lint, migration policy and syntax passed. Browser/native search checks
 are pending; existing design and navigation are unchanged.
 
+## Durable push delivery storage — approved October 23
+
+A message can commit and the API process can exit before its current in-memory
+push operation completes. Retries also need per-recipient progress, so one
+recipient's temporary provider failure does not resend to everyone. Existing
+chat rows are readable by room members; placing staff delivery identities there
+would weaken business-seat privacy. Using hidden bell notifications as queue
+rows would change notification-list/count behavior and overload that contract.
+
+Approved addition: one private `ChatPushDelivery` table, with no client grants
+or RLS policies. Each row references the existing message, recipient account
+and represented room identity; a unique message/recipient key prevents duplicate
+jobs. It stores delivery state, attempts, next-attempt time, lease ID/expiry and
+completion time. It stores no message text, credentials or device tokens.
+
+An insert trigger creates work in the message transaction, preserving mute
+preferences at send time. The API reuses the existing Postgres notification
+listener to wake a bounded worker and periodically recovers pending work after
+process restarts. A service-only claim RPC uses leases and SKIP LOCKED; finish
+requires the same lease. Each attempt rechecks current membership, task-room
+eligibility, block/mute settings, deletion and the read boundary before loading
+public sender identity and sending. Existing business bell notifications retain
+their idempotent identity; transport retries do not create duplicate bell rows.
+
+Retry temporary/unknown provider outcomes with bounded backoff, suppress stale
+or newly ineligible work, and expire old push work. Use stable message IDs for
+provider collapse/deduplication. Provider acceptance is not proof of physical
+phone delivery. Verify durable capture, crash/lease recovery, concurrent workers,
+preference suppression and current message state locally; physical phones and
+hosted APNs/FCM remain a separate founder-supported verification step.
+
+The founder approved the additive schema and local implementation. The private
+queue now captures work atomically, fences/renews worker leases, keeps accepted
+registration IDs (never raw tokens), expires work after 24 hours, and cleans
+completed rows after seven days. A new writer opt-in column preserves the old
+API push path during a rolling deployment. Stable message-specific APNs collapse
+IDs follow [Apple's notification request contract](https://developer.apple.com/documentation/usernotifications/sending-notification-requests-to-apns).
+
+Local checks passed: transaction capture and old-writer compatibility; three
+workers claiming 12 distinct jobs; expired-lease recovery and stale-worker
+rejection; mute-at-send and current mute/read/delete/block/revocation suppression;
+private client privileges; business staff delivery and atomic bell deduplication,
+read-state preservation and deletion preservation. The running API recovered a
+job created while stopped, retained retries with an unavailable APNs transport,
+and settled after its synthetic registration was removed. No real push was sent.
+Schema/function lint, migration policy, syntax and identity privacy guards pass.
+
+On the running backend, real web UI queued-send recovery, fresh send/peer receipt,
+reaction, edit and delete passed. The observed fresh peer receipt was 502 ms
+including automation overhead; this is not a percentile or production benchmark.
+Native ordinary-flow rechecks are continuing. Hosted migration/deployment and
+physical-phone APNs/FCM acceptance remain unverified and founder-owned.
+
 ## Remaining repair sequence
 
 | Area | Work remaining after immediate repairs |

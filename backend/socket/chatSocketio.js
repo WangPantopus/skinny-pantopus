@@ -472,7 +472,7 @@ module.exports = (io) => {
           success: true,
           // Without actor_user_id, as the API serves messages: who wrote for a business stays internal.
           // Each sender is named as the chat list names them (services/chatPeople).
-          messages: backfill.map(({ actor_user_id: _actor, ...message }) => ({
+          messages: backfill.map(({ actor_user_id: _actor, push_delivery_requested: _pushDelivery, ...message }) => ({
             ...message,
             sender: chatPersonRow(message.sender, people),
             reactions: reactionMap.get(String(message.id)) || [],

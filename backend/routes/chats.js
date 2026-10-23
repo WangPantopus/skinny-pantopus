@@ -662,6 +662,8 @@ chatRealtime.setHandler(emitCommittedChatChange);
 // sender (loadChatPeople); without it they're looked up here.
 async function deliverNewMessage(io, { room, message, actorUserId, senderUserId = actorUserId, requestId = null, people = null }) {
   const roomId = room.id;
+  // The durable row was captured in the insert transaction, even if this process exits now.
+  if (message.push_delivery_requested) require('../services/chatPushDelivery').wake();
   const broadcast = serializeChatMessageForViewer(message, { people: people || await loadMessageSenders([message]) });
   if (io) {
     chatRealtime.announce({ t: 'ChatMessage', r: roomId, m: message.id, op: 'INSERT', v: message.sync_version },
@@ -687,6 +689,7 @@ async function deliverNewMessage(io, { room, message, actorUserId, senderUserId 
   }
   if (recipientUserIds.length === 0) return;
   badgeService.emitBadgeUpdateToMany(recipientUserIds);
+  if (message.push_delivery_requested) return;
   const mutedRecipients = (['direct', 'gig'].includes(room.type)
     ? mutedBySender(recipientUserIds, senderUserId) : Promise.resolve(new Set()))
     .then((muted) => {
@@ -865,7 +868,7 @@ function serializeChatMessageForViewer(message, options = {}) {
   const viewerWroteIt = Boolean(options.viewerId && message.actor_user_id
     && String(message.actor_user_id) === String(options.viewerId));
   const base = options.includeActorIdentity || viewerWroteIt ? message : stripActorIdentity(message);
-  const { sender, ...safe } = base;
+  const { sender, push_delivery_requested: _pushDelivery, ...safe } = base;
   const bodyText = safe.message_text ?? safe.message ?? null;
   const bodyType = safe.message_type ?? safe.type ?? 'text';
   const senderId = sender?.id || safe.user_id;
@@ -2444,6 +2447,7 @@ router.post('/messages', verifyToken, messageSendLimiter, messageBurstLimiter, v
 
     // Insert message
     const messageData = {
+      push_delivery_requested: true,
       room_id: roomId,
       user_id: senderUserId,
       message: resolvedMessage,

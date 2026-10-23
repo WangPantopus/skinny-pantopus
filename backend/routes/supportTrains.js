@@ -2674,6 +2674,7 @@ router.post(
         type: 'text',
         message: req.body.message,
         metadata: { source: 'support_train_nudge', support_train_id: st.id },
+        push_delivery_requested: true,
       })
       .select('*, sender:user_id(id, username, name, profile_picture_url)')
       .single();
