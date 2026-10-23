@@ -607,10 +607,11 @@ extension AuthManager {
         // and its exported Home documents, emergency card and residency letters.
         ChatMediaURL.removeLocalFiles()
         try? HomeDocumentTemporaryFiles.clearPreviousLaunch()
-        guard hadSession else { return false }
         // The next person on this device must not read the last account's
         // notifications on the lock screen or in Notification Center.
+        UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
         UNUserNotificationCenter.current().removeAllDeliveredNotifications()
+        guard hadSession else { return false }
         SocketClient.shared.disconnect()
         Observability.shared.identify(userId: nil)
         Analytics.identify(userId: nil)

@@ -161,6 +161,11 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         let userInfo = notification.request.content.userInfo
         let type = userInfo["type"] as? String
         let roomId = userInfo["room_id"] as? String
+        let recipient = userInfo["recipient_user_id"] as? String
+        let belongsToCurrentAccount = await MainActor.run {
+            Self.permitsNotification(type: type, recipient: recipient, allowSignedOut: false)
+        }
+        guard belongsToCurrentAccount else { return [] }
         if type == "chat_message" || type == "business_message", let roomId {
             let isViewingThread = await MainActor.run {
                 ActiveChatThreadTracker.shared.isViewingRoom(roomId)
@@ -188,6 +193,14 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         }
         if !launchAvailable { return [] }
         return [.banner, .list, .sound, .badge]
+    }
+
+    @MainActor
+    private static func permitsNotification(type: String?, recipient: String?, allowSignedOut: Bool) -> Bool {
+        guard type == "chat_message" || type == "business_message" || recipient != nil else { return true }
+        guard let recipient, let recipientID = UUID(uuidString: recipient) else { return false }
+        guard case let .signedIn(user) = AuthManager.shared.state else { return allowSignedOut }
+        return UUID(uuidString: user.id) == recipientID
     }
 
     private struct ReminderPayload {
@@ -286,9 +299,14 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         // (HOME) banner tap crashed the app with SIGABRT (2026-09-22).
         Task { @MainActor in
             defer { completionHandler() }
+            // A queued push can arrive after this device changes accounts.
+            // Chat pushes must be bound, including when sign-in is deferred.
+            guard Self.permitsNotification(type: type, recipient: recipient, allowSignedOut: true) else { return }
             // Opened while the app was in the background (willPresent never
             // ran): a connection request or acceptance marks Connections first.
-            ScreenStoreLive.pushArrived(type: type)
+            if case .signedIn = AuthManager.shared.state {
+                ScreenStoreLive.pushArrived(type: type)
+            }
             if action == UNNotificationDismissActionIdentifier { return }
             if action == "TASK_NOT_NOW" {
                 guard category == "TASK_REMINDER", let recipient, UUID(uuidString: recipient) != nil,
@@ -316,7 +334,11 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
             if let deepLink, !deepLink.isEmpty {
                 // `link` is a path like `/chat/42`; handle(path:) normalises it
                 // to the pantopus:// scheme, matching the Android dispatcher.
-                DeepLinkRouter.shared.handle(path: deepLink)
+                if let recipient {
+                    DeepLinkRouter.shared.handle(path: deepLink, expectedUserID: recipient)
+                } else {
+                    DeepLinkRouter.shared.handle(path: deepLink)
+                }
             }
         }
     }
