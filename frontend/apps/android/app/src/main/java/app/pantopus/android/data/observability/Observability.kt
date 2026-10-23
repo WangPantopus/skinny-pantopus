@@ -54,8 +54,7 @@ class Observability
                 // P15: scrub PII from every event + breadcrumb before send.
                 options.beforeSend =
                     SentryOptions.BeforeSendCallback { event, _ ->
-                        // A link preview the server couldn't load is routine, and its
-                        // failed-request event would carry the chat link.
+                        // A link the server couldn't preview answers 502, which is routine.
                         if (isLinkPreview(event.request?.url)) return@BeforeSendCallback null
                         scrubPII(event)
                         event
@@ -67,9 +66,8 @@ class Observability
                     }
                 options.beforeSendTransaction =
                     SentryOptions.BeforeSendTransactionCallback { transaction, _ ->
-                        transaction.spans
-                            .filter { isLinkPreview(it.description) }
-                            .forEach { span -> span.data = span.data?.filterKeys { it != HTTP_QUERY } }
+                        transaction.spans.forEach { span -> span.data = span.data?.filterKeys { it !in URL_QUERY_KEYS } }
+                        transaction.breadcrumbs?.forEach { scrubPII(it) }
                         transaction
                     }
 
@@ -132,6 +130,11 @@ class Observability
         private val phoneRegex = Regex("""\+?\d[\d\s().-]{7,}""")
 
         private fun scrubPII(event: SentryEvent) {
+            // A failed-request event keeps the method, path and status.
+            event.request?.apply {
+                queryString = null
+                fragment = null
+            }
             val extras = event.extras
             if (extras != null) {
                 val mutable = extras.toMutableMap()
@@ -141,14 +144,11 @@ class Observability
             event.breadcrumbs?.forEach { scrubPII(it) }
         }
 
-        /**
-         * `GET /api/link-preview?url=` carries a chat message's link in its
-         * query string, which never leaves the device.
-         */
+        /** `GET /api/link-preview?url=` answers 502 for a link that won't load. */
         private fun isLinkPreview(url: String?): Boolean = url?.substringBefore('?')?.endsWith("/api/link-preview") == true
 
         private fun scrubPII(breadcrumb: Breadcrumb) {
-            if (isLinkPreview(breadcrumb.data["url"] as? String)) breadcrumb.removeData(HTTP_QUERY)
+            URL_QUERY_KEYS.forEach { breadcrumb.removeData(it) }
             breadcrumb.data
                 .toMutableMap()
                 .also { scrubInPlace(it) }
@@ -226,8 +226,11 @@ class Observability
         }
     }
 
-/** Sentry's key for an HTTP request's query string (breadcrumbs and spans). */
-private const val HTTP_QUERY = "http.query"
+/**
+ * Sentry's keys for a request URL's query string and fragment (HTTP breadcrumbs and spans). Queries carry
+ * typed addresses, coordinates, search terms and signed-URL tokens, so only the path leaves the device.
+ */
+private val URL_QUERY_KEYS = setOf("http.query", "http.fragment")
 
 private fun SentryLevel.toTimberPriority(): Int =
     when (this) {
