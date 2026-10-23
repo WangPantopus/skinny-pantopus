@@ -346,16 +346,25 @@ async function canViewProfileField(viewerId, targetUserId, field) {
     home_affiliation: 'show_home_affiliation',
   };
 
+  // Someone without a settings row has the table's defaults, which their privacy screen shows them.
+  const defaultLevel = {
+    gig_history: 'followers',
+    neighborhood: 'followers',
+    home_affiliation: 'private',
+  };
+
   const column = fieldToColumn[field];
   if (!column) return false;
 
-  const { data: settings } = await supabaseAdmin
+  // An unreadable setting fails the caller rather than guess.
+  const { data: settings, error } = await supabaseAdmin
     .from('UserPrivacySettings')
     .select(column)
     .eq('user_id', targetUserId)
     .maybeSingle();
+  if (error) throw error;
 
-  const level = settings?.[column] || 'public';
+  const level = settings?.[column] || defaultLevel[field];
 
   switch (level) {
     case 'public':

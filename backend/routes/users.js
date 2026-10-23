@@ -15,7 +15,7 @@ const Joi = require('joi');
 const logger = require('../utils/logger');
 const { getPublicResidencySummary } = require('../utils/publicResidencyProfile');
 const { generateCsrfToken } = require('../utils/csrf');
-const { isConnected, isSearchable, isScopedBlocked, isUnpublishedBusiness, unpublishedBusinessIds } = require('../utils/visibilityPolicy');
+const { isConnected, isSearchable, isScopedBlocked, isUnpublishedBusiness, unpublishedBusinessIds, canViewProfileField } = require('../utils/visibilityPolicy');
 const affinityService = require('../services/gig/affinityService');
 const inviteRewardService = require('../services/inviteRewardService');
 const emailService = require('../services/emailService');
@@ -409,6 +409,15 @@ async function withLocalProfileNameForViewer(shown, userData, viewerId, routeLoc
     last_name: null,
     profile_picture_url: avatarUrl,
   };
+}
+
+// Where someone lives (their profile's city and state, and their home's city in `residency`) is shown to the people
+// their Neighborhood privacy setting names, "Who can see your general area": everyone, their connections and the
+// people they live with ("Followers only", the default), or nobody but themselves ("Only me"). Everyone else gets those
+// keys with null values; the verified-resident badge stays. The owner and a business see and show them as before.
+async function canSeeProfileArea(viewerId, userData) {
+  if (viewerId === userData.id || userData.account_type === 'business') return true;
+  return canViewProfileField(viewerId, userData.id, 'neighborhood');
 }
 
 const PUBLIC_USER_PROFILE_SELECT = [
@@ -3628,7 +3637,10 @@ router.get('/id/:id', optionalAuth, async (req, res) => {
       logger.warn('Could not fetch reviews', { error: reviewErr.message });
     }
 
-    const residency = await getPublicResidencySummary(userData.id, req.user?.id || null);
+    const [residency, showArea] = await Promise.all([
+      getPublicResidencySummary(userData.id, req.user?.id || null),
+      canSeeProfileArea(viewerId, userData),
+    ]);
 
     res.json({
       id: publicUserData.id,
@@ -3645,11 +3657,11 @@ router.get('/id/:id', optionalAuth, async (req, res) => {
       avatar_url: publicUserData.profile_picture_url,
       profile_picture_url: publicUserData.profile_picture_url,
       profilePicture: publicUserData.profile_picture_url,
-      city: publicUserData.city,
-      state: publicUserData.state,
+      city: showArea ? publicUserData.city : null,
+      state: showArea ? publicUserData.state : null,
       accountType: publicUserData.account_type,
       verified: publicUserData.verified,
-      residency,
+      residency: showArea ? residency : { ...residency, city: null, state: null },
       profileVisibility,
       profile_visibility: profileVisibility,
       showEmail: publicUserData.show_email || false,
@@ -3938,6 +3950,7 @@ router.get('/:username', optionalAuth, async (req, res) => {
       return res.status(403).json({ error: 'This profile is private' });
     }
     const shownUser = await withLocalProfileNameForViewer(userData, userData, viewerId);
+    const showArea = await canSeeProfileArea(viewerId, userData);
 
     res.json({
       user: {
@@ -3948,8 +3961,8 @@ router.get('/:username', optionalAuth, async (req, res) => {
         middleName: shownUser.middle_name,
         lastName: shownUser.last_name,
         bio: shownUser.bio,
-        city: shownUser.city,
-        state: shownUser.state,
+        city: showArea ? shownUser.city : null,
+        state: showArea ? shownUser.state : null,
         profile_picture_url: shownUser.profile_picture_url,
         memberSince: shownUser.created_at,
         profile_visibility: profileVisibility,
@@ -4522,7 +4535,10 @@ router.get('/username/:username', optionalAuth, async (req, res) => {
       logger.warn('Could not fetch reviews', { error: reviewErr.message });
     }
 
-    const residency = await getPublicResidencySummary(userData.id, req.user?.id || null);
+    const [residency, showArea] = await Promise.all([
+      getPublicResidencySummary(userData.id, req.user?.id || null),
+      canSeeProfileArea(viewerId, userData),
+    ]);
 
     res.json({
       id: publicUserData.id,
@@ -4539,11 +4555,11 @@ router.get('/username/:username', optionalAuth, async (req, res) => {
       avatar_url: publicUserData.profile_picture_url,
       profile_picture_url: publicUserData.profile_picture_url,
       profilePicture: publicUserData.profile_picture_url,
-      city: publicUserData.city,
-      state: publicUserData.state,
+      city: showArea ? publicUserData.city : null,
+      state: showArea ? publicUserData.state : null,
       accountType: publicUserData.account_type,
       verified: publicUserData.verified,
-      residency,
+      residency: showArea ? residency : { ...residency, city: null, state: null },
       profileVisibility,
       profile_visibility: profileVisibility,
       showEmail: publicUserData.show_email || false,
