@@ -680,17 +680,22 @@ async function markReuse({ session, req }) {
  * activity" alert without holding a single credential. Hints still resolve the
  * row so a rotation we failed to persist can be recovered (and so the row is
  * never clobbered by `recordRefresh`), and a *valid* proof over that row is
- * still accepted — only the failure paths are made inert.
+ * still accepted — only the failure paths are made inert. A row named by the
+ * pair GoTrue minted for the presented token (`mintedSession`, see
+ * checkMintedSession) is no hint: GoTrue has just accepted the token for it.
  *
  * @returns {Promise<{ok:true, session:object|null, device:object|null, legacy:boolean, adopt:boolean, matchedBy:string|null, tokenResolved:boolean}
  *                  |{ok:false, status:number, code:string, error:string, tokenResolved:boolean}>}
  */
-async function checkRefresh({ refreshToken, sessionId, accessToken, dpop, req, cookieTransport = false }) {
+async function checkRefresh({ refreshToken, sessionId, accessToken, dpop, req, cookieTransport = false, mintedSession = null }) {
   const mode = authPolicy.deviceBindingMode();
-  const { session, matchedBy } = await resolveSessionForRefresh({ refreshToken, sessionId, accessToken });
-  // True only when the PRESENTED refresh token hashes to this row (current or
-  // previous generation) — i.e. the caller really holds a token of this session.
-  const tokenResolved = matchedBy === 'hash' || matchedBy === 'prev_hash';
+  const { session, matchedBy } = mintedSession
+    ? { session: mintedSession, matchedBy: 'minted' }
+    : await resolveSessionForRefresh({ refreshToken, sessionId, accessToken });
+  // True only when the caller really holds a token of this session: the
+  // PRESENTED refresh token hashes to this row (current or previous
+  // generation), or GoTrue rotated it into a pair that names this row.
+  const tokenResolved = matchedBy === 'hash' || matchedBy === 'prev_hash' || matchedBy === 'minted';
   // See SECURITY (`webExemption`) above: a client-declared header alone may not
   // buy an opt-out from `required` mode.
   const webExemption = cookieTransport && !looksNativeRequest(req) && !sessionLooksNative(session);
@@ -773,12 +778,34 @@ async function checkRefresh({ refreshToken, sessionId, accessToken, dpop, req, c
 }
 
 /**
+ * /refresh once GoTrue has rotated a refresh token that matched no row: a
+ * pre-registry session, or a rotation whose hashes weren't saved (a blip during
+ * an earlier refresh). The new pair names its session. A row that session
+ * already has gets every checkRefresh rule (a bound row needs a proof from its
+ * key), and recordRefresh records the rotation on it: writing a new row over it
+ * dropped its device binding and its `restored` context. GoTrue has just
+ * accepted the presented token for this session, so a refusal has the effects
+ * it has for a row the token's hash found: a copied token without the key ends
+ * the session (DEVICE_MISMATCH). `session: null` only when the session has no
+ * row at all; recordRefresh then creates one.
+ */
+async function checkMintedSession({ sessionId, refreshToken, dpop, req, cookieTransport = false }) {
+  const noRow = { ok: true, session: null, device: null, legacy: true, adopt: false, matchedBy: null, tokenResolved: false };
+  if (!isUuid(sessionId)) return noRow;
+  // A logout this process could not save yet counts as saved, row or no row (routes/users.js retries it).
+  if (authSessionService.signOutPending(sessionId)) return { ...fail('SESSION_REVOKED'), tokenResolved: true };
+  const session = await authSessionService.getSessionById(sessionId);
+  if (!session) return noRow;
+  return checkRefresh({ refreshToken, dpop, req, cookieTransport, mintedSession: session });
+}
+
+/**
  * Persist a successful refreshSession: hashes, last_refresh/seen/ip, device
  * last_seen; optionally adopt a legacy session onto the presenting key
  * (only when checkRefresh said `adopt` and the client sent a deviceId).
  *
  * @param {object} p
- * @param {object|null} p.session       row from checkRefresh (null ⇒ pre-registry, a row is created)
+ * @param {object|null} p.session       row from checkRefresh / checkMintedSession (null ⇒ the session has no row, one is created)
  * @param {object} p.newSession         Supabase session returned by refreshSession
  * @param {string} p.oldRefreshToken
  * @param {object} [p.dpop]
@@ -799,7 +826,8 @@ async function recordRefresh({ session, newSession, oldRefreshToken, dpop, adopt
     if (!session) {
       const userId = claims?.sub || null;
       if (userId) {
-        await authSessionService.insertSession({
+        // Never over a row the session already has (one written since checkMintedSession read it).
+        const created = await authSessionService.insertSession({
           id: sessionId,
           userId,
           deviceRowId: null,
@@ -808,11 +836,14 @@ async function recordRefresh({ session, newSession, oldRefreshToken, dpop, adopt
           boundAtIssue: false,
           refreshToken: newSession.refresh_token,
           req,
+          replace: false,
         });
-        await supabaseAdmin
-          .from('AuthSession')
-          .update({ prev_refresh_token_hash: oldRefreshToken ? hashToken(oldRefreshToken) : null, last_refresh_at: nowIso() })
-          .eq('id', sessionId);
+        if (created) {
+          await supabaseAdmin
+            .from('AuthSession')
+            .update({ prev_refresh_token_hash: oldRefreshToken ? hashToken(oldRefreshToken) : null, last_refresh_at: nowIso() })
+            .eq('id', sessionId);
+        }
       }
       return out;
     }
@@ -1695,6 +1726,7 @@ module.exports = {
   resolveSessionForRefresh,
   verifyRefreshProof,
   checkRefresh,
+  checkMintedSession,
   recordRefresh,
   markReuse,
   markMismatch,

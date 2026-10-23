@@ -43,6 +43,7 @@ Cookie transport (web): backend still inserts an `AuthSession` row (platform web
 Body: `{ refreshToken, deviceId?, sessionId? }` (+ `DPoP` with `rth`). Web: cookie as today.
 Response: `{ ok:true, accessToken, refreshToken, expiresIn, expiresAt, sessionId, session:{ id, context } }`.
 Server order: resolve session (hash → prev hash → sessionId) → revoked? → inactivity → if bound: verify DPoP against bound key (`rth` must match) → refreshSession → update hashes.
+No row found (a pre-registry session, or a rotation whose hashes weren't saved): after refreshSession, the session named by the new pair gets the same checks, as if the token's hash had found it. A revoked or signed-out row is refused, a bound row needs a proof from its key (else `DEVICE_MISMATCH`, session revoked), and the rotation is recorded on that row. Only a session with no row gets a new legacy row. A refusal also signs the new pair out; a row that can't be read answers 503, and the client's retry with its own token gets GoTrue's current one.
 Legacy (unbound) sessions: accepted while `AUTH_DEVICE_BINDING=optional`; a legacy session may be adopted onto the presenting key ONLY if `bound_at_issue=false AND issued_at < DPOP_CUTOVER` (env, ISO date). Default = far future, i.e. while unset EVERY unbound legacy session is adoptable (accepted status-quo risk of `optional` mode). Ops sets `DPOP_CUTOVER` to the date the DPoP-capable clients shipped; sessions issued after it are never adoptable and must re-login when the mode flips to `required`.
 
 ### `POST /api/users/logout`
