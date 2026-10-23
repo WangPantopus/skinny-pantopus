@@ -72,10 +72,14 @@ data class TransactionReviewDto(
     val reviewer: TransactionReviewerDto? = null,
 )
 
-/** Inlined reviewer card on each received review. */
+/**
+ * Inlined reviewer card on each received review. A person with a Local Profile comes with its `name` and no first or
+ * last name (backend/services/chatPeople.js).
+ */
 @JsonClass(generateAdapter = true)
 data class TransactionReviewerDto(
     val id: String,
+    val name: String? = null,
     @Json(name = "first_name") val firstName: String? = null,
     @Json(name = "last_name") val lastName: String? = null,
     val username: String? = null,

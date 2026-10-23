@@ -8,8 +8,9 @@
  * nothing else about the person (bio, locality, badges, counts) is added.
  *
  * Shared by routes/chats.js and socket/chatSocketio.js so the REST routes and the socket name people
- * the same way. Post comments (routes/posts.js) name their writers with it too, and post and connection notices
- * (routes/posts.js, routes/relationships.js) the person who acted.
+ * the same way. Post comments (routes/posts.js) name their writers with it too, post and connection notices
+ * (routes/posts.js, routes/relationships.js) the person who acted, and the Connections lists (routes/relationships.js)
+ * the people in them.
  */
 
 const supabaseAdmin = require('../config/supabaseAdmin');
