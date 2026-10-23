@@ -39,6 +39,23 @@ permission suppressed subsequent indicators. Temporary fixture rows were
 removed. Syntax and all four identity-select guards pass. App UI checks against
 this revision are pending; online/offline presence is still process-local.
 
+## Preference changes on another device
+
+`chat:preferences_changed` carries only `{at}` and invalidates the current
+identity's active chat preference readers. It is emitted after room mute or
+person mute commits, using the existing database notification trigger and
+coalesced listener. Other conversation participants receive no preference
+signal. Currently authorized business staff receive their business's signal;
+revoked staff do not. Ordinary message/read updates do not cause preference
+refetches. Foreground/reconnect still refreshes if a transient signal was missed.
+
+The additive local migration passed transaction rehearsal and complete
+application-function lint before being applied. Real two-process API/socket
+checks observed exactly two own-account signals for mute/unmute, zero peer
+signals, and no additional signal for reading. Business-owner receipt and
+revocation suppression passed. Syntax, migration policy and identity-select
+guards passed. Real app icon synchronization is being verified next.
+
 ## Immediate contract
 
 - REST message history uses `(created_at, id)` for both `before` and `after`; both bounds can be combined. `nextCursor` pages backward and `hasMore` comes from an extra row.

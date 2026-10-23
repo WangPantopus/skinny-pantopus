@@ -59,6 +59,7 @@ const RULES = {
   SavedPlace: { scope: 'user', topics: ({ p }) => ['homes', 'today', ...(p ? [`place:${p}`] : [])] },
   ChatParticipant: { scope: 'room', topics: ({ r }) => ['chats', `chat:${r}`] },
   ChatMessage: { scope: 'room', topics: ({ r }) => [`chat:${r}`, 'chats'] },
+  ChatPreferences: { scope: 'user', topics: () => ['chats'], preferences: true },
   Notification: { scope: 'user', topics: () => ['notifications'] },
   User: { scope: 'user', topics: () => ['profile:me'] },
   // default_home_id lives here too: another device reads its home list again.
@@ -117,6 +118,7 @@ function handleNotification(raw) {
   const key = String(id).toLowerCase();
   const entry = map.get(key) || { topics: new Set(), users: new Set() };
   for (const topic of rule.topics({ ...change, [SCOPE_KEY[rule.scope]]: key })) entry.topics.add(topic);
+  if (rule.preferences) entry.preferences = true;
   if (UUID_RE.test(String(change.u || ''))) entry.users.add(String(change.u).toLowerCase());
   map.set(key, entry);
   // A chat joined, re-joined or left (whatever wrote it: a REST route, an SQL function, a socket event):
@@ -252,7 +254,31 @@ async function flush() {
     }
   }
 
+  // Preference changes are private to the changed identity and its currently
+  // authorized business staff. Never tell the other conversation participant.
+  const preferenceRecipients = new Set();
+  const changedPreferences = [...batch.user].filter(([, entry]) => entry.preferences).map(([id]) => id);
+  for (const id of changedPreferences) if (_connectedUsers.has(id)) preferenceRecipients.add(id);
+  if (changedPreferences.length) {
+    try {
+      const { businessStaff } = require('./chatBusinessAccess');
+      for (const part of chunks(changedPreferences)) {
+        const { data, error } = await supabaseAdmin.from('User').select('id, account_type').in('id', part);
+        if (error) throw error;
+        const businesses = (data || []).filter((user) => user.account_type === 'business').map((user) => user.id);
+        for (const staff of await businessStaff(businesses, { include: (id) => _connectedUsers.has(id) })) {
+          preferenceRecipients.add(staff.userId);
+          add(staff.userId, ['chats']);
+        }
+      }
+    } catch (error) {
+      logger.warn('chat_preference_recipients_unavailable', { code: error.code });
+    }
+  }
   const at = new Date().toISOString();
+  for (const userId of preferenceRecipients) {
+    for (const socketId of _connectedUsers.get(userId) || []) _io.to(socketId).emit('chat:preferences_changed', { at });
+  }
   for (const [userId, topics] of byUser) {
     const payload = { topics: [...topics].sort(), at };
     for (const socketId of _connectedUsers.get(userId) || []) _io.to(socketId).emit(EVENT, payload);
