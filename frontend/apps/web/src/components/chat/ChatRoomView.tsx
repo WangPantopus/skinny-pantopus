@@ -505,6 +505,8 @@ export default function ChatRoomView({
       <ChatInput
         onSend={handleSend}
         sending={chat.sending}
+        typingPeerCount={chat.typingPeerCount}
+        onTypingChange={chat.onTypingChange}
         disabled={inputDisabled}
         placeholder={inputDisabled ? (launchFeatures.openGigs ? 'Place a bid to continue chatting…' : 'Message limit reached') : 'Type a message…'}
         onAttachAction={handleAttachAction}

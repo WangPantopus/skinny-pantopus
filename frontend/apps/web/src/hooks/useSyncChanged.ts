@@ -22,6 +22,11 @@ function mark(client: QueryClient, queryKey: readonly unknown[]): void {
   void client.invalidateQueries({ queryKey });
 }
 
+function refreshChatPreferences(client: QueryClient): void {
+  void client.invalidateQueries({ queryKey: ['chat', 'preferences'],
+    refetchType: navigator.onLine && document.visibilityState === 'visible' ? 'active' : 'none' });
+}
+
 /** Marks what one topic covers. Unknown topics (and `mail`, dormant while Mailbox is off) are ignored. */
 export function markTopic(client: QueryClient, topic: string): void {
   const split = topic.indexOf(':');
@@ -91,21 +96,28 @@ export function useSyncChanged(): void {
         mark(client, queryKeys.placePrimaryHome());
         mark(client, queryKeys.placeMyHomes());
         markTopic(client, 'chats');
-        mark(client, ['chat']);
+        void client.invalidateQueries({ queryKey: ['chat'],
+          refetchType: navigator.onLine && document.visibilityState === 'visible' ? 'active' : 'none' });
         mark(client, queryKeys.notifications());
         emitSyncTopics([RECONNECTED]);
       }
       connectedBefore = true;
     };
     socket.on('sync:changed', changed);
+    // Account-scoped and emitted only when notification preferences change.
+    // Ordinary message/read events must not refetch every open mute control.
+    const preferencesChanged = () => refreshChatPreferences(client);
+    socket.on('chat:preferences_changed', preferencesChanged);
     socket.on('connect', connected);
-    return () => { if (inboxRefresh) clearTimeout(inboxRefresh); socket.off('sync:changed', changed); socket.off('connect', connected); };
+    return () => { if (inboxRefresh) clearTimeout(inboxRefresh); socket.off('sync:changed', changed);
+      socket.off('chat:preferences_changed', preferencesChanged); socket.off('connect', connected); };
   }, [socket, client]);
 
   useEffect(() => {
     let hiddenAt: number | null = null;
     const visibility = () => {
       if (document.visibilityState === 'hidden') { hiddenAt = Date.now(); return; }
+      refreshChatPreferences(client);
       if (hiddenAt !== null && Date.now() - hiddenAt >= AWAY_MS) {
         void client.invalidateQueries();
         emitSyncTopics([EVERYTHING]);
@@ -113,6 +125,8 @@ export function useSyncChanged(): void {
       hiddenAt = null;
     };
     document.addEventListener('visibilitychange', visibility);
-    return () => document.removeEventListener('visibilitychange', visibility);
+    const online = () => refreshChatPreferences(client);
+    window.addEventListener('online', online);
+    return () => { document.removeEventListener('visibilitychange', visibility); window.removeEventListener('online', online); };
   }, [client]);
 }

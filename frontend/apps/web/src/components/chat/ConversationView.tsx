@@ -454,6 +454,8 @@ export default function ConversationView({
       <ChatInput
         onSend={handleSend}
         sending={chat.sending}
+        typingPeerCount={chat.typingPeerCount}
+        onTypingChange={chat.onTypingChange}
         disabled={!!chat.directChatError}
         placeholder={chat.directChatError ? "You can't send messages in this conversation." : 'Message'}
         onAttachAction={handleAttachAction}

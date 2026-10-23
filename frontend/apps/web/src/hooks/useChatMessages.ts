@@ -7,6 +7,7 @@ import type { ChatMessage as BaseChatMessage, User } from '@pantopus/types';
 import { getDateKey, formatDateLabel } from '@pantopus/ui-utils';
 import { useSocket, useSocketConnected } from './useSocket';
 import { useSocketEvent, useSocketEmit } from './useSocket';
+import { useChatTyping } from './useChatTyping';
 import { chosenUsername } from '@pantopus/utils';
 import { confirmStore } from '@/components/ui/confirm-store';
 import { queryKeys } from '@/lib/query-keys';
@@ -231,6 +232,8 @@ export interface UseChatMessagesReturn {
   error: string | null;
   setError: (e: string | null) => void;
   connected: boolean;
+  typingPeerCount: number;
+  onTypingChange: (active: boolean) => void;
   sending: boolean;
   hasMore: boolean;
   loadingOlder: boolean;
@@ -741,6 +744,8 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     ];
     return Array.from(new Set(ids.filter(Boolean)));
   }, [isRoomMode, roomId, resolvedRoomId, conversationRoomIds]);
+  const typing = useChatTyping({ roomId: roomId || resolvedRoomId, roomIds: activeRoomIds,
+    currentUserId, asBusinessUserId, scopeKey: cacheKeyId });
 
   // ── Connected transition handling ──────────────────────────
   // Track false→true and true→false transitions for reconnect/disconnect.
@@ -1133,6 +1138,8 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     error,
     setError,
     connected,
+    typingPeerCount: typing.peerCount,
+    onTypingChange: typing.onTypingChange,
     sending,
     hasMore,
     loadingOlder,

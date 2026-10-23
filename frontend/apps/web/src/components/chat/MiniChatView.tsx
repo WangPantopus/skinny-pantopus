@@ -177,6 +177,8 @@ export default function MiniChatView({ roomId, otherUserId, name, avatar, onBack
       <ChatInput
         onSend={handleSend}
         sending={chat.sending}
+        typingPeerCount={chat.typingPeerCount}
+        onTypingChange={chat.onTypingChange}
         placeholder="Type a message…"
         onAttachAction={handleAttachAction}
         compact

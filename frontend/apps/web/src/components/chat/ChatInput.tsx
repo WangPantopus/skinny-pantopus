@@ -22,11 +22,13 @@ interface ChatInputProps {
   editingMessage?: { messageId: string; text: string } | null;
   onCancelEdit?: () => void;
   onSaveEdit?: (text: string) => Promise<void>;
+  typingPeerCount?: number;
+  onTypingChange?: (active: boolean) => void;
   /** Why the conversation takes no messages (the server's sentence): shown in place of the composer. */
   lockedNote?: string | null;
 }
 
-export default function ChatInput({ onSend, sending, disabled = false, placeholder = 'Type a message…', onAttachAction, compact = false, replyingTo = null, onCancelReply, editingMessage = null, onCancelEdit, onSaveEdit, lockedNote = null }: ChatInputProps) {
+export default function ChatInput({ onSend, sending, disabled = false, placeholder = 'Type a message…', onAttachAction, compact = false, replyingTo = null, onCancelReply, editingMessage = null, onCancelEdit, onSaveEdit, typingPeerCount = 0, onTypingChange, lockedNote = null }: ChatInputProps) {
   const [text, setText] = useState('');
   const [editText, setEditText] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
@@ -42,6 +44,10 @@ export default function ChatInput({ onSend, sending, disabled = false, placehold
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const emojiBtnRef = useRef<HTMLButtonElement>(null);
   const retainingRef = useRef(false);
+  useEffect(() => {
+    if (disabled || lockedNote || editingMessage) onTypingChange?.(false);
+    return () => onTypingChange?.(false);
+  }, [disabled, lockedNote, editingMessage, onTypingChange]);
 
   useEffect(() => {
     setEditText(editingMessage?.text || '');
@@ -70,6 +76,7 @@ export default function ChatInput({ onSend, sending, disabled = false, placehold
     const hasFiles = selectedFiles.length > 0;
     if ((!trimmed && !hasFiles) || retainingRef.current || sending || disabled) return;
     retainingRef.current = true;
+    onTypingChange?.(false);
 
     const savedText = trimmed;
     const savedFiles = [...selectedFiles];
@@ -141,6 +148,7 @@ export default function ChatInput({ onSend, sending, disabled = false, placehold
   return (
     <footer className="bg-surface border-t border-app shrink-0">
       <div className={compact ? 'px-2 py-2' : 'max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-3'}>
+        {typingPeerCount > 0 && <p role="status" className="mb-1 text-xs text-app-muted">{typingPeerCount > 1 ? 'People are typing…' : 'Typing…'}</p>}
         {error && (
           <div className="mb-2 text-xs text-red-600">{error}</div>
         )}
@@ -203,7 +211,9 @@ export default function ChatInput({ onSend, sending, disabled = false, placehold
           <input
             ref={inputRef}
             value={visibleText}
-            onChange={e => setVisibleText(e.target.value)}
+            onChange={e => { setVisibleText(e.target.value); onTypingChange?.(!editingMessage && Boolean(e.target.value.trim())); }}
+            onFocus={() => onTypingChange?.(!editingMessage && Boolean(visibleText.trim()))}
+            onBlur={() => onTypingChange?.(false)}
             maxLength={editingMessage ? 10000 : undefined}
             onKeyDown={e => {
               if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
