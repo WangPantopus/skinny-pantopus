@@ -2515,7 +2515,6 @@ class ChatConversationViewModel
             _state.value = ChatConversationUiState.Error(error.message)
         }
 
-        /** The newest hundred server messages, restored from the account-scoped encrypted recent-history cache. */
         private fun resolveLatestScroll(firstPage: Boolean) {
             if (!firstPage || !scrollToLatestOnLoad) return
             scrollToLatestOnLoad = false
@@ -2525,6 +2524,7 @@ class ChatConversationViewModel
             didResolveScrollTarget = false
         }
 
+        /** The newest hundred server messages, restored from the account-scoped encrypted recent-history cache. */
         private fun showHistoryCopy(): Boolean {
             val copy =
                 when (val target = mode) {
