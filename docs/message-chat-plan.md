@@ -98,6 +98,31 @@ history and unified inbox. The metric endpoint returned twelve observations
 per route with the new bound metadata. This small local run is a functional
 check, not a production latency benchmark. Syntax and diff checks passed.
 
+## Complete room and business inbox pages
+
+The older `/chat/rooms` and `/chat/business/:id/rooms` readers now order all
+eligible rooms by latest message activity before limiting, and filter type
+before paging. Previously an active older conversation could be excluded by
+its membership's join date. Existing rows remain; additive fields are
+`hasMore` and `nextCursor`, with `before=<timestamp>|<room UUID>` for the next
+page. Limits are clamped to 1–500 (default 200). `total` and `totalUnread`
+describe the complete eligible, type-filtered inbox, not only the current page.
+
+An overload of the existing service-only room reader returns page memberships
+and totals in one database snapshot. Preview seeks reuse existing indexes.
+Counterparty reads use at most 100 room IDs per URL; failed identity/preview
+dependencies return retryable unavailability instead of replacing cached rows
+with incomplete data. Current business and assigned-task access checks remain.
+
+The additive migration passed a transaction rehearsal, complete function lint,
+migration policy and four identity-select guards, then was applied and recorded
+only locally. Real API checks used 531 personal and 531 business fixture rooms:
+both old readers omitted the newly active older room, both new readers placed
+it first, 500-row pages and subsequent pages recovered every room once, totals
+were stable, type filtering preceded the limit, malformed cursors returned 400,
+and a nonowner received 403. Fixtures were removed. Real client pagination
+adoption and screen verification remain in progress; no test code was changed.
+
 ## Immediate contract
 
 - REST message history uses `(created_at, id)` for both `before` and `after`; both bounds can be combined. `nextCursor` pages backward and `hasMore` comes from an extra row.

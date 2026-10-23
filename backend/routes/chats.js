@@ -840,6 +840,7 @@ function roomIsActive(room, planStates) {
 }
 
 function sendChatReadError(res, error, fallback) {
+  if (error.status === 400) return res.status(400).json({ error: error.message });
   if (error.status === 503 || error.code === 'CHAT_UNAVAILABLE') {
     return res.status(503).json({ error: error.message, code: error.code });
   }
@@ -1024,6 +1025,41 @@ function parseCursor(before) {
   return { beforeTs: before.slice(0, pipeIdx), beforeId: before.slice(pipeIdx + 1) };
 }
 
+async function roomInboxPage(query, userId, actorId = userId) {
+  const limit = Math.min(Math.max(parseInt(query.limit, 10) || 200, 1), 500);
+  const { beforeTs, beforeId } = parseCursor(query.before);
+  if (query.before && (String(query.before).length > 256 || !Number.isFinite(Date.parse(beforeTs))
+    || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(beforeId || ''))) {
+    throw Object.assign(new Error('Invalid room cursor'), { status: 400 });
+  }
+  if (query.type != null && typeof query.type !== 'string') {
+    throw Object.assign(new Error('Invalid room type'), { status: 400 });
+  }
+  const { data, error } = await supabaseAdmin.rpc('get_user_chat_rooms', {
+    p_user_id: userId, p_actor_id: actorId, p_limit: limit,
+    p_before_at: beforeTs, p_before_id: beforeId, p_type: query.type || null,
+  });
+  if (error || !data || !Array.isArray(data.entries)) throw chatAccessUnavailable();
+  const last = data.entries.at(-1);
+  return { ...data, nextCursor: data.hasMore && last ? `${last.sort_at}|${last.id}` : null };
+}
+
+async function roomPagePeople(roomIds, viewerId, activeOnly = false) {
+  const people = [];
+  // Bound GET URLs as well as result pages; 500 UUIDs can exceed proxy limits.
+  for (let offset = 0; offset < roomIds.length; offset += 100) {
+    let query = supabaseAdmin.from('ChatParticipant')
+      .select('room_id, user:user_id(id, username, name, first_name, middle_name, last_name, profile_picture_url)')
+      .in('room_id', roomIds.slice(offset, offset + 100))
+      .neq('user_id', viewerId).order('is_active', { ascending: false });
+    if (activeOnly) query = query.eq('is_active', true);
+    const { data, error } = await query;
+    if (error) throw chatAccessUnavailable();
+    people.push(...data || []);
+  }
+  return people;
+}
+
 /** Build a nextCursor string from the oldest message in a result set. */
 function buildNextCursor(messages) {
   if (!messages || messages.length === 0) return null;
@@ -1118,43 +1154,14 @@ router.get('/rooms', verifyToken, async (req, res) => {
   const roomsStartMs = Date.now();
   try {
     const userId = req.user.id;
-    const { limit = 200, type } = req.query;
-
-    let rooms = [];
-
-    const lim = Math.min(Math.max(parseInt(limit, 10) || 200, 1), 500);
-    const { data: participantRows, error: partErr } = await supabaseAdmin
-      .from('ChatParticipant')
-      .select(`
-        room_id,
-        unread_count,
-        last_read_at,
-        notifications_enabled,
-        preferences_updated_at,
-        role,
-        is_active,
-        room:room_id(
-          id,
-          type,
-          name,
-          description,
-          gig_id,
-          home_id,
-          is_active,
-          created_at,
-          updated_at
-        )
-      `)
-      .eq('user_id', userId)
-      // A room the person left isn't listed: its preview would show messages from after they left.
-      .eq('is_active', true)
-      .order('joined_at', { ascending: false })
-      .limit(lim);
-
-    if (partErr) {
-      logger.error('Error fetching chat rooms', { requestId: req.requestId, userId, error: partErr.message });
-      return res.status(500).json({ error: 'Failed to fetch chat rooms' });
+    const page = await roomInboxPage(req.query, userId);
+    const rank = new Map(page.entries.map((entry, index) => [entry.id, index]));
+    if (!page.entries.length) {
+      recordHistogram('chat.rooms.load_latency_ms', Date.now() - roomsStartMs);
+      return res.json({ rooms: [], total: page.total, totalUnread: page.totalUnread,
+        hasMore: page.hasMore, nextCursor: page.nextCursor });
     }
+    const participantRows = page.entries.map((entry) => entry.membership);
 
     // Build room list. A leftover member of an assigned task's gig room doesn't see it.
     const joinedRooms = (participantRows || []).filter(p => p.room);
@@ -1164,16 +1171,13 @@ router.get('/rooms', verifyToken, async (req, res) => {
     // Batch-fetch other participants and last messages for all rooms (2 queries instead of 2N)
     const allRoomIds = roomList.map(p => p.room.id);
 
-    const [{ data: allOtherParts }, { data: roomPreviews }, planStates] = await Promise.all([
-      supabaseAdmin
-        .from('ChatParticipant')
-        .select('room_id, user:user_id(id, username, name, first_name, middle_name, last_name, profile_picture_url)')
-        .in('room_id', allRoomIds)
-        .neq('user_id', userId)
-        .order('is_active', { ascending: false }),
+    const [allOtherParts, { data: roomPreviews, error: previewError }, planStates] = await Promise.all([
+      roomPagePeople(allRoomIds, userId),
       supabaseAdmin.rpc('get_room_previews', { p_room_ids: allRoomIds }),
       loadPlanChatStates(roomList.map((p) => p.room)),
     ]);
+
+    if (previewError) throw chatAccessUnavailable();
 
     // Pick first (active-preferred) participant per room, never a leftover member of an assigned task's gig room
     const hiddenMembers = await hiddenGigRoomMembers(
@@ -1229,24 +1233,15 @@ router.get('/rooms', verifyToken, async (req, res) => {
       };
     });
 
-    rooms = enrichedRooms;
+    const rooms = enrichedRooms.sort((a, b) => rank.get(a.id) - rank.get(b.id));
 
-    rooms.sort((a, b) => {
-      const ta = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
-      const tb = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
-      return tb - ta;
-    });
-    
-    // Filter by type if specified
-    if (type) {
-      rooms = rooms.filter(r => (r.room_type || r.type) === type);
-    }
-    
     recordHistogram('chat.rooms.load_latency_ms', Date.now() - roomsStartMs);
     res.json({
       rooms,
-      total: rooms.length,
-      totalUnread: rooms.reduce((sum, r) => sum + (r.unread_count || 0), 0)
+      total: page.total,
+      totalUnread: page.totalUnread,
+      hasMore: page.hasMore,
+      nextCursor: page.nextCursor
     });
 
   } catch (err) {
@@ -1263,46 +1258,21 @@ router.get('/business/:businessUserId/rooms', verifyToken, async (req, res) => {
   try {
     const actorUserId = req.user.id;
     const { businessUserId } = req.params;
-    const { limit = 200, type } = req.query;
 
     const allowed = await canActAsBusiness(businessUserId, actorUserId);
     if (!allowed) {
       return res.status(403).json({ error: 'Not authorized to access this business inbox' });
     }
 
+    const page = await roomInboxPage(req.query, businessUserId, actorUserId);
+    const rank = new Map(page.entries.map((entry, index) => [entry.id, index]));
+    if (!page.entries.length) return res.json({ rooms: [], total: page.total, totalUnread: page.totalUnread,
+      hasMore: page.hasMore, nextCursor: page.nextCursor, businessUserId });
+
     const teamMemberIds = await getBusinessMessagingMemberIds(businessUserId);
     const teamSet = new Set(teamMemberIds.map((id) => String(id)));
 
-    const { data: participantRows, error: partErr } = await supabaseAdmin
-      .from('ChatParticipant')
-      .select(`
-        room_id,
-        unread_count,
-        last_read_at,
-        notifications_enabled,
-        preferences_updated_at,
-        role,
-        room:room_id(
-          id,
-          type,
-          name,
-          description,
-          gig_id,
-          home_id,
-          is_active,
-          created_at,
-          updated_at
-        )
-      `)
-      .eq('user_id', businessUserId)
-      .eq('is_active', true)
-      .order('joined_at', { ascending: false })
-      .limit(parseInt(limit));
-
-    if (partErr) {
-      logger.error('Error fetching business chat rooms', { requestId: req.requestId, userId: actorUserId, businessUserId, error: partErr.message });
-      return res.status(500).json({ error: 'Failed to fetch business chat rooms' });
-    }
+    const participantRows = page.entries.map((entry) => entry.membership);
 
     const joinedRooms = (participantRows || []).filter((p) => p.room);
     const closedRoomIds = await closedGigRoomIds(joinedRooms.map((p) => p.room), actorUserId, [businessUserId]);
@@ -1314,15 +1284,13 @@ router.get('/business/:businessUserId/rooms', verifyToken, async (req, res) => {
 
     // Batch-fetch participants and last messages for all rooms (2 queries instead of 2N)
     const allBizRoomIds = roomList.map(p => p.room.id);
-    const [{ data: allBizParts }, { data: bizRoomPreviews }, planStates] = await Promise.all([
-      supabaseAdmin
-        .from('ChatParticipant')
-        .select('room_id, user:user_id(id, username, name, first_name, middle_name, last_name)')
-        .in('room_id', allBizRoomIds)
-        .eq('is_active', true),
+    const [allBizParts, { data: bizRoomPreviews, error: previewError }, planStates] = await Promise.all([
+      roomPagePeople(allBizRoomIds, businessUserId, true),
       supabaseAdmin.rpc('get_room_previews', { p_room_ids: allBizRoomIds }),
       loadPlanChatStates(roomList.map((p) => p.room)),
     ]);
+
+    if (previewError) throw chatAccessUnavailable();
 
     // Group participants by room, leaving out leftover members of assigned task gig rooms
     const hiddenBizMembers = await hiddenGigRoomMembers(
@@ -1381,18 +1349,14 @@ router.get('/business/:businessUserId/rooms', verifyToken, async (req, res) => {
       };
     });
 
-    let filtered = rooms;
-    if (type) filtered = rooms.filter((r) => (r.room_type || r.type) === type);
-    filtered.sort((a, b) => {
-      const ta = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
-      const tb = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
-      return tb - ta;
-    });
+    rooms.sort((a, b) => rank.get(a.id) - rank.get(b.id));
 
     res.json({
-      rooms: filtered,
-      total: filtered.length,
-      totalUnread: filtered.reduce((sum, r) => sum + (r.unread_count || 0), 0),
+      rooms,
+      total: page.total,
+      totalUnread: page.totalUnread,
+      hasMore: page.hasMore,
+      nextCursor: page.nextCursor,
       businessUserId,
     });
   } catch (err) {
