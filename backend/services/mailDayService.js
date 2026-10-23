@@ -19,6 +19,7 @@
 
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
+const { nameMailSenders } = require('../utils/mailSenderView');
 
 // PostgREST silently truncates unpaginated selects at the server's
 // max-rows cap (1000 on hosted Supabase) — a scan that "works" in dev
@@ -119,8 +120,10 @@ async function ensureTodayItems(userId, today) {
     if (rows.length === 0) return 0;
 
     const nowIso = new Date().toISOString();
-    const inserts = rows.map((q) => {
-      const mail = q.Mail || {};
+    // A person who sent the letter in their own name is named as neighbors see them (their Local Profile).
+    const letters = await nameMailSenders(rows.map((q) => q.Mail || {}), userId);
+    const inserts = rows.map((q, i) => {
+      const mail = letters[i] || {};
       return {
         user_id: userId,
         home_id: q.home_id || null,
