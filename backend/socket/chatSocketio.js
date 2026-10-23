@@ -315,39 +315,63 @@ module.exports = (io) => {
     // connect), or socket.io drops those events.
     const initialRoomsLoad = (async () => {
       try {
-        const { data: rooms, error } = await supabaseAdmin.rpc('get_user_chat_rooms', {
+        // Startup remains a bounded head subscription; older rooms are joined
+        // explicitly by clients. Use the current authorized, indexed inbox
+        // reader instead of the legacy function's full-history MAX scans.
+        const { data: page, error } = await supabaseAdmin.rpc('get_user_chat_rooms', {
           p_user_id: userId,
-          p_limit: 100
+          p_actor_id: userId,
+          p_limit: 100,
+          p_before_at: null,
+          p_before_id: null,
+          p_type: null,
+        });
+        if (error || !Array.isArray(page?.entries)) throw chatAccessUnavailable();
+        if (!socket.connected) return;
+        const entries = page.entries;
+        const { data: previews, error: previewError } = entries.length
+          ? await supabaseAdmin.rpc('get_room_previews', { p_room_ids: entries.map((entry) => entry.id) })
+          : { data: [] };
+        if (previewError) throw chatAccessUnavailable();
+        const previewByRoom = new Map((previews || []).map((preview) => [String(preview.room_id), preview]));
+        const rooms = entries.map(({ membership }) => {
+          const room = membership.room;
+          const preview = previewByRoom.get(String(room.id));
+          return {
+            id: room.id, room_type: room.type, room_name: room.name,
+            description: room.description, gig_id: room.gig_id, home_id: room.home_id,
+            is_active: room.is_active, created_at: room.created_at, updated_at: room.updated_at,
+            last_message_at: preview?.created_at || room.updated_at,
+            last_message_preview: preview?.message?.slice(0, 100) || null,
+            unread_count: membership.unread_count, last_read_at: membership.last_read_at, role: membership.role,
+          };
         });
 
-        if (!error && rooms) {
-          const roomIds = userRooms.get(userId) || new Set();
-          // A leftover member of an assigned task's gig room doesn't join it or get its preview.
-          let closedRoomIds;
-          try {
-            closedRoomIds = await closedGigRoomIds(rooms, userId);
-          } catch (accessErr) {
-            logger.warn('gig_room_access_unavailable_on_connect', { sessionId, userId, error: accessErr.message });
-            closedRoomIds = new Set(rooms.filter((r) => r.room_type === 'gig').map((r) => String(r.id)));
-          }
-          const openRooms = rooms.filter((r) => !closedRoomIds.has(String(r.id)));
-          if (!socket.connected) return;
-
-          for (const room of openRooms) {
-            // get_user_chat_rooms returns the room id as `id`.
-            const roomId = room.id;
-            socket.join(roomId);
-            roomIds.add(roomId);
-
-            logger.info('User joined room', { sessionId, userId, roomId, roomType: room.room_type });
-          }
-
-          userRooms.set(userId, roomIds);
-
-          // Send initial room list, without the other person's account name and username that get_user_chat_rooms
-          // also returns: the chat list names people by their Local Profile (routes/chats.js), and no app reads them here.
-          socket.emit('rooms:list', openRooms.map(({ other_participant_name, other_participant_username, ...room }) => room));
+        const roomIds = userRooms.get(userId) || new Set();
+        // A leftover member of an assigned task's gig room doesn't join it or get its preview.
+        let closedRoomIds;
+        try {
+          closedRoomIds = await closedGigRoomIds(rooms, userId);
+        } catch (accessErr) {
+          logger.warn('gig_room_access_unavailable_on_connect', { sessionId, userId, error: accessErr.message });
+          closedRoomIds = new Set(rooms.filter((r) => r.room_type === 'gig').map((r) => String(r.id)));
         }
+        const openRooms = rooms.filter((r) => !closedRoomIds.has(String(r.id)));
+        if (!socket.connected) return;
+
+        for (const room of openRooms) {
+          const roomId = room.id;
+          socket.join(roomId);
+          roomIds.add(roomId);
+
+          logger.info('User joined room', { sessionId, userId, roomId, roomType: room.room_type });
+        }
+
+        userRooms.set(userId, roomIds);
+
+        // The chat list names people through its authenticated REST reader;
+        // this compatibility event contains room metadata, never raw names.
+        socket.emit('rooms:list', openRooms);
       } catch (err) {
         logger.error('Error loading user rooms', { sessionId, userId, error: err.message });
       }
