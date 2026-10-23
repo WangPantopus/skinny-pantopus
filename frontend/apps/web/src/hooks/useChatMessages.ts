@@ -1024,10 +1024,13 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
   useSocketEvent('message:edited', handleMessageEdited);
   useSocketEvent('message:reaction_updated', handleReactionUpdated);
 
-  const handleMessagesRead = useCallback((data: { userId?: string; roomId?: string; readAt?: string; throughMessageId?: string }) => {
-    // A group member reading is not a receipt from every recipient. Person
-    // and verified direct-room views show Read only for that particular peer.
+  const handleMessagesRead = useCallback((data: { userId?: string; roomId?: string; readAt?: string; throughMessageId?: string;
+    directReceiptEligible?: boolean }) => {
     if (!receiptPeerId || data.userId !== receiptPeerId || !data.roomId || !data.readAt || !isCurrentScope()) return;
+    // A person view also contains task and group rooms. Only the server's
+    // verified two-member direct audience permits an immediate peer receipt.
+    // Legacy or ineligible events use the existing scope-coalesced recovery.
+    if (data.directReceiptEligible !== true) { void refresh().catch(() => {}); return; }
     const through = messagesRef.current.find((message) => message.id === data.throughMessageId);
     if (data.throughMessageId && !through) return;
     setMessages((previous) => previous.map((message) => {
@@ -1037,13 +1040,14 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
       noteLiveChange(String(message.id));
       return { ...message, read_at: data.readAt };
     }));
-  }, [receiptPeerId, asBusinessUserId, currentUserId, isCurrentScope, noteLiveChange]);
+  }, [receiptPeerId, asBusinessUserId, currentUserId, isCurrentScope, noteLiveChange, refresh]);
   useSocketEvent('messages:read', handleMessagesRead);
 
   const handleTopicMessagesRead = useCallback((data: { userId?: string; roomId?: string; topicId?: string;
-    readAt?: string; throughMessageId?: string; throughCreatedAt?: string }) => {
+    readAt?: string; throughMessageId?: string; throughCreatedAt?: string; directReceiptEligible?: boolean }) => {
     if (!receiptPeerId || data.userId !== receiptPeerId || !data.roomId || !data.topicId || !data.readAt
       || !data.throughMessageId || !data.throughCreatedAt || !isCurrentScope()) return;
+    if (data.directReceiptEligible !== true) { void refresh().catch(() => {}); return; }
     const boundary = { id: data.throughMessageId, created_at: data.throughCreatedAt } as ChatMessage;
     if (!Number.isFinite(messageTime(boundary))) return;
     setMessages((previous) => previous.map((message) => {
@@ -1054,7 +1058,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
       noteLiveChange(String(message.id));
       return mergeMessageRecord(message, { ...message, read_at: data.readAt });
     }));
-  }, [receiptPeerId, asBusinessUserId, currentUserId, isCurrentScope, noteLiveChange]);
+  }, [receiptPeerId, asBusinessUserId, currentUserId, isCurrentScope, noteLiveChange, refresh]);
   useSocketEvent('messages:topic_read', handleTopicMessagesRead);
 
   useEffect(() => {
