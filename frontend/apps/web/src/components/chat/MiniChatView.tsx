@@ -177,6 +177,9 @@ export default function MiniChatView({ roomId, otherUserId, name, avatar, onBack
           onReact={handleReact}
           onRetry={chat.retryMessage}
           onRemovePending={chat.removePendingMessage}
+          onEdit={chat.sendRefusal ? undefined : chat.beginEdit}
+          onDelete={chat.deleteMessage}
+          canChangeMessage={chat.canChangeMessage}
           onReply={chat.sendRefusal ? undefined : chat.beginReply}
         />
       </div>
@@ -190,6 +193,9 @@ export default function MiniChatView({ roomId, otherUserId, name, avatar, onBack
         compact
         replyingTo={chat.replyingTo}
         onCancelReply={chat.cancelReply}
+        editingMessage={chat.editingMessage}
+        onCancelEdit={chat.cancelEdit}
+        onSaveEdit={chat.saveEdit}
         lockedNote={chat.sendRefusal}
       />
 

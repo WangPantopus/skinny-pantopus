@@ -33,6 +33,9 @@ interface ChatMessageListProps {
   onRemovePending?: (messageId: string) => void;
   /** Called when the user picks Reply on a message; leave it out where the composer can't send. */
   onReply?: (target: ChatReplyTarget) => void;
+  canChangeMessage?: (message: ChatMessage) => boolean;
+  onEdit?: (message: ChatMessage) => void;
+  onDelete?: (message: ChatMessage) => void;
 }
 
 /** Within this distance of the bottom, the list follows new messages. */
@@ -67,6 +70,9 @@ export default function ChatMessageList({
   onRetry,
   onRemovePending,
   onReply,
+  canChangeMessage,
+  onEdit,
+  onDelete,
 }: ChatMessageListProps) {
   const scrollRef = useRef<HTMLElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
@@ -307,7 +313,7 @@ export default function ChatMessageList({
                     {startsDate && <ChatDateSeparator label={formatDateLabel(dateKey)} />}
                     {renderTopicDivider?.(msg, previous)}
                     <ChatMessageBubble msg={msg} isMine={isMine} showSender={!isMine && (startsDate || senderId !== previousSenderId)} reply={reply}
-                      onImageClick={onImageClick} onReact={onReact} onRetry={onRetry} onRemovePending={onRemovePending}
+                      onEdit={!canChangeMessage || canChangeMessage(msg) ? onEdit : undefined} onDelete={!canChangeMessage || canChangeMessage(msg) ? onDelete : undefined} onImageClick={onImageClick} onReact={onReact} onRetry={onRetry} onRemovePending={onRemovePending}
                       onReply={onReply ? handleReply : undefined} />
                   </div>
                 );

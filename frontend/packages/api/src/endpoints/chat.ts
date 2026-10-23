@@ -282,8 +282,8 @@ export async function editMessage(messageId: string, messageText: string): Promi
 /**
  * Delete a message
  */
-export async function deleteMessage(messageId: string): Promise<ApiResponse> {
-  return del<ApiResponse>(`/api/chat/messages/${messageId}`);
+export async function deleteMessage(messageId: string): Promise<ApiResponse & { sync_version?: number }> {
+  return del<ApiResponse & { sync_version?: number }>(`/api/chat/messages/${messageId}`);
 }
 
 /**

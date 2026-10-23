@@ -8,6 +8,7 @@ import { getDateKey, formatDateLabel } from '@pantopus/ui-utils';
 import { useSocket, useSocketConnected } from './useSocket';
 import { useSocketEvent, useSocketEmit } from './useSocket';
 import { chosenUsername } from '@pantopus/utils';
+import { confirmStore } from '@/components/ui/confirm-store';
 import { queryKeys } from '@/lib/query-keys';
 import { activateChatStorage, deleteChatRecords, readChatRecord, writeChatRecords } from '@/components/chat/chatStorage';
 import { enqueueChatSend, pendingChatMessage, removeChatSend, resumeChatOutbox, retryChatSend, startChatOutbox, subscribeChatOutbox } from '@/components/chat/chatOutbox';
@@ -249,6 +250,12 @@ export interface UseChatMessagesReturn {
   replyingTo: ChatReplyTarget | null;
   beginReply: (target: ChatReplyTarget) => void;
   cancelReply: () => void;
+  canChangeMessage: (message: BaseChatMessage) => boolean;
+  editingMessage: { messageId: string; text: string } | null;
+  beginEdit: (message: BaseChatMessage) => void;
+  cancelEdit: () => void;
+  saveEdit: (text: string) => Promise<void>;
+  deleteMessage: (message: BaseChatMessage) => Promise<void>;
   retryMessage: (messageId: string) => Promise<void>;
   removePendingMessage: (messageId: string) => Promise<void>;
   loadOlder: () => Promise<void>;
@@ -321,6 +328,20 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
   const [syncGeneration, setSyncGeneration] = useState(0);
   const completedRefreshRef = useRef(0);
   const [replyingTo, setReplyingTo] = useState<ChatReplyTarget | null>(null);
+  const [editingMessage, setEditingMessage] = useState<{ messageId: string; text: string } | null>(null);
+  const editRequest = useRef(false);
+  const deleteRequest = useRef(false);
+  const deletionConfirmation = useRef<ReturnType<typeof confirmStore.getSnapshot>>(null);
+  useEffect(() => {
+    const retire = () => {
+      setEditingMessage(null);
+      if (deletionConfirmation.current && confirmStore.getSnapshot() === deletionConfirmation.current) confirmStore.close(false);
+      deletionConfirmation.current = null;
+    };
+    retire();
+    const unsubscribe = api.onTokenChange(retire);
+    return () => { unsubscribe(); retire(); };
+  }, [cacheKeyId]);
   const [sendRefusal, setSendRefusal] = useState<string | null>(null);
   // A reply, and a reason the conversation takes no messages, belong to the conversation they came from.
   useEffect(() => { setReplyingTo(null); setSendRefusal(null); }, [cacheKeyId]);
@@ -814,6 +835,8 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     tombstonesRef.current.set(String(data.messageId), Math.max(tombstonesRef.current.get(String(data.messageId)) ?? 0, revision));
     noteLiveChange(String(data.messageId));
     setMessages(prev => prev.filter(m => String(m.id) !== String(data.messageId)));
+    setEditingMessage((current) => current?.messageId === String(data.messageId) ? null : current);
+    setReplyingTo((current) => current?.messageId === String(data.messageId) ? null : current);
   }, [activeRoomIds, isCurrentScope, noteLiveChange]);
 
   const handleMessageEdited = useCallback((data: Record<string, any>) => {
@@ -952,7 +975,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     } finally { if (isCurrentScope()) setSending(false); }
   }, [isRoomMode, roomId, resolvedRoomId, currentUserId, directChatError, otherUserId, asBusinessUserId, topicId, replyingTo, isCurrentScope]);
 
-  const beginReply = useCallback((target: ChatReplyTarget) => setReplyingTo(target), []);
+  const beginReply = useCallback((target: ChatReplyTarget) => { setEditingMessage(null); setReplyingTo(target); }, []);
   const cancelReply = useCallback(() => setReplyingTo(null), []);
   const retryMessage = useCallback(async (messageId: string) => {
     try { await retryChatSend(messageId); }
@@ -962,6 +985,57 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     try { await removeChatSend(messageId); }
     catch (error) { if (isCurrentScope()) setError(sendFailureReason(error)); }
   }, [isCurrentScope]);
+
+  const canChangeMessage = useCallback((message: BaseChatMessage) => {
+    const actor = (message as BaseChatMessage & { actor_user_id?: string }).actor_user_id;
+    const sender = message.user_id || message.sender_id || message.sender?.id;
+    return isCurrentScope() && !isUnsent(message) && (actor ? actor === currentUserId : sender === currentUserId)
+      && messagesRef.current.some((row) => row.id === message.id);
+  }, [currentUserId, isCurrentScope]);
+  const beginEdit = useCallback((message: BaseChatMessage) => {
+    if (!canChangeMessage(message)) return;
+    setEditingMessage({ messageId: message.id, text: message.message_text || message.message || message.content || '' });
+  }, [canChangeMessage]);
+  const cancelEdit = useCallback(() => setEditingMessage(null), []);
+  const saveEdit = useCallback(async (text: string) => {
+    const target = messagesRef.current.find((message) => message.id === editingMessage?.messageId);
+    if (!target || !canChangeMessage(target)) throw new Error('This message is no longer available to edit.');
+    if (editRequest.current) return;
+    const value = text.trim();
+    if (!value || value.length > 10000) throw new Error('Use between 1 and 10,000 characters.');
+    const marker = api.authSessionMarker();
+    editRequest.current = true;
+    try {
+      const result = await api.chat.editMessage(target.id, value);
+      if (!isCurrentScope() || marker !== api.authSessionMarker()) return;
+      if (survivesDeletion(result.message)) {
+        noteLiveChange(target.id);
+        setMessages((previous) => previous.map((message) => message.id === target.id ? mergeMessageRecord(message, result.message) : message));
+      }
+      setEditingMessage((current) => current?.messageId === target.id ? null : current);
+      setError(null);
+    } finally { editRequest.current = false; }
+  }, [editingMessage, canChangeMessage, isCurrentScope, survivesDeletion, noteLiveChange]);
+  const deleteMessage = useCallback(async (message: BaseChatMessage) => {
+    if (!canChangeMessage(message) || deleteRequest.current) return;
+    deleteRequest.current = true;
+    const marker = api.authSessionMarker();
+    try {
+      const answer = confirmStore.open({ title: 'Delete this message?', description: 'This removes the message and its attachments for everyone in this chat.', confirmLabel: 'Delete', variant: 'destructive' });
+      deletionConfirmation.current = confirmStore.getSnapshot();
+      const yes = await answer;
+      deletionConfirmation.current = null;
+      if (!yes || !isCurrentScope() || marker !== api.authSessionMarker()) return;
+      const result = await api.chat.deleteMessage(message.id);
+      if (!isCurrentScope() || marker !== api.authSessionMarker()) return;
+      handleMessageDeleted({ messageId: message.id, roomId: message.room_id, sync_version: result.sync_version ?? messageRevision(message) });
+      setEditingMessage((current) => current?.messageId === message.id ? null : current);
+      setReplyingTo((current) => current?.messageId === message.id ? null : current);
+      setError(null);
+    } catch (error) {
+      if (isCurrentScope() && marker === api.authSessionMarker()) setError(sendFailureReason(error) || 'Could not delete this message. Try again.');
+    } finally { deleteRequest.current = false; }
+  }, [canChangeMessage, isCurrentScope, handleMessageDeleted]);
 
   // ── React to message ────────────────────────────────
 
@@ -1031,6 +1105,12 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     replyingTo,
     beginReply,
     cancelReply,
+    editingMessage,
+    canChangeMessage,
+    beginEdit,
+    cancelEdit,
+    saveEdit,
+    deleteMessage,
     retryMessage,
     removePendingMessage,
     loadOlder,

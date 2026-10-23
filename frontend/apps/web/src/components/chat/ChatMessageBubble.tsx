@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Copy, MoreHorizontal, Reply } from 'lucide-react';
+import { Copy, MoreHorizontal, Reply, Pencil, Trash2 } from 'lucide-react';
 import type { ChatMessage } from '@pantopus/types';
 import { chatPersonAvatar, chatPersonHandle, chatPersonName, extractAttachments, resolveMessageType } from '../../hooks/useChatMessages';
 import ChatRichCard from './ChatRichCard';
@@ -43,13 +43,15 @@ interface ChatMessageBubbleProps {
   onRemovePending?: (messageId: string) => void;
   /** Picked from the message's actions menu: the composer replies to this message. */
   onReply?: (msg: ChatMessage) => void;
+  onEdit?: (msg: ChatMessage) => void;
+  onDelete?: (msg: ChatMessage) => void;
 }
 
 // The actions menu's size (its row of quick reactions sets the width), to keep it on screen next to its button.
 const MENU_WIDTH = 304;
-const MENU_HEIGHT = 150;
 
-function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClick, onReact, onRetry, onRemovePending, onReply }: ChatMessageBubbleProps) {
+
+function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClick, onReact, onRetry, onRemovePending, onReply, onEdit, onDelete }: ChatMessageBubbleProps) {
   const [preview, setPreview] = useState<{ url: string; title?: string; mimeType?: string; liveUrl?: string } | null>(null);
   const [hovered, setHovered] = useState(false);
   const [showQuickPicker, setShowQuickPicker] = useState(false);
@@ -112,15 +114,20 @@ function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClic
   const menuActions: MessageAction[] = [
     ...(onReply ? [{ key: 'reply', label: 'Reply', icon: Reply }] : []),
     ...(showText ? [{ key: 'copy', label: 'Copy text', icon: Copy }] : []),
+    ...(isMine && showText && onEdit && !['location', 'gig_offer', 'listing_offer'].includes(msgType) ? [{ key: 'edit', label: 'Edit', icon: Pencil }] : []),
+    ...(isMine && onDelete ? [{ key: 'delete', label: 'Delete', icon: Trash2, destructive: true }] : []),
   ];
   const openMenu = (e: React.MouseEvent<HTMLButtonElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const left = Math.max(8, Math.min(isMine ? rect.right - MENU_WIDTH : rect.left, window.innerWidth - MENU_WIDTH - 8));
+    const MENU_HEIGHT = 68 + menuActions.length * 40;
     const top = rect.bottom + 4 + MENU_HEIGHT > window.innerHeight ? Math.max(8, rect.top - 4 - MENU_HEIGHT) : rect.bottom + 4;
     setMenuAt({ top, left });
   };
   const handleMenuAction = (key: string) => {
     if (key === 'reply') onReply?.(msg);
+    else if (key === 'edit') onEdit?.(msg);
+    else if (key === 'delete') onDelete?.(msg);
     else if (key === 'copy') void navigator.clipboard?.writeText(msgText).catch(() => {});
     else if (key === 'emoji_picker') setShowFullPicker(true);
   };
@@ -380,5 +387,7 @@ export default React.memo(ChatMessageBubble, (prev, next) => {
     && prev.onImageClick === next.onImageClick
     && prev.onRetry === next.onRetry
     && prev.onRemovePending === next.onRemovePending
-    && prev.onReply === next.onReply;
+    && prev.onReply === next.onReply
+    && prev.onEdit === next.onEdit
+    && prev.onDelete === next.onDelete;
 });
