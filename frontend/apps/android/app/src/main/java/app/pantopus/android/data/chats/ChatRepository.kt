@@ -98,9 +98,8 @@ class ChatRepository
             limit: Int = HISTORY_LIMIT,
             force: Boolean = false,
             asBusinessUserId: String? = null,
-            networkOnly: Boolean = false,
         ): NetworkResult<ChatMessagesResponse> {
-            if (networkOnly || before != null || after != null) {
+            if (force || before != null || after != null) {
                 return safeApiCall { api.roomMessages(roomId, limit, before, after, asBusinessUserId) }
                     .forgetRefusedHistory(StoreKeys.roomMessages(roomId, HISTORY_LIMIT, asBusinessUserId))
             }
@@ -124,9 +123,8 @@ class ChatRepository
             limit: Int = HISTORY_LIMIT,
             topicId: String? = null,
             force: Boolean = false,
-            networkOnly: Boolean = false,
         ): NetworkResult<ChatMessagesResponse> {
-            if (networkOnly || before != null || after != null) {
+            if (force || before != null || after != null) {
                 return safeApiCall { api.conversationMessages(otherUserId, limit, before, after, topicId) }
                     .forgetRefusedHistory(StoreKeys.conversationMessages(otherUserId, topicId, HISTORY_LIMIT))
             }

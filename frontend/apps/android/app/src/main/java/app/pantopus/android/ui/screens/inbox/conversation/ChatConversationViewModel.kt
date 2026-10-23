@@ -2510,9 +2510,9 @@ class ChatConversationViewModel
         ): NetworkResult<ChatMessagesResponse> =
             when (val target = context.mode) {
                 is ChatThreadMode.Room ->
-                    repo.roomMessages(target.id, before = before, asBusinessUserId = target.asBusinessUserId, networkOnly = true)
+                    repo.roomMessages(target.id, before = before, asBusinessUserId = target.asBusinessUserId, force = true)
                 is ChatThreadMode.Person ->
-                    repo.conversationMessages(target.otherUserId, before = before, topicId = context.topicId, networkOnly = true)
+                    repo.conversationMessages(target.otherUserId, before = before, topicId = context.topicId, force = true)
                 ChatThreadMode.Ai -> NetworkResult.Success(ChatMessagesResponse(emptyList()))
             }
 
