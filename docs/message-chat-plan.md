@@ -82,8 +82,10 @@ Two real local API processes passed initial already-online discovery, remote
 reconnect, one-device disconnect without a false offline, last-device offline,
 blocked-peer suppression and revoked-member suppression. Abruptly stopping the
 isolated source process cleared its online status after 52 seconds. Actual
-native header checks are pending. Syntax and four identity-select checks
-passed. No test code was added or modified.
+Android reopening an already-online peer showed Active now, and the peer's
+last disconnect removed it. A subsequent peer message arrived once and the
+sender saw Read. The iOS header check remains pending. Syntax and four
+identity-select checks passed. No test code was added or modified.
 
 ## Bounded latency observations
 
@@ -137,7 +139,32 @@ before local application. Repeating the delayed transaction kept the new
 message after the read boundary with unread count one. Its synthetic rows were
 removed. Existing app send and receive flows are being rechecked. Separately,
 person conversations spanning several rooms need a visible boundary per room;
-the current global timestamp can acknowledge another room's unseen history.
+the previous global timestamp could acknowledge another room's unseen history.
+
+## Visible read boundaries for each room
+
+Room and person read endpoints now accept `throughMessageIds`, a map from room
+ID to the newest accepted message actually visible in that room. They also
+accept the existing `throughMessageId` as an older-server fallback; when both
+are supplied that ID must be in the map. A map updates only its listed rooms.
+Clients must retain foreground and topic-filter guards and must not derive
+these boundaries from offscreen cached rows. An empty map changes nothing.
+
+A single cursor from an existing client now updates only its own room. Legacy
+requests without either cursor retain request-time semantics using each room's
+own latest message. The private wrapper reuses existing monotonic read locking,
+validates the complete map before updates and returns complete unread totals in
+one JSON envelope, avoiding PostgREST's set-returning row cap. No table is added.
+
+Local database checks reproduced the old unseen-room count falling to zero,
+then verified the new count stays one. Actual API requests passed partial and
+complete two-room reads, wrong-room and out-of-scope rejection, a stale cursor
+leaving a later arrival unread, and existing single-cursor clients. A real
+PostgREST call returned all 1,031 empty fixture rooms in its JSON response.
+All temporary rooms were removed. The additive migration passed full function
+lint and transaction rehearsal before local application; migration policy,
+JavaScript syntax and four identity-select checks passed. Actual client map
+adoption and screen verification remain pending. No test code was changed.
 
 ## Immediate contract
 

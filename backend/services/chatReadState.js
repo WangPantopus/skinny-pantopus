@@ -6,21 +6,45 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 
 // A subscription/send is not evidence of reading. Only an explicit read after
 // rendering history advances this boundary; legacy clients use request time.
-async function markChatRead({ roomIds, userId, throughMessageId, requestAt, io }) {
+async function markChatRead({ roomIds, userId, throughMessageId, throughMessageIds, requestAt, io }) {
   if (throughMessageId != null && (typeof throughMessageId !== 'string' || !UUID.test(throughMessageId))) {
     return { error: { code: '22023', message: 'Invalid read cursor' } };
   }
-  const { data, error } = await supabaseAdmin.rpc('mark_chat_read_through', {
+  let boundaries = null;
+  if (throughMessageIds != null) {
+    if (typeof throughMessageIds !== 'object' || Array.isArray(throughMessageIds)
+      || Object.keys(throughMessageIds).length > 500) {
+      return { error: { code: '22023', message: 'Invalid read cursor' } };
+    }
+    const allowedRooms = new Set(roomIds.map((id) => String(id).toLowerCase()));
+    boundaries = Object.create(null);
+    for (const [room, message] of Object.entries(throughMessageIds)) {
+      if (!UUID.test(room) || !allowedRooms.has(room.toLowerCase())
+        || typeof message !== 'string' || !UUID.test(message) || boundaries[room.toLowerCase()]) {
+        return { error: { code: '22023', message: 'Invalid read cursor' } };
+      }
+      boundaries[room.toLowerCase()] = message.toLowerCase();
+    }
+    if (throughMessageId && !Object.values(boundaries).includes(throughMessageId.toLowerCase())) {
+      return { error: { code: '22023', message: 'Invalid read cursor' } };
+    }
+  }
+  const { data, error } = await supabaseAdmin.rpc('mark_chat_read_boundaries', {
     p_user_id: userId,
     p_room_ids: roomIds,
+    p_boundaries: boundaries,
     p_through_message_id: throughMessageId || null,
     p_request_at: requestAt || new Date().toISOString(),
   });
   if (error) return { error };
-  for (const row of data || []) {
+  // One JSON response keeps complete totals even above PostgREST's row cap.
+  if (!Array.isArray(data?.data) || !Number.isSafeInteger(data.unreadCount) || data.unreadCount < 0) {
+    return { error: { code: 'XX000', message: 'Read state unavailable' } };
+  }
+  for (const row of data.data) {
     if (row.through_message_id && io) chatRealtime.announce({ t: 'ChatRead', r: row.room_id, u: userId });
   }
-  return { data: data || [], unreadCount: (data || []).reduce((sum, row) => sum + row.unread_count, 0) };
+  return { data: data.data, unreadCount: data.unreadCount };
 }
 
 function timestampMicros(value) {

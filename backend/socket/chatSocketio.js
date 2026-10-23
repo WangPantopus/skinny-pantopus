@@ -578,7 +578,7 @@ module.exports = (io) => {
     /**
      * Mark messages as read
      */
-    on('messages:read', async ({ roomId, throughMessageId }, callback) => {
+    on('messages:read', async ({ roomId, throughMessageId, throughMessageIds }, callback) => {
       const requestAt = new Date().toISOString();
       try {
         // Verify the socket has joined this room as a member (a business's read goes through the API)
@@ -587,7 +587,7 @@ module.exports = (io) => {
         }
 
         if (await isGigRoomClosedTo(roomId, userId)) return callback({ error: 'Access denied' });
-        const result = await markChatRead({ roomIds: [roomId], userId, throughMessageId, requestAt, io });
+        const result = await markChatRead({ roomIds: [roomId], userId, throughMessageId, throughMessageIds, requestAt, io });
         if (result.error) return callback({ error: 'Failed to mark as read' });
 
         // Update the reader's own badge counts (unread decreased)

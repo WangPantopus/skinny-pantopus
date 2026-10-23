@@ -1973,7 +1973,8 @@ router.post('/conversations/:otherUserId/read', verifyToken, async (req, res) =>
 
     const usersToClear = [String(readTargetUserId)];
     const result = await markChatRead({ roomIds: sharedRoomIds, userId: readTargetUserId,
-      throughMessageId: req.body?.throughMessageId, requestAt, io: req.app.get('io') });
+      throughMessageId: req.body?.throughMessageId, throughMessageIds: req.body?.throughMessageIds,
+      requestAt, io: req.app.get('io') });
     if (result.error) {
       const status = result.error.code === '22023' ? 400 : result.error.code === '42501' ? 403 : 500;
       return res.status(status).json({ error: status === 400 ? 'Invalid read cursor' : 'Failed to mark conversation as read' });
@@ -2655,7 +2656,8 @@ router.post('/rooms/:roomId/read', verifyToken, async (req, res) => {
     const usersToClear = [String(readTargetUserId)];
 
     const result = await markChatRead({ roomIds: [roomIdStr], userId: readTargetUserId,
-      throughMessageId: req.body?.throughMessageId, requestAt, io: req.app.get('io') });
+      throughMessageId: req.body?.throughMessageId, throughMessageIds: req.body?.throughMessageIds,
+      requestAt, io: req.app.get('io') });
     if (result.error) {
       const status = result.error.code === '22023' ? 400 : result.error.code === '42501' ? 403 : 500;
       return res.status(status).json({ error: status === 400 ? 'Invalid read cursor' : 'Failed to mark messages as read' });
