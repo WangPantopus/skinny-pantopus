@@ -282,14 +282,9 @@ SELECT region, source_id, priority, active FROM seeder_sources ORDER BY region, 
 
 ## Step 4: Deploy the Backend Link Preview Endpoint
 
-The seeder posts include links to original articles. The frontend displays link preview cards using a backend endpoint that fetches Open Graph metadata.
+The seeder posts include links to original articles. The frontend displays link preview cards using a backend endpoint that fetches Open Graph metadata. The cards are text only (title, description, site name): the article's image is never loaded, so showing a card never sends a reader's IP address to the linked site.
 
-### Install the cheerio dependency
-
-```bash
-cd backend
-npm install cheerio
-```
+The endpoint parses pages with `htmlparser2`, which installs with the backend's dependencies.
 
 ### Verify the route is registered
 
@@ -776,6 +771,6 @@ aws logs tail /aws/lambda/pantopus-seeder-SeederPosterFunction-XXXXX --follow
 
 ### Link preview cards not showing
 
-- Verify `cheerio` is installed in the backend: `cd backend && npm ls cheerio`
+- Verify `htmlparser2` is installed in the backend: `cd backend && pnpm ls htmlparser2`
 - Check the route is registered in `backend/app.js`
 - Test directly: `curl -H "Authorization: Bearer <token>" "https://api.pantopus.com/api/link-preview?url=https://example.com"`

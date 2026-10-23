@@ -14,7 +14,7 @@ const fail = storage.storageError;
 const uuid = Joi.string().uuid().required();
 const fields = Joi.object({ upload_id: uuid, expected_version: uuid });
 const multipart = multer({ storage: multer.memoryStorage(),
-  limits: { fileSize: storage.MAX_DOCUMENT_BYTES, files: 1, fields: 2, fieldSize: 100 },
+  limits: { fieldNameSize: 100, fieldNestingDepth: 3, fieldArrayIndexLimit: 32, fileSize: storage.MAX_DOCUMENT_BYTES, files: 1, fields: 2, fieldSize: 100 },
 }).single('file');
 
 async function row(table, id) {
