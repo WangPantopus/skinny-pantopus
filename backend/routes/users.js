@@ -588,7 +588,7 @@ async function revokeSessionByAccessToken(accessToken, context = {}) {
     const { error } = await supabaseAdmin.auth.admin.signOut(accessToken, 'local');
     if (error) {
       const status = Number(error.status);
-      if ([401, 403, 404].includes(status)) {
+      if (authSessionService.sessionAlreadyEnded(error)) {
         logger.info('auth.session_revoke_already_invalid', {
           ...context,
           status,
@@ -721,8 +721,7 @@ async function safeHook(name, fn) {
     return await fn();
   } catch (err) {
     logger.error(`auth.hook.${name}_failed`, { error: err.message, stack: err.stack });
-    if (['password_changed', 'password_reset', 'account_deleted', 'refresh_reuse',
-      'refresh_foreign', 'oauth_token_mismatch', 'logout_local'].includes(name)) throw err;
+    if (['password_reset', 'refresh_reuse', 'refresh_foreign', 'oauth_token_mismatch'].includes(name)) throw err;
     return null;
   }
 }
@@ -2520,13 +2519,23 @@ router.post('/password', verifyToken, reauthLimiter, reauthAccountLimiter, valid
 
     // Persistent login (design §6.3 /password): every OTHER session/device is
     // signed out (GoTrue scope 'others' + registry rows + grants) and the user
-    // is told; the current session stays.
-    await safeHook('password_changed', () => authDeviceService.onPasswordChanged({
-      userId,
-      currentSessionId: currentSessionId(req),
-      accessToken: accessTokenFromRequest(req),
-      req,
-    }));
+    // is told; the current session stays. The password has already changed, so
+    // a sign-out that didn't finish is reported as that, not as a failed change.
+    try {
+      await authDeviceService.onPasswordChanged({
+        userId,
+        currentSessionId: currentSessionId(req),
+        accessToken: accessTokenFromRequest(req),
+        req,
+      });
+    } catch (hookErr) {
+      logger.error('auth.hook.password_changed_failed', { userId, error: hookErr.message, stack: hookErr.stack });
+      return res.status(503).json({
+        error: 'Your password was changed, but signing out your other devices didn\'t finish. Choose "Sign out other devices" in Security settings.',
+        code: 'SIGN_OUT_INCOMPLETE',
+        hasPassword: true,
+      });
+    }
 
     return res.status(200).json({
       message: hasPassword ? 'Password updated successfully' : 'Password set successfully',
@@ -2718,6 +2727,8 @@ router.post('/refresh', refreshLimiter, refreshDpop, async (req, res) => {
     res.status(200).json({ ok: true, ...tokenFields, ...registryFields });
   } catch (err) {
     logger.error('Refresh token error', { error: err.message });
+    // A reuse/mismatch revocation that couldn't be saved: the apps retry a 503.
+    if (err.authBusy) return res.status(503).json({ error: 'Could not verify this session right now. Please try again.', code: 'AUTH_UNAVAILABLE' });
     res.status(500).json({ error: 'Failed to refresh session' });
   }
 });
@@ -4279,6 +4290,8 @@ const RESET_BUSY_LINK_USED = 'Password reset is busy right now. Please request a
  * Reset password using recovery token (token_hash) or access token
  */
 router.post('/reset-password', resetPasswordLimiter, validate(resetPasswordSchema), async (req, res) => {
+  // Set once the new password is saved: a later failure must not say the link still works.
+  let passwordChanged = false;
   try {
     const { token, newPassword } = req.body;
     const isJwtAccessToken = token.split('.').length === 3;
@@ -4324,6 +4337,7 @@ router.post('/reset-password', resetPasswordLimiter, validate(resetPasswordSchem
         }
         return res.status(400).json({ error: 'Unable to reset password' });
       }
+      passwordChanged = true;
 
       // Persistent login (design §6.3 /reset-password): everything is signed
       // out — GoTrue global sign-out, registry rows, devices, grants, push
@@ -4385,6 +4399,7 @@ router.post('/reset-password', resetPasswordLimiter, validate(resetPasswordSchem
         }
         return res.status(400).json({ error: 'Unable to reset password' });
       }
+      passwordChanged = true;
 
       // Persistent login: revoke ALL sessions/devices/grants + watermark
       // (global sign-out through the recovery session's JWT), then drop the
@@ -4406,10 +4421,18 @@ router.post('/reset-password', resetPasswordLimiter, validate(resetPasswordSchem
     startSignInCountsAgain(resetEmail);
     return res.json({ message: 'Password reset successful. You can now sign in.' });
   } catch (err) {
-    // A revocation failure can happen after the password or recovery link changed.
+    // The recovery check reads the session registry before anything changes (the
+    // link still works); the sign-out-everywhere step runs after the new password is saved.
+    if (err.authBusy && !passwordChanged) {
+      logger.warn('Reset password unavailable - session registry unreadable', { code: err.code });
+      return res.status(503).json({ error: RESET_BUSY_LINK_KEPT, code: 'AUTH_BUSY' });
+    }
     if (err.authBusy) {
-      logger.warn('Reset password unavailable - security state could not be saved', { code: err.code });
-      return res.status(503).json({ error: 'Could not complete the password reset securely. Please request a new reset link and try again.', code: 'AUTH_BUSY' });
+      logger.warn('Reset password saved, sign-out everywhere incomplete', { code: err.code });
+      return res.status(503).json({
+        error: 'Your new password was saved, but signing out your other devices didn\'t finish. Sign in with it, then choose "Sign out everywhere" in Security settings.',
+        code: 'SIGN_OUT_INCOMPLETE',
+      });
     }
     logger.error('Reset password error', { error: err.message });
     return res.status(500).json({ error: 'Failed to reset password' });
@@ -5754,6 +5777,9 @@ router.delete('/account', verifyToken, requireStepUp('delete_account'), requireS
     // of an account that still exists. Revoke every session/device/grant,
     // delete PushToken rows, kick sockets, record `account_deleted`. These
     // rows are FK'd to auth.users, so this runs before admin.deleteUser.
+    // A failure here must not skip that deletion: with the User row gone
+    // verifyToken already refuses these sessions, and deleting the auth user
+    // ends their refresh tokens.
     await safeHook('account_deleted', () => authDeviceService.onAccountDeleted({
       userId,
       accessToken: accessTokenFromRequest(req),
@@ -5762,7 +5788,8 @@ router.delete('/account', verifyToken, requireStepUp('delete_account'), requireS
 
     // ── 5. Delete Supabase Auth user ─────────────────────────────
     try {
-      await supabaseAdmin.auth.admin.deleteUser(userId);
+      const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
+      if (authDeleteError) throw authDeleteError;
       logger.info('Supabase auth user deleted', { userId });
     } catch (authErr) {
       // User row is already gone — log but don't fail the request

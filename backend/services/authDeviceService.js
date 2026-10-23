@@ -1121,14 +1121,17 @@ async function revokeDevice({ userId, deviceRowId, reason = 'user', req, actorSe
   // device revoked but failed before revoking its resume grants.
   const already = Boolean(row.revoked_at);
 
-  try {
-    await pushService.sendToDevice(userId, row.device_id, {
-      title: 'Signed out',
-      body: 'This device was signed out of Pantopus.',
-      data: { type: 'session_revoked', reason },
-    });
-  } catch (err) {
-    logger.debug('auth.revoke_device.push_failed', { error: err.message });
+  // The device was told the first time; a retry only finishes the cleanup.
+  if (!already) {
+    try {
+      await pushService.sendToDevice(userId, row.device_id, {
+        title: 'Signed out',
+        body: 'This device was signed out of Pantopus.',
+        data: { type: 'session_revoked', reason },
+      });
+    } catch (err) {
+      logger.debug('auth.revoke_device.push_failed', { error: err.message });
+    }
   }
 
   const revokedSessions = await authSessionService.revokeSessionsForDevice(row.id, 'device_revoked', { userId });

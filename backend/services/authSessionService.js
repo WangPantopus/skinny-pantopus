@@ -315,6 +315,15 @@ function invalidateSessionStateCache(sessionId) {
   else _sessionStateCache.delete(sessionId);
 }
 
+/** Drop cached state for every session of one user, e.g. after another process revoked one. */
+function invalidateSessionStateCacheForUser(userId) {
+  if (!userId) return;
+  const id = String(userId).toLowerCase();
+  for (const [sessionId, entry] of _sessionStateCache) {
+    if (String(entry.value.row?.user_id || '').toLowerCase() === id) _sessionStateCache.delete(sessionId);
+  }
+}
+
 function emitRevoked(userId, sessionIds, reason) {
   const ids = (sessionIds || []).filter(Boolean);
   if (ids.length === 0) return;
@@ -402,15 +411,22 @@ async function listActiveSessions(userId) {
 
 /**
  * supabaseAdmin.auth.admin.signOut(jwt, scope). 401/403/404 count as
- * "already gone". Returns true when GoTrue-side revocation is in effect.
+ * "already gone", and so does a session GoTrue already ended: auth-js reports
+ * its 403 session_not_found as AuthSessionMissingError with status 400 (a
+ * password change or reset ends sessions before this runs).
+ * Returns true when GoTrue-side revocation is in effect.
  */
+function sessionAlreadyEnded(error) {
+  return [401, 403, 404].includes(Number(error.status)) || error.name === 'AuthSessionMissingError';
+}
+
 async function signOutSupabase(accessToken, scope = 'local', context = {}) {
   if (!accessToken || typeof accessToken !== 'string') return false;
   try {
     const { error } = await supabaseAdmin.auth.admin.signOut(accessToken, scope);
     if (error) {
       const status = Number(error.status);
-      if ([401, 403, 404].includes(status)) {
+      if (sessionAlreadyEnded(error)) {
         logger.info('auth.session_revoke_already_invalid', { ...context, scope, status });
         return true;
       }
@@ -717,12 +733,14 @@ module.exports = {
   setSessionContext,
   getSessionStateCached,
   invalidateSessionStateCache,
+  invalidateSessionStateCacheForUser,
   _sessionStateCache,
   revokeSessionRow,
   revokeSessionsForUser,
   revokeSessionsForDevice,
   listActiveSessions,
   signOutSupabase,
+  sessionAlreadyEnded,
   setSessionsValidAfter,
   getSessionsValidAfter,
   // minting

@@ -106,51 +106,85 @@ function subscribeSessionRevocation(io) {
   authSessionService.authEvents.on('session_revoked', _revokeListener);
 }
 
-// A connection is not an indefinite authentication grant. Read current policy
-// before incoming events and periodically for idle listeners, including on APIs
-// that did not handle the logout. Concurrent events share only an in-flight read.
-async function checkConnectedSession(socket) {
+// A connection is not an indefinite authentication grant. Expiry is checked on
+// every event; the session row and watermark are read on connect, on a change
+// signal for the user (any API process) and when the last read is older than the
+// window below. Registry sessions are covered by the AuthSession/User signals
+// while the listener is up, so the read then only backs up a missed signal;
+// without the listener, or for a session without a registry row, read often.
+const POLICY_READ_SIGNALLED_MS = 30_000;
+const POLICY_READ_UNSIGNALLED_MS = 5_000;
+const POLICY_TICK_MS = 5_000;
+
+function policyIsFresh(socket) {
+  if (!socket.policyReadAt) return false;
+  const signalled = Boolean(socket.policyRegistryRow) && syncChangedService.isLive()
+    && socket.policyEpoch === syncChangedService.currentEpoch();
+  const windowMs = signalled ? socket.policyReadWindowMs : POLICY_READ_UNSIGNALLED_MS;
+  return Date.now() - socket.policyReadAt < windowMs;
+}
+
+async function checkConnectedSession(socket, { force = false } = {}) {
   if (!socket.connected) return false;
-  if (socket.authCheck) return socket.authCheck;
-  socket.authCheck = (async () => {
-    try {
-      if (socket.authExpiresAt <= Date.now()) {
-        endAuthenticatedSocket(socket, 'expired');
-        return false;
-      }
-      const [session, account] = await Promise.all([
-        socket.authSessionId ? authSessionService.getSessionById(socket.authSessionId) : null,
-        supabaseAdmin.from('User').select('sessions_valid_after').eq('id', socket.userId).maybeSingle(),
-      ]);
-      if (account.error) throw authSessionService.authUnavailableError(account.error);
-      if (!account.data || session?.revoked_at || (session && session.user_id !== socket.userId)
-          || (account.data.sessions_valid_after && socket.authIssuedAt < Date.parse(account.data.sessions_valid_after))) {
-        endAuthenticatedSocket(socket, session?.revoked_reason || 'revoked');
-        return false;
-      }
-      if (!session) {
-        // Pre-registry tokens still need the provider's current decision.
-        const { data, error } = await supabaseAdmin.auth.getUser(socket.authAccessToken);
-        if (authSessionService.isAuthServiceBusy(error)) throw authSessionService.authUnavailableError(error);
-        if (error || data?.user?.id !== socket.userId) {
-          endAuthenticatedSocket(socket, 'revoked');
-          return false;
-        }
-      }
-      if (socket.authExpiresAt <= Date.now()) {
-        endAuthenticatedSocket(socket, 'expired');
-        return false;
-      }
-      return socket.connected;
-    } catch (err) {
-      logger.warn('Socket security state unavailable', { code: err.code || 'AUTH_UNAVAILABLE' });
-      // No live data while policy is unreadable. A transport close lets existing
-      // clients retry the handshake without treating an outage as account loss.
-      socket.conn.close();
+  if (socket.authExpiresAt <= Date.now()) {
+    endAuthenticatedSocket(socket, 'expired');
+    return false;
+  }
+  if (socket.authCheck) {
+    // A signal that lands during a read is answered by a read that starts after it.
+    if (force) socket.authRecheck = true;
+    return socket.authCheck;
+  }
+  if (!force && policyIsFresh(socket)) return true;
+  socket.authCheck = readConnectedSession(socket).finally(() => {
+    socket.authCheck = null;
+    if (socket.authRecheck) {
+      socket.authRecheck = false;
+      void checkConnectedSession(socket, { force: true });
+    }
+  });
+  return socket.authCheck;
+}
+
+async function readConnectedSession(socket) {
+  const startedAt = Date.now();
+  const epoch = syncChangedService.currentEpoch();
+  try {
+    const [session, account] = await Promise.all([
+      socket.authSessionId ? authSessionService.getSessionById(socket.authSessionId) : null,
+      supabaseAdmin.from('User').select('sessions_valid_after').eq('id', socket.userId).maybeSingle(),
+    ]);
+    if (account.error) throw authSessionService.authUnavailableError(account.error);
+    if (!account.data || session?.revoked_at || (session && session.user_id !== socket.userId)
+        || (account.data.sessions_valid_after && socket.authIssuedAt < Date.parse(account.data.sessions_valid_after))) {
+      endAuthenticatedSocket(socket, session?.revoked_reason || 'revoked');
       return false;
     }
-  })();
-  try { return await socket.authCheck; } finally { socket.authCheck = null; }
+    if (!session) {
+      // Pre-registry tokens still need the provider's current decision.
+      const { data, error } = await supabaseAdmin.auth.getUser(socket.authAccessToken);
+      if (authSessionService.isAuthServiceBusy(error)) throw authSessionService.authUnavailableError(error);
+      if (error || data?.user?.id !== socket.userId) {
+        endAuthenticatedSocket(socket, 'revoked');
+        return false;
+      }
+    }
+    if (socket.authExpiresAt <= Date.now()) {
+      endAuthenticatedSocket(socket, 'expired');
+      return false;
+    }
+    socket.policyReadAt = startedAt;
+    socket.policyEpoch = epoch;
+    socket.policyRegistryRow = Boolean(session);
+    return socket.connected;
+  } catch (err) {
+    logger.warn('Socket security state unavailable', { code: err.code || 'AUTH_UNAVAILABLE' });
+    // No live data while policy is unreadable. A transport close lets existing
+    // clients retry the handshake without treating an outage as account loss.
+    // Timers and signals call this unawaited, and app.js exits on a rejection.
+    socket.conn?.close();
+    return false;
+  }
 }
 
 function endAuthenticatedSocket(socket, reason) {
@@ -167,11 +201,14 @@ function subscribeSecurityChanges(io) {
   if (stopSecurityChanges) stopSecurityChanges();
   stopSecurityChanges = syncChangedService.onChange(change => {
     if (!['AuthSession', 'User'].includes(change.t) || !change.u) return;
+    // Another process may have signed this person out. Drop what this process
+    // cached for them (REST's session state and watermark) and recheck their
+    // sockets now instead of after the caches' TTLs.
+    authSessionService.invalidateSessionStateCacheForUser(change.u);
+    authSessionService.authEvents.emit('watermark_updated', { userId: change.u });
     for (const id of connectedUsers.get(change.u) || []) {
       const socket = io.sockets.sockets.get(id);
-      if (!socket) continue;
-      authSessionService.invalidateSessionStateCache(socket.authSessionId);
-      void checkConnectedSession(socket);
+      if (socket) void checkConnectedSession(socket, { force: true });
     }
   });
 }
@@ -406,7 +443,9 @@ module.exports = (io) => {
     emitSocketGauges();
     const expiryTimer = setTimeout(() => endAuthenticatedSocket(socket, 'expired'),
       Math.min(Math.max(0, socket.authExpiresAt - Date.now()), 2_147_483_647));
-    const policyTimer = setInterval(() => { void checkConnectedSession(socket); }, 5000);
+    // Spread the backup reads so sockets that reconnected together (a deploy) don't read together.
+    socket.policyReadWindowMs = POLICY_READ_SIGNALLED_MS * (0.8 + Math.random() * 0.4);
+    const policyTimer = setInterval(() => { void checkConnectedSession(socket); }, POLICY_TICK_MS);
     expiryTimer.unref();
     policyTimer.unref();
 
