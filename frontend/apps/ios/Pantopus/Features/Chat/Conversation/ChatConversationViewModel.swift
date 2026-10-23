@@ -650,7 +650,9 @@ public final class ChatConversationViewModel {
     private var fallbackRefreshTask: Task<Void, Never>?
     private var topicsRefreshTask: Task<Void, Never>?
     private var markReadTask: Task<Void, Never>?
-    private var isTimelineAtBottom = false
+    private var visibleReadMessageId: String?
+    private var scheduledReadMessageId: String?
+    private var markReadRequestId: UUID?
     private var lastReadMessageId: String?
     private var socketTasks: [Task<Void, Never>] = []
     /// Socket-down fallback: checks promptly, backing off to 30 seconds while
@@ -1746,25 +1748,47 @@ public final class ChatConversationViewModel {
         }
     }
 
-    /// Mark every message in the thread as read for the current user.
-    /// Debounced — repeated calls within 600 ms collapse to one.
-    public func setTimelineAtBottom(_ atBottom: Bool) {
-        isTimelineAtBottom = atBottom
-        if atBottom { scheduleMarkRead() } else { markReadTask?.cancel() }
+    /// The view measures this accepted message itself, excluding typing and
+    /// pending-send rows from the read boundary.
+    public var latestAcceptedMessageId: String? {
+        messages.last?.id
+    }
+
+    public func setVisibleReadBoundary(_ messageId: String?) {
+        visibleReadMessageId = messageId
+        guard messageId != nil else {
+            markReadTask?.cancel()
+            markReadTask = nil
+            scheduledReadMessageId = nil
+            markReadRequestId = nil
+            return
+        }
+        scheduleMarkRead()
     }
 
     public func scheduleMarkRead() {
-        guard isTimelineAtBottom, selectedTopicId == nil else { return }
+        guard selectedTopicId == nil, let messageId = visibleReadMessageId,
+              messageId != lastReadMessageId, UUID(uuidString: messageId) != nil,
+              messages.contains(where: { $0.id == messageId }), scheduledReadMessageId != messageId else { return }
         markReadTask?.cancel()
+        scheduledReadMessageId = messageId
+        let requestId = UUID()
+        markReadRequestId = requestId
+        let generation = historyGeneration
         markReadTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 600_000_000)
-            guard !Task.isCancelled else { return }
-            await self?.performMarkRead()
+            do { try await Task.sleep(nanoseconds: 600_000_000) } catch { return }
+            guard let self else { return }
+            await performMarkRead(throughMessageId: messageId, generation: generation)
+            if markReadRequestId == requestId {
+                markReadRequestId = nil
+                scheduledReadMessageId = nil
+                markReadTask = nil
+            }
         }
     }
 
     public func teardown() {
-        isTimelineAtBottom = false
+        setVisibleReadBoundary(nil)
         historyGeneration += 1
         historyRequestId = nil
         fallbackRefreshTask?.cancel()
@@ -2343,6 +2367,7 @@ public final class ChatConversationViewModel {
             return
         }
         if case .reload = kind {
+            setVisibleReadBoundary(nil)
             historyGeneration += 1
             state = .loading
             messages = []
@@ -2557,9 +2582,8 @@ public final class ChatConversationViewModel {
 
     // MARK: - Mark-read
 
-    private func performMarkRead() async {
-        guard isTimelineAtBottom, selectedTopicId == nil,
-              let throughMessageId = messages.last?.id,
+    private func performMarkRead(throughMessageId: String, generation: Int) async {
+        guard !Task.isCancelled, visibleReadMessageId == throughMessageId, selectedTopicId == nil, historyGeneration == generation,
               UUID(uuidString: throughMessageId) != nil,
               throughMessageId != lastReadMessageId,
               let target = await resolveRoomIdForReadMark() else { return }
@@ -2572,6 +2596,7 @@ public final class ChatConversationViewModel {
             }
         do {
             _ = try await api.request(endpoint, as: EmptyResponse.self)
+            guard historyGeneration == generation else { return }
             lastReadMessageId = throughMessageId
         } catch {
             logger.warning("markRead failed: \(error)")
