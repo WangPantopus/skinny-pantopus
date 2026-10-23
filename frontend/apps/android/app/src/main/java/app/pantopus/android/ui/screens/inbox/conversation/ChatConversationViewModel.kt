@@ -13,10 +13,12 @@ import app.pantopus.android.data.ai.AIChatStreamEvent
 import app.pantopus.android.data.ai.AIConversationSession
 import app.pantopus.android.data.ai.AIPdfCheck
 import app.pantopus.android.data.ai.AIScreenContext
+import app.pantopus.android.data.api.models.chats.ChatChangesResponse
 import app.pantopus.android.data.api.models.chats.ChatMessageDto
 import app.pantopus.android.data.api.models.chats.ChatMessageSender
 import app.pantopus.android.data.api.models.chats.ChatMessagesResponse
 import app.pantopus.android.data.api.models.chats.ChatReactionSummary
+import app.pantopus.android.data.api.models.chats.ChatReadReceipt
 import app.pantopus.android.data.api.models.chats.ChatTopic
 import app.pantopus.android.data.api.models.chats.FindOrCreateTopicBody
 import app.pantopus.android.data.api.models.chats.SendChatMessageBody
@@ -294,6 +296,7 @@ class ChatConversationViewModel
 
         /** The newest server page behind the copy; the copy keeps its room list so an unchanged reopen can get a 304. */
         private var historyPage: ChatMessagesResponse? = null
+        private val deletedMessageVersions = linkedMapOf<String, Long>()
 
         // Send inputs captured per optimistic row, keyed by its bare-UUID
         // `clientMessageId`. Survives refetches so retry resends the same
@@ -414,6 +417,7 @@ class ChatConversationViewModel
             if (this.currentUserId != null && (this.currentUserId != currentUserId || this.mode != mode)) {
                 teardown()
                 messages.clear()
+                deletedMessageVersions.clear()
                 pendingByClientId.clear()
                 sendContextsByClientId.clear()
                 outboxClientIds.clear()
@@ -1531,9 +1535,9 @@ class ChatConversationViewModel
          */
         private fun upsert(message: ChatMessageDto) {
             changedDuringCatchUp.add(message.id)
-            if (!matchesTopicFilter(message)) return
+            if (!matchesTopicFilter(message) || !canMerge(message)) return
             val index = messages.indexOfFirst { it.id == message.id }
-            if (index >= 0) messages[index] = message else messages.add(message)
+            if (index >= 0) messages[index] = keepingWriter(message, messages[index]) else messages.add(message)
             messages.sortWith(messageOrder)
         }
 
@@ -1860,8 +1864,7 @@ class ChatConversationViewModel
             viewModelScope.launch {
                 when (val result = repo.deleteMessage(messageId)) {
                     is NetworkResult.Success -> {
-                        changedDuringCatchUp.add(messageId)
-                        messages.removeAll { it.id == messageId }
+                        rememberDeletion(messageId)
                         rebuild()
                     }
                     is NetworkResult.Failure -> {
@@ -2057,8 +2060,7 @@ class ChatConversationViewModel
                 ids.forEach { id ->
                     when (val result = repo.deleteMessage(id)) {
                         is NetworkResult.Success -> {
-                            changedDuringCatchUp.add(id)
-                            messages.removeAll { it.id == id }
+                            rememberDeletion(id)
                         }
                         is NetworkResult.Failure -> {
                             failed++
@@ -2234,15 +2236,27 @@ class ChatConversationViewModel
                     // resolves alongside the first fetch); the fetch for it owns the thread.
                     if (context != historyContext()) return@launch
                     publishHistoryPage(response, keepMessages, initial, firstPage = before == null)
+                    recoverRetainedHistory(response, initial, keepMessages)
                 } finally {
                     historyReadsInFlight.remove(requestKey)
                 }
             }
         }
 
+        private fun recoverRetainedHistory(
+            response: NetworkResult<ChatMessagesResponse>,
+            initial: Boolean,
+            retained: Boolean,
+        ) {
+            if (initial && retained && response is NetworkResult.Success) catchUpMessages()
+        }
+
         /** A first-page read (or a new thread or topic): the copy writer follows the read's context. */
         private fun followHistoryCopy(context: HistoryReadContext) {
-            if (context != historyCopyContext) historyPage = null
+            if (context != historyCopyContext) {
+                historyPage = null
+                deletedMessageVersions.clear()
+            }
             historyCopyContext = context
             updateHistoryCopy =
                 when (val target = context.mode) {
@@ -2261,7 +2275,10 @@ class ChatConversationViewModel
             when (response) {
                 is NetworkResult.Success -> {
                     historyRefusal = null
-                    if (firstPage) historyPage = response.data
+                    if (firstPage) {
+                        val anchor = historyPage?.syncCursors.orEmpty().takeIf { keepMessages && it.isNotEmpty() }
+                        historyPage = response.data.copy(syncCursors = anchor ?: response.data.syncCursors)
+                    }
                     _composerClosedNote.value = response.data.sendRefusal?.error
                     val keptOlder = placePage(response.data.messages, keepMessages)
                     retireConfirmedSends(response.data.messages)
@@ -2313,7 +2330,8 @@ class ChatConversationViewModel
                     ChatThreadMode.Ai -> null
                 } ?: return false
             historyPage = copy
-            messages = copy.messages.toMutableList()
+            deletedMessageVersions.putAll(copy.deletedMessageVersions)
+            messages = copy.messages.filterNot { it.id in deletedMessageVersions }.toMutableList()
             _composerClosedNote.value = copy.sendRefusal?.error
             hasMore = copy.hasMore ?: false
             oldestCursor = copy.nextCursor ?: paginationCursor(messages.firstOrNull())
@@ -2328,20 +2346,10 @@ class ChatConversationViewModel
             quiet: Boolean,
         ): Boolean {
             if (quiet) return mergeNewestPage(page)
-            // A socket join's backfill can land before this page; its rows carry no sender,
-            // attachments or reactions, so the page's copy of the same message replaces them.
-            val pageIds = page.mapTo(HashSet()) { it.id }
-            messages.removeAll { it.sender == null && it.id in pageIds }
-            // Drop ids we already hold — a send completing while
-            // this fetch was in flight may have upserted its
-            // message ahead of us.
-            val existingIds = messages.mapTo(mutableSetOf()) { it.id }
-            // Backend returns messages oldest-first (ascending) —
-            // see backend/routes/chats.js, which fetches the newest
-            // N rows then reverses them. Append + sort by created_at
-            // so the held list stays oldest-first regardless of which
-            // page these rows came from.
-            messages.addAll(page.filterNot { existingIds.contains(it.id) })
+            page.filter(::canMerge).forEach { incoming ->
+                val index = messages.indexOfFirst { it.id == incoming.id }
+                if (index >= 0) messages[index] = keepingWriter(incoming, messages[index]) else messages.add(incoming)
+            }
             messages.sortWith(messageOrder)
             return false
         }
@@ -2357,7 +2365,9 @@ class ChatConversationViewModel
             val newest = page.maxWithOrNull(messageOrder)
             val older = messages.filter { it.id !in pageIds && oldest != null && messageOrder.compare(it, oldest) < 0 }
             val newer = messages.filter { it.id !in pageIds && newest != null && messageOrder.compare(it, newest) > 0 }
-            messages = (older + page + newer).sortedWith(messageOrder).toMutableList()
+            val existing = messages.associateBy { it.id }
+            val fresh = page.filter(::canMerge).map { incoming -> existing[incoming.id]?.let { keepingWriter(incoming, it) } ?: incoming }
+            messages = (older + fresh + newer).filter(::canMerge).sortedWith(messageOrder).toMutableList()
             return older.isNotEmpty()
         }
 
@@ -2699,6 +2709,7 @@ class ChatConversationViewModel
             changedDuringCatchUp.clear()
             catchUpJob =
                 viewModelScope.launch {
+                    if (recoverChanges(context)) return@launch
                     var before: String? = null
                     val authoritative = LinkedHashMap<String, ChatMessageDto>()
                     var firstPage: ChatMessagesResponse? = null
@@ -2731,6 +2742,115 @@ class ChatConversationViewModel
                 }
         }
 
+        /** Apply a complete, fixed server revision window before advancing the durable recovery anchor. */
+        @Suppress("ReturnCount") // Scope changes, access refusal and server reset each end this recovery attempt.
+        private suspend fun recoverChanges(context: HistoryReadContext): Boolean {
+            var cursor = historyPage?.syncCursors.orEmpty()
+            if (cursor.isEmpty()) return false
+            var until: Map<String, Long>? = null
+            val changes = linkedMapOf<String, ChatMessageDto>()
+            val receipts = linkedMapOf<String, ChatReadReceipt>()
+            var pages = 0
+            while (pages++ < MAX_CHANGE_PAGES) {
+                val result = readChanges(context, cursor, until)
+                if (context != historyContext()) return true
+                if (result is NetworkResult.Failure) {
+                    if (historyAccessEnded(result.error)) refuseHistory(result.error)
+                    return true
+                }
+                val page = (result as NetworkResult.Success).data
+                if (page.resetRequired) return false
+                collectChanges(page, changes, receipts)
+                if (!page.hasMore) {
+                    applyChanges(page, changes.values, receipts.values)
+                    return true
+                }
+                if (page.syncCursors == cursor) return false
+                cursor = page.syncCursors
+                until = until ?: page.untilCursors
+            }
+            // A very old anchor can cost more than the loaded window. Reconcile that bounded window instead.
+            return false
+        }
+
+        private suspend fun readChanges(
+            context: HistoryReadContext,
+            cursor: Map<String, Long>,
+            until: Map<String, Long>?,
+        ): NetworkResult<ChatChangesResponse> {
+            val encodedCursor = JSONObject(cursor).toString()
+            val encodedUntil = until?.let { JSONObject(it).toString() }
+            return when (val target = context.mode) {
+                is ChatThreadMode.Room -> repo.roomChanges(target.id, encodedCursor, encodedUntil, target.asBusinessUserId)
+                is ChatThreadMode.Person -> repo.conversationChanges(target.otherUserId, encodedCursor, encodedUntil)
+                ChatThreadMode.Ai -> NetworkResult.Success(ChatChangesResponse())
+            }
+        }
+
+        private fun collectChanges(
+            page: ChatChangesResponse,
+            changes: MutableMap<String, ChatMessageDto>,
+            receipts: MutableMap<String, ChatReadReceipt>,
+        ) {
+            page.messages.forEach { row ->
+                if ((row.syncVersion ?: 0) >= (changes[row.id]?.syncVersion ?: 0)) changes[row.id] = row
+            }
+            page.readReceipts.forEach { receipts["${it.roomId}:${it.userId}"] = it }
+        }
+
+        private fun applyChanges(
+            page: ChatChangesResponse,
+            changes: Collection<ChatMessageDto>,
+            receipts: Collection<ChatReadReceipt>,
+        ) {
+            val oldest = messages.minWithOrNull(messageOrder)
+            val merged = messages.associateBy { it.id }.toMutableMap()
+            changes.forEach { row ->
+                if (row.deleted || row.deletedAt != null) {
+                    rememberDeletion(row.id, row.syncVersion)
+                } else if (belongsInRecoveredWindow(row, merged, oldest)) {
+                    merged[row.id] = merged[row.id]?.let { keepingWriter(row, it) } ?: row
+                    changedDuringCatchUp.add(row.id)
+                }
+            }
+            messages =
+                merged.values.filter { it.roomId !in page.removedRoomIds && canMerge(it) }
+                    .sortedWith(messageOrder).toMutableList()
+            historyPage = (historyPage ?: ChatMessagesResponse(emptyList())).copy(syncCursors = page.syncCursors, roomIds = page.roomIds)
+            activeRoomIds = page.roomIds.toSet()
+            retireConfirmedSends(changes.filterNot { it.deleted })
+            refreshUnknownTopics(changes.filterNot { it.deleted })
+            receipts.forEach(::applyReadReceipt)
+            rebuild()
+            publishViewedRooms()
+            joinActiveRoomsIfPossible()
+            scheduleMarkRead()
+        }
+
+        private fun belongsInRecoveredWindow(
+            row: ChatMessageDto,
+            held: Map<String, ChatMessageDto>,
+            oldest: ChatMessageDto?,
+        ): Boolean {
+            if (!matchesTopicFilter(row) || !canMerge(row)) return false
+            return row.id in held || oldest == null || messageOrder.compare(row, oldest) >= 0
+        }
+
+        private fun rememberDeletion(
+            id: String,
+            version: Long? = null,
+        ) {
+            val known = messages.firstOrNull { it.id == id }?.syncVersion ?: 0
+            if (version != null && version < known) return
+            deletedMessageVersions[id] = maxOf(deletedMessageVersions[id] ?: 0, version ?: (known + 1))
+            while (deletedMessageVersions.size > MAX_TOMBSTONES) deletedMessageVersions.remove(deletedMessageVersions.keys.first())
+            messages.removeAll { it.id == id }
+            changedDuringCatchUp.add(id)
+        }
+
+        private fun canMerge(message: ChatMessageDto): Boolean =
+            message.createdAt.isNotBlank() && !message.deleted && message.deletedAt == null && message.id !in deletedMessageVersions
+
         private suspend fun readHistoryPage(
             context: HistoryReadContext,
             before: String?,
@@ -2760,7 +2880,10 @@ class ChatConversationViewModel
         ) {
             val olderLoadedMeanwhile = messages.filter { oldest != null && messageOrder.compare(it, oldest) < 0 }
             val liveRows = messages.filter { it.id in changedDuringCatchUp }
-            val refreshed = authoritative.filter { it.id !in changedDuringCatchUp }
+            val held = messages.associateBy { it.id }
+            val refreshed =
+                authoritative.filter { it.id !in changedDuringCatchUp && canMerge(it) }
+                    .map { incoming -> held[incoming.id]?.let { keepingWriter(incoming, it) } ?: incoming }
             messages = (refreshed + liveRows + olderLoadedMeanwhile).distinctBy { it.id }.sortedWith(messageOrder).toMutableList()
             if (olderLoadedMeanwhile.isEmpty()) {
                 hasMore = page.hasMore == true
@@ -2839,7 +2962,7 @@ class ChatConversationViewModel
             val retiredPending = retireConfirmedSends(backfill)
             val existing = messages.map { it.id }.toSet()
             // The room backfill carries every topic; a topic view keeps its own.
-            val fresh = backfill.filter { !existing.contains(it.id) && matchesTopicFilter(it) }
+            val fresh = backfill.filter { !existing.contains(it.id) && matchesTopicFilter(it) && canMerge(it) }
             if (fresh.isEmpty()) {
                 if (retiredPending) rebuild()
                 return
@@ -2852,6 +2975,7 @@ class ChatConversationViewModel
         }
 
         private fun applyUpdatedMessage(updated: ChatMessageDto) {
+            if (!canMerge(updated)) return
             changedDuringCatchUp.add(updated.id)
             val index = messages.indexOfFirst { it.id == updated.id }
             if (index >= 0) {
@@ -2869,16 +2993,21 @@ class ChatConversationViewModel
         private fun keepingWriter(
             incoming: ChatMessageDto,
             existing: ChatMessageDto,
-        ): ChatMessageDto = if (incoming.actorUserId == null) incoming.copy(actorUserId = existing.actorUserId) else incoming
+        ): ChatMessageDto {
+            if ((incoming.syncVersion ?: 0) < (existing.syncVersion ?: 0)) return existing
+            return incoming.copy(actorUserId = incoming.actorUserId ?: existing.actorUserId, readAt = incoming.readAt ?: existing.readAt)
+        }
 
         private fun applyReactions(
             messageId: String,
             reactions: List<app.pantopus.android.data.api.models.chats.ChatReactionSummary>,
+            revision: Long? = null,
         ) {
             val index = messages.indexOfFirst { it.id == messageId }
             if (index < 0) return
+            if (revision != null && revision < (messages[index].syncVersion ?: 0)) return
             changedDuringCatchUp.add(messageId)
-            messages[index] = messages[index].copy(reactions = reactions)
+            messages[index] = messages[index].copy(reactions = reactions, syncVersion = revision ?: messages[index].syncVersion)
             rebuild()
         }
 
@@ -2896,7 +3025,7 @@ class ChatConversationViewModel
             if (messages.none { it.id == id }) return
             val summaries = json.optJSONArray("reactions")?.let(::viewerReactions)
             if (summaries != null) {
-                applyReactions(id, summaries)
+                applyReactions(id, summaries, json.optLong("sync_version").takeIf { it > 0 })
                 return
             }
             reactionRefetchJob?.cancel()
@@ -2974,6 +3103,7 @@ class ChatConversationViewModel
 
         /** Dedupe by id, insert sorted by createdAt, rebuild, mark read. */
         private fun insertIncoming(message: ChatMessageDto) {
+            if (!canMerge(message)) return
             changedDuringCatchUp.add(message.id)
             val index = messages.indexOfFirst { it.id == message.id }
             if (index >= 0) {
@@ -3041,6 +3171,22 @@ class ChatConversationViewModel
             rebuild()
         }
 
+        private fun applyReadReceipt(receipt: ChatReadReceipt) {
+            val person = mode as? ChatThreadMode.Person ?: return
+            if (receipt.roomId != directRoomId || receipt.userId != person.otherUserId) return
+            val through =
+                ChatMessageDto(id = receipt.throughMessageId, roomId = receipt.roomId, createdAt = receipt.throughCreatedAt)
+            messages.replaceAll { message ->
+                if (message.roomId == receipt.roomId && message.userId == messageIdentityId &&
+                    messageOrder.compare(message, through) <= 0
+                ) {
+                    message.copy(readAt = message.readAt ?: receipt.readAt)
+                } else {
+                    message
+                }
+            }
+        }
+
         private fun handleDelete(json: JSONObject) {
             val roomId = json.optStringValue("room_id") ?: json.optStringValue("roomId")
             if (roomId != null && !activeRoomIds.contains(roomId)) return
@@ -3049,12 +3195,8 @@ class ChatConversationViewModel
                     ?: json.optStringValue("message_id")
                     ?: json.optStringValue("messageId")
                     ?: return
-            changedDuringCatchUp.add(id)
-            val index = messages.indexOfFirst { it.id == id }
-            if (index >= 0) {
-                messages.removeAt(index)
-                rebuild()
-            }
+            rememberDeletion(id, json.optLong("sync_version").takeIf { it > 0 })
+            rebuild()
         }
 
         private suspend fun uploadQueuedAttachmentsIfNeeded(
@@ -3145,6 +3287,7 @@ class ChatConversationViewModel
                         roomIds = if (page != null) page.roomIds else activeRoomIds.toList(),
                         sendRefusal = page?.sendRefusal,
                         syncCursors = page?.syncCursors.orEmpty(),
+                        deletedMessageVersions = deletedMessageVersions.toMap(),
                     ),
                 )
             }
@@ -3749,3 +3892,6 @@ private fun <T> NetworkResult<T>.orThrow(): T =
         is NetworkResult.Success -> data
         is NetworkResult.Failure -> throw error
     }
+
+private const val MAX_CHANGE_PAGES = 100
+private const val MAX_TOMBSTONES = 2000

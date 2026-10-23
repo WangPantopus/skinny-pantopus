@@ -159,7 +159,7 @@ data class ChatMessageDto(
     @Json(name = "reply_to_id") val replyToId: String? = null,
     @Json(name = "topic_id") val topicId: String? = null,
     @Json(name = "client_message_id") val clientMessageId: String? = null,
-    @Json(name = "created_at") val createdAt: String,
+    @Json(name = "created_at") val createdAt: String = "",
     @Json(name = "edited_at") val editedAt: String? = null,
     @Json(name = "deleted_at") val deletedAt: String? = null,
     @Json(name = "delivered_at") val deliveredAt: String? = null,
@@ -172,6 +172,9 @@ data class ChatMessageDto(
      * the business's messages you wrote yourself and null everywhere else.
      */
     @Json(name = "actor_user_id") val actorUserId: String? = null,
+    @Json(name = "sync_version") val syncVersion: Long? = null,
+    /** Incremental recovery can return a minimal tombstone without body or timestamp fields. */
+    val deleted: Boolean = false,
 )
 
 /** Body text — API may return canonical `message` or alias `message_text`. */
@@ -236,6 +239,29 @@ data class ChatMessagesResponse(
     val sendRefusal: ChatSendRefusal? = null,
     /** First-page anchor only; older pages never advance the saved recovery cursor. */
     val syncCursors: Map<String, Long> = emptyMap(),
+    /** Device-only tombstone revisions prevent a delayed history response from restoring a deleted bubble. */
+    val deletedMessageVersions: Map<String, Long> = emptyMap(),
+)
+
+@JsonClass(generateAdapter = true)
+data class ChatReadReceipt(
+    val roomId: String,
+    val userId: String,
+    val readAt: String,
+    val throughMessageId: String,
+    val throughCreatedAt: String,
+)
+
+@JsonClass(generateAdapter = true)
+data class ChatChangesResponse(
+    val messages: List<ChatMessageDto> = emptyList(),
+    val syncCursors: Map<String, Long> = emptyMap(),
+    val untilCursors: Map<String, Long> = emptyMap(),
+    val hasMore: Boolean = false,
+    val roomIds: List<String> = emptyList(),
+    val removedRoomIds: List<String> = emptyList(),
+    val resetRequired: Boolean = false,
+    val readReceipts: List<ChatReadReceipt> = emptyList(),
 )
 
 /** Why a conversation takes no messages, as the server words it (`backend/routes/chats.js` `unpublishedDirectRoomRefusal`). */

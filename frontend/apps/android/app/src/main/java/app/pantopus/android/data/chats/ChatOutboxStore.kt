@@ -9,11 +9,15 @@ import app.pantopus.android.data.upload.UploadFile
 import com.squareup.moshi.JsonClass
 import com.squareup.moshi.Moshi
 import dagger.hilt.android.qualifiers.ApplicationContext
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.RequestBody
+import okio.BufferedSink
 import timber.log.Timber
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.File
 import java.io.FileOutputStream
+import java.io.OutputStream
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
@@ -135,7 +139,15 @@ class ChatOutboxStore
         fun attachments(entry: ChatOutboxEntry): List<UploadFile> =
             entry.attachments.map { attachment ->
                 val file = File(entryFolder(entry), "${UUID.fromString(attachment.id)}.enc")
-                UploadFile(attachment.filename, attachment.mimeType, readAttachment(file, attachment.size))
+                val body =
+                    object : RequestBody() {
+                        override fun contentType() = attachment.mimeType.toMediaTypeOrNull()
+
+                        override fun contentLength() = attachment.size.toLong()
+
+                        override fun writeTo(sink: BufferedSink) = writeDecryptedAttachment(file, attachment.size, sink.outputStream())
+                    }
+                UploadFile(attachment.filename, attachment.mimeType, streamingBody = body)
             }
 
         fun remove(entry: ChatOutboxEntry) {
@@ -169,12 +181,12 @@ class ChatOutboxStore
             }
         }
 
-        private fun readAttachment(
+        private fun writeDecryptedAttachment(
             file: File,
             size: Int,
-        ): ByteArray {
+            output: OutputStream,
+        ) {
             require(size.toLong() in 0..MAX_BYTES)
-            val bytes = ByteArray(size)
             DataInputStream(file.inputStream().buffered()).use { input ->
                 var offset = 0
                 var index = 0
@@ -185,13 +197,12 @@ class ChatOutboxStore
                     input.readFully(encrypted)
                     val plain = cipher.decrypt(encrypted, "${scope(file)}:$index:$size")
                     require(plain.size == (size - offset).coerceAtMost(CHUNK_BYTES))
-                    plain.copyInto(bytes, offset)
+                    output.write(plain)
                     offset += plain.size
                     index++
                 }
                 require(input.read() == -1)
             }
-            return bytes
         }
 
         private fun atomicWrite(

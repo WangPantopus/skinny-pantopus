@@ -1,5 +1,6 @@
 package app.pantopus.android.data.chats
 
+import app.pantopus.android.data.api.models.chats.ChatChangesResponse
 import app.pantopus.android.data.api.models.chats.ChatMessagesResponse
 import app.pantopus.android.data.api.models.chats.ChatNotificationPreferencesBody
 import app.pantopus.android.data.api.models.chats.ChatNotificationPreferencesResponse
@@ -102,7 +103,16 @@ class ChatRepository
             asBusinessUserId: String? = null,
         ): NetworkResult<ChatMessagesResponse> {
             if (force || before != null || after != null) {
-                return safeApiCall { api.roomMessages(roomId, limit, before, after, asBusinessUserId) }
+                return safeApiCall {
+                    api.roomMessages(
+                        roomId,
+                        limit,
+                        before,
+                        after,
+                        asBusinessUserId,
+                        sync = before == null && after == null,
+                    )
+                }
                     .forgetRefusedHistory(StoreKeys.roomMessages(roomId, HISTORY_LIMIT, asBusinessUserId))
             }
             val count = limit.coerceIn(1, HISTORY_LIMIT)
@@ -127,7 +137,16 @@ class ChatRepository
             force: Boolean = false,
         ): NetworkResult<ChatMessagesResponse> {
             if (force || before != null || after != null) {
-                return safeApiCall { api.conversationMessages(otherUserId, limit, before, after, topicId) }
+                return safeApiCall {
+                    api.conversationMessages(
+                        otherUserId,
+                        limit,
+                        before,
+                        after,
+                        topicId,
+                        sync = before == null && after == null,
+                    )
+                }
                     .forgetRefusedHistory(StoreKeys.conversationMessages(otherUserId, topicId, HISTORY_LIMIT))
             }
             val count = limit.coerceIn(1, HISTORY_LIMIT)
@@ -177,6 +196,19 @@ class ChatRepository
             val timestamp = oldest.createdAt.replace("+00:00", "Z").replace("+0000", "Z")
             return response.copy(messages = messages, hasMore = true, nextCursor = "$timestamp|${oldest.id}")
         }
+
+        suspend fun roomChanges(
+            roomId: String,
+            cursor: String,
+            until: String?,
+            asBusinessUserId: String?,
+        ): NetworkResult<ChatChangesResponse> = safeApiCall { api.roomChanges(roomId, cursor, until, asBusinessUserId) }
+
+        suspend fun conversationChanges(
+            otherUserId: String,
+            cursor: String,
+            until: String?,
+        ): NetworkResult<ChatChangesResponse> = safeApiCall { api.conversationChanges(otherUserId, cursor, until) }
 
         suspend fun createDirectChat(otherUserId: String): NetworkResult<CreateDirectChatResponse> =
             safeApiCall { api.createDirectChat(CreateDirectChatBody(otherUserId)) }.chatsChanged()

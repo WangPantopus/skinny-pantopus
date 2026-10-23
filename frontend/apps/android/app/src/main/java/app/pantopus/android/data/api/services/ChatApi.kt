@@ -1,5 +1,6 @@
 package app.pantopus.android.data.api.services
 
+import app.pantopus.android.data.api.models.chats.ChatChangesResponse
 import app.pantopus.android.data.api.models.chats.ChatMessagesResponse
 import app.pantopus.android.data.api.models.chats.ChatNotificationPreferencesBody
 import app.pantopus.android.data.api.models.chats.ChatNotificationPreferencesResponse
@@ -84,6 +85,7 @@ interface ChatApi {
         @Query("before") before: String? = null,
         @Query("after") after: String? = null,
         @Query("asBusinessUserId") asBusinessUserId: String? = null,
+        @Query("sync") sync: Boolean? = null,
     ): ChatMessagesResponse
 
     /** `GET /api/chat/conversations/:otherUserId/messages` — route `chats.js:1157`. */
@@ -94,6 +96,7 @@ interface ChatApi {
         @Query("before") before: String? = null,
         @Query("after") after: String? = null,
         @Query("topicId") topicId: String? = null,
+        @Query("sync") sync: Boolean? = null,
     ): ChatMessagesResponse
 
     @GET("api/chat/rooms/{roomId}/messages")
@@ -102,6 +105,7 @@ interface ChatApi {
         @Query("limit") limit: Int,
         @Header("If-None-Match") etag: String?,
         @Query("asBusinessUserId") asBusinessUserId: String? = null,
+        @Query("sync") sync: Boolean? = true,
     ): Response<ChatMessagesResponse>
 
     @GET("api/chat/conversations/{otherUserId}/messages")
@@ -110,7 +114,27 @@ interface ChatApi {
         @Query("limit") limit: Int,
         @Query("topicId") topicId: String?,
         @Header("If-None-Match") etag: String?,
+        @Query("sync") sync: Boolean? = true,
     ): Response<ChatMessagesResponse>
+
+    @Headers("Cache-Control: no-store")
+    @GET("api/chat/rooms/{roomId}/changes")
+    suspend fun roomChanges(
+        @Path("roomId") roomId: String,
+        @Query("cursor") cursor: String,
+        @Query("until") until: String? = null,
+        @Query("asBusinessUserId") asBusinessUserId: String? = null,
+        @Query("limit") limit: Int = 200,
+    ): ChatChangesResponse
+
+    @Headers("Cache-Control: no-store")
+    @GET("api/chat/conversations/{otherUserId}/changes")
+    suspend fun conversationChanges(
+        @Path("otherUserId") otherUserId: String,
+        @Query("cursor") cursor: String,
+        @Query("until") until: String? = null,
+        @Query("limit") limit: Int = 200,
+    ): ChatChangesResponse
 
     /**
      * `POST /api/chat/direct` — find-or-create the 1:1 direct room with
