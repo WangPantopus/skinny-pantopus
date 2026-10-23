@@ -23,6 +23,7 @@ const stripeService = require('../stripe/stripeService');
 const { PAYMENT_STATES } = require('../stripe/paymentStateMachine');
 const { emitPrivateGigUpdate } = require('../socket/chatSocketio');
 const parsePostGISPoint = require('../utils/parsePostGISPoint');
+const { hydrateListingCreatorIdentities, serializeTaskPerson } = require('../utils/listingCreatorIdentity');
 
 // ============ REAL-TIME HELPER (same pattern as gigs.js) ============
 
@@ -295,11 +296,16 @@ router.get('/status/:token', async (req, res) => {
     const live = value => Number.isFinite(Date.parse(value)) && Date.parse(value) > Date.now();
     if (!live(gig.status_share_expires_at)) return res.status(404).json({ error: 'Status link expired' });
 
+    // A helper who named their Local Profile goes by that name, as on the task (serializeTaskPerson). Anyone else, a
+    // business included, keeps the first name alone, as before: never the full account name.
     let helperFirstName = null;
     if (gig.accepted_by) {
-      const { data: helper, error: helperErr } = await supabaseAdmin.from('User').select('first_name').eq('id', gig.accepted_by).single();
-      if (helperErr) return res.status(503).json({ error: 'Status is temporarily unavailable' });
-      helperFirstName = helper?.first_name || null;
+      const holder = { user_id: gig.accepted_by };
+      await hydrateListingCreatorIdentities(holder);
+      const helper = holder.creator;
+      helperFirstName = helper?.display_name && helper.account_type !== 'business'
+        ? serializeTaskPerson(helper).displayName
+        : helper?.first_name || null;
     }
     const { data: current, error: currentErr } = await supabaseAdmin.from('Gig').select(columns).eq('id', gig.id).eq('status_share_token', token).maybeSingle();
     if (currentErr) return res.status(503).json({ error: 'Status is temporarily unavailable' });
