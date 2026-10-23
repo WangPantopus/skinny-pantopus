@@ -276,9 +276,10 @@ class ChatRepository
             cursor: Map<String, Long>,
             until: Map<String, Long>?,
             asBusinessUserId: String?,
+            readMessageIds: List<String>? = null,
         ): NetworkResult<ChatChangesResponse> =
             readChanges(
-                ChatChangesBody(cursor, until, asBusinessUserId),
+                ChatChangesBody(cursor, until, asBusinessUserId, readMessageIds = readMessageIds),
                 post = { api.roomChangesPost(roomId, it) },
                 legacy = { encodedCursor, encodedUntil -> api.roomChanges(roomId, encodedCursor, encodedUntil, asBusinessUserId) },
             )
@@ -287,9 +288,10 @@ class ChatRepository
             otherUserId: String,
             cursor: Map<String, Long>,
             until: Map<String, Long>?,
+            readMessageIds: List<String>? = null,
         ): NetworkResult<ChatChangesResponse> =
             readChanges(
-                ChatChangesBody(cursor, until),
+                ChatChangesBody(cursor, until, readMessageIds = readMessageIds),
                 post = { api.conversationChangesPost(otherUserId, it) },
                 legacy = { encodedCursor, encodedUntil -> api.conversationChanges(otherUserId, encodedCursor, encodedUntil) },
             )
@@ -299,7 +301,7 @@ class ChatRepository
             post: suspend (ChatChangesBody) -> ChatChangesResponse,
             legacy: suspend (String, String?) -> ChatChangesResponse,
         ): NetworkResult<ChatChangesResponse> {
-            val result = safeApiCall { post(body) }
+            val result = receiptCompatibleChanges(body, safeApiCall { post(body) })
             if (result !is NetworkResult.Failure || result.error.code !in listOf(HTTP_NOT_FOUND, HTTP_BAD_METHOD)) return result
             val cursor = JSONObject(body.cursor).toString()
             val until = body.until?.let { JSONObject(it).toString() }
@@ -314,6 +316,33 @@ class ChatRepository
                 NetworkResult.Success(ChatChangesResponse(resetRequired = true))
             } else {
                 fallback
+            }
+        }
+
+        /** A missing receipt projection requires canonical history before the recovery cursor can advance. */
+        private fun receiptCompatibleChanges(
+            body: ChatChangesBody,
+            result: NetworkResult<ChatChangesResponse>,
+        ): NetworkResult<ChatChangesResponse> {
+            if (body.readMessageIds == null) return result
+            return when (result) {
+                is NetworkResult.Success ->
+                    if (result.data.messageReadReceipts == null) {
+                        NetworkResult.Success(result.data.copy(resetRequired = true))
+                    } else {
+                        result
+                    }
+                is NetworkResult.Failure -> {
+                    val error = result.error
+                    val unsupportedField =
+                        error is NetworkError.ClientError && error.code == HTTP_BAD_REQUEST &&
+                            error.body?.contains("readMessageIds") == true
+                    if (unsupportedField || error.code in listOf(HTTP_NOT_FOUND, HTTP_BAD_METHOD)) {
+                        NetworkResult.Success(ChatChangesResponse(resetRequired = true))
+                    } else {
+                        result
+                    }
+                }
             }
         }
 
@@ -432,14 +461,52 @@ class ChatRepository
                 )
             }
 
+        suspend fun markRoomTopicRead(
+            roomId: String,
+            topicId: String,
+            asBusinessUserId: String?,
+            throughMessageId: String,
+        ): NetworkResult<Unit> =
+            readWithInboxProjection(
+                matches = { row -> asBusinessUserId == null && (row.id == roomId || row.roomIds == listOf(roomId)) },
+                expectedTopicId = topicId,
+            ) {
+                api.markRoomTopicRead(
+                    roomId,
+                    topicId,
+                    buildMap {
+                        put("throughMessageId", throughMessageId)
+                        asBusinessUserId?.let { put("asBusinessUserId", it) }
+                    },
+                )
+            }
+
+        suspend fun markConversationTopicRead(
+            otherUserId: String,
+            topicId: String,
+            throughMessageIds: Map<String, String>,
+        ): NetworkResult<Unit> =
+            readWithInboxProjection(matches = { it.otherParticipantId == otherUserId }, expectedTopicId = topicId) {
+                api.markConversationTopicRead(otherUserId, topicId, mapOf("throughMessageIds" to throughMessageIds))
+            }
+
         private suspend fun readWithInboxProjection(
             matches: (UnifiedConversationDto) -> Boolean,
+            expectedTopicId: String? = null,
             read: suspend () -> ChatReadResponse,
         ): NetworkResult<Unit> {
             val update = store.chatReadUpdater(StoreKeys.conversations)
             return when (val result = safeApiCall { read() }) {
                 is NetworkResult.Failure -> result
                 is NetworkResult.Success -> {
+                    if (expectedTopicId != null && (result.data.topicId != expectedTopicId || result.data.readScope != "topic")) {
+                        return NetworkResult.Failure(
+                            NetworkError.ClientError(
+                                java.net.HttpURLConnection.HTTP_BAD_GATEWAY,
+                                "Topic read response was not scoped",
+                            ),
+                        )
+                    }
                     val count = result.data.unreadCount?.takeIf { it >= 0 }
                     update { copy ->
                         // A scoped count cannot establish global totals or mixed-muted unread counts.

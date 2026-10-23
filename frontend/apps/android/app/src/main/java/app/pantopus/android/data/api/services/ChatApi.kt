@@ -241,6 +241,21 @@ interface ChatApi {
         @Body body: Map<String, @JvmSuppressWildcards Any> = emptyMap(),
     ): ChatReadResponse
 
+    /** Separate routes prevent older servers from interpreting a selected-topic read as a global read. */
+    @POST("api/chat/rooms/{roomId}/topics/{topicId}/read")
+    suspend fun markRoomTopicRead(
+        @Path("roomId") roomId: String,
+        @Path("topicId") topicId: String,
+        @Body body: Map<String, String>,
+    ): ChatReadResponse
+
+    @POST("api/chat/conversations/{otherUserId}/topics/{topicId}/read")
+    suspend fun markConversationTopicRead(
+        @Path("otherUserId") otherUserId: String,
+        @Path("topicId") topicId: String,
+        @Body body: Map<String, @JvmSuppressWildcards Any>,
+    ): ChatReadResponse
+
     /** `GET /api/chat/conversations/:otherUserId/topics` — route `chats.js:2466`. */
     @GET("api/chat/conversations/{otherUserId}/topics")
     suspend fun conversationTopics(

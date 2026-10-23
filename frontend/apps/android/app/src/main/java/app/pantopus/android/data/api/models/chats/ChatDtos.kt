@@ -103,7 +103,11 @@ data class UnifiedConversationsResponse(
 
 /** The authoritative unread count for the room or person scope acknowledged by the read request. */
 @JsonClass(generateAdapter = true)
-data class ChatReadResponse(val unreadCount: Int? = null)
+data class ChatReadResponse(
+    val unreadCount: Int? = null,
+    val topicId: String? = null,
+    val readScope: String? = null,
+)
 
 @JsonClass(generateAdapter = true)
 data class ChatNotificationPreferencesBody(
@@ -269,7 +273,11 @@ data class ChatChangesBody(
     val until: Map<String, Long>? = null,
     val asBusinessUserId: String? = null,
     val limit: Int = 200,
+    val readMessageIds: List<String>? = null,
 )
+
+@JsonClass(generateAdapter = true)
+data class ChatMessageReadReceipt(val messageId: String, val readAt: String? = null)
 
 @JsonClass(generateAdapter = true)
 data class ChatChangesResponse(
@@ -281,6 +289,7 @@ data class ChatChangesResponse(
     val removedRoomIds: List<String> = emptyList(),
     val resetRequired: Boolean = false,
     val readReceipts: List<ChatReadReceipt> = emptyList(),
+    val messageReadReceipts: List<ChatMessageReadReceipt>? = null,
 )
 
 /** Why a conversation takes no messages, as the server words it (`backend/routes/chats.js` `unpublishedDirectRoomRefusal`). */

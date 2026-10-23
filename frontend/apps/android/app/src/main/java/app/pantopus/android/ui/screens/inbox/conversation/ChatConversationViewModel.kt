@@ -15,6 +15,7 @@ import app.pantopus.android.data.ai.AIPdfCheck
 import app.pantopus.android.data.ai.AIScreenContext
 import app.pantopus.android.data.api.models.chats.ChatChangesResponse
 import app.pantopus.android.data.api.models.chats.ChatMessageDto
+import app.pantopus.android.data.api.models.chats.ChatMessageReadReceipt
 import app.pantopus.android.data.api.models.chats.ChatMessageSender
 import app.pantopus.android.data.api.models.chats.ChatMessagesResponse
 import app.pantopus.android.data.api.models.chats.ChatReactionSummary
@@ -390,6 +391,7 @@ class ChatConversationViewModel
         private var viewingLatest = true
         private var lastReadMessageId: String? = null
         private var readReceiptJob: Job? = null
+        private var topicReadReceiptJob: Job? = null
         private var connectionJob: Job? = null
         private var messageJob: Job? = null
         private var updateJob: Job? = null
@@ -846,6 +848,9 @@ class ChatConversationViewModel
             catchUpJob?.cancel()
             visibleReadThroughId = null
             visibleReadThroughByRoom.clear()
+            acknowledgedReadByRoom.clear()
+            lastReadMessageId = null
+            markReadJob?.cancel()
             _selectedTopicId.value = if (_selectedTopicId.value == topicId) null else topicId
             _composerText.value = ""
             _queuedAttachments.value = emptyList()
@@ -2270,7 +2275,7 @@ class ChatConversationViewModel
 
         fun markVisibleMessageRead(messageId: String) {
             val visible = messages.firstOrNull { it.id == messageId } ?: return
-            if (visible.id.startsWith("client_")) return
+            if (visible.id.startsWith("client_") || !matchesTopicFilter(visible)) return
             val previousInRoom = visibleReadThroughByRoom[visible.roomId]
             if (previousInRoom == null || messageOrder.compare(visible, previousInRoom) > 0) {
                 visibleReadThroughByRoom[visible.roomId] = ChatMessageDto(visible.id, visible.roomId, createdAt = visible.createdAt)
@@ -2289,7 +2294,7 @@ class ChatConversationViewModel
         }
 
         fun scheduleMarkRead() {
-            if (!isForeground || _selectedTopicId.value != null) return
+            if (!isForeground) return
             val throughId = visibleReadThroughId ?: return
             val throughIds =
                 visibleReadThroughByRoom.mapValues { it.value.id }
@@ -2305,18 +2310,30 @@ class ChatConversationViewModel
                 viewModelScope.launch {
                     delay(600)
                     if (!isForeground || context != historyContext()) return@launch
-                    val result =
-                        when (val target = context.mode) {
-                            is ChatThreadMode.Room -> repo.markRoomRead(target.id, target.asBusinessUserId, throughId)
-                            is ChatThreadMode.Person -> repo.markConversationRead(target.otherUserId, throughMessageIds = throughIds)
-                            ChatThreadMode.Ai -> return@launch
-                        }
+                    val result = submitVisibleRead(context, throughId, throughIds)
                     if (result is NetworkResult.Success && context == historyContext()) {
                         lastReadMessageId = throughId
                         acknowledgedReadByRoom.putAll(throughIds)
                     }
                 }
         }
+
+        private suspend fun submitVisibleRead(
+            context: HistoryReadContext,
+            throughId: String,
+            throughIds: Map<String, String>,
+        ): NetworkResult<Unit> =
+            when (val target = context.mode) {
+                is ChatThreadMode.Room ->
+                    context.topicId?.let { topic ->
+                        repo.markRoomTopicRead(target.id, topic, target.asBusinessUserId, throughId)
+                    } ?: repo.markRoomRead(target.id, target.asBusinessUserId, throughId)
+                is ChatThreadMode.Person ->
+                    context.topicId?.let { topic ->
+                        repo.markConversationTopicRead(target.otherUserId, topic, throughIds)
+                    } ?: repo.markConversationRead(target.otherUserId, throughMessageIds = throughIds)
+                ChatThreadMode.Ai -> NetworkResult.Success(Unit)
+            }
 
         fun teardown() {
             persistComposerDraft()
@@ -2340,6 +2357,7 @@ class ChatConversationViewModel
             deleteJob?.cancel()
             reactJob?.cancel()
             readReceiptJob?.cancel()
+            topicReadReceiptJob?.cancel()
             presenceOnlineJob?.cancel()
             presenceOfflineJob?.cancel()
             reactionRefetchJob?.cancel()
@@ -2359,6 +2377,7 @@ class ChatConversationViewModel
             deleteJob = null
             reactJob = null
             readReceiptJob = null
+            topicReadReceiptJob = null
             presenceOnlineJob = null
             presenceOfflineJob = null
             reactionRefetchJob = null
@@ -2885,6 +2904,12 @@ class ChatConversationViewModel
                         socket.eventsOf("messages:read").collect { handleReadReceipt(it) }
                     }
             }
+            if (topicReadReceiptJob == null) {
+                topicReadReceiptJob =
+                    viewModelScope.launch {
+                        socket.eventsOf("messages:topic_read").collect { handleTopicReadReceipt(it) }
+                    }
+            }
             if (reactJob == null) {
                 reactJob =
                     viewModelScope.launch {
@@ -3074,6 +3099,7 @@ class ChatConversationViewModel
             var until: Map<String, Long>? = null
             val changes = linkedMapOf<String, ChatMessageDto>()
             val receipts = linkedMapOf<String, ChatReadReceipt>()
+            val messageReceipts = linkedMapOf<String, ChatMessageReadReceipt>()
             val retireAccess = repo.historyAccessRetirer()
             val removedRooms = retiredRoomIds.toMutableSet()
             var pages = 0
@@ -3095,6 +3121,9 @@ class ChatConversationViewModel
                 }
                 if (page.resetRequired) return false
                 collectChanges(page, changes, receipts)
+                page.messageReadReceipts.orEmpty().forEach { receipt ->
+                    if (receipt.readAt != null) messageReceipts[receipt.messageId] = receipt
+                }
                 changes.entries.removeAll { it.value.roomId in retiredRoomIds }
                 receipts.entries.removeAll { it.value.roomId in retiredRoomIds }
                 if (!page.hasMore) {
@@ -3104,7 +3133,7 @@ class ChatConversationViewModel
                             syncCursors = page.syncCursors.filterKeys { it !in retiredRoomIds },
                             removedRoomIds = (page.removedRoomIds + removedRooms).distinct(),
                         )
-                    applyChanges(admitted, changes.values, receipts.values)
+                    applyChanges(admitted, changes.values, receipts.values, messageReceipts.values)
                     return true
                 }
                 if (page.syncCursors == cursor) return false
@@ -3120,9 +3149,12 @@ class ChatConversationViewModel
             cursor: Map<String, Long>,
             until: Map<String, Long>?,
         ): NetworkResult<ChatChangesResponse> {
+            val receiptIds =
+                messages.asSequence().filter { it.userId == messageIdentityId && canMerge(it) }
+                    .map { it.id }.filterNot { it.startsWith("client_") }.take(MAX_TIMELINE_MESSAGES).toList().takeIf { it.isNotEmpty() }
             return when (val target = context.mode) {
-                is ChatThreadMode.Room -> repo.roomChanges(target.id, cursor, until, target.asBusinessUserId)
-                is ChatThreadMode.Person -> repo.conversationChanges(target.otherUserId, cursor, until)
+                is ChatThreadMode.Room -> repo.roomChanges(target.id, cursor, until, target.asBusinessUserId, receiptIds)
+                is ChatThreadMode.Person -> repo.conversationChanges(target.otherUserId, cursor, until, receiptIds)
                 ChatThreadMode.Ai -> NetworkResult.Success(ChatChangesResponse())
             }
         }
@@ -3162,6 +3194,7 @@ class ChatConversationViewModel
             page: ChatChangesResponse,
             changes: Collection<ChatMessageDto>,
             receipts: Collection<ChatReadReceipt>,
+            messageReceipts: Collection<ChatMessageReadReceipt>,
         ) {
             val oldest = messages.minWithOrNull(messageOrder)
             val merged = messages.associateBy { it.id }.toMutableMap()
@@ -3181,6 +3214,7 @@ class ChatConversationViewModel
             retireConfirmedSends(changes.filterNot { it.deleted })
             refreshUnknownTopics(changes.filterNot { it.deleted })
             receipts.forEach(::applyReadReceipt)
+            applyMessageReadReceipts(messageReceipts)
             rebuild()
             publishViewedRooms()
             joinActiveRoomsIfPossible()
@@ -3618,6 +3652,7 @@ class ChatConversationViewModel
                 .onFailure { Timber.w(it, "socket message decode failed") }
                 .getOrNull()
 
+        @Suppress("ReturnCount") // Invalid boundaries stop early; historical rooms use authorized per-message recovery.
         private fun handleReadReceipt(json: JSONObject) {
             val person = mode as? ChatThreadMode.Person ?: return
             val roomId = json.optStringValue("roomId")
@@ -3625,7 +3660,13 @@ class ChatConversationViewModel
             val throughId = json.optStringValue("throughMessageId")
             val readAt = json.optStringValue("readAt")
             if (roomId == null || throughId == null || readAt == null) return
-            if (roomId != directRoomId || reader != person.otherUserId) return
+            if (reader != person.otherUserId) return
+            if (roomId != directRoomId) {
+                // Aggregate history can include groups. Let authorized per-message receipts establish
+                // the reader for historical direct rooms without trusting a group boundary as 1:1 Read.
+                if (roomId in activeRoomIds && messages.any { it.roomId == roomId && it.userId == messageIdentityId }) catchUpMessages()
+                return
+            }
             // The last-read cursor is needed: a server clock timestamp alone could mark a newer send as read.
             val through = messages.firstOrNull { it.id == throughId && it.roomId == roomId } ?: return
             messages.replaceAll { message ->
@@ -3649,6 +3690,44 @@ class ChatConversationViewModel
                     messageOrder.compare(message, through) <= 0
                 ) {
                     message.copy(readAt = message.readAt ?: receipt.readAt)
+                } else {
+                    message
+                }
+            }
+        }
+
+        /** Topic receipts are a distinct protocol and can never acknowledge a different topic. */
+        @Suppress("ReturnCount") // Discard incomplete or out-of-scope socket boundaries before projection.
+        private fun handleTopicReadReceipt(json: JSONObject) {
+            val roomId = json.optStringValue("roomId") ?: return
+            val topicId = json.optStringValue("topicId") ?: return
+            val reader = json.optStringValue("userId") ?: return
+            val throughId = json.optStringValue("throughMessageId") ?: return
+            val throughAt = json.optStringValue("throughCreatedAt") ?: return
+            val readAt = json.optStringValue("readAt") ?: return
+            if (roomId !in activeRoomIds || reader == messageIdentityId) return
+            val person = mode as? ChatThreadMode.Person
+            if (person != null && reader != person.otherUserId) return
+            val through = ChatMessageDto(throughId, roomId, createdAt = throughAt)
+            messages.replaceAll { message ->
+                val matchesScope = message.roomId == roomId && message.topicId == topicId && message.userId == messageIdentityId
+                if (matchesScope && messageOrder.compare(message, through) <= 0) {
+                    changedDuringCatchUp.add(message.id)
+                    message.copy(readAt = message.readAt ?: readAt)
+                } else {
+                    message
+                }
+            }
+            rebuild()
+        }
+
+        /** Bounded, authorized per-message receipts also repair historical direct rooms and missed topic events. */
+        private fun applyMessageReadReceipts(receipts: Collection<ChatMessageReadReceipt>) {
+            val known = receipts.mapNotNull { receipt -> receipt.readAt?.let { receipt.messageId to it } }.toMap()
+            messages.replaceAll { message ->
+                val readAt = known[message.id]
+                if (readAt != null && message.userId == messageIdentityId && canMerge(message)) {
+                    message.copy(readAt = message.readAt ?: readAt)
                 } else {
                     message
                 }
