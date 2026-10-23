@@ -19,6 +19,8 @@ data class BusinessInboxRoomsResponse(
     val rooms: List<BusinessInboxRoomDto> = emptyList(),
     val total: Int? = null,
     val totalUnread: Int? = null,
+    val hasMore: Boolean = false,
+    val nextCursor: String? = null,
 )
 
 /**

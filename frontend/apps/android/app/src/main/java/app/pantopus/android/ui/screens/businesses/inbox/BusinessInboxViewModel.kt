@@ -10,12 +10,15 @@ import app.pantopus.android.data.api.models.businessinbox.BusinessInboxRoomDto
 import app.pantopus.android.data.api.models.businessinbox.BusinessMatchedPostDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.businessinbox.BusinessInboxRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.net.HttpURLConnection.HTTP_BAD_REQUEST
 import java.time.Duration
 import java.time.Instant
 import javax.inject.Inject
@@ -55,13 +58,16 @@ class BusinessInboxViewModel
         /** Per-section cache so flipping back doesn't re-blank the list. */
         private var messagesState: BusinessInboxUiState? = null
         private var mentionsState: BusinessInboxUiState? = null
+        private var roomsGeneration = 0L
+        private var nextRoomCursor: String? = null
+        private var roomPageJob: Job? = null
 
         fun load() {
             viewModelScope.launch { fetch(_section.value) }
         }
 
         fun refresh() {
-            cache(null, _section.value)
+            if (_section.value == BusinessInboxSection.Mentions) cache(null, _section.value)
             // Returning to the inbox re-reads it behind the rows already shown; only a first load or Retry shows the skeleton.
             val showLoading = _state.value is BusinessInboxUiState.Loading || _state.value is BusinessInboxUiState.Error
             viewModelScope.launch { fetch(_section.value, showLoading) }
@@ -73,6 +79,7 @@ class BusinessInboxViewModel
             val cached = cached(next)
             if (cached != null) {
                 _state.value = cached
+                viewModelScope.launch { fetch(next, showLoading = false) }
                 return
             }
             viewModelScope.launch { fetch(next) }
@@ -90,25 +97,94 @@ class BusinessInboxViewModel
         }
 
         private suspend fun fetchRooms() {
+            val generation = ++roomsGeneration
+            roomPageJob?.cancel()
+            val previous = messagesState as? BusinessInboxUiState.LoadedRooms
             when (val result = repository.rooms(businessId)) {
                 is NetworkResult.Success -> {
+                    if (generation != roomsGeneration) return
                     _totalUnread.value = result.data.totalUnread ?: 0
+                    nextRoomCursor = result.data.nextCursor
                     val rooms = result.data.rooms.map { projectRoom(it) }
                     apply(
                         if (rooms.isEmpty()) {
                             BusinessInboxUiState.Empty
                         } else {
-                            BusinessInboxUiState.LoadedRooms(rooms)
+                            BusinessInboxUiState.LoadedRooms(rooms, hasMore = result.data.hasMore && nextRoomCursor != null)
                         },
                         BusinessInboxSection.Messages,
                     )
                 }
-                is NetworkResult.Failure ->
+                is NetworkResult.Failure -> {
+                    if (generation != roomsGeneration) return
+                    if (result.error.refusesStoredCopy) {
+                        nextRoomCursor = null
+                        _totalUnread.value = 0
+                    }
                     apply(
-                        BusinessInboxUiState.Error(message(result.error, "Couldn't load messages.")),
+                        if (previous != null && !result.error.refusesStoredCopy) {
+                            previous.copy(
+                                loadingMore = false,
+                                loadError = message(result.error, "Couldn't refresh messages."),
+                                retryFromStart = true,
+                            )
+                        } else {
+                            BusinessInboxUiState.Error(message(result.error, "Couldn't load messages."))
+                        },
                         BusinessInboxSection.Messages,
                     )
+                }
             }
+        }
+
+        fun loadMoreRooms() {
+            val previous = messagesState as? BusinessInboxUiState.LoadedRooms ?: return
+            if (previous.retryFromStart) {
+                refresh()
+                return
+            }
+            val cursor = nextRoomCursor ?: return
+            if (!previous.hasMore || previous.loadingMore) return
+            val generation = roomsGeneration
+            apply(previous.copy(loadingMore = true, loadError = null), BusinessInboxSection.Messages)
+            roomPageJob =
+                viewModelScope.launch {
+                    val result = repository.rooms(businessId, before = cursor)
+                    if (generation != roomsGeneration || nextRoomCursor != cursor) return@launch
+                    when (result) {
+                        is NetworkResult.Success -> {
+                            _totalUnread.value = result.data.totalUnread ?: _totalUnread.value
+                            nextRoomCursor = result.data.nextCursor
+                            val rows = (previous.rooms + result.data.rooms.map(::projectRoom)).associateBy { it.id }.values.toList()
+                            apply(
+                                BusinessInboxUiState.LoadedRooms(
+                                    rows,
+                                    hasMore = result.data.hasMore && nextRoomCursor != null && nextRoomCursor != cursor,
+                                ),
+                                BusinessInboxSection.Messages,
+                            )
+                        }
+                        is NetworkResult.Failure -> {
+                            if (result.error.refusesStoredCopy) {
+                                nextRoomCursor = null
+                                _totalUnread.value = 0
+                                apply(
+                                    BusinessInboxUiState.Error(message(result.error, "Couldn't load messages.")),
+                                    BusinessInboxSection.Messages,
+                                )
+                            } else {
+                                apply(
+                                    previous.copy(
+                                        loadingMore = false,
+                                        loadError = message(result.error, "Couldn't load more messages."),
+                                        retryFromStart = result.error.code == HTTP_BAD_REQUEST,
+                                    ),
+                                    BusinessInboxSection.Messages,
+                                )
+                            }
+                        }
+                    }
+                }
         }
 
         private suspend fun fetchMentions() {

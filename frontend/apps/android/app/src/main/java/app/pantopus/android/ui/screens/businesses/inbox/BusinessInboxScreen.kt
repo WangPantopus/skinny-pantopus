@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -114,6 +115,24 @@ fun BusinessInboxScreen(
                     ) {
                         items(current.rooms, key = { it.id }) { room ->
                             RoomCard(room = room, onOpen = { onOpenRoom(room.id, room.title, room.handle) })
+                        }
+                        if (current.hasMore || current.loadError != null) {
+                            item(key = "load-more-rooms") {
+                                Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    current.loadError?.let { error ->
+                                        Text(error, color = PantopusColors.appTextSecondary, modifier = Modifier.padding(Spacing.s2))
+                                    }
+                                    TextButton(onClick = viewModel::loadMoreRooms, enabled = !current.loadingMore) {
+                                        Text(
+                                            when {
+                                                current.loadingMore -> "Loading…"
+                                                current.loadError != null -> "Retry"
+                                                else -> "Load more"
+                                            },
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 is BusinessInboxUiState.LoadedMentions ->
