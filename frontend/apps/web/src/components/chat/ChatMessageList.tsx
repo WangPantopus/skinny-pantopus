@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { chatPersonName, getDateKey, formatDateLabel } from '../../hooks/useChatMessages';
+import type { ChatReplyTarget } from '../../hooks/useChatMessages';
 import ChatDateSeparator from './ChatDateSeparator';
 import ChatMessageBubble from './ChatMessageBubble';
 import type { ChatMessage, ChatReplyQuote } from './ChatMessageBubble';
@@ -25,6 +26,8 @@ interface ChatMessageListProps {
   onReact?: (messageId: string, emoji: string) => void;
   /** Called when the user retries a failed (not refused) send */
   onRetry?: (messageId: string) => void;
+  /** Called when the user picks Reply on a message; leave it out where the composer can't send. */
+  onReply?: (target: ChatReplyTarget) => void;
 }
 
 /** Within this distance of the bottom, the list follows new messages. */
@@ -54,6 +57,7 @@ export default function ChatMessageList({
   onImageClick,
   onReact,
   onRetry,
+  onReply,
 }: ChatMessageListProps) {
   const scrollRef = useRef<HTMLElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
@@ -66,6 +70,11 @@ export default function ChatMessageList({
   // A reply quotes its original only when that is loaded: one answering a
   // message older than the loaded pages shows no quote.
   const messagesById = useMemo(() => new Map(messages.map((m) => [String(m.id), m])), [messages]);
+  // The composer's reply bar names the message as its quote will.
+  const handleReply = useCallback(
+    (msg: ChatMessage) => onReply?.({ messageId: String(msg.id), ...replyQuote(msg, isOwnMessage(msg)) }),
+    [onReply, isOwnMessage],
+  );
 
   const scrollToNewest = useCallback(() => {
     const el = scrollRef.current;
@@ -193,7 +202,7 @@ export default function ChatMessageList({
                 const reply = original ? replyQuote(original, isOwnMessage(original)) : undefined;
 
                 nodes.push(
-                  <ChatMessageBubble key={msg.id} msg={msg} isMine={isMine} showSender={showSender} reply={reply} onImageClick={onImageClick} onReact={onReact} onRetry={onRetry} />
+                  <ChatMessageBubble key={msg.id} msg={msg} isMine={isMine} showSender={showSender} reply={reply} onImageClick={onImageClick} onReact={onReact} onRetry={onRetry} onReply={onReply ? handleReply : undefined} />
                 );
 
                 return nodes;

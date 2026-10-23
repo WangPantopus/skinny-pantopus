@@ -162,12 +162,14 @@ export default function MiniChatView({ roomId, otherUserId, name, avatar, onBack
         <ChatMessageList
           messages={chat.messages}
           loading={chat.loading}
-          error={chat.error}
+          // A conversation that takes no messages says why in place of the composer instead.
+          error={chat.sendRefusal ? null : chat.error}
           hasMore={chat.hasMore}
           loadingOlder={chat.loadingOlder}
           onLoadOlder={chat.loadOlder}
           isOwnMessage={isOwnMessage}
           onReact={handleReact}
+          onReply={chat.sendRefusal ? undefined : chat.beginReply}
         />
       </div>
 
@@ -178,6 +180,9 @@ export default function MiniChatView({ roomId, otherUserId, name, avatar, onBack
         placeholder="Type a message…"
         onAttachAction={handleAttachAction}
         compact
+        replyingTo={chat.replyingTo}
+        onCancelReply={chat.cancelReply}
+        lockedNote={chat.sendRefusal}
       />
 
       {/* Share a Task / Share a Listing modals */}
