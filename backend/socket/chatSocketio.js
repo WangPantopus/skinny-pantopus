@@ -316,8 +316,8 @@ module.exports = (io) => {
     const initialRoomsLoad = (async () => {
       try {
         // Startup remains a bounded head subscription; older rooms are joined
-        // explicitly by clients. Use the current authorized, indexed inbox
-        // reader instead of the legacy function's full-history MAX scans.
+        // explicitly by clients. The current inbox reader applies task access
+        // before selecting that head and uses the same stable activity order.
         const { data: page, error } = await supabaseAdmin.rpc('get_user_chat_rooms', {
           p_user_id: userId,
           p_actor_id: userId,
