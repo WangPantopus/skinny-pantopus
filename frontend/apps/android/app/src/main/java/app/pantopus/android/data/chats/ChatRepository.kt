@@ -139,11 +139,13 @@ class ChatRepository
             room: ChatRoomDetail,
         ): Boolean {
             if (room.isActive != true) return false
+            val participants = room.participants.orEmpty()
+            val active = participants.filter { it.isActive == true && it.leftAt == null }
             return when (target.kind) {
                 "room" -> roomId == target.id
                 "person" ->
-                    room.type == "direct" && room.participants?.size == 2 &&
-                        room.participants.mapNotNull { it.userId }.toSet() == setOf(target.asBusinessUserId ?: target.accountId, target.id)
+                    room.type == "direct" && participants.none { it.isActive == null } && active.size == 2 &&
+                        active.mapNotNull { it.userId }.toSet() == setOf(target.asBusinessUserId ?: target.accountId, target.id)
                 else -> false
             }
         }

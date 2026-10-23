@@ -375,6 +375,9 @@ data class ChatRoomParticipant(
     @Json(name = "user_id") val userId: String? = null,
     /** The local-identity projection (`serializeUserAsLocalIdentity`). */
     val user: ChatRoomParticipantIdentity? = null,
+    @Json(name = "is_active") val isActive: Boolean? = null,
+    // Missing legacy membership fields cannot prove an active reply audience.
+    @Json(name = "left_at") val leftAt: String? = "",
 )
 
 @JsonClass(generateAdapter = true)
