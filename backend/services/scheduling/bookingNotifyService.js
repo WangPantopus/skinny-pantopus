@@ -14,6 +14,7 @@ const { buildIcs } = require('./icsService');
 const { isEmailSuppressed } = require('./schedulingShared');
 const notifyPrefs = require('./schedulingNotifyPrefs');
 const { getBusinessMemberIdsByRole } = require('../../utils/businessPermissions');
+const { loadChatPeople } = require('../chatPeople');
 
 const APP_URL = process.env.APP_URL || 'http://localhost:3000';
 
@@ -34,12 +35,6 @@ function formatWhen(startIso, endIso, tz) {
   return `${s.toFormat('cccc, LLL d, yyyy')} · ${s.toFormat('h:mm a')} – ${e.toFormat('h:mm a')} (${s.toFormat('ZZZZ')})`;
 }
 
-async function getUserContact(userId) {
-  if (!userId) return null;
-  const { data } = await supabaseAdmin.from('User').select('id, email, name').eq('id', userId).maybeSingle();
-  return data || null;
-}
-
 // The address our own emails come from (SMTP_FROM, "Name <address>").
 function platformSenderAddress() {
   const from = process.env.SMTP_FROM || 'Pantopus <hello@pantopus.com>';
@@ -48,13 +43,19 @@ function platformSenderAddress() {
 }
 
 /**
- * The organizer the guest's calendar invite names. A business's booking is organized by the business: its name
- * and its public email, or our own sender address, never the host's or owner's personal name and email (the host of
- * a round-robin, collective or reassigned booking is a staff member). Personal and Home bookings name their host
- * (else the owner), as before.
+ * The organizer the guest's calendar invite names. The invite goes to the guest's own address, outside Pantopus, so it
+ * never carries a person's account email. A business's booking is organized by the business: its name and its public
+ * email, or our own sender address (the host of a round-robin, collective or reassigned booking is a staff member).
+ * Personal and Home bookings name their host (else the owner) as neighbors see them (services/chatPeople.js: by their
+ * Local Profile, or the account for anyone without one), at our own sender address.
  */
 async function inviteOrganizer(booking) {
-  if (booking.owner_type !== 'business') return getUserContact(booking.host_user_id || booking.owner_user_id);
+  if (booking.owner_type !== 'business') {
+    const hostId = booking.host_user_id || booking.owner_user_id;
+    if (!hostId) return null;
+    const host = (await loadChatPeople([hostId])).get(String(hostId));
+    return { email: platformSenderAddress(), name: host?.displayName || 'Pantopus' };
+  }
   const [{ data: business }, { data: profile }] = await Promise.all([
     supabaseAdmin.from('User').select('name').eq('id', booking.owner_id).maybeSingle(),
     supabaseAdmin.from('BusinessProfile').select('public_email').eq('business_user_id', booking.owner_id).maybeSingle(),
