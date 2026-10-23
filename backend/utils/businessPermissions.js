@@ -38,8 +38,8 @@ const BUSINESS_ROLE_RANK = {
  * @param {string} permission - e.g. 'profile.edit', 'catalog.manage'
  * @returns {Promise<boolean>}
  */
-async function hasPermission(businessUserId, userId, permission) {
-  const membership = await getActiveMembership(businessUserId, userId);
+async function hasPermission(businessUserId, userId, permission, { throwOnError = false } = {}) {
+  const membership = await getActiveMembership(businessUserId, userId, { throwOnError });
   if (!membership) return false;
 
   const roleBase = membership.role_base;
@@ -57,20 +57,24 @@ async function hasPermission(businessUserId, userId, permission) {
     .maybeSingle();
 
   // A failed read cannot establish that an explicit denial is absent.
-  if (overrideError) return false;
+  if (overrideError) {
+    if (throwOnError) throw authorizationUnavailable();
+    return false;
+  }
 
   if (override && override.allowed !== null && override.allowed !== undefined) {
     return override.allowed;
   }
 
   // Fall back to role default
-  const { data: rolePerm } = await supabaseAdmin
+  const { data: rolePerm, error: roleError } = await supabaseAdmin
     .from('BusinessRolePermission')
     .select('allowed')
     .eq('role_base', roleBase)
     .eq('permission', permission)
     .maybeSingle();
 
+  if (roleError && throwOnError) throw authorizationUnavailable();
   return rolePerm?.allowed === true;
 }
 
@@ -372,11 +376,16 @@ async function getBusinessPayoutAccount(businessUserId) {
 // Helpers
 // ============================================================
 
-/**
- * Get active team membership for a user in a business
- */
-async function getActiveMembership(businessUserId, userId) {
-  const { data: membership } = await supabaseAdmin
+// Chat callers need to preserve cached history when authorization cannot be read.
+function authorizationUnavailable() {
+  return Object.assign(new Error('Authorization is temporarily unavailable. Please retry.'), {
+    code: 'AUTHORIZATION_UNAVAILABLE', status: 503,
+  });
+}
+
+/** Get active team membership; optionally distinguish outages from absence. */
+async function getActiveMembership(businessUserId, userId, { throwOnError = false } = {}) {
+  const { data: membership, error } = await supabaseAdmin
     .from('BusinessTeam')
     .select('*')
     .eq('business_user_id', businessUserId)
@@ -384,6 +393,7 @@ async function getActiveMembership(businessUserId, userId) {
     .eq('is_active', true)
     .maybeSingle();
 
+  if (error && throwOnError) throw authorizationUnavailable();
   return membership || null;
 }
 

@@ -19,6 +19,7 @@ const {
 const { verifiedResidentUserIds } = require('../utils/identityProfiles');
 const { isUnpublishedBusiness } = require('../utils/visibilityPolicy');
 const {
+  chatAccessUnavailable,
   UNPUBLISHED_BUSINESS_REFUSAL,
   unpublishedDirectRoomRefusal,
   isBusinessAccount,
@@ -319,12 +320,13 @@ async function getBusinessMessagingMemberIds(businessUserId) {
 // request says so (`asBusinessUserId`), and in the chat room of a task it posted, where they always answer as the
 // business. Otherwise it is the caller's own row; `activeOnly` refuses one they left.
 async function roomMembership(roomId, userId, asBusinessUserId, { activeOnly = false } = {}) {
-  const { data: own } = await supabaseAdmin
+  const { data: own, error } = await supabaseAdmin
     .from('ChatParticipant')
     .select('*')
     .eq('room_id', roomId)
     .eq('user_id', userId)
     .maybeSingle();
+  if (error) throw chatAccessUnavailable();
   const businessUserId = asBusinessUserId && String(asBusinessUserId) !== String(userId)
     ? asBusinessUserId
     : await taskBusinessInRoom(roomId, userId);
@@ -820,7 +822,7 @@ function roomIsActive(room, planStates) {
 }
 
 function sendChatReadError(res, error, fallback) {
-  if (error.code === 'CHAT_UNAVAILABLE') {
+  if (error.status === 503 || error.code === 'CHAT_UNAVAILABLE') {
     return res.status(503).json({ error: error.message, code: error.code });
   }
   return res.status(500).json({ error: fallback });
@@ -2139,7 +2141,7 @@ router.get('/rooms/:roomId/messages', verifyToken, async (req, res) => {
 
   } catch (err) {
     logger.error('Messages fetch error', { requestId: req.requestId, userId: req.user?.id, roomId: req.params.roomId || req.query.roomId, error: err.message });
-    res.status(500).json({ error: 'Failed to fetch messages' });
+    sendChatReadError(res, err, 'Failed to fetch messages');
   }
 });
 

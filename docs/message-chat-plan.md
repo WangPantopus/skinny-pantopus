@@ -170,6 +170,26 @@ An execution plan used the existing room-message, participant and topic
 indexes; its single observed database execution took 87 ms on the loaded
 development host. Browser/native pagination checks are still pending.
 
+## Authorization outages and room preview queries
+
+Room and business authorization now distinguish a failed database read from a
+confirmed refusal. History, changes and preference reads return a retryable
+failure during an outage, preserving the cached-history revocation contract.
+Socket room joins likewise report a retryable failure. The existing permission
+helper opts into this distinction only for chat; its other callers keep their
+current behavior.
+
+The existing room-preview RPC now uses one indexed lateral seek per distinct
+room instead of reading the complete matching history before selecting its
+latest row. Its invoker security, columns and deleted-message rule are unchanged.
+
+A real local API through a temporary network-fault proxy returned 503 for
+history, changes and preferences when membership storage was unreachable, then
+returned the same history after recovery. The new preview SQL matched the old
+result, including repeated room inputs. Application-function lint, JavaScript
+syntax, migration policy and identity guards passed. Final app verification of
+this slice is pending; no hosted configuration was changed.
+
 ## Remaining repair sequence
 
 | Area | Work remaining after immediate repairs |

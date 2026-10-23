@@ -12,7 +12,7 @@ const syncChangedService = require('../services/syncChangedService');
 const chatRealtime = require('../services/chatRealtime');
 const { isBlocked, blockedUserIds } = require('../services/blockService');
 const { closedGigRoomIds, isGigRoomClosedTo, isRoomClosedForWrites } = require('../services/chatGigRoomAccess');
-const { actingBusinessInRoom, UNPUBLISHED_BUSINESS_REFUSAL } = require('../services/chatBusinessAccess');
+const { chatAccessUnavailable, actingBusinessInRoom, UNPUBLISHED_BUSINESS_REFUSAL } = require('../services/chatBusinessAccess');
 const { unpublishedBusinessIds } = require('../utils/visibilityPolicy');
 const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
 const { markChatRead } = require('../services/chatReadState');
@@ -411,13 +411,14 @@ module.exports = (io) => {
     on('room:join', async ({ roomId }, callback) => {
       try {
         // Verify user has access to room
-        const { data: participant } = await supabaseAdmin
+        const { data: participant, error: participantError } = await supabaseAdmin
           .from('ChatParticipant')
           .select('*')
           .eq('room_id', roomId)
           .eq('user_id', userId)
           .eq('is_active', true)
-          .single();
+          .maybeSingle();
+        if (participantError) throw chatAccessUnavailable();
         // A business's owner and staff aren't members of its rooms (services/chatBusinessAccess), but its inbox hears
         // the room's live updates. They join quietly: the room is never told who they are (no joined, presence,
         // typing or read events), and their own read goes through the API for the business.
@@ -491,7 +492,7 @@ module.exports = (io) => {
         
       } catch (err) {
         logger.error('Room join error', { sessionId, userId, roomId, error: err.message });
-        callback({ error: 'Failed to join room' });
+        callback({ error: 'Failed to join room', retryable: true });
       }
     });
     
