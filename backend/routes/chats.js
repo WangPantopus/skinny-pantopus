@@ -595,6 +595,20 @@ async function emitCommittedChatChange(io, change, prepared) {
     ? { data: prepared.room } : await supabaseAdmin.from('ChatRoom').select('id, type, gig_id').eq('id', change.r).maybeSingle();
   if (roomError) throw roomError;
   if (!room) return Number(change.v || 0);
+  if (change.t === 'ChatTopicRead') {
+    // The topic event has a separate name: old clients must never apply a
+    // selected-topic boundary to every message in the room.
+    const { data: receipt, error } = await supabaseAdmin.from('ChatTopicRead')
+      .select('last_read_message_id, last_read_message_at, read_at, participant:ChatParticipant!inner(is_active)')
+      .eq('room_id', room.id).eq('user_id', change.u).eq('topic_id', change.q)
+      .eq('participant.is_active', true).maybeSingle();
+    if (error) throw error;
+    if (receipt && room.type === 'direct') await emitChatMutation(io, room, 'messages:topic_read', {
+      userId: change.u, roomId: room.id, topicId: change.q, readAt: receipt.read_at,
+      throughMessageId: receipt.last_read_message_id, throughCreatedAt: receipt.last_read_message_at,
+    });
+    return 0;
+  }
   if (change.t === 'ChatRead') {
     const { data: participant, error } = await supabaseAdmin.from('ChatParticipant')
       .select('last_read_at, last_read_message_id, last_read_message_at')
@@ -852,7 +866,7 @@ function serializeChatMessageForViewer(message, options = {}) {
   const viewerWroteIt = Boolean(options.viewerId && message.actor_user_id
     && String(message.actor_user_id) === String(options.viewerId));
   const base = options.includeActorIdentity || viewerWroteIt ? message : stripActorIdentity(message);
-  const { sender, push_delivery_requested: _pushDelivery, ...safe } = base;
+  const { sender, push_delivery_requested: _pushDelivery, read_topic_id: _readTopic, ...safe } = base;
   const bodyText = safe.message_text ?? safe.message ?? null;
   const bodyType = safe.message_type ?? safe.type ?? 'text';
   const senderId = sender?.id || safe.user_id;
@@ -906,6 +920,16 @@ async function personChatRoomIds(userId, otherUserId, asBusinessUserId) {
 
 async function respondWithChatChanges(req, res, roomIds, identityUserId) {
   const params = req.method === 'POST' ? (req.body || {}) : req.query;
+  let receiptIds = params.readMessageIds;
+  if (receiptIds !== undefined) {
+    if (typeof receiptIds === 'string') {
+      try { receiptIds = JSON.parse(receiptIds); } catch { throw Object.assign(new Error('Invalid receipt messages'), { status: 400 }); }
+    }
+    if (Joi.array().items(Joi.string().uuid()).max(500).validate(receiptIds).error) {
+      throw Object.assign(new Error('Invalid receipt messages'), { status: 400 });
+    }
+    receiptIds = [...new Set(receiptIds)];
+  }
   const cursor = parseSyncCursor(params.cursor);
   const until = parseSyncCursor(params.until, { optional: true });
   const limit = Math.min(Math.max(parseInt(params.limit, 10) || 200, 1), 200);
@@ -917,8 +941,20 @@ async function respondWithChatChanges(req, res, roomIds, identityUserId) {
     chatReadReceipts(roomIds),
     applyDirectReadReceipts(visible, req.user.id),
   ]);
+  const messageReadReceipts = [];
+  const authorizedRooms = new Set(roomIds.map(String));
+  for (let start = 0; start < (receiptIds?.length || 0); start += 100) {
+    const { data, error } = await supabaseAdmin.from('ChatMessage')
+      .select('id, room_id, user_id, actor_user_id, created_at')
+      .in('id', receiptIds.slice(start, start + 100)).eq('deleted', false);
+    if (error) throw error;
+    const authorized = (data || []).filter((m) => authorizedRooms.has(String(m.room_id))
+      && [String(m.user_id), String(m.actor_user_id)].includes(String(req.user.id)));
+    await applyDirectReadReceipts(authorized, req.user.id, { required: true });
+    messageReadReceipts.push(...authorized.map((m) => ({ messageId: m.id, readAt: m.read_at || null })));
+  }
   res.set('Cache-Control', 'private, no-store');
-  return res.json({ ...changes, readReceipts, messages: changes.messages.map((message) => message.deleted
+  return res.json({ ...changes, readReceipts, ...(receiptIds ? { messageReadReceipts } : {}), messages: changes.messages.map((message) => message.deleted
     ? { id: message.id, room_id: message.room_id, deleted: true, sync_version: message.sync_version }
     : { ...serializeChatMessageForViewer(message, { people, viewerId: req.user.id }),
       reactions: reactions.get(message.id) || [] }) });
@@ -1959,21 +1995,27 @@ router.get('/conversations/:otherUserId/messages', verifyToken, async (req, res)
  * POST /api/chat/conversations/:otherUserId/read
  * Mark shared direct/task-room messages with a person as read.
  */
-router.post('/conversations/:otherUserId/read', verifyToken, async (req, res) => {
+router.post(['/conversations/:otherUserId/read', '/conversations/:otherUserId/topics/:topicId/read'], verifyToken, async (req, res) => {
   const requestAt = new Date().toISOString();
   try {
     const userId = req.user.id;
     const { otherUserId } = req.params;
+    if (req.body?.topicId !== undefined) return res.status(400).json({ error: 'Use the topic read route' });
+    if (req.params.topicId && Joi.string().uuid().validate(req.params.topicId).error) {
+      return res.status(400).json({ error: 'Invalid topic' });
+    }
     const asBusinessUserId = req.body?.asBusinessUserId ? String(req.body.asBusinessUserId) : null;
     const readTargetUserId = asBusinessUserId || userId;
     const sharedRoomIds = await personChatRoomIds(userId, otherUserId, asBusinessUserId);
 
     if (sharedRoomIds.length === 0) {
+      if (req.params.topicId) return res.status(403).json({ error: 'Access denied' });
       return res.json({ unreadCount: 0, updatedRooms: 0 });
     }
 
     const usersToClear = [String(readTargetUserId)];
     const result = await markChatRead({ roomIds: sharedRoomIds, userId: readTargetUserId,
+      topicId: req.params.topicId, otherUserId,
       throughMessageId: req.body?.throughMessageId, throughMessageIds: req.body?.throughMessageIds,
       requestAt, io: req.app.get('io') });
     if (result.error) {
@@ -1983,7 +2025,8 @@ router.post('/conversations/:otherUserId/read', verifyToken, async (req, res) =>
     badgeService.emitBadgeUpdateToMany(usersToClear);
     // Do not clear a later business notification outside the visible boundary.
     if (result.unreadCount === 0) await readBusinessNotices(userId, asBusinessUserId, sharedRoomIds);
-    return res.json({ unreadCount: result.unreadCount, updatedRooms: result.data.length });
+    return res.json({ unreadCount: result.unreadCount, updatedRooms: result.data.length,
+      ...(req.params.topicId ? { topicId: req.params.topicId, readScope: 'topic' } : {}) });
   } catch (err) {
     logger.error('Conversation read error', { requestId: req.requestId, userId: req.user?.id, error: err.message });
     return res.status(err.status || 500).json({ error: err.status ? err.message : 'Failed to mark conversation as read' });
@@ -2639,10 +2682,14 @@ router.delete('/messages/:messageId', verifyToken, messageDeleteLimiter, async (
  * POST /api/chat/rooms/:roomId/read
  * Mark messages as read
  */
-router.post('/rooms/:roomId/read', verifyToken, async (req, res) => {
+router.post(['/rooms/:roomId/read', '/rooms/:roomId/topics/:topicId/read'], verifyToken, async (req, res) => {
   const requestAt = new Date().toISOString();
   try {
     const { roomId } = req.params;
+    if (req.body?.topicId !== undefined) return res.status(400).json({ error: 'Use the topic read route' });
+    if (req.params.topicId && Joi.string().uuid().validate(req.params.topicId).error) {
+      return res.status(400).json({ error: 'Invalid topic' });
+    }
     const roomIdStr = String(roomId || '');
     const userId = req.user.id;
     const asBusinessUserId = req.body?.asBusinessUserId ? String(req.body.asBusinessUserId) : null;
@@ -2652,6 +2699,7 @@ router.post('/rooms/:roomId/read', verifyToken, async (req, res) => {
     // Treat invalid room IDs as a no-op instead of a server error.
     const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (!UUID_REGEX.test(roomIdStr)) {
+      if (req.params.topicId) return res.status(400).json({ error: 'Invalid room' });
       return res.json({ unreadCount: 0 });
     }
 
@@ -2669,6 +2717,7 @@ router.post('/rooms/:roomId/read', verifyToken, async (req, res) => {
     const usersToClear = [String(readTargetUserId)];
 
     const result = await markChatRead({ roomIds: [roomIdStr], userId: readTargetUserId,
+      topicId: req.params.topicId,
       throughMessageId: req.body?.throughMessageId, throughMessageIds: req.body?.throughMessageIds,
       requestAt, io: req.app.get('io') });
     if (result.error) {
@@ -2677,7 +2726,8 @@ router.post('/rooms/:roomId/read', verifyToken, async (req, res) => {
     }
     badgeService.emitBadgeUpdateToMany(usersToClear);
     if (result.unreadCount === 0) await readBusinessNotices(userId, asBusinessUserId, [roomIdStr]);
-    res.json({ unreadCount: result.unreadCount });
+    res.json({ unreadCount: result.unreadCount,
+      ...(req.params.topicId ? { topicId: req.params.topicId, readScope: 'topic' } : {}) });
     
   } catch (err) {
     logger.error('Mark read error', { requestId: req.requestId, userId: req.user?.id, error: err.message });

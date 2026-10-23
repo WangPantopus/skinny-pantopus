@@ -545,7 +545,7 @@ module.exports = (io) => {
           ...(operation.token ? { subscriptionId: operation.token } : {}),
           // Without actor_user_id, as the API serves messages: who wrote for a business stays internal.
           // Each sender is named as the chat list names them (services/chatPeople).
-          messages: backfill.map(({ actor_user_id: _actor, push_delivery_requested: _pushDelivery, ...message }) => ({
+          messages: backfill.map(({ actor_user_id: _actor, push_delivery_requested: _pushDelivery, read_topic_id: _readTopic, ...message }) => ({
             ...message,
             sender: chatPersonRow(message.sender, people),
             reactions: reactionMap.get(String(message.id)) || [],
@@ -618,7 +618,7 @@ module.exports = (io) => {
     /**
      * Mark messages as read
      */
-    on('messages:read', async ({ roomId, throughMessageId, throughMessageIds }, callback) => {
+    const readMessages = async ({ roomId, topicId, throughMessageId, throughMessageIds }, callback) => {
       const requestAt = new Date().toISOString();
       try {
         // Verify the socket has joined this room as a member (a business's read goes through the API)
@@ -627,7 +627,7 @@ module.exports = (io) => {
         }
 
         if (await isGigRoomClosedTo(roomId, userId)) return callback({ error: 'Access denied' });
-        const result = await markChatRead({ roomIds: [roomId], userId, throughMessageId, throughMessageIds, requestAt, io });
+        const result = await markChatRead({ roomIds: [roomId], userId, topicId, throughMessageId, throughMessageIds, requestAt, io });
         if (result.error) return callback({ error: 'Failed to mark as read' });
 
         // Update the reader's own badge counts (unread decreased)
@@ -639,7 +639,11 @@ module.exports = (io) => {
         logger.error('Mark read error', { sessionId, userId, roomId, error: err.message });
         callback({ error: 'Failed to mark as read' });
       }
-    });
+    };
+    on('messages:read', (payload = {}, callback) => payload.topicId !== undefined
+      ? callback({ error: 'Use the topic read event' }) : readMessages(payload, callback));
+    on('messages:topic_read', (payload = {}, callback) => !payload.topicId
+      ? callback({ error: 'Topic required' }) : readMessages(payload, callback));
     
     // Note: message:delete is handled via REST (DELETE /api/chat/messages/:id)
     // which broadcasts message:deleted to the room after soft-delete. Both web

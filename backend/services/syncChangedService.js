@@ -58,6 +58,7 @@ const RULES = {
   HomeScopedGrant: { scope: 'home', topics: ({ h }) => [`home:${h}`] },
   SavedPlace: { scope: 'user', topics: ({ p }) => ['homes', 'today', ...(p ? [`place:${p}`] : [])] },
   ChatParticipant: { scope: 'room', topics: ({ r }) => ['chats', `chat:${r}`] },
+  ChatTopicRead: { scope: 'room', topics: ({ r }) => ['chats', `chat:${r}`] },
   ChatMessage: { scope: 'room', topics: ({ r }) => [`chat:${r}`, 'chats'] },
   ChatPreferences: { scope: 'user', topics: () => ['chats'], preferences: true },
   Notification: { scope: 'user', topics: () => ['notifications'] },

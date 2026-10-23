@@ -26,6 +26,7 @@ function init(value) {
   syncChanged.onChange((change) => {
     if (change.t === 'ChatMessage' && change.m && change.op) announce(change);
     if (change.t === 'ChatRead' && change.u) announce(change);
+    if (change.t === 'ChatTopicRead' && change.u && UUID.test(change.q || '')) announce(change);
     if (change.t === 'ChatTyping' && change.origin !== processId) queueTyping(change);
   });
 }
@@ -36,7 +37,9 @@ function invalidate(roomId) {
 
 function announce(change, prepared) {
   if (!io || !handler || !UUID.test(change.r || '') || !UUID.test(change.m || change.u || '')) return;
-  const key = change.t === 'ChatRead' ? `read:${change.r}:${change.u}` : change.m;
+  if (change.t === 'ChatTopicRead' && !UUID.test(change.q || '')) return;
+  const key = change.t === 'ChatTopicRead' ? `topic-read:${change.r}:${change.u}:${change.q}`
+    : change.t === 'ChatRead' ? `read:${change.r}:${change.u}` : change.m;
   const previous = pending.get(key);
   if (pending.size >= 1000 && !previous) { invalidate(change.r); return; }
   const newer = !previous || Number(change.v || 0) >= Number(previous.change.v || 0);
@@ -57,7 +60,7 @@ function drain() {
     running.add(key);
     const seen = delivered.get(key);
     const version = Number(item.change.v || 0);
-    const read = item.change.t === 'ChatRead';
+    const read = ['ChatRead', 'ChatTopicRead'].includes(item.change.t);
     const insert = item.inserted && !seen?.inserted;
     Promise.resolve().then(async () => {
       if (!read && !insert && seen && version <= seen.version) return;

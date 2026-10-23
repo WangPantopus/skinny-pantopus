@@ -7,7 +7,10 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 
 // A subscription/send is not evidence of reading. Only an explicit read after
 // rendering history advances this boundary; legacy clients use request time.
-async function markChatRead({ roomIds, userId, throughMessageId, throughMessageIds, requestAt, io }) {
+async function markChatRead({ roomIds, userId, topicId, otherUserId, throughMessageId, throughMessageIds, requestAt, io }) {
+  if (topicId != null && (typeof topicId !== 'string' || !UUID.test(topicId))) {
+    return { error: { code: '22023', message: 'Invalid topic' } };
+  }
   if (throughMessageId != null && (typeof throughMessageId !== 'string' || !UUID.test(throughMessageId))) {
     return { error: { code: '22023', message: 'Invalid read cursor' } };
   }
@@ -30,12 +33,13 @@ async function markChatRead({ roomIds, userId, throughMessageId, throughMessageI
       return { error: { code: '22023', message: 'Invalid read cursor' } };
     }
   }
-  const { data, error } = await supabaseAdmin.rpc('mark_chat_read_boundaries', {
+  const { data, error } = await supabaseAdmin.rpc(topicId ? 'mark_chat_topic_read_boundaries' : 'mark_chat_read_boundaries', {
     p_user_id: userId,
     p_room_ids: roomIds,
     p_boundaries: boundaries,
     p_through_message_id: throughMessageId || null,
     p_request_at: requestAt || new Date().toISOString(),
+    ...(topicId ? { p_topic_id: topicId, p_other_user_id: otherUserId || null } : {}),
   });
   if (error) return { error };
   // One JSON response keeps complete totals even above PostgREST's row cap.
@@ -43,7 +47,9 @@ async function markChatRead({ roomIds, userId, throughMessageId, throughMessageI
     return { error: { code: 'XX000', message: 'Read state unavailable' } };
   }
   for (const row of data.data) {
-    if (row.through_message_id && io) chatRealtime.announce({ t: 'ChatRead', r: row.room_id, u: userId });
+    if (row.through_message_id && io) chatRealtime.announce({
+      t: topicId ? 'ChatTopicRead' : 'ChatRead', r: row.room_id, u: userId, ...(topicId ? { q: topicId } : {}),
+    });
   }
   return { data: data.data, unreadCount: data.unreadCount };
 }
@@ -57,11 +63,31 @@ function timestampMicros(value) {
 
 // Existing message DTOs already understand read_at. A direct conversation has
 // one recipient; group reads need per-recipient semantics and stay unset.
-async function applyDirectReadReceipts(messages, viewerId) {
+async function applyDirectReadReceipts(messages, viewerId, { required = false } = {}) {
   const own = messages.filter((m) => String(m.user_id) === String(viewerId)
     || String(m.actor_user_id) === String(viewerId));
   const roomIds = [...new Set(own.map((m) => m.room_id))];
   if (!roomIds.length) return;
+  // Per-message receipts cover both room and topic boundaries. Bound by the
+  // actual authorized window rather than every topic ever used in these rooms.
+  let legacy = false;
+  for (let start = 0; start < own.length; start += 500) {
+    const batch = own.slice(start, start + 500);
+    const { data: receipts, error } = await supabaseAdmin.rpc('get_chat_message_receipts', {
+      p_user_id: viewerId, p_message_ids: batch.map((m) => m.id),
+    });
+    if (error) {
+      // A rolling deployment may reach an older schema. Its room boundaries
+      // remain truthful; never infer a topic read from a missing function.
+      if (['42883', 'PGRST202'].includes(error.code)) { legacy = true; break; }
+      logger.warn('chat_read_receipts_unavailable', { code: error.code });
+      if (required) throw error;
+      return;
+    }
+    const byMessage = new Map((receipts || []).map((row) => [String(row.message_id), row.read_at]));
+    for (const message of batch) if (byMessage.get(String(message.id))) message.read_at = byMessage.get(String(message.id));
+  }
+  if (!legacy) return;
   let data;
   try {
     data = await readChatRoomBatches(roomIds, (ids) => supabaseAdmin.from('ChatParticipant')
@@ -69,6 +95,7 @@ async function applyDirectReadReceipts(messages, viewerId) {
       .in('room_id', ids).eq('room.type', 'direct').eq('is_active', true));
   } catch (error) {
     logger.warn('chat_read_receipts_unavailable', { code: error.code });
+    if (required) throw error;
     return;
   }
   const byRoom = new Map();
