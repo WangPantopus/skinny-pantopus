@@ -185,7 +185,9 @@ export default function ChatRoomView({
     (async () => {
       try {
         const convResp = await ((api.chat as Record<string, any>).getConversationMessages as ((id: string, opts?: Record<string, any>) => Promise<{ messages?: ChatMessage[]; roomIds?: string[] }>) | undefined)?.(historyPeerId, {
-          limit: 1000,
+          // This is a preview outside the paginated timeline. The existing
+          // person conversation below owns complete history and search.
+          limit: 50,
           ...(asBusinessUserId ? { asBusinessUserId } : {}),
         });
         if (cancelled) return;
@@ -309,7 +311,7 @@ export default function ChatRoomView({
   const otherProfileHref = supportTrainId ? `/app/support-trains/${supportTrainId}` : isPersonRoom ? chatPersonHref(otherUser) : null;
 
   // ── Historical messages header ────────────────────────
-  const historicalHeader = historicalMessages.length > 0 ? (
+  const historicalHeader = historicalRoomId && historyPeerId ? (
     <div className="mb-5">
       <div className="flex items-center justify-center my-4">
         <div className="bg-violet-100 text-violet-700 text-xs font-medium px-3 py-1 rounded-full">
@@ -387,8 +389,8 @@ export default function ChatRoomView({
       })()}
       {historicalRoomId && (
         <div className="text-center mt-2">
-          <button onClick={() => router.push(`/app/chat/${historicalRoomId}${asBusinessUserId ? `?asBusinessUserId=${encodeURIComponent(asBusinessUserId)}` : ''}`)} className="text-xs text-violet-600 hover:text-violet-800">
-            Open original conversation
+          <button onClick={() => router.push(`/app/chat/conversation/${historyPeerId}${asBusinessUserId ? `?asBusinessUserId=${encodeURIComponent(asBusinessUserId)}` : ''}`)} className="text-xs text-violet-600 hover:text-violet-800">
+            Open full conversation
           </button>
         </div>
       )}
