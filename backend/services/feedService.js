@@ -252,6 +252,20 @@ function normalizeFeedPostRow(row, likedPostIds = new Set(), savedPostIds = new 
   };
 }
 
+// A house number and then a word: how the geocoder writes a street line ("4014 Tacoma Court").
+const STREET_LINE_LABEL = /^\s*\d+[a-z]?(?:-\d+)?\s+\S/i;
+
+// The place label everyone but the author reads names a place or a town, never a street address or the home itself
+// (docs/location-privacy-matrix.md). A Home post says its home's city, as Home posts are labelled since October 6;
+// older ones carry the home's name, which is often its street address, and iOS sends the address for a home with no
+// city. Any other label that is a street line (an address tagged as the place, or a picker that found no town) is left
+// out.
+function placeLabelForOthers(post) {
+  const isHomePost = post.identity_context_type === 'home' || post.post_as === 'home';
+  if (isHomePost && post.home?.city) return post.home.city;
+  return STREET_LINE_LABEL.test(post.location_name) ? null : post.location_name;
+}
+
 function applyPostLocationPrivacy(post, viewerUserId) {
   if (!post) return post;
 
@@ -270,6 +284,7 @@ function applyPostLocationPrivacy(post, viewerUserId) {
     });
     delete post.location;
     post.locationUnlocked = false;
+    if (post.location_name) post.location_name = placeLabelForOthers(post);
     if (post.home) {
       post.home = {
         ...post.home,

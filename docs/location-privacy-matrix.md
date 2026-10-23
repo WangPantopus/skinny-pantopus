@@ -126,6 +126,21 @@ GPS fix, which differs by a few metres from post to post. Non-authors see the
 grid-cell point described under [Approximate-area points](#approximate-area-points),
 so every post from the same spot shows the same pin.
 
+**Place label:** the author's own `location_name` is theirs to see. Everyone else
+(signed in or not) reads a place or a town, never a street address or the home
+itself (`placeLabelForOthers` in `services/feedService.js`, decided 2026-10-23):
+
+- A Home post says its home's city. New Home posts have been labelled that way
+  since October 6. Older ones carry the home's name, which is often its street
+  address, and iOS sends the address for a home with no city.
+- Any other label that starts with a house number is a street line, and nobody
+  else sees it. That happens when an address is tagged as the place, or when a
+  picker found no town. Place names ("Crown Park", "Near Prune Hill") and towns
+  ("Camas, WA") are kept.
+
+The full `location_address` is removed for these viewers like any other
+address.
+
 ### Nearby Plans
 
 A plan is a `Post` (the public card) plus a `Plan` row. The exact place never
@@ -362,6 +377,7 @@ See `backend/utils/verifiedCoordinateGuard.js`:
 - [x] Gig list applies per-viewer `resolveGigPrecision`
 - [x] Gig nearby/in-bounds/browse enforce location privacy
 - [x] Post detail enforces permanent blur for non-authors (`leastPrecise`)
+- [x] Post place labels shown to non-authors never name a street address or the home (`placeLabelForOthers`)
 - [x] Feed service enforces permanent blur on every row
 - [x] `approx_area` points come from the fixed grid cell, so repeat posts from one spot show one pin
 - [x] Post feed and map filters, distances, the empty-map hint and matched-business distances and order never measure a non-author's stored point

@@ -643,12 +643,25 @@ async function serializePostForViewer(post, viewerUserId) {
 }
 
 // A reader who isn't signed in (the web's public post page and its link preview,
-// frontend/apps/web/src/app/posts/[id]/page.tsx) gets what that page shows and nothing else. The rest of the row
-// is for signed-in readers who may see the post: a Lost & Found contact (phone|<digits> when the poster asked for
-// calls), replies and who wrote them, account, home and place ids, audience settings, geocoding, the GPS fix time,
-// counts and moderation notes.
+// frontend/apps/web/src/app/posts/[id]/page.tsx) gets what that page shows and nothing else.
 const SIGNED_OUT_POST_FIELDS = ['id', 'title', 'content', 'post_type', 'state', 'media_urls', 'media_live_urls',
   'ref_task_id', 'ref_listing_id', 'location_name', 'created_at'];
+
+// A signed-in reader who isn't the author gets what the web, iOS and Android post pages read: the post, its
+// approximate place, the Lost & Found contact (phone|<digits> when the poster asked for calls), what decides whether
+// it can be shared, its counts and the viewer's own likes and saves, and the replies. Only the author, whose edit
+// form reads it, gets the rest of the row: moderation notes, geocoding, the GPS fix time, account, home and place
+// ids, audience and profile settings, and the view and delivery counts.
+const READER_POST_FIELDS = [
+  'id', 'user_id', 'author_user_id', 'author', 'creator', 'home', 'created_at', 'is_edited',
+  'title', 'content', 'post_type', 'purpose', 'tags', 'media_urls', 'media_types', 'media_thumbnails', 'media_live_urls',
+  'location_name', 'latitude', 'longitude', 'locationUnlocked',
+  'state', 'resolution', 'expires_at', 'archived_at', 'archive_reason',
+  'read_scope', 'visibility', 'audience', 'allow_external_share', 'moderation_state',
+  'event_date', 'event_end_date', 'event_venue', 'safety_alert_kind', 'deal_business_name', 'deal_expires_at',
+  'lost_found_type', 'lost_found_contact_pref', 'service_category', 'ref_task_id', 'ref_listing_id',
+  'like_count', 'comment_count', 'share_count', 'userHasLiked', 'userHasSaved', 'userHasReposted', 'comments',
+];
 
 function signedOutPostView(post) {
   const view = Object.fromEntries(SIGNED_OUT_POST_FIELDS.map((field) => [field, post[field] ?? null]));
@@ -656,6 +669,10 @@ function signedOutPostView(post) {
   const { id: _creatorId, ...creator } = post.creator || {};
   view.creator = post.creator ? creator : null;
   return view;
+}
+
+function readerPostView(post) {
+  return Object.fromEntries(READER_POST_FIELDS.map((field) => [field, post[field] ?? null]));
 }
 
 
@@ -2600,10 +2617,10 @@ router.get('/:id', optionalAuth, async (req, res) => {
     const { id } = req.params;
     const userId = req.user?.id || null;
 
-    // A signed-in reader gets more of the post than anyone else (SIGNED_OUT_POST_FIELDS). A rejected token
-    // (expired, invalid or revoked) or the web's session flag without its access cookie gets a 401, as verifyToken
-    // would, so the client refreshes and asks again instead of showing them the signed-out view; a sign-in that
-    // couldn't be checked gets a retry.
+    // A signed-in reader gets more of the post than anyone else (READER_POST_FIELDS, and its author the whole row;
+    // SIGNED_OUT_POST_FIELDS otherwise). A rejected token (expired, invalid or revoked) or the web's session flag
+    // without its access cookie gets a 401, as verifyToken would, so the client refreshes and asks again instead of
+    // showing them the signed-out view; a sign-in that couldn't be checked gets a retry.
     const staleWebSession = req.cookies?.pantopus_session === '1'
       && !req.cookies?.pantopus_access && !req.headers.authorization;
     if (!userId && (req.authRejected || staleWebSession)) {
@@ -2693,7 +2710,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
     }, userId);
 
     res.json({
-      post: responsePost,
+      post: isOwner ? responsePost : readerPostView(responsePost),
     });
   } catch (err) {
     logger.error('Post fetch error', { error: err.message, postId: req.params.id });
