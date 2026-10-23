@@ -482,7 +482,7 @@ object BusinessProfileMapper {
             reviewerName = review.reviewerName ?: "Anonymous",
             reviewerAvatarUrl = review.reviewerAvatar,
             rating = review.rating.coerceIn(0, 5),
-            body = review.content.orEmpty(),
+            body = (review.comment ?: review.content).orEmpty(),
             timestamp = relativeTimestamp(review.createdAt),
             verified = false,
         )
