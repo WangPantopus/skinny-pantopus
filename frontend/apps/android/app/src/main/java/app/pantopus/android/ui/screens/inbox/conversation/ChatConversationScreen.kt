@@ -2748,6 +2748,8 @@ internal fun PopulatedFrame(
     val scope = rememberCoroutineScope()
     var newMessageCount by rememberSaveable { mutableIntStateOf(0) }
     var previousNewestId by rememberSaveable { mutableStateOf<String?>(null) }
+    var previousTailKeys by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var previousRowCount by remember { mutableIntStateOf(0) }
     // Leading non-row items (pagination spacer + any pinned welcome card)
     // offset row indices inside the LazyColumn.
     val headerCount =
@@ -2761,6 +2763,10 @@ internal fun PopulatedFrame(
         val lastIndex = headerCount + rows.lastIndex
         val previousIndex = rows.indexOfLast { it.rowId == previousNewestId }
         val appended = if (previousIndex >= 0) rows.drop(previousIndex + 1).count { it is ChatTimelineRow.Bubble } else 0
+        val oldTailKeys = previousTailKeys
+        val addedRows = rows.size - previousRowCount
+        previousRowCount = rows.size
+        previousTailKeys = rows.takeLast(NEAR_BOTTOM_ROW_SLACK + 1).map { it.rowId }.toSet()
         previousNewestId = rows.lastOrNull { it is ChatTimelineRow.Bubble }?.rowId
         if (!initialScrollDone) {
             // Open at the latest message. A Chat Search deep-link owns the
@@ -2775,9 +2781,16 @@ internal fun PopulatedFrame(
         // stable keys, so they fail this check and preserve position.
         val layoutInfo = listState.layoutInfo
         val lastVisible = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: return@LaunchedEffect
-        if (lastVisible >= layoutInfo.totalItemsCount - 1 - NEAR_BOTTOM_ROW_SLACK) {
+        // A recovered batch can grow the measured list before this effect runs, including before a pending bubble.
+        // Visible keys from the previous tail retain the reader's position relative to the old bottom.
+        val wasNearBottom = layoutInfo.visibleItemsInfo.any { it.key in oldTailKeys }
+        if (wasNearBottom || lastVisible >= layoutInfo.totalItemsCount - 1 - NEAR_BOTTOM_ROW_SLACK) {
             newMessageCount = 0
-            listState.animateScrollToItem(lastIndex)
+            if (addedRows > NEAR_BOTTOM_ROW_SLACK) {
+                listState.scrollToItem(lastIndex)
+            } else {
+                listState.animateScrollToItem(lastIndex)
+            }
         } else {
             newMessageCount += appended
         }
@@ -2786,7 +2799,7 @@ internal fun PopulatedFrame(
     LaunchedEffect(listState, rowsByKey) {
         snapshotFlow { listState.layoutInfo.visibleItemsInfo.map { it.key } }.collect { visibleKeys ->
             visibleKeys.asReversed().firstNotNullOfOrNull { key ->
-                (rowsByKey[key] as? ChatTimelineRow.Bubble)?.content?.id
+                (rowsByKey[key] as? ChatTimelineRow.Bubble)?.content?.id?.takeUnless { it.startsWith("client_") }
             }?.let(onVisibleMessage)
         }
     }
