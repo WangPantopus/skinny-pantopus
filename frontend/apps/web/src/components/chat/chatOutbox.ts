@@ -29,7 +29,7 @@ type Listener = (pending: PendingChatSend[], accepted?: ChatMessage) => void;
 let accountId: string | null = null;
 let scope: ChatStorageScope | null = null;
 let starting: Promise<void> | null = null;
-let running = false;
+let running: ChatStorageScope | null = null;
 let timer: ReturnType<typeof setTimeout> | undefined;
 let pending: PendingChatSend[] = [];
 let enqueueTime = 0;
@@ -42,6 +42,7 @@ const current = (saved: ChatStorageScope | null): saved is ChatStorageScope => !
 const save = (saved: ChatStorageScope, message: PendingChatSend) => writeChatRecords(saved, [{ kind: 'outbox', key: message.clientMessageId, value: message }]);
 
 async function readPending(saved: ChatStorageScope) {
+  if (!current(saved)) return;
   const version = ++readVersion;
   const ids = await listChatRecordKeys(saved, 'outbox');
   const messages = await Promise.all(ids.map((id) => readChatRecord<PendingChatSend>(saved, 'outbox', id)));
@@ -174,9 +175,9 @@ export async function removeChatSend(id: string): Promise<void> {
 }
 
 async function drain(): Promise<void> {
-  if (running || !current(scope) || !navigator.onLine) return;
+  if (running === scope || !current(scope) || !navigator.onLine) return;
   const saved = scope;
-  running = true;
+  running = saved;
   const work = async () => {
     try {
       await storageWrites.catch(() => {});
@@ -220,6 +221,7 @@ async function drain(): Promise<void> {
           ...(uploaded.length ? { fileIds: uploaded.map((file) => file.id) } : {}) });
         if (!current(saved)) return;
         await discard(saved, message);
+        if (!current(saved)) return;
         publish(result.message);
       } catch (error) {
         if (!current(saved)) return;
@@ -243,7 +245,7 @@ async function drain(): Promise<void> {
     // One worker across same-origin tabs; server client IDs are the fallback
     // for browsers without Web Locks or a tab that closes during a request.
     await withOutboxLock(saved, work);
-  } finally { running = false; if (saved !== scope && current(scope)) schedule(); }
+  } finally { if (running === saved) running = null; if (saved !== scope && current(scope)) schedule(); }
 }
 
 export function pendingChatMessage(message: PendingChatSend, actorId: string): ChatMessage {
