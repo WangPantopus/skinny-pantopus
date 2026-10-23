@@ -68,6 +68,54 @@ enum ChatMediaURL {
         return components?.url ?? absolute
     }
 
+    /// Timeline tiles request the bounded image variant; opening or saving a
+    /// file keeps its original URL. Never rewrite an external sender URL.
+    @MainActor
+    static func thumbnail(_ url: URL, baseURL: URL = AppEnvironment.current.apiBaseURL) -> URL {
+        guard isSameOrigin(url, baseURL), url.path.hasPrefix("/api/chat/files/") else { return url }
+        var parts = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        var items = (parts?.queryItems ?? []).filter { $0.name != "variant" }
+        items.append(URLQueryItem(name: "variant", value: "thumbnail"))
+        parts?.queryItems = items
+        return parts?.url ?? url
+    }
+
+    struct PickedDocument {
+        let filename: String
+        let mimeType: String
+        let data: Data
+    }
+
+    /// Called off the main actor. Refuse oversized files before reading their
+    /// bytes, and bound the read too when a provider cannot report its size.
+    static func readDocument(_ url: URL, isAssistant: Bool) throws -> PickedDocument {
+        let accessed = url.startAccessingSecurityScopedResource()
+        defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+        let values = try url.resourceValues(forKeys: [.contentTypeKey, .localizedNameKey, .fileSizeKey])
+        let mime = values.contentType?.preferredMIMEType ?? "application/octet-stream"
+        let filename = values.localizedName ?? url.lastPathComponent
+        let data: Data
+        if isAssistant {
+            // The assistant keeps its existing PDF validation and limits.
+            data = try Data(contentsOf: url)
+        } else {
+            let megabytes = mime.hasPrefix("image/") ? 10 : mime.hasPrefix("video/") ? 100 : 25
+            let limit = megabytes * 1024 * 1024
+            guard (values.fileSize ?? 0) <= limit else { throw ChatLocalStorageError.attachmentLimit(megabytes: megabytes) }
+            let file = try FileHandle(forReadingFrom: url)
+            defer { try? file.close() }
+            var bytes = Data()
+            while bytes.count <= limit {
+                let chunk = try file.read(upToCount: min(1024 * 1024, limit + 1 - bytes.count)) ?? Data()
+                if chunk.isEmpty { break }
+                bytes.append(chunk)
+            }
+            data = bytes
+            guard data.count <= limit else { throw ChatLocalStorageError.attachmentLimit(megabytes: megabytes) }
+        }
+        return PickedDocument(filename: filename, mimeType: mime, data: data)
+    }
+
     /// Same scheme, host and port (a missing port is the scheme's default).
     static func isSameOrigin(_ url: URL, _ other: URL) -> Bool {
         guard let scheme = url.scheme?.lowercased(), let host = url.host?.lowercased(), !host.isEmpty,

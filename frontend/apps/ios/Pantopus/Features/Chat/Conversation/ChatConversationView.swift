@@ -605,27 +605,29 @@ public struct ChatConversationView: View {
 
     private func handlePickedDocuments(_ result: Result<[URL], any Error>) {
         guard case let .success(urls) = result else { return }
+        let generation = AuthManager.shared.requestSessionGeneration
+        let isAssistant = mode == .aiAssistant
         Task {
             for url in urls.prefix(5) {
-                let didStart = url.startAccessingSecurityScopedResource()
-                defer {
-                    if didStart { url.stopAccessingSecurityScopedResource() }
-                }
-                guard let data = try? Data(contentsOf: url) else { continue }
-                let values = try? url.resourceValues(forKeys: [.contentTypeKey, .localizedNameKey])
-                let mimeType = values?.contentType?.preferredMIMEType ?? "application/octet-stream"
-                let filename = values?.localizedName ?? url.lastPathComponent
-                if mode == .aiAssistant {
-                    await MainActor.run { viewModel.queueAIDocument(filename: filename, data: data) }
-                    continue
-                }
-                await MainActor.run {
-                    viewModel.queueAttachment(
-                        kind: mimeType.hasPrefix("image/") ? .image : .document,
-                        filename: filename,
-                        mimeType: mimeType,
-                        data: data
-                    )
+                do {
+                    let document = try await Task.detached(priority: .userInitiated) {
+                        try ChatMediaURL.readDocument(url, isAssistant: isAssistant)
+                    }.value
+                    guard !Task.isCancelled, AuthManager.shared.requestSessionGeneration == generation else { return }
+                    if isAssistant {
+                        viewModel.queueAIDocument(filename: document.filename, data: document.data)
+                    } else {
+                        viewModel.queueAttachment(
+                            kind: document.mimeType.hasPrefix("image/") ? .image : .document,
+                            filename: document.filename,
+                            mimeType: document.mimeType,
+                            data: document.data
+                        )
+                    }
+                } catch {
+                    guard AuthManager.shared.requestSessionGeneration == generation else { return }
+                    viewModel.actionFailure = (error as? ChatLocalStorageError)?.localizedDescription
+                        ?? "Couldn't open this file. Try choosing it again."
                 }
             }
         }
@@ -3150,7 +3152,7 @@ private struct ChatBubbleRow: View {
     @ViewBuilder
     private func imageBody(_ url: URL?) -> some View {
         if let url {
-            CachedAsyncImage(url: url) { phase in
+            CachedAsyncImage(url: ChatMediaURL.thumbnail(url)) { phase in
                 switch phase {
                 case let .success(image): image.resizable().scaledToFill()
                 case .failure: PhotoBubblePlaceholder()
