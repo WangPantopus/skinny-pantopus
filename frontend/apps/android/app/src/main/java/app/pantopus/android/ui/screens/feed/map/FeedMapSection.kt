@@ -31,6 +31,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -77,6 +78,7 @@ import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.MapStyleOptions
+import com.google.maps.android.compose.CameraMoveStartedReason
 import com.google.maps.android.compose.CameraPositionState
 import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.MapProperties
@@ -84,6 +86,8 @@ import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.MarkerComposable
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlin.math.PI
 import kotlin.math.abs
@@ -147,11 +151,14 @@ fun FeedMapSection(
 
     // The map's size in pixels.
     var mapSize by remember { mutableStateOf(IntSize.Zero) }
+    // Google Maps has drawn its first tiles: a camera animation started before then ends at once, where it began.
+    var mapLoaded by remember { mutableStateOf(false) }
     FeedMapCameraEffect(
         cameraState = cameraState,
         region = region,
         mapSize = mapSize,
         viewportDirty = viewportDirty,
+        isMapLoaded = { mapLoaded },
         onSettle = viewModel::cameraDidSettle,
     )
     val panSignal by rememberUpdatedState(onVerticalPan)
@@ -177,6 +184,7 @@ fun FeedMapSection(
                 pinStyles = loaded?.pinStyles.orEmpty(),
                 clusterStyles = loaded?.clusterStyles.orEmpty(),
                 cameraState = cameraState,
+                onMapLoaded = { mapLoaded = true },
                 onPinTap = viewModel::selectEntity,
                 onClusterTap = { cluster ->
                     // Search would leave it one cluster when its posts share a point
@@ -264,6 +272,7 @@ private fun FeedMapCameraEffect(
     region: FeedMapRegion,
     mapSize: IntSize,
     viewportDirty: Boolean,
+    isMapLoaded: () -> Boolean,
     onSettle: (FeedMapViewport) -> Unit,
 ) {
     val density = LocalDensity.current.density
@@ -292,9 +301,7 @@ private fun FeedMapCameraEffect(
             // The view-model starts on a placeholder area until it knows the person's; fly in to theirs.
             if (flyIn && !flewIn && region != FeedMapRegion.Fallback) {
                 flewIn = true
-                cameraState.position =
-                    CameraPosition(framed.target, (framed.zoom - FLY_IN_ZOOM_OUT).coerceAtLeast(MIN_ZOOM), 0f, 0f)
-                cameraState.animate(CameraUpdateFactory.newCameraPosition(framed), FLY_IN_MS)
+                flyIn(cameraState, framed, isMapLoaded)
             } else {
                 cameraState.position = framed
             }
@@ -320,6 +327,32 @@ private fun FeedMapCameraEffect(
                     ),
             ),
         )
+    }
+}
+
+/**
+ * The opening fly-in: from higher and flat to [framed], tilted. It waits for the map to draw (an animation started
+ * before ends at once, where it began), and lands on [framed] whenever it is cut short, unless the person took the
+ * map.
+ */
+private suspend fun flyIn(
+    cameraState: CameraPositionState,
+    framed: CameraPosition,
+    isMapLoaded: () -> Boolean,
+) {
+    cameraState.position = CameraPosition(framed.target, (framed.zoom - FLY_IN_ZOOM_OUT).coerceAtLeast(MIN_ZOOM), 0f, 0f)
+    val takenByPerson = { cameraState.cameraMoveStartedReason == CameraMoveStartedReason.GESTURE }
+    try {
+        snapshotFlow { isMapLoaded() }.first { it }
+        cameraState.animate(CameraUpdateFactory.newCameraPosition(framed), FLY_IN_MS)
+    } catch (interrupted: CancellationException) {
+        // A new map size or region restarted the effect mid-flight, which stops the animation where it was.
+        if (!takenByPerson()) cameraState.position = framed
+        throw interrupted
+    }
+    val landed = cameraState.position
+    if (!takenByPerson() && (abs(landed.zoom - framed.zoom) > 0.2f || abs(landed.tilt - framed.tilt) > 2f)) {
+        cameraState.position = framed
     }
 }
 
@@ -417,6 +450,7 @@ private fun FeedMapLayer(
     pinStyles: Map<String, PulsePinStyle>,
     clusterStyles: Map<String, PulseClusterStyle>,
     cameraState: CameraPositionState,
+    onMapLoaded: () -> Unit,
     onPinTap: (String) -> Unit,
     onClusterTap: (ExploreCluster) -> Unit,
 ) {
@@ -451,6 +485,7 @@ private fun FeedMapLayer(
         cameraPositionState = cameraState,
         properties = mapProperties,
         uiSettings = uiSettings,
+        onMapLoaded = onMapLoaded,
     ) {
         markers.forEach { marker ->
             when (marker) {

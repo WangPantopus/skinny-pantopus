@@ -314,6 +314,8 @@ class FeedMapViewModel
          */
         fun cameraDidSettle(next: FeedMapViewport) {
             val camera = next.camera
+            // The pins regroup for the new zoom straight away, so zooming in splits a cluster (iOS does the same).
+            regroup(camera)
             val pending = pendingRegion
             if (pending != null) {
                 if (!camera.changedSignificantly(pending)) return
@@ -406,6 +408,14 @@ class FeedMapViewModel
         fun selectEntity(id: String?) {
             val current = _state.value as? FeedMapUiState.Loaded ?: return
             _state.value = current.copy(selectedId = id, clusterPostIds = emptySet())
+        }
+
+        /** Regroups the loaded pins for [camera]'s zoom, keeping the selection and the listed cluster. */
+        private fun regroup(camera: FeedMapRegion) {
+            val current = _state.value as? FeedMapUiState.Loaded ?: return
+            val markers = ExploreMapViewModel.cluster(current.entities, clusterRadius(camera))
+            if (markers == current.markers) return
+            _state.value = current.copy(markers = markers, clusterStyles = clusterStyles(markers, current.pinStyles))
         }
 
         /** Lists [cluster]'s posts in the preview card's place. */
@@ -526,8 +536,11 @@ class FeedMapViewModel
                 marker.cluster.id to PulseClusterStyle(mix = mix, isLive = styles.any { it.isLive })
             }
 
-        /** Widen the cluster radius as the camera zooms out and vice versa. */
-        private fun clusterRadius(target: FeedMapRegion): Double = (target.latitudeDelta * 0.08).coerceIn(MIN_CLUSTER_RADIUS, 0.05)
+        /**
+         * Widen the cluster radius as the camera zooms out and vice versa: about an eighth of the view's height, so
+         * neighbouring cluster bubbles (up to 56 dp) don't overlap.
+         */
+        private fun clusterRadius(target: FeedMapRegion): Double = (target.latitudeDelta * 0.12).coerceIn(MIN_CLUSTER_RADIUS, 0.05)
 
         companion object {
             /**
