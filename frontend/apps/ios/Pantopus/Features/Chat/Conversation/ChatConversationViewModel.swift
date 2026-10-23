@@ -1662,6 +1662,7 @@ public final class ChatConversationViewModel {
                     ChatEndpoints.room(roomId: roomId, asBusinessUserId: asBusinessUserId),
                     expectedSessionGeneration: roomJoinAccountSession
                 )
+                guard detail.hasCompleteReplyAudience else { throw ChatReplyScopeError.unverifiedAudience }
                 guard detail.isDirectConversation(senderId: sendingIdentityId, peerId: peerId) else {
                     throw ChatReplyScopeError.differentAudience
                 }

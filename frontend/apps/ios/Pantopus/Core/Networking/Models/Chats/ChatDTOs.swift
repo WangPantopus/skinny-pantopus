@@ -203,11 +203,15 @@ public struct ChatRoomDetailResponse: Decodable, Sendable {
 
     public struct Participant: Decodable, Sendable {
         public let userId: String?
+        public let isActive: Bool?
+        public let leftAt: String?
         /// The local-identity projection (`serializeUserAsLocalIdentity`).
         public let user: Identity?
 
         private enum CodingKeys: String, CodingKey {
             case userId = "user_id"
+            case isActive = "is_active"
+            case leftAt = "left_at"
             case user
         }
     }
@@ -218,9 +222,15 @@ public struct ChatRoomDetailResponse: Decodable, Sendable {
 
     public let room: Room
 
+    var hasCompleteReplyAudience: Bool {
+        guard room.type != nil, room.isActive != nil, let participants = room.participants else { return false }
+        return participants.allSatisfy { $0.userId != nil && $0.isActive != nil }
+    }
+
     func isDirectConversation(senderId: String, peerId: String) -> Bool {
-        guard senderId != peerId, room.type == "direct", room.isActive != false,
-              let participants = room.participants, participants.count == 2 else { return false }
+        guard senderId != peerId, room.type == "direct", room.isActive == true,
+              let participants = room.participants, participants.count == 2,
+              participants.allSatisfy({ $0.isActive == true && $0.leftAt == nil }) else { return false }
         return Set(participants.compactMap(\.userId)) == Set([senderId, peerId])
     }
 }

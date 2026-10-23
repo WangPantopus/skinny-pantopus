@@ -290,7 +290,7 @@ final class ChatOutbox {
     }
 
     private static func isRefused(_ error: any Error) -> Bool {
-        if error is ChatReplyScopeError { return true }
+        if case ChatReplyScopeError.differentAudience = error { return true }
         if case APIError.forbidden = error { return true }
         if case let APIError.clientError(status, _) = error { return status == 403 }
         return false
@@ -319,6 +319,7 @@ private extension ChatOutbox {
                 ChatEndpoints.room(roomId: replyRoom, asBusinessUserId: message.businessUserId),
                 expectedSessionGeneration: requestGeneration
             )
+            guard detail.hasCompleteReplyAudience else { throw ChatReplyScopeError.unverifiedAudience }
             guard detail.isDirectConversation(senderId: message.businessUserId ?? account, peerId: message.targetId) else {
                 throw ChatReplyScopeError.differentAudience
             }

@@ -75,9 +75,14 @@ enum ChatLocalStorageError: LocalizedError {
 
 enum ChatReplyScopeError: LocalizedError {
     case differentAudience
+    case unverifiedAudience
 
     var errorDescription: String? {
-        "Open the original conversation to reply to this message, or cancel the reply to send here."
+        switch self {
+        case .differentAudience: "Open the original conversation to reply to this message, or cancel the reply to send here."
+        case .unverifiedAudience:
+            "Couldn't verify this reply's conversation. Your message is saved. Try again later or open the original conversation."
+        }
     }
 }
 
