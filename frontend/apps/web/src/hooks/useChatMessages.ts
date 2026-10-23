@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import type { ChatMessage as BaseChatMessage, User } from '@pantopus/types';
 import { getDateKey, formatDateLabel } from '@pantopus/ui-utils';
@@ -438,6 +438,8 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
   // older snapshot. Reset per scope; no message content is persisted here.
   const liveChangesRef = useRef(new Map<string, number>());
   const changeVersionRef = useRef(0);
+  const reactionRequestsRef = useRef(new Map<string, Promise<void>>());
+  const pendingReactionsRef = useRef(new Map<string, { intent: symbol; wanted: boolean; scope: number }>());
   const noteLiveChange = useCallback((id: string) => {
     liveChangesRef.current.set(String(id), ++changeVersionRef.current);
   }, []);
@@ -659,6 +661,8 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     setLoadFailure(null);
     shownKeyRef.current = cacheKeyId;
     liveChangesRef.current.clear();
+    reactionRequestsRef.current.clear();
+    pendingReactionsRef.current.clear();
     visibleThroughRef.current = null;
     readAcknowledgedRef.current = null;
     void (async () => {
@@ -856,6 +860,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
 
   type ReactionUpdatedPayload = {
     messageId: string;
+    roomId?: string;
     sync_version?: number;
     reactions: Array<{
       reaction: string;
@@ -866,6 +871,10 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
   };
   const handleReactionUpdated = useCallback((data: ReactionUpdatedPayload) => {
     if (!data?.messageId || !isCurrentScope()) return;
+    if (data.roomId && !activeRoomIds.includes(String(data.roomId))) return;
+    const existing = messagesRef.current.find((message) => String(message.id) === String(data.messageId));
+    if (tombstonesRef.current.has(String(data.messageId))
+      || (existing && data.sync_version !== undefined && messageRevision(existing) > data.sync_version)) return;
     noteLiveChange(String(data.messageId));
     // Recalculate reacted_by_me for the current user since the server
     // broadcasts the same payload to all users in the room.
@@ -884,7 +893,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     if (!hasMessage) {
       void refresh().catch(() => {});
     }
-  }, [currentUserId, refresh, isCurrentScope, noteLiveChange]);
+  }, [currentUserId, activeRoomIds, refresh, isCurrentScope, noteLiveChange]);
 
   useSocketEvent('message:new', handleIncomingMessage);
   useSocketEvent('newMessage', handleIncomingMessage);
@@ -1055,53 +1064,66 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     } finally { deleteRequest.current = false; }
   }, [canChangeMessage, isCurrentScope, handleMessageDeleted]);
 
-  // ── React to message ────────────────────────────────
-
-  // ── React to message (useMutation — swallows errors per original) ──
+  // Keep taps in order per message. Socket ACKs and the REST fallback currently
+  // have no revision, so they may only replace the state present at dispatch.
   type ReactResult = { reactions?: Array<{ reaction: string; count: number; users: Array<{ id: string; name: string }>; reacted_by_me: boolean }> };
-  const reactMutation = useMutation<ReactResult, Error, { messageId: string; emoji: string; reacted?: boolean; scope: number }>({
-    mutationFn: async ({ messageId, emoji, reacted }) => {
-      if (socket?.connected) {
-        return new Promise<ReactResult>((resolve, reject) => {
-          const timeout = setTimeout(() => reject(new Error('Reaction request timed out')), 5000);
-          socket.emit('message:react', { messageId, reaction: emoji, reacted }, (response: { error?: string; reactions?: ReactResult['reactions'] }) => {
-            clearTimeout(timeout);
-            if (response?.error) {
-              reject(new Error(String(response.error)));
-              return;
-            }
-            resolve(response);
-          });
-        }).catch(() => api.chat.reactToMessage(messageId, emoji, reacted));
-      }
-      return api.chat.reactToMessage(messageId, emoji, reacted);
-    },
-    onSuccess: (result, vars) => {
-      if (!isCurrentScope() || vars.scope !== scopeRef.current.generation) return;
-      noteLiveChange(vars.messageId);
-      const reactions = (result?.reactions || []).map((reaction) => ({
-        ...reaction,
-        reacted_by_me: currentUserId ? reaction.users.some((user) => user.id === currentUserId) : false,
-      }));
-      setMessages(prev => prev.map(m =>
-        String(m.id) === String(vars.messageId)
-          ? { ...m, reactions }
-          : m
-      ));
-    },
-    // onError: swallow (original behavior)
-  });
-
   const reactToMessage = useCallback(async (messageId: string, emoji: string, reacted?: boolean): Promise<void> => {
-    // Send the state this tap asks for, so a retry after a lost reply keeps the reaction instead of undoing it.
-    const message = messagesRef.current.find((m) => String(m.id) === String(messageId));
-    const wanted = reacted ?? (message ? !(message.reactions || []).some((r) => r.reaction === emoji && r.reacted_by_me) : undefined);
-    try {
-      await reactMutation.mutateAsync({ messageId, emoji, reacted: wanted, scope: scopeGeneration });
-    } catch {
-      // Swallow errors to preserve original behavior
-    }
-  }, [reactMutation, scopeGeneration]);
+    const message = messagesRef.current.find((row) => String(row.id) === String(messageId));
+    if ((!message && reacted === undefined) || (message && isUnsent(message)) || !isCurrentScope()) return;
+    const marker = api.authSessionMarker();
+    const current = () => isCurrentScope() && marker === api.authSessionMarker();
+    const requestKey = `${scopeGeneration}:${marker}:${messageId}`;
+    const key = `${requestKey}:${emoji}`;
+    const pending = pendingReactionsRef.current.get(key);
+    const alreadyReacted = pending?.scope === scopeGeneration ? pending.wanted
+      : (message?.reactions || []).some((reaction) => reaction.reaction === emoji && reaction.reacted_by_me);
+    const wanted = reacted ?? !alreadyReacted;
+    const intent = Symbol();
+    pendingReactionsRef.current.set(key, { intent, wanted, scope: scopeGeneration });
+    const previous = reactionRequestsRef.current.get(requestKey) ?? Promise.resolve();
+    const request = previous.catch(() => {}).then(async () => {
+      if (!current() || tombstonesRef.current.has(messageId)) return;
+      const atDispatch = messagesRef.current.find((row) => String(row.id) === String(messageId));
+      if (!atDispatch && reacted === undefined) return;
+      const startedVersion = liveChangesRef.current.get(messageId) || 0;
+      const startedRevision = atDispatch ? messageRevision(atDispatch) : 0;
+      try {
+        let result: ReactResult;
+        if (socket?.connected) {
+          try {
+            result = await new Promise<ReactResult>((resolve, reject) => {
+              const timeout = setTimeout(() => reject(new Error('Reaction request timed out')), 5000);
+              socket.emit('message:react', { messageId, reaction: emoji, reacted: wanted }, (response: ReactResult & { error?: string }) => {
+                clearTimeout(timeout);
+                if (!response || response.error) reject(new Error(response?.error || 'Reaction response missing'));
+                else resolve(response);
+              });
+            });
+          } catch {
+            if (!current()) return;
+            // Explicit desired state makes a lost ACK safe to retry.
+            result = await api.chat.reactToMessage(messageId, emoji, wanted);
+          }
+        } else result = await api.chat.reactToMessage(messageId, emoji, wanted);
+        if (!current()) return;
+        if ((liveChangesRef.current.get(messageId) || 0) === startedVersion) {
+          const reactions = (result.reactions || []).map((reaction) => ({ ...reaction,
+            reacted_by_me: currentUserId ? reaction.users.some((user) => user.id === currentUserId) : false }));
+          setMessages((rows) => rows.map((row) => String(row.id) === String(messageId)
+            && messageRevision(row) === startedRevision ? { ...row, reactions } : row));
+          noteLiveChange(messageId);
+        }
+        setError(null);
+      } catch {
+        if (current()) setError("Couldn't update this reaction. Check your connection and try again.");
+      }
+    }).finally(() => {
+      if (pendingReactionsRef.current.get(key)?.intent === intent) pendingReactionsRef.current.delete(key);
+      if (reactionRequestsRef.current.get(requestKey) === request) reactionRequestsRef.current.delete(requestKey);
+    });
+    reactionRequestsRef.current.set(requestKey, request);
+    await request;
+  }, [socket, currentUserId, scopeGeneration, isCurrentScope, noteLiveChange]);
 
   return {
     messages,
