@@ -120,12 +120,43 @@ function withChosenUsername(user) {
   return user ? { ...user, username: chosenUsernameOrNull(user.username) } : user;
 }
 
-// A person in one of the lists below, named as neighbors see them on posts, in chats and in connection notices
-// (services/chatPeople.js): by their Local Profile's name, handle and photo, or, for a business or anyone without one,
-// by the account. `people` comes from loadChatPeople; anyone it lacks (the caller's own entry included) keeps the
-// account row. `id` stays the account id.
-function listedPerson(user, people) {
-  return withChosenUsername(chatPersonRow(user, people));
+// The area each of these people's Local Profiles shows, by account id: its public city and state while their
+// Neighborhood setting shows them to everyone, otherwise none (the rule the Local Profile overlay on profiles and user
+// search follow). Businesses go by the account and get no entry. Throws on a failed read, so a list fails rather than
+// show what a Local Profile hides.
+async function loadLocalProfileAreas(userIds) {
+  const ids = [...new Set(userIds.filter(Boolean).map(String))];
+  if (ids.length === 0) return new Map();
+  const { data, error } = await supabaseAdmin
+    .from('LocalProfile')
+    .select('user_id, public_city, public_state, show_neighborhood, owner:user_id (account_type)')
+    .in('user_id', ids);
+  if (error) throw new Error(error.message);
+  return new Map((data || [])
+    .filter((profile) => profile.owner?.account_type !== 'business')
+    .map((profile) => {
+      const shown = profile.show_neighborhood === true;
+      return [String(profile.user_id), {
+        city: shown ? (profile.public_city || null) : null,
+        state: shown ? (profile.public_state || null) : null,
+      }];
+    }));
+}
+
+// What the lists below need to show these people: their names (loadChatPeople) and their Local Profiles' areas.
+async function loadListedPeople(userIds) {
+  const [people, areas] = await Promise.all([loadChatPeople(userIds), loadLocalProfileAreas(userIds)]);
+  return { people, areas };
+}
+
+// A person in one of the lists below, as neighbors see them. Someone with a Local Profile goes by it: its name, handle
+// and photo (services/chatPeople.js, as on posts, in chats and in connection notices), only the area it shows, and no
+// first or last name, which belong to the private account. A business, or anyone without one, goes by the account.
+// Anyone `listed` lacks (the caller's own entry included) keeps the account row. `id` stays the account id.
+function listedPerson(user, { people, areas }) {
+  const row = withChosenUsername(chatPersonRow(user, people));
+  const area = row?.id ? areas.get(String(row.id)) : null;
+  return area ? { ...row, first_name: null, last_name: null, city: area.city, state: area.state } : row;
 }
 
 // Blocks hide content in both directions (the feed and marketplace filters read them
@@ -801,12 +832,12 @@ router.get('/', verifyToken, async (req, res) => {
     }
 
     // Enrich with role info (who is the "other" user relative to current user)
-    const people = await loadChatPeople((relationships || [])
+    const listed = await loadListedPeople((relationships || [])
       .map(rel => (rel.requester?.id === userId ? rel.addressee?.id : rel.requester?.id)));
     const enriched = (relationships || []).map(rel => {
       const isRequester = rel.requester?.id === userId;
-      const requester = listedPerson(rel.requester, people);
-      const addressee = listedPerson(rel.addressee, people);
+      const requester = listedPerson(rel.requester, listed);
+      const addressee = listedPerson(rel.addressee, listed);
       return {
         ...rel,
         requester,
@@ -839,8 +870,8 @@ router.get('/requests/pending', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch pending requests' });
     }
 
-    const people = await loadChatPeople(requests.map(r => r.requester?.id));
-    res.json({ requests: requests.map(r => ({ ...r, requester: listedPerson(r.requester, people) })) });
+    const listed = await loadListedPeople(requests.map(r => r.requester?.id));
+    res.json({ requests: requests.map(r => ({ ...r, requester: listedPerson(r.requester, listed) })) });
   } catch (err) {
     if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return connectionReadUnavailable(res);
     logger.error('Pending requests error', { error: err.message });
@@ -873,8 +904,8 @@ router.get('/requests/sent', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch sent requests' });
     }
 
-    const people = await loadChatPeople((requests || []).map(r => r.addressee?.id));
-    res.json({ requests: (requests || []).map(r => ({ ...r, addressee: listedPerson(r.addressee, people) })) });
+    const listed = await loadListedPeople((requests || []).map(r => r.addressee?.id));
+    res.json({ requests: (requests || []).map(r => ({ ...r, addressee: listedPerson(r.addressee, listed) })) });
   } catch (err) {
     if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return connectionReadUnavailable(res);
     logger.error('Sent requests error', { error: err.message });
@@ -905,11 +936,11 @@ router.get('/blocked', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch blocked users' });
     }
 
-    const people = await loadChatPeople((blocked || [])
+    const listed = await loadListedPeople((blocked || [])
       .map(rel => (rel.requester?.id === userId ? rel.addressee?.id : rel.requester?.id)));
     const enriched = (blocked || []).map(rel => {
-      const requester = listedPerson(rel.requester, people);
-      const addressee = listedPerson(rel.addressee, people);
+      const requester = listedPerson(rel.requester, listed);
+      const addressee = listedPerson(rel.addressee, listed);
       const blockedUser = rel.requester?.id === userId ? addressee : requester;
       return { ...rel, requester, addressee, blocked_user: blockedUser };
     });
