@@ -707,14 +707,10 @@ async function requireVisiblePost({ postId, userId, res, select = POST_VISIBILIT
   return post;
 }
 
+// A like, comment, reply or repost notice names the person who acted as their comments do: a person by their Local
+// Profile's name, a business (or anyone without a Local Profile) by the account. The metadata keeps the account id.
 async function getUserDisplayName(userId) {
-  const { data } = await supabaseAdmin
-    .from('User')
-    .select('username, name, first_name')
-    .eq('id', userId)
-    .single();
-  if (!data) return 'Someone';
-  return data.name || data.first_name || chosenUsernameOrNull(data.username) || 'Someone';
+  return (await loadChatPeople([userId])).get(String(userId))?.displayName || 'Someone';
 }
 
 // ============ POST ROUTES ============
