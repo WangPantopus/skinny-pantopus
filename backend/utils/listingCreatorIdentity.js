@@ -1,5 +1,6 @@
 const supabaseAdmin = require('../config/supabaseAdmin');
 const { serializeUserIdentityForViewer } = require('../serializers/identitySerializers');
+const { isKnownMadeUpUsername } = require('./personalUsername');
 
 const LISTING_CREATOR_USER_SELECT = [
   'id',
@@ -29,18 +30,11 @@ function cleanIdentityText(value) {
   return text || null;
 }
 
-function sameDisplayValue(a, b) {
-  const left = cleanIdentityText(a);
-  const right = cleanIdentityText(b);
-  if (!left || !right) return false;
-  return left.toLowerCase() === right.toLowerCase();
-}
-
-function hasCustomLocalDisplayName(profile, user) {
+// The name the person shows neighbors, as they set it (their handle included): only a blank one, or a username the
+// server made up, leaves them named by the account.
+function hasCustomLocalDisplayName(profile) {
   const displayName = cleanIdentityText(profile?.display_name);
-  if (!displayName) return false;
-  return !sameDisplayValue(displayName, profile?.handle)
-    && !sameDisplayValue(displayName, user?.username);
+  return !!displayName && !isKnownMadeUpUsername(displayName);
 }
 
 async function hydrateListingCreatorIdentities(input) {
@@ -80,8 +74,14 @@ async function hydrateListingCreatorIdentities(input) {
     if (profile) {
       creator.local_profile_id = profile.id;
       creator.handle = profile.handle || creator.username;
-      creator.avatar_url = profile.avatar_url || creator.profile_picture_url || null;
-      if (hasCustomLocalDisplayName(profile, user)) {
+      if (user.account_type === 'business') {
+        creator.avatar_url = profile.avatar_url || creator.profile_picture_url || null;
+      } else {
+        // A person is shown with the photo they show neighbors, or none if they removed it: never the account's.
+        creator.avatar_url = profile.avatar_url || null;
+        creator.profile_picture_url = creator.avatar_url;
+      }
+      if (hasCustomLocalDisplayName(profile)) {
         creator.display_name = profile.display_name;
       } else {
         delete creator.display_name;
