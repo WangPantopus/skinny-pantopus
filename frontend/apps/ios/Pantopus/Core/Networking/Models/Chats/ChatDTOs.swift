@@ -483,7 +483,7 @@ public struct ChatMessageDTO: Codable, Sendable, Hashable, Identifiable {
         return updated
     }
 
-    public func replacingReadAt(_ readAt: String) -> ChatMessageDTO {
+    public func replacingReadAt(_ readAt: String?) -> ChatMessageDTO {
         var updated = self
         updated.readAt = readAt
         return updated
@@ -890,6 +890,7 @@ public struct ChatRealtimeReaction: Decodable, Sendable, Hashable {
 
 /// A recipient acknowledged a bounded position, not every message in the room.
 public struct ChatRealtimeRead: Decodable, Sendable, Hashable {
+    public var directReceiptEligible: Bool?
     public let userId: String
     public let roomId: String
     public let readAt: String?
@@ -899,6 +900,7 @@ public struct ChatRealtimeRead: Decodable, Sendable, Hashable {
 
 /// Topic boundaries never imply reads outside this room and topic.
 public struct ChatRealtimeTopicRead: Decodable, Sendable {
+    public var directReceiptEligible: Bool?
     public let userId: String
     public let roomId: String
     public let topicId: String

@@ -394,6 +394,7 @@ public final class ChatConversationViewModel {
     private var earlierHistoryBefore: String?
     private var hasLatestHistoryWindow = false
     private var historyCacheVersion: Int?
+    private var ineligibleReceiptRooms: Set<String> = []
 
     /// True while the screen was opened from Chat Search (or at a nudge) and
     /// the matched message hasn't been scrolled to yet — the view skips its
@@ -3065,6 +3066,7 @@ public final class ChatConversationViewModel {
         invalidateSavedThreadCache()
         messages.removeAll { reset || !roomIds.contains($0.roomId) }
         activeRoomIds = roomIds
+        ineligibleReceiptRooms.formIntersection(roomIds)
         if let directRoomId, !roomIds.contains(directRoomId) { self.directRoomId = nil }
         visibleReadBoundaries = visibleReadBoundaries.filter { roomIds.contains($0.key) }
         lastReadBoundaries = lastReadBoundaries.filter { roomIds.contains($0.key) }
@@ -3728,8 +3730,17 @@ public final class ChatConversationViewModel {
         // A group's single reader must never imply that everyone has read it.
         guard !historyAccessRefused, roomJoinAccountSession == AuthManager.shared.requestSessionGeneration,
               case let .person(otherUserId) = mode, event.userId == otherUserId,
-              activeRoomIds.contains(event.roomId),
-              let throughMessageId = event.throughMessageId, let readAt = event.readAt else { return }
+              activeRoomIds.contains(event.roomId) else { return }
+        if event.directReceiptEligible == false {
+            retireIneligibleReceipts(roomId: event.roomId)
+            return
+        }
+        guard event.directReceiptEligible == true else {
+            if recoverOtherRooms { scheduleFallbackRefresh() }
+            return
+        }
+        ineligibleReceiptRooms.remove(event.roomId)
+        guard let throughMessageId = event.throughMessageId, let readAt = event.readAt else { return }
         guard event.roomId == directRoomId else {
             // Aggregate history also contains groups and older direct rooms.
             // Only the server's per-message receipts can distinguish them here.
@@ -3753,7 +3764,17 @@ public final class ChatConversationViewModel {
     private func handleTopicRead(_ event: ChatRealtimeTopicRead) {
         guard !historyAccessRefused, roomJoinAccountSession == AuthManager.shared.requestSessionGeneration,
               case let .person(peerId) = mode, event.userId == peerId,
-              activeRoomIds.contains(event.roomId), selectedTopicId == nil || selectedTopicId == event.topicId,
+              activeRoomIds.contains(event.roomId) else { return }
+        if event.directReceiptEligible == false {
+            retireIneligibleReceipts(roomId: event.roomId)
+            return
+        }
+        guard event.directReceiptEligible == true else {
+            scheduleFallbackRefresh()
+            return
+        }
+        ineligibleReceiptRooms.remove(event.roomId)
+        guard selectedTopicId == nil || selectedTopicId == event.topicId,
               let throughId = event.throughMessageId, let readAt = event.readAt else { return }
         guard event.roomId == directRoomId else {
             scheduleFallbackRefresh()
@@ -3771,6 +3792,25 @@ public final class ChatConversationViewModel {
             messages[index] = message.replacingReadAt(readAt)
         }
         rebuild()
+    }
+
+    /// Explicit server ineligibility overrides a legacy optimistic Read. Retire
+    /// all encrypted topic variants before canonical recovery can fail offline.
+    private func retireIneligibleReceipts(roomId: String) {
+        let firstRefusal = ineligibleReceiptRooms.insert(roomId).inserted
+        var changed = false
+        for index in messages.indices {
+            let message = messages[index]
+            guard message.roomId == roomId, message.userId == sendingIdentityId, message.readAt != nil else { continue }
+            historyTouchedIds.insert(message.id)
+            messages[index] = message.replacingReadAt(nil)
+            changed = true
+        }
+        guard firstRefusal || changed else { return }
+        invalidateSavedThreadCache()
+        historyCacheVersion = nil
+        rebuild()
+        scheduleFallbackRefresh()
     }
 
     private func handleDelete(_ event: ChatRealtimeMessageDelete) {
