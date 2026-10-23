@@ -246,6 +246,8 @@ data class ChatMessagesResponse(
     val syncCursors: Map<String, Long> = emptyMap(),
     /** Device-only tombstone revisions prevent a delayed history response from restoring a deleted bubble. */
     val deletedMessageVersions: Map<String, Long> = emptyMap(),
+    val hasMoreAfter: Boolean = false,
+    val anchorMessageId: String? = null,
 )
 
 @JsonClass(generateAdapter = true)
@@ -367,4 +369,20 @@ data class ChatRoomParticipant(
 data class ChatRoomParticipantIdentity(
     val displayName: String? = null,
     val avatarUrl: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class ChatSearchRoomContext(
+    val conversationId: String,
+    val kind: String,
+    val name: String,
+    val identity: ChatOtherIdentity? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class ChatSearchResponse(
+    val messages: List<ChatMessageDto> = emptyList(),
+    val roomContexts: Map<String, ChatSearchRoomContext> = emptyMap(),
+    val hasMore: Boolean = false,
+    val nextCursor: String? = null,
 )

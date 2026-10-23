@@ -257,6 +257,10 @@ class ChatConversationViewModel
         private var gigId: String? = null
         private var scrollToMessageId: String? = null
         private var didResolveScrollTarget = false
+        private var contextMessageId: String? = null
+        private var contextHasNewer = false
+        private val _showLatestMessages = MutableStateFlow(false)
+        val showLatestMessages: StateFlow<Boolean> = _showLatestMessages.asStateFlow()
         private var messages: MutableList<ChatMessageDto> = mutableListOf()
         private val messageTimes = LinkedHashMap<String, Instant>()
         private val messageOrder = compareBy<ChatMessageDto> { messageInstant(it.createdAt) }.thenBy { it.id }
@@ -440,6 +444,14 @@ class ChatConversationViewModel
             this.mode = mode
             this.currentUserId = currentUserId
             this._counterparty.value = counterparty
+            if (this.scrollToMessageId != scrollToMessageId || contextMessageId != scrollToMessageId) {
+                historyGeneration++
+                didResolveScrollTarget = false
+                contextMessageId = scrollToMessageId.takeUnless { mode is ChatThreadMode.Ai }
+                contextHasNewer = contextMessageId != null
+                _showLatestMessages.value = contextMessageId != null
+                if (contextMessageId != null) _selectedTopicId.value = null
+            }
             this.scrollToMessageId = scrollToMessageId
             this.initialTopic = initialTopic
             this.gigId = gigId
@@ -782,6 +794,7 @@ class ChatConversationViewModel
         }
 
         fun selectTopic(topicId: String?) {
+            clearContextWindow()
             historyGeneration++
             catchUpJob?.cancel()
             visibleReadThroughId = null
@@ -790,6 +803,25 @@ class ChatConversationViewModel
             // (mirrors iOS selectTopic).
             _sendLimitNotice.value = null
             fetch(initial = true)
+        }
+
+        private fun clearContextWindow() {
+            contextMessageId = null
+            contextHasNewer = false
+            _showLatestMessages.value = false
+            scrollToMessageId = null
+            didResolveScrollTarget = false
+            _pendingScrollTarget.value = null
+        }
+
+        fun returnToLatestMessages() {
+            if (contextMessageId == null) return
+            clearContextWindow()
+            historyGeneration++
+            catchUpJob?.cancel()
+            historyPage = null
+            visibleReadThroughId = null
+            fetch(initial = true, force = true)
         }
 
         fun loadOlder() {
@@ -1353,6 +1385,7 @@ class ChatConversationViewModel
                         _actionFailure.value = error
                         return@launch
                     }
+                    returnToLatestMessages()
                     if (_composerText.value == draft) _composerText.value = ""
                     _queuedAttachments.value = _queuedAttachments.value.filterNot { it.id in attachmentIds }
                     if (_replyingTo.value?.messageId == replyId) _replyingTo.value = null
@@ -1535,7 +1568,7 @@ class ChatConversationViewModel
          */
         private fun upsert(message: ChatMessageDto) {
             changedDuringCatchUp.add(message.id)
-            if (!matchesTopicFilter(message) || !canMerge(message)) return
+            if (!matchesTopicFilter(message) || !canMerge(message) || !belongsInContextWindow(message)) return
             val index = messages.indexOfFirst { it.id == message.id }
             if (index >= 0) messages[index] = keepingWriter(message, messages[index]) else messages.add(message)
             messages.sortWith(messageOrder)
@@ -2199,7 +2232,7 @@ class ChatConversationViewModel
             val requestKey = context to before
             if (!historyReadsInFlight.add(requestKey)) return
             if (initial || context != historyCopyContext) followHistoryCopy(context)
-            val copied = initial && !quiet && showHistoryCopy()
+            val copied = initial && !quiet && contextMessageId == null && showHistoryCopy()
             val keepMessages = quiet || copied || pendingByClientId.isNotEmpty()
             viewModelScope.launch {
                 try {
@@ -2219,22 +2252,14 @@ class ChatConversationViewModel
                         if (!keepMessages) _state.value = ChatConversationUiState.Empty
                         return@launch
                     }
-                    val response =
-                        when (val target = context.mode) {
-                            is ChatThreadMode.Room ->
-                                repo.roomMessages(
-                                    target.id,
-                                    before,
-                                    force = force,
-                                    asBusinessUserId = target.asBusinessUserId,
-                                )
-                            is ChatThreadMode.Person ->
-                                repo.conversationMessages(target.otherUserId, before, topicId = context.topicId, force = force)
-                            ChatThreadMode.Ai -> return@launch
-                        }
+                    val response = readThreadPage(context, before, force)
                     // The topic changed while this page was in flight (the opening topic
                     // resolves alongside the first fetch); the fetch for it owns the thread.
                     if (context != historyContext()) return@launch
+                    if (contextMessageId != null && response is NetworkResult.Failure && response.error == NetworkError.NotFound) {
+                        returnToLatestMessages()
+                        return@launch
+                    }
                     publishHistoryPage(response, keepMessages, initial, firstPage = before == null)
                     recoverRetainedHistory(response, initial, keepMessages)
                 } finally {
@@ -2275,10 +2300,11 @@ class ChatConversationViewModel
             when (response) {
                 is NetworkResult.Success -> {
                     historyRefusal = null
-                    if (firstPage) {
+                    if (firstPage && contextMessageId == null) {
                         val anchor = historyPage?.syncCursors.orEmpty().takeIf { keepMessages && it.isNotEmpty() }
                         historyPage = response.data.copy(syncCursors = anchor ?: response.data.syncCursors)
                     }
+                    if (firstPage && contextMessageId != null) contextHasNewer = response.data.hasMoreAfter
                     _composerClosedNote.value = response.data.sendRefusal?.error
                     val keptOlder = placePage(response.data.messages, keepMessages)
                     retireConfirmedSends(response.data.messages)
@@ -2709,7 +2735,7 @@ class ChatConversationViewModel
             changedDuringCatchUp.clear()
             catchUpJob =
                 viewModelScope.launch {
-                    if (recoverChanges(context)) return@launch
+                    if (contextMessageId == null && recoverChanges(context)) return@launch
                     var before: String? = null
                     val authoritative = LinkedHashMap<String, ChatMessageDto>()
                     var firstPage: ChatMessagesResponse? = null
@@ -2725,13 +2751,17 @@ class ChatConversationViewModel
                                 if (before == null) applyCaughtUpHistory(authoritative.values, oldest, page)
                             }
                             is NetworkResult.Failure -> {
-                                if (historyAccessEnded(result.error)) refuseHistory(result.error)
+                                if (contextMessageId != null && result.error == NetworkError.NotFound) {
+                                    returnToLatestMessages()
+                                } else if (historyAccessEnded(result.error)) {
+                                    refuseHistory(result.error)
+                                }
                                 return@launch
                             }
                         }
                     } while (before != null)
                     firstPage?.let { page ->
-                        historyPage = page
+                        if (contextMessageId == null) historyPage = page else contextHasNewer = page.hasMoreAfter
                         _composerClosedNote.value = page.sendRefusal?.error
                         updateActiveRooms(page)
                     }
@@ -2854,14 +2884,40 @@ class ChatConversationViewModel
         private suspend fun readHistoryPage(
             context: HistoryReadContext,
             before: String?,
+        ): NetworkResult<ChatMessagesResponse> = readThreadPage(context, before, force = true)
+
+        private suspend fun readThreadPage(
+            context: HistoryReadContext,
+            before: String?,
+            force: Boolean,
         ): NetworkResult<ChatMessagesResponse> =
-            when (val target = context.mode) {
-                is ChatThreadMode.Room ->
-                    repo.roomMessages(target.id, before = before, asBusinessUserId = target.asBusinessUserId, force = true)
-                is ChatThreadMode.Person ->
-                    repo.conversationMessages(target.otherUserId, before = before, topicId = context.topicId, force = true)
+            if (before == null && contextMessageId != null) {
+                readMessageContext(context)
+            } else {
+                when (val target = context.mode) {
+                    is ChatThreadMode.Room ->
+                        repo.roomMessages(target.id, before = before, asBusinessUserId = target.asBusinessUserId, force = force)
+                    is ChatThreadMode.Person ->
+                        repo.conversationMessages(target.otherUserId, before = before, topicId = context.topicId, force = force)
+                    ChatThreadMode.Ai -> NetworkResult.Success(ChatMessagesResponse(emptyList()))
+                }
+            }
+
+        private suspend fun readMessageContext(context: HistoryReadContext): NetworkResult<ChatMessagesResponse> {
+            val messageId = contextMessageId ?: return NetworkResult.Success(ChatMessagesResponse(emptyList()))
+            return when (val target = context.mode) {
+                is ChatThreadMode.Room -> repo.roomMessageContext(target.id, messageId, target.asBusinessUserId)
+                is ChatThreadMode.Person -> repo.conversationMessageContext(target.otherUserId, messageId)
                 ChatThreadMode.Ai -> NetworkResult.Success(ChatMessagesResponse(emptyList()))
             }
+        }
+
+        private fun belongsInContextWindow(message: ChatMessageDto): Boolean {
+            if (contextMessageId == null) return true
+            val oldest = messages.minWithOrNull(messageOrder) ?: return false
+            val newest = messages.maxWithOrNull(messageOrder) ?: return false
+            return messageOrder.compare(message, oldest) >= 0 && (!contextHasNewer || messageOrder.compare(message, newest) <= 0)
+        }
 
         private fun nextCatchUpCursor(
             page: ChatMessagesResponse,
@@ -2962,7 +3018,10 @@ class ChatConversationViewModel
             val retiredPending = retireConfirmedSends(backfill)
             val existing = messages.map { it.id }.toSet()
             // The room backfill carries every topic; a topic view keeps its own.
-            val fresh = backfill.filter { !existing.contains(it.id) && matchesTopicFilter(it) && canMerge(it) }
+            val fresh =
+                backfill.filter {
+                    !existing.contains(it.id) && matchesTopicFilter(it) && canMerge(it) && belongsInContextWindow(it)
+                }
             if (fresh.isEmpty()) {
                 if (retiredPending) rebuild()
                 return
@@ -2975,7 +3034,7 @@ class ChatConversationViewModel
         }
 
         private fun applyUpdatedMessage(updated: ChatMessageDto) {
-            if (!canMerge(updated)) return
+            if (!canMerge(updated) || !belongsInContextWindow(updated)) return
             changedDuringCatchUp.add(updated.id)
             val index = messages.indexOfFirst { it.id == updated.id }
             if (index >= 0) {
@@ -3103,7 +3162,7 @@ class ChatConversationViewModel
 
         /** Dedupe by id, insert sorted by createdAt, rebuild, mark read. */
         private fun insertIncoming(message: ChatMessageDto) {
-            if (!canMerge(message)) return
+            if (!canMerge(message) || !belongsInContextWindow(message)) return
             changedDuringCatchUp.add(message.id)
             val index = messages.indexOfFirst { it.id == message.id }
             if (index >= 0) {
@@ -3276,7 +3335,7 @@ class ChatConversationViewModel
                 _state.value = ChatConversationUiState.Error(it)
                 return
             }
-            if (historyCopyContext == historyContext()) {
+            if (contextMessageId == null && historyCopyContext == historyContext()) {
                 // In the server's shape (no cursor without older messages, its room list), so unchanged is equal.
                 val page = historyPage
                 updateHistoryCopy?.invoke(
@@ -3399,8 +3458,7 @@ class ChatConversationViewModel
         /**
          * Resolve the Chat Search scroll target once: if the deep-linked
          * message is in the loaded page, publish its row id for the screen
-         * to scroll to. The match is guaranteed present because search
-         * indexes the same most-recent page the conversation loads.
+         * to scroll to. Server search opens a bounded context window around an older match.
          */
         private fun resolveScrollTarget(rows: List<ChatTimelineRow>) {
             if (didResolveScrollTarget) return

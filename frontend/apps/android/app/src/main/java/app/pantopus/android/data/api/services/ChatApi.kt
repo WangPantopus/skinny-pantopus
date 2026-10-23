@@ -5,6 +5,7 @@ import app.pantopus.android.data.api.models.chats.ChatMessagesResponse
 import app.pantopus.android.data.api.models.chats.ChatNotificationPreferencesBody
 import app.pantopus.android.data.api.models.chats.ChatNotificationPreferencesResponse
 import app.pantopus.android.data.api.models.chats.ChatRoomDetailResponse
+import app.pantopus.android.data.api.models.chats.ChatSearchResponse
 import app.pantopus.android.data.api.models.chats.ChatStatsResponse
 import app.pantopus.android.data.api.models.chats.ConversationTopicsResponse
 import app.pantopus.android.data.api.models.chats.CreateDirectChatBody
@@ -52,6 +53,29 @@ interface ChatApi {
         @Query("limit") limit: Int,
         @Header("If-None-Match") etag: String?,
     ): Response<UnifiedConversationsResponse>
+
+    @Headers("Cache-Control: no-store")
+    @GET("api/chat/search")
+    suspend fun searchMessages(
+        @Query("q") query: String,
+        @Query("before") before: String? = null,
+        @Query("limit") limit: Int = 50,
+    ): ChatSearchResponse
+
+    @Headers("Cache-Control: no-store")
+    @GET("api/chat/rooms/{roomId}/messages/{messageId}/context")
+    suspend fun roomMessageContext(
+        @Path("roomId") roomId: String,
+        @Path("messageId") messageId: String,
+        @Query("asBusinessUserId") asBusinessUserId: String? = null,
+    ): ChatMessagesResponse
+
+    @Headers("Cache-Control: no-store")
+    @GET("api/chat/conversations/{otherUserId}/messages/{messageId}/context")
+    suspend fun conversationMessageContext(
+        @Path("otherUserId") otherUserId: String,
+        @Path("messageId") messageId: String,
+    ): ChatMessagesResponse
 
     @PATCH("api/chat/conversations/{otherUserId}/preferences")
     suspend fun conversationPreferences(

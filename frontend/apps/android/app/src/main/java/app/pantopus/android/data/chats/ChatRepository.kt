@@ -5,6 +5,7 @@ import app.pantopus.android.data.api.models.chats.ChatMessagesResponse
 import app.pantopus.android.data.api.models.chats.ChatNotificationPreferencesBody
 import app.pantopus.android.data.api.models.chats.ChatNotificationPreferencesResponse
 import app.pantopus.android.data.api.models.chats.ChatRoomDetailResponse
+import app.pantopus.android.data.api.models.chats.ChatSearchResponse
 import app.pantopus.android.data.api.models.chats.ChatStatsResponse
 import app.pantopus.android.data.api.models.chats.ConversationTopicsResponse
 import app.pantopus.android.data.api.models.chats.CreateDirectChatBody
@@ -92,6 +93,22 @@ class ChatRepository
             query: String? = null,
         ): NetworkResult<UnifiedConversationsResponse> =
             safeApiCall { api.unifiedConversations(limit = CONVERSATIONS_LIMIT, before = before, query = query) }
+
+        suspend fun searchMessages(
+            query: String,
+            before: String? = null,
+        ): NetworkResult<ChatSearchResponse> = safeApiCall { api.searchMessages(query, before) }
+
+        suspend fun roomMessageContext(
+            roomId: String,
+            messageId: String,
+            asBusinessUserId: String? = null,
+        ): NetworkResult<ChatMessagesResponse> = safeApiCall { api.roomMessageContext(roomId, messageId, asBusinessUserId) }
+
+        suspend fun conversationMessageContext(
+            otherUserId: String,
+            messageId: String,
+        ): NetworkResult<ChatMessagesResponse> = safeApiCall { api.conversationMessageContext(otherUserId, messageId) }
 
         suspend fun stats(): NetworkResult<ChatStatsResponse> = safeApiCall { api.stats() }
 

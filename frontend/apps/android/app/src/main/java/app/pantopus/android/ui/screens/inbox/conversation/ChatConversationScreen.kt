@@ -200,6 +200,7 @@ fun ChatConversationScreen(
     val isCounterpartyTyping by viewModel.isCounterpartyTyping.collectAsStateWithLifecycle()
     val queuedAttachments by viewModel.queuedAttachments.collectAsStateWithLifecycle()
     val pendingScroll by viewModel.pendingScrollTarget.collectAsStateWithLifecycle()
+    val showLatestMessages by viewModel.showLatestMessages.collectAsStateWithLifecycle()
     val sendLimitNotice by viewModel.sendLimitNotice.collectAsStateWithLifecycle()
     val composerClosedNote by viewModel.composerClosedNote.collectAsStateWithLifecycle()
     val isSelectionMode by viewModel.isSelectionMode.collectAsStateWithLifecycle()
@@ -503,6 +504,8 @@ fun ChatConversationScreen(
                             onVisibleMessage = viewModel::markVisibleMessageRead,
                             scrollToRowId = pendingScroll,
                             onScrollConsumed = viewModel::consumePendingScroll,
+                            showLatestMessages = showLatestMessages,
+                            onLatestMessages = viewModel::returnToLatestMessages,
                             conversationMode = conversationMode,
                             incomingInitials = incomingInitialsFor(conversationMode, activeCounterparty),
                             aiPrompts = viewModel.aiPrompts,
@@ -2729,6 +2732,8 @@ internal fun PopulatedFrame(
     onVisibleMessage: (String) -> Unit = {},
     scrollToRowId: String? = null,
     onScrollConsumed: () -> Unit = {},
+    showLatestMessages: Boolean = false,
+    onLatestMessages: () -> Unit = {},
     conversationMode: ChatConversationMode = ChatConversationMode.Dm,
     incomingInitials: String? = null,
     aiPrompts: List<ChatPromptChip> = emptyList(),
@@ -2907,11 +2912,15 @@ internal fun PopulatedFrame(
                 }
             }
         }
-        if (newMessageCount > 0) {
+        if (newMessageCount > 0 || showLatestMessages) {
             TextButton(
                 onClick = {
                     newMessageCount = 0
-                    scope.launch { listState.animateScrollToItem((listState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0)) }
+                    if (showLatestMessages) {
+                        onLatestMessages()
+                    } else {
+                        scope.launch { listState.animateScrollToItem((listState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0)) }
+                    }
                 },
                 modifier =
                     Modifier.align(Alignment.BottomCenter).padding(bottom = Spacing.s2)
@@ -2919,7 +2928,16 @@ internal fun PopulatedFrame(
                         .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.pill))
                         .testTag("chatNewMessages"),
             ) {
-                Text(if (newMessageCount == 1) "1 new message ↓" else "$newMessageCount new messages ↓", color = PantopusColors.appText)
+                Text(
+                    if (showLatestMessages) {
+                        "Latest messages ↓"
+                    } else if (newMessageCount == 1) {
+                        "1 new message ↓"
+                    } else {
+                        "$newMessageCount new messages ↓"
+                    },
+                    color = PantopusColors.appText,
+                )
             }
         }
     }
