@@ -688,8 +688,9 @@ router.get('/pending', verifyToken, async (req, res) => {
     // or Home letters the Home mail rule shows them; M01).
     const visible = await visibleMailIds((data || []).map((row) => row.mail_id), userId, homeIds);
     const pending = (data || []).filter((row) => visible.has(row.mail_id));
+    // A letter sent as a business shows the business, never the person behind the seat (presentMailSender).
     const letters = await nameMailSenders(pending.map((row) => row.Mail), userId);
-    return res.json({ pending: pending.map((row, i) => ({ ...row, Mail: letters[i] })) });
+    return res.json({ pending: pending.map((row, i) => ({ ...row, Mail: presentMailSender(letters[i], userId) })) });
   } catch (err) {
     logger.error('Pending fetch error', { error: err.message });
     return res.status(500).json({ error: 'Server error' });
