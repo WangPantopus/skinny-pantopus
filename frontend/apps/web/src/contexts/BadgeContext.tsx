@@ -100,7 +100,7 @@ export function BadgeProvider({ children }: { children: ReactNode }) {
           };
         }
         if (chatRes.status === 'fulfilled' && chatRes.value?.stats) {
-          next.unreadMessages = Number(chatRes.value.stats.total_unread ?? previous.unreadMessages) || 0;
+          next.unreadMessages = Number(chatRes.value.stats.total_unmuted_unread ?? chatRes.value.stats.total_unread ?? previous.unreadMessages) || 0;
           next.totalMessages = Number(chatRes.value.stats.total_messages ?? previous.totalMessages) || 0;
         }
         if (offersRes.status === 'fulfilled' && Array.isArray(offersRes.value?.offers)) next.pendingOffers = offersRes.value.offers.filter((offer: { status?: string }) => offer.status === 'pending').length;
@@ -172,7 +172,7 @@ export function BadgeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!socket) return;
 
-    const handleBadgeUpdate = (data: Partial<BadgeCounts>) => {
+    const handleBadgeUpdate = (data: Partial<BadgeCounts> & { unmutedUnreadMessages?: number }) => {
       if (!getAuthToken()) return;
       revision.current += 1;
       if (data?.notifications != null) {
@@ -184,7 +184,7 @@ export function BadgeProvider({ children }: { children: ReactNode }) {
       }
       setCounts((prev) => ({
         ...prev,
-        unreadMessages: Number(data?.unreadMessages ?? prev.unreadMessages) || 0,
+        unreadMessages: Number(data?.unmutedUnreadMessages ?? data?.unreadMessages ?? prev.unreadMessages) || 0,
         totalMessages: Number(data?.totalMessages ?? prev.totalMessages) || 0,
         pendingOffers: Number(data?.pendingOffers ?? prev.pendingOffers) || 0,
       }));

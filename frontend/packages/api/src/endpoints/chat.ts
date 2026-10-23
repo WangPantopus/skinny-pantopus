@@ -337,6 +337,7 @@ export async function getChatStats(config?: ApiRequestConfig): Promise<{
     total_chats: number;
     total_messages: number;
     total_unread: number;
+    total_unmuted_unread?: number;
     direct_chats: number;
     gig_chats: number;
     home_chats: number;
@@ -447,6 +448,7 @@ export async function getUnifiedConversations(params?: {
   conversations: UnifiedConversationItem[];
   total: number;
   totalUnread: number;
+  totalUnmutedUnread?: number;
   totalMessages: number;
   hasMore: boolean;
   nextCursor: string | null;
@@ -455,6 +457,7 @@ export async function getUnifiedConversations(params?: {
     conversations: UnifiedConversationItem[];
     total: number;
     totalUnread: number;
+    totalUnmutedUnread?: number;
     totalMessages: number;
     hasMore: boolean;
     nextCursor: string | null;
