@@ -361,6 +361,17 @@ async function stop() {
   }
 }
 
+// Best-effort, content-free typing signals reuse the live LISTEN connection.
+// Bound pg's pending query queue; stale typing is dropped rather than replayed.
+let typingPublishes = 0;
+function publishChatTyping(change) {
+  if (!live || !client || typingPublishes >= 32 || change?.t !== 'ChatTyping') return;
+  typingPublishes += 1;
+  client.query({ text: 'SELECT pg_notify($1, $2)', values: [CHANNEL, JSON.stringify(change)], query_timeout: 2000 })
+    .catch(() => { /* Typing expires; durable message delivery is independent. */ })
+    .finally(() => { typingPublishes -= 1; });
+}
+
 /** True while the LISTEN connection is up, so every committed change is being heard. */
 function isLive() {
   return live;
@@ -371,4 +382,4 @@ function currentEpoch() {
   return epoch;
 }
 
-module.exports = { init, start, stop, onChange, isLive, currentEpoch, handleNotification, flush, RULES };
+module.exports = { init, start, stop, onChange, isLive, currentEpoch, handleNotification, flush, RULES, publishChatTyping };

@@ -20,6 +20,23 @@ bounded read updated both rooms. The temporary rooms were removed afterward.
 Syntax and the four existing identity-select guards passed; final app checks
 against this exact backend revision remain in progress.
 
+## Typing across API processes
+
+Typing start/stop now shares the existing Postgres notification connection,
+carrying only room/user IDs, state, time and a process nonce. It is best-effort
+and expires after five seconds; pending work and database publish queues are
+bounded. Each receiving API process checks current membership, blocks and task
+eligibility before emitting to its local subscribers. Business staff keep
+receiving customer typing after a fresh authority check, but never broadcast
+their personal identity as the business. Both start and stop are rate limited.
+
+Real Socket.IO clients on two local API processes received one start and one
+stop each. Blocked/revoked members received none. A business owner received the
+customer indicator, their own typing emitted nothing, and revoking staff
+permission suppressed subsequent indicators. Temporary fixture rows were
+removed. Syntax and all four identity-select guards pass. App UI checks against
+this revision are pending; online/offline presence is still process-local.
+
 ## Immediate contract
 
 - REST message history uses `(created_at, id)` for both `before` and `after`; both bounds can be combined. `nextCursor` pages backward and `hasMore` comes from an extra row.

@@ -2,6 +2,10 @@
 // keys travel through NOTIFY; the handler reads current, authorized chat data.
 const syncChanged = require('./syncChangedService');
 const logger = require('../utils/logger');
+const processId = require('crypto').randomUUID();
+const typingPending = new Map();
+const typingRunning = new Set();
+let typingHandler;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const pending = new Map();
@@ -13,6 +17,7 @@ let timer;
 let subscribed = false;
 
 function setHandler(value) { handler = value; }
+function setTypingHandler(value) { typingHandler = value; }
 
 function init(value) {
   io = value;
@@ -21,6 +26,7 @@ function init(value) {
   syncChanged.onChange((change) => {
     if (change.t === 'ChatMessage' && change.m && change.op) announce(change);
     if (change.t === 'ChatRead' && change.u) announce(change);
+    if (change.t === 'ChatTyping' && change.origin !== processId) queueTyping(change);
   });
 }
 
@@ -70,4 +76,39 @@ function drain() {
   }
 }
 
-module.exports = { init, setHandler, announce };
+function publishTyping(roomId, userId, typing) {
+  if (!UUID.test(roomId || '') || !UUID.test(userId || '')) return;
+  const change = { t: 'ChatTyping', r: roomId, u: userId, typing, at: Date.now(), origin: processId };
+  queueTyping(change);
+  syncChanged.publishChatTyping(change);
+}
+
+function queueTyping(change) {
+  if (!io || !typingHandler || !UUID.test(change.r || '') || !UUID.test(change.u || '')
+    || typeof change.typing !== 'boolean' || !Number.isFinite(change.at)
+    || Math.abs(Date.now() - change.at) > 5000) return;
+  const key = `${change.r}:${change.u}`;
+  if (typingPending.size >= 128 && !typingPending.has(key)) return;
+  if ((typingPending.get(key)?.at || 0) > change.at) return;
+  typingPending.set(key, change);
+  drainTyping();
+}
+
+function drainTyping() {
+  for (const [key, change] of typingPending) {
+    if (typingRunning.size >= 4) break;
+    if (typingRunning.has(key)) continue;
+    typingPending.delete(key);
+    typingRunning.add(key);
+    Promise.resolve().then(() => {
+      if (Date.now() - change.at <= 5000) return typingHandler(io, change);
+    }).catch((error) => {
+      logger.warn('chat_typing_unavailable', { code: error.code });
+    }).finally(() => {
+      typingRunning.delete(key);
+      drainTyping();
+    });
+  }
+}
+
+module.exports = { init, setHandler, announce, setTypingHandler, publishTyping };

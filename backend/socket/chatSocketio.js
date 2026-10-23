@@ -11,7 +11,7 @@ const notificationService = require('../services/notificationService');
 const syncChangedService = require('../services/syncChangedService');
 const chatRealtime = require('../services/chatRealtime');
 const { isBlocked, blockedUserIds } = require('../services/blockService');
-const { closedGigRoomIds, isGigRoomClosedTo, isRoomClosedForWrites } = require('../services/chatGigRoomAccess');
+const { closedGigRoomIds, gigRoomRecipients, isGigRoomClosedTo, isRoomClosedForWrites } = require('../services/chatGigRoomAccess');
 const { chatAccessUnavailable, actingBusinessInRoom, UNPUBLISHED_BUSINESS_REFUSAL } = require('../services/chatBusinessAccess');
 const { unpublishedBusinessIds } = require('../utils/visibilityPolicy');
 const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
@@ -104,6 +104,7 @@ function subscribeSessionRevocation(io) {
 const socketRateLimits = {
   'message:react': { max: 60, windowMs: 60_000 },
   'typing:start':  { max: 10, windowMs: 60_000 },
+  'typing:stop':   { max: 30, windowMs: 60_000 },
 };
 
 // Map<socketId, Map<eventName, { count, resetAt }>>
@@ -231,12 +232,62 @@ async function emitPresence(socket, event, userId, roomIds) {
   }
 }
 
+// Membership, blocks and task assignment can change after room:join. Resolve
+// only locally connected subscribers, before emitting even an ephemeral signal.
+async function emitTyping(io, change) {
+  const targets = [...(io.sockets.adapter.rooms.get(change.r) || [])]
+    .map((id) => io.sockets.sockets.get(id)).filter((socket) => socket?.connected
+    && socket.userId !== change.u && socket.rooms.has(change.r));
+  if (!targets.length) return;
+  const [roomResult, senderResult] = await Promise.all([
+    supabaseAdmin.from('ChatRoom').select('id, type, gig_id, is_active').eq('id', change.r).maybeSingle(),
+    supabaseAdmin.from('ChatParticipant').select('user_id').eq('room_id', change.r)
+      .eq('user_id', change.u).eq('is_active', true).maybeSingle(),
+  ]);
+  if (roomResult.error || senderResult.error) throw chatAccessUnavailable();
+  const room = roomResult.data;
+  if (!room || !senderResult.data || await isRoomClosedForWrites(change.r, room)
+    || !(await gigRoomRecipients(room, [change.u])).includes(change.u)) return;
+  const ids = [...new Set(targets.map((socket) => socket.userId))];
+  const permitted = new Set();
+  for (let offset = 0; offset < ids.length; offset += 200) {
+    const batch = ids.slice(offset, offset + 200);
+    const [members, outgoing, incoming] = await Promise.all([
+      supabaseAdmin.from('ChatParticipant').select('user_id').eq('room_id', change.r)
+        .eq('is_active', true).in('user_id', batch),
+      supabaseAdmin.from('UserBlock').select('blocked_user_id').eq('blocker_user_id', change.u).in('blocked_user_id', batch),
+      supabaseAdmin.from('UserBlock').select('blocker_user_id').eq('blocked_user_id', change.u).in('blocker_user_id', batch),
+    ]);
+    if (members.error || outgoing.error || incoming.error) throw chatAccessUnavailable();
+    const blocked = new Set([...(outgoing.data || []).map((row) => row.blocked_user_id),
+      ...(incoming.data || []).map((row) => row.blocker_user_id)]);
+    const eligible = await gigRoomRecipients(room, (members.data || []).map((row) => row.user_id));
+    for (const id of eligible) if (!blocked.has(id)) permitted.add(id);
+    const membersSet = new Set((members.data || []).map((row) => row.user_id));
+    for (const id of batch) {
+      if (membersSet.has(id) || blocked.has(id)
+        || !targets.some((socket) => socket.userId === id && socket.chatBusinessRooms?.has(change.r))) continue;
+      const actingFor = await actingBusinessInRoom(change.r, id);
+      if (!actingFor || await isGigRoomClosedTo(change.r, id, [actingFor])) continue;
+      const block = await supabaseAdmin.from('UserBlock').select('id', { count: 'exact', head: true })
+        .or(`and(blocker_user_id.eq.${change.u},blocked_user_id.eq.${actingFor}),and(blocker_user_id.eq.${actingFor},blocked_user_id.eq.${change.u})`);
+      if (block.error || !Number.isInteger(block.count)) throw chatAccessUnavailable();
+      if (block.count === 0) permitted.add(id);
+    }
+  }
+  if (Date.now() - change.at > 5000) return;
+  for (const socket of targets) if (socket.connected && socket.rooms.has(change.r) && permitted.has(socket.userId)) {
+    socket.emit(change.typing ? 'typing:user' : 'typing:stopped', { userId: change.u, roomId: change.r });
+  }
+}
+
 module.exports = (io) => {
   // Initialize badge + notification services with io + connectedUsers references
   badgeService.init(io, connectedUsers);
   notificationService.init(io, connectedUsers);
   // Instant Screens: database changes (NOTIFY sync_changed) → 'sync:changed' to the people they concern
   syncChangedService.init(io, connectedUsers);
+  chatRealtime.setTypingHandler(emitTyping);
   chatRealtime.init(io);
   syncChangedService.start();
   // Persistent login: disconnect sockets of revoked sessions
@@ -308,6 +359,7 @@ module.exports = (io) => {
     const wasOnline = Boolean(existingSockets && existingSockets.size > 0);
     // Rooms this socket joined for a business inbox (room:join), where the user isn't a member.
     const businessRooms = new Set();
+    socket.chatBusinessRooms = businessRooms;
 
     logger.info('User connected to chat', {
       sessionId,
@@ -513,11 +565,7 @@ module.exports = (io) => {
           return;
         }
 
-        // Broadcast to room (except sender)
-        socket.to(roomId).emit('typing:user', {
-          userId,
-          roomId
-        });
+        chatRealtime.publishTyping(roomId, userId, true);
 
       } catch (err) {
         logger.error('Typing indicator error', { sessionId, userId, roomId, error: err.message });
@@ -529,12 +577,13 @@ module.exports = (io) => {
      */
     on('typing:stop', async ({ roomId }) => {
       try {
+        if (socketRateLimited(socket.id, 'typing:stop')) return;
         // Verify the socket has joined this room
         if (!socket.rooms.has(roomId) || businessRooms.has(String(roomId))) {
           return;
         }
 
-        socket.to(roomId).emit('typing:stopped', { userId, roomId });
+        chatRealtime.publishTyping(roomId, userId, false);
 
       } catch (err) {
         logger.error('Stop typing error', { sessionId, userId, roomId, error: err.message });
