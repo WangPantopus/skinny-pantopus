@@ -384,16 +384,12 @@ public final class ChatListViewModel {
         publishBadgeCount()
     }
 
-    private static let activityISOFormatter: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter
-    }()
+    private static let activityISOStyle = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
 
     private static let activityPlainISOFormatter = ISO8601DateFormatter()
 
     private static func parseISO(_ raw: String) -> Date? {
-        activityISOFormatter.date(from: raw) ?? activityPlainISOFormatter.date(from: raw)
+        (try? activityISOStyle.parse(raw)) ?? activityPlainISOFormatter.date(from: raw)
     }
 
     // MARK: - Projection

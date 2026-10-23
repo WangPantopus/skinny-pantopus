@@ -3332,11 +3332,14 @@ public final class ChatConversationViewModel {
     }()
 
     private static let isoFormatter = ISO8601DateFormatter()
+    private static let preciseISOStyle = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
     private static var parsedDates: [String: Date] = [:]
 
     private static func parseISO(_ raw: String) -> Date? {
         if let cached = parsedDates[raw] { return cached }
-        let date = fractionalISOFormatter.date(from: raw) ?? isoFormatter.date(from: raw)
+        // ISO8601DateFormatter truncates sub-millisecond values. PostgreSQL
+        // cursors retain microseconds, so keep that precision before the id tie-break.
+        let date = (try? preciseISOStyle.parse(raw)) ?? isoFormatter.date(from: raw)
         if parsedDates.count > 4096 { parsedDates.removeAll(keepingCapacity: true) }
         if let date { parsedDates[raw] = date }
         return date
