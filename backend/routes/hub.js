@@ -27,7 +27,7 @@ const { recordFunnelEvent, APP_POSTABLE_EVENT_TYPES } = require('../services/fun
 const { validTimezone } = require('../utils/timezone');
 const { resolveNotificationTimezone } = require('../services/context/locationResolver');
 const { chosenUsernameOrNull } = require('../utils/personalUsername');
-const { loadChatPeople, reviewerRow } = require('../services/chatPeople');
+const { loadChatPeople, reviewerRow, loadListedPeople, listedPerson } = require('../services/chatPeople');
 
 // Authenticated pilot beacons: account identity comes only from verifyToken.
 // The app-wide JSON parser runs first, so enforce the small body here.
@@ -1116,14 +1116,15 @@ router.get('/discovery', verifyToken, async (req, res) => {
         const sellerIds = Array.from(
           new Set((listings || []).map((l) => l.user_id).filter(Boolean))
         );
-        const [sellers, sellerPeople] = await Promise.all([
+        const [sellers, listedSellers] = await Promise.all([
           sellerIds.length
             ? supabaseAdmin.from('User').select('id, name, first_name, username, city').in('id', sellerIds)
             : { data: [] },
-          loadChatPeople(sellerIds),
+          loadListedPeople(sellerIds),
         ]);
-        // Named as the gigs rail names posters.
-        const sellerById = new Map((sellers.data || []).map((u) => [u.id, reviewerRow(u, sellerPeople)]));
+        // Named as the gigs rail names posters, and placed as in people lists: a seller with a Local Profile only where
+        // it shows them, and only by a username they chose (services/chatPeople.js listedPerson).
+        const sellerById = new Map((sellers.data || []).map((u) => [u.id, listedPerson(u, listedSellers)]));
 
         items = (listings || []).map((l) => {
           const seller = sellerById.get(l.user_id);

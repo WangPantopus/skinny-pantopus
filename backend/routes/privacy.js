@@ -22,6 +22,7 @@ const logger = require('../utils/logger');
 const { writeIdentityAuditLog } = require('../utils/identityAudit');
 const { syncLocalProfileLocality } = require('../utils/identityProfiles');
 const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
+const { chosenUsernameOrNull } = require('../utils/personalUsername');
 
 // ============================================================
 // Validation schemas
@@ -184,9 +185,15 @@ router.get('/blocks', verifyToken, async (req, res) => {
     }
 
     // A blocked person goes by the name, handle and photo neighbors see on their posts and in chats: their Local
-    // Profile's, or a business's (or anyone else's) account as before (services/chatPeople.js).
+    // Profile's, or a business's (or anyone else's) account as before (services/chatPeople.js). Only a username the
+    // person chose is kept (a made-up one can show part of their email address), as in GET /api/users/blocked.
     const people = await loadChatPeople((blocks || []).map((b) => b.blocked_user_id));
-    res.json({ blocks: (blocks || []).map((b) => ({ ...b, blocked: chatPersonRow(b.blocked, people) })) });
+    res.json({
+      blocks: (blocks || []).map((b) => {
+        const blocked = chatPersonRow(b.blocked, people);
+        return { ...b, blocked: blocked && { ...blocked, username: chosenUsernameOrNull(blocked.username) } };
+      }),
+    });
   } catch (err) {
     logger.error('GET /privacy/blocks error', { error: err.message });
     res.status(500).json({ error: 'Failed to load blocks' });
