@@ -135,8 +135,8 @@ class ChatOutboxStore
             }
             val destination = entryFolder(entry)
             check(!destination.exists()) { "This message is already queued." }
-            val temporary = File(folder, "${entry.clientId}.tmp")
-            check(temporary.mkdirs()) { "Couldn't save the message on this device." }
+            val temporary = sourceDraft?.let { draftFolder(it.target, it.topicId) } ?: File(folder, "${entry.clientId}.tmp")
+            check(temporary.isDirectory || temporary.mkdirs()) { "Couldn't save the message on this device." }
             try {
                 val attachments =
                     sourceDraft?.attachments?.map { attachment ->
@@ -146,14 +146,7 @@ class ChatOutboxStore
                 val saved = entry.copy(attachments = attachments)
                 files.zip(attachments).forEach { (input, attachment) ->
                     val temporaryFile = File(temporary, "${attachment.id}.enc")
-                    if (sourceDraft != null) {
-                        // Both paths reference the same encrypted bytes until the durable send replaces the draft.
-                        // A crash before the final rename leaves the original draft intact; startup drops .tmp links.
-                        Files.createLink(
-                            temporaryFile.toPath(),
-                            File(draftFolder(sourceDraft.target, sourceDraft.topicId), temporaryFile.name).toPath(),
-                        )
-                    } else {
+                    if (sourceDraft == null) {
                         writeAttachment(temporaryFile, input.bytes, scope(File(destination, temporaryFile.name)))
                     }
                 }
@@ -165,11 +158,13 @@ class ChatOutboxStore
                 check(held + storedBytes <= MAX_BYTES) {
                     "Unsent attachments have filled the device queue. Send or remove some before adding more."
                 }
+                // Android denies hard links in app data. Moving the draft folder commits its encrypted files
+                // together with the outgoing metadata; their authenticated original scopes remain in metadata.
                 Files.move(temporary.toPath(), destination.toPath(), StandardCopyOption.ATOMIC_MOVE)
-                sourceDraft?.let { draftFolder(it.target, it.topicId).deleteRecursively() }
+                File(destination, "draft.enc").delete()
                 return saved
             } finally {
-                temporary.deleteRecursively()
+                if (sourceDraft == null) temporary.deleteRecursively() else File(temporary, "message.enc").delete()
             }
         }
 
