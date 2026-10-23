@@ -93,7 +93,7 @@ public final class ChatListViewModel {
         let generation = fetchGeneration
         let session = AuthManager.shared.requestSessionGeneration
         let scope = localCacheScope
-        let version = ChatLocalStore.shared.version
+        let checkpoint = ChatLocalStore.shared.inboxCheckpoint
         do {
             let page: UnifiedConversationsResponse = try await api.request(ChatEndpoints.unifiedConversations(before: cursor))
             guard generation == fetchGeneration, session == AuthManager.shared.requestSessionGeneration, !Task.isCancelled else { return }
@@ -110,7 +110,7 @@ public final class ChatListViewModel {
             publishBadgeCount()
             if let scope {
                 await ChatLocalStore.shared.saveInbox(
-                    ChatInboxMemory(response: combined, stats: nil, confirmedAt: Date()), scope: scope, version: version
+                    ChatInboxMemory(response: combined, stats: nil, confirmedAt: Date()), scope: scope, checkpoint: checkpoint
                 )
             }
         } catch {
@@ -211,7 +211,7 @@ public final class ChatListViewModel {
         activeFetchGeneration = generation
         defer { if activeFetchGeneration == generation { activeFetchGeneration = nil } }
         let session = AuthManager.shared.requestSessionGeneration
-        let cacheVersion = ChatLocalStore.shared.version
+        let cacheCheckpoint = ChatLocalStore.shared.inboxCheckpoint
         let scope = localCacheScope
         let minimumCount = inboxResponse?.conversations.count ?? 0
         async let conversationsTask: (response: UnifiedConversationsResponse, confirmedAt: Date)? = optional(
@@ -275,7 +275,7 @@ public final class ChatListViewModel {
             await ChatLocalStore.shared.saveInbox(
                 ChatInboxMemory(response: response.response, stats: stats, confirmedAt: response.confirmedAt),
                 scope: scope,
-                version: cacheVersion
+                checkpoint: cacheCheckpoint
             )
         }
     }

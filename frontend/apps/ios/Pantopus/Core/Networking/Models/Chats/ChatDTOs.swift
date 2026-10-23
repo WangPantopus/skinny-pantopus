@@ -45,7 +45,7 @@ public struct UnifiedConversation: Codable, Sendable, Hashable, Identifiable {
     /// ISO8601 timestamp of the last message in the conversation, if any.
     public let lastMessageAt: String?
     /// Aggregate unread across all rooms in this conversation.
-    public let totalUnread: Int
+    public private(set) var totalUnread: Int
     public let notificationsEnabled: Bool?
     public let unmutedUnread: Int?
     /// Topic tags attached to a person-conversation. `topic_type`
@@ -177,6 +177,12 @@ public struct UnifiedConversation: Codable, Sendable, Hashable, Identifiable {
             try c.encodeIfPresent(gigId, forKey: .gigId)
             try c.encodeIfPresent(homeId, forKey: .homeId)
         }
+    }
+
+    func withUnreadCount(_ count: Int) -> Self {
+        var copy = self
+        copy.totalUnread = max(0, count)
+        return copy
     }
 }
 
@@ -310,6 +316,11 @@ public struct ChatBadgeUpdate: Decodable, Sendable, Hashable {
 public struct ChatPreferencesResponse: Decodable, Sendable {
     public let notificationsEnabled: Bool
     public let roomIds: [String]
+}
+
+/// A read response describes only the requested room/person scope.
+struct ChatReadResponse: Decodable {
+    let unreadCount: Int?
 }
 
 /// `message:new` socket event payload — just the fields the chat list

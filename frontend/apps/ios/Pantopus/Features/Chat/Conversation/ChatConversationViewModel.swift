@@ -3057,10 +3057,27 @@ public final class ChatConversationViewModel {
             return
         }
         let session = AuthManager.shared.requestSessionGeneration
+        let checkpoint = ChatLocalStore.shared.inboxCheckpoint
         do {
-            _ = try await api.request(endpoint, as: EmptyResponse.self)
+            let response = try await api.request(endpoint, as: ChatReadResponse.self)
             guard historyGeneration == generation, session == AuthManager.shared.requestSessionGeneration else { return }
             lastReadBoundaries.merge(boundaries) { _, confirmed in confirmed }
+            guard api === APIClient.shared, asBusinessUserId == nil, let count = response.unreadCount,
+                  case let .signedIn(user) = AuthManager.shared.state, user.id == currentUserId else { return }
+            let kind: UnifiedConversation.Kind
+            let id: String
+            switch mode {
+            case let .person(otherUserId): (kind, id) = (.conversation, otherUserId)
+            case let .room(roomId): (kind, id) = (.room, roomId)
+            case .ai: return
+            }
+            await ChatLocalStore.shared.saveInboxRead(
+                count: count,
+                kind: kind,
+                id: id,
+                scope: ChatLocalStore.scope(server: api.apiBaseURL.absoluteString, account: currentUserId),
+                checkpoint: checkpoint
+            )
         } catch {
             logger.warning("markRead failed: \(error)")
         }

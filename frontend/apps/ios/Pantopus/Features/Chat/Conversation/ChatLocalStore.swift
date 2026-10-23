@@ -29,6 +29,8 @@ final class ChatLocalStore: @unchecked Sendable {
     var draftReservations: [String: UUID] = [:]
     var consumedDraftIds: Set<String> = []
     private var sessionGeneration = 0
+    private var inboxGeneration = 0
+    private var inboxReadConfirmedAt: Date?
     // The following preparation state is used only on `queue`.
     private var preparedGeneration: Int?
     private var preparedScope: String?
@@ -114,7 +116,7 @@ final class ChatLocalStore: @unchecked Sendable {
     }
 
     /// Last-message previews use the same encrypted account store as history.
-    /// Keep only the most recent twenty rows for offline navigation.
+    /// Keep one bounded response and its matching pagination cursor.
     func inbox(scope: String) async -> ChatInboxMemory? {
         let started = version
         return await withCheckedContinuation { continuation in
@@ -145,13 +147,14 @@ final class ChatLocalStore: @unchecked Sendable {
         }
     }
 
-    func saveInbox(_ memory: ChatInboxMemory, scope: String, version started: Int) async {
+    func saveInbox(_ memory: ChatInboxMemory, scope: String, checkpoint: ChatInboxCheckpoint) async {
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             queue.async { [self] in
                 defer { continuation.resume() }
                 try? lock.withLock {
-                    guard generation == started else { throw CancellationError() }
-                    let key = try prepare(scope: scope, generation: started)
+                    guard generation == checkpoint.version, inboxGeneration == checkpoint.revision else { throw CancellationError() }
+                    let key = try prepare(scope: scope, generation: checkpoint.version)
+                    guard memory.confirmedAt >= (inboxReadConfirmedAt ?? .distantPast) else { return }
                     // Keep rows and their paging cursor as one snapshot. A truncated
                     // prefix paired with the loaded tail's cursor would skip rows.
                     // An over-budget response leaves the prior complete snapshot.
@@ -166,6 +169,7 @@ final class ChatLocalStore: @unchecked Sendable {
                         attributes: [.protectionKey: FileProtectionType.complete]
                     )
                     try combined.write(to: directory.appendingPathComponent("inbox.sealed"), options: [.atomic, .completeFileProtection])
+                    inboxGeneration += 1
                     trimHistory()
                 }
             }
@@ -188,6 +192,8 @@ final class ChatLocalStore: @unchecked Sendable {
         lock.withLock {
             generation += 1
             sessionGeneration += 1
+            inboxGeneration += 1
+            inboxReadConfirmedAt = nil
             draftReservations.removeAll()
             consumedDraftIds.removeAll()
             try? secure.delete("encryption-key")
@@ -240,6 +246,7 @@ final class ChatLocalStore: @unchecked Sendable {
     /// `lock` is held and this runs only on the serial storage queue.
     func prepare(scope: String, generation: Int) throws -> SymmetricKey {
         if preparedGeneration == generation, preparedScope == scope, let encryptionKey { return encryptionKey }
+        if preparedScope != scope { inboxReadConfirmedAt = nil }
         let marker = root.appendingPathComponent("scope")
         if let previous = try? String(contentsOf: marker, encoding: .utf8), previous != scope {
             try FileManager.default.removeItem(at: root)
@@ -291,6 +298,75 @@ final class ChatLocalStore: @unchecked Sendable {
             try? FileManager.default.removeItem(at: file.url)
             bytes -= file.size
             if file.url.lastPathComponent != "inbox.sealed" { count -= 1 }
+        }
+    }
+}
+
+struct ChatInboxCheckpoint {
+    let version: Int
+    let revision: Int
+}
+
+extension ChatLocalStore {
+    var inboxCheckpoint: ChatInboxCheckpoint {
+        lock.withLock { ChatInboxCheckpoint(version: generation, revision: inboxGeneration) }
+    }
+
+    /// A new message can arrive after the server accepts a read but before its
+    /// response reaches us. Generic read invalidations must not bump this guard.
+    func invalidateInboxReadCheckpoint() {
+        lock.withLock { inboxGeneration += 1 }
+    }
+
+    func saveInboxRead(
+        count: Int,
+        kind: UnifiedConversation.Kind,
+        id: String,
+        scope: String,
+        checkpoint: ChatInboxCheckpoint
+    ) async {
+        let confirmedAt = Date()
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            queue.async { [self] in
+                defer { continuation.resume() }
+                try? lock.withLock {
+                    guard count >= 0, generation == checkpoint.version, inboxGeneration == checkpoint.revision else { return }
+                    let key = try prepare(scope: scope, generation: checkpoint.version)
+                    let url = root.appendingPathComponent("history/inbox.sealed")
+                    let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+                    guard (attributes[.size] as? Int ?? 0) <= Self.historyLimit else { return }
+                    let bytes = try AES.GCM.open(
+                        AES.GCM.SealedBox(combined: Data(contentsOf: url)),
+                        using: key,
+                        authenticating: Data("\(scope)|inbox".utf8)
+                    )
+                    let saved = try JSONDecoder().decode(SavedInbox.self, from: bytes)
+                    guard saved.schema == 1, Date().timeIntervalSince(saved.memory.confirmedAt) <= Self.historyLifetime,
+                          saved.memory.response.conversations.contains(where: { $0.kind == kind && $0.id == id }) else { return }
+                    let old = saved.memory.response
+                    let rows = old.conversations.map { $0.kind == kind && $0.id == id ? $0.withUnreadCount(count) : $0 }
+                    let response = UnifiedConversationsResponse(
+                        conversations: rows,
+                        total: old.total,
+                        totalUnread: old.totalUnread,
+                        totalUnmutedUnread: old.totalUnmutedUnread,
+                        hasMore: old.hasMore,
+                        nextCursor: old.nextCursor
+                    )
+                    // Scope-only unread cannot safely change global or mixed-mute
+                    // totals. Preserve them and the snapshot's original lifetime.
+                    let memory = ChatInboxMemory(response: response, stats: saved.memory.stats, confirmedAt: saved.memory.confirmedAt)
+                    let encoded = try JSONEncoder().encode(SavedInbox(schema: 1, memory: memory))
+                    guard encoded.count <= Self.historyLimit else { return }
+                    let sealed = try AES.GCM.seal(encoded, using: key, authenticating: Data("\(scope)|inbox".utf8))
+                    guard let combined = sealed.combined else { return }
+                    try combined.write(to: url, options: [.atomic, .completeFileProtection])
+                    inboxGeneration += 1
+                    // A later fallback of an older ScreenStore head must not
+                    // overwrite this read when canonical revalidation failed.
+                    inboxReadConfirmedAt = confirmedAt
+                }
+            }
         }
     }
 }
