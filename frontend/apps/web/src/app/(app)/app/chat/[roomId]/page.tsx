@@ -11,6 +11,7 @@ export default function ChatRoomPage() {
   const roomId = String(params.roomId || '');
   const asBusinessUserId = searchParams.get('asBusinessUserId') || undefined;
   const returnTo = searchParams.get('returnTo') || '/app/chat';
+  const messageId = searchParams.get('message') || undefined;
 
   useEffect(() => {
     if (!roomId) router.replace('/app/chat');
@@ -23,6 +24,8 @@ export default function ChatRoomPage() {
       roomId={roomId}
       asBusinessUserId={asBusinessUserId}
       returnTo={returnTo}
+      initialMessageId={messageId}
+      key={messageId || 'latest'}
     />
   );
 }

@@ -16,6 +16,8 @@ interface ChatMessageListProps {
   loadingOlder: boolean;
   onLoadOlder: () => void;
   onVisibleMessage?: (messageId: string) => void;
+  anchorMessageId?: string | null;
+  onReturnToLatest?: () => void;
   /** Check if a message is from the current user */
   isOwnMessage: (msg: ChatMessage) => boolean;
   /** Optional extra items to render before the main messages (e.g. historical messages) */
@@ -55,6 +57,8 @@ export default function ChatMessageList({
   loadingOlder,
   onLoadOlder,
   onVisibleMessage,
+  anchorMessageId,
+  onReturnToLatest,
   isOwnMessage,
   headerContent,
   renderTopicDivider,
@@ -77,6 +81,7 @@ export default function ChatMessageList({
   const [newBelow, setNewBelow] = useState(false);
   const prependAnchorRef = useRef<{ id: string; top: number } | null>(null);
   const anchorFrameRef = useRef<number | null>(null);
+  const focusedAnchorRef = useRef<string | null>(null);
   // A reply quotes its original only when that is loaded: one answering a
   // message older than the loaded pages shows no quote.
   const messagesById = useMemo(() => new Map(messages.map((m) => [String(m.id), m])), [messages]);
@@ -136,7 +141,21 @@ export default function ChatMessageList({
     const before = laidOutRef.current;
     const firstId = messages[0]?.id;
     const lastId = messages[messages.length - 1]?.id;
-    if (el && messages.length > 0) {
+    if (el && anchorMessageId && focusedAnchorRef.current !== anchorMessageId) {
+      const index = messages.findIndex((message) => String(message.id) === anchorMessageId);
+      if (index >= 0) {
+        focusedAnchorRef.current = anchorMessageId;
+        followingRef.current = false;
+        virtualizer.scrollToIndex(index, { align: 'center' });
+        let frames = 0;
+        const settle = () => {
+          virtualizer.scrollToIndex(index, { align: 'center' });
+          if (++frames < 4) anchorFrameRef.current = requestAnimationFrame(settle);
+          else anchorFrameRef.current = null;
+        };
+        anchorFrameRef.current = requestAnimationFrame(settle);
+      }
+    } else if (el && messages.length > 0) {
       const sameConversation = messages.some((m) => m.id === before.lastId || m.id === before.firstId);
       if (!sameConversation) {
         // First page, or another conversation: open at the newest message.
@@ -173,7 +192,7 @@ export default function ChatMessageList({
       }
     }
     laidOutRef.current = { firstId, lastId, count: messages.length, height: el?.scrollHeight ?? 0 };
-  }, [messages, isOwnMessage, scrollToNewest, virtualizer]);
+  }, [messages, isOwnMessage, scrollToNewest, virtualizer, anchorMessageId]);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -234,6 +253,7 @@ export default function ChatMessageList({
       style={{ overflowAnchor: 'none' }}
     >
       <div ref={contentRef} className="max-w-3xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        {onReturnToLatest && <div className="sticky top-0 z-10 flex justify-center mb-3"><button onClick={onReturnToLatest} className="rounded-full border border-app bg-surface px-3 py-1.5 text-xs text-primary-700 shadow-sm">Back to latest messages ↓</button></div>}
         {error && (
           <div className="mb-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
             {error}
@@ -281,7 +301,7 @@ export default function ChatMessageList({
                 const original = msg.reply_to_id ? messagesById.get(String(msg.reply_to_id)) : undefined;
                 const reply = original ? replyQuote(original, isOwnMessage(original)) : undefined;
                 return (
-                  <div key={row.key} data-index={row.index} ref={virtualizer.measureElement}
+                  <div key={row.key} data-index={row.index} ref={virtualizer.measureElement} className={String(msg.id) === anchorMessageId ? 'rounded-lg bg-primary-50 ring-1 ring-primary-200' : undefined}
                     style={{ position: 'absolute', top: 0, left: 0, width: '100%', paddingBottom: 4,
                       transform: `translateY(${row.start - scrollMargin}px)` }}>
                     {startsDate && <ChatDateSeparator label={formatDateLabel(dateKey)} />}

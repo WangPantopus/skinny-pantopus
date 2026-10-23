@@ -10,6 +10,8 @@ import { getInitials } from '@pantopus/ui-utils';
 import { useChatMessages, getDateKey, formatDateLabel, extractAttachments, shareFailureMessage, chatPersonAvatar, chatPersonHandle, chatPersonHref, chatPersonName } from '../../hooks/useChatMessages';
 import { useSocketEvent } from '../../hooks/useSocket';
 import ChatMessageList from './ChatMessageList';
+import ChatSearch from './ChatSearch';
+import ChatNotificationPreference from './ChatNotificationPreference';
 import ErrorState from '@/components/ui/ErrorState';
 import ChatInput from './ChatInput';
 import GigPickerModal from './GigPickerModal';
@@ -31,10 +33,12 @@ export default function ChatRoomView({
   roomId,
   asBusinessUserId,
   returnTo = '/app/chat',
+  initialMessageId,
 }: {
   roomId: string;
   asBusinessUserId?: string;
   returnTo?: string;
+  initialMessageId?: string;
 }) {
   const router = useRouter();
 
@@ -51,7 +55,7 @@ export default function ChatRoomView({
   const [lightboxImage, setLightboxImage] = useState<{ url: string; title?: string } | null>(null);
 
   // ── Shared chat hook ──────────────────────────────────
-  const chat = useChatMessages({ roomId, asBusinessUserId, currentUserId });
+  const chat = useChatMessages({ roomId, asBusinessUserId, currentUserId, initialMessageId });
 
   // ── Load current user ─────────────────────────────────
   useEffect(() => {
@@ -190,6 +194,7 @@ export default function ChatRoomView({
       }
       try {
         await chat.sendMessage(text, files);
+        if (initialMessageId) router.replace(`/app/chat/${roomId}${asBusinessUserId ? `?asBusinessUserId=${encodeURIComponent(asBusinessUserId)}` : ''}`);
         if (preBidStatus?.is_pre_bid) await loadPreBidStatus();
       } catch (e: unknown) {
         const err = e as { code?: string; message?: string };
@@ -201,7 +206,7 @@ export default function ChatRoomView({
         throw e;
       }
     },
-    [chat, preBidStatus, loadPreBidStatus],
+    [chat, preBidStatus, loadPreBidStatus, initialMessageId, router, roomId, asBusinessUserId],
   );
 
   // ── Attachment action handlers ───────────────────────────
@@ -432,6 +437,8 @@ export default function ChatRoomView({
                 )}
               </div>
             </div>
+            <ChatSearch target={{ roomId, asBusinessUserId, currentUserId }} />
+            <ChatNotificationPreference target={{ roomId, asBusinessUserId, currentUserId }} />
             <button onClick={() => chat.refresh()} className="text-sm font-semibold text-primary-700 hover:text-primary-800 p-1" aria-label="Refresh messages">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -461,6 +468,8 @@ export default function ChatRoomView({
           loadingOlder={chat.loadingOlder}
           onLoadOlder={chat.loadOlder}
           onVisibleMessage={chat.onVisibleMessage}
+          anchorMessageId={chat.contextAnchorId}
+          onReturnToLatest={initialMessageId ? () => router.replace(`/app/chat/${roomId}${asBusinessUserId ? `?asBusinessUserId=${encodeURIComponent(asBusinessUserId)}` : ''}`) : undefined}
           isOwnMessage={isOwnMessage}
           headerContent={historicalHeader}
           onImageClick={handleImageClick}

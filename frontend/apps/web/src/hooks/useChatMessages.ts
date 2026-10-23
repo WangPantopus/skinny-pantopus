@@ -200,6 +200,8 @@ export interface UseChatMessagesOptions {
   otherUserId?: string;
   /** Topic filter for person-based mode */
   topicId?: string | null;
+  /** Open an authorized search match with a bounded surrounding window. */
+  initialMessageId?: string;
   /** Business identity for room-based mode */
   asBusinessUserId?: string;
   /** Check if a sender id belongs to current user (room mode uses business identity) */
@@ -231,6 +233,7 @@ export interface UseChatMessagesReturn {
   sending: boolean;
   hasMore: boolean;
   loadingOlder: boolean;
+  contextAnchorId: string | null;
   resolvedRoomId: string | null;
   /** Populated in person-based mode after createDirectChat resolves (header / avatar). */
   directChatPeer: User | null;
@@ -275,7 +278,7 @@ function replyTargetIn(messages: ChatMessage[], replyToId: string | null | undef
 // ── Hook ────────────────────────────────────────────────────
 
 export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesReturn {
-  const { roomId, otherUserId, topicId, asBusinessUserId, currentUserId } = opts;
+  const { roomId, otherUserId, topicId, asBusinessUserId, currentUserId, initialMessageId } = opts;
   const isRoomMode = Boolean(roomId);
 
   const queryClient = useQueryClient();
@@ -302,6 +305,10 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
   const [loadFailure, setLoadFailure] = useState<ChatLoadFailure | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [sending, setSending] = useState(false);
+  const [contextAnchorId, setContextAnchorId] = useState<string | null>(null);
+  const contextWindowRef = useRef(Boolean(initialMessageId));
+  const contextReadyRef = useRef(!initialMessageId);
+  const historyViewRef = useRef(0);
   const [hasMore, setHasMore] = useState(() => initialSnapshot?.hasMore ?? false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [resolvedRoomId, setResolvedRoomId] = useState<string | null>(() => roomId || initialSnapshot?.resolvedRoomId || null);
@@ -372,7 +379,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
   const visibleThroughRef = useRef<ChatMessage | null>(null);
   const readAcknowledgedRef = useRef<string | null>(null);
   const markRead = useCallback(async () => {
-    if (!isCurrentScope() || topicId || document.visibilityState !== 'visible') return;
+    if (!isCurrentScope() || !contextReadyRef.current || topicId || document.visibilityState !== 'visible') return;
     const through = visibleThroughRef.current;
     if (!through || isUnsent(through) || readAcknowledgedRef.current === through.id) return;
     try {
@@ -384,7 +391,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
   }, [isRoomMode, roomId, otherUserId, asBusinessUserId, topicId, isCurrentScope]);
 
   const onVisibleMessage = useCallback((messageId: string) => {
-    if (!isCurrentScope() || topicId) return;
+    if (!isCurrentScope() || !contextReadyRef.current || topicId) return;
     const message = messagesRef.current.find((m) => String(m.id) === messageId);
     if (!message || isUnsent(message)) return;
     if (!visibleThroughRef.current || compareMessages(message, visibleThroughRef.current) > 0) visibleThroughRef.current = message;
@@ -414,15 +421,28 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
   }, []);
 
   const refresh = useCallback((): Promise<void> => {
-    if (!isCurrentScope()) return Promise.resolve();
+    if (!isCurrentScope() || !currentUserId) return Promise.resolve();
     if (refreshInFlightRef.current?.scope === scopeGeneration) return refreshInFlightRef.current.promise;
+    const historyView = historyViewRef.current;
+    const current = () => isCurrentScope() && historyViewRef.current === historyView;
     const promise = (async () => {
       const fullRefresh = async () => {
+        if (contextWindowRef.current && initialMessageId) {
+          const page = await api.chat.getMessageContext({ roomId, otherUserId }, initialMessageId, { asBusinessUserId });
+          if (!current()) return;
+          setMessages((previous) => mergeMessages(previous.filter(isUnsent), page.messages.filter(survivesDeletion)));
+          visibleThroughRef.current = null;
+          readAcknowledgedRef.current = null;
+          contextReadyRef.current = true;
+          setContextAnchorId(page.anchorMessageId);
+          applyPage(page);
+          return;
+        }
         const startedVersion = changeVersionRef.current;
         const loaded = messagesRef.current.filter((m) => !isUnsent(m));
         const oldest = loaded[0];
         let page = await fetchMessages();
-        if (!isCurrentScope()) return;
+        if (!current()) return;
         // Only the first page establishes an anchor. Its revision was captured
         // before the history query; older pages must never advance that anchor.
         const firstPageCursors = page.syncCursors;
@@ -433,7 +453,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
           if (seenCursors.has(page.nextCursor)) throw new Error('Message history did not advance. Try again.');
           seenCursors.add(page.nextCursor);
           page = await fetchMessages({ before: page.nextCursor });
-          if (!isCurrentScope()) return;
+          if (!current()) return;
           refreshed = mergeMessages(page.messages, refreshed);
         }
         const changedAfterStart = (id: string) => (liveChangesRef.current.get(String(id)) || 0) > startedVersion;
@@ -447,7 +467,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
         setSyncGeneration((value) => value + 1);
         applyPage(page);
       };
-      if (!syncCursorsRef.current) return fullRefresh();
+      if (!syncCursorsRef.current || (contextWindowRef.current && !contextReadyRef.current)) return fullRefresh();
       let cursor = syncCursorsRef.current;
       let until: api.chat.ChatSyncCursors | undefined;
       const changes: api.chat.ChatChanges['messages'] = [];
@@ -461,7 +481,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
           if (status === 400 || status === 404) return fullRefresh();
           throw error;
         }
-        if (!isCurrentScope()) return;
+        if (!current()) return;
         if (result.resetRequired) return fullRefresh();
         changes.push(...result.messages);
         receipts.push(...result.readReceipts);
@@ -481,12 +501,15 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
       setMessages((previous) => {
         const accepted = previous.filter((message) => !isUnsent(message));
         const oldest = accepted[0];
+        const newest = accepted[accepted.length - 1];
         const known = new Set(previous.map((message) => String(message.id)));
         const changedTopics = new Set(fullMessages.filter((message) => !belongsToTopic(message)).map((message) => String(message.id)));
         let merged = mergeMessages(previous.filter((message) => survivesDeletion(message)
           && !removedRooms.has(message.room_id) && !changedTopics.has(String(message.id))),
         fullMessages.filter((message) => survivesDeletion(message) && belongsToTopic(message)
-          && (!oldest || known.has(String(message.id)) || !hasMore || compareMessages(message, oldest) >= 0)));
+          && (known.has(String(message.id)) || (contextWindowRef.current
+            ? oldest && newest && compareMessages(message, oldest) >= 0 && compareMessages(message, newest) <= 0
+            : !oldest || !hasMore || compareMessages(message, oldest) >= 0))));
         if (otherUserId) for (const receipt of receipts) {
           if (receipt.userId !== otherUserId || !receipt.throughCreatedAt || !receipt.throughMessageId) continue;
           const boundary = { id: receipt.throughMessageId, created_at: receipt.throughCreatedAt } as ChatMessage;
@@ -504,7 +527,10 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
       setSyncGeneration((value) => value + 1);
     })().catch((error: unknown) => {
       const status = (error as { statusCode?: number })?.statusCode;
-      if (isCurrentScope() && (status === 403 || status === 404)) {
+      if (current() && initialMessageId && status === 404) {
+        setMessages([]);
+        setError('This message is no longer available.');
+      } else if (current() && (status === 403 || status === 404)) {
         deniedScopeRef.current = scopeGeneration;
         if (cacheKey) queryClient.removeQueries({ queryKey: cacheKey, exact: true });
         setMessages([]);
@@ -517,7 +543,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     });
     refreshInFlightRef.current = { scope: scopeGeneration, promise };
     return promise;
-  }, [scopeGeneration, fetchMessages, applyPage, isCurrentScope, cacheKey, cacheKeyId, currentUserId, queryClient, roomId, otherUserId, asBusinessUserId, isRoomMode, belongsToTopic, survivesDeletion, hasMore]);
+  }, [scopeGeneration, fetchMessages, applyPage, isCurrentScope, cacheKey, cacheKeyId, currentUserId, queryClient, roomId, otherUserId, asBusinessUserId, isRoomMode, belongsToTopic, survivesDeletion, hasMore, initialMessageId]);
 
   // ── Tab/window foreground resume ──────────────────────────
   // When the tab becomes visible again, refresh messages to catch anything
@@ -540,7 +566,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
   // ── Resolve room for person-based mode ──────────────────
 
   useEffect(() => {
-    if (!otherUserId || isRoomMode) {
+    if (!otherUserId || isRoomMode || !currentUserId) {
       setDirectChatPeer(null);
       return;
     }
@@ -576,19 +602,25 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
 
   useEffect(() => {
     if (!roomId && !otherUserId) { setLoading(false); return; }
+    if (!currentUserId) { setMessages([]); setLoading(true); return; }
     let cancelled = false;
+    contextWindowRef.current = Boolean(initialMessageId);
+    contextReadyRef.current = !initialMessageId;
+    historyViewRef.current += 1;
+    refreshInFlightRef.current = null;
+    setContextAnchorId(null);
     let kept = loadAttempt === 0 ? readSnapshot() : undefined;
     const beforeRefresh = completedRefreshRef.current;
     const showKept = (snapshot?: ConversationSnapshot) => {
       if (snapshot && deniedScopeRef.current === scopeGeneration) return;
-      const initial = mergeMessages(snapshot?.messages ?? [], messagesRef.current.filter(isUnsent));
+      const initial = mergeMessages(initialMessageId ? [] : snapshot?.messages ?? [], messagesRef.current.filter(isUnsent));
       setMessages(initial);
       messagesRef.current = initial;
       setHasMore(snapshot?.hasMore ?? false);
       nextCursorRef.current = snapshot?.nextCursor ?? null;
       syncCursorsRef.current = snapshot?.syncCursors;
       tombstonesRef.current = new Map(Object.entries(snapshot?.tombstones ?? {}));
-      setLoading(!snapshot);
+      setLoading(Boolean(initialMessageId) || !snapshot);
       if (snapshot) {
         setConversationRoomIds(snapshot.roomIds);
         setResolvedRoomId(roomId || snapshot.resolvedRoomId);
@@ -621,6 +653,12 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     })().catch((e: unknown) => {
       if (cancelled || !isCurrentScope()) return;
       const status = (e as { statusCode?: number } | null)?.statusCode;
+      if (initialMessageId && status === 404) {
+        setMessages([]); setError('This message is no longer available.'); return;
+      }
+      if (initialMessageId && status !== 403) {
+        setMessages([]); setError('Could not open this message. Check your connection and try again.'); return;
+      }
       if (!kept || status === 403 || status === 404) {
         if (cacheKey) queryClient.removeQueries({ queryKey: cacheKey, exact: true });
         if (currentUserId && (status === 403 || status === 404)) {
@@ -632,12 +670,12 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
       }
     }).finally(() => { if (!cancelled && isCurrentScope()) setLoading(false); });
     return () => { cancelled = true; };
-  }, [cacheKeyId, loadAttempt]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cacheKeyId, loadAttempt, initialMessageId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Recent accepted history is encrypted on this device; pending originals
   // are retained separately until acceptance. Never persist received media.
   useEffect(() => {
-    if (!cacheKey || loading || loadFailure || shownKeyRef.current !== cacheKeyId) return;
+    if (!cacheKey || loading || loadFailure || contextWindowRef.current || shownKeyRef.current !== cacheKeyId) return;
     const accepted = messages.filter((message) => !isUnsent(message));
     const snapshot = { messages: accepted, hasMore, nextCursor: nextCursorRef.current,
       roomIds: conversationRoomIds, resolvedRoomId, peer: directChatPeer,
@@ -745,7 +783,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
           joinedRoomsRef.current.add(activeRoomId);
           const backfill = (response.messages || []).filter((message) => belongsToTopic(message) && survivesDeletion(message)
             && (liveChangesRef.current.get(String(message.id)) || 0) <= startedVersion);
-          const unseen = backfill.filter((message) => !messagesRef.current.some((existing) => String(existing.id) === String(message.id)));
+          const unseen = contextWindowRef.current ? [] : backfill.filter((message) => !messagesRef.current.some((existing) => String(existing.id) === String(message.id)));
           unseen.forEach((message) => noteLiveChange(String(message.id)));
           setMessages((previous) => mergeMessages(previous, unseen));
         }
@@ -760,6 +798,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     const msgRoomId = msg?.room_id;
     if (!activeRoomIds.includes(String(msgRoomId))) return;
     if (!belongsToTopic(msg) || !survivesDeletion(msg) || !isCurrentScope()) return;
+    if (contextWindowRef.current && !messagesRef.current.some((message) => message.id === msg.id)) return;
     noteLiveChange(String(msg.id));
     setMessages((previous) => insertMessageSorted(previous, msg));
   }, [activeRoomIds, belongsToTopic, isCurrentScope, noteLiveChange, survivesDeletion]);
@@ -882,11 +921,12 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     if (!isCurrentScope() || olderRequestRef.current === cacheKeyId || !hasMore) return;
     const before = nextCursorRef.current;
     if (!before) return;
+    const historyView = historyViewRef.current;
     olderRequestRef.current = cacheKeyId;
     setLoadingOlder(true);
     try {
       const page = await fetchMessages({ before });
-      if (!isCurrentScope()) return;
+      if (!isCurrentScope() || historyView !== historyViewRef.current) return;
       setMessages((previous) => mergeMessages(previous, page.messages.filter(survivesDeletion)));
       applyPage(page);
     } catch {
@@ -982,6 +1022,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     sending,
     hasMore,
     loadingOlder,
+    contextAnchorId,
     resolvedRoomId,
     directChatPeer,
     directChatError,

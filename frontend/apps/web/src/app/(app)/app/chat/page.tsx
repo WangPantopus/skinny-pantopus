@@ -11,6 +11,7 @@ import { formatTimeAgo, getInitials } from '@pantopus/ui-utils';
 import { MessageCircle, Search, Home, Users, Wrench, ShoppingCart, Sparkles } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import SearchInput from '@/components/SearchInput';
+import { ChatSearchResults } from '@/components/chat/ChatSearch';
 import { useSocketEvent, useSocketConnected } from '@/hooks/useSocket';
 import { useBadges } from '@/contexts/BadgeContext';
 import { queryKeys } from '@/lib/query-keys';
@@ -403,7 +404,7 @@ export default function ChatListPage() {
             <SearchInput
               value={search}
               onChange={setSearch}
-              placeholder="Search conversations…"
+              placeholder="Search conversations or messages…"
               className="max-w-sm flex-1"
             />
             <button
@@ -417,6 +418,7 @@ export default function ChatListPage() {
       </div>
 
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pb-6">
+        {search.trim() && <div className="mb-4"><ChatSearchResults query={search} target={{ currentUserId }} /></div>}
         {error && (
           <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             {error}

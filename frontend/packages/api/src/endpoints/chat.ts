@@ -3,7 +3,7 @@
 // Real-time chat rooms and messages
 // ============================================================
 
-import { get, post, put, del } from '../client';
+import { get, post, put, patch, del } from '../client';
 import type { ApiRequestConfig } from '../client';
 import type {
   ChatRoom,
@@ -345,28 +345,56 @@ export async function getChatStats(config?: ApiRequestConfig): Promise<{
   return get<{ stats: any }>('/api/chat/stats', undefined, config);
 }
 
-/**
- * Search messages in a room
- * @deprecated Not implemented server-side. No backend route exists.
- */
-export async function searchMessages(roomId: string, query: string): Promise<{
-  messages: ChatMessage[];
-  total: number;
-}> {
-  console.warn('searchMessages: not implemented server-side');
-  return get<{ messages: ChatMessage[]; total: number }>(
-    `/api/chat/rooms/${roomId}/search`,
-    { q: query }
-  );
+export interface ChatSearchResult {
+  messages: ChatSyncMessage[];
+  roomContexts: Record<string, { conversationId: string; kind: 'conversation' | 'room'; name: string; identity?: Record<string, unknown> | null }>;
+  hasMore: boolean;
+  nextCursor: string | null;
 }
 
-/**
- * Mute/unmute a chat room
- * @deprecated Not implemented server-side. No backend route exists.
- */
-export async function muteRoom(roomId: string, muted: boolean): Promise<ApiResponse> {
-  console.warn('muteRoom: not implemented server-side');
-  return put<ApiResponse>(`/api/chat/rooms/${roomId}/mute`, { muted });
+/** Server-authorized literal search, including messages outside loaded history. */
+export function searchChatMessages(query: string, options?: {
+  roomId?: string; otherUserId?: string; asBusinessUserId?: string; before?: string; limit?: number;
+}): Promise<ChatSearchResult> {
+  const path = options?.roomId ? `/rooms/${options.roomId}` : options?.otherUserId ? `/conversations/${options.otherUserId}` : '';
+  return get<ChatSearchResult>(`/api/chat${path}/search`, {
+    q: query, limit: options?.limit ?? 50,
+    ...(options?.before ? { before: options.before } : {}),
+    ...(options?.asBusinessUserId ? { asBusinessUserId: options.asBusinessUserId } : {}),
+  });
+}
+
+export function searchMessages(roomId: string, query: string): Promise<ChatSearchResult> {
+  return searchChatMessages(query, { roomId });
+}
+
+export interface ChatMessageContext {
+  messages: ChatSyncMessage[];
+  roomIds: string[];
+  anchorMessageId: string;
+  hasMore: boolean;
+  nextCursor: string | null;
+  hasMoreAfter: boolean;
+}
+
+export function getMessageContext(target: { roomId?: string; otherUserId?: string }, messageId: string,
+  params?: { limit?: number; asBusinessUserId?: string }): Promise<ChatMessageContext> {
+  const path = target.roomId ? `rooms/${target.roomId}` : `conversations/${target.otherUserId}`;
+  return get<ChatMessageContext>(`/api/chat/${path}/messages/${messageId}/context`, { limit: 25, ...params });
+}
+
+export type ChatPreferences = { notificationsEnabled: boolean; roomIds: string[] };
+export function getChatPreferences(target: { roomId?: string; otherUserId?: string }, asBusinessUserId?: string): Promise<ChatPreferences> {
+  const path = target.roomId ? `rooms/${target.roomId}` : `conversations/${target.otherUserId}`;
+  return get<ChatPreferences>(`/api/chat/${path}/preferences`, asBusinessUserId ? { asBusinessUserId } : undefined);
+}
+export function setChatPreferences(target: { roomId?: string; otherUserId?: string }, notificationsEnabled: boolean,
+  asBusinessUserId?: string): Promise<ChatPreferences> {
+  const path = target.roomId ? `rooms/${target.roomId}` : `conversations/${target.otherUserId}`;
+  return patch<ChatPreferences>(`/api/chat/${path}/preferences`, { notificationsEnabled, ...(asBusinessUserId ? { asBusinessUserId } : {}) });
+}
+export function muteRoom(roomId: string, muted: boolean): Promise<ChatPreferences> {
+  return setChatPreferences({ roomId }, !muted);
 }
 
 /**

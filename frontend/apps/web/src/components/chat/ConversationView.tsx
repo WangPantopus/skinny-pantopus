@@ -11,6 +11,8 @@ import { getInitials } from '@pantopus/ui-utils';
 import type { ConversationTopic } from '@pantopus/types';
 import { useChatMessages, shareFailureMessage, CONVERSATION_NOT_READY, chatPersonAvatar, chatPersonHandle, chatPersonHref, chatPersonName } from '../../hooks/useChatMessages';
 import ChatMessageList from './ChatMessageList';
+import ChatSearch from './ChatSearch';
+import ChatNotificationPreference from './ChatNotificationPreference';
 import ChatInput from './ChatInput';
 import GigPickerModal from './GigPickerModal';
 import ListingPickerModal from './ListingPickerModal';
@@ -34,10 +36,12 @@ export default function ConversationView({
   otherUserId,
   initialTopicId,
   returnTo = '/app/chat',
+  initialMessageId,
 }: {
   otherUserId: string;
   initialTopicId?: string;
   returnTo?: string;
+  initialMessageId?: string;
 }) {
   const router = useRouter();
 
@@ -66,7 +70,7 @@ export default function ConversationView({
   const [listingOwnerMap, setListingOwnerMap] = useState<Record<string, string>>({});
 
   // ── Shared chat hook ──────────────────────────────────
-  const chat = useChatMessages({ otherUserId, topicId: selectedTopicId, currentUserId });
+  const chat = useChatMessages({ otherUserId, topicId: selectedTopicId, currentUserId, initialMessageId });
 
   // Safety actions belong to the account and conversation that opened them.
   const safetyScope = useRef(0);
@@ -218,9 +222,10 @@ export default function ConversationView({
   const handleSend = useCallback(
     async (text: string, files?: File[]) => {
       await chat.sendMessage(text, files);
+      if (initialMessageId) router.replace(`/app/chat/conversation/${otherUserId}`);
       fetchTopics();
     },
-    [chat, fetchTopics],
+    [chat, fetchTopics, initialMessageId, router, otherUserId],
   );
 
   // ── Attachment action handlers ───────────────────────────
@@ -380,6 +385,8 @@ export default function ConversationView({
                 )}
               </div>
             </div>
+            <ChatSearch target={{ otherUserId, currentUserId }} />
+            <ChatNotificationPreference target={{ otherUserId, currentUserId }} />
             <button
               onClick={() => setShowDrawer(!showDrawer)}
               className="text-app-muted hover:text-app-text-strong p-1"
@@ -438,6 +445,8 @@ export default function ConversationView({
           loadingOlder={chat.loadingOlder}
           onLoadOlder={chat.loadOlder}
           onVisibleMessage={chat.onVisibleMessage}
+          anchorMessageId={chat.contextAnchorId}
+          onReturnToLatest={initialMessageId ? () => router.replace(`/app/chat/conversation/${otherUserId}`) : undefined}
           isOwnMessage={isOwnMessage}
           renderTopicDivider={renderTopicDivider}
           onImageClick={handleImageClick}
