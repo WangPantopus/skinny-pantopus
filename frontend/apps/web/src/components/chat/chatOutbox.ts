@@ -41,8 +41,12 @@ export function directReplyRoomStatus(room: ChatRoomWithDetails, roomId: string,
   return 'ready';
 }
 
-export function chatReplyRoomHref(roomId: string, asBusinessUserId?: string): string {
-  return `/app/chat/${encodeURIComponent(roomId)}${asBusinessUserId ? `?asBusinessUserId=${encodeURIComponent(asBusinessUserId)}` : ''}`;
+export function chatReplyRoomHref(roomId: string, asBusinessUserId?: string, messageId?: string): string {
+  const params = new URLSearchParams();
+  if (asBusinessUserId) params.set('asBusinessUserId', asBusinessUserId);
+  if (messageId) params.set('message', messageId);
+  const query = params.toString();
+  return `/app/chat/${encodeURIComponent(roomId)}${query ? `?${query}` : ''}`;
 }
 
 export const REPLY_AUDIENCE_REFUSAL = 'This reply belongs to a different conversation. Open the original conversation to review its participants and reply there.';
@@ -181,7 +185,9 @@ export async function retryChatSend(id: string): Promise<void> {
   await withOutboxLock(saved, async () => {
     await readPending(saved);
     const message = pending.find((entry) => entry.clientMessageId === id);
-    if (!message || !current(saved) || message.state === 'refused') return;
+    // Only an explicit person-reply retry can revisit an audience refusal.
+    // The worker still checks the captured room and identities before sending.
+    if (!message || !current(saved) || message.state === 'refused' && !(message.replyToId && message.otherUserId)) return;
     await save(saved, { ...message, state: 'queued', nextAttemptAt: 0, attempts: 0, error: undefined });
     await readPending(saved);
     schedule();
@@ -290,5 +296,6 @@ export function pendingChatMessage(message: PendingChatSend, actorId: string): C
     is_edited: false, is_deleted: false, _clientMessageId: message.clientMessageId,
     _optimistic: message.state === 'queued' || message.state === 'sending', _failed: message.state === 'failed' || message.state === 'refused',
     _refused: message.state === 'refused', _outbox: true, _queued: message.state === 'queued', _error: message.error,
+    _canRetryReply: Boolean(message.replyToId && message.otherUserId),
     _replyRoomHref: message.replyToId && message.otherUserId ? chatReplyRoomHref(message.roomId, message.asBusinessUserId) : undefined } as ChatMessage;
 }

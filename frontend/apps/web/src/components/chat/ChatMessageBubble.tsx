@@ -30,6 +30,7 @@ export type { ChatMessage };
 export interface ChatReplyQuote {
   senderName: string;
   text: string;
+  href?: string;
 }
 
 interface ChatMessageBubbleProps {
@@ -81,7 +82,7 @@ function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClic
   const isOptimistic = msg._optimistic;
   const isFailed = msg._failed;
   const isRefused = msg._refused;
-  const pending = msg as ChatMessage & { _queued?: boolean; _outbox?: boolean; _error?: string; _replyRoomHref?: string };
+  const pending = msg as ChatMessage & { _queued?: boolean; _outbox?: boolean; _error?: string; _replyRoomHref?: string; _canRetryReply?: boolean };
   const receipt = isMine ? ((msg as ChatMessage & { read_at?: string }).read_at ? 'Read' : 'Sent') : null;
   // Launch cut #3 (Marketplace): a shared listing card is not shown.
   if (msgType === 'listing_offer' && !launchFeatures.marketplace) return null;
@@ -189,10 +190,25 @@ function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClic
     </div>
   );
 
+  const renderReply = (insideBubble = false) => {
+    if (!reply) return null;
+    const onPrimary = insideBubble && isMine;
+    return <div className={`border-l-[3px] rounded px-2 py-1 mb-1.5 text-xs ${
+      onPrimary ? 'border-white/50 bg-white/15' : 'border-primary-500 bg-primary-500/[0.08]'
+    }`}>
+      <div className={`font-semibold ${onPrimary ? 'text-white/90' : 'text-primary-600'}`}>{reply.senderName}</div>
+      <div className={`line-clamp-2 ${onPrimary ? 'text-white/70' : 'text-app-muted'}`}>{reply.text}</div>
+      {reply.href && <Link href={reply.href} prefetch={false} className="underline">Open original message</Link>}
+    </div>;
+  };
+
   const deliveryStatus = (
     <>
       {isFailed && isRefused ? (
-        <span className="text-red-500">Not sent</span>
+        <span className="text-red-500">Not sent{' '}
+          {pending._canRetryReply && onRetry && <button type="button" className="underline hover:text-red-600 cursor-pointer"
+            onClick={() => onRetry(msg.id)}>Retry</button>}
+        </span>
       ) : isFailed ? (
         <span className="text-red-500">
           Failed to send{' '}
@@ -242,6 +258,7 @@ function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClic
             {reactionTrigger}
             {actionsTrigger}
             {reactionOverlays}
+            {renderReply()}
             <ChatRichCard msgType={msgType} metadata={metadata} msgText={msgText} isMine={isMine} />
           </div>
           <div className={`text-[10px] text-app-muted mt-0.5 ${isMine ? 'text-right mr-1' : 'ml-1'}`}>
@@ -281,9 +298,9 @@ function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClic
           {actionsTrigger}
           {reactionOverlays}
           {emojiOnly ? (
-            <div className={`text-4xl leading-snug ${isOptimistic ? 'opacity-60' : ''} ${isFailed ? 'opacity-70 ring-1 ring-red-400' : ''}`}>
+            <>{renderReply()}<div className={`text-4xl leading-snug ${isOptimistic ? 'opacity-60' : ''} ${isFailed ? 'opacity-70 ring-1 ring-red-400' : ''}`}>
               {msgText}
-            </div>
+            </div></>
           ) : (
           <div
             className={`px-3.5 py-2 rounded-2xl text-sm whitespace-pre-wrap ${
@@ -292,20 +309,7 @@ function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClic
                 : 'bg-surface text-app border border-app rounded-bl-md'
             } ${isOptimistic ? 'opacity-60' : ''} ${isFailed ? 'opacity-70 ring-1 ring-red-400' : ''}`}
           >
-            {reply && (
-              <div className={`border-l-[3px] rounded px-2 py-1 mb-1.5 text-xs ${
-                isMine
-                  ? 'border-white/50 bg-white/15'
-                  : 'border-primary-500 bg-primary-500/[0.08]'
-              }`}>
-                <div className={`font-semibold ${isMine ? 'text-white/90' : 'text-primary-600'}`}>
-                  {reply.senderName}
-                </div>
-                <div className={`line-clamp-2 ${isMine ? 'text-white/70' : 'text-app-muted'}`}>
-                  {reply.text}
-                </div>
-              </div>
-            )}
+            {renderReply(true)}
             {showText && <span className="[&_a]:text-inherit"><PostLinkContent content={msgText} /></span>}
             {attachments.length > 0 && (
               <div className={`${showText ? 'mt-2' : ''} space-y-2`}>
@@ -410,6 +414,7 @@ export default React.memo(ChatMessageBubble, (prev, next) => {
     && prev.showSender === next.showSender
     && prev.reply?.senderName === next.reply?.senderName
     && prev.reply?.text === next.reply?.text
+    && prev.reply?.href === next.reply?.href
     && prev.onReact === next.onReact
     && prev.onImageClick === next.onImageClick
     && prev.onRetry === next.onRetry

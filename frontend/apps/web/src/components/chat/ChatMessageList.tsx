@@ -4,11 +4,13 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { chatPersonName, getDateKey, formatDateLabel } from '../../hooks/useChatMessages';
 import type { ChatReplyTarget } from '../../hooks/useChatMessages';
+import { chatReplyRoomHref } from './chatOutbox';
 import ChatDateSeparator from './ChatDateSeparator';
 import ChatMessageBubble from './ChatMessageBubble';
 import type { ChatMessage, ChatReplyQuote } from './ChatMessageBubble';
 
 interface ChatMessageListProps {
+  asBusinessUserId?: string;
   messages: ChatMessage[];
   loading: boolean;
   error: string | null;
@@ -28,7 +30,7 @@ interface ChatMessageListProps {
   onImageClick?: (url: string, title?: string) => void;
   /** Called when a user reacts to a message */
   onReact?: (messageId: string, emoji: string) => void;
-  /** Called when the user retries a failed (not refused) send */
+  /** Explicitly retry a failed send or a retained person reply after a refusal. */
   onRetry?: (messageId: string) => void;
   onRemovePending?: (messageId: string) => void;
   /** Called when the user picks Reply on a message; leave it out where the composer can't send. */
@@ -53,6 +55,7 @@ function replyQuote(original: ChatMessage, isMine: boolean): ChatReplyQuote {
 }
 
 export default function ChatMessageList({
+  asBusinessUserId,
   messages,
   loading,
   error,
@@ -313,7 +316,10 @@ export default function ChatMessageList({
                 const previousSenderId = previous?.user_id || previous?.sender_id || previous?.sender?.id;
                 const isMine = isOwnMessage(msg);
                 const original = msg.reply_to_id ? messagesById.get(String(msg.reply_to_id)) : undefined;
-                const reply = original ? replyQuote(original, isOwnMessage(original)) : undefined;
+                const reply: ChatReplyQuote | undefined = original ? replyQuote(original, isOwnMessage(original)) : msg.reply_to_id ? {
+                  senderName: 'Reply', text: 'Original message is not loaded.',
+                  href: msg.room_id ? chatReplyRoomHref(msg.room_id, asBusinessUserId, msg.reply_to_id) : undefined,
+                } : undefined;
                 return (
                   <div key={row.key} data-index={row.index} ref={virtualizer.measureElement} className={String(msg.id) === anchorMessageId ? 'rounded-lg bg-primary-50 ring-1 ring-primary-200' : undefined}
                     style={{ position: 'absolute', top: 0, left: 0, width: '100%', paddingBottom: 4,

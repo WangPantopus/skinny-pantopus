@@ -469,6 +469,7 @@ export default function ChatRoomView({
       {/* Messages — flex-1 min-h-0 so this area gets a bounded height and can scroll */}
       <div className="flex-1 min-h-0 flex flex-col">
         <ChatMessageList
+          asBusinessUserId={asBusinessUserId}
           messages={chat.messages}
           loading={chat.loading}
           // A conversation that takes no messages says why in place of the composer instead.
