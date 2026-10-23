@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useId, useMemo, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import Image from 'next/image';
 import * as api from '@pantopus/api';
@@ -12,29 +12,13 @@ import { MessageCircle, Search, Home, Users, Wrench, ShoppingCart, Sparkles } fr
 import PageHeader from '@/components/PageHeader';
 import SearchInput from '@/components/SearchInput';
 import { ChatSearchResults } from '@/components/chat/ChatSearch';
-import { useSocketEvent, useSocketConnected } from '@/hooks/useSocket';
+import { useSocketConnected } from '@/hooks/useSocket';
 import { queryKeys } from '@/lib/query-keys';
 import type { UnifiedConversationItem, ConversationTopic, Relationship, RelationshipUser, User } from '@pantopus/types';
 import { launchFeatures } from '@/lib/featureFlags';
 import { chosenUsername, usernameHandle } from '@pantopus/utils';
 import { fetchMe } from '@/lib/me';
-import { useConversationPages, conversationKey, compareConversationTime, type ConversationsReply } from '@/lib/conversations';
-
-type IncomingChatMessage = {
-  id?: string;
-  room_id?: string;
-  message?: string;
-  message_text?: string;
-  created_at?: string;
-  user_id?: string;
-  sender_id?: string;
-  sender?: { id?: string };
-  preview?: string;
-  unread_for?: number;
-  other_user_id?: string;
-};
-
-type ConversationsResponse = ConversationsReply;
+import { useConversationPages, conversationKey } from '@/lib/conversations';
 
 type NewChatPerson = { id: string; name: string; handle: string; avatar?: string | null };
 
@@ -115,7 +99,6 @@ function NewChatPersonRow({ person, starting, onStart }: {
 
 export default function ChatListPage() {
   const router = useRouter();
-  const queryClient = useQueryClient();
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [inboxSearch, setInboxSearch] = useState('');
@@ -132,12 +115,7 @@ export default function ChatListPage() {
   const [startingChatUserId, setStartingChatUserId] = useState<string | null>(null);
   const connected = useSocketConnected();
 
-  // Refs for batching badge syncs and throttling reload
-  const lastReloadTimeRef = useRef(0);
-  const seenMessageEvents = useRef(new Set<string>());
-
   // ── Conversations via useQuery ─────────────────────────────
-  const conversationsKey = useMemo(() => inboxSearch ? [...queryKeys.conversations(), 'search', inboxSearch] : queryKeys.conversations(), [inboxSearch]);
   const pages = useConversationPages(inboxSearch);
   const conversationsQuery = pages.query;
   const conversations = pages.conversations;
@@ -179,25 +157,6 @@ export default function ChatListPage() {
   const load = useCallback(async () => {
     await conversationsQuery.refetch({ cancelRefetch: false });
   }, [conversationsQuery]);
-
-  // ── setQueryData helpers ───────────────────────────────────
-  const updateConversations = useCallback(
-    (updater: (conversations: UnifiedConversationItem[], totalUnread: number) => {
-      conversations: UnifiedConversationItem[];
-      totalUnread: number;
-    }) => {
-      queryClient.setQueryData<ConversationsResponse>(conversationsKey, (old) => {
-        if (!old) return old;
-        const next = updater(old.conversations || [], Number(old.totalUnread || 0));
-        return {
-          ...old,
-          conversations: next.conversations,
-          totalUnread: next.totalUnread,
-        };
-      });
-    },
-    [queryClient, conversationsKey],
-  );
 
   useEffect(() => {
     let cancelled = false;
@@ -255,62 +214,6 @@ export default function ChatListPage() {
       clearTimeout(timer);
     };
   }, [newChatOpen, newChatQuery]);
-
-  const handleIncomingListMessage = useCallback((msg: IncomingChatMessage) => {
-    if (!currentUserId || !msg?.room_id || !msg.id || seenMessageEvents.current.has(String(msg.id))) return;
-    seenMessageEvents.current.add(String(msg.id));
-    if (seenMessageEvents.current.size > 1000) seenMessageEvents.current.delete(seenMessageEvents.current.values().next().value!);
-    const roomId = String(msg.room_id);
-    const preview = msg.preview || msg.message || msg.message_text || '';
-    const timestamp = msg.created_at || new Date().toISOString();
-    const senderId = String(msg.user_id || msg.sender_id || msg?.sender?.id || '');
-    const isOwn = !!currentUserId && senderId === String(currentUserId);
-    let shouldReload = false;
-
-    // Reorder and bump the conversation in the cache via setQueryData.
-    // The O(n) findIndex + splice + unshift is preserved — just moved here.
-    updateConversations((prev, prevTotalUnread) => {
-      const idx = prev.findIndex(conv =>
-        conv._type === 'room'
-          ? String(conv.id) === roomId
-          : String(conv.other_participant_id) === msg.other_user_id || (conv.room_ids || []).map(String).includes(roomId)
-      );
-
-      if (idx === -1) {
-        shouldReload = true;
-        return { conversations: prev, totalUnread: prevTotalUnread };
-      }
-
-      const updated = [...prev];
-      const conv = { ...updated[idx] };
-      if (!conv.last_message_at || compareConversationTime(timestamp, conv.last_message_at) >= 0) {
-        conv.last_message_preview = String(preview);
-        conv.last_message_at = timestamp;
-      }
-      const oldUnread = Number(conv.total_unread) || 0;
-      conv.total_unread = typeof msg.unread_for === 'number' ? msg.unread_for : oldUnread + (isOwn ? 0 : 1);
-      if (conv._type !== 'room') conv.room_ids = [...new Set([...(conv.room_ids || []), roomId])];
-
-      updated[idx] = conv as UnifiedConversationItem;
-      updated.sort((a, b) => compareConversationTime(b.last_message_at, a.last_message_at));
-      return {
-        conversations: updated,
-        totalUnread: Math.max(0, prevTotalUnread + conv.total_unread - oldUnread),
-      };
-    });
-    // Throttle full reload to at most once per 10 seconds
-    if (shouldReload) {
-      const now = Date.now();
-      if (now - lastReloadTimeRef.current >= 10000) {
-        lastReloadTimeRef.current = now;
-        void load();
-      }
-    }
-  }, [currentUserId, load, updateConversations]);
-
-  // ── Real-time: update conversation list when a new message arrives ──
-  useSocketEvent('message:new', handleIncomingListMessage);
-  useSocketEvent('newMessage', handleIncomingListMessage);
 
   const getLastMessagePreview = (conv: UnifiedConversationItem) => {
     const raw = conv?.last_message_preview ?? '';

@@ -1,15 +1,12 @@
 'use client';
 
 import { useCallback, useRef } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import type { UnifiedConversationItem, ConversationTopic } from '@pantopus/types';
+import type { ConversationTopic } from '@pantopus/types';
 import { getInitials } from '@pantopus/ui-utils';
-import { useSocketEvent } from '../../hooks/useSocket';
 import { launchFeatures } from '@/lib/featureFlags';
 import { chosenUsername } from '@pantopus/utils';
-import { conversationsQuery, conversationKey, compareConversationTime, useConversationPages, type ConversationsReply } from '@/lib/conversations';
-import { useMe } from '@/lib/me';
+import { conversationKey, useConversationPages } from '@/lib/conversations';
 
 interface MiniConversationListProps {
   onSelectConversation: (chat: {
@@ -38,68 +35,15 @@ function timeAgo(dateStr: string | null | undefined): string {
 export default function MiniConversationList({ onSelectConversation }: MiniConversationListProps) {
   // The same Messages list the Messages page shows (lib/conversations.ts):
   // opening the widget again shows it at once and refreshes quietly.
-  const queryClient = useQueryClient();
   const pages = useConversationPages();
   const listQuery = pages.query;
   const conversations = pages.conversations;
   const loading = listQuery.isPending;
   const error = listQuery.isError && !listQuery.data ? 'Failed to load conversations' : null;
   const fetchConversations = useCallback(() => { void listQuery.refetch(); }, [listQuery]);
-  const myId = useMe().data?.id;
-  const seenEvents = useRef(new Set<string>());
   const scrollRef = useRef<HTMLDivElement>(null);
   const virtualizer = useVirtualizer({ count: conversations.length, getScrollElement: () => scrollRef.current,
     getItemKey: (index) => conversationKey(conversations[index]), estimateSize: () => 80, overscan: 5 });
-
-  // Real-time: when a new message arrives, update preview and bump to top.
-  // (The widget is never open on /app/chat, whose page applies the same update.)
-  useSocketEvent('message:new', useCallback((msg: Record<string, any>) => {
-    if (!myId || !msg?.room_id || !msg.id || seenEvents.current.has(String(msg.id))) return;
-    seenEvents.current.add(String(msg.id));
-    if (seenEvents.current.size > 1000) seenEvents.current.delete(seenEvents.current.values().next().value!);
-    const roomId = String(msg.room_id);
-    const msgText = (msg.preview as string) || (msg.message_text as string) || (msg.message as string) || '';
-    const createdAt = (msg.created_at as string) || new Date().toISOString();
-    // Your own messages (sent from another tab or device) are never unread.
-    const senderId = String(msg.user_id || msg.sender_id || msg?.sender?.id || '');
-    const isOwn = !!myId && senderId === String(myId);
-
-    let shouldReload = false;
-    queryClient.setQueryData<ConversationsReply>(conversationsQuery().queryKey, (old) => {
-      if (!old) return old;
-      const prev = (old.conversations || []) as UnifiedConversationItem[];
-      const idx = prev.findIndex(conv =>
-        conv._type === 'room'
-          ? String(conv.id) === roomId
-          : String(conv.other_participant_id) === msg.other_user_id || (conv.room_ids || []).map(String).includes(roomId)
-      );
-
-      if (idx === -1) {
-        shouldReload = true;
-        return old;
-      }
-
-      const updated = { ...prev[idx] };
-      if (!updated.last_message_at || compareConversationTime(createdAt, updated.last_message_at) >= 0) {
-        updated.last_message_preview = msgText.substring(0, 100) || '[Attachment]';
-        updated.last_message_at = createdAt;
-      }
-      const oldUnread = Number(updated.total_unread) || 0;
-      updated.total_unread = typeof msg.unread_for === 'number' ? msg.unread_for : oldUnread + (isOwn ? 0 : 1);
-      if (updated._type !== 'room') updated.room_ids = [...new Set([...(updated.room_ids || []), roomId])];
-
-      return {
-        ...old,
-        conversations: prev.map((conversation, index) => index === idx ? updated : conversation)
-          .sort((a, b) => compareConversationTime(b.last_message_at, a.last_message_at)),
-        totalUnread: Math.max(0, Number(old.totalUnread || 0) + updated.total_unread - oldUnread),
-      };
-    });
-
-    if (shouldReload) {
-      void queryClient.invalidateQueries({ queryKey: conversationsQuery().queryKey });
-    }
-  }, [queryClient, myId]));
 
   if (loading) {
     return (

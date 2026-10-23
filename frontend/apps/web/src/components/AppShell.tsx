@@ -24,7 +24,7 @@ import { myHomesQuery } from '@/lib/myHomes';
 import { showsMyHomesCopy, useAfterRecheck } from '@/lib/householdCopy';
 import { HomePermissionsProvider, useHomePermissions } from '@/components/home/useHomePermissions';
 import { businessAccessQuery } from '@/components/business/useBusinessData';
-import { conversationsQuery } from '@/lib/conversations';
+import { conversationsQuery, useConversationEvents } from '@/lib/conversations';
 import type { PostComposerSubmitData } from '@/components/feed/PostComposer';
 import { identityCopy } from '@/lib/identityLabels';
 
@@ -244,6 +244,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   // ── You: the shared profile entry (lib/me.ts) ─────────────
   const { data: me } = useMe({ enabled: mounted && !!getAuthToken() });
   const user: User | null = me ?? null;
+  useConversationEvents(user?.id);
   useEffect(() => { if (user?.id) void startChatOutbox(user.id).catch(() => {}); }, [user?.id]);
 
   // ── Tile prefetch for home area ──────────────────────────────
