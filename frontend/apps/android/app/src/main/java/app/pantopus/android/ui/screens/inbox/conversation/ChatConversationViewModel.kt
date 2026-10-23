@@ -145,6 +145,13 @@ class ChatConversationViewModel
         private val _sendLimitNotice = MutableStateFlow<String?>(null)
         val sendLimitNotice: StateFlow<String?> = _sendLimitNotice.asStateFlow()
 
+        /**
+         * The line shown in place of the composer when the conversation takes no messages from you (the server's
+         * `sendRefusal` sentence: a direct chat with a draft or closed business), or null.
+         */
+        private val _composerClosedNote = MutableStateFlow<String?>(null)
+        val composerClosedNote: StateFlow<String?> = _composerClosedNote.asStateFlow()
+
         private val _isSelectionMode = MutableStateFlow(false)
         val isSelectionMode: StateFlow<Boolean> = _isSelectionMode.asStateFlow()
 
@@ -973,7 +980,7 @@ class ChatConversationViewModel
             metadata: Map<String, Any>,
             topicForPerson: Triple<String, String, String>? = null,
         ) {
-            if (mode is ChatThreadMode.Ai || _isSending.value) return
+            if (mode is ChatThreadMode.Ai || _isSending.value || _composerClosedNote.value != null) return
             _isSending.value = true
             viewModelScope.launch {
                 try {
@@ -986,6 +993,7 @@ class ChatConversationViewModel
                             roomId = knownRoomIdHint(),
                             messageType = messageType,
                             metadata = metadata,
+                            replyToId = _replyingTo.value?.messageId,
                         )
                     pendingByClientId[clientId] = pending
                     sendContextsByClientId[clientId] =
@@ -996,6 +1004,7 @@ class ChatConversationViewModel
                             messageType = messageType,
                             metadata = metadata,
                         )
+                    _replyingTo.value = null
                     rebuild()
                     val succeeded = performSend(clientId)
                     if (succeeded && topicForPerson != null) loadTopicsIfNeeded()
@@ -1035,6 +1044,7 @@ class ChatConversationViewModel
             roomId: String,
             messageType: String,
             metadata: Map<String, Any>,
+            replyToId: String?,
         ): ChatMessageDto =
             ChatMessageDto(
                 id = "client_$clientId",
@@ -1043,6 +1053,7 @@ class ChatConversationViewModel
                 messageText = text,
                 messageType = messageType,
                 metadata = metadata,
+                replyToId = sanitizedReplyToId(replyToId, roomId),
                 clientMessageId = clientId,
                 createdAt = Instant.now().toString(),
                 sender =
@@ -1079,7 +1090,7 @@ class ChatConversationViewModel
         fun send() {
             val trimmed = _composerText.value.trim()
             val hasQueuedFiles = _queuedAttachments.value.any { it.bytes != null }
-            if ((trimmed.isEmpty() && !hasQueuedFiles) || _isSending.value) return
+            if ((trimmed.isEmpty() && !hasQueuedFiles) || _isSending.value || _composerClosedNote.value != null) return
             // AI sends stream on their own cancellable job so the composer's
             // stop button can abort generation (A15.3) without blocking
             // [isSending] for the whole stream.
@@ -1117,6 +1128,7 @@ class ChatConversationViewModel
                             text = trimmed.ifEmpty { "Attachment" },
                             clientId = clientId,
                             roomId = knownRoomIdHint(),
+                            replyToId = _replyingTo.value?.messageId,
                         )
                     pendingByClientId[clientId] = pending
                     sendContextsByClientId[clientId] =
@@ -1125,6 +1137,8 @@ class ChatConversationViewModel
                             replyToId = _replyingTo.value?.messageId,
                             topicId = _selectedTopicId.value,
                         )
+                    // The sending bubble quotes the original now, and a retry keeps the reply.
+                    _replyingTo.value = null
                     rebuild()
                     performSend(clientId)
                 } finally {
@@ -1144,7 +1158,7 @@ class ChatConversationViewModel
             if (!pendingByClientId.containsKey(bareId)) return
             if (!sendContextsByClientId.containsKey(bareId)) return
             if (refusedClientIds.contains(bareId)) return
-            if (_isSending.value) return
+            if (_isSending.value || _composerClosedNote.value != null) return
             failedClientIds.remove(bareId)
             _isSending.value = true
             viewModelScope.launch {
@@ -1208,7 +1222,6 @@ class ChatConversationViewModel
                     sendContextsByClientId.remove(clientId)
                     failedClientIds.remove(clientId)
                     upsert(result.data.message)
-                    _replyingTo.value = null
                     _sendLimitNotice.value = null
                     if (context.messageType == null) _queuedAttachments.value = emptyList()
                     rebuild()
@@ -1588,7 +1601,7 @@ class ChatConversationViewModel
         }
 
         fun beginEdit(messageId: String) {
-            val message = messages.firstOrNull { it.id == messageId && it.userId == currentUserId } ?: return
+            val message = messages.firstOrNull { it.id == messageId && wroteMessage(it) } ?: return
             _editingMessageId.value = messageId
             _replyingTo.value = null
             _composerText.value = message.resolvedText
@@ -1599,8 +1612,19 @@ class ChatConversationViewModel
             _editingMessageId.value = null
         }
 
+        /**
+         * Edit and delete are for the person who wrote a message: their own, or one they wrote for the business they
+         * answer as here (the server names its writer only to them). A teammate's message for the same business stays
+         * theirs; the API refuses it.
+         */
+        fun canManageMessage(messageId: String): Boolean = messages.any { it.id == messageId && wroteMessage(it) }
+
+        private fun wroteMessage(message: ChatMessageDto): Boolean =
+            message.userId == currentUserId ||
+                (message.userId == messageIdentityId && message.actorUserId == currentUserId)
+
         fun delete(messageId: String) {
-            if (messages.none { it.id == messageId && it.userId == currentUserId }) return
+            if (!canManageMessage(messageId)) return
             viewModelScope.launch {
                 when (val result = repo.deleteMessage(messageId)) {
                     is NetworkResult.Success -> {
@@ -1764,9 +1788,8 @@ class ChatConversationViewModel
 
         // MARK: - Selection mode (bulk delete)
 
-        /** Only own persisted rows are selectable — optimistic `client_` rows have no server id yet. */
-        private fun isSelectable(messageId: String): Boolean =
-            messages.any { it.id == messageId && it.userId == currentUserId && !it.id.startsWith("client_") }
+        /** Only rows you wrote are selectable — optimistic `client_` rows have no server id yet. */
+        private fun isSelectable(messageId: String): Boolean = !messageId.startsWith("client_") && canManageMessage(messageId)
 
         fun enterSelectionMode(messageId: String) {
             if (!isSelectable(messageId)) return
@@ -1956,6 +1979,7 @@ class ChatConversationViewModel
                 is NetworkResult.Success -> {
                     historyRefusal = null
                     if (firstPage) historyPage = response.data
+                    _composerClosedNote.value = response.data.sendRefusal?.error
                     val keptOlder = placePage(response.data.messages, keepMessages)
                     retireConfirmedSends(response.data.messages)
                     updateActiveRooms(response.data)
@@ -2006,6 +2030,7 @@ class ChatConversationViewModel
                 } ?: return false
             historyPage = copy
             messages = copy.messages.toMutableList()
+            _composerClosedNote.value = copy.sendRefusal?.error
             hasMore = copy.hasMore ?: false
             oldestCursor = copy.nextCursor ?: paginationCursor(messages.firstOrNull())
             updateActiveRooms(copy)
@@ -2446,12 +2471,21 @@ class ChatConversationViewModel
         private fun applyUpdatedMessage(updated: ChatMessageDto) {
             val index = messages.indexOfFirst { it.id == updated.id }
             if (index >= 0) {
-                messages[index] = updated
+                messages[index] = keepingWriter(updated, messages[index])
             } else {
                 messages.add(updated)
             }
             rebuild()
         }
+
+        /**
+         * A room broadcast never names who wrote for a business (only the writer's own REST reads do), and a message's
+         * writer doesn't change, so a broadcast copy keeps the writer this row already had.
+         */
+        private fun keepingWriter(
+            incoming: ChatMessageDto,
+            existing: ChatMessageDto,
+        ): ChatMessageDto = if (incoming.actorUserId == null) incoming.copy(actorUserId = existing.actorUserId) else incoming
 
         private fun applyReactions(
             messageId: String,
@@ -2553,7 +2587,7 @@ class ChatConversationViewModel
         private fun insertIncoming(message: ChatMessageDto) {
             val index = messages.indexOfFirst { it.id == message.id }
             if (index >= 0) {
-                messages[index] = message
+                messages[index] = keepingWriter(message, messages[index])
             } else {
                 messages.add(message)
                 messages.sortBy { it.createdAt }
@@ -2985,12 +3019,14 @@ class ChatConversationViewModel
         /**
          * Optimistic local row. Its `id` keeps the `client_` prefix — the
          * projection and screen key "still sending" off that — while
-         * `clientMessageId` stays a bare UUID for the wire.
+         * `clientMessageId` stays a bare UUID for the wire. A reply quotes its
+         * original while it sends, when the send will carry that reply.
          */
         private fun optimistic(
             text: String,
             clientId: String,
             roomId: String,
+            replyToId: String?,
         ): ChatMessageDto =
             ChatMessageDto(
                 id = "client_$clientId",
@@ -2998,6 +3034,7 @@ class ChatConversationViewModel
                 userId = messageIdentityId,
                 messageText = text,
                 messageType = "text",
+                replyToId = sanitizedReplyToId(replyToId, roomId),
                 clientMessageId = clientId,
                 createdAt = Instant.now().toString(),
                 sender =

@@ -200,6 +200,7 @@ fun ChatConversationScreen(
     val queuedAttachments by viewModel.queuedAttachments.collectAsStateWithLifecycle()
     val pendingScroll by viewModel.pendingScrollTarget.collectAsStateWithLifecycle()
     val sendLimitNotice by viewModel.sendLimitNotice.collectAsStateWithLifecycle()
+    val composerClosedNote by viewModel.composerClosedNote.collectAsStateWithLifecycle()
     val isSelectionMode by viewModel.isSelectionMode.collectAsStateWithLifecycle()
     val selectedMessageIds by viewModel.selectedMessageIds.collectAsStateWithLifecycle()
     val isBlocking by viewModel.isBlocking.collectAsStateWithLifecycle()
@@ -553,8 +554,11 @@ fun ChatConversationScreen(
                     onUpgrade = { showFanUpgradePrompt = true },
                 )
             }
+            val closedNote = composerClosedNote
             if (planChat.closed) {
                 PlanChatClosedBar(planChat)
+            } else if (closedNote != null) {
+                ChatClosedLine(text = closedNote)
             } else if (isSelectionMode) {
                 SelectionDeleteBar(
                     enabled = selectedMessageIds.isNotEmpty(),
@@ -696,7 +700,7 @@ fun ChatConversationScreen(
             ) {
                 MessageActionSheet(
                     content = target,
-                    canManageMessages = (args.mode as? ChatThreadMode.Room)?.asBusinessUserId == null,
+                    canManageMessages = viewModel.canManageMessage(target.id),
                     onCopy = { actionTarget = null },
                     onReply = {
                         viewModel.beginReply(target.id)
@@ -3907,6 +3911,26 @@ private fun SelectionDeleteBar(
                 color = if (enabled) PantopusColors.appTextInverse else PantopusColors.appTextMuted,
             )
         }
+    }
+}
+
+// MARK: - Closed conversation line
+
+/**
+ * In place of the composer when the conversation takes no messages from you, in the server's words (a direct chat
+ * with a draft or closed business), as iOS shows its closed line.
+ */
+@Composable
+private fun ChatClosedLine(text: String) {
+    Column(modifier = Modifier.fillMaxWidth().background(PantopusColors.appSurface).testTag("chatClosedLine")) {
+        Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(PantopusColors.appBorder))
+        Text(
+            text = text,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s4, vertical = 14.dp),
+            fontSize = 13.sp,
+            color = PantopusColors.appTextSecondary,
+            textAlign = TextAlign.Center,
+        )
     }
 }
 
