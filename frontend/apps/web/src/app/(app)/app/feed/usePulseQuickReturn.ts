@@ -12,7 +12,6 @@ import {
   useEffect,
   useRef,
   useState,
-  type FocusEvent,
   type PointerEvent as ReactPointerEvent,
   type RefObject,
 } from 'react';
@@ -230,6 +229,18 @@ export function usePulseQuickReturn({ mode, canHide, resetKey, listScrollRef, re
     if (modeRef.current === 'map') event.preventDefault();
   }, []);
 
+  // Focus moving into the header shows it; keyboard focus (or the area search) keeps it there until focus moves on
+  // or leaves. Native listeners, as for the flick: React sent the focus and blur of the map's portalled chips and
+  // count to the map, so focus arriving there went unseen and focus leaving from there left the header stuck.
+  const onHeaderFocusIn = useCallback((event: FocusEvent) => {
+    setHideRequested(false);
+    setFocusInside(event.target instanceof Element && isKeyboardOrTextFocus(event.target));
+  }, []);
+  const onHeaderFocusOut = useCallback((event: FocusEvent) => {
+    const next = event.relatedTarget;
+    if (!(next instanceof Node) || !headerEl.current?.contains(next)) setFocusInside(false);
+  }, []);
+
   // The header's own height (offsetHeight ignores the slide), for the map's top items and the list's top.
   const observer = useRef<ResizeObserver | null>(null);
   const headerRef = useCallback((el: HTMLElement | null) => {
@@ -237,16 +248,23 @@ export function usePulseQuickReturn({ mode, canHide, resetKey, listScrollRef, re
     observer.current = null;
     headerEl.current?.removeEventListener('pointerdown', onHeaderPointerDown);
     headerEl.current?.removeEventListener('dragstart', onHeaderDragStart);
+    headerEl.current?.removeEventListener('focusin', onHeaderFocusIn);
+    headerEl.current?.removeEventListener('focusout', onHeaderFocusOut);
+    // List and map draw separate header elements: focus in the one going away (removing it sends no blur) doesn't
+    // keep the new one in view.
+    if (el !== headerEl.current) setFocusInside(false);
     headerEl.current = el;
     if (!el) return;
     el.addEventListener('pointerdown', onHeaderPointerDown);
     el.addEventListener('dragstart', onHeaderDragStart);
+    el.addEventListener('focusin', onHeaderFocusIn);
+    el.addEventListener('focusout', onHeaderFocusOut);
     setHeaderHeight(el.offsetHeight);
     if (typeof ResizeObserver !== 'undefined') {
       observer.current = new ResizeObserver(() => setHeaderHeight(el.offsetHeight));
       observer.current.observe(el);
     }
-  }, [onHeaderPointerDown, onHeaderDragStart]);
+  }, [onHeaderPointerDown, onHeaderDragStart, onHeaderFocusIn, onHeaderFocusOut]);
   useEffect(() => () => observer.current?.disconnect(), []);
 
   // List mode: the window scrolls the header's flow space, the posts and the cards above them;
@@ -333,16 +351,6 @@ export function usePulseQuickReturn({ mode, canHide, resetKey, listScrollRef, re
     );
   }, []);
 
-  // The keyboard (or a screen reader moving focus) inside the header shows it and keeps it.
-  const onFocus = useCallback((event: FocusEvent<HTMLElement>) => {
-    setHideRequested(false);
-    if (isKeyboardOrTextFocus(event.target)) setFocusInside(true);
-  }, []);
-  const onBlur = useCallback((event: FocusEvent<HTMLElement>) => {
-    const next = event.relatedTarget;
-    if (!(next instanceof Node) || !event.currentTarget.contains(next)) setFocusInside(false);
-  }, []);
-
   return {
     hidden,
     headerHeight,
@@ -350,7 +358,6 @@ export function usePulseQuickReturn({ mode, canHide, resetKey, listScrollRef, re
     show,
     mapPanStart,
     mapPan,
-    headerFocusProps: { onFocus, onBlur },
     onRevealPointerDown,
   };
 }
