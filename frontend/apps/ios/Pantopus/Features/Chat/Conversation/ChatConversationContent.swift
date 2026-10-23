@@ -394,7 +394,7 @@ public struct ChatBubbleReaction: Identifiable, Sendable, Hashable {
     public let reactedByMe: Bool
 }
 
-public struct ChatConversationTopic: Identifiable, Sendable, Hashable {
+public struct ChatConversationTopic: Identifiable, Sendable, Hashable, Codable {
     public let id: String
     public let topicType: String
     public let title: String

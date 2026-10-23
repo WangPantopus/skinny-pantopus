@@ -459,6 +459,7 @@ public final class ChatConversationViewModel {
     }
 
     public private(set) var topics: [ChatConversationTopic] = []
+    private var topicsConfirmed = false
     public private(set) var selectedTopicId: String? {
         didSet {
             if oldValue != selectedTopicId {
@@ -1251,11 +1252,12 @@ public final class ChatConversationViewModel {
     }
 
     public func selectTopic(_ topicId: String?) async {
+        rememberThread()
         isViewingSearchContext = false
         scrollToMessageId = nil
         selectedTopicId = selectedTopicId == topicId ? nil : topicId
         sendLimitNotice = nil
-        await fetch(.reload)
+        await fetch(.reload, recallOnReload: true)
     }
 
     public func returnToLatest() async {
@@ -2768,19 +2770,28 @@ public final class ChatConversationViewModel {
         case older(cursor: String)
     }
 
-    private func fetch(_ kind: FetchKind, recoverReceiptReset: Bool = true) async {
+    private func prepareHistoryReload(recall: Bool) async -> Bool {
+        setVisibleReadBoundaries([])
+        historyGeneration += 1
+        state = .loading
+        messages = []
+        oldestCursor = nil
+        hasMore = false
+        syncCursors = nil
+        hasLatestHistoryWindow = false
+        guard recall else { return true }
+        let generation = historyGeneration
+        _ = await recallThread()
+        return generation == historyGeneration && !Task.isCancelled
+    }
+
+    private func fetch(_ kind: FetchKind, recoverReceiptReset: Bool = true, recallOnReload: Bool = false) async {
         if case .ai = mode {
             if messages.isEmpty { state = .empty }
             return
         }
         if case .reload = kind {
-            setVisibleReadBoundaries([])
-            historyGeneration += 1
-            state = .loading
-            messages = []
-            oldestCursor = nil
-            hasMore = false
-            syncCursors = nil
+            guard await prepareHistoryReload(recall: recallOnReload) else { return }
         } else if historyRequestId != nil {
             return
         }
@@ -3084,6 +3095,8 @@ public final class ChatConversationViewModel {
             topics = response.topics.map {
                 ChatConversationTopic(id: $0.id, topicType: $0.topicType, title: $0.title, status: $0.status)
             }
+            topicsConfirmed = true
+            scheduleHistorySave()
         } catch {
             logger.warning("load topics failed: \(error)")
         }
@@ -3116,7 +3129,7 @@ public final class ChatConversationViewModel {
             default: break
             }
         }
-        if case .reload = kind {
+        if case .reload = kind, !hasLatestHistoryWindow {
             state = .error(message: friendlyMessage(error))
         } else {
             logger.warning("chat refetch failed: \(error)")
@@ -4229,17 +4242,20 @@ struct ChatThreadMemory: Codable, Equatable {
     let hasMore: Bool
     var confirmedAt: Date?
     var syncCursors: [String: Int64]?
+    var topics: [ChatConversationTopic]?
 }
 
 extension ChatConversationViewModel {
     /// How many of a thread's newest messages are kept for reopening it.
     static let rememberedMessages = 100
 
-    /// The newest page's request, which keys the kept thread. A thread opened
-    /// for a topic still being created, at a searched message, or the assistant
-    /// starts from the server as before.
+    /// Topic windows use their own query key within the same encrypted history
+    /// scope. Search context is never saved as a recent window.
     private var threadMemoryEndpoint: Endpoint? {
-        guard initialTopic == nil, scrollToMessageId == nil, selectedTopicId == nil else { return nil }
+        guard initialTopic == nil, scrollToMessageId == nil else { return nil }
+        if case let .person(otherUserId) = mode {
+            return ChatEndpoints.conversationMessages(otherUserId: otherUserId, before: nil, topicId: selectedTopicId)
+        }
         return latestThreadMemoryEndpoint
     }
 
@@ -4271,6 +4287,9 @@ extension ChatConversationViewModel {
         hasMore = memory.hasMore
         historyConfirmedAt = memory.confirmedAt
         syncCursors = memory.syncCursors
+        if !topicsConfirmed, let savedTopics = memory.topics {
+            topics = Array(savedTopics.prefix(100))
+        }
         activeRoomIds = Set(messages.map(\.roomId))
         rebuild()
         return true
@@ -4299,7 +4318,8 @@ extension ChatConversationViewModel {
             oldestCursor: trimmed ? Self.paginationCursor(for: kept.first) : oldestCursor,
             hasMore: trimmed || hasMore,
             confirmedAt: historyConfirmedAt,
-            syncCursors: syncCursors
+            syncCursors: syncCursors,
+            topics: Array(topics.prefix(100))
         )
         store.seed(memory, for: endpoint)
         guard api === APIClient.shared, historyConfirmedAt != nil else { return }
@@ -4324,6 +4344,8 @@ extension ChatConversationViewModel {
 
     private func discardSavedThread() {
         historyAccessRefused = true
+        topics = []
+        topicsConfirmed = false
         activeRoomIds.removeAll()
         resetRoomJoins()
         activeThreadTracker.clear(owner: ObjectIdentifier(self))
