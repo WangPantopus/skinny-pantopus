@@ -11,7 +11,8 @@ import { useChatTyping } from './useChatTyping';
 import { chosenUsername } from '@pantopus/utils';
 import { confirmStore } from '@/components/ui/confirm-store';
 import { queryKeys } from '@/lib/query-keys';
-import { activateChatStorage, deleteChatRecords, readChatRecord, writeChatRecords } from '@/components/chat/chatStorage';
+import { activateChatStorage, deleteChatRecords, readChatRecord, writeChatRecords, type ChatDraftCommit } from '@/components/chat/chatStorage';
+import type { ChatDraftConfig, ChatDraftContext } from '@/components/chat/chatDrafts';
 import { enqueueChatSend, pendingChatMessage, removeChatSend, resumeChatOutbox, retryChatSend, startChatOutbox, subscribeChatOutbox, type PendingChatSend } from '@/components/chat/chatOutbox';
 
 type ChatMessage = BaseChatMessage & { sync_version?: number; read_at?: string | null };
@@ -218,6 +219,7 @@ export type ChatLoadFailure = 'forbidden' | 'notFound' | 'unavailable';
 /** The message the next send replies to, as the composer's reply bar and the reply's quote show it. */
 export interface ChatReplyTarget {
   messageId: string;
+  roomId?: string;
   senderName: string;
   text: string;
 }
@@ -234,6 +236,7 @@ export interface UseChatMessagesReturn {
   connected: boolean;
   typingPeerCount: number;
   onTypingChange: (active: boolean) => void;
+  composerDraft: ChatDraftConfig;
   sending: boolean;
   hasMore: boolean;
   loadingOlder: boolean;
@@ -248,7 +251,7 @@ export interface UseChatMessagesReturn {
    * NOT_PUBLISHED), or null. The composer shows this line instead of a field.
    */
   sendRefusal: string | null;
-  sendMessage: (text: string, files?: File[]) => Promise<void>;
+  sendMessage: (text: string, files?: File[], draft?: ChatDraftCommit) => Promise<void>;
   sendSharedMessage: (message: Pick<PendingChatSend, 'text' | 'metadata' | 'topicRequest'> & { messageType: 'gig_offer' | 'listing_offer' }) => Promise<void>;
   /** The message the next send replies to (the composer shows "Replying to …"), or null. */
   replyingTo: ChatReplyTarget | null;
@@ -980,7 +983,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
 
   // Persist the original intent before returning control to the composer. The
   // account worker keeps sending after navigation and resumes after a reload.
-  const sendMessage = useCallback(async (text: string, files?: File[]) => {
+  const sendMessage = useCallback(async (text: string, files?: File[], draft?: ChatDraftCommit) => {
     const targetRoomId = isRoomMode ? roomId : resolvedRoomId;
     if (!text.trim() && !files?.length) return;
     if (!targetRoomId || !currentUserId) throw new Error(directChatError || "This conversation isn't ready yet. Try again in a moment.");
@@ -988,7 +991,8 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     try {
       await enqueueChatSend(currentUserId, { clientMessageId: crypto.randomUUID(), roomId: targetRoomId,
         otherUserId, text: text.trim(), asBusinessUserId, topicId: topicId || undefined,
-        replyToId: replyTargetIn(messagesRef.current, replyingTo?.messageId, targetRoomId) }, files);
+        replyToId: replyTargetIn(messagesRef.current, replyingTo?.messageId, targetRoomId)
+          || (replyingTo?.roomId === targetRoomId ? replyingTo.messageId : undefined) }, files, draft);
       if (isCurrentScope()) { setReplyingTo(null); setError(null); }
     } finally { if (isCurrentScope()) setSending(false); }
   }, [isRoomMode, roomId, resolvedRoomId, currentUserId, directChatError, otherUserId, asBusinessUserId, topicId, replyingTo, isCurrentScope]);
@@ -1007,7 +1011,15 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     }
   }, [isRoomMode, roomId, resolvedRoomId, currentUserId, directChatError, otherUserId, asBusinessUserId, topicId, isCurrentScope]);
 
-  const beginReply = useCallback((target: ChatReplyTarget) => { setEditingMessage(null); setReplyingTo(target); }, []);
+  const beginReply = useCallback((target: ChatReplyTarget) => {
+    setEditingMessage(null);
+    setReplyingTo({ ...target, roomId: messagesRef.current.find((message) => message.id === target.messageId)?.room_id });
+  }, []);
+  const restoreDraftContext = useCallback(async (context: ChatDraftContext) => {
+    if (!isCurrentScope()) return;
+    setReplyingTo(context.reply);
+    setEditingMessage(context.edit);
+  }, [isCurrentScope]);
   const cancelReply = useCallback(() => setReplyingTo(null), []);
   const retryMessage = useCallback(async (messageId: string) => {
     try { await retryChatSend(messageId); }
@@ -1031,20 +1043,23 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
   const cancelEdit = useCallback(() => setEditingMessage(null), []);
   const saveEdit = useCallback(async (text: string) => {
     const target = messagesRef.current.find((message) => message.id === editingMessage?.messageId);
-    if (!target || !canChangeMessage(target)) throw new Error('This message is no longer available to edit.');
+    const messageId = editingMessage?.messageId;
+    // An encrypted draft can refer to an older message outside the loaded
+    // window. The existing edit endpoint validates ownership on explicit Save.
+    if (!messageId || !isCurrentScope() || (target && !canChangeMessage(target))) throw new Error('This message is no longer available to edit.');
     if (editRequest.current) return;
     const value = text.trim();
     if (!value || value.length > 10000) throw new Error('Use between 1 and 10,000 characters.');
     const marker = api.authSessionMarker();
     editRequest.current = true;
     try {
-      const result = await api.chat.editMessage(target.id, value);
+      const result = await api.chat.editMessage(messageId, value);
       if (!isCurrentScope() || marker !== api.authSessionMarker()) return;
       if (survivesDeletion(result.message)) {
-        noteLiveChange(target.id);
-        setMessages((previous) => previous.map((message) => message.id === target.id ? mergeMessageRecord(message, result.message) : message));
+        noteLiveChange(messageId);
+        setMessages((previous) => previous.map((message) => message.id === messageId ? mergeMessageRecord(message, result.message) : message));
       }
-      setEditingMessage((current) => current?.messageId === target.id ? null : current);
+      setEditingMessage((current) => current?.messageId === messageId ? null : current);
       setError(null);
     } finally { editRequest.current = false; }
   }, [editingMessage, canChangeMessage, isCurrentScope, survivesDeletion, noteLiveChange]);
@@ -1140,6 +1155,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     connected,
     typingPeerCount: typing.peerCount,
     onTypingChange: typing.onTypingChange,
+    composerDraft: { actorId: currentUserId, key: cacheKeyId, ready: !loading && !loadFailure && !directChatError, restoreContext: restoreDraftContext },
     sending,
     hasMore,
     loadingOlder,

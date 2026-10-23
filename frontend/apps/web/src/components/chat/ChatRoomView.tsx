@@ -21,7 +21,7 @@ import MessageReactionBar from './MessageReactionBar';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import { launchFeatures } from '@/lib/featureFlags';
 import { fetchMe } from '@/lib/me';
-import { readCachedChatAccountId } from './chatStorage';
+import { readCachedChatAccountId, type ChatDraftCommit } from './chatStorage';
 import { queryKeys } from '@/lib/query-keys';
 
 // Launch cut #4 (Open Gigs): bidding is hidden, so the pre-bid chat limit does not point to it.
@@ -187,13 +187,13 @@ export default function ChatRoomView({
 
   // ── Send with pre-bid check ───────────────────────────
   const handleSend = useCallback(
-    async (text: string, files?: File[]) => {
+    async (text: string, files?: File[], draft?: ChatDraftCommit) => {
       if (preBidStatus?.is_pre_bid && (preBidStatus.messages_remaining || 0) <= 0) {
         chat.setError(PRE_BID_LIMIT_MESSAGE);
-        return;
+        throw new Error(PRE_BID_LIMIT_MESSAGE);
       }
       try {
-        await chat.sendMessage(text, files);
+        await chat.sendMessage(text, files, draft);
         if (initialMessageId) router.replace(`/app/chat/${roomId}${asBusinessUserId ? `?asBusinessUserId=${encodeURIComponent(asBusinessUserId)}` : ''}`);
         if (preBidStatus?.is_pre_bid) await loadPreBidStatus();
       } catch (e: unknown) {
@@ -503,6 +503,8 @@ export default function ChatRoomView({
 
       {/* Input */}
       <ChatInput
+        key={chat.composerDraft.key}
+        draft={chat.composerDraft}
         onSend={handleSend}
         sending={chat.sending}
         typingPeerCount={chat.typingPeerCount}

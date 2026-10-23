@@ -9,7 +9,7 @@ import GigPickerModal from './GigPickerModal';
 import ListingPickerModal from './ListingPickerModal';
 import type { ChatMessage } from './ChatMessageBubble';
 import { fetchMe } from '@/lib/me';
-import { readCachedChatAccountId } from './chatStorage';
+import { readCachedChatAccountId, type ChatDraftCommit } from './chatStorage';
 
 interface MiniChatViewProps {
   roomId?: string;
@@ -59,9 +59,9 @@ export default function MiniChatView({ roomId, otherUserId, name, avatar, onBack
     await chat.reactToMessage(messageId, emoji);
   }, [chat.reactToMessage]);
 
-  const handleSend = useCallback(async (text: string, files?: File[]) => {
+  const handleSend = useCallback(async (text: string, files?: File[], draft?: ChatDraftCommit) => {
     try {
-      await chat.sendMessage(text, files);
+      await chat.sendMessage(text, files, draft);
     } catch (e: unknown) {
       chat.setError(e instanceof Error ? e.message : 'Failed to send');
       throw e;
@@ -175,6 +175,8 @@ export default function MiniChatView({ roomId, otherUserId, name, avatar, onBack
 
       {/* Input */}
       <ChatInput
+        key={chat.composerDraft.key}
+        draft={chat.composerDraft}
         onSend={handleSend}
         sending={chat.sending}
         typingPeerCount={chat.typingPeerCount}

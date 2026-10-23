@@ -24,7 +24,7 @@ import { toast } from '../ui/toast-store';
 import { launchFeatures } from '@/lib/featureFlags';
 import { usernameHandle } from '@pantopus/utils';
 import { fetchMe } from '@/lib/me';
-import { readCachedChatAccountId } from './chatStorage';
+import { readCachedChatAccountId, type ChatDraftCommit } from './chatStorage';
 import { queryKeys } from '@/lib/query-keys';
 
 // ============================================================
@@ -226,8 +226,8 @@ export default function ConversationView({
 
   // ── Send and refresh topics ───────────────────────────
   const handleSend = useCallback(
-    async (text: string, files?: File[]) => {
-      await chat.sendMessage(text, files);
+    async (text: string, files?: File[], draft?: ChatDraftCommit) => {
+      await chat.sendMessage(text, files, draft);
       if (initialMessageId) router.replace(`/app/chat/conversation/${otherUserId}`);
       fetchTopics();
     },
@@ -452,6 +452,8 @@ export default function ConversationView({
 
       {/* Input */}
       <ChatInput
+        key={chat.composerDraft.key}
+        draft={chat.composerDraft}
         onSend={handleSend}
         sending={chat.sending}
         typingPeerCount={chat.typingPeerCount}

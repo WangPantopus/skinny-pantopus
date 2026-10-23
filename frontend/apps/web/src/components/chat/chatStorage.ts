@@ -5,9 +5,18 @@ const DATABASE = 'pantopus-private-chat-v1';
 const HISTORY_TTL = 7 * 24 * 60 * 60 * 1000;
 const HISTORY_BYTES = 5 * 1024 * 1024;
 const OUTBOX_BYTES = 100 * 1024 * 1024;
-const OUTBOX_FULL = 'Your pending messages are full (100 messages or 100 MB). Send or remove a pending message before adding more.';
-type Kind = 'history' | 'outbox' | 'media';
-interface Metadata { id: string; account: string; kind: Kind; key: string; at: number; bytes: number }
+const OUTBOX_FULL = 'Your pending messages and drafts are full (100 items or 100 MB). Send or remove an item before adding more.';
+type Kind = 'history' | 'outbox' | 'media' | 'draft';
+interface Metadata { id: string; account: string; kind: Kind; key: string; at: number; bytes: number; revision?: string }
+export interface ChatDraftCommit { key: string; revision: string; mediaKeys: string[] }
+export interface ChatRecordMutation {
+  expectedDraft?: { key: string; revision: string | null };
+  remove?: Array<{ kind: Kind; key: string }>;
+}
+export const consumeChatDraft = (draft?: ChatDraftCommit): ChatRecordMutation => draft ? {
+  expectedDraft: draft,
+  remove: [{ kind: 'draft', key: draft.key }, ...draft.mediaKeys.map((key) => ({ kind: 'media' as const, key }))],
+} : {};
 interface Envelope { iv: ArrayBuffer; ciphertext: ArrayBuffer }
 interface SessionBinding { account: string; sessionMarker: string; at: number }
 export interface ChatStorageScope { account: string; marker: string; generation: number }
@@ -163,24 +172,25 @@ export async function deleteChatRecords(scope: ChatStorageScope, records: Array<
 
 /** Reject over-capacity selections before loading/encrypting their bytes.
  * The write transaction repeats this check for concurrent tabs. */
-export async function assertChatOutboxCapacity(scope: ChatStorageScope, records: Array<{ kind: 'outbox' | 'media'; key: string; bytes: number }>): Promise<void> {
-  const replaced = new Set(records.map((record) => recordId(scope, record.kind, record.key)));
+export async function assertChatOutboxCapacity(scope: ChatStorageScope, records: Array<{ kind: 'outbox' | 'media' | 'draft'; key: string; bytes: number }>, mutation: ChatRecordMutation = {}): Promise<void> {
+  const replaced = new Set([...records, ...(mutation.remove ?? [])].map((record) => recordId(scope, record.kind, record.key)));
   const existing = (await metadata(await open())).filter((entry) => entry.account === scope.account
     && entry.kind !== 'history' && !replaced.has(entry.id));
   if (!isChatStorageCurrent(scope)) throw new Error('This chat session ended.');
   if (existing.reduce((sum, entry) => sum + entry.bytes, 0) + records.reduce((sum, entry) => sum + entry.bytes + 16, 0) > OUTBOX_BYTES
-    || existing.filter((entry) => entry.kind === 'outbox').length + records.filter((entry) => entry.kind === 'outbox').length > 100) {
+    || existing.filter((entry) => entry.kind === 'outbox' || entry.kind === 'draft').length + records.filter((entry) => entry.kind === 'outbox' || entry.kind === 'draft').length > 100) {
     throw new Error(OUTBOX_FULL);
   }
 }
 
 /** Metadata and original attachment bytes commit together, before a send starts. */
-export async function writeChatRecords(scope: ChatStorageScope, records: Array<{ kind: Kind; key: string; value: unknown } | { kind: 'media'; key: string; bytes: ArrayBuffer }>): Promise<void> {
+export async function writeChatRecords(scope: ChatStorageScope, records: Array<{ kind: Kind; key: string; value: unknown; revision?: string } | { kind: 'media'; key: string; bytes: ArrayBuffer }>, mutation: ChatRecordMutation = {}): Promise<void> {
   const prepared = await Promise.all(records.map(async (record) => {
     const id = recordId(scope, record.kind, record.key);
     const bytes = 'bytes' in record ? record.bytes : new TextEncoder().encode(JSON.stringify(record.value)).buffer;
     const sealed = await seal(scope, id, bytes);
-    return { meta: { id, account: scope.account, kind: record.kind, key: record.key, at: Date.now(), bytes: sealed.ciphertext.byteLength }, sealed };
+    return { meta: { id, account: scope.account, kind: record.kind, key: record.key, at: Date.now(), bytes: sealed.ciphertext.byteLength,
+      ...('revision' in record ? { revision: record.revision } : {}) }, sealed };
   }));
   const db = await open();
   await new Promise<void>((resolve, reject) => {
@@ -191,11 +201,19 @@ export async function writeChatRecords(scope: ChatStorageScope, records: Array<{
     let reason = 'Chat could not be saved. Free some device storage and try again.';
     request.onsuccess = () => {
       if (!isChatStorageCurrent(scope)) { reason = 'This chat session ended.'; transaction.abort(); return; }
-      const replaced = new Set(prepared.map((entry) => entry.meta.id));
+      if (mutation.expectedDraft) {
+        const actual = (request.result as Metadata[]).find((entry) => entry.id === recordId(scope, 'draft', mutation.expectedDraft!.key));
+        if ((actual?.revision ?? null) !== mutation.expectedDraft.revision) {
+          reason = 'Another tab changed this draft. Keep your text here and reopen the conversation to recover the saved draft.';
+          transaction.abort(); return;
+        }
+      }
+      const removed = new Set((mutation.remove ?? []).map((record) => recordId(scope, record.kind, record.key)));
+      const replaced = new Set([...prepared.map((entry) => entry.meta.id), ...removed]);
       const entries = (request.result as Metadata[]).filter((entry) => entry.id && entry.account === scope.account && !replaced.has(entry.id));
       const outgoing = [...entries, ...prepared.map((entry) => entry.meta)].filter((entry) => entry.kind !== 'history');
       if (outgoing.reduce((sum, entry) => sum + entry.bytes, 0) > OUTBOX_BYTES
-        || outgoing.filter((entry) => entry.kind === 'outbox').length > 100) {
+        || outgoing.filter((entry) => entry.kind === 'outbox' || entry.kind === 'draft').length > 100) {
         reason = OUTBOX_FULL;
         transaction.abort(); return;
       }
@@ -206,6 +224,7 @@ export async function writeChatRecords(scope: ChatStorageScope, records: Array<{
         return index >= 20 || total > HISTORY_BYTES || Date.now() - entry.at > HISTORY_TTL;
       }).map((entry) => entry.id));
       try {
+        for (const id of removed) { metas.delete(id); payloads.delete(id); }
         for (const entry of prepared) if (!evicted.has(entry.meta.id)) { metas.put(entry.meta, entry.meta.id); payloads.put(entry.sealed, entry.meta.id); }
         for (const id of evicted) { metas.delete(id); payloads.delete(id); }
       } catch { transaction.abort(); }

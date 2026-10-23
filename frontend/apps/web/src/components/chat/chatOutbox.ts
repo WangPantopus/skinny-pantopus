@@ -1,7 +1,7 @@
 import * as api from '@pantopus/api';
 import type { ChatMessage } from '@pantopus/types';
-import { activateChatStorage, assertChatOutboxCapacity, deleteChatRecords, isChatStorageCurrent, listChatRecordKeys, readChatBytes,
-  readChatRecord, suspendChatStorage, writeChatRecords, type ChatStorageScope } from './chatStorage';
+import { activateChatStorage, assertChatOutboxCapacity, consumeChatDraft, deleteChatRecords, isChatStorageCurrent, listChatRecordKeys, readChatBytes,
+  readChatRecord, suspendChatStorage, writeChatRecords, type ChatDraftCommit, type ChatStorageScope } from './chatStorage';
 
 interface PendingFile { key: string; name: string; type: string; lastModified: number }
 type UploadedFile = { id: string; mime_type?: string; original_filename?: string; file_url?: string };
@@ -119,7 +119,7 @@ export function subscribeChatOutbox(listener: Listener): () => void {
   return () => { listeners.delete(listener); };
 }
 
-export async function enqueueChatSend(actorId: string, input: Omit<PendingChatSend, 'files' | 'createdAt' | 'attempts' | 'nextAttemptAt' | 'state'>, files: File[] = []): Promise<void> {
+export async function enqueueChatSend(actorId: string, input: Omit<PendingChatSend, 'files' | 'createdAt' | 'attempts' | 'nextAttemptAt' | 'state'>, files: File[] = [], draft?: ChatDraftCommit): Promise<void> {
   await startChatOutbox(actorId);
   const saved = scope;
   if (!current(saved)) throw new Error('Sign in again before sending.');
@@ -129,13 +129,16 @@ export async function enqueueChatSend(actorId: string, input: Omit<PendingChatSe
       name: file.name, type: file.type, lastModified: file.lastModified })) };
   // Serialize disk commits so rapid sends retain the same order after a crash.
   const write = storageWrites.catch(() => {}).then(async () => {
+    const mutation = consumeChatDraft(draft);
     // File.size is available without allocating or encrypting the attachment.
     await assertChatOutboxCapacity(saved, [
       { kind: 'outbox', key: message.clientMessageId, bytes: new TextEncoder().encode(JSON.stringify(message)).byteLength },
       ...files.map((file, index) => ({ kind: 'media' as const, key: message.files[index].key, bytes: file.size })),
-    ]);
+    ], mutation);
     const media = await Promise.all(files.map(async (file, index) => ({ kind: 'media' as const, key: message.files[index].key, bytes: await file.arrayBuffer() })));
-    await writeChatRecords(saved, [{ kind: 'outbox', key: message.clientMessageId, value: message }, ...media]);
+    // Moving the draft and its attachment bytes into the queue is one commit:
+    // a reload sees either the original composer or the retained send.
+    await writeChatRecords(saved, [{ kind: 'outbox', key: message.clientMessageId, value: message }, ...media], mutation);
     if (!current(saved)) return;
     await readPending(saved);
     schedule();
