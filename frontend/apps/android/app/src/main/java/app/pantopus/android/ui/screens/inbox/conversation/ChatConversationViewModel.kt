@@ -2403,12 +2403,13 @@ class ChatConversationViewModel
                 viewModelScope.launch(Dispatchers.Default) {
                     var interval = SOCKET_FALLBACK_INITIAL_MS
                     while (socket.connectionState.value != SocketManager.ConnectionState.Connected) {
+                        // The opening history read already covers now; do not race it with an immediate duplicate.
+                        delay(interval)
                         withContext(Dispatchers.Main.immediate) {
                             if (_state.value is ChatConversationUiState.Loaded || _state.value is ChatConversationUiState.Empty) {
                                 catchUpMessages()
                             }
                         }
-                        delay(interval)
                         interval = (interval * 2).coerceAtMost(SOCKET_FALLBACK_POLL_MS)
                     }
                 }
