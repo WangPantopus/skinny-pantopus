@@ -71,6 +71,9 @@ async function deliver(job) {
     // immediately before contacting a provider. A database failure retries, never allows.
     current = await rpc('read_chat_push_delivery', { p_id: job.id, p_lease: job.lease_id });
     if (!current?.pushAllowed) return await finish(job, 'suppressed');
+    // Let foreground clients distinguish the visible topic from another topic
+    // in the same room. Use the last authorized snapshot, never retained read scope.
+    if (current.message.topic_id) payload.data.topic_id = current.message.topic_id;
     if (stopped || leaseLost) return await finish(job, 'pending');
     if (freshNotice) notificationService.emitDesktopAlert(freshNotice);
     const receipt = await pushService.sendToUserWithReceipt(job.recipient_user_id, payload, {
