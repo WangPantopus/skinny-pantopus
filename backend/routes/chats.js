@@ -114,16 +114,18 @@ function chatRateLimiter(windowMs, max, label) {
     windowMs,
     max,
     keyGenerator: (req) => req.user?.id || req.ip,
-    handler: (_req, res) => {
-      const retryAfter = Math.ceil(windowMs / 1000);
-      res.status(429).json({ error: 'Rate limit exceeded', retryAfter });
+    handler: (req, res) => {
+      const retryAfter = Math.max(1, Math.ceil(((req.rateLimit?.resetTime?.getTime() || Date.now() + windowMs) - Date.now()) / 1000));
+      res.set('Retry-After', String(retryAfter));
+      res.status(429).json({ error: 'Rate limit exceeded', code: 'CHAT_RATE_LIMITED', scope: label, retryAfter });
     },
     standardHeaders: true,
     legacyHeaders: false,
   });
 }
 
-const messageSendLimiter = chatRateLimiter(60_000, 30, 'message-send');
+const messageSendLimiter = chatRateLimiter(60_000, 120, 'message-send');
+const messageBurstLimiter = chatRateLimiter(5_000, 12, 'message-burst');
 // Idempotent get-or-create; UI may resolve the same peer from multiple effects — keep headroom.
 const directChatMax = Math.max(parseInt(process.env.CHAT_DIRECT_RATE_LIMIT_PER_MIN || '40', 10) || 40, 1);
 const directChatLimiter = chatRateLimiter(60_000, directChatMax, 'direct-chat');
@@ -185,6 +187,19 @@ const sendMessageSchema = Joi.object({
   topicId: Joi.string().uuid().optional(),
   clientMessageId: Joi.string().uuid().optional(),
 });
+
+const chatPreferencesSchema = Joi.object({
+  notificationsEnabled: Joi.boolean().strict().required(),
+  asBusinessUserId: Joi.string().uuid().optional(),
+});
+
+async function mutedBySender(recipientIds, senderUserId) {
+  if (!recipientIds.length) return new Set();
+  const { data, error } = await supabaseAdmin.from('UserNotificationPreferences')
+    .select('user_id').in('user_id', recipientIds).contains('chat_muted_user_ids', [senderUserId]);
+  if (error) throw error;
+  return new Set((data || []).map((row) => String(row.user_id)));
+}
 
 // Chat photos and files load through this API's own /api/chat/files/:id proxy, which the
 // upload returns as a relative path. iOS and Android builds before October 9 add the viewer's
@@ -573,6 +588,15 @@ async function deliverNewMessage(io, { room, message, actorUserId, senderUserId 
   }
   if (recipientUserIds.length === 0) return;
   badgeService.emitBadgeUpdateToMany(recipientUserIds);
+  const mutedRecipients = (['direct', 'gig'].includes(room.type)
+    ? mutedBySender(recipientUserIds, senderUserId) : Promise.resolve(new Set()))
+    .then((muted) => {
+      for (const row of participantRows || []) if (row.notifications_enabled === false) muted.add(String(row.user_id));
+      return muted;
+    }).catch((error) => {
+      logger.warn('chat_mute_preferences_unavailable', { requestId, code: error.code });
+      return new Set(recipientUserIds); // no push while the recipient's preference is unreadable
+    });
 
   const text = String(message.message || '');
   const type = message.type || 'text';
@@ -593,8 +617,7 @@ async function deliverNewMessage(io, { room, message, actorUserId, senderUserId 
         .eq('push_notifications', false);
       if (prefsError) return;
       const disabled = new Set((disabledRows || []).map((r) => r.user_id));
-      const muted = new Set((participantRows || []).filter((row) => row.notifications_enabled === false)
-        .map((row) => String(row.user_id)));
+      const muted = await mutedRecipients;
       const pushEnabledIds = recipientUserIds.filter((id) => !disabled.has(id) && !muted.has(id));
       if (pushEnabledIds.length === 0) return;
 
@@ -614,17 +637,16 @@ async function deliverNewMessage(io, { room, message, actorUserId, senderUserId 
     .filter((row) => row.user?.account_type === 'business' && recipientSet.has(String(row.user_id)))
     .map((row) => String(row.user_id));
   if (businessRecipientIds.length > 0) {
-    notifyBusinessStaff({
+    mutedRecipients.then((mutedBusinessIds) => notifyBusinessStaff({
       room,
       messageId: message.id,
       businessIds: businessRecipientIds,
       actorUserId,
       senderUserId,
       memberIds: participantUserIds,
-      mutedBusinessIds: new Set((participantRows || [])
-        .filter((row) => row.notifications_enabled === false).map((row) => String(row.user_id))),
+      mutedBusinessIds,
       preview,
-    }).catch((err) => {
+    })).catch((err) => {
       logger.warn('business_message_notice_failed', { requestId, roomId, error: err.message });
     });
   }
@@ -891,6 +913,8 @@ router.get('/rooms', verifyToken, async (req, res) => {
         room_id,
         unread_count,
         last_read_at,
+        notifications_enabled,
+        preferences_updated_at,
         role,
         is_active,
         room:room_id(
@@ -979,6 +1003,7 @@ router.get('/rooms', verifyToken, async (req, res) => {
         last_message_preview: lastMessagePreview,
         unread_count: p.unread_count || 0,
         last_read_at: p.last_read_at,
+        notifications_enabled: p.notifications_enabled !== false,
         role: p.role,
         other_participant_id: u?.id || otherIdentity?.id || null,
         other_participant_name: otherIdentity?.displayName || null,
@@ -1038,6 +1063,8 @@ router.get('/business/:businessUserId/rooms', verifyToken, async (req, res) => {
         room_id,
         unread_count,
         last_read_at,
+        notifications_enabled,
+        preferences_updated_at,
         role,
         room:room_id(
           id,
@@ -1129,6 +1156,7 @@ router.get('/business/:businessUserId/rooms', verifyToken, async (req, res) => {
         last_message_preview: lastMessagePreview,
         unread_count: p.unread_count || 0,
         last_read_at: p.last_read_at,
+        notifications_enabled: p.notifications_enabled !== false,
         role: p.role,
         other_participant_id: chosen?.id || otherIdentity?.id || null,
         other_participant_name: otherIdentity?.displayName || null,
@@ -1875,7 +1903,7 @@ router.get('/rooms/:roomId/messages', verifyToken, async (req, res) => {
  * POST /api/chat/messages
  * Send a message (alternative to WebSocket)
  */
-router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSchema), async (req, res) => {
+router.post('/messages', verifyToken, messageSendLimiter, messageBurstLimiter, validate(sendMessageSchema), async (req, res) => {
   try {
     const userId = req.user.id;
     const requestId = req.requestId;
@@ -2455,6 +2483,59 @@ router.post('/rooms/:roomId/read', verifyToken, async (req, res) => {
   }
 });
 
+// Mute is a server preference so another device and background push agree with
+// the existing inbox menu. Person preferences cover the pair's future task rooms.
+router.patch('/conversations/:otherUserId/preferences', verifyToken, validate(chatPreferencesSchema), async (req, res) => {
+  try {
+    const { otherUserId } = req.params;
+    if (Joi.string().uuid().validate(otherUserId).error) return res.status(400).json({ error: 'Invalid person' });
+    const { notificationsEnabled, asBusinessUserId } = req.body;
+    const targetUserId = asBusinessUserId || req.user.id;
+    if (asBusinessUserId && !await canActAsBusiness(asBusinessUserId, req.user.id)) return res.status(403).json({ error: 'Access denied' });
+    if (targetUserId === otherUserId) return res.status(400).json({ error: 'Invalid person' });
+    const [mine, theirs] = await Promise.all([
+      supabaseAdmin.from('ChatParticipant').select('room_id, room:room_id!inner(type)')
+        .eq('user_id', targetUserId).eq('is_active', true).in('room.type', ['direct', 'gig']),
+      supabaseAdmin.from('ChatParticipant').select('room_id').eq('user_id', otherUserId).eq('is_active', true),
+    ]);
+    if (mine.error || theirs.error) throw mine.error || theirs.error;
+    const ownIds = new Set((mine.data || []).map((row) => row.room_id));
+    const candidates = (theirs.data || []).map((row) => row.room_id).filter((id) => ownIds.has(id));
+    const closed = await closedGigRoomIdsByRoomId(candidates, req.user.id, [targetUserId]);
+    const roomIds = candidates.filter((id) => !closed.has(String(id)));
+    if (!roomIds.length) return res.status(404).json({ error: 'Conversation not found' });
+    const { error } = await supabaseAdmin.rpc('set_chat_notifications', {
+      p_user_id: targetUserId, p_room_ids: roomIds, p_enabled: notificationsEnabled, p_other_user_id: otherUserId,
+    });
+    if (error) throw error;
+    return res.json({ notificationsEnabled, roomIds });
+  } catch (error) {
+    logger.warn('chat_preferences_failed', { requestId: req.requestId, code: error.code });
+    return res.status(error.code === '42501' ? 403 : 500).json({ error: 'Could not save chat preferences' });
+  }
+});
+
+router.patch('/rooms/:roomId/preferences', verifyToken, validate(chatPreferencesSchema), async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    if (Joi.string().uuid().validate(roomId).error) return res.status(400).json({ error: 'Invalid room' });
+    const { notificationsEnabled, asBusinessUserId } = req.body;
+    // Explicit business authority is checked even if the caller has an old personal membership.
+    if (asBusinessUserId && !await canActAsBusiness(asBusinessUserId, req.user.id)) return res.status(403).json({ error: 'Access denied' });
+    const participant = await roomMembership(roomId, req.user.id, asBusinessUserId, { activeOnly: true });
+    if (asBusinessUserId && participant?.user_id !== asBusinessUserId) return res.status(403).json({ error: 'Access denied' });
+    if (!participant || await gigRoomClosed(roomId, req.user.id, asBusinessUserId)) return res.status(403).json({ error: 'Access denied' });
+    const { error } = await supabaseAdmin.rpc('set_chat_notifications', {
+      p_user_id: participant.user_id, p_room_ids: [roomId], p_enabled: notificationsEnabled,
+    });
+    if (error) throw error;
+    return res.json({ notificationsEnabled, roomIds: [roomId] });
+  } catch (error) {
+    logger.warn('chat_preferences_failed', { requestId: req.requestId, code: error.code });
+    return res.status(error.code === '42501' ? 403 : 500).json({ error: 'Could not save chat preferences' });
+  }
+});
+
 // ============ PARTICIPANT ROUTES ============
 
 /**
@@ -2719,6 +2800,8 @@ router.get('/unified-conversations', verifyToken, async (req, res) => {
         room_id,
         unread_count,
         last_read_at,
+        notifications_enabled,
+        preferences_updated_at,
         role,
         is_active,
         room:room_id(
@@ -2748,7 +2831,7 @@ router.get('/unified-conversations', verifyToken, async (req, res) => {
     // room, including any that end up without a counterpart).
     const mergeableRoomIds = mergeableParticipants.map(p => p.room_id);
     const previewRoomIds = [...mergeableRoomIds, ...groupHomeParticipants.map(p => p.room_id)];
-    const [{ data: otherParts }, { data: allConvMsgs }, { data: allTopics }, planByRoom] = await Promise.all([
+    const [{ data: otherParts }, { data: allConvMsgs }, { data: allTopics }, planByRoom, mutePreferences] = await Promise.all([
       mergeableRoomIds.length > 0
         ? supabaseAdmin
           .from('ChatParticipant')
@@ -2771,7 +2854,10 @@ router.get('/unified-conversations', verifyToken, async (req, res) => {
         .eq('status', 'active')
         .order('last_activity_at', { ascending: false }),
       loadPlanChatStates(groupHomeParticipants.map((p) => p.room)),
+      supabaseAdmin.from('UserNotificationPreferences').select('chat_muted_user_ids').eq('user_id', userId).maybeSingle(),
     ]);
+    if (mutePreferences.error) throw mutePreferences.error;
+    const mutedPeople = new Set(mutePreferences.data?.chat_muted_user_ids || []);
     let allOtherParticipants = otherParts || [];
     // Leftover members of an assigned task's gig room don't stand in for its counterpart.
     const hiddenMembers = await hiddenGigRoomMembers(mergeableParticipants.map((p) => p.room), allOtherParticipants);
@@ -2782,10 +2868,12 @@ router.get('/unified-conversations', verifyToken, async (req, res) => {
 
     // Step 3: Group rooms by other_participant_id
     const conversationMap = new Map();
+    const otherByRoom = new Map();
+    for (const other of allOtherParticipants) if (!otherByRoom.has(other.room_id)) otherByRoom.set(other.room_id, other);
 
     for (const p of mergeableParticipants) {
       const roomId = p.room_id;
-      const otherP = allOtherParticipants.find(op => op.room_id === roomId);
+      const otherP = otherByRoom.get(roomId);
       if (!otherP || !otherP.user) continue;
 
       const otherId = otherP.user.id;
@@ -2800,6 +2888,7 @@ router.get('/unified-conversations', verifyToken, async (req, res) => {
           other_participant_identity: otherIdentity,
           room_ids: [],
           total_unread: 0,
+          notifications_enabled: false,
           last_message_at: null,
           last_message_preview: null,
           topics: [],
@@ -2809,6 +2898,7 @@ router.get('/unified-conversations', verifyToken, async (req, res) => {
       const conv = conversationMap.get(otherId);
       conv.room_ids.push(roomId);
       conv.total_unread += (p.unread_count || 0);
+      conv.notifications_enabled ||= !mutedPeople.has(otherId) && p.notifications_enabled !== false;
     }
 
     // Step 4-5: Messages and topics, batch-fetched in step 2 (3 queries instead of 2N+M sequential)
@@ -2860,6 +2950,7 @@ router.get('/unified-conversations', verifyToken, async (req, res) => {
         home_id: p.room.home_id,
         support_train_id: p.room.support_train_id || null,
         total_unread: p.unread_count || 0,
+        notifications_enabled: p.notifications_enabled !== false,
         last_message_at: lastMessageAt || p.room.updated_at,
         last_message_preview: lastMessagePreview,
         topics: [],
@@ -2884,7 +2975,7 @@ router.get('/unified-conversations', verifyToken, async (req, res) => {
       const participantByRoom = new Map(roomList.map((p) => [String(p.room_id), p]));
       const roomChanged = (roomId) => {
         const p = participantByRoom.get(String(roomId));
-        return newer(convMsgByRoom[roomId]?.created_at) || newer(p?.last_read_at)
+        return newer(convMsgByRoom[roomId]?.created_at) || newer(p?.last_read_at) || newer(p?.preferences_updated_at)
           || newer(p?.room?.updated_at) || newer(p?.room?.created_at);
       };
       listed = conversations.filter((conv) => (conv._type === 'room'

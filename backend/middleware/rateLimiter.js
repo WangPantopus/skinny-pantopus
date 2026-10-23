@@ -4,6 +4,18 @@ const { clientIpKey } = require('../utils/clientIpKey');
 
 const isRead = (req) => req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS';
 
+// Visible-message acknowledgements are frequent during a conversation and must
+// not spend the same allowance as sending, editing, or unrelated app actions.
+function chatTrafficKind(req) {
+  const path = String(req.originalUrl || req.url || '').split('?')[0];
+  const id = '[0-9a-fA-F-]{36}';
+  if (req.method === 'POST' && new RegExp(`^/api/chat/(?:rooms|conversations)/${id}/read$`).test(path)) return 'read';
+  if ((req.method === 'POST' && (path === '/api/chat/messages'
+    || new RegExp(`^/api/chat/messages/${id}/react$`).test(path)))
+    || (['PUT', 'DELETE'].includes(req.method) && new RegExp(`^/api/chat/messages/${id}$`).test(path))) return 'message';
+  return null;
+}
+
 /**
  * Whether the request carries sign-in credentials (the app's bearer token, or the web's
  * access or refresh cookie, so a session refresh counts as signed in). Checked before
@@ -62,6 +74,8 @@ function perUserWriteLimit({ name, limit, windowMs, message }) {
 }
 
 const GLOBAL_WRITES = { name: 'writes', limit: 60, windowMs: 60 * 1000, message: 'Too many requests. Please try again shortly.' };
+const CHAT_WRITES = { name: 'chat-writes', limit: 240, windowMs: 60 * 1000, message: 'Too many chat requests. Please try again shortly.' };
+const CHAT_READS = { name: 'chat-reads', limit: 240, windowMs: 60 * 1000, message: 'Too many read updates. Please try again shortly.' };
 const PAYMENT_WRITES = { name: 'payments', limit: 10, windowMs: 60 * 1000, message: 'Too many payment requests. Please try again shortly.' };
 const CONTENT_WRITES = { name: 'content', limit: 20, windowMs: 60 * 1000, message: 'Too many submissions. Please slow down.' };
 const HOME_CREATION = { name: 'home-creation', limit: 5, windowMs: 60 * 60 * 1000, message: 'Too many home creation requests. Please try again later.' };
@@ -71,7 +85,10 @@ const HOME_CREATION = { name: 'home-creation', limit: 5, windowMs: 60 * 60 * 100
  * anonymous, 300 signed in), and 60 a minute per signed-in person in userWriteLimits.
  * Per-route limiters are stricter and still apply on their own routes.
  */
-const globalWriteLimiter = perIpWriteCap({ ...GLOBAL_WRITES, limit: 30 });
+const ordinaryIpWriteLimiter = perIpWriteCap({ ...GLOBAL_WRITES, limit: 30 });
+const chatIpWriteLimiter = perIpWriteCap({ ...CHAT_WRITES, limit: 120 });
+const globalWriteLimiter = (req, res, next) => (chatTrafficKind(req)
+  ? chatIpWriteLimiter(req, res, next) : ordinaryIpWriteLimiter(req, res, next));
 
 /**
  * Stricter limiter for sensitive financial/payment endpoints: 10 writes a minute per person
@@ -104,7 +121,9 @@ const homeCreationLimiter = perIpWriteCap({ ...HOME_CREATION, skip: (req) => !is
  * user is verified; `done` continues the request.
  */
 const USER_WRITE_LIMITS = [
-  { applies: () => true, limiter: perUserWriteLimit(GLOBAL_WRITES) },
+  { applies: (_path, req) => !chatTrafficKind(req), limiter: perUserWriteLimit(GLOBAL_WRITES) },
+  { applies: (_path, req) => chatTrafficKind(req) === 'message', limiter: perUserWriteLimit(CHAT_WRITES) },
+  { applies: (_path, req) => chatTrafficKind(req) === 'read', limiter: perUserWriteLimit(CHAT_READS) },
   { applies: (path) => /^\/api\/(payments|wallet)(\/|$)/.test(path), limiter: perUserWriteLimit(PAYMENT_WRITES) },
   { applies: (path) => /^\/api\/(posts|listings|reviews)(\/|$)/.test(path), limiter: perUserWriteLimit(CONTENT_WRITES) },
   { applies: (path, req) => isHomeCreation(req, path.replace(/^\/api\/homes/, '')), limiter: perUserWriteLimit(HOME_CREATION) },

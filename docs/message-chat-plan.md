@@ -25,6 +25,32 @@ On an isolated local database replayed from current migrations plus the additive
 - JavaScript syntax, migration policy, existing identity-select checks and whitespace checks passed. No unit tests or coverage work was written or run.
 - Web browser, iOS simulator and Android emulator verification is in progress. These API/socket observations do **not** substitute for the app checks.
 
+## Persistent mute and traffic budgets
+
+The next backend slice adds `PATCH /api/chat/rooms/:roomId/preferences` and
+`PATCH /api/chat/conversations/:otherUserId/preferences`, with
+`{notificationsEnabled, asBusinessUserId?}`. Room, business-room and unified
+inbox rows expose `notifications_enabled`. Person mute is stored in the existing
+private notification preferences and also covers future direct/task rooms;
+room mute stays on the existing participant. Both personal and business
+membership are checked before writing.
+
+Chat read acknowledgements now have a separate 240/minute authenticated budget.
+Other chat message actions share 240/minute, with sends capped at 120/minute
+and 12/5 seconds; reaction/edit/delete limits remain. Ordinary app writes retain
+their existing allowance. Rate-limit responses carry the actual retry delay.
+
+Local live-API checks passed for persisted person/room mute, unmute, nonmember
+refusal, and sending successfully after 80 read acknowledgements. The clients
+will wire these contracts in their next cache/outbox slice. Real image upload
+also succeeded against the isolated private S3-compatible storage service.
+Hosted push delivery and physical devices remain unverified.
+
+The first backend PR's CI database replay, migration safeguards, privacy gates,
+and Docker build pass. Its existing Jest suite fails five assertions tied to
+the old read/typing/pagination behavior or its old mocked RPC surface. No tests
+were modified under the founder's instruction; the PR remains draft.
+
 ## Remaining repair sequence
 
 | Area | Work remaining after immediate repairs |
