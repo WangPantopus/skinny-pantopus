@@ -1090,7 +1090,9 @@ class ChatConversationViewModel
         fun send() {
             val trimmed = _composerText.value.trim()
             val hasQueuedFiles = _queuedAttachments.value.any { it.bytes != null }
-            if ((trimmed.isEmpty() && !hasQueuedFiles) || _isSending.value || _composerClosedNote.value != null) return
+            if ((trimmed.isEmpty() && !hasQueuedFiles) || _isSending.value) return
+            // A conversation that takes no messages from you says why in place of the composer.
+            if (_composerClosedNote.value != null) return
             // AI sends stream on their own cancellable job so the composer's
             // stop button can abort generation (A15.3) without blocking
             // [isSending] for the whole stream.
