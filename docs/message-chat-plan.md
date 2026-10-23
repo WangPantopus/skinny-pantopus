@@ -119,7 +119,33 @@ or hosted storage configuration is required.
 Local real-storage checks passed for an image and identical keyed retry,
 invalid image rejection, oversize rejection, a 12 MB document attached to a
 message, correct byte-range download, concurrent admission and abort cleanup.
-The real-app attachment checks are being repeated with this handler.
+The real web sender and recipient also passed fresh image send, thumbnail,
+lightbox, document download with matching bytes, and persistence after reload.
+Native attachment checks remain in progress.
+
+## Delivery across API processes
+
+Committed message changes now announce only their row keys, operation and
+revision over the existing Postgres listener connection. Every API process
+loads current message data and current eligible recipients before emitting the
+same message, edit, reaction, delete and read events. The local write path
+shares the bounded queue and revision deduplication with database notices, so
+it does not add a second message event. Reaction selection is calculated for
+each recipient. No new table, external broker or hosted setup is introduced.
+
+A listener reconnect invalidates connected clients' chat windows because
+Postgres notifications are transient; durable history/change cursors remain
+the recovery authority. Failed or overloaded event work also invalidates the
+affected room rather than emitting unverified content.
+
+Two real local API processes passed send/receive exactly once, edit, reaction
+with recipient-specific selection, bounded read receipt, soft deletion,
+direct database insertion and hard deletion. A nonmember and a participant
+revoked in the same transaction as an insertion received no message content.
+Two individual recipient-arrival observations were 164 ms and 260 ms under
+the heavily loaded development host; these are not percentile benchmarks.
+Web and Android passed a real shared-group exchange, plus reload/relaunch
+persistence. iOS verification and the final cross-platform sweep remain open.
 
 ## Remaining repair sequence
 

@@ -1,5 +1,6 @@
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
+const chatRealtime = require('./chatRealtime');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -17,9 +18,7 @@ async function markChatRead({ roomIds, userId, throughMessageId, requestAt, io }
   });
   if (error) return { error };
   for (const row of data || []) {
-    if (row.through_message_id && io) io.to(row.room_id).emit('messages:read', {
-      userId, roomId: row.room_id, readAt: row.read_at, throughMessageId: row.through_message_id,
-    });
+    if (row.through_message_id && io) chatRealtime.announce({ t: 'ChatRead', r: row.room_id, u: userId });
   }
   return { data: data || [], unreadCount: (data || []).reduce((sum, row) => sum + row.unread_count, 0) };
 }

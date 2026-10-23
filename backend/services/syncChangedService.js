@@ -310,6 +310,14 @@ async function connect() {
   epoch += 1;
   live = true;
   retryMs = 1000;
+  // A listener gap can miss NOTIFY while sockets stay connected. Tell those
+  // clients to reconcile from their durable cursors once listening resumes.
+  if (_io && _connectedUsers) for (const ids of _connectedUsers.values()) for (const id of ids) {
+    const socket = _io.sockets.sockets.get(id);
+    if (!socket) continue;
+    const rooms = [...socket.rooms].filter((room) => UUID_RE.test(room));
+    socket.emit(EVENT, { topics: ['chats', ...rooms.map((room) => `chat:${room}`)], at: new Date().toISOString() });
+  }
   // A pooled or NATed connection can die quietly; a small query proves it is alive.
   clearInterval(heartbeatTimer);
   heartbeatTimer = setInterval(() => {

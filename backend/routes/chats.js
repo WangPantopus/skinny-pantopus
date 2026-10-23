@@ -43,6 +43,7 @@ const {
 const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
 const { markChatRead, applyDirectReadReceipts } = require('../services/chatReadState');
 const { parseSyncCursor, chatSyncSnapshot, chatChanges, chatReadReceipts } = require('../services/chatSync');
+const chatRealtime = require('../services/chatRealtime');
 const { incCounter, recordHistogram, getSnapshot } = require('../services/chatMetrics');
 const pushService = require('../services/pushService');
 const notificationService = require('../services/notificationService');
@@ -511,13 +512,17 @@ async function emitNewMessage(io, { room, message, actorUserId, identityUserId }
   const identity = String(identityUserId);
   const others = members.filter((row) => ![actor, identity].includes(String(row.user_id)));
   // Leftover members of an assigned task's room hear nothing, as with its pushes and badges.
-  const recipients = new Set(await gigRoomRecipients(room, others.map((row) => String(row.user_id))));
+  const eligible = new Set(await gigRoomRecipients(room, members.map((row) => String(row.user_id))));
+  const recipients = new Set(others.map((row) => String(row.user_id)).filter((id) => eligible.has(id)));
   const personChat = room.type === 'direct' || room.type === 'gig';
   const base = { ...message };
   const preview = getVisibleMessagePreview(message);
   if (typeof preview === 'string') base.preview = preview;
   const emitTo = (userId, payload) => {
-    for (const socketId of connectedUsers.get(userId) || []) io.to(socketId).emit('message:new', payload);
+    const personalized = { ...payload, reactions: (payload.reactions || []).map((reaction) => ({
+      ...reaction, reacted_by_me: reaction.users.some((user) => String(user.id) === userId),
+    })) };
+    for (const socketId of connectedUsers.get(userId) || []) io.to(socketId).emit('message:new', personalized);
   };
   for (const row of others) {
     const userId = String(row.user_id);
@@ -534,17 +539,87 @@ async function emitNewMessage(io, { room, message, actorUserId, identityUserId }
     const unread = await personRowUnread(actor, counterpart).catch(() => null);
     if (unread !== null) own = { ...base, other_user_id: counterpart, unread_for: unread };
   }
-  emitTo(actor, own);
+  const actorMember = members.some((row) => String(row.user_id) === actor);
+  const actorCanHear = actorMember
+    ? eligible.has(actor)
+    : eligible.has(identity) && await canActAsBusiness(identity, actor);
+  if (actorCanHear) emitTo(actor, own);
   // Staff hear what their business hears, and what a colleague sent as it. Members already heard it above.
   const businessIds = members
     .filter((row) => row.user?.account_type === 'business')
     .map((row) => String(row.user_id))
-    .filter((id) => recipients.has(id) || id === identity);
+    .filter((id) => eligible.has(id));
   const heard = new Set([actor, ...members.map((row) => String(row.user_id))]);
   await emitToBusinessStaff(emitTo, base, businessIds, heard).catch((staffError) => {
     logger.warn('message_new_business_staff_failed', { roomId: room.id, error: staffError.message });
   });
 }
+
+// Mutation broadcasts use current membership, including staff acting for a
+// business. A stale Socket.IO room subscription is not access authorization.
+async function emitChatMutation(io, room, event, payload) {
+  const { connectedUsers } = require('../socket/chatSocketio');
+  const { data: members, error } = await supabaseAdmin.from('ChatParticipant')
+    .select('user_id, user:user_id(account_type)').eq('room_id', room.id).eq('is_active', true);
+  if (error) throw error;
+  const recipients = new Set(await gigRoomRecipients(room, (members || []).map((row) => String(row.user_id))));
+  const emitTo = (userId, data) => {
+    // A reaction's selected state belongs to the receiving person, not the actor.
+    const personalize = (reactions) => reactions.map((reaction) => ({
+      ...reaction, reacted_by_me: reaction.users.some((user) => String(user.id) === userId),
+    }));
+    const personalized = { ...data,
+      ...(data.reactions ? { reactions: personalize(data.reactions) } : {}),
+      ...(data.message?.reactions ? { message: { ...data.message, reactions: personalize(data.message.reactions) } } : {}),
+    };
+    for (const socketId of connectedUsers.get(userId) || []) io.to(socketId).emit(event, personalized);
+  };
+  for (const userId of recipients) emitTo(userId, payload);
+  const businessIds = (members || []).filter((row) => row.user?.account_type === 'business'
+    && recipients.has(String(row.user_id))).map((row) => String(row.user_id));
+  await emitToBusinessStaff(emitTo, payload, businessIds, recipients);
+}
+
+async function emitCommittedChatChange(io, change, prepared) {
+  const { data: room, error: roomError } = prepared?.room
+    ? { data: prepared.room } : await supabaseAdmin.from('ChatRoom').select('id, type, gig_id').eq('id', change.r).maybeSingle();
+  if (roomError) throw roomError;
+  if (!room) return Number(change.v || 0);
+  if (change.t === 'ChatRead') {
+    const { data: participant, error } = await supabaseAdmin.from('ChatParticipant')
+      .select('last_read_at, last_read_message_id, last_read_message_at')
+      .eq('room_id', room.id).eq('user_id', change.u).eq('is_active', true).maybeSingle();
+    if (error) throw error;
+    if (participant?.last_read_message_id) await emitChatMutation(io, room, 'messages:read', {
+      userId: change.u, roomId: room.id, readAt: participant.last_read_at,
+      throughMessageId: participant.last_read_message_id, throughCreatedAt: participant.last_read_message_at,
+    });
+    return 0;
+  }
+  const { data: message, error } = prepared?.message
+    ? { data: prepared.message } : await supabaseAdmin.from('ChatMessage').select('*').eq('id', change.m).maybeSingle();
+  if (error) throw error;
+  const version = Math.max(Number(change.v || 0), Number(message?.sync_version || 0));
+  if (!message || message.deleted) {
+    await emitChatMutation(io, room, 'message:deleted', { messageId: change.m, roomId: room.id, sync_version: version });
+    return version;
+  }
+  const [people, summaries] = await Promise.all([
+    prepared?.people || loadMessageSenders([message]), buildReactionSummary([message.id]),
+  ]);
+  const reactions = summaries.get(message.id) || [];
+  const safe = { ...serializeChatMessageForViewer(message, { people }), reactions };
+  if (change.insert) await emitNewMessage(io, {
+    room, message: safe, actorUserId: message.actor_user_id || message.user_id, identityUserId: message.user_id,
+  });
+  else await emitChatMutation(io, room, 'message:edited', { messageId: message.id, message: safe });
+  if (!change.insert || reactions.length) await emitChatMutation(io, room, 'message:reaction_updated', {
+    messageId: message.id, roomId: room.id, sync_version: version, reactions,
+  });
+  return version;
+}
+
+chatRealtime.setHandler(emitCommittedChatChange);
 
 // ── Delivery ─────────────────────────────────────────────────────────
 // A message just written to `room` (with its `sender`) goes out the same way
@@ -558,12 +633,8 @@ async function deliverNewMessage(io, { room, message, actorUserId, senderUserId 
   const roomId = room.id;
   const broadcast = serializeChatMessageForViewer(message, { people: people || await loadMessageSenders([message]) });
   if (io) {
-    emitNewMessage(io, { room, message: broadcast, actorUserId, identityUserId: senderUserId })
-      .catch((emitError) => {
-        // Without the members, the room still hears it as before (the lists reload).
-        logger.warn('message_new_personal_failed', { requestId, roomId, error: emitError.message });
-        io.to(roomId).emit('message:new', broadcast);
-      });
+    chatRealtime.announce({ t: 'ChatMessage', r: roomId, m: message.id, op: 'INSERT', v: message.sync_version },
+      { room, message, people });
   }
 
   // Push fresh badge counts (including total message count) immediately.
@@ -2507,12 +2578,11 @@ router.put('/messages/:messageId', verifyToken, messageEditLimiter, async (req, 
     incCounter('chat.message.edited');
     // The edited row names its sender as the room's messages do, so the edit doesn't blank the bubble's name.
     const people = await loadMessageSenders([updated]);
-    const responseMessage = serializeChatMessageForViewer(updated, { people });
-
     // Broadcast via socket
     const io = req.app.get('io');
     if (io && message.room_id) {
-      io.to(message.room_id).emit('message:edited', { messageId, message: responseMessage });
+      chatRealtime.announce({ t: 'ChatMessage', r: message.room_id, m: messageId, op: 'UPDATE', v: updated.sync_version },
+        { message: updated, people });
     }
 
     res.json({ message: serializeChatMessageForViewer(updated, { people, viewerId: userId }) });
@@ -2588,9 +2658,7 @@ router.delete('/messages/:messageId', verifyToken, messageDeleteLimiter, async (
     // Broadcast via socket
     const io = req.app.get('io');
     if (io && message.room_id) {
-      io.to(message.room_id).emit('message:deleted', {
-        messageId, roomId: message.room_id, sync_version: deletedMessage.sync_version,
-      });
+      chatRealtime.announce({ t: 'ChatMessage', r: message.room_id, m: messageId, op: 'DELETE', v: deletedMessage.sync_version });
     }
 
     res.json({ message: 'Message deleted successfully', sync_version: deletedMessage.sync_version });
@@ -3402,7 +3470,8 @@ router.post('/messages/:messageId/react', verifyToken, reactionLimiter, validate
     // Broadcast via socket
     const io = req.app.get('io');
     if (io) {
-      io.to(message.room_id).emit('message:reaction_updated', { messageId, reactions });
+      const { data: current } = await supabaseAdmin.from('ChatMessage').select('sync_version').eq('id', messageId).maybeSingle();
+      if (current) chatRealtime.announce({ t: 'ChatMessage', r: message.room_id, m: messageId, op: 'UPDATE', v: current.sync_version });
     }
 
     res.json({ reactions });

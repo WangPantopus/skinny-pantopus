@@ -9,6 +9,7 @@ const logger = require('../utils/logger');
 const badgeService = require('../services/badgeService');
 const notificationService = require('../services/notificationService');
 const syncChangedService = require('../services/syncChangedService');
+const chatRealtime = require('../services/chatRealtime');
 const { isBlocked, blockedUserIds } = require('../services/blockService');
 const { closedGigRoomIds, isGigRoomClosedTo, isRoomClosedForWrites } = require('../services/chatGigRoomAccess');
 const { actingBusinessInRoom, UNPUBLISHED_BUSINESS_REFUSAL } = require('../services/chatBusinessAccess');
@@ -236,6 +237,7 @@ module.exports = (io) => {
   notificationService.init(io, connectedUsers);
   // Instant Screens: database changes (NOTIFY sync_changed) → 'sync:changed' to the people they concern
   syncChangedService.init(io, connectedUsers);
+  chatRealtime.init(io);
   syncChangedService.start();
   // Persistent login: disconnect sockets of revoked sessions
   subscribeSessionRevocation(io);
@@ -647,7 +649,8 @@ module.exports = (io) => {
         // Build reaction summary (same format as REST endpoint)
         const reactions = await buildSocketReactionSummary(messageId, userId);
 
-        io.to(message.room_id).emit('message:reaction_updated', { messageId, reactions });
+        const { data: current } = await supabaseAdmin.from('ChatMessage').select('sync_version').eq('id', messageId).maybeSingle();
+        if (current) chatRealtime.announce({ t: 'ChatMessage', r: message.room_id, m: messageId, op: 'UPDATE', v: current.sync_version });
         callback({ success: true, reactions });
 
       } catch (err) {
@@ -689,11 +692,8 @@ module.exports = (io) => {
           .maybeSingle();
 
         if (message) {
-          const reactions = await buildSocketReactionSummary(reactionRow.message_id, userId);
-          io.to(message.room_id).emit('message:reaction_updated', {
-            messageId: reactionRow.message_id,
-            reactions,
-          });
+          const { data: current } = await supabaseAdmin.from('ChatMessage').select('sync_version').eq('id', reactionRow.message_id).maybeSingle();
+          if (current) chatRealtime.announce({ t: 'ChatMessage', r: message.room_id, m: reactionRow.message_id, op: 'UPDATE', v: current.sync_version });
         }
 
         callback({ success: true });
