@@ -32,6 +32,13 @@ import { queryKeys } from '@/lib/query-keys';
 
 type RelationshipState = 'none' | 'pending_sent' | 'pending_received' | 'connected' | 'blocked';
 type ViewerContext = 'public' | 'neighborhood' | 'follower' | 'owner';
+
+// As the owner's Preview selector names them (components/profile/public/ProfileHeader.tsx).
+const OWNER_PREVIEW_LABELS: Record<Exclude<ViewerContext, 'owner'>, string> = {
+  public: 'Public',
+  neighborhood: 'Neighborhood',
+  follower: 'Followers',
+};
 type ProfileTab = 'overview' | 'portfolio' | 'missions' | 'reviews' | 'activity' | 'insights' | 'settings';
 
 /** Extended profile shape returned by the public profile API. */
@@ -133,6 +140,19 @@ export default function PublicProfileClient({ username, initialProfile }: Public
   const reviewsRequested = useRef<string | null>(null);
   const [postsLoading, setPostsLoading] = useState(false);
   const [ownerPreviewContext, setOwnerPreviewContext] = useState<ViewerContext>('owner');
+  // Settings → How neighbors see you links here with ?preview=public: your own profile opens as others see it.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('preview') === 'public') setOwnerPreviewContext('public');
+  }, []);
+  // Back to your own view, and off the link's ?preview=public so a reload stays there.
+  const leaveOwnerPreview = () => {
+    setOwnerPreviewContext('owner');
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has('preview')) return;
+    params.delete('preview');
+    const query = params.toString();
+    window.history.replaceState(window.history.state, '', `${window.location.pathname}${query ? `?${query}` : ''}`);
+  };
   const [shareCopied, setShareCopied] = useState(false);
   // Sharing your own profile while its link still has the made-up username asks once for a real one.
   const [usernamePromptOpen, setUsernamePromptOpen] = useState(false);
@@ -792,6 +812,22 @@ export default function PublicProfileClient({ username, initialProfile }: Public
         onSubmit={submitReport}
         entityType="user"
       />
+      {isOwnProfile && ownerPreviewContext !== 'owner' ? (
+        // Your own profile as someone else sees it has no Preview selector (that is in your view): say which view this
+        // is and give yours back.
+        <div className="w-full px-4 sm:px-6 lg:px-10 xl:px-12 py-3 bg-surface border-b border-app flex items-center justify-between gap-3 text-sm">
+          <span className="text-app">
+            Viewing as: <span className="font-semibold">{OWNER_PREVIEW_LABELS[ownerPreviewContext]}</span>
+          </span>
+          <button
+            type="button"
+            onClick={leaveOwnerPreview}
+            className="font-medium text-primary-600 hover:underline"
+          >
+            Back to your view
+          </button>
+        </div>
+      ) : null}
       <ProfileHeader
         profile={shownProfile}
         fullName={fullName}

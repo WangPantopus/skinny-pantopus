@@ -272,7 +272,7 @@ export default function SettingsPage() {
                   <span className="text-xl">🛡️</span>
                   <div className="text-left">
                     <span className="font-medium text-app group-hover:text-primary-600 block">Advanced Privacy & Blocks</span>
-                    <span className="text-xs text-app-secondary">Search visibility, field privacy, and profile blocks</span>
+                    <span className="text-xs text-app-secondary">How neighbors see you, search visibility, field privacy, and profile blocks</span>
                   </div>
                 </div>
                 <svg className="w-5 h-5 text-app-muted group-hover:text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
