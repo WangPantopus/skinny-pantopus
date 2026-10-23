@@ -455,7 +455,8 @@ class ChatConversationViewModel
             }
             this.mode = mode
             this.currentUserId = currentUserId
-            this._counterparty.value = counterparty
+            this._counterparty.value =
+                if (counterparty is ChatCounterparty.Person) counterparty.copy(online = false) else counterparty
             if (this.scrollToMessageId != scrollToMessageId || contextMessageId != scrollToMessageId) {
                 historyGeneration++
                 didResolveScrollTarget = false
@@ -2146,11 +2147,15 @@ class ChatConversationViewModel
             isForeground = foreground
             if (foreground) {
                 publishViewedRooms()
+                resetRoomSubscriptions()
+                joinActiveRoomsIfPossible()
                 catchUpMessages()
                 scheduleMarkRead()
                 if (socket.connectionState.value != SocketManager.ConnectionState.Connected) startFallbackPollingIfNeeded()
             } else {
                 persistComposerDraft()
+                clearTransientPresence()
+                emitTypingStop()
                 activeChatThread.clear()
                 markReadJob?.cancel()
                 stopFallbackPolling()
@@ -2187,6 +2192,7 @@ class ChatConversationViewModel
 
         fun teardown() {
             persistComposerDraft()
+            clearTransientPresence()
             draftLoadJob?.cancel()
             draftLoadJob = null
             outboxJob?.cancel()
@@ -2704,6 +2710,7 @@ class ChatConversationViewModel
                                 resetRoomSubscriptions()
                                 joinActiveRoomsIfPossible()
                             } else {
+                                clearTransientPresence()
                                 resetRoomSubscriptions()
                                 startFallbackPollingIfNeeded()
                             }
@@ -2781,12 +2788,24 @@ class ChatConversationViewModel
             json: JSONObject,
             online: Boolean,
         ) {
+            if (!isForeground || socket.connectionState.value != SocketManager.ConnectionState.Connected) return
             val target = mode as? ChatThreadMode.Person ?: return
             val userId = json.optStringValue("userId") ?: json.optStringValue("user_id") ?: return
             if (userId != target.otherUserId) return
+            val roomId = json.optStringValue("roomId") ?: json.optStringValue("room_id")
+            if (roomId != null && roomId !in activeRoomIds) return
             val person = _counterparty.value as? ChatCounterparty.Person ?: return
             if (person.online == online) return
             _counterparty.value = person.copy(online = online)
+        }
+
+        /** A lost connection is unknown presence; keep the normal verified/locality subtitle without an online dot. */
+        private fun clearTransientPresence() {
+            val person = _counterparty.value as? ChatCounterparty.Person
+            if (person?.online == true) _counterparty.value = person.copy(online = false)
+            typingClearJob?.cancel()
+            typingClearJob = null
+            _isCounterpartyTyping.value = false
         }
 
         /** Keep a visible conversation responsive when HTTP works but realtime is unavailable. */
