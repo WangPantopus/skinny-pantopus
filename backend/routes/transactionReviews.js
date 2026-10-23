@@ -13,6 +13,7 @@ const validate = require('../middleware/validate');
 const Joi = require('joi');
 const logger = require('../utils/logger');
 const reputationService = require('../services/marketplace/reputationService');
+const { loadChatPeople, reviewerRow } = require('../services/chatPeople');
 
 // ============ VALIDATION ============
 
@@ -196,15 +197,19 @@ router.get('/user/:userId', async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch reviews' });
     }
 
-    // Hydrate reviewer info
+    // Hydrate reviewer info: a writer goes by their Local Profile, as on their posts and comments
+    // (services/chatPeople.js), so the card has their name and no first or last name.
     const reviewerIds = [...new Set((reviews || []).map(r => r.reviewer_id))];
     let reviewerMap = {};
     if (reviewerIds.length > 0) {
-      const { data: reviewers } = await supabaseAdmin
-        .from('User')
-        .select('id, first_name, last_name, username, profile_picture_url')
-        .in('id', reviewerIds);
-      (reviewers || []).forEach(u => { reviewerMap[u.id] = u; });
+      const [{ data: reviewers }, people] = await Promise.all([
+        supabaseAdmin
+          .from('User')
+          .select('id, first_name, last_name, username, profile_picture_url')
+          .in('id', reviewerIds),
+        loadChatPeople(reviewerIds),
+      ]);
+      (reviewers || []).forEach(u => { reviewerMap[u.id] = reviewerRow(u, people); });
     }
 
     const enriched = (reviews || []).map(r => ({
