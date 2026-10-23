@@ -19,6 +19,9 @@ const {
   serializeUserAsLocalIdentity,
 } = require('../serializers/identitySerializers');
 
+// The people loadChatPeople named by their Local Profile; the rest go by the account (see reviewerRow).
+const localProfilePeople = new WeakSet();
+
 /**
  * The people with these account ids, by id, each as a local identity. People it can't read are
  * left out (a read error leaves them all out), and callers name them as before.
@@ -45,7 +48,7 @@ async function loadChatPeople(userIds) {
     const people = new Map();
     for (const user of users.data || []) {
       const profile = user.account_type === 'business' ? null : profilesByUserId.get(String(user.id));
-      people.set(String(user.id), profile
+      const person = profile
         ? serializeLocalProfileForViewer({
           id: user.id,
           user_id: user.id,
@@ -54,7 +57,9 @@ async function loadChatPeople(userIds) {
           avatar_url: profile.avatar_url,
           user,
         })
-        : serializeUserAsLocalIdentity(user));
+        : serializeUserAsLocalIdentity(user);
+      if (profile) localProfilePeople.add(person);
+      people.set(String(user.id), person);
     }
     return people;
   } catch (error) {
@@ -70,7 +75,27 @@ function chatPersonRow(user, people) {
   return { ...user, username: person.handle || null, name: person.displayName, profile_picture_url: person.avatarUrl || null };
 }
 
+/**
+ * A review's writer as the account row a review list reads (id, username, name, first_name, last_name,
+ * profile_picture_url), named the same way: someone with a Local Profile gets its handle, name and photo and no first
+ * or last name, which belong to the private account. A business, anyone without a Local Profile and anyone `people`
+ * lacks keep the row as it is. `id` stays the account id.
+ */
+function reviewerRow(user, people) {
+  const person = user?.id ? people.get(String(user.id)) : null;
+  if (!person || !localProfilePeople.has(person)) return user;
+  return {
+    ...user,
+    username: person.handle || null,
+    name: person.displayName,
+    first_name: null,
+    last_name: null,
+    profile_picture_url: person.avatarUrl || null,
+  };
+}
+
 module.exports = {
   loadChatPeople,
   chatPersonRow,
+  reviewerRow,
 };
