@@ -29,6 +29,7 @@ import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.auth.OAuthSessionStore
 import app.pantopus.android.data.auth.TokenStorage
 import app.pantopus.android.data.chats.ActiveChatThread
+import app.pantopus.android.data.chats.ChatOutbox
 import app.pantopus.android.data.plans.PlansFeature
 import app.pantopus.android.data.store.StoreSync
 import app.pantopus.android.push.ASSISTANT_RECIPIENT
@@ -65,6 +66,8 @@ class MainActivity : FragmentActivity() {
 
     /** Chat-push suppression: notifications skip rooms the user is viewing. */
     @Inject lateinit var activeChatThread: ActiveChatThread
+
+    @Inject lateinit var chatOutbox: ChatOutbox
 
     @Inject lateinit var appLockManager: AppLockManager
 
@@ -159,6 +162,7 @@ class MainActivity : FragmentActivity() {
         // Foreground marker for chat-push suppression — a notification
         // for the on-screen conversation is skipped only while visible.
         activeChatThread.isForeground = true
+        chatOutbox.foregrounded()
         pilotEvents.enterForeground()
         appLockManager.appDidBecomeActive()
         storeSync.foregrounded()
@@ -176,6 +180,7 @@ class MainActivity : FragmentActivity() {
         if (!isChangingConfigurations) {
             pilotEvents.enterBackground()
             storeSync.backgrounded()
+            chatOutbox.backgrounded()
         }
         activeChatThread.isForeground = false
         super.onStop()

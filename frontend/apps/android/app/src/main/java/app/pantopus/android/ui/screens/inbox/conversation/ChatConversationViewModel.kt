@@ -17,6 +17,7 @@ import app.pantopus.android.data.api.models.chats.ChatMessageDto
 import app.pantopus.android.data.api.models.chats.ChatMessageSender
 import app.pantopus.android.data.api.models.chats.ChatMessagesResponse
 import app.pantopus.android.data.api.models.chats.ChatReactionSummary
+import app.pantopus.android.data.api.models.chats.ChatTopic
 import app.pantopus.android.data.api.models.chats.FindOrCreateTopicBody
 import app.pantopus.android.data.api.models.chats.SendChatMessageBody
 import app.pantopus.android.data.api.models.chats.resolvedText
@@ -30,7 +31,11 @@ import app.pantopus.android.data.api.net.readableForbiddenMessage
 import app.pantopus.android.data.api.services.GeoApi
 import app.pantopus.android.data.blocks.BlocksRepository
 import app.pantopus.android.data.chats.ActiveChatThread
+import app.pantopus.android.data.chats.ChatOutbox
+import app.pantopus.android.data.chats.ChatOutboxEntry
+import app.pantopus.android.data.chats.ChatOutboxTopic
 import app.pantopus.android.data.chats.ChatRepository
+import app.pantopus.android.data.chats.ChatSendTarget
 import app.pantopus.android.data.gigs.GigsRepository
 import app.pantopus.android.data.links.LinkPreview
 import app.pantopus.android.data.links.LinkPreviewRepository
@@ -87,6 +92,7 @@ class ChatConversationViewModel
         private val placeRepository: PlaceRepository,
         private val aiActions: AIActionRunner,
         private val aiCards: AIActionCardStore,
+        private val outbox: ChatOutbox? = null,
     ) : ViewModel() {
         private val _state = MutableStateFlow<ChatConversationUiState>(ChatConversationUiState.Loading)
         val state: StateFlow<ChatConversationUiState> = _state.asStateFlow()
@@ -293,6 +299,9 @@ class ChatConversationViewModel
         // `clientMessageId`. Survives refetches so retry resends the same
         // payload under the same idempotency key.
         private val sendContextsByClientId = LinkedHashMap<String, PendingSendContext>()
+        private var outboxJob: Job? = null
+        private var outboxAcceptedJob: Job? = null
+        private val outboxClientIds = mutableSetOf<String>()
 
         /**
          * Inputs needed to (re)send one optimistic message. Captured at
@@ -361,6 +370,8 @@ class ChatConversationViewModel
         // connectionState collector, cancelled on connect / teardown.
         private var fallbackPollJob: Job? = null
         private var catchUpJob: Job? = null
+        private var topicsJob: Job? = null
+        private var topicsRefreshRequested = false
 
         // The attachment download in flight; a second tap waits for it.
         private var openAttachmentJob: Job? = null
@@ -405,6 +416,11 @@ class ChatConversationViewModel
                 messages.clear()
                 pendingByClientId.clear()
                 sendContextsByClientId.clear()
+                outboxClientIds.clear()
+                _isSending.value = false
+                _composerText.value = ""
+                _queuedAttachments.value = emptyList()
+                _replyingTo.value = null
                 failedClientIds.clear()
                 refusedClientIds.clear()
                 directRoomDeferred?.cancel()
@@ -440,6 +456,7 @@ class ChatConversationViewModel
         }
 
         fun load() {
+            observeOutbox()
             if (_state.value is ChatConversationUiState.Loaded) {
                 // Back on screen after teardown() (a pushed screen, a tab
                 // switch): listen again. Re-joining the rooms backfills what
@@ -1011,6 +1028,10 @@ class ChatConversationViewModel
             topicForPerson: Triple<String, String, String>? = null,
         ) {
             if (mode is ChatThreadMode.Ai || _isSending.value || _composerClosedNote.value != null) return
+            if (outbox != null) {
+                enqueueRich(messageText, messageType, metadata, topicForPerson)
+                return
+            }
             _isSending.value = true
             viewModelScope.launch {
                 try {
@@ -1118,6 +1139,14 @@ class ChatConversationViewModel
         }
 
         fun send() {
+            if (outbox != null && mode !is ChatThreadMode.Ai && _editingMessageId.value == null) {
+                enqueueComposer()
+            } else {
+                sendImmediately()
+            }
+        }
+
+        private fun sendImmediately() {
             val trimmed = _composerText.value.trim()
             val hasQueuedFiles = _queuedAttachments.value.any { it.bytes != null }
             if ((trimmed.isEmpty() && !hasQueuedFiles) || _isSending.value) return
@@ -1179,6 +1208,157 @@ class ChatConversationViewModel
             }
         }
 
+        private fun enqueueRich(
+            text: String,
+            type: String,
+            metadata: Map<String, Any>,
+            topic: Triple<String, String, String>?,
+        ) {
+            val queue = outbox ?: return
+            val target = sendTarget() ?: return
+            val clientId = newClientMessageId()
+            val roomId = knownRoomIdHint()
+            val replyId = sanitizedReplyToId(_replyingTo.value?.messageId, roomId)
+            val pending = optimisticRich(text, clientId, roomId, type, metadata, replyId).copy(topicId = _selectedTopicId.value)
+            val entry =
+                ChatOutboxEntry(
+                    clientId = clientId,
+                    target = target,
+                    pending = pending,
+                    body =
+                        SendChatMessageBody(
+                            roomId = roomId,
+                            messageText = text,
+                            messageType = type,
+                            clientMessageId = clientId,
+                            replyToId = replyId,
+                            topicId = pending.topicId,
+                            metadata = metadata,
+                            asBusinessUserId = target.asBusinessUserId,
+                        ),
+                    topic = topic?.takeIf { target.kind == "person" }?.let { ChatOutboxTopic(it.first, it.second, it.third) },
+                )
+            _isSending.value = true
+            viewModelScope.launch {
+                try {
+                    val error = queue.enqueue(entry, emptyList())
+                    if (target != sendTarget()) return@launch
+                    if (error != null) {
+                        _actionFailure.value = error
+                    } else if (_replyingTo.value?.messageId == replyId) {
+                        _replyingTo.value = null
+                    }
+                } finally {
+                    if (target == sendTarget()) _isSending.value = false
+                }
+            }
+        }
+
+        private fun sendTarget(): ChatSendTarget? =
+            when (val target = mode) {
+                is ChatThreadMode.Room -> ChatSendTarget(currentUserId, "room", target.id, target.asBusinessUserId)
+                is ChatThreadMode.Person -> ChatSendTarget(currentUserId, "person", target.otherUserId)
+                ChatThreadMode.Ai -> null
+            }
+
+        private fun observeOutbox() {
+            val queue = outbox ?: return
+            val target = sendTarget() ?: return
+            if (outboxJob != null) return
+            outboxJob =
+                viewModelScope.launch {
+                    queue.entries.collect { entries ->
+                        if (target != sendTarget()) return@collect
+                        val held = entries.filter { it.target == target }
+                        val ids = held.mapTo(mutableSetOf()) { it.clientId }
+                        (outboxClientIds - ids).forEach { id ->
+                            pendingByClientId.remove(id)
+                            failedClientIds.remove(id)
+                            refusedClientIds.remove(id)
+                        }
+                        outboxClientIds.clear()
+                        outboxClientIds.addAll(ids)
+                        val confirmed = messages.mapNotNullTo(mutableSetOf()) { it.clientMessageId }
+                        held.filterNot { it.clientId in confirmed }.forEach { entry ->
+                            pendingByClientId[entry.clientId] = entry.pending
+                            if (entry.error != null) failedClientIds.add(entry.clientId) else failedClientIds.remove(entry.clientId)
+                            if (entry.refused) refusedClientIds.add(entry.clientId) else refusedClientIds.remove(entry.clientId)
+                        }
+                        if (held.isNotEmpty() || _state.value is ChatConversationUiState.Loaded) rebuild()
+                    }
+                }
+            outboxAcceptedJob =
+                viewModelScope.launch {
+                    queue.accepted.collect { (destination, message) ->
+                        if (destination != sendTarget()) return@collect
+                        message.clientMessageId?.let { id ->
+                            pendingByClientId.remove(id)
+                            failedClientIds.remove(id)
+                            refusedClientIds.remove(id)
+                        }
+                        if (mode is ChatThreadMode.Person) directRoomId = message.roomId
+                        activeRoomIds = activeRoomIds + message.roomId
+                        if (matchesTopicFilter(message)) upsert(message)
+                        refreshUnknownTopics(listOf(message))
+                        _sendLimitNotice.value = null
+                        publishViewedRooms()
+                        joinActiveRoomsIfPossible()
+                        rebuild()
+                        scheduleMarkRead()
+                    }
+                }
+        }
+
+        /** Persist the complete send snapshot before clearing the composer; network delivery continues independently. */
+        private fun enqueueComposer() {
+            val queue = outbox ?: return
+            val target = sendTarget() ?: return
+            val draft = _composerText.value
+            val text = draft.trim()
+            val attachments = _queuedAttachments.value.filter { it.bytes != null }
+            if (text.isEmpty() && attachments.isEmpty()) return
+            if (_isSending.value || _composerClosedNote.value != null) return
+            val clientId = newClientMessageId()
+            val roomId = knownRoomIdHint()
+            val replyId = sanitizedReplyToId(_replyingTo.value?.messageId, roomId)
+            val pending = optimistic(text.ifEmpty { "Attachment" }, clientId, roomId, replyId)
+            val entry =
+                ChatOutboxEntry(
+                    clientId = clientId,
+                    target = target,
+                    pending = pending,
+                    body =
+                        SendChatMessageBody(
+                            roomId = roomId,
+                            messageText = text.ifEmpty { null },
+                            messageType = if (attachments.isEmpty()) "text" else "file",
+                            clientMessageId = clientId,
+                            replyToId = replyId,
+                            topicId = _selectedTopicId.value,
+                            asBusinessUserId = target.asBusinessUserId,
+                        ),
+                )
+            val files = attachments.map { UploadFile(it.filename, it.mimeType, requireNotNull(it.bytes)) }
+            val attachmentIds = attachments.mapTo(mutableSetOf()) { it.id }
+            _isSending.value = true
+            viewModelScope.launch {
+                try {
+                    val error = queue.enqueue(entry, files)
+                    if (target != sendTarget()) return@launch
+                    if (error != null) {
+                        _actionFailure.value = error
+                        return@launch
+                    }
+                    if (_composerText.value == draft) _composerText.value = ""
+                    _queuedAttachments.value = _queuedAttachments.value.filterNot { it.id in attachmentIds }
+                    if (_replyingTo.value?.messageId == replyId) _replyingTo.value = null
+                    emitTypingStop()
+                } finally {
+                    if (target == sendTarget()) _isSending.value = false
+                }
+            }
+        }
+
         /**
          * Retry a failed optimistic send. Accepts the timeline row id
          * (`client_<uuid>`) or the bare client id, and resends with the
@@ -1187,6 +1367,14 @@ class ChatConversationViewModel
          */
         fun retry(clientId: String) {
             val bareId = clientId.removePrefix("client_")
+            if (outbox != null && bareId in outboxClientIds) {
+                outbox.retry(bareId)
+            } else {
+                retryImmediately(bareId)
+            }
+        }
+
+        private fun retryImmediately(bareId: String) {
             if (!pendingByClientId.containsKey(bareId)) return
             if (!sendContextsByClientId.containsKey(bareId)) return
             if (refusedClientIds.contains(bareId)) return
@@ -1652,6 +1840,15 @@ class ChatConversationViewModel
          * answer as here (the server names its writer only to them). A teammate's message for the same business stays
          * theirs; the API refuses it.
          */
+        fun canDiscardMessage(messageId: String): Boolean {
+            val id = messageId.removePrefix("client_")
+            return id in outboxClientIds && id in failedClientIds
+        }
+
+        fun discardMessage(messageId: String) {
+            if (canDiscardMessage(messageId)) outbox?.discard(messageId.removePrefix("client_"))
+        }
+
         fun canManageMessage(messageId: String): Boolean = messages.any { it.id == messageId && wroteMessage(it) }
 
         private fun wroteMessage(message: ChatMessageDto): Boolean =
@@ -1922,6 +2119,10 @@ class ChatConversationViewModel
         }
 
         fun teardown() {
+            outboxJob?.cancel()
+            outboxJob = null
+            outboxAcceptedJob?.cancel()
+            outboxAcceptedJob = null
             historyGeneration++
             resetRoomSubscriptions()
             // Don't leave the counterparty staring at a stale "typing…" row.
@@ -1940,6 +2141,9 @@ class ChatConversationViewModel
             reactionRefetchJob?.cancel()
             fallbackPollJob?.cancel()
             catchUpJob?.cancel()
+            topicsRefreshRequested = false
+            topicsJob?.cancel()
+            topicsJob = null
             typingUserJob?.cancel()
             typingStoppedJob?.cancel()
             typingClearJob?.cancel()
@@ -1994,7 +2198,7 @@ class ChatConversationViewModel
             if (!historyReadsInFlight.add(requestKey)) return
             if (initial || context != historyCopyContext) followHistoryCopy(context)
             val copied = initial && !quiet && showHistoryCopy()
-            val keepMessages = quiet || copied
+            val keepMessages = quiet || copied || pendingByClientId.isNotEmpty()
             viewModelScope.launch {
                 try {
                     if (initial && !keepMessages) {
@@ -2061,6 +2265,7 @@ class ChatConversationViewModel
                     _composerClosedNote.value = response.data.sendRefusal?.error
                     val keptOlder = placePage(response.data.messages, keepMessages)
                     retireConfirmedSends(response.data.messages)
+                    refreshUnknownTopics(response.data.messages)
                     updateActiveRooms(response.data)
                     // Older pages kept under a quiet read keep their own cursor.
                     if (!keptOlder) {
@@ -2077,7 +2282,7 @@ class ChatConversationViewModel
                 is NetworkResult.Failure -> {
                     if (historyAccessEnded(response.error)) {
                         refuseHistory(response.error)
-                    } else if (initial && !keepMessages) {
+                    } else if (initial && !keepMessages && pendingByClientId.isEmpty()) {
                         _state.value = ChatConversationUiState.Error(response.error.message)
                     } else {
                         Timber.w("chat refresh or pagination failed: ${response.error.message}")
@@ -2225,55 +2430,76 @@ class ChatConversationViewModel
 
         private fun loadTopicsIfNeeded() {
             val target = mode as? ChatThreadMode.Person ?: return
-            val context = historyContext()
-            viewModelScope.launch {
-                val pendingInitial = initialTopic
-                if (pendingInitial != null && _selectedTopicId.value == null) {
-                    when (
-                        val result =
-                            repo.findOrCreateTopic(
-                                target.otherUserId,
-                                FindOrCreateTopicBody(
-                                    topicType = pendingInitial.topicType,
-                                    topicRefId = pendingInitial.topicRefId,
-                                    title = pendingInitial.title,
-                                ),
-                            )
-                    ) {
-                        is NetworkResult.Success -> {
-                            if (context != historyContext()) return@launch
-                            historyGeneration++
-                            _selectedTopicId.value = result.data.topic.id
-                            // The first fetch may already have left unfiltered.
-                            fetch(initial = true)
-                        }
-                        is NetworkResult.Failure -> Timber.w("find/create topic failed: ${result.error.message}")
-                    }
-                    if (context.mode != mode || context.user != currentUserId) return@launch
-                    initialTopic = null
-                }
-                val topicsContext = historyContext()
-                when (val result = repo.conversationTopics(target.otherUserId)) {
-                    is NetworkResult.Success -> {
-                        if (topicsContext != historyContext()) return@launch
-                        _topics.value =
-                            result.data.topics.mapNotNull { topic ->
-                                val id = topic.id ?: return@mapNotNull null
-                                val type = topic.topicType ?: "general"
-                                ChatConversationTopic(
-                                    id = id,
-                                    topicType = type,
-                                    title = topic.title ?: "Topic",
-                                    status = topic.status,
-                                )
-                            }
-                        // Topic dividers are labeled from this list; relabel a card
-                        // shared into a new topic (it read "General" until then).
-                        if (messages.isNotEmpty()) rebuild()
-                    }
-                    is NetworkResult.Failure -> Timber.w("load topics failed: ${result.error.message}")
-                }
+            if (topicsJob?.isActive == true) {
+                topicsRefreshRequested = true
+                return
             }
+            val context = historyContext()
+            topicsJob =
+                viewModelScope.launch {
+                    try {
+                        val pendingInitial = initialTopic
+                        if (pendingInitial != null && _selectedTopicId.value == null) {
+                            when (
+                                val result =
+                                    repo.findOrCreateTopic(
+                                        target.otherUserId,
+                                        FindOrCreateTopicBody(
+                                            topicType = pendingInitial.topicType,
+                                            topicRefId = pendingInitial.topicRefId,
+                                            title = pendingInitial.title,
+                                        ),
+                                    )
+                            ) {
+                                is NetworkResult.Success -> {
+                                    if (context != historyContext()) return@launch
+                                    historyGeneration++
+                                    _selectedTopicId.value = result.data.topic.id
+                                    // The first fetch may already have left unfiltered.
+                                    fetch(initial = true)
+                                }
+                                is NetworkResult.Failure -> Timber.w("find/create topic failed: ${result.error.message}")
+                            }
+                            if (context.mode != mode || context.user != currentUserId) return@launch
+                            initialTopic = null
+                        }
+                        val topicsContext = historyContext()
+                        when (val result = repo.conversationTopics(target.otherUserId)) {
+                            is NetworkResult.Success -> {
+                                if (topicsContext != historyContext()) return@launch
+                                _topics.value = topicRows(result.data.topics)
+                                // Topic dividers are labeled from this list; relabel a card
+                                // shared into a new topic (it read "General" until then).
+                                if (messages.isNotEmpty()) rebuild()
+                            }
+                            is NetworkResult.Failure -> Timber.w("load topics failed: ${result.error.message}")
+                        }
+                    } finally {
+                        finishTopicsRefresh(context, coroutineContext[Job])
+                    }
+                }
+        }
+
+        private fun finishTopicsRefresh(
+            context: HistoryReadContext,
+            job: Job?,
+        ) {
+            if (topicsJob !== job) return
+            topicsJob = null
+            if (topicsRefreshRequested && context.mode == mode && context.user == currentUserId) {
+                topicsRefreshRequested = false
+                loadTopicsIfNeeded()
+            }
+        }
+
+        private fun topicRows(topics: List<ChatTopic>): List<ChatConversationTopic> =
+            topics.mapNotNull { topic ->
+                val id = topic.id ?: return@mapNotNull null
+                ChatConversationTopic(id, topic.topicType ?: "general", topic.title ?: "Topic", topic.status)
+            }
+
+        private fun refreshUnknownTopics(rows: List<ChatMessageDto>) {
+            if (rows.any { row -> row.topicId != null && _topics.value.none { it.id == row.topicId } }) loadTopicsIfNeeded()
         }
 
         private fun updateActiveRooms(response: ChatMessagesResponse) {
@@ -2588,6 +2814,7 @@ class ChatConversationViewModel
          * Returns whether anything was retired.
          */
         private fun retireConfirmedSends(rows: List<ChatMessageDto>): Boolean {
+            outbox?.acknowledge(rows)
             var retired = false
             rows.forEach { row ->
                 val confirmedId = row.clientMessageId ?: return@forEach
@@ -2608,6 +2835,7 @@ class ChatConversationViewModel
         private fun mergeBackfill(backfill: List<ChatMessageDto>) {
             // Backfill is exactly the gap a lost POST response plus a missed
             // `message:new` echo leaves, so confirmed sends are retired here too.
+            refreshUnknownTopics(backfill)
             val retiredPending = retireConfirmedSends(backfill)
             val existing = messages.map { it.id }.toSet()
             // The room backfill carries every topic; a topic view keeps its own.
@@ -2702,6 +2930,10 @@ class ChatConversationViewModel
             val roomId = json.optStringValue("room_id") ?: json.optStringValue("roomId")
             if (roomId != null && !activeRoomIds.contains(roomId)) return
             val decoded = decodeSocketMessage(json)
+            decoded?.let {
+                outbox?.acknowledge(listOf(it))
+                refreshUnknownTopics(listOf(it))
+            }
             val clientId = json.optString("client_message_id").takeIf { it.isNotEmpty() }
             if (clientId != null && pendingByClientId.containsKey(clientId)) {
                 // Echo of our own in-flight send (the broadcast can beat

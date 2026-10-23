@@ -707,6 +707,11 @@ fun ChatConversationScreen(
                 MessageActionSheet(
                     content = target,
                     canManageMessages = viewModel.canManageMessage(target.id),
+                    canDiscardMessage = viewModel.canDiscardMessage(target.id),
+                    onDiscard = {
+                        viewModel.discardMessage(target.id)
+                        actionTarget = null
+                    },
                     onCopy = { actionTarget = null },
                     onReply = {
                         viewModel.beginReply(target.id)
@@ -3787,6 +3792,8 @@ private val ChatBubbleBody.copyableText: String?
 private fun MessageActionSheet(
     content: ChatBubbleContent,
     canManageMessages: Boolean,
+    canDiscardMessage: Boolean,
+    onDiscard: () -> Unit,
     // Invoked after the text has landed on the clipboard — dismisses the sheet.
     onCopy: () -> Unit,
     onReply: () -> Unit,
@@ -3831,6 +3838,9 @@ private fun MessageActionSheet(
         // for rows with no server id: in-flight optimistic sends
         // (`client_`) and AI-thread local rows (`ai_user_` /
         // `ai_assistant_`), whose edits/deletes can only ever 404.
+        if (canDiscardMessage) {
+            MessageActionRow(label = "Stop retrying", icon = PantopusIcon.Trash2, destructive = true, onClick = onDiscard)
+        }
         val isPersistedMessage = !content.id.startsWith("client_") && !content.id.startsWith("ai_")
         if (canManageMessages && content.side == ChatMessageSide.Outgoing && isPersistedMessage) {
             MessageActionRow(label = "Select", icon = PantopusIcon.CheckCircle, onClick = onSelect)
