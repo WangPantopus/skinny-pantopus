@@ -167,7 +167,7 @@ async function getDevice(deviceRowId) {
     .maybeSingle();
   if (error) {
     logger.warn('auth.device.lookup_failed', { deviceRowId, error: error.message });
-    return null;
+    throw authSessionService.authUnavailableError(error);
   }
   return data || null;
 }
@@ -1099,7 +1099,9 @@ async function listDevices(userId, currentSessionId) {
 // ---------------------------------------------------------------------------
 
 async function revokeDeviceRow(deviceRow, reason) {
-  return updateDevice(deviceRow.id, { revoked_at: nowIso(), revoked_reason: reason, require_step_up: false });
+  const row = await updateDevice(deviceRow.id, { revoked_at: nowIso(), revoked_reason: reason, require_step_up: false });
+  if (!row) throw authSessionService.authUnavailableError();
+  return row;
 }
 
 /**
@@ -1115,7 +1117,9 @@ async function revokeDevice({ userId, deviceRowId, reason = 'user', req, actorSe
   if (!row || row.user_id !== userId) {
     return { ok: false, status: 404, code: 'NOT_FOUND', error: 'Device not found' };
   }
-  if (row.revoked_at) return { ok: true, revokedSessions: 0, already: true };
+  // Retry all durable cleanup even if a previous attempt already marked the
+  // device revoked but failed before revoking its resume grants.
+  const already = Boolean(row.revoked_at);
 
   try {
     await pushService.sendToDevice(userId, row.device_id, {
@@ -1139,8 +1143,8 @@ async function revokeDevice({ userId, deviceRowId, reason = 'user', req, actorSe
     req,
     meta: { reason, revokedSessions, name: row.name || row.model || null, platform: row.platform },
   });
-  if (notify) await authNotifyService.deviceRemoved({ userId, device: row, req, byUser: reason === 'user' });
-  return { ok: true, revokedSessions };
+  if (notify && !already) await authNotifyService.deviceRemoved({ userId, device: row, req, byUser: reason === 'user' });
+  return { ok: true, revokedSessions, ...(already ? { already: true } : {}) };
 }
 
 async function revokeOtherDevices(userId, keepDeviceRowId, reason) {
@@ -1177,12 +1181,14 @@ async function currentSessionForSignOut(currentSessionId) {
  * @returns {Promise<{revoked:number}>}
  */
 async function revokeOthers({ userId, currentSessionId, accessToken, req, reason = 'user', eventType = 'revoke_others' }) {
-  await authSessionService.signOutSupabase(accessToken, 'others', { source: eventType, userId });
   const current = await currentSessionForSignOut(currentSessionId);
   const revoked = await authSessionService.revokeSessionsForUser(userId, { exceptSessionId: currentSessionId || null, reason });
   const revokedDevices = await revokeOtherDevices(userId, current?.device_id || null, reason);
   // Grants: keep only the current device's.
   await revokeGrantsExcept(userId, current?.device_id || null);
+  if (accessToken && !(await authSessionService.signOutSupabase(accessToken, 'others', { source: eventType, userId }))) {
+    throw authSessionService.authUnavailableError();
+  }
   await authSessionService.recordSecurityEvent({
     userId,
     deviceRowId: current?.device_id || null,
@@ -1201,10 +1207,12 @@ async function revokeGrantsExcept(userId, keepDeviceRowId) {
     .eq('user_id', userId)
     .is('used_at', null)
     .is('revoked_at', null);
-  if (error || !data) return 0;
+  if (error) throw authSessionService.authUnavailableError(error);
+  if (!data) return 0;
   const ids = data.filter((g) => !keepDeviceRowId || g.device_id !== keepDeviceRowId).map((g) => g.id);
   if (ids.length === 0) return 0;
-  await supabaseAdmin.from('AuthResumeGrant').update({ revoked_at: nowIso() }).in('id', ids);
+  const { error: revokeError } = await supabaseAdmin.from('AuthResumeGrant').update({ revoked_at: nowIso() }).in('id', ids);
+  if (revokeError) throw authSessionService.authUnavailableError(revokeError);
   return ids.length;
 }
 
@@ -1215,13 +1223,17 @@ async function revokeGrantsExcept(userId, keepDeviceRowId) {
  * revoked, sessions_valid_after=now.
  */
 async function revokeAll({ userId, accessToken = null, req, reason = 'lockdown', eventType = 'lockdown', notify = true }) {
-  if (accessToken) await authSessionService.signOutSupabase(accessToken, 'global', { source: eventType, userId });
+  // Establish the cutoff first. Any later failure leaves old access tokens
+  // refused, and never turns a partial lockdown into a successful response.
+  const validAfter = new Date();
+  await authSessionService.setSessionsValidAfter(userId, validAfter);
   const revoked = await authSessionService.revokeSessionsForUser(userId, { reason });
   const revokedDevices = await revokeOtherDevices(userId, null, reason);
   await pushService.removeAllTokens(userId);
   await authSessionService.revokeGrantsForUser(userId);
-  const validAfter = new Date();
-  await authSessionService.setSessionsValidAfter(userId, validAfter);
+  if (accessToken && !(await authSessionService.signOutSupabase(accessToken, 'global', { source: eventType, userId }))) {
+    throw authSessionService.authUnavailableError();
+  }
   await authSessionService.recordSecurityEvent({
     userId,
     type: eventType,

@@ -35,9 +35,14 @@ const U3 = 'cccccccc-cccc-1ccc-8ccc-cccccccccccc';
 const ROOM_1 = 'dd000000-0000-4000-a000-000000000001';
 const MSG_1 = 'dd000000-0000-4000-a000-000000000010';
 
-const TOKEN_U1 = 'token-user-1';
-const TOKEN_U2 = 'token-user-2';
-const TOKEN_U3 = 'token-user-3';
+// GoTrue verifies these fixture tokens below. The socket also requires the
+// expiry/issued-at claims carried by a real Supabase access token.
+const tokenFor = sub => `fixture.${Buffer.from(JSON.stringify({
+  sub, iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 3600,
+})).toString('base64url')}.signature`;
+const TOKEN_U1 = tokenFor(U1);
+const TOKEN_U2 = tokenFor(U2);
+const TOKEN_U3 = tokenFor(U3);
 
 // ── Server setup ────────────────────────────────────────────
 

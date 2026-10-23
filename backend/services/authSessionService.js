@@ -337,7 +337,7 @@ async function revokeSessionRow(sessionId, reason, { userId } = {}) {
     .select('id, user_id');
   if (error) {
     logger.error('auth.session.revoke_failed', { sessionId, error: error.message });
-    return false;
+    throw authUnavailableError(error);
   }
   const rows = Array.isArray(data) ? data : data ? [data] : [];
   if (rows.length > 0) emitRevoked(userId || rows[0].user_id, rows.map((r) => r.id), reason);
@@ -359,7 +359,7 @@ async function revokeSessionsForUser(userId, { exceptSessionId = null, deviceRow
   const { data, error } = await query.select('id');
   if (error) {
     logger.error('auth.session.revoke_many_failed', { userId, error: error.message });
-    return 0;
+    throw authUnavailableError(error);
   }
   const ids = (data || []).map((r) => r.id);
   emitRevoked(userId, ids, reason);
@@ -375,7 +375,7 @@ async function revokeSessionsForDevice(deviceRowId, reason, { userId } = {}) {
     .select('id, user_id');
   if (error) {
     logger.error('auth.session.revoke_device_failed', { deviceRowId, error: error.message });
-    return 0;
+    throw authUnavailableError(error);
   }
   const ids = (data || []).map((r) => r.id);
   emitRevoked(userId || data?.[0]?.user_id, ids, reason);
@@ -432,7 +432,7 @@ async function setSessionsValidAfter(userId, at = new Date()) {
     .eq('id', userId);
   if (error) {
     logger.error('auth.watermark_failed', { userId, error: error.message });
-    return false;
+    throw authUnavailableError(error);
   }
   try {
     // verifyToken folds the watermark into its 60-s role cache; let this
@@ -619,7 +619,7 @@ async function revokeGrantsForUser(userId, { deviceRowId = undefined } = {}) {
   const { data, error } = await query.select('id');
   if (error) {
     logger.error('auth.grant.revoke_failed', { userId, error: error.message });
-    return 0;
+    throw authUnavailableError(error);
   }
   return (data || []).length;
 }

@@ -715,12 +715,14 @@ async function isRecoveryAccessToken(token) {
   return { ok: true };
 }
 
-/** Best-effort persistent-login hook: registry failures never fail the auth route. */
+/** Optional bookkeeping may fail; security revocation must never report false success. */
 async function safeHook(name, fn) {
   try {
     return await fn();
   } catch (err) {
     logger.error(`auth.hook.${name}_failed`, { error: err.message, stack: err.stack });
+    if (['password_changed', 'password_reset', 'account_deleted', 'refresh_reuse',
+      'refresh_foreign', 'oauth_token_mismatch', 'logout_local'].includes(name)) throw err;
     return null;
   }
 }
@@ -2368,7 +2370,7 @@ router.get('/auth-methods', verifyToken, async (req, res) => {
  * Change the password with the caller's own access token (GoTrue PUT /user). Returns false,
  * so the caller falls back to the admin update, when there's no token or GoTrue refuses.
  */
-async function updatePasswordWithOwnSession(accessToken, newPassword, userId) {
+async function updatePasswordWithOwnSession(accessToken, newPassword, userId, currentPassword) {
   const baseUrl = String(process.env.SUPABASE_URL || '').replace(/\/+$/, '');
   const anonKey = process.env.SUPABASE_ANON_KEY;
   if (!accessToken || !baseUrl || !anonKey) return false;
@@ -2376,7 +2378,7 @@ async function updatePasswordWithOwnSession(accessToken, newPassword, userId) {
     const response = await fetch(`${baseUrl}/auth/v1/user`, {
       method: 'PUT',
       headers: { apikey: anonKey, Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: newPassword }),
+      body: JSON.stringify({ password: newPassword, current_password: currentPassword }),
       signal: AbortSignal.timeout(10000),
     });
     if (response.ok) return true;
@@ -2495,7 +2497,7 @@ router.post('/password', verifyToken, reauthLimiter, reauthAccountLimiter, valid
     // Through the caller's own session, GoTrue keeps that session and ends the others, as the
     // design below says. admin.updateUserById ends every session, the caller's too, so the
     // next request 401s and the apps sign the person out; it stays as the fallback.
-    if (!(await updatePasswordWithOwnSession(accessTokenFromRequest(req), newPassword, userId))) {
+    if (!(await updatePasswordWithOwnSession(accessTokenFromRequest(req), newPassword, userId, currentPassword))) {
       const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
         password: newPassword,
       });
@@ -4404,10 +4406,10 @@ router.post('/reset-password', resetPasswordLimiter, validate(resetPasswordSchem
     startSignInCountsAgain(resetEmail);
     return res.json({ message: 'Password reset successful. You can now sign in.' });
   } catch (err) {
-    // Only the recovery-token check reads the session registry, before anything changes.
+    // A revocation failure can happen after the password or recovery link changed.
     if (err.authBusy) {
-      logger.warn('Reset password unavailable - session registry unreadable', { code: err.code });
-      return res.status(503).json({ error: RESET_BUSY_LINK_KEPT, code: 'AUTH_BUSY' });
+      logger.warn('Reset password unavailable - security state could not be saved', { code: err.code });
+      return res.status(503).json({ error: 'Could not complete the password reset securely. Please request a new reset link and try again.', code: 'AUTH_BUSY' });
     }
     logger.error('Reset password error', { error: err.message });
     return res.status(500).json({ error: 'Failed to reset password' });
@@ -5949,7 +5951,7 @@ router.post(
         return res.json({ success: true, revoked: result.revoked });
       } catch (err) {
         logger.error('Logout scope error', { userId, scope, error: err.message, stack: err.stack });
-        return res.status(500).json({ error: 'Could not sign out other devices', code: 'INTERNAL' });
+        return res.status(err.authBusy ? 503 : 500).json({ error: 'Could not sign out other devices', code: err.authBusy ? 'AUTH_UNAVAILABLE' : 'INTERNAL' });
       }
     }
 
@@ -5960,55 +5962,47 @@ router.post(
 
     const accessToken = getLogoutAccessToken(req);
 
-    // Proof (a) MUST be established BEFORE the JWT is revoked. GoTrue's
-    // `admin.signOut(jwt,'local')` deletes the session row, after which
-    // `auth.getUser(jwt)` answers 403 session_not_found — so resolving the
-    // caller afterwards would silently forfeit every registry side effect
-    // (session row revoke, that device's push tokens, its resume grants) for
-    // web and for any session without a DPoP proof.
+    // Verify the signed token even when GoTrue already removed its session in a
+    // previous partial attempt. The registry must still be revocable on retry.
     let proofUserId = null;
     let proofSessionId = null;
-    if (accessToken && typeof accessToken === 'string') {
-      const { data, error } = await supabase.auth.getUser(accessToken);
-      if (!error && data?.user?.id) {
-        proofUserId = data.user.id;
-        proofSessionId = authSessionService.sessionClaimsFromAccessToken(accessToken)?.id || null;
+    try {
+      if (accessToken && typeof accessToken === 'string') {
+        const { verifyAccessToken } = require('../services/accessTokenVerifier');
+        const verified = await verifyAccessToken(accessToken, { authClient: supabase, allowExpiredForRevocation: true });
+        if (!verified.ok && verified.reason === 'busy') throw authSessionService.authUnavailableError(verified.error);
+        if (verified.ok) {
+          proofUserId = verified.user.id;
+          proofSessionId = authSessionService.sessionClaimsFromAccessToken(accessToken)?.id || null;
+        }
       }
-    }
-
-    const sessionRevoked = await revokeSessionByAccessToken(accessToken, {
-      source: 'logout',
-      transport: getBearerToken(req) ? 'bearer' : accessToken ? 'cookie_or_body' : 'none',
-    });
-
-    // Registry side effects only with proof (best effort; never fails the logout).
-    await safeHook('logout_local', async () => {
       const refreshToken = req.body?.refreshToken || req.body?.refresh_token || null;
       const deviceId = typeof req.body?.deviceId === 'string' && req.body.deviceId ? req.body.deviceId : undefined;
-
-      // Proof (b): DPoP (rth over the refresh token) — verified when present,
-      // never required (a missing/invalid proof only forfeits the side effects).
       let dpop = null;
       if (getHeader(req, 'dpop')) {
         const result = await verifyDpop(req, refreshToken ? { refreshToken } : {});
         if (result.ok) dpop = result.dpop;
-        else logger.warn('auth.logout.dpop_invalid', { errorCode: result.code, ip: req.ip });
+        else logger.warn('auth.logout.dpop_invalid', { errorCode: result.code });
       }
-
-      if (!proofUserId && !(refreshToken && dpop)) return null;
-      return authDeviceService.logoutLocal({
-        userId: proofUserId,
-        bearerSessionId: proofSessionId,
-        deviceId,
-        refreshToken,
-        dpop,
-        req,
-      });
-    });
+      if (proofUserId || (refreshToken && dpop)) {
+        await authDeviceService.logoutLocal({
+          userId: proofUserId, bearerSessionId: proofSessionId, deviceId, refreshToken, dpop, req,
+        });
+      }
+      // Commit application revocation before removing the provider session.
+      // Invalid/missing credentials still allow idempotent local cookie clearing.
+      if (accessToken && !(await revokeSessionByAccessToken(accessToken, { source: 'logout' }))) {
+        throw authSessionService.authUnavailableError();
+      }
+    } catch (err) {
+      logger.warn('auth.logout.incomplete', { code: err.code || 'AUTH_UNAVAILABLE' });
+      return res.status(503).json({ code: 'AUTH_UNAVAILABLE',
+        error: 'Local sign-in data was cleared, but server sign-out could not be confirmed. Please try again.' });
+    }
 
     logger.info('Logout completed', {
       hasAccessToken: Boolean(accessToken),
-      sessionRevoked,
+      sessionRevoked: Boolean(accessToken),
     });
 
     res.json({ success: true });
