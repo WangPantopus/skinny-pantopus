@@ -117,19 +117,26 @@ public enum ChatEndpoints {
     /// `POST /api/chat/rooms/:roomId/read` — mark every message in the
     /// room as read for the current user. Route
     /// `backend/routes/chats.js:1953`.
-    public static func markRoomRead(roomId: String, asBusinessUserId: String? = nil) -> Endpoint {
-        Endpoint(
+    public static func markRoomRead(roomId: String, asBusinessUserId: String? = nil, throughMessageId: String? = nil) -> Endpoint {
+        var body: [String: String] = [:]
+        if let asBusinessUserId { body["asBusinessUserId"] = asBusinessUserId }
+        if let throughMessageId { body["throughMessageId"] = throughMessageId }
+        return Endpoint(
             method: .post,
             path: "/api/chat/rooms/\(roomId)/read",
-            body: asBusinessUserId.map { ["asBusinessUserId": $0] }
+            body: body
         )
     }
 
     /// `POST /api/chat/conversations/:otherUserId/read` — mark every
     /// shared-room message read for a person-grouped thread. Route
     /// `backend/routes/chats.js:1265`.
-    public static func markConversationRead(otherUserId: String) -> Endpoint {
-        Endpoint(method: .post, path: "/api/chat/conversations/\(otherUserId)/read")
+    public static func markConversationRead(otherUserId: String, throughMessageId: String? = nil) -> Endpoint {
+        Endpoint(
+            method: .post,
+            path: "/api/chat/conversations/\(otherUserId)/read",
+            body: throughMessageId.map { ["throughMessageId": $0] }
+        )
     }
 
     /// `GET /api/chat/conversations/:otherUserId/topics` — list topic chips.

@@ -184,6 +184,8 @@ public enum ChatDeliveryState: Sendable, Hashable {
     case failed
     /// The server refused the send (403); resending cannot succeed.
     case refused
+    /// Persisted by the server; recipient delivery is not implied.
+    case sent
     case delivered
     case read
 }

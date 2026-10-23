@@ -44,10 +44,14 @@ public final class ChatListViewModel {
     private let preferences: ChatConversationPreferences
     private let logger = Logger(label: "app.pantopus.ios.ChatList")
     private var allRows: [ConversationRowContent] = []
+    private var activityDates: [String: Date] = [:]
+    private var seenMessageIds: Set<String> = []
+    private var recentMessageIds: [String] = []
+    private var refreshTask: Task<Void, Never>?
+
     private var serverTotalUnread: Int = 0
     private var hiddenKeys: Set<String> = []
     private var mutedKeys: Set<String> = []
-    /// Always-pinned synthetic AI assistant row.
     /// The pinned assistant row. The empty state shows it too: before a
     /// first conversation it is the only way into the assistant.
     let aiRow: ConversationRowContent = .init(
@@ -83,11 +87,7 @@ public final class ChatListViewModel {
         }
     }
 
-    // No `deinit { cancel }` — Swift 6's strict concurrency disallows
-    // touching `@MainActor`-isolated stored properties from the
-    // nonisolated `deinit`. The view calls `teardown()` from
-    // `.onDisappear`, and each task captures `[weak self]` so it
-    // exits cleanly once the VM is deallocated.
+    // The view cancels subscriptions through `teardown()` on disappearance.
 
     // MARK: - Public API
 
@@ -111,6 +111,18 @@ public final class ChatListViewModel {
         await fetch(force: true)
     }
 
+    /// Several message/participant changes can describe the same inbox update.
+    /// Keep the immediate socket patch visible and coalesce their canonical read.
+    public func refreshAfterChange() {
+        guard refreshTask == nil else { return }
+        refreshTask = Task { [weak self] in
+            do { try await Task.sleep(nanoseconds: 500_000_000) } catch { return }
+            guard let self else { return }
+            await fetch(force: false)
+            refreshTask = nil
+        }
+    }
+
     /// Tap a filter tab. Pure UI — no refetch.
     public func selectFilter(_ filter: ChatFilter) {
         guard filter != activeFilter else { return }
@@ -124,6 +136,8 @@ public final class ChatListViewModel {
         messageTask?.cancel()
         badgeTask = nil
         messageTask = nil
+        refreshTask?.cancel()
+        refreshTask = nil
     }
 
     /// Swipe action — remove the conversation from the list until new unread arrives.
@@ -183,6 +197,9 @@ public final class ChatListViewModel {
     private func apply(_ response: UnifiedConversationsResponse, stats: ChatStatsResponse.Stats?) {
         loadPreferences()
         serverTotalUnread = stats?.totalUnread ?? response.totalUnread ?? rowsUnreadTotal(from: response.conversations)
+        activityDates = Dictionary(uniqueKeysWithValues: response.conversations.map {
+            ($0.id, $0.lastMessageAt.flatMap(Self.parseISO) ?? .distantPast)
+        })
         allRows = response.conversations.map { Self.project($0, mutedKeys: mutedKeys) }
         updateUnreadByFilter()
         applyFilter()
@@ -246,8 +263,10 @@ public final class ChatListViewModel {
         // Pinned-first ordering — AI is always pinned; user-pinned
         // conversations come next; rest follow.
         let pinnedFirst = rows.sorted { lhs, rhs in
-            if lhs.pinned == rhs.pinned { return false }
-            return lhs.pinned && !rhs.pinned
+            if lhs.id == aiRow.id { return rhs.id != aiRow.id }
+            if rhs.id == aiRow.id { return false }
+            if lhs.pinned != rhs.pinned { return lhs.pinned }
+            return (activityDates[lhs.id] ?? .distantPast, lhs.id) > (activityDates[rhs.id] ?? .distantPast, rhs.id)
         }
         if filtered.isEmpty, activeFilter == .all {
             emptyFilter = nil
@@ -320,22 +339,27 @@ public final class ChatListViewModel {
     }
 
     private func handleMessage(_ event: ChatMessageEvent) {
-        // Best-effort: bump the matching row's preview + timestamp +
-        // unread count. We match by conversation other-user-id (DM /
-        // gig merged rows) or by room id (group / home). When neither
-        // matches, trigger a full refetch so the new conversation
-        // appears.
+        if let id = event.id {
+            guard seenMessageIds.insert(id).inserted else { return }
+            recentMessageIds.append(id)
+            if recentMessageIds.count > 1000 { seenMessageIds.remove(recentMessageIds.removeFirst()) }
+        }
+        // Match a person thread by other-user-id, or a group/home by room id.
+        // Unknown conversations require a canonical inbox read.
         // The row is patched here; the stored list re-checks on the next visit.
         store.markStale(topics: [ScreenTopic.chats])
         let targetId = event.otherUserId ?? event.roomId
         guard let index = allRows.firstIndex(where: { $0.id == targetId }) else {
-            Task { await self.refresh() }
+            refreshAfterChange()
             return
         }
         let original = allRows[index]
         let nextUnread = event.unreadFor ?? (original.unread + 1)
-        let preview = event.preview ?? original.preview
-        let time = event.createdAt.flatMap(Self.relative(timestamp:)) ?? "now"
+        let eventDate = event.createdAt.flatMap(Self.parseISO) ?? Date()
+        let isLatest = eventDate >= (activityDates[targetId] ?? .distantPast)
+        let preview = isLatest ? (event.preview ?? original.preview) : original.preview
+        let time = isLatest ? (event.createdAt.flatMap(Self.relative(timestamp:)) ?? "now") : original.timeLabel
+        if isLatest { activityDates[targetId] = eventDate }
         let updated = ConversationRowContent(
             id: original.id,
             variant: original.variant,
@@ -355,11 +379,21 @@ public final class ChatListViewModel {
             isMuted: original.isMuted
         )
         allRows[index] = updated
-        if nextUnread > original.unread {
-            serverTotalUnread += nextUnread - original.unread
-        }
+        serverTotalUnread = max(0, serverTotalUnread + nextUnread - original.unread)
         applyFilter()
         publishBadgeCount()
+    }
+
+    private static let activityISOFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    private static let activityPlainISOFormatter = ISO8601DateFormatter()
+
+    private static func parseISO(_ raw: String) -> Date? {
+        activityISOFormatter.date(from: raw) ?? activityPlainISOFormatter.date(from: raw)
     }
 
     // MARK: - Projection

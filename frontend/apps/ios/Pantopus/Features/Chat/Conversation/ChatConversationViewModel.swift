@@ -642,10 +642,18 @@ public final class ChatConversationViewModel {
     private var joinedRoomIds: Set<String> = []
     private var hasMore: Bool = false
     private var oldestCursor: String?
+    /// A topic change or leaving the screen invalidates every suspended history request.
+    private var historyGeneration = 0
+    private var historyRequestId: UUID?
+    private var historyTouchedIds: Set<String> = []
+    private var refreshInProgress = false
+    private var fallbackRefreshTask: Task<Void, Never>?
     private var markReadTask: Task<Void, Never>?
+    private var isTimelineAtBottom = false
+    private var lastReadMessageId: String?
     private var socketTasks: [Task<Void, Never>] = []
-    /// Socket-down fallback: polls `refresh()` every 30s while the
-    /// connection is not `.connected`, so the loaded thread keeps
+    /// Socket-down fallback: checks promptly, backing off to 30 seconds while
+    /// the connection is not `.connected`, so the loaded thread keeps
     /// receiving replies. Cancelled on reconnect and teardown. Never
     /// runs for the AI thread (its messages are local-only).
     private var fallbackPollTask: Task<Void, Never>?
@@ -1074,16 +1082,27 @@ public final class ChatConversationViewModel {
     }
 
     public func refresh() async {
+        guard !refreshInProgress else { return }
+        refreshInProgress = true
+        defer { refreshInProgress = false }
+        let generation = historyGeneration
         await loadTopicsIfNeeded()
-        // Merge, don't reload: refresh() fires on every socket echo, the
-        // offline poll, and pull-to-refresh. A reload would tear the
-        // thread down to the shimmer, wipe any older pages the user had
-        // scrolled to, and reset the scroll position on each of those.
-        // Reload only out of an error state, where nothing is on screen.
+        guard generation == historyGeneration, !Task.isCancelled else { return }
         if case .error = state {
             await fetch(.reload)
         } else {
             await fetch(.merge)
+        }
+    }
+
+    /// Incomplete legacy events and reconnects share one recovery request.
+    private func scheduleFallbackRefresh() {
+        guard fallbackRefreshTask == nil else { return }
+        fallbackRefreshTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 150_000_000)
+            guard let self, !Task.isCancelled else { return }
+            await refresh()
+            fallbackRefreshTask = nil
         }
     }
 
@@ -1276,11 +1295,18 @@ public final class ChatConversationViewModel {
     /// Insert a persisted message, replacing any copy that already
     /// arrived through a socket-triggered refetch.
     private func upsert(_ message: ChatMessageDTO) {
+        historyTouchedIds.insert(message.id)
+        guard selectedTopicId == nil || message.topicId == selectedTopicId else { return }
         if let index = messages.firstIndex(where: { $0.id == message.id }) {
-            messages[index] = message
+            if message.readAt == nil, let knownRead = messages[index].readAt {
+                messages[index] = message.replacingReadAt(knownRead)
+            } else {
+                messages[index] = message
+            }
         } else {
             messages.append(message)
         }
+        messages.sort(by: Self.messagePrecedes)
     }
 
     /// Bare lowercase UUID — the send validator is `Joi.string().uuid()`
@@ -1720,15 +1746,27 @@ public final class ChatConversationViewModel {
 
     /// Mark every message in the thread as read for the current user.
     /// Debounced — repeated calls within 600 ms collapse to one.
+    public func setTimelineAtBottom(_ atBottom: Bool) {
+        isTimelineAtBottom = atBottom
+        if atBottom { scheduleMarkRead() } else { markReadTask?.cancel() }
+    }
+
     public func scheduleMarkRead() {
+        guard isTimelineAtBottom, selectedTopicId == nil else { return }
         markReadTask?.cancel()
         markReadTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 600_000_000)
+            guard !Task.isCancelled else { return }
             await self?.performMarkRead()
         }
     }
 
     public func teardown() {
+        isTimelineAtBottom = false
+        historyGeneration += 1
+        historyRequestId = nil
+        fallbackRefreshTask?.cancel()
+        fallbackRefreshTask = nil
         rememberThread()
         emitTypingStopIfNeeded()
         markReadTask?.cancel()
@@ -2150,8 +2188,9 @@ public final class ChatConversationViewModel {
             messageType: messageType,
             metadata: .object(metadata),
             replyToId: sanitizedReplyToId(replyingTo?.messageId, roomId: roomId),
+            topicId: selectedTopicId,
             clientMessageId: clientId,
-            createdAt: ISO8601DateFormatter().string(from: Date()),
+            createdAt: Self.fractionalISOFormatter.string(from: Date()),
             editedAt: nil,
             deletedAt: nil,
             deliveredAt: nil,
@@ -2295,43 +2334,89 @@ public final class ChatConversationViewModel {
     }
 
     private func fetch(_ kind: FetchKind) async {
-        // AI thread messages are local-only — there is no persisted
-        // history to refetch, so refresh/pull-to-refresh must be a
-        // no-op BEFORE any clearing or the gesture would wipe the
-        // visible conversation (including mid-stream). A fresh thread
-        // still lands on `.empty` so the welcome card renders.
         if case .ai = mode {
-            if messages.isEmpty {
-                state = .empty
-            }
+            if messages.isEmpty { state = .empty }
             return
         }
         if case .reload = kind {
+            historyGeneration += 1
             state = .loading
             messages = []
-            // Pending / failed optimistic rows survive refetches —
-            // eating an in-flight or failed send here would lose the
-            // message and its retry CTA. Confirmed rows are retired in
-            // `apply(response:kind:)` by `client_message_id` match.
             oldestCursor = nil
             hasMore = false
-        }
-        let before: String? =
-            if case let .older(cursor) = kind { cursor } else { nil }
-        switch mode {
-        case .ai:
-            // Handled by the early return above.
+        } else if historyRequestId != nil {
             return
-        case let .room(roomId):
-            await fetchRoom(roomId: roomId, before: before, kind: kind)
-        case let .person(otherUserId):
-            await fetchPerson(otherUserId: otherUserId, before: before, kind: kind)
         }
+        let requestId = UUID()
+        let generation = historyGeneration
+        let topicId = selectedTopicId
+        let held = messages
+        let heldIds = Set(held.map(\.id))
+        historyRequestId = requestId
+        historyTouchedIds = []
+        defer {
+            if historyRequestId == requestId { historyRequestId = nil }
+        }
+        let before: String? = if case let .older(cursor) = kind { cursor } else { nil }
+        do {
+            let response = try await requestHistory(before: before, topicId: topicId)
+            guard generation == historyGeneration, historyRequestId == requestId, !Task.isCancelled else { return }
+            var fetched = response.messages
+            var page = response
+            // Refresh every already-loaded range. This fills arbitrarily large reconnect gaps
+            // and reconciles offline edits/deletes without discarding older loaded history.
+            if case .merge = kind, let earliest = held.min(by: Self.messagePrecedes) {
+                var cursors: Set<String> = []
+                while page.hasMore == true,
+                      let oldest = page.messages.min(by: Self.messagePrecedes),
+                      Self.messagePrecedes(earliest, oldest),
+                      let cursor = page.nextCursor ?? Self.paginationCursor(for: oldest),
+                      cursors.insert(cursor).inserted {
+                    page = try await requestHistory(before: cursor, topicId: topicId)
+                    guard generation == historyGeneration, historyRequestId == requestId, !Task.isCancelled else { return }
+                    fetched.append(contentsOf: page.messages)
+                }
+                let fetchedIds = Set(fetched.map(\.id))
+                let lowerBound = fetched.min(by: Self.messagePrecedes)
+                messages.removeAll { message in
+                    guard heldIds.contains(message.id), !historyTouchedIds.contains(message.id),
+                          !fetchedIds.contains(message.id) else { return false }
+                    return page.hasMore != true || lowerBound.map { !Self.messagePrecedes(message, $0) } == true
+                }
+            }
+            if case .person = mode, let roomIds = response.roomIds {
+                let allowedRooms = Set(roomIds)
+                messages.removeAll { !allowedRooms.contains($0.roomId) }
+            }
+            apply(response: response, kind: kind, fetchedMessages: fetched)
+            scheduleMarkRead()
+            if case let .room(roomId) = mode, before == nil {
+                await refreshRoomAvailability(roomId: roomId)
+            }
+        } catch {
+            guard generation == historyGeneration, historyRequestId == requestId, !Task.isCancelled else { return }
+            handleFetchFailure(error, kind: kind)
+        }
+    }
+
+    private func requestHistory(before: String?, topicId: String?) async throws -> ChatMessagesResponse {
+        let endpoint: Endpoint
+        switch mode {
+        case let .room(roomId):
+            endpoint = ChatEndpoints.roomMessages(roomId: roomId, before: before, asBusinessUserId: asBusinessUserId)
+        case let .person(otherUserId):
+            endpoint = ChatEndpoints.conversationMessages(otherUserId: otherUserId, before: before, topicId: topicId)
+        case .ai:
+            throw ChatSendError.noRoom
+        }
+        return try await api.request(endpoint)
     }
 
     private func loadTopicsIfNeeded() async {
         guard case let .person(otherUserId) = mode else { return }
+        let generation = historyGeneration
         if let initialTopic, selectedTopicId == nil {
+            self.initialTopic = nil
             do {
                 let response: FindOrCreateTopicResponse = try await api.request(
                     ChatEndpoints.findOrCreateTopic(
@@ -2343,6 +2428,7 @@ public final class ChatConversationViewModel {
                         )
                     )
                 )
+                guard generation == historyGeneration, !Task.isCancelled else { return }
                 selectedTopicId = response.topic.id
             } catch {
                 logger.warning("find/create topic failed: \(error)")
@@ -2351,24 +2437,12 @@ public final class ChatConversationViewModel {
         }
         do {
             let response: ConversationTopicsResponse = try await api.request(ChatEndpoints.conversationTopics(otherUserId: otherUserId))
+            guard generation == historyGeneration, !Task.isCancelled else { return }
             topics = response.topics.map {
                 ChatConversationTopic(id: $0.id, topicType: $0.topicType, title: $0.title, status: $0.status)
             }
         } catch {
             logger.warning("load topics failed: \(error)")
-        }
-    }
-
-    private func fetchRoom(roomId: String, before: String?, kind: FetchKind) async {
-        do {
-            let response: ChatMessagesResponse = try await api.request(
-                ChatEndpoints.roomMessages(roomId: roomId, before: before, asBusinessUserId: asBusinessUserId)
-            )
-            apply(response: response, kind: kind)
-            scheduleMarkRead(for: roomId)
-            if before == nil { await refreshRoomAvailability(roomId: roomId) }
-        } catch {
-            handleFetchFailure(error, kind: kind)
         }
     }
 
@@ -2389,23 +2463,6 @@ public final class ChatConversationViewModel {
         }
     }
 
-    private func fetchPerson(otherUserId: String, before: String?, kind: FetchKind) async {
-        do {
-            let response: ChatMessagesResponse = try await api.request(
-                ChatEndpoints.conversationMessages(otherUserId: otherUserId, before: before, topicId: selectedTopicId)
-            )
-            if let roomIds = response.roomIds {
-                // Drop cached history that no longer belongs to this person thread.
-                let allowedRooms = Set(roomIds)
-                messages.removeAll { !allowedRooms.contains($0.roomId) }
-            }
-            apply(response: response, kind: kind)
-            scheduleMarkRead(for: otherUserId)
-        } catch {
-            handleFetchFailure(error, kind: kind)
-        }
-    }
-
     private func handleFetchFailure(_ error: any Error, kind: FetchKind) {
         if case .reload = kind {
             state = .error(message: friendlyMessage(error))
@@ -2414,61 +2471,29 @@ public final class ChatConversationViewModel {
         }
     }
 
-    private func apply(response: ChatMessagesResponse, kind: FetchKind) {
-        sendRefusalNote = response.sendRefusal?.error
-        if case .merge = kind, !messages.isEmpty, Self.leavesGap(response, after: messages) {
-            // More arrived while away than one page holds: what's held and the
-            // newest page don't meet, so the thread starts from the newest page
-            // (older ones load on scroll) instead of showing a silent gap.
-            messages = response.messages.sorted { ($0.createdAt, $0.id) < ($1.createdAt, $1.id) }
-            retireConfirmedClientIds(in: response)
-            updateActiveRooms(response: response)
-            hasMore = true
-            oldestCursor = response.nextCursor ?? Self.paginationCursor(for: messages.first)
-            rebuild()
-            joinActiveRoomsIfPossible()
-            return
+    private func apply(response: ChatMessagesResponse, kind: FetchKind, fetchedMessages: [ChatMessageDTO]) {
+        switch kind {
+        case .reload, .merge: sendRefusalNote = response.sendRefusal?.error
+        case .older: break
         }
-        if case .merge = kind, !messages.isEmpty {
-            // Newest-page refetch while older pages may be loaded —
-            // replace held copies (edits/reactions land) and append rows
-            // we don't hold yet. Never touches the pagination cursors, so
-            // a socket echo can't wipe the history the user scrolled to.
-            var didChange = false
-            for fetched in response.messages {
-                if let index = messages.firstIndex(where: { $0.id == fetched.id }) {
-                    if messages[index] != fetched {
-                        messages[index] = fetched
-                        didChange = true
-                    }
-                } else {
-                    messages.append(fetched)
-                    didChange = true
-                }
+        // Events received after the request started are newer than its snapshot.
+        var byId = Dictionary(uniqueKeysWithValues: messages.map { ($0.id, $0) })
+        for message in fetchedMessages where !historyTouchedIds.contains(message.id) {
+            if message.readAt == nil, let knownRead = byId[message.id]?.readAt {
+                byId[message.id] = message.replacingReadAt(knownRead)
+            } else {
+                byId[message.id] = message
             }
-            if didChange {
-                messages.sort { ($0.createdAt, $0.id) < ($1.createdAt, $1.id) }
-            }
-            retireConfirmedClientIds(in: response)
-            updateActiveRooms(response: response)
-            rebuild()
-            joinActiveRoomsIfPossible()
-            return
         }
-        // Backend returns messages oldest-first (ascending) — see
-        // backend/routes/chats.js, which fetches the newest N rows then
-        // reverses them. Drop ids we already hold (a send completing while
-        // this fetch was in flight may have upserted its message ahead of
-        // us), then sort by (created_at, id) so the held array stays
-        // oldest-first regardless of which page these rows came from.
-        let existingIds = Set(messages.map(\.id))
-        let incoming = response.messages.filter { !existingIds.contains($0.id) }
-        messages.append(contentsOf: incoming)
-        messages.sort { ($0.createdAt, $0.id) < ($1.createdAt, $1.id) }
-        retireConfirmedClientIds(in: response)
+        messages = byId.values.sorted(by: Self.messagePrecedes)
+        retireConfirmedClientIds(in: fetchedMessages)
         updateActiveRooms(response: response)
-        hasMore = response.hasMore ?? false
-        oldestCursor = response.nextCursor ?? Self.paginationCursor(for: messages.first)
+        if case .merge = kind, oldestCursor != nil {
+            // Keep the pagination position belonging to the oldest loaded page.
+        } else {
+            hasMore = response.hasMore ?? false
+            oldestCursor = response.nextCursor ?? Self.paginationCursor(for: messages.first)
+        }
         rebuild()
         joinActiveRoomsIfPossible()
     }
@@ -2477,8 +2502,8 @@ public final class ChatConversationViewModel {
     /// landed server-side (e.g. the POST response was lost, then a
     /// socket refetch ran) — retire every trace of the optimistic
     /// copy so a delivered message can never linger as "failed".
-    private func retireConfirmedClientIds(in response: ChatMessagesResponse) {
-        for clientId in response.messages.compactMap(\.clientMessageId)
+    private func retireConfirmedClientIds(in messages: [ChatMessageDTO]) {
+        for clientId in messages.compactMap(\.clientMessageId)
             where pendingByClientId[clientId] != nil
             || sendContextsByClientId[clientId] != nil
             || failedClientIds.contains(clientId) {
@@ -2529,16 +2554,21 @@ public final class ChatConversationViewModel {
     // MARK: - Mark-read
 
     private func performMarkRead() async {
-        guard let target = await resolveRoomIdForReadMark() else { return }
+        guard isTimelineAtBottom, selectedTopicId == nil,
+              let throughMessageId = messages.last?.id,
+              UUID(uuidString: throughMessageId) != nil,
+              throughMessageId != lastReadMessageId,
+              let target = await resolveRoomIdForReadMark() else { return }
         let endpoint =
             switch mode {
             case let .person(otherUserId):
-                ChatEndpoints.markConversationRead(otherUserId: otherUserId)
+                ChatEndpoints.markConversationRead(otherUserId: otherUserId, throughMessageId: throughMessageId)
             default:
-                ChatEndpoints.markRoomRead(roomId: target, asBusinessUserId: asBusinessUserId)
+                ChatEndpoints.markRoomRead(roomId: target, asBusinessUserId: asBusinessUserId, throughMessageId: throughMessageId)
             }
         do {
             _ = try await api.request(endpoint, as: EmptyResponse.self)
+            lastReadMessageId = throughMessageId
         } catch {
             logger.warning("markRead failed: \(error)")
         }
@@ -2616,19 +2646,26 @@ public final class ChatConversationViewModel {
                 if state == .connected {
                     joinedRoomIds.removeAll()
                     joinActiveRoomsIfPossible()
+                    scheduleFallbackRefresh()
                 }
                 updateFallbackPolling(isConnected: state == .connected)
             }
         })
         socketTasks.append(Task { [weak self] in
-            guard let stream = self?.socket.events(named: "message:new", as: ChatRealtimeMessage.self) else { return }
+            guard let stream = self?.socket.events(
+                named: "message:new", as: ChatRealtimeMessageEnvelope.self, keyDecodingStrategy: .useDefaultKeys
+            ) else { return }
             for await event in stream {
                 guard let self else { return }
                 handleIncoming(event)
             }
         })
         socketTasks.append(Task { [weak self] in
-            guard let stream = self?.socket.events(named: "message:edited", as: ChatRealtimeMessageUpdate.self) else { return }
+            guard let stream = self?.socket.events(
+                named: "message:edited",
+                as: ChatRealtimeMessageUpdate.self,
+                keyDecodingStrategy: .useDefaultKeys
+            ) else { return }
             for await event in stream {
                 guard let self else { return }
                 handleUpdate(event)
@@ -2648,6 +2685,7 @@ public final class ChatConversationViewModel {
                 handleReaction(event)
             }
         })
+        subscribeToReadReceipts()
         socketTasks.append(Task { [weak self] in
             guard let stream = self?.socket.events(named: "typing:user", as: ChatRealtimeTyping.self) else { return }
             for await event in stream {
@@ -2679,6 +2717,16 @@ public final class ChatConversationViewModel {
         joinActiveRoomsIfPossible()
     }
 
+    private func subscribeToReadReceipts() {
+        socketTasks.append(Task { [weak self] in
+            guard let stream = self?.socket.events(named: "messages:read", as: ChatRealtimeRead.self) else { return }
+            for await event in stream {
+                guard let self else { return }
+                handleRead(event)
+            }
+        })
+    }
+
     /// Live presence (A15 header dot / "Active now"). Only the person
     /// thread's counterparty matters — room/group/AI threads have no
     /// single presence subject.
@@ -2688,9 +2736,8 @@ public final class ChatConversationViewModel {
     }
 
     /// Start/stop the socket-down fallback poll. While disconnected, a
-    /// loaded non-AI thread refetches every 30s so incoming replies
-    /// still land; reconnecting cancels the loop (the socket resumes
-    /// realtime delivery and `room:join` backfills the gap).
+    /// loaded non-AI thread refreshes promptly then backs off to 30 seconds.
+    /// Reconnection resumes realtime delivery and canonical REST catch-up.
     private func updateFallbackPolling(isConnected: Bool) {
         if isConnected {
             fallbackPollTask?.cancel()
@@ -2699,12 +2746,15 @@ public final class ChatConversationViewModel {
         }
         guard fallbackPollTask == nil else { return }
         if case .ai = mode { return }
+        scheduleFallbackRefresh()
         fallbackPollTask = Task { [weak self] in
+            var delay: UInt64 = 3
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 30_000_000_000)
+                try? await Task.sleep(nanoseconds: delay * 1_000_000_000)
                 guard !Task.isCancelled else { return }
                 guard let self else { return }
                 await refresh()
+                delay = min(delay * 2, 30)
             }
         }
     }
@@ -2722,94 +2772,88 @@ public final class ChatConversationViewModel {
                     payload: ["roomId": roomId],
                     as: ChatRoomJoinAck.self
                 )
-                guard ack?.success == true, let backfill = ack?.messages, !backfill.isEmpty else { return }
-                mergeBackfill(backfill)
+                guard !Task.isCancelled, activeRoomIds.contains(roomId) else { return }
+                guard ack?.success == true else {
+                    joinedRoomIds.remove(roomId)
+                    scheduleFallbackRefresh()
+                    return
+                }
+                // Joining subscribes to future changes. Canonical REST catch-up,
+                // shared by all room acknowledgements, fills every missed page.
+                scheduleFallbackRefresh()
             })
         }
     }
 
-    private func mergeBackfill(_ backfill: [ChatMessageDTO]) {
-        // A backfill row carrying one of our client ids means that send
-        // landed server-side (lost POST response + missed `message:new`
-        // echo — exactly the reconnect case backfill exists for). Retire
-        // every trace of the optimistic copy, same contract as
-        // `apply(response:)`, so the delivered message can't render next
-        // to its own "Failed — Retry" twin.
-        var retiredPending = false
-        for clientId in backfill.compactMap(\.clientMessageId)
-            where pendingByClientId[clientId] != nil
-            || sendContextsByClientId[clientId] != nil
-            || failedClientIds.contains(clientId) {
-            retireConfirmedSend(clientId: clientId)
-            retiredPending = true
-        }
-        let existingIds = Set(messages.map(\.id))
-        // The room backfill carries every topic; a topic view keeps its own.
-        let newMessages = backfill.filter {
-            !existingIds.contains($0.id) && (selectedTopicId == nil || $0.topicId == selectedTopicId)
-        }
-        guard !newMessages.isEmpty else {
-            if retiredPending { rebuild() }
+    private func handleReaction(_ event: ChatRealtimeReaction) {
+        guard let original = messages.first(where: { $0.id == event.messageId }) else { return }
+        guard let summaries = event.reactions, summaries.allSatisfy({ $0.users != nil }) else {
+            scheduleFallbackRefresh()
             return
         }
-        messages.append(contentsOf: newMessages)
-        messages.sort { $0.createdAt < $1.createdAt }
+        // reacted_by_me on a room broadcast belongs to its author. Derive it
+        // from the supplied users for this viewer instead.
+        historyTouchedIds.insert(original.id)
+        applyReactions(summaries.map {
+            ChatReactionSummary(reaction: $0.reaction, count: $0.count, reactedByMe: $0.users?.contains { $0.id == currentUserId } == true)
+        }, to: original.id)
+    }
+
+    private func handleIncoming(_ event: ChatRealtimeMessageEnvelope) {
+        let message = event.message
+        if case let .person(otherUserId) = mode, event.otherUserId == otherUserId,
+           activeRoomIds.insert(message.roomId).inserted {
+            // A new direct/task room can belong to an already-open person thread.
+            activeThreadTracker.setActiveRooms(activeRoomIds, owner: ObjectIdentifier(self))
+            joinActiveRoomsIfPossible()
+        }
+        guard activeRoomIds.contains(message.roomId) else { return }
+        if let clientId = message.clientMessageId { retireConfirmedSend(clientId: clientId) }
+        upsert(message)
         rebuild()
         scheduleMarkRead()
     }
 
-    /// Merge a reaction count update into the matching message. The
-    /// minimal patch is the count — the projection re-derives the
-    /// delivery state + stamp from the existing message fields.
-    private func handleReaction(_ event: ChatRealtimeReaction) {
-        guard messages.contains(where: { $0.id == event.messageId }) else { return }
-        // Reactions don't change the message body — just trigger a
-        // re-fetch so the server count is canonical.
-        Task { await self.refresh() }
-    }
-
-    private func handleIncoming(_ event: ChatRealtimeMessage) {
-        guard activeRoomIds.contains(event.roomId) else { return }
-        // Server-side echo of our own optimistic message. Retire every
-        // trace of it — clearing the send context and any failed mark
-        // too, so a lost POST response resolving moments later can't
-        // re-flag the now-confirmed message as failed.
-        if let clientId = event.clientMessageId, pendingByClientId[clientId] != nil {
-            retireConfirmedSend(clientId: clientId)
-            Task { await self.refresh() }
-            return
-        }
-        // Someone else's message in this thread → append + rebuild.
-        if messages.contains(where: { $0.id == event.id }) { return }
-        Task { await self.refresh() }
-    }
-
     private func handleUpdate(_ event: ChatRealtimeMessageUpdate) {
         if let roomId = event.roomId, !activeRoomIds.contains(roomId) { return }
-        guard let index = messages.firstIndex(where: { $0.id == event.id }) else { return }
-        let original = messages[index]
-        // Construct an updated DTO by re-encoding/decoding the
-        // delta — the simpler path is to just refetch.
-        Task { await self.refresh() }
-        _ = original
+        guard messages.contains(where: { $0.id == event.id }) else { return }
+        guard let updated = event.updatedMessage else {
+            scheduleFallbackRefresh()
+            return
+        }
+        applyUpdatedMessage(updated)
+    }
+
+    private func handleRead(_ event: ChatRealtimeRead) {
+        // A group's single reader must never imply that everyone has read it.
+        guard case let .person(otherUserId) = mode, event.userId == otherUserId, event.roomId == directRoomId,
+              let throughMessageId = event.throughMessageId, let readAt = event.readAt,
+              let boundary = messages.first(where: { $0.id == throughMessageId && $0.roomId == event.roomId }) else { return }
+        for index in messages.indices {
+            let message = messages[index]
+            guard message.roomId == event.roomId, message.userId == sendingIdentityId,
+                  !Self.messagePrecedes(boundary, message) else { continue }
+            historyTouchedIds.insert(message.id)
+            messages[index] = message.replacingReadAt(readAt)
+        }
+        rebuild()
     }
 
     private func handleDelete(_ event: ChatRealtimeMessageDelete) {
         if let roomId = event.roomId, !activeRoomIds.contains(roomId) { return }
+        historyTouchedIds.insert(event.id)
         messages.removeAll { $0.id == event.id }
         rebuild()
     }
 
     private func applyUpdatedMessage(_ updated: ChatMessageDTO) {
-        if let index = messages.firstIndex(where: { $0.id == updated.id }) {
-            messages[index] = updated
-        } else {
-            messages.append(updated)
-        }
+        guard let original = messages.first(where: { $0.id == updated.id }) else { return }
+        upsert(original.applyingEdit(updated))
         rebuild()
     }
 
     private func applyReactions(_ reactions: [ChatReactionSummary], to messageId: String) {
+        historyTouchedIds.insert(messageId)
         guard let index = messages.firstIndex(where: { $0.id == messageId }) else { return }
         messages[index] = messages[index].replacingReactions(reactions)
         rebuild()
@@ -2819,6 +2863,7 @@ public final class ChatConversationViewModel {
 
     private func rebuild() {
         let combined = combinedMessages()
+        let messagesById = Dictionary(uniqueKeysWithValues: combined.map { ($0.id, $0) })
         if combined.isEmpty {
             state = .empty
             return
@@ -2872,7 +2917,7 @@ public final class ChatConversationViewModel {
                 }
                 if message.id.hasPrefix("client_") { return .sending }
                 if message.readAt != nil { return .read }
-                return .delivered
+                return .sent
             }()
             // Failed / in-flight rows keep their stamp row even when
             // grouped (no tail) — the stamp is the only surface for the
@@ -2883,7 +2928,7 @@ public final class ChatConversationViewModel {
                 || deliveryState == .sending
             let stamp: String? = showStamp ? Self.stampLabel(for: message, currentUserId: sendingIdentityId) : nil
             let body = bubbleBody(for: message)
-            let replyPreview = Self.replyPreview(for: message, in: combined, currentUserId: sendingIdentityId)
+            let replyPreview = Self.replyPreview(for: message, in: messagesById, currentUserId: sendingIdentityId)
             let reactions = message.reactions.map {
                 ChatBubbleReaction(id: $0.reaction, reaction: $0.reaction, count: $0.count, reactedByMe: $0.reactedByMe)
             }
@@ -2970,8 +3015,8 @@ public final class ChatConversationViewModel {
     /// rows stay in the list with the same id so the retry CTA can
     /// target them.
     private func combinedMessages() -> [ChatMessageDTO] {
-        let pending = pendingByClientId.values.sorted { $0.createdAt < $1.createdAt }
-        return messages + pending
+        let pending = pendingByClientId.values.filter { selectedTopicId == nil || $0.topicId == selectedTopicId }
+        return (messages + pending).sorted(by: Self.messagePrecedes)
     }
 
     /// Optimistic local row. Its `id` keeps the `client_` prefix — the
@@ -2987,8 +3032,9 @@ public final class ChatConversationViewModel {
             messageType: "text",
             metadata: nil,
             replyToId: sanitizedReplyToId(replyingTo?.messageId, roomId: roomId),
+            topicId: selectedTopicId,
             clientMessageId: clientId,
-            createdAt: ISO8601DateFormatter().string(from: Date()),
+            createdAt: Self.fractionalISOFormatter.string(from: Date()),
             editedAt: nil,
             deletedAt: nil,
             deliveredAt: nil,
@@ -3008,7 +3054,7 @@ public final class ChatConversationViewModel {
             metadata: nil,
             replyToId: nil,
             clientMessageId: nil,
-            createdAt: createdAt ?? ISO8601DateFormatter().string(from: Date()),
+            createdAt: createdAt ?? Self.fractionalISOFormatter.string(from: Date()),
             editedAt: nil,
             deletedAt: nil,
             deliveredAt: nil,
@@ -3178,11 +3224,11 @@ public final class ChatConversationViewModel {
 
     private static func replyPreview(
         for message: ChatMessageDTO,
-        in messages: [ChatMessageDTO],
+        in messages: [String: ChatMessageDTO],
         currentUserId: String
     ) -> ChatReplyPreview? {
         guard let replyToId = message.replyToId,
-              let original = messages.first(where: { $0.id == replyToId }) else { return nil }
+              let original = messages[replyToId] else { return nil }
         return ChatReplyPreview(
             messageId: original.id,
             senderName: replyName(for: original, currentUserId: currentUserId),
@@ -3229,9 +3275,7 @@ public final class ChatConversationViewModel {
 
     private static func dayKey(for iso: String) -> String {
         guard let date = parseISO(iso) else { return iso }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: date)
+        return dayKeyFormatter.string(from: date)
     }
 
     private static func dayLabel(for iso: String) -> String {
@@ -3239,16 +3283,12 @@ public final class ChatConversationViewModel {
         let calendar = Calendar.current
         if calendar.isDateInToday(date) { return "Today" }
         if calendar.isDateInYesterday(date) { return "Yesterday" }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMM d"
-        return formatter.string(from: date).uppercased()
+        return dayLabelFormatter.string(from: date).uppercased()
     }
 
     private static func stampLabel(for message: ChatMessageDTO, currentUserId: String) -> String? {
         guard let date = parseISO(message.createdAt) else { return nil }
-        let formatter = DateFormatter()
-        formatter.timeStyle = .short
-        let time = formatter.string(from: date)
+        let time = stampFormatter.string(from: date)
         let isOutgoing = message.userId == currentUserId
         let sender = senderName(of: message)
         if isOutgoing {
@@ -3260,10 +3300,51 @@ public final class ChatConversationViewModel {
         }
     }
 
+    private static let dayKeyFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = .autoupdatingCurrent
+        formatter.timeZone = .autoupdatingCurrent
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+
+    private static let dayLabelFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = .autoupdatingCurrent
+        formatter.timeZone = .autoupdatingCurrent
+        formatter.dateFormat = "MMM d"
+        return formatter
+    }()
+
+    private static let stampFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = .autoupdatingCurrent
+        formatter.timeZone = .autoupdatingCurrent
+        formatter.timeStyle = .short
+        return formatter
+    }()
+
+    private static let fractionalISOFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    private static let isoFormatter = ISO8601DateFormatter()
+    private static var parsedDates: [String: Date] = [:]
+
     private static func parseISO(_ raw: String) -> Date? {
-        let f1 = ISO8601DateFormatter()
-        f1.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f1.date(from: raw) ?? ISO8601DateFormatter().date(from: raw)
+        if let cached = parsedDates[raw] { return cached }
+        let date = fractionalISOFormatter.date(from: raw) ?? isoFormatter.date(from: raw)
+        if parsedDates.count > 4096 { parsedDates.removeAll(keepingCapacity: true) }
+        if let date { parsedDates[raw] = date }
+        return date
+    }
+
+    private static func messagePrecedes(_ lhs: ChatMessageDTO, _ rhs: ChatMessageDTO) -> Bool {
+        let left = parseISO(lhs.createdAt) ?? .distantPast
+        let right = parseISO(rhs.createdAt) ?? .distantPast
+        return (left, lhs.id) < (right, rhs.id)
     }
 
     private func friendlyMessage(_ error: any Error) -> String {

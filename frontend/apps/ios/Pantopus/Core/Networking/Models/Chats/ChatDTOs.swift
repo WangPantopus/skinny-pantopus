@@ -266,6 +266,7 @@ public struct ChatBadgeUpdate: Decodable, Sendable, Hashable {
 /// conversation screen is richer; we only consume the room reference +
 /// preview here.
 public struct ChatMessageEvent: Decodable, Sendable, Hashable {
+    public let id: String?
     public let roomId: String
     public let otherUserId: String?
     public let preview: String?
@@ -300,7 +301,7 @@ public struct ChatMessageDTO: Decodable, Sendable, Hashable, Identifiable {
     public let id: String
     public let roomId: String
     public let userId: String?
-    public let messageText: String?
+    public private(set) var messageText: String?
     public let messageType: String
     public let metadata: JSONValue?
     public let replyToId: String?
@@ -310,10 +311,10 @@ public struct ChatMessageDTO: Decodable, Sendable, Hashable, Identifiable {
     public let topicId: String?
     public let clientMessageId: String?
     public let createdAt: String
-    public let editedAt: String?
+    public private(set) var editedAt: String?
     public let deletedAt: String?
     public let deliveredAt: String?
-    public let readAt: String?
+    public private(set) var readAt: String?
     public let sender: ChatMessageSender?
     public let reactions: [ChatReactionSummary]
     public let attachments: [ChatAttachmentDTO]
@@ -370,6 +371,20 @@ public struct ChatMessageDTO: Decodable, Sendable, Hashable, Identifiable {
         reactions = try c.decodeIfPresent([ChatReactionSummary].self, forKey: .reactions) ?? []
         attachments = try c.decodeIfPresent([ChatAttachmentDTO].self, forKey: .attachments) ?? []
         actorUserId = try c.decodeIfPresent(String.self, forKey: .actorUserId)
+    }
+
+    /// Edit responses carry the changed text, not hydrated files or viewer reactions.
+    public func applyingEdit(_ edited: ChatMessageDTO) -> ChatMessageDTO {
+        var updated = self
+        updated.messageText = edited.messageText
+        updated.editedAt = edited.editedAt
+        return updated
+    }
+
+    public func replacingReadAt(_ readAt: String) -> ChatMessageDTO {
+        var updated = self
+        updated.readAt = readAt
+        return updated
     }
 
     public func replacingReactions(_ reactions: [ChatReactionSummary]) -> ChatMessageDTO {
@@ -553,6 +568,21 @@ public struct ReactToChatMessageResponse: Decodable, Sendable, Hashable {
 /// `message:new` socket payload at the conversation view-model layer
 /// — richer than `ChatMessageEvent` used by the list. The socket
 /// decoder converts snake_case → camelCase automatically.
+/// Full socket row plus its recipient-specific person-thread routing hint.
+public struct ChatRealtimeMessageEnvelope: Decodable, Sendable {
+    public let message: ChatMessageDTO
+    public let otherUserId: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case otherUserId = "other_user_id"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        message = try ChatMessageDTO(from: decoder)
+        otherUserId = try decoder.container(keyedBy: CodingKeys.self).decodeIfPresent(String.self, forKey: .otherUserId)
+    }
+}
+
 public struct ChatRealtimeMessage: Decodable, Sendable, Hashable {
     public let id: String
     public let roomId: String
@@ -590,6 +620,7 @@ public struct ChatRealtimeMessage: Decodable, Sendable, Hashable {
 
 /// `message:edited` socket payload.
 public struct ChatRealtimeMessageUpdate: Decodable, Sendable, Hashable {
+    public let updatedMessage: ChatMessageDTO?
     public let id: String
     public let roomId: String?
     public let messageText: String?
@@ -610,6 +641,7 @@ public struct ChatRealtimeMessageUpdate: Decodable, Sendable, Hashable {
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        updatedMessage = try? c.decode(ChatMessageDTO.self, forKey: .message)
         let message = try c.decodeIfPresent([String: JSONValue].self, forKey: .message)
         id = try c.decodeIfPresent(String.self, forKey: .id)
             ?? c.decodeIfPresent(String.self, forKey: .messageId)
@@ -659,6 +691,25 @@ public struct ChatRealtimeReaction: Decodable, Sendable, Hashable {
     public let messageId: String
     public let reaction: String?
     public let counts: [String: Int]?
+    public let reactions: [Summary]?
+
+    public struct Summary: Decodable, Sendable, Hashable {
+        public let reaction: String
+        public let count: Int
+        public let users: [User]?
+
+        public struct User: Decodable, Sendable, Hashable {
+            public let id: String
+        }
+    }
+}
+
+/// A recipient acknowledged a bounded position, not every message in the room.
+public struct ChatRealtimeRead: Decodable, Sendable, Hashable {
+    public let userId: String
+    public let roomId: String
+    public let readAt: String?
+    public let throughMessageId: String?
 }
 
 /// `typing:user` / `typing:stopped` socket payloads — broadcast to a

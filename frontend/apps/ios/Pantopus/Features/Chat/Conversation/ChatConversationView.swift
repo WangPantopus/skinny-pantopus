@@ -78,10 +78,12 @@ public struct ChatConversationView: View {
     /// message. Gates stay-pinned-on-new-rows scrolling. Only flips on
     /// actual boundary crossings, so it stays a cheap @State.
     @State private var isAtBottom = false
+    @State private var isNewestMessageVisible = false
     /// The thread opened at its latest message once; coming back (a pushed
     /// profile, a tab switch) keeps the reading position (Instant Screens).
     @State private var hasLandedAtLatest = false
     @Environment(\.openURL) private var openURL
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// A Nearby Plan's chat (board A4): the plan above the messages.
     @Environment(\.chatPlanContext) private var planContext
@@ -263,6 +265,10 @@ public struct ChatConversationView: View {
             if loaded { onContentLoaded() }
         }
         .onDisappear { viewModel.teardown() }
+        .onChange(of: scenePhase) { _, phase in
+            viewModel.setTimelineAtBottom(phase == .active && isNewestMessageVisible)
+            if phase == .active { Task { await viewModel.refresh() } }
+        }
         // RN attach-grid parity: Camera / Photos / Document / Location /
         // Task / Marketplace. Camera hides itself where no capture device
         // exists (simulator).
@@ -1183,6 +1189,10 @@ extension ChatConversationView {
         proxy: ScrollViewProxy
     ) {
         scrollMetrics.distanceFromTop = -frame.minY
+        // Read only when the newest bubble is actually inside the viewport.
+        let newestVisible = frame.maxY <= viewportHeight + 4
+        if isNewestMessageVisible != newestVisible { isNewestMessageVisible = newestVisible }
+        viewModel.setTimelineAtBottom(scenePhase == .active && newestVisible)
         let nearBottom = (frame.maxY - viewportHeight) < 120
         if isAtBottom != nearBottom {
             isAtBottom = nearBottom
@@ -3473,8 +3483,9 @@ private struct ChatBubbleRow: View {
                     switch content.deliveryState {
                     case .read:
                         EmptyView()
-                    case .delivered:
+                    case .sent, .delivered:
                         Icon(.check, size: 10, strokeWidth: 2.0, color: Theme.Color.appTextMuted)
+                            .accessibilityLabel(content.deliveryState == .delivered ? "Delivered" : "Sent")
                     case .sending:
                         ProgressView().scaleEffect(0.6).tint(Theme.Color.appTextMuted)
                     case .failed:
@@ -3505,8 +3516,8 @@ private struct ChatBubbleRow: View {
     private func stampString(_ raw: String) -> String {
         switch content.deliveryState {
         case .read: "Read \(raw)"
-        // Delivered is conveyed by the small check icon, not a loud word (RN).
-        case .delivered: raw
+        // A single check confirms the server accepted the message.
+        case .sent, .delivered: raw
         case .sending: "Sending..."
         case .failed: "Failed to send"
         case .refused: "Not sent"
