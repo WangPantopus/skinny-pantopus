@@ -308,7 +308,8 @@ function snippet(text, name) {
 
 /**
  * Recommendation posts and questions on the person's Nearby feed that match the request, and
- * the names in them and their replies, grouped with how many neighbors named each.
+ * the names in them and their replies, grouped with how many neighbors named each. Ended posts
+ * count too: an Ask ends after 7 days and a recommendation after 60, well inside the 180 days.
  */
 async function findRecommendations(args, ctx) {
   const stems = queryStems(args.query);
@@ -317,8 +318,8 @@ async function findRecommendations(args, ctx) {
   if (!location) return { error: 'They have no home or saved place yet, so there is no Nearby feed to search.' };
   const sinceMs = Date.now() - RECOMMENDATION_DAYS * DAY_MS;
   const [recommendations, questions] = await Promise.all([
-    feedSince(ctx, location, sinceMs, { postType: 'recommendation', pages: RECOMMENDATION_PAGES }),
-    feedSince(ctx, location, sinceMs, { postType: 'ask_local', pages: RECOMMENDATION_PAGES }),
+    feedSince(ctx, location, sinceMs, { postType: 'recommendation', pages: RECOMMENDATION_PAGES, includeEnded: true }),
+    feedSince(ctx, location, sinceMs, { postType: 'ask_local', pages: RECOMMENDATION_PAGES, includeEnded: true }),
   ]);
   const posts = [...recommendations, ...questions]
     .filter((post) => matchesStems(stems, `${post.title || ''} ${post.content || ''}`))
