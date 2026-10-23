@@ -2844,7 +2844,7 @@ public final class ChatConversationViewModel {
             historyAccessRefused = false
             if response.anchorMessageId != nil { isViewingSearchContext = true }
             if before == nil {
-                hasLatestHistoryWindow = response.anchorMessageId == nil && topicId == nil
+                hasLatestHistoryWindow = response.anchorMessageId == nil
                 syncCursors = topicId == nil ? response.syncCursors : nil
             }
             apply(response: response, kind: kind, fetchedMessages: fetched)
