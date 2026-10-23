@@ -292,6 +292,7 @@ const _sessionStateCache = new Map(); // sessionId -> { value, ts }
  */
 async function getSessionStateCached(sessionId) {
   if (!isUuid(sessionId)) return { known: false, revoked: false, context: null, row: null };
+  if (signOutPending(sessionId)) return { known: true, revoked: true, context: null, row: null };
   const hit = _sessionStateCache.get(sessionId);
   if (hit && Date.now() - hit.ts <= SESSION_STATE_TTL_MS) return hit.value;
   const row = await getSessionById(sessionId);
@@ -322,6 +323,28 @@ function invalidateSessionStateCacheForUser(userId) {
   for (const [sessionId, entry] of _sessionStateCache) {
     if (String(entry.value.row?.user_id || '').toLowerCase() === id) _sessionStateCache.delete(sessionId);
   }
+}
+
+// Sign-outs this process accepted but could not save yet: a local /logout
+// while the registry or Supabase Auth was failing, which routes/users.js keeps
+// retrying. Until the retry's deadline this process reads the session as
+// revoked, so verifyToken, optionalAuth, sockets and /refresh refuse it here.
+// Other processes refuse it once the row is saved.
+const _pendingSignOuts = new Map(); // sessionId -> deadline (ms)
+
+/** Read `sessionId`, the session of a verified token, as signed out in this process until `untilMs`. */
+function markSignOutPending(sessionId, userId, untilMs) {
+  if (!isUuid(sessionId)) return;
+  const now = Date.now();
+  for (const [id, until] of _pendingSignOuts) if (until <= now) _pendingSignOuts.delete(id);
+  if ((_pendingSignOuts.get(sessionId) || 0) >= untilMs) return;
+  _pendingSignOuts.set(sessionId, untilMs);
+  emitRevoked(userId, [sessionId], 'logout');
+}
+
+function signOutPending(sessionId) {
+  const until = _pendingSignOuts.get(sessionId);
+  return Boolean(until) && until > Date.now();
 }
 
 function emitRevoked(userId, sessionIds, reason) {
@@ -734,6 +757,8 @@ module.exports = {
   getSessionStateCached,
   invalidateSessionStateCache,
   invalidateSessionStateCacheForUser,
+  markSignOutPending,
+  signOutPending,
   _sessionStateCache,
   revokeSessionRow,
   revokeSessionsForUser,
