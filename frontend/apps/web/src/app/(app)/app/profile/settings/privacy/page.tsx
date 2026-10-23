@@ -220,9 +220,11 @@ export default function PrivacySettingsPage() {
 
 // ─── Constants ────────────────────────────────────────────────
 
+// The server shows a 'followers' field to the person's connections and the people they live with, not to whoever
+// follows them (backend/utils/visibilityPolicy.js canViewProfileField).
 const VISIBILITY_OPTIONS = [
   { value: 'public', label: 'Everyone' },
-  { value: 'followers', label: 'Followers only' },
+  { value: 'followers', label: 'Connections and household' },
   { value: 'private', label: 'Only me' },
 ];
 
