@@ -350,7 +350,7 @@ public struct SwipeableConversationRow: View {
             swipeActions
             ConversationRow(content: content, onTap: onTap)
                 .offset(x: clampedOffset)
-                .highPriorityGesture(swipeGesture)
+                .simultaneousGesture(swipeGesture)
         }
         .accessibilityIdentifier("swipeableConversationRow_\(content.id)")
     }
@@ -413,6 +413,7 @@ public struct SwipeableConversationRow: View {
                 }
             }
             .onEnded { value in
+                guard abs(value.translation.width) > abs(value.translation.height) else { return }
                 let projected = offset + value.translation.width
                 withAnimation(.interpolatingSpring(stiffness: 320, damping: 30)) {
                     offset = projected < -revealWidth / 2 ? -revealWidth : 0
