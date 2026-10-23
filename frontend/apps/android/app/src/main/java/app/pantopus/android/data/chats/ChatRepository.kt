@@ -82,11 +82,11 @@ class ChatRepository
         /** A live inbox change invalidates saved previews/counts without refetching message history. */
         fun inboxChanged() = store.markStale(StoreTopics.CHAT_LIST)
 
-        /** Successful mutations revalidate the inbox; replaced or deleted content also retires its saved preview. */
-        private fun <T> NetworkResult<T>.chatsChanged(retainChatList: Boolean = true): NetworkResult<T> =
+        /** Ordinary successful mutations retain the offline inbox while marking it for revalidation. */
+        private fun <T> NetworkResult<T>.chatsChanged(): NetworkResult<T> =
             also {
                 if (it is NetworkResult.Success) {
-                    store.markEdited(StoreTopics.CHAT_LIST, retainChatList = retainChatList)
+                    store.markEdited(StoreTopics.CHAT_LIST, retainChatList = true)
                     // Reading/sending a message must not cancel a history access check already in flight.
                     store.markStale(StoreTopics.CHATS)
                 }
@@ -287,11 +287,37 @@ class ChatRepository
         suspend fun editMessage(
             messageId: String,
             messageText: String,
-        ): NetworkResult<SendChatMessageResponse> =
-            safeApiCall { api.editMessage(messageId, EditChatMessageBody(messageText)) }.chatsChanged(retainChatList = false)
+            target: ChatSendTarget? = null,
+        ): NetworkResult<SendChatMessageResponse> = contentChanged(target) { api.editMessage(messageId, EditChatMessageBody(messageText)) }
 
-        suspend fun deleteMessage(messageId: String): NetworkResult<Unit> =
-            safeApiCall { api.deleteMessage(messageId) }.chatsChanged(retainChatList = false)
+        suspend fun deleteMessage(
+            messageId: String,
+            target: ChatSendTarget? = null,
+        ): NetworkResult<Unit> = contentChanged(target) { api.deleteMessage(messageId) }
+
+        private suspend fun <T> contentChanged(
+            target: ChatSendTarget?,
+            write: suspend () -> T,
+        ): NetworkResult<T> {
+            val update = store.chatContentUpdater(StoreKeys.conversations, target?.accountId)
+            return safeApiCall { write() }.also { result ->
+                if (result is NetworkResult.Success) {
+                    update { copy ->
+                        val matches: (UnifiedConversationDto) -> Boolean = { row ->
+                            when (target?.kind) {
+                                "person" -> row.otherParticipantId == target.id
+                                "room" -> row.id == target.id || row.roomIds?.contains(target.id) == true
+                                else -> false
+                            }
+                        }
+                        // Unknown or missing scope keeps conservative retirement rather than retaining stale content.
+                        copy.takeIf { it.conversations.any(matches) }?.copy(
+                            conversations = copy.conversations.map { if (matches(it)) it.copy(lastMessagePreview = null) else it },
+                        )
+                    }
+                }
+            }
+        }
 
         /** Streams a chat attachment into [destination], so it can be opened in another app. */
         suspend fun downloadFile(

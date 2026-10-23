@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Provider
@@ -376,6 +377,48 @@ class ScreenStore
                             writeSaved(data, slot, now, etag = null)
                         }
                         markStale(StoreTopics.CHATS)
+                    }
+                }
+                update
+            }
+        }
+
+        /** Retain unaffected inbox rows after an edit/delete, guarded by the account and access captured before it. */
+        fun <T : Any> chatContentUpdater(
+            key: StoreKey<T>,
+            expectedAccountId: String?,
+        ): suspend ((T) -> T?) -> Unit {
+            require(key.kind == StoreKind.MESSAGES_LIST)
+            val account = accountId() ?: return {}
+            if (expectedAccountId != null && expectedAccountId != account) return {}
+            return synchronized(slots) {
+                val slot = slotLocked(key, account)
+                val gen = generation
+                val session = identity(account)
+                val refusals = slot.refusals
+                val update: suspend ((T) -> T?) -> Unit = { project ->
+                    withContext(Dispatchers.IO) {
+                        synchronized(slots) live@{
+                            val active = gen == generation && session == identity() && slots["$account|${key.id}"] === slot
+                            if (!active || refusals != slot.refusals) return@live
+                            // Clear the affected preview in the latest copy, including a reply that arrived during the write.
+                            // A scoped mutation cannot establish the replacement newest message or any unread totals.
+                            @Suppress("UNCHECKED_CAST")
+                            val data = slot.state.value.data?.let { project(it as T) }
+                            markEdited(StoreTopics.CHAT_LIST, retainChatList = data != null)
+                            slot.memoryEdits++
+                            val now = System.currentTimeMillis()
+                            slot.state.value = slot.state.value.copy(data = data, fetchedAt = now)
+                            // Finish retirement/replacement before confirming the edit. A failed write or immediate
+                            // process death may lose the offline copy, but can never restore the old deleted preview.
+                            synchronized(diskLock) {
+                                saved.delete(account, key.id)
+                                if (data != null && slot.persist && key.permitsSavedCopy(data)) {
+                                    saved.save(account, key, data, now, etag = null, stale = true)
+                                }
+                            }
+                            markStale(StoreTopics.CHATS)
+                        }
                     }
                 }
                 update

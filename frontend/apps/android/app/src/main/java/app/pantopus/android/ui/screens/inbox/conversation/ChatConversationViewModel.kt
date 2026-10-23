@@ -1252,12 +1252,13 @@ class ChatConversationViewModel
             _composerText.value = ""
             emitTypingStop()
             _isSending.value = true
+            val mutationTarget = sendTarget()
 
             viewModelScope.launch {
                 try {
                     val editingId = _editingMessageId.value
                     if (editingId != null) {
-                        when (val result = repo.editMessage(editingId, trimmed)) {
+                        when (val result = repo.editMessage(editingId, trimmed, mutationTarget)) {
                             is NetworkResult.Success -> {
                                 applyUpdatedMessage(result.data.message)
                                 cancelMessageAction()
@@ -1954,8 +1955,9 @@ class ChatConversationViewModel
 
         fun delete(messageId: String) {
             if (!canManageMessage(messageId)) return
+            val mutationTarget = sendTarget()
             viewModelScope.launch {
-                when (val result = repo.deleteMessage(messageId)) {
+                when (val result = repo.deleteMessage(messageId, mutationTarget)) {
                     is NetworkResult.Success -> {
                         rememberDeletion(messageId)
                         rebuild()
@@ -2149,10 +2151,11 @@ class ChatConversationViewModel
                 exitSelectionMode()
                 return
             }
+            val mutationTarget = sendTarget()
             viewModelScope.launch {
                 var failed = 0
                 ids.forEach { id ->
-                    when (val result = repo.deleteMessage(id)) {
+                    when (val result = repo.deleteMessage(id, mutationTarget)) {
                         is NetworkResult.Success -> {
                             rememberDeletion(id)
                         }
