@@ -3637,6 +3637,7 @@ class ChatConversationViewModel
             val end = start + MAX_TIMELINE_MESSAGES
             if (end < messages.size) {
                 // This is now a historical window. The existing Latest messages control returns to the live tail.
+                historyGeneration++
                 contextMessageId = visibleTimelineAnchor ?: messages[start].id
                 contextHasNewer = true
                 _showLatestMessages.value = true
