@@ -3438,7 +3438,6 @@ router.post('/:gigId/report', verifyToken, validate(reportGigSchema), async (req
 // ============ BROWSE SECTIONS ENDPOINT ============
 
 const { getGigClusters } = require('../services/gig/clusterService');
-const { chosenUsernameOrNull } = require('../utils/personalUsername');
 
 /**
  * GET /api/gigs/browse
