@@ -33,6 +33,7 @@ const {
   BUSINESS_ROLE_RANK,
 } = require('../utils/businessPermissions');
 const membershipService = require('../services/businessMembershipService');
+const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
 
 
 // ============================================================
@@ -133,7 +134,11 @@ router.get('/:businessId/members', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch members' });
     }
 
-    res.json({ members: members || [] });
+    // Teammates name each other as everyone else names them, by the Local Profile's name, handle and photo
+    // (services/chatPeople.js), not by the account behind the seat (identity firewall design §9.3). `id` stays the
+    // account id the role, permission and removal routes take.
+    const people = await loadChatPeople((members || []).map((m) => m.user?.id));
+    res.json({ members: (members || []).map((m) => ({ ...m, user: chatPersonRow(m.user, people) })) });
   } catch (err) {
     logger.error('Business members error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch members' });
@@ -652,7 +657,9 @@ router.get('/:businessId/audit-log', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch audit log' });
     }
 
-    res.json({ entries: data || [] });
+    // The teammate who acted goes by their Local Profile, as in the members list.
+    const people = await loadChatPeople((data || []).map((entry) => entry.actor?.id));
+    res.json({ entries: (data || []).map((entry) => ({ ...entry, actor: chatPersonRow(entry.actor, people) })) });
   } catch (err) {
     logger.error('Business audit log error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch audit log' });

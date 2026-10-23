@@ -169,14 +169,15 @@ async function settleInvoiceAfterRefund(payment) {
   }
 }
 // The crew learns of a refund (the payer's own, or one Pantopus made) from its owner's notices, as it learned of the
-// payment: otherwise the invoice just turns void, after "will reach your wallet after a short review".
+// payment: otherwise the invoice just turns void, after "will reach your wallet after a short review". The payer goes
+// by their Local Profile, as in the paid notice.
 async function notifyInvoiceRefunded(invoice, payment) {
   const { getBusinessPrimaryOwnerId } = require('../utils/businessPermissions');
-  const { chosenUsernameOrNull } = require('../utils/personalUsername');
+  const { loadChatPeople } = require('./chatPeople');
   const ownerId = await getBusinessPrimaryOwnerId(invoice.business_user_id);
   if (!ownerId) return;
-  const { data: payer } = await db.from('User').select('name, username').eq('id', invoice.recipient_user_id).maybeSingle();
-  const payerName = payer?.name || chosenUsernameOrNull(payer?.username) || 'A customer';
+  const people = await loadChatPeople([invoice.recipient_user_id]);
+  const payerName = people.get(String(invoice.recipient_user_id))?.displayName || 'A customer';
   const total = `$${(invoice.total_cents / 100).toFixed(2)}`;
   await require('./notificationService').createNotification({
     userId: ownerId,

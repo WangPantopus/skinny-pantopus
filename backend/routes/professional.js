@@ -28,6 +28,7 @@ const validate = require('../middleware/validate');
 const Joi = require('joi');
 const logger = require('../utils/logger');
 const { canViewProfessionalProfile, isBlocked } = require('../utils/visibilityPolicy');
+const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
 
 // ============ VALIDATION ============
 
@@ -297,7 +298,10 @@ router.get('/discover', async (req, res) => {
       );
     }
 
-    res.json({ professionals: filtered });
+    // Each professional goes by their Local Profile's name, handle and photo, as neighbors see them elsewhere
+    // (services/chatPeople.js).
+    const people = await loadChatPeople(filtered.map(p => p.user?.id));
+    res.json({ professionals: filtered.map(p => ({ ...p, user: chatPersonRow(p.user, people) })) });
   } catch (err) {
     logger.error('Discover professionals error', { error: err.message });
     res.status(500).json({ error: 'Failed to discover professionals' });
@@ -464,14 +468,16 @@ router.get('/:username', optionalAuth, async (req, res) => {
       ? Math.round((reviews.reduce((s, r) => s + r.rating, 0) / reviewCount) * 100) / 100
       : 0;
 
+    // Named by the Local Profile, as in discovery.
+    const named = chatPersonRow(user, await loadChatPeople([user.id]));
     res.json({
       user: {
         id: user.id,
-        username: user.username,
-        name: user.name,
+        username: named.username,
+        name: named.name,
         first_name: user.first_name,
         last_name: user.last_name,
-        profile_picture_url: user.profile_picture_url,
+        profile_picture_url: named.profile_picture_url,
         city: user.city,
         state: user.state,
       },
