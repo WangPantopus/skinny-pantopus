@@ -289,6 +289,9 @@ class ChatConversationViewModel
         private var hasMore = false
         private var oldestCursor: String? = null
         private var activeRoomIds: Set<String> = emptySet()
+
+        // A confirmed removal blocks delayed pages and socket backfill for this open conversation.
+        private val retiredRoomIds = mutableSetOf<String>()
         private val joinedRoomIds = mutableSetOf<String>()
         private val roomJoinJobs = mutableMapOf<String, Job>()
         private val roomSubscriptionIds = mutableMapOf<String, String>()
@@ -468,6 +471,7 @@ class ChatConversationViewModel
                 directRoomId = null
                 replyRoomDetails.clear()
                 activeRoomIds = emptySet()
+                retiredRoomIds.clear()
                 visibleReadThroughId = null
                 visibleReadThroughByRoom.clear()
                 acknowledgedReadByRoom.clear()
@@ -1661,7 +1665,7 @@ class ChatConversationViewModel
             val roomId = reply.roomId ?: messages.firstOrNull { it.id == reply.messageId }?.roomId
             val known = roomId?.let(replyRoomDetails::get)
             val unsupported =
-                roomId.isNullOrBlank() || reply.messageId.startsWith("client_") ||
+                roomId.isNullOrBlank() || roomId in retiredRoomIds || reply.messageId.startsWith("client_") ||
                     (target.kind == "room" && roomId != target.id) ||
                     (known != null && !repo.replyRoomAllowed(target, roomId, known))
             if (unsupported) {
@@ -1674,12 +1678,14 @@ class ChatConversationViewModel
 
         private fun rememberReplyRoom(roomId: String) {
             val target = sendTarget() ?: return
-            if (roomId.isBlank() || replyRoomDetails.containsKey(roomId)) return
+            if (roomId.isBlank() || roomId in retiredRoomIds || replyRoomDetails.containsKey(roomId)) return
             val context = historyContext()
             viewModelScope.launch {
                 when (val result = repo.room(roomId, target.asBusinessUserId)) {
                     is NetworkResult.Success ->
-                        if (target == sendTarget() && context == historyContext()) replyRoomDetails[roomId] = result.data.room
+                        if (target == sendTarget() && context == historyContext() && roomId !in retiredRoomIds) {
+                            replyRoomDetails[roomId] = result.data.room
+                        }
                     is NetworkResult.Failure -> Unit // Offline drafting remains available; delivery will revalidate.
                 }
             }
@@ -2624,7 +2630,7 @@ class ChatConversationViewModel
                 } ?: return false
             historyPage = copy
             deletedMessageVersions.putAll(copy.deletedMessageVersions)
-            messages = copy.messages.filterNot { it.id in deletedMessageVersions }.toMutableList()
+            messages = copy.messages.filter(::canMerge).toMutableList()
             _composerClosedNote.value = copy.sendRefusal?.error
             hasMore = copy.hasMore ?: false
             oldestCursor = copy.nextCursor ?: paginationCursor(messages.firstOrNull())
@@ -2695,6 +2701,7 @@ class ChatConversationViewModel
             val roomId = deferred.await()
             if (generation != historyGeneration || userId != currentUserId || historyRefusal != null) return null
             if (directRoomDeferred === deferred) directRoomDeferred = null
+            if (roomId in retiredRoomIds) return null
             if (roomId != null && directRoomId == null) {
                 directRoomId = roomId
                 // Join the freshly resolved room so the socket delivers
@@ -2819,7 +2826,7 @@ class ChatConversationViewModel
                     response.messages.forEach { add(it.roomId) }
                     (mode as? ChatThreadMode.Room)?.id?.let(::add)
                     directRoomId?.let(::add)
-                }
+                } - retiredRoomIds
             publishViewedRooms()
         }
 
@@ -3067,6 +3074,8 @@ class ChatConversationViewModel
             var until: Map<String, Long>? = null
             val changes = linkedMapOf<String, ChatMessageDto>()
             val receipts = linkedMapOf<String, ChatReadReceipt>()
+            val retireAccess = repo.historyAccessRetirer()
+            val removedRooms = retiredRoomIds.toMutableSet()
             var pages = 0
             while (pages++ < MAX_CHANGE_PAGES) {
                 val result = readChanges(context, cursor, until)
@@ -3076,10 +3085,25 @@ class ChatConversationViewModel
                     return true
                 }
                 val page = (result as NetworkResult.Success).data
+                val newlyRemoved = page.removedRoomIds.toSet() - removedRooms
+                if (newlyRemoved.isNotEmpty()) {
+                    retireAccess(newlyRemoved)
+                    if (context != historyContext()) return true
+                    removedRooms.addAll(newlyRemoved)
+                    retireRemovedRooms(newlyRemoved)
+                }
                 if (page.resetRequired) return false
                 collectChanges(page, changes, receipts)
+                changes.entries.removeAll { it.value.roomId in retiredRoomIds }
+                receipts.entries.removeAll { it.value.roomId in retiredRoomIds }
                 if (!page.hasMore) {
-                    applyChanges(page, changes.values, receipts.values)
+                    val admitted =
+                        page.copy(
+                            roomIds = page.roomIds.filterNot { it in retiredRoomIds },
+                            syncCursors = page.syncCursors.filterKeys { it !in retiredRoomIds },
+                            removedRoomIds = (page.removedRoomIds + removedRooms).distinct(),
+                        )
+                    applyChanges(admitted, changes.values, receipts.values)
                     return true
                 }
                 if (page.syncCursors == cursor) return false
@@ -3100,6 +3124,26 @@ class ChatConversationViewModel
                 is ChatThreadMode.Person -> repo.conversationChanges(target.otherUserId, cursor, until)
                 ChatThreadMode.Ai -> NetworkResult.Success(ChatChangesResponse())
             }
+        }
+
+        /** Access loss is applied immediately; ordinary edits and cursor advancement still wait for complete recovery. */
+        private fun retireRemovedRooms(roomIds: Set<String>) {
+            retiredRoomIds.addAll(roomIds)
+            messages.removeAll { it.roomId in roomIds }
+            activeRoomIds = activeRoomIds - roomIds
+            historyPage =
+                historyPage?.copy(
+                    messages = historyPage?.messages.orEmpty().filterNot { it.roomId in roomIds },
+                    roomIds = activeRoomIds.toList(),
+                    syncCursors = historyPage?.syncCursors.orEmpty().filterKeys { it !in roomIds },
+                )
+            visibleReadThroughByRoom.keys.removeAll(roomIds)
+            acknowledgedReadByRoom.keys.removeAll(roomIds)
+            replyRoomDetails.keys.removeAll(roomIds)
+            if (directRoomId in roomIds) directRoomId = null
+            publishViewedRooms()
+            joinActiveRoomsIfPossible()
+            rebuild()
         }
 
         private fun collectChanges(
@@ -3164,7 +3208,8 @@ class ChatConversationViewModel
         }
 
         private fun canMerge(message: ChatMessageDto): Boolean =
-            message.createdAt.isNotBlank() && !message.deleted && message.deletedAt == null && message.id !in deletedMessageVersions
+            message.roomId !in retiredRoomIds && message.createdAt.isNotBlank() && !message.deleted &&
+                message.deletedAt == null && message.id !in deletedMessageVersions
 
         private suspend fun readHistoryPage(
             context: HistoryReadContext,
@@ -3707,9 +3752,9 @@ class ChatConversationViewModel
                         messages = messages.toList(),
                         hasMore = hasMore,
                         nextCursor = oldestCursor.takeIf { hasMore },
-                        roomIds = if (page != null) page.roomIds else activeRoomIds.toList(),
+                        roomIds = (page?.roomIds ?: activeRoomIds.toList()).filterNot { it in retiredRoomIds },
                         sendRefusal = page?.sendRefusal,
-                        syncCursors = page?.syncCursors.orEmpty(),
+                        syncCursors = page?.syncCursors.orEmpty().filterKeys { it !in retiredRoomIds },
                         deletedMessageVersions = deletedMessageVersions.toMap(),
                     ),
                 )

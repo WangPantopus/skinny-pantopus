@@ -16,6 +16,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.currentCoroutineContext
@@ -498,6 +499,38 @@ class ScreenStore
                 }
             }
             deleteSaved(key.id, account)
+        }
+
+        /** Capture before recovery. Confirmed room removal must survive a later-page failure or immediate process death. */
+        fun chatAccessRetirer(): suspend (Set<String>) -> Unit {
+            val account = accountId() ?: return {}
+            val gen = generation
+            val session = identity(account)
+            return { roomIds ->
+                if (roomIds.isNotEmpty()) {
+                    withContext(Dispatchers.IO + NonCancellable) {
+                        synchronized(slots) retire@{
+                            if (gen != generation || session != identity()) return@retire
+                            val topics = roomIds.map { "chat:$it" } + StoreTopics.CHAT_LIST
+                            // Aggregate windows use chat:* and may contain this room under an unopened topic.
+                            // Retire those copies and previews conservatively; unsent intent is a separate store.
+                            val iterator = slots.values.iterator()
+                            while (iterator.hasNext()) {
+                                val slot = iterator.next()
+                                if (topics.any(slot.key::matches)) {
+                                    slot.retire()
+                                    slot.state.value = Stored()
+                                    iterator.remove()
+                                }
+                            }
+                            synchronized(diskLock) {
+                                saved.invalidate(account, SavedCopies.Mark(topics = topics.toSet(), edited = true))
+                            }
+                        }
+                    }
+                    _changes.update { it + 1 }
+                }
+            }
         }
 
         /**

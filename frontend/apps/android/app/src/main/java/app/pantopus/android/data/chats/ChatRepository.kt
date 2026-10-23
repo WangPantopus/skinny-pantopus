@@ -244,6 +244,8 @@ class ChatRepository
             topicId: String?,
         ): (ChatMessagesResponse) -> Unit = historyUpdater(StoreKeys.conversationMessages(otherUserId, topicId, HISTORY_LIMIT))
 
+        fun historyAccessRetirer(): suspend (Set<String>) -> Unit = store.chatAccessRetirer()
+
         private fun historyUpdater(key: StoreKey<ChatMessagesResponse>): (ChatMessagesResponse) -> Unit {
             val update = store.memoryUpdater(key)
             return { response -> update(boundedHistory(response)) }

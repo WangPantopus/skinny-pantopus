@@ -111,6 +111,7 @@ class SavedCopies
             val edited: Boolean = false,
             val upTo: Long = Long.MAX_VALUE,
             val retainChatList: Boolean = false,
+            val topics: Set<String> = emptySet(),
         )
 
         @JsonClass(generateAdapter = true)
@@ -205,7 +206,7 @@ class SavedCopies
             mark: Mark,
             guard: (() -> Unit) -> Unit = { it() },
         ) {
-            if (mark.topic == null && mark.kinds.isEmpty()) return
+            if (mark.topic == null && mark.topics.isEmpty() && mark.kinds.isEmpty()) return
             val folder = file(account, "").parentFile ?: return
             folder.listFiles()?.filter { it.extension in setOf("json", "enc") }?.forEach {
                     target ->
@@ -225,7 +226,8 @@ class SavedCopies
                     val envelope = reader.readLine()?.let { envelopes.fromJson(it) } ?: return@use
                     // A copy saved after the mark came from a later read and keeps its own state.
                     if (envelope.fetchedAt > mark.upTo) return@use
-                    if (!envelope.legacy && !envelope.matches(mark.topic, mark.kinds)) return@use
+                    val matches = envelope.matches(mark.topic, mark.kinds) || mark.topics.any { envelope.matches(it, emptySet()) }
+                    if (!envelope.legacy && !matches) return@use
                     val retainChatList = mark.retainChatList && envelope.kind == StoreKind.MESSAGES_LIST
                     if (edited && !envelope.legacy && !retainChatList) {
                         target.delete()
