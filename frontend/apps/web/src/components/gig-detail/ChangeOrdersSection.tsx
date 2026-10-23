@@ -214,6 +214,11 @@ export default function ChangeOrdersSection({
 	            const canWithdraw = o.status === 'pending' && isMyOrder;
 	            const amountChange = o.amount_change ?? 0;
 	            const timeChangeMinutes = o.time_change_minutes ?? 0;
+            // The server names the requester as the task names its people (displayName, handle, avatarUrl: their Local
+            // Profile, or the business); older servers sent the account row (name, username, profile_picture_url).
+            const requester = o.requester;
+            const requesterHandle = requester?.handle || requester?.username;
+            const requesterName = requester?.displayName || requester?.name || chosenUsername(requesterHandle) || 'Someone';
 
             return (
               <div key={o.id} className="border border-app-border-subtle rounded-lg p-3">
@@ -236,19 +241,19 @@ export default function ChangeOrdersSection({
 	                  {timeChangeMinutes > 0 && (
 	                    <span>+{timeChangeMinutes}min</span>
 	                  )}
-                  {o.requester?.username ? (
+                  {requesterHandle ? (
                     <UserIdentityLink
-                      userId={o.requester?.id || null}
-                      username={o.requester.username}
-                      displayName={o.requester?.name || chosenUsername(o.requester?.username) || 'Someone'}
-                      avatarUrl={o.requester?.profile_picture_url || null}
-                      city={o.requester?.city || null}
-                      state={o.requester?.state || null}
+                      userId={requester?.id || null}
+                      username={requesterHandle}
+                      displayName={requesterName}
+                      avatarUrl={requester?.avatarUrl || requester?.profile_picture_url || null}
+                      city={requester?.city || null}
+                      state={requester?.state || null}
                       textClassName="text-xs text-app-text-secondary hover:underline"
                     />
                   ) : (
                     // No requester means the person has deleted their account.
-                    <span>{o.requester ? o.requester.name || chosenUsername(o.requester.username) || 'Someone' : 'Former member'}</span>
+                    <span>{requester ? requesterName : 'Former member'}</span>
                   )}
                   <span>{o.created_at ? timeAgo(o.created_at) : ''}</span>
                 </div>
