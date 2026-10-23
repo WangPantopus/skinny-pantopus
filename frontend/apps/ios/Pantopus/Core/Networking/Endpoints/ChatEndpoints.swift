@@ -149,14 +149,18 @@ public enum ChatEndpoints {
         )
     }
 
-    /// `POST /api/chat/conversations/:otherUserId/read` — mark every
-    /// shared-room message read for a person-grouped thread. Route
-    /// `backend/routes/chats.js:1265`.
-    public static func markConversationRead(otherUserId: String, throughMessageId: String? = nil) -> Endpoint {
+    /// Mark only the explicitly viewed room boundaries in a person thread.
+    /// Omitted rooms keep their unread state. The single cursor remains for
+    /// callers speaking the older protocol.
+    public static func markConversationRead(
+        otherUserId: String,
+        throughMessageId: String? = nil,
+        throughMessageIds: [String: String]? = nil
+    ) -> Endpoint {
         Endpoint(
             method: .post,
             path: "/api/chat/conversations/\(otherUserId)/read",
-            body: throughMessageId.map { ["throughMessageId": $0] }
+            body: ChatReadBoundariesBody(throughMessageId: throughMessageId, throughMessageIds: throughMessageIds)
         )
     }
 
@@ -250,4 +254,9 @@ public struct EditChatMessageBody: Encodable, Sendable {
     public init(messageText: String) {
         self.messageText = messageText
     }
+}
+
+private struct ChatReadBoundariesBody: Encodable {
+    let throughMessageId: String?
+    let throughMessageIds: [String: String]?
 }

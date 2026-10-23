@@ -652,10 +652,10 @@ public final class ChatConversationViewModel {
     private var fallbackRefreshTask: Task<Void, Never>?
     private var topicsRefreshTask: Task<Void, Never>?
     private var markReadTask: Task<Void, Never>?
-    private var visibleReadMessageId: String?
-    private var scheduledReadMessageId: String?
+    private var visibleReadBoundaries: [String: String] = [:]
+    private var scheduledReadBoundaries: [String: String] = [:]
     private var markReadRequestId: UUID?
-    private var lastReadMessageId: String?
+    private var lastReadBoundaries: [String: String] = [:]
     private var socketTasks: [Task<Void, Never>] = []
     /// Socket-down fallback: checks promptly, backing off to 30 seconds while
     /// the connection is not `.connected`, so the loaded thread keeps
@@ -1895,40 +1895,50 @@ public final class ChatConversationViewModel {
         }
     }
 
-    /// The view measures this accepted message itself, excluding typing and
-    /// pending-send rows from the read boundary.
-    public var latestAcceptedMessageId: String? {
-        messages.last?.id
+    /// Only accepted messages can establish a read boundary. A person thread
+    /// can combine several rooms; each room needs its own visible boundary.
+    public var latestAcceptedMessageIds: Set<String> {
+        var latest: [String: ChatMessageDTO] = [:]
+        for message in messages where message.deletedAt == nil && UUID(uuidString: message.id) != nil {
+            if let previous = latest[message.roomId], !Self.messagePrecedes(previous, message) { continue }
+            latest[message.roomId] = message
+        }
+        return Set(latest.values.map(\.id))
     }
 
-    public func setVisibleReadBoundary(_ messageId: String?) {
-        visibleReadMessageId = messageId
-        guard messageId != nil else {
-            markReadTask?.cancel()
-            markReadTask = nil
-            scheduledReadMessageId = nil
-            markReadRequestId = nil
-            return
+    public func setVisibleReadBoundaries(_ messageIds: Set<String>) {
+        let acceptedIds = latestAcceptedMessageIds
+        var boundaries: [String: String] = [:]
+        for message in messages where messageIds.contains(message.id) && acceptedIds.contains(message.id) {
+            guard UUID(uuidString: message.roomId) != nil else { continue }
+            boundaries[message.roomId] = message.id
         }
+        guard visibleReadBoundaries != boundaries else { return }
+        visibleReadBoundaries = boundaries
+        markReadTask?.cancel()
+        markReadTask = nil
+        scheduledReadBoundaries = [:]
+        markReadRequestId = nil
         scheduleMarkRead()
     }
 
     public func scheduleMarkRead() {
-        guard selectedTopicId == nil, let messageId = visibleReadMessageId,
-              messageId != lastReadMessageId, UUID(uuidString: messageId) != nil,
-              messages.contains(where: { $0.id == messageId }), scheduledReadMessageId != messageId else { return }
+        guard selectedTopicId == nil else { return }
+        let pending = visibleReadBoundaries.filter { lastReadBoundaries[$0.key] != $0.value }
+        let boundaries = Dictionary(uniqueKeysWithValues: pending.sorted { $0.key < $1.key }.prefix(500))
+        guard !boundaries.isEmpty, boundaries != scheduledReadBoundaries else { return }
         markReadTask?.cancel()
-        scheduledReadMessageId = messageId
+        scheduledReadBoundaries = boundaries
         let requestId = UUID()
         markReadRequestId = requestId
         let generation = historyGeneration
         markReadTask = Task { [weak self] in
             do { try await Task.sleep(nanoseconds: 600_000_000) } catch { return }
             guard let self else { return }
-            await performMarkRead(throughMessageId: messageId, generation: generation)
+            await performMarkRead(boundaries: boundaries, generation: generation)
             if markReadRequestId == requestId {
                 markReadRequestId = nil
-                scheduledReadMessageId = nil
+                scheduledReadBoundaries = [:]
                 markReadTask = nil
             }
         }
@@ -1937,7 +1947,7 @@ public final class ChatConversationViewModel {
     public func teardown() {
         outboxTask?.cancel()
         outboxTask = nil
-        setVisibleReadBoundary(nil)
+        setVisibleReadBoundaries([])
         historyGeneration += 1
         historyRequestId = nil
         fallbackRefreshTask?.cancel()
@@ -2523,7 +2533,7 @@ public final class ChatConversationViewModel {
             return
         }
         if case .reload = kind {
-            setVisibleReadBoundary(nil)
+            setVisibleReadBoundaries([])
             historyGeneration += 1
             state = .loading
             messages = []
@@ -2753,22 +2763,25 @@ public final class ChatConversationViewModel {
 
     // MARK: - Mark-read
 
-    private func performMarkRead(throughMessageId: String, generation: Int) async {
-        guard !Task.isCancelled, visibleReadMessageId == throughMessageId, selectedTopicId == nil, historyGeneration == generation,
-              UUID(uuidString: throughMessageId) != nil,
-              throughMessageId != lastReadMessageId,
-              let target = await resolveRoomIdForReadMark() else { return }
-        let endpoint =
-            switch mode {
-            case let .person(otherUserId):
-                ChatEndpoints.markConversationRead(otherUserId: otherUserId, throughMessageId: throughMessageId)
-            default:
-                ChatEndpoints.markRoomRead(roomId: target, asBusinessUserId: asBusinessUserId, throughMessageId: throughMessageId)
-            }
+    private func performMarkRead(boundaries: [String: String], generation: Int) async {
+        guard !Task.isCancelled, selectedTopicId == nil, historyGeneration == generation,
+              !boundaries.isEmpty,
+              boundaries.allSatisfy({ visibleReadBoundaries[$0.key] == $0.value }) else { return }
+        let endpoint: Endpoint
+        switch mode {
+        case let .person(otherUserId):
+            endpoint = ChatEndpoints.markConversationRead(otherUserId: otherUserId, throughMessageIds: boundaries)
+        case let .room(roomId):
+            guard let messageId = boundaries[roomId] else { return }
+            endpoint = ChatEndpoints.markRoomRead(roomId: roomId, asBusinessUserId: asBusinessUserId, throughMessageId: messageId)
+        case .ai:
+            return
+        }
+        let session = AuthManager.shared.requestSessionGeneration
         do {
             _ = try await api.request(endpoint, as: EmptyResponse.self)
-            guard historyGeneration == generation else { return }
-            lastReadMessageId = throughMessageId
+            guard historyGeneration == generation, session == AuthManager.shared.requestSessionGeneration else { return }
+            lastReadBoundaries.merge(boundaries) { _, confirmed in confirmed }
         } catch {
             logger.warning("markRead failed: \(error)")
         }
@@ -2776,14 +2789,6 @@ public final class ChatConversationViewModel {
 
     private func scheduleMarkRead(for _: String) {
         scheduleMarkRead()
-    }
-
-    private func resolveRoomIdForReadMark() async -> String? {
-        switch mode {
-        case let .room(id): id
-        case let .person(otherUserId): otherUserId
-        case .ai: nil
-        }
     }
 
     /// Resolve the room to send into. Room threads use their fixed id.

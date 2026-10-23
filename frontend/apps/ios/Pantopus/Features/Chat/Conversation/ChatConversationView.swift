@@ -78,7 +78,7 @@ public struct ChatConversationView: View {
     /// message. Gates stay-pinned-on-new-rows scrolling. Only flips on
     /// actual boundary crossings, so it stays a cheap @State.
     @State private var isAtBottom = false
-    @State private var visibleReadMessageId: String?
+    @State private var visibleReadMessageIds: Set<String> = []
     /// The thread opened at its latest message once; coming back (a pushed
     /// profile, a tab switch) keeps the reading position (Instant Screens).
     @State private var hasLandedAtLatest = false
@@ -266,7 +266,7 @@ public struct ChatConversationView: View {
         }
         .onDisappear { viewModel.teardown() }
         .onChange(of: scenePhase) { _, phase in
-            viewModel.setVisibleReadBoundary(phase == .active ? visibleReadMessageId : nil)
+            viewModel.setVisibleReadBoundaries(phase == .active ? visibleReadMessageIds : [])
             if phase == .active { Task { await viewModel.refresh() } }
         }
         // RN attach-grid parity: Camera / Photos / Document / Location /
@@ -1088,8 +1088,10 @@ extension ChatConversationView {
     private static let scrollSpaceName = "chatConversationScroll"
 
     private func populatedFrame(_ rows: [ChatTimelineRow]) -> some View {
+        // Resolve the accepted room tails once per rendered snapshot, not per row.
+        let readBoundaryIds = viewModel.latestAcceptedMessageIds
         // Gig context strip is loaded by `ChatConversationViewModel.loadGigContextIfNeeded`.
-        GeometryReader { geo in
+        return GeometryReader { geo in
             ScrollViewReader { proxy in
                 ScrollView {
                     // A plain (non-lazy) VStack on purpose: pages are
@@ -1116,7 +1118,7 @@ extension ChatConversationView {
                             // out twice and snap from the fallback width
                             // while scrolling.
                             timelineRowView(row, rowWidth: max(0, geo.size.width - 24))
-                                .background { readBoundaryTracker(row: row, viewportHeight: geo.size.height) }
+                                .background { readBoundaryTracker(row: row, acceptedIds: readBoundaryIds, viewportHeight: geo.size.height) }
                         }
                         Color.clear
                             .frame(height: 4)
@@ -1206,14 +1208,14 @@ extension ChatConversationView {
     }
 
     @ViewBuilder
-    private func readBoundaryTracker(row: ChatTimelineRow, viewportHeight: CGFloat) -> some View {
+    private func readBoundaryTracker(row: ChatTimelineRow, acceptedIds: Set<String>, viewportHeight: CGFloat) -> some View {
         let messageId: String? = switch row {
         case let .bubble(bubble): bubble.id
         case let .broadcastReference(reference): reference.id
         case let .systemLine(line): line.id
         case .dayDivider, .topicDivider: nil
         }
-        if let messageId, messageId == viewModel.latestAcceptedMessageId {
+        if let messageId, acceptedIds.contains(messageId) {
             GeometryReader { geometry in
                 let frame = geometry.frame(in: .named(Self.scrollSpaceName))
                 Color.clear
@@ -1225,22 +1227,20 @@ extension ChatConversationView {
                         updateReadBoundary(messageId, frame: frame, viewportHeight: height)
                     }
                     .onDisappear {
-                        guard visibleReadMessageId == messageId else { return }
-                        visibleReadMessageId = nil
-                        viewModel.setVisibleReadBoundary(nil)
+                        visibleReadMessageIds.remove(messageId)
+                        viewModel.setVisibleReadBoundaries(scenePhase == .active ? visibleReadMessageIds : [])
                     }
             }
         }
     }
 
     private func updateReadBoundary(_ messageId: String, frame: CGRect, viewportHeight: CGFloat) {
-        guard messageId == viewModel.latestAcceptedMessageId else { return }
+        guard viewModel.latestAcceptedMessageIds.contains(messageId) else { return }
         // The message's trailing edge must be on-screen. A tall message can
         // still be read at its end; typing and padding below it do not count.
         let visible = frame.maxY > 0 && frame.maxY <= viewportHeight + 4 && frame.minY < viewportHeight
-        let boundary = visible ? messageId : nil
-        if visibleReadMessageId != boundary { visibleReadMessageId = boundary }
-        viewModel.setVisibleReadBoundary(scenePhase == .active ? boundary : nil)
+        if visible { visibleReadMessageIds.insert(messageId) } else { visibleReadMessageIds.remove(messageId) }
+        viewModel.setVisibleReadBoundaries(scenePhase == .active ? visibleReadMessageIds : [])
     }
 
     /// Force the thread to open at the latest message. The bottom anchor
