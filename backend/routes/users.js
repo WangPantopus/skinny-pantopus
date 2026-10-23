@@ -3597,14 +3597,19 @@ router.get('/id/:id', optionalAuth, async (req, res) => {
         .limit(20);
 
       if (reviewData && reviewData.length > 0) {
+        const { loadChatPeople, reviewerRow } = require('../services/chatPeople');
         const reviewerIds = [...new Set(reviewData.map(r => r.reviewer_id))];
-        const { data: reviewers } = await supabaseAdmin
-          .from('User')
-          .select('id, username, name, first_name, last_name, profile_picture_url')
-          .in('id', reviewerIds);
+        const [{ data: reviewers }, people] = await Promise.all([
+          supabaseAdmin
+            .from('User')
+            .select('id, username, name, first_name, last_name, profile_picture_url')
+            .in('id', reviewerIds),
+          loadChatPeople(reviewerIds),
+        ]);
 
+        // A writer goes by their Local Profile, as on their posts and comments (services/chatPeople.js).
         const reviewerMap = {};
-        (reviewers || []).forEach(u => { reviewerMap[u.id] = u; });
+        (reviewers || []).forEach(u => { reviewerMap[u.id] = reviewerRow(u, people); });
 
         reviews = reviewData.map(r => ({
           ...r,
@@ -4484,15 +4489,20 @@ router.get('/username/:username', optionalAuth, async (req, res) => {
         .limit(20);
 
       if (reviewData && reviewData.length > 0) {
-        // Hydrate reviewer info
+        // Hydrate reviewer info: a writer goes by their Local Profile, as on their posts and comments
+        // (services/chatPeople.js).
+        const { loadChatPeople, reviewerRow } = require('../services/chatPeople');
         const reviewerIds = [...new Set(reviewData.map(r => r.reviewer_id))];
-        const { data: reviewers } = await supabaseAdmin
-          .from('User')
-          .select('id, username, name, first_name, last_name, profile_picture_url')
-          .in('id', reviewerIds);
+        const [{ data: reviewers }, people] = await Promise.all([
+          supabaseAdmin
+            .from('User')
+            .select('id, username, name, first_name, last_name, profile_picture_url')
+            .in('id', reviewerIds),
+          loadChatPeople(reviewerIds),
+        ]);
 
         const reviewerMap = {};
-        (reviewers || []).forEach(u => { reviewerMap[u.id] = u; });
+        (reviewers || []).forEach(u => { reviewerMap[u.id] = reviewerRow(u, people); });
 
         reviews = reviewData.map(r => ({
           ...r,
