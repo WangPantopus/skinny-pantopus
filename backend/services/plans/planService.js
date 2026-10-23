@@ -73,9 +73,20 @@ function firstName(user) {
   return displayName(user).split(' ')[0];
 }
 
-/** The photo someone already shows neighbors (services/chatPeople.js): their Local Profile's, else the account's. */
+/**
+ * The photo someone shows neighbors (services/chatPeople.js): their Local Profile's, or none when they removed it; the
+ * account's for anyone without one. Only someone the lookup missed (`withLocalAvatar` left them as they were) falls back
+ * to the account's photo.
+ */
 function avatarUrl(user) {
-  return user?.local_avatar_url || user?.profile_picture_url || null;
+  if (user && user.local_avatar_url !== undefined) return user.local_avatar_url || null;
+  return user?.profile_picture_url || null;
+}
+
+/** `user` (an account row with `id`) with the photo loadChatPeople found for them. */
+function withLocalAvatar(user, people) {
+  const person = user?.id ? people.get(String(user.id)) : null;
+  return person ? { ...user, local_avatar_url: person.avatarUrl || null } : user;
 }
 
 /** Every time in a Plans response: ISO 8601 in UTC with milliseconds, e.g. 2026-10-18T20:25:00.000Z. */
@@ -222,11 +233,7 @@ async function loadCardContext(plans, viewer, { withPeople = false } = {}) {
   if (users.error) throw new Error(`Failed to load people: ${users.error.message}`);
   for (const user of users.data || []) {
     const id = String(user.id);
-    ctx.users.set(id, {
-      ...user,
-      local_display_name: names.get(id) || null,
-      local_avatar_url: people.get(id)?.avatarUrl || null,
-    });
+    ctx.users.set(id, withLocalAvatar({ ...user, local_display_name: names.get(id) || null }, people));
   }
   ctx.verified = verified;
   ctx.mutualByHost = mutual;
@@ -819,6 +826,7 @@ module.exports = {
   displayName,
   firstName,
   avatarUrl,
+  withLocalAvatar,
   shareUrl,
   startsAt,
   endsAt,

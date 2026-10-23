@@ -924,7 +924,7 @@ async function listRequests(user, postId) {
       user: {
         user_id: id,
         display_name: names.get(id) || 'A neighbor',
-        avatar_url: planService.avatarUrl({ ...row, local_avatar_url: people.get(id)?.avatarUrl }),
+        avatar_url: planService.avatarUrl(planService.withLocalAvatar(row || { id }, people)),
         verified_address: verified.has(id),
         distance_band: r.distance_band || null,
         plans_joined: stat.plans_joined,
