@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { Copy, MoreHorizontal, Reply } from 'lucide-react';
 import type { ChatMessage } from '@pantopus/types';
 import { chatPersonAvatar, chatPersonHandle, chatPersonName, extractAttachments, resolveMessageType } from '../../hooks/useChatMessages';
 import ChatRichCard from './ChatRichCard';
@@ -10,6 +11,8 @@ import UserIdentityLink from '@/components/user/UserIdentityLink';
 import MessageReactionBar from './MessageReactionBar';
 import QuickReactionPicker from './QuickReactionPicker';
 import EmojiPickerPopover from './EmojiPickerPopover';
+import MessageActionMenu from './MessageActionMenu';
+import type { MessageAction } from './MessageActionMenu';
 import { launchFeatures } from '@/lib/featureFlags';
 
 const EMOJI_ONLY_REGEX = /^(\p{Emoji_Presentation}|\p{Emoji}\uFE0F|\p{Emoji_Modifier_Base}\p{Emoji_Modifier}?){1,5}$/u;
@@ -37,13 +40,20 @@ interface ChatMessageBubbleProps {
   onImageClick?: (url: string, title?: string) => void;
   onReact?: (messageId: string, emoji: string) => void;
   onRetry?: (messageId: string) => void;
+  /** Picked from the message's actions menu: the composer replies to this message. */
+  onReply?: (msg: ChatMessage) => void;
 }
 
-function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClick, onReact, onRetry }: ChatMessageBubbleProps) {
+// The actions menu's size (its row of quick reactions sets the width), to keep it on screen next to its button.
+const MENU_WIDTH = 304;
+const MENU_HEIGHT = 150;
+
+function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClick, onReact, onRetry, onReply }: ChatMessageBubbleProps) {
   const [preview, setPreview] = useState<{ url: string; title?: string; mimeType?: string; liveUrl?: string } | null>(null);
   const [hovered, setHovered] = useState(false);
   const [showQuickPicker, setShowQuickPicker] = useState(false);
   const [showFullPicker, setShowFullPicker] = useState(false);
+  const [menuAt, setMenuAt] = useState<{ top: number; left: number } | null>(null);
 
   const who = chatPersonName(msg.sender) || 'Someone';
   const ts = msg.created_at
@@ -95,6 +105,47 @@ function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClic
     </button>
   );
 
+  // Reply and Copy text, in the menu the message's actions button opens (with quick reactions on top).
+  const menuActions: MessageAction[] = [
+    ...(onReply ? [{ key: 'reply', label: 'Reply', icon: Reply }] : []),
+    ...(showText ? [{ key: 'copy', label: 'Copy text', icon: Copy }] : []),
+  ];
+  const openMenu = (e: React.MouseEvent<HTMLButtonElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const left = Math.max(8, Math.min(isMine ? rect.right - MENU_WIDTH : rect.left, window.innerWidth - MENU_WIDTH - 8));
+    const top = rect.bottom + 4 + MENU_HEIGHT > window.innerHeight ? Math.max(8, rect.top - 4 - MENU_HEIGHT) : rect.bottom + 4;
+    setMenuAt({ top, left });
+  };
+  const handleMenuAction = (key: string) => {
+    if (key === 'reply') onReply?.(msg);
+    else if (key === 'copy') void navigator.clipboard?.writeText(msgText).catch(() => {});
+    else if (key === 'emoji_picker') setShowFullPicker(true);
+  };
+  const actionsTrigger = !isOptimistic && !isFailed && onReact && menuActions.length > 0 && (
+    <button
+      type="button"
+      onClick={openMenu}
+      aria-label="Message actions"
+      aria-haspopup="menu"
+      aria-expanded={menuAt !== null}
+      className={`absolute ${isMine ? '-left-16' : '-right-16'} top-0 w-7 h-7 flex items-center justify-center rounded-full bg-surface border border-app shadow-sm hover:bg-surface-muted transition-all focus-visible:opacity-100 focus-visible:scale-100 ${
+        hovered || menuAt ? 'opacity-100 scale-100' : 'opacity-0 scale-90'
+      }`}
+    >
+      <MoreHorizontal className="w-4 h-4 text-app-text-secondary" aria-hidden />
+    </button>
+  );
+  const actionsMenu = actionsTrigger && (
+    <MessageActionMenu
+      open={menuAt !== null}
+      onClose={() => setMenuAt(null)}
+      onAction={handleMenuAction}
+      onReact={(emoji) => onReact?.(msg.id, emoji)}
+      actions={menuActions}
+      anchorPosition={menuAt ?? undefined}
+    />
+  );
+
   const reactionOverlays = (showQuickPicker || showFullPicker) && (
     <div className={`absolute ${isMine ? 'right-0' : 'left-0'} bottom-full mb-1 z-20`}>
       {showFullPicker ? (
@@ -139,6 +190,7 @@ function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClic
           )}
           <div className="relative">
             {reactionTrigger}
+            {actionsTrigger}
             {reactionOverlays}
             <ChatRichCard msgType={msgType} metadata={metadata} msgText={msgText} isMine={isMine} />
           </div>
@@ -146,6 +198,7 @@ function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClic
             {isEdited && <span>edited · </span>}{ts}
           </div>
           {reactionBar}
+          {actionsMenu}
         </div>
       </div>
     );
@@ -175,6 +228,7 @@ function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClic
           )}
         <div className="relative">
           {reactionTrigger}
+          {actionsTrigger}
           {reactionOverlays}
           {emojiOnly ? (
             <div className={`text-4xl leading-snug ${isOptimistic ? 'opacity-60' : ''} ${isFailed ? 'opacity-70 ring-1 ring-red-400' : ''}`}>
@@ -301,6 +355,7 @@ function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClic
           ) : isOptimistic ? 'Sending…' : <>{isEdited && <span>edited · </span>}{ts}</>}
         </div>
         {reactionBar}
+        {actionsMenu}
         <ImageLightbox imageUrl={preview?.url ?? null} title={preview?.title} mimeType={preview?.mimeType}
           liveUrl={preview?.liveUrl} onClose={() => setPreview(null)} />
       </div>
@@ -321,5 +376,6 @@ export default React.memo(ChatMessageBubble, (prev, next) => {
     && prev.msg.reactions === next.msg.reactions
     && prev.onReact === next.onReact
     && prev.onImageClick === next.onImageClick
-    && prev.onRetry === next.onRetry;
+    && prev.onRetry === next.onRetry
+    && prev.onReply === next.onReply;
 });

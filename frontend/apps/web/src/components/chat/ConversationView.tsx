@@ -426,7 +426,8 @@ export default function ConversationView({
         <ChatMessageList
           messages={chat.messages}
           loading={chat.loading}
-          error={chat.error}
+          // A conversation that takes no messages says why in place of the composer instead.
+          error={chat.sendRefusal ? null : chat.error}
           hasMore={chat.hasMore}
           loadingOlder={chat.loadingOlder}
           onLoadOlder={chat.loadOlder}
@@ -435,6 +436,7 @@ export default function ConversationView({
           onImageClick={handleImageClick}
           onReact={handleReact}
           onRetry={chat.retryMessage}
+          onReply={chat.directChatError || chat.sendRefusal ? undefined : chat.beginReply}
         />
       </div>
 
@@ -459,6 +461,9 @@ export default function ConversationView({
         disabled={!!chat.directChatError}
         placeholder={chat.directChatError ? "You can't send messages in this conversation." : 'Message'}
         onAttachAction={handleAttachAction}
+        replyingTo={chat.replyingTo}
+        onCancelReply={chat.cancelReply}
+        lockedNote={chat.sendRefusal}
       />
 
       {/* Gig Picker Modal */}

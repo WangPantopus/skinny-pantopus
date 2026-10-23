@@ -72,7 +72,8 @@ describe('P0.4 — serializeLocalProfileForViewer drops legacy aliases', () => {
       },
     });
     expect(out.handle).toBe('mayabuilds');
-    expect(out.displayName).toBe('Maya Builder');
+    // The name the person shows neighbors, even when it is their handle: the account name is private.
+    expect(out.displayName).toBe('mayabuilds');
     expect(out.avatarUrl).toBe('https://cdn.example/maya.jpg');
     expectNoLegacyKeys(out);
   });
