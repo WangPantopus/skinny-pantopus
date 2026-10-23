@@ -572,6 +572,11 @@ async function emitNewMessage(io, { room, message, actorUserId, identityUserId }
 async function emitChatMutation(io, room, event, payload) {
   const { connectedUsers } = require('../socket/chatSocketio');
   const members = await readChatParticipants([room.id], 'user_id, user:user_id(account_type)');
+  // A room-wide read boundary is not a group delivery receipt. Clients may
+  // project the other person's Read state only for this current direct pair.
+  const receiptPayload = ['messages:read', 'messages:topic_read'].includes(event)
+    ? { ...payload, directReceiptEligible: room.type === 'direct' && members.length === 2 }
+    : payload;
   const recipients = new Set(await gigRoomRecipients(room, (members || []).map((row) => String(row.user_id))));
   const emitTo = (userId, data) => {
     // A reaction's selected state belongs to the receiving person, not the actor.
@@ -584,10 +589,10 @@ async function emitChatMutation(io, room, event, payload) {
     };
     for (const socketId of connectedUsers.get(userId) || []) io.to(socketId).emit(event, personalized);
   };
-  for (const userId of recipients) emitTo(userId, payload);
+  for (const userId of recipients) emitTo(userId, receiptPayload);
   const businessIds = (members || []).filter((row) => row.user?.account_type === 'business'
     && recipients.has(String(row.user_id))).map((row) => String(row.user_id));
-  await emitToBusinessStaff(emitTo, payload, businessIds, recipients);
+  await emitToBusinessStaff(emitTo, receiptPayload, businessIds, recipients);
 }
 
 async function emitCommittedChatChange(io, change, prepared) {
