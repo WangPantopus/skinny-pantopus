@@ -31,6 +31,7 @@ const { photoBlocks } = require('./photos');
 const { refreshPickupDraft, editorFields } = require('./pickupDraft');
 const radonReport = require('./radonReport');
 const { getAuthorizedMail } = require('./mailAccess');
+const { nameMailSender } = require('../../utils/mailSenderView');
 const noaa = require('../external/noaa');
 const { isLaunchFeatureEnabled } = require('../../utils/featureFlags');
 const { isFeatureEnabled } = require('../featureFlagService');
@@ -1200,12 +1201,12 @@ async function summarizeMail({ mailItemId, userId }) {
     return { error: 'AI_UNAVAILABLE', fallback: true };
   }
 
-  // Fetch only mail the caller is authorized to view.
-  const item = await getAuthorizedMail({
+  // Fetch only mail the caller is authorized to view, a person who sent it named as neighbors see them.
+  const item = await nameMailSender(await getAuthorizedMail({
     mailItemId,
     userId,
-    select: 'subject, content, preview_text, sender_display, category, type, urgency, due_date, key_facts',
-  });
+    select: 'subject, content, preview_text, sender_display, sender_user_id, sender_entity_id, sender_business_name, category, type, urgency, due_date, key_facts',
+  }), userId);
 
   if (!item) {
     return { error: 'MAIL_NOT_FOUND', message: 'Mail item not found.' };
