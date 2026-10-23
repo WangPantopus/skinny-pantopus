@@ -21,15 +21,20 @@ import type {
 export async function getChatRooms(filters?: {
   type?: 'direct' | 'group' | 'gig' | 'home';
   limit?: number;
+  before?: string;
 }): Promise<{ 
   rooms: ChatRoomWithDetails[];
   total: number;
   totalUnread: number;
+  hasMore?: boolean;
+  nextCursor?: string | null;
 }> {
   return get<{ 
     rooms: ChatRoomWithDetails[]; 
     total: number;
     totalUnread: number;
+    hasMore?: boolean;
+    nextCursor?: string | null;
   }>('/api/chat/rooms', filters);
 }
 
@@ -41,17 +46,22 @@ export async function getBusinessChatRooms(
   filters?: {
     type?: 'direct' | 'group' | 'gig' | 'home';
     limit?: number;
+    before?: string;
   }
 ): Promise<{
   rooms: ChatRoomWithDetails[];
   total: number;
   totalUnread: number;
+  hasMore?: boolean;
+  nextCursor?: string | null;
   businessUserId: string;
 }> {
   return get<{
     rooms: ChatRoomWithDetails[];
     total: number;
     totalUnread: number;
+    hasMore?: boolean;
+    nextCursor?: string | null;
     businessUserId: string;
   }>(`/api/chat/business/${businessUserId}/rooms`, filters);
 }
