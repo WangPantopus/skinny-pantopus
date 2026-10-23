@@ -8,6 +8,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 /// Single row in the chat list.
 public struct ConversationRow: View {
@@ -331,6 +332,7 @@ public struct SwipeableConversationRow: View {
 
     private let revealWidth: CGFloat = 140
     @State private var offset: CGFloat = 0
+    @State private var nativeDragging: CGFloat = 0
     @GestureState private var dragging: CGFloat = 0
 
     public init(
@@ -348,15 +350,30 @@ public struct SwipeableConversationRow: View {
     public var body: some View {
         ZStack(alignment: .trailing) {
             swipeActions
-            ConversationRow(content: content, onTap: onTap)
-                .offset(x: clampedOffset)
-                .simultaneousGesture(swipeGesture)
+            swipeableContent
         }
         .accessibilityIdentifier("swipeableConversationRow_\(content.id)")
     }
 
     private var clampedOffset: CGFloat {
-        min(0, max(-revealWidth, offset + dragging))
+        min(0, max(-revealWidth, offset + dragging + nativeDragging))
+    }
+
+    @ViewBuilder
+    private var swipeableContent: some View {
+        let row = ConversationRow(content: content, onTap: onTap).offset(x: clampedOffset)
+        if #available(iOS 18, *) {
+            row.gesture(ConversationHorizontalPan(
+                onChange: { nativeDragging = $0 },
+                onEnd: { translation in
+                    nativeDragging = 0
+                    finishSwipe(translation)
+                },
+                onCancel: { nativeDragging = 0 }
+            ))
+        } else {
+            row.simultaneousGesture(swipeGesture)
+        }
     }
 
     private var swipeActions: some View {
@@ -414,16 +431,56 @@ public struct SwipeableConversationRow: View {
             }
             .onEnded { value in
                 guard abs(value.translation.width) > abs(value.translation.height) else { return }
-                let projected = offset + value.translation.width
-                withAnimation(.interpolatingSpring(stiffness: 320, damping: 30)) {
-                    offset = projected < -revealWidth / 2 ? -revealWidth : 0
-                }
+                finishSwipe(value.translation.width)
             }
+    }
+
+    private func finishSwipe(_ translation: CGFloat) {
+        let projected = offset + translation
+        withAnimation(.interpolatingSpring(stiffness: 320, damping: 30)) {
+            offset = projected < -revealWidth / 2 ? -revealWidth : 0
+        }
     }
 
     private func reset() {
         withAnimation(.interpolatingSpring(stiffness: 320, damping: 30)) {
             offset = 0
+        }
+    }
+}
+
+/// Reject vertical motion before this row can compete with the inbox scroll view.
+@available(iOS 18, *)
+private struct ConversationHorizontalPan: UIGestureRecognizerRepresentable {
+    let onChange: (CGFloat) -> Void
+    let onEnd: (CGFloat) -> Void
+    let onCancel: () -> Void
+
+    func makeCoordinator(converter _: CoordinateSpaceConverter) -> Coordinator {
+        Coordinator()
+    }
+
+    func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
+        let recognizer = UIPanGestureRecognizer()
+        recognizer.maximumNumberOfTouches = 1
+        recognizer.delegate = context.coordinator
+        return recognizer
+    }
+
+    func handleUIGestureRecognizerAction(_ recognizer: UIPanGestureRecognizer, context _: Context) {
+        switch recognizer.state {
+        case .began, .changed: onChange(recognizer.translation(in: recognizer.view).x)
+        case .ended: onEnd(recognizer.translation(in: recognizer.view).x)
+        case .cancelled, .failed: onCancel()
+        default: break
+        }
+    }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            guard let pan = gestureRecognizer as? UIPanGestureRecognizer else { return false }
+            let velocity = pan.velocity(in: pan.view)
+            return abs(velocity.x) > abs(velocity.y)
         }
     }
 }
