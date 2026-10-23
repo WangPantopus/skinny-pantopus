@@ -11,6 +11,7 @@
 
 import type { Metadata } from 'next';
 import { IBM_Plex_Mono, Newsreader } from 'next/font/google';
+import { IOS_APP_STORE_APP_ID } from '@pantopus/utils';
 import HomeHero from './_components/HomeHero';
 import UnderstandSection from './_components/UnderstandSection';
 import BallotBand from './_components/BallotBand';
@@ -47,6 +48,8 @@ export const metadata: Metadata = {
     images: [{ url: '/api/og/home', width: 1200, height: 630, alt: 'A house and an apartment block under a night sky, with the words “Your place, alive.”' }],
   },
   twitter: { card: 'summary_large_image', title: 'Your place, alive.', description: DESCRIPTION, images: ['/api/og/home'] },
+  // Safari on an iPhone offers the app in its own banner above the page.
+  ...(IOS_APP_STORE_APP_ID ? { itunes: { appId: IOS_APP_STORE_APP_ID } } : {}),
 };
 
 // Re-rendered hourly, so the Ballot band leaves on its own after Election Day.

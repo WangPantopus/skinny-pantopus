@@ -9,6 +9,7 @@ const { SAFE_CREATOR_SELECT } = require('../serializers/identitySerializers');
 const { currentOccupancy, resolveHomeRole, ROLE_RANK } = require('../utils/homeAccessPolicy');
 const parsePoint = require('../utils/parsePostGISPoint');
 const { localDisplayNames } = require('../utils/identityProfiles');
+const { loadChatPeople } = require('./chatPeople');
 const { chosenUsernameOrNull } = require('../utils/personalUsername');
 
 // A shared Home is not a container for every sensitive column/file reference.
@@ -54,6 +55,12 @@ function userRef(user, expectedId) {
   if (!object(user) || !uuid(user.id) || user.id !== expectedId || typeof user.username !== 'string') throw failure();
   return { id: user.id, username: user.username, name: null,
     profile_picture_url: typeof user.profile_picture_url === 'string' ? user.profile_picture_url : null };
+}
+// A HomeUserRef with the handle and photo the person shows neighbors (services/chatPeople.js): their Local Profile's,
+// or the account's for anyone without one or whom loadChatPeople can't read. Its name stays null.
+function localRef(ref, people) {
+  const person = people.get(String(ref.id));
+  return person ? { ...ref, username: person.handle || ref.username, profile_picture_url: person.avatarUrl || null } : ref;
 }
 
 async function readHome(homeId, access, { provider = false } = {}) {
@@ -116,13 +123,21 @@ async function readMembers(homeId, { history = false } = {}) {
 }
 
 // Members show by the name they show neighbors on their posts. A username the server made up is never a display name
-// (utils/personalUsername.js); a person with no name reads "Household member". Used only once the consistency recheck
-// passes, and only for display_name: the rest of each row keeps its shape.
+// (utils/personalUsername.js); a person with no name reads "Household member". Their handle and photo are the ones
+// they show neighbors too (localRef). Used only once the consistency recheck passes, and only for display_name, the
+// handle and the photo: the rest of each row keeps its shape.
 async function withDisplayNames(occupants) {
   if (occupants.length === 0) return occupants;
+  const ids = occupants.map(member => member.user_id);
   let names;
-  try { names = await localDisplayNames(occupants.map(member => member.user_id)); } catch (_) { throw failure(); }
-  return occupants.map(member => ({ ...member, display_name: names.get(String(member.user_id)) || 'Household member' }));
+  const people = loadChatPeople(ids);
+  try { names = await localDisplayNames(ids); } catch (_) { throw failure(); }
+  const shown = await people;
+  return occupants.map((member) => {
+    const user = localRef(member.user, shown);
+    return { ...member, user, display_name: names.get(String(member.user_id)) || 'Household member',
+      username: user.username, avatar_url: user.profile_picture_url };
+  });
 }
 
 async function ownClaims(homeId, actorId) {
@@ -148,11 +163,12 @@ async function detail(homeId, actorId) {
     const primary = visibleOwners.find(owner => owner.is_primary_owner && owner.owner_status === 'verified' && owner.subject_type === 'user');
     // The primary owner's account and delete eligibility are independent reads,
     // so they run together; a failure is reported in the same order as before.
-    const [ownerRead, deleteRead] = await Promise.allSettled([
+    const [ownerRead, deleteRead, ownerPeople] = await Promise.allSettled([
       primary ? checked(db.from('User').select(SAFE_CREATOR_SELECT).eq('id', primary.subject_id).maybeSingle()) : null,
       deletion.deleteEligibility(homeId, actorId),
+      primary ? loadChatPeople([primary.subject_id]) : null,
     ]);
-    const owner = primary ? userRef(settledValue(ownerRead), primary.subject_id) : null;
+    const owner = primary ? localRef(userRef(settledValue(ownerRead), primary.subject_id), settledValue(ownerPeople)) : null;
     const canDelete = settledValue(deleteRead).allowed;
     // A member or owner can change while this caller's grants remain unchanged.
     // Retire those held projections as well as rechecking caller authority.

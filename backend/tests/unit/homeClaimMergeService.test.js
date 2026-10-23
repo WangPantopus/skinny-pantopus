@@ -12,12 +12,15 @@ test('issue binds exact current claim and actor; raw token is only used for post
  const rpc=jest.fn(async(_name,args)=>({data:{ok:true,replayed:false,homeId:'home',claimId:'claim',
   invitation:{id:'invite',invitee_user_id:'recipient',proposed_role_base:'owner'},token:args.p_token,
   actor_name:'Owner',home_label:'Home'}}));db.setRpcMock(rpc);
+ // The inviter goes by their Local Profile, not the account name the SQL returns.
+ db.seedTable('User',[{id:'actor',username:'owner_handle',name:'Owner',account_type:'individual'}]);
+ db.seedTable('LocalProfile',[{user_id:'actor',handle:'owner_handle',display_name:'Owner Q.'}]);
  const result=await service.issueClaimInvitation({homeId:'home',claimId:'claim',userId:'actor',note:'Exact claimant'});
  expect(rpc).toHaveBeenCalledTimes(1);
  expect(rpc).toHaveBeenCalledWith('mutate_home_claim_invitation',{p_home_id:'home',p_claim_id:'claim',p_actor_id:'actor',
   p_action:'issue',p_invitation_id:null,p_token:expect.stringMatching(/^[a-f0-9]{64}$/),p_note:'Exact claimant',p_validity_days:365});
  expect(result).not.toHaveProperty('token');
- expect(notifications.notifyHomeInvite).toHaveBeenCalledWith({inviteeUserId:'recipient',inviterName:'Owner',homeName:'Home',
+ expect(notifications.notifyHomeInvite).toHaveBeenCalledWith({inviteeUserId:'recipient',inviterName:'Owner Q.',homeName:'Home',
   homeId:'home',inviteToken:rpc.mock.calls[0][1].p_token});
 });
 test('accept binds exact invitation, ignoring an untrusted old snapshot and avoiding local writes',async()=>{
@@ -27,7 +30,8 @@ test('accept binds exact invitation, ignoring an untrusted old snapshot and avoi
  expect(rpc).toHaveBeenCalledTimes(1);
  expect(rpc).toHaveBeenCalledWith('mutate_home_claim_invitation',{p_home_id:'home',p_claim_id:'claim',p_actor_id:'actor',
   p_action:'accept',p_invitation_id:'invite',p_token:null,p_note:null,p_validity_days:365});
- expect(from).not.toHaveBeenCalled();from.mockRestore();
+ // The only tables it touches are the accepter's name reads for the inviter's notice.
+ expect(from.mock.calls.map(([table])=>table).sort()).toEqual(['LocalProfile','User']);from.mockRestore();
 });
 test.each([
  null,{}, {ok:true}, {...accepted,homeId:'other'}, {...accepted,claimId:'other'},

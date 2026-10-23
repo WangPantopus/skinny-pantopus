@@ -450,7 +450,8 @@ export default function ChatRoomView({
         <ChatMessageList
           messages={chat.messages}
           loading={chat.loading}
-          error={chat.error}
+          // A conversation that takes no messages says why in place of the composer instead.
+          error={chat.sendRefusal ? null : chat.error}
           hasMore={chat.hasMore}
           loadingOlder={chat.loadingOlder}
           onLoadOlder={chat.loadOlder}
@@ -459,6 +460,7 @@ export default function ChatRoomView({
           onImageClick={handleImageClick}
           onReact={handleReact}
           onRetry={chat.retryMessage}
+          onReply={inputDisabled || chat.sendRefusal ? undefined : chat.beginReply}
         />
       </div>
 
@@ -500,6 +502,9 @@ export default function ChatRoomView({
         disabled={inputDisabled}
         placeholder={inputDisabled ? (launchFeatures.openGigs ? 'Place a bid to continue chatting…' : 'Message limit reached') : 'Type a message…'}
         onAttachAction={handleAttachAction}
+        replyingTo={chat.replyingTo}
+        onCancelReply={chat.cancelReply}
+        lockedNote={chat.sendRefusal}
       />
       </>
       )}

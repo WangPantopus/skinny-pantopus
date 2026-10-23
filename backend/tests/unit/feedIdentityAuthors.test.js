@@ -88,7 +88,7 @@ describe('feed identity authors', () => {
     expect(JSON.stringify(post)).not.toContain('Maya Private');
   });
 
-  test('local posts render readable names while keeping LocalProfile handles', async () => {
+  test('local posts show the name the person chose for neighbors, even their handle, never the account name', async () => {
     seedTable('PublicPersona', []);
     seedTable('LocalProfile', [{
       id: 'local-1',
@@ -121,7 +121,7 @@ describe('feed identity authors', () => {
       type: 'local',
       id: 'local-1',
       handle: 'RiverHome',
-      displayName: 'Local Person',
+      displayName: 'RiverHome',
       href: '/RiverHome',
     });
     // P0.4 follow-up: post.creator now mirrors post.author — for local
@@ -131,7 +131,7 @@ describe('feed identity authors', () => {
       type: 'local',
       id: 'local-1',
       handle: 'RiverHome',
-      displayName: 'Local Person',
+      displayName: 'RiverHome',
     });
     expect(post.creator).not.toHaveProperty('username');
     expect(post.creator).not.toHaveProperty('name');

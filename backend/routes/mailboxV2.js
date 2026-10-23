@@ -14,8 +14,11 @@ const Joi = require('joi');
 const logger = require('../utils/logger');
 const mailObjects = require('../services/mailObjectStorage');
 const { chosenUsernameOrNull } = require('../utils/personalUsername');
+// Other people are named the way neighbors see them: by their Local Profile (a business by the business).
+const { loadChatPeople } = require('../services/chatPeople');
+const { localDisplayNames } = require('../utils/identityProfiles');
 // A letter sent as a business names the business to everyone it reaches, never the person who sent it.
-const { presentMailSender } = require('../utils/mailSenderView');
+const { presentMailSender, nameMailSender, nameMailSenders } = require('../utils/mailSenderView');
 
 // ============ VALIDATION SCHEMAS ============
 
@@ -141,7 +144,7 @@ async function routeMail(recipientName, recipientAddressId, homeId) {
     const score = fuzzyNameScore(recipientName, user.name);
     if (score > bestScore) {
       bestScore = score;
-      bestMatch = { userId: user.id, name: user.name };
+      bestMatch = { userId: user.id };
     }
   }
 
@@ -150,7 +153,7 @@ async function routeMail(recipientName, recipientAddressId, homeId) {
     const score = fuzzyNameScore(recipientName, alias.alias);
     if (score > bestScore) {
       bestScore = score;
-      bestMatch = { userId: alias.user_id, name: alias.alias };
+      bestMatch = { userId: alias.user_id, alias: alias.alias };
     }
   }
 
@@ -162,9 +165,12 @@ async function routeMail(recipientName, recipientAddressId, homeId) {
   }
 
   if (bestScore >= 0.6) {
+    // The envelope's name is matched against the account name, but the resident is shown by the name they show their
+    // household (their Local Profile's); an alias is shown as the household wrote it.
+    const names = bestMatch.alias ? null : await localDisplayNames([bestMatch.userId]).catch(() => new Map());
     return {
       drawer: null, method: 'disambiguation_needed', confidence: bestScore,
-      homeId, bestMatchUserId: bestMatch?.userId, bestMatchName: bestMatch?.name,
+      homeId, bestMatchUserId: bestMatch.userId, bestMatchName: bestMatch.alias || names.get(String(bestMatch.userId)) || null,
     };
   }
 
@@ -366,7 +372,7 @@ router.get('/drawer/:drawer', verifyToken, async (req, res) => {
       }
     }
 
-    const enrichedMail = (mail || []).map(m => presentMailSender({
+    const enrichedMail = (await nameMailSenders(mail || [], userId)).map(m => presentMailSender({
       ...m,
       sender_display: resolveSenderDisplay(m),
       sender_trust: resolveSenderTrust(m),
@@ -469,11 +475,12 @@ router.get('/item/:id', verifyToken, async (req, res) => {
       }
     }
 
+    const named = await nameMailSender(mail, userId);
     return res.json({
       mail: presentMailSender({
-        ...mail,
-        sender_display: resolveSenderDisplay(mail),
-        sender_trust: resolveSenderTrust(mail),
+        ...named,
+        sender_display: resolveSenderDisplay(named),
+        sender_trust: resolveSenderTrust(named),
         package: packageInfo,
         timeline: packageTimeline,
         object_payload: objectPayload,
@@ -680,7 +687,10 @@ router.get('/pending', verifyToken, async (req, res) => {
     // Each item embeds its Mail: keep only mail this member may see (their own,
     // or Home letters the Home mail rule shows them; M01).
     const visible = await visibleMailIds((data || []).map((row) => row.mail_id), userId, homeIds);
-    return res.json({ pending: (data || []).filter((row) => visible.has(row.mail_id)) });
+    const pending = (data || []).filter((row) => visible.has(row.mail_id));
+    // A letter sent as a business shows the business, never the person behind the seat (presentMailSender).
+    const letters = await nameMailSenders(pending.map((row) => row.Mail), userId);
+    return res.json({ pending: pending.map((row, i) => ({ ...row, Mail: presentMailSender(letters[i], userId) })) });
   } catch (err) {
     logger.error('Pending fetch error', { error: err.message });
     return res.status(500).json({ error: 'Server error' });
@@ -707,11 +717,12 @@ router.get('/package/:mailId', verifyToken, async (req, res) => {
       .eq('package_id', pkg.id)
       .order('occurred_at', { ascending: true });
 
-    const { data: mail } = await supabaseAdmin
+    const { data: stored } = await supabaseAdmin
       .from('Mail')
-      .select('sender_display, sender_trust, created_at')
+      .select('sender_display, sender_trust, sender_user_id, sender_entity_id, sender_business_name, created_at')
       .eq('id', mailId)
       .single();
+    const mail = await nameMailSender(stored, req.user.id);
 
     return res.json({
       package: pkg,
@@ -794,13 +805,15 @@ router.post('/package/:mailId/share-eta', verifyToken, async (req, res) => {
     const { mailId } = req.params;
     const userId = req.user.id;
 
-    const { data: mail } = await supabaseAdmin
+    const { data: stored } = await supabaseAdmin
       .from('Mail')
-      .select('id, recipient_user_id, recipient_home_id, address_home_id, sender_display')
+      .select('id, recipient_user_id, recipient_home_id, address_home_id, sender_display, sender_user_id, sender_entity_id, sender_business_name')
       .eq('id', mailId)
       .single();
 
-    if (!mail || !(await canAccessMail(mail, userId))) return res.status(404).json({ error: 'Mail not found' });
+    if (!stored || !(await canAccessMail(stored, userId))) return res.status(404).json({ error: 'Mail not found' });
+    // The package's sender as the household sees it (a person by their Local Profile).
+    const mail = await nameMailSender(stored, userId);
 
     const homeId = mail.recipient_home_id || mail.address_home_id;
     if (!homeId) return res.status(400).json({ error: 'No home associated' });
@@ -819,13 +832,11 @@ router.post('/package/:mailId/share-eta', verifyToken, async (req, res) => {
     // Create notification mail items for all household members (batch insert)
     if (otherResidents.length > 0) {
       // The notice comes from the member who shared it, as an ordinary
-      // Pantopus user; it is not a verified business message.
-      const { data: sharer } = await supabaseAdmin
-        .from('User')
-        .select('name, username')
-        .eq('id', userId)
-        .maybeSingle();
-      const sharerName = (sharer?.name || sharer?.username || 'A household member').trim();
+      // Pantopus user named as neighbors see them (their Local Profile); it is
+      // not a verified business message. The mailbox names them again from
+      // sender_user_id whenever the notice is read.
+      const sharer = (await loadChatPeople([userId])).get(String(userId));
+      const sharerName = (sharer?.displayName || 'A household member').trim();
       const mailRows = otherResidents.map((resident) => ({
         recipient_user_id: resident.user_id,
         recipient_home_id: homeId,

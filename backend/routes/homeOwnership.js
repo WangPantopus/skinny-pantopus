@@ -28,7 +28,7 @@ const { listOwnClaims } = require('../services/homeOwnershipClaimListService');
 const { ownershipClaimLimiter, postcardLimiter, homePostcardRequestLimiter, verificationAttemptLimiter } = require('../middleware/rateLimiter');
 const logger = require('../utils/logger');
 const homePostcardService = require('../services/homePostcardService');
-const { displayNameFromUser } = require('../serializers/identitySerializers');
+const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
 
 // ============================================================
 // VALIDATION SCHEMAS
@@ -785,7 +785,9 @@ router.get('/:id/owners', verifyToken, async (req, res) => {
         .select('id, username, name, profile_picture_url')
         .in('id', userIds);
 
-      userMap = (users || []).reduce((acc, u) => { acc[u.id] = u; return acc; }, {});
+      // Owners go by the Local Profile they show neighbors (services/chatPeople.js); a business by the business.
+      const people = await loadChatPeople(userIds);
+      userMap = (users || []).reduce((acc, u) => { acc[u.id] = chatPersonRow(u, people); return acc; }, {});
     }
 
     const enriched = (owners || []).map(o => ({
@@ -1348,7 +1350,13 @@ router.get('/:id/quorum-actions', verifyToken, async (req, res) => {
 
     if (error) throw error;
 
-    res.json({ actions: actions || [] });
+    // Proposers go by the Local Profile they show neighbors (services/chatPeople.js).
+    const people = await loadChatPeople((actions || []).map(action => action.proposer?.id));
+    res.json({ actions: (actions || []).map((action) => {
+      if (!action.proposer) return action;
+      const { id, username, name } = chatPersonRow(action.proposer, people);
+      return { ...action, proposer: { id, username, name } };
+    }) });
   } catch (err) {
     logger.error('Failed to fetch quorum actions', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch quorum actions' });
@@ -2131,14 +2139,9 @@ router.post('/:id/verify-postcard', postcardNoStore, verifyToken, verificationAt
           .eq('is_active', true)
           .in('role_base', ['owner', 'admin', 'manager']);
 
-        const { data: newUser } = await supabaseAdmin
-          .from('User')
-          .select('name, first_name, middle_name, last_name, username')
-          .eq('id', userId)
-          .single();
-
-        // Household members see the person's display name, never their e-mail address.
-        const userName = displayNameFromUser(newUser);
+        // Household members see the person by the Local Profile name they show neighbors (services/chatPeople.js),
+        // never their e-mail address.
+        const userName = (await loadChatPeople([userId])).get(String(userId))?.displayName || 'Pantopus member';
 
         for (const auth of (authorities || [])) {
           await notificationService.createNotification({

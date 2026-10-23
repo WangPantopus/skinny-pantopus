@@ -2180,14 +2180,10 @@ router.post('/:listingId/questions', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to post question' });
     }
 
-    // Notify listing seller
+    // Notify listing seller, naming the asker as the question does
+    await hydrateTaskPeople([q], ['asker']);
     if (String(listing.user_id) !== String(userId)) {
-      const { data: asker } = await supabaseAdmin
-        .from('User')
-        .select('name, username')
-        .eq('id', userId)
-        .single();
-      const askerName = asker?.name || asker?.username || 'Someone';
+      const askerName = serializeTaskPerson(q.asker)?.displayName || 'Someone';
 
       createNotification({
         userId: listing.user_id,
@@ -2200,7 +2196,6 @@ router.post('/:listingId/questions', verifyToken, async (req, res) => {
       });
     }
 
-    await hydrateTaskPeople([q], ['asker']);
     res.status(201).json({ question: serializeListingQuestionForViewer(q) });
   } catch (err) {
     if (err.listingBlockRefusal) return res.status(err.status).json({ error: err.message });

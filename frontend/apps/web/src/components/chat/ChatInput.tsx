@@ -1,8 +1,9 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import ChatAttachmentMenu from './ChatAttachmentMenu';
 import EmojiPickerPopover from './EmojiPickerPopover';
+import type { ChatReplyQuote } from './ChatMessageBubble';
 
 type AttachAction = 'photos' | 'documents' | 'gig' | 'listing';
 
@@ -15,9 +16,14 @@ interface ChatInputProps {
   onAttachAction?: (action: 'gig' | 'listing') => void;
   /** Compact mode for mini chat widget — removes max-width and reduces padding */
   compact?: boolean;
+  /** The message the next send replies to, shown above the field ("Replying to …"). */
+  replyingTo?: ChatReplyQuote | null;
+  onCancelReply?: () => void;
+  /** Why the conversation takes no messages (the server's sentence): shown in place of the composer. */
+  lockedNote?: string | null;
 }
 
-export default function ChatInput({ onSend, sending, disabled = false, placeholder = 'Type a message…', onAttachAction, compact = false }: ChatInputProps) {
+export default function ChatInput({ onSend, sending, disabled = false, placeholder = 'Type a message…', onAttachAction, compact = false, replyingTo = null, onCancelReply, lockedNote = null }: ChatInputProps) {
   const [text, setText] = useState('');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -25,6 +31,11 @@ export default function ChatInput({ onSend, sending, disabled = false, placehold
   const inputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const emojiBtnRef = useRef<HTMLButtonElement>(null);
+
+  // Starting a reply puts the cursor in the field.
+  useEffect(() => {
+    if (replyingTo) inputRef.current?.focus();
+  }, [replyingTo]);
 
   const handleSend = async () => {
     const trimmed = text.trim();
@@ -88,11 +99,32 @@ export default function ChatInput({ onSend, sending, disabled = false, placehold
     }
   };
 
+  if (lockedNote) {
+    return (
+      <footer className="bg-surface border-t border-app shrink-0">
+        <div className={compact ? 'px-2 py-2' : 'max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-3'}>
+          <p role="status" className="text-center text-sm text-app-text-secondary">{lockedNote}</p>
+        </div>
+      </footer>
+    );
+  }
+
   return (
     <footer className="bg-surface border-t border-app shrink-0">
       <div className={compact ? 'px-2 py-2' : 'max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-3'}>
         {error && (
           <div className="mb-2 text-xs text-red-600">{error}</div>
+        )}
+        {replyingTo && !disabled && (
+          <div className="mb-2 flex items-start gap-2 rounded border-l-[3px] border-primary-500 bg-primary-500/[0.08] px-2 py-1 text-xs">
+            <div className="min-w-0 flex-1">
+              <div className="font-semibold text-primary-600">Replying to {replyingTo.senderName}</div>
+              <div className="line-clamp-1 text-app-muted">{replyingTo.text}</div>
+            </div>
+            <button type="button" onClick={onCancelReply} aria-label="Cancel reply" className="text-app-text-secondary hover:text-app">
+              ×
+            </button>
+          </div>
         )}
         {selectedFiles.length > 0 && (
           <div className="mb-2 flex flex-wrap gap-2">
@@ -141,6 +173,8 @@ export default function ChatInput({ onSend, sending, disabled = false, placehold
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 handleSend();
+              } else if (e.key === 'Escape' && replyingTo) {
+                onCancelReply?.();
               }
             }}
             placeholder={placeholder}
