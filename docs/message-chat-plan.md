@@ -81,9 +81,7 @@ in revision order; malformed cursors returned 400, nonmembers 403, and hard
 deletion requested replacement. Public client roles cannot call the new RPC.
 Client integration and app verification of this slice remain in progress.
 
-## Remaining repair sequence
-
-### Server search and old-message navigation
+## Server search and old-message navigation
 
 `GET /api/chat/search?q=...` searches the current identity's authorized rooms;
 room/person `/search` routes narrow that scope. `asBusinessUserId` retains the
@@ -103,6 +101,27 @@ Local API/DB checks recovered an old match behind 130 newer messages, paged 130
 matches as 50/50/30 without duplicates, preserved literal wildcard characters
 and Unicode, opened the old match's context, and refused a nonmember. The
 client search integration and its real-app checks are next.
+
+## Bounded attachment uploads
+
+Chat uploads now authorize the room before consuming multipart data, stream
+into private temporary files, validate content from disk, strip image metadata
+with one image processor at a time, hash streams and stream to private object
+storage. The existing upload request IDs, attachment rows, byte limits and
+message binding stay in use. Temporary originals are removed after completion,
+failure or cancellation; abandoned directories expire after a day.
+
+Admission allows four uploads per process and two per account, with a retryable
+429 before reading excess requests. A multipart batch is bounded to 250 MB;
+the existing image/document/video limits apply during streaming. No new table
+or hosted storage configuration is required.
+
+Local real-storage checks passed for an image and identical keyed retry,
+invalid image rejection, oversize rejection, a 12 MB document attached to a
+message, correct byte-range download, concurrent admission and abort cleanup.
+The real-app attachment checks are being repeated with this handler.
+
+## Remaining repair sequence
 
 | Area | Work remaining after immediate repairs |
 | --- | --- |

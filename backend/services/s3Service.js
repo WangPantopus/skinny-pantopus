@@ -83,14 +83,16 @@ function cacheControl(key) {
   return key.startsWith('chat/') ? PRIVATE_IMMUTABLE : PUBLIC_IMMUTABLE;
 }
 
-async function uploadToS3(buffer, key, contentType, objectMetadata) {
+async function uploadToS3(buffer, key, contentType, objectMetadata, { contentLength, abortSignal } = {}) {
   const cmd = new PutObjectCommand(
     buildPutObjectParams({ Bucket: S3_BUCKET, Key: key, Body: buffer, ContentType: contentType,
       CacheControl: cacheControl(key),
+      ...(contentLength === undefined ? {} : { ContentLength: contentLength }),
       ...(objectMetadata ? { Metadata: objectMetadata } : {}) })
   );
-  await s3Client.send(cmd);
-  logger.info('S3 upload success', { key, size: buffer.length });
+  try { await s3Client.send(cmd, { abortSignal }); }
+  finally { if (typeof buffer.destroy === 'function') buffer.destroy(); }
+  logger.info('S3 upload success', { key, size: contentLength ?? buffer.length });
   return { key, url: getPublicUrl(key) };
 }
 
