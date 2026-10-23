@@ -30,6 +30,13 @@ export function getTileUrl(): string {
 /** Static tile URL — evaluated once at module load. */
 export const TILE_URL = `${MAPBOX_TILE_URL_BASE}?access_token=${MAP_PUBLIC_TOKEN}`;
 
+/**
+ * The same tiles at twice the pixels on high-density screens: Leaflet fills `{r}` with
+ * `@2x` there (512 px tiles drawn from 1024 px images), and with nothing elsewhere.
+ * Opt-in per map (the Pulse map), so other maps keep their tiles and their cache.
+ */
+export const RETINA_TILE_URL = `${MAPBOX_TILE_URL_BASE}{r}?access_token=${MAP_PUBLIC_TOKEN}`;
+
 /** Cache Storage bucket for map tiles (offline fallback). Sign-out deletes it. */
 export const TILE_CACHE_NAME = 'pantopus-map-tiles-v1';
 

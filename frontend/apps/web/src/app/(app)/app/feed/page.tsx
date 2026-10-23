@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect, useRef } from 'react';
+import type { CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
@@ -8,7 +9,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   MapPin, Link as LinkIcon, Radio, Trophy,
-  ClipboardList, Map as MapIcon, Settings,
+  ClipboardList, Map as MapIcon, Settings, ChevronDown,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { FeedSurface, Post, PostType } from '@pantopus/api';
@@ -33,8 +34,54 @@ import {
 import { FEED_POST_CREATED_EVENT } from '@/lib/feedComposerEvents';
 import { launchFeatures } from '@/lib/featureFlags';
 import NearbyTabs from '@/components/nearby/NearbyTabs';
+import { useReducedMotion } from '@/components/scheduling/polish/a11y';
+import { usePulseQuickReturn } from './usePulseQuickReturn';
+import { mapFilterLabel } from './pulseMapFilters';
+import './pulse.css';
 
 const FeedMap = dynamic(() => import('./FeedMap'), { ssr: false });
+
+/** Map mode: the reveal capsule's bottom edge (top-2 + h-8), where the map's top pills start while the header is away. */
+const REVEAL_CAPSULE_BOTTOM_PX = 40;
+/** Before the phone tab bar is measured: its 54 px row plus the home-indicator inset. */
+const TAB_BAR_FALLBACK = 'calc(3.375rem + env(safe-area-inset-bottom))';
+
+/** The phone tab bar's height (AppShell draws it below md), so the Map fills exactly the space above it. */
+function useMobileTabBarHeight(active: boolean): number | null {
+  const [height, setHeight] = useState<number | null>(null);
+  useEffect(() => {
+    if (!active) return undefined;
+    let observed: Element | null = null;
+    let observer: ResizeObserver | null = null;
+    let frame = 0;
+    const measure = () => {
+      const bar = document.querySelector('[data-testid="mobile-tab-bar"]');
+      if (bar !== observed) {
+        observer?.disconnect();
+        observer = null;
+        observed = bar;
+        if (bar && typeof ResizeObserver !== 'undefined') {
+          observer = new ResizeObserver(measure);
+          observer.observe(bar);
+        }
+      }
+      setHeight(bar ? bar.getBoundingClientRect().height : 0);
+    };
+    // The bar comes and goes with the breakpoint: measure again once a resize has rendered.
+    const onResize = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(measure);
+    };
+    measure();
+    window.addEventListener('resize', onResize);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      cancelAnimationFrame(frame);
+      observer?.disconnect();
+    };
+  }, [active]);
+  return height;
+}
 
 const SURFACE_TABS: { key: FeedSurface; label: string; icon: ReactNode }[] = ([
   { key: 'place', label: 'Place', icon: <MapPin className="w-4 h-4 inline-block" /> },
@@ -237,155 +284,245 @@ export default function FeedPage() {
     }
   }, [virtualizer.getVirtualItems(), feed.hasMore, feed.loading, feed.loadingMore, listed.posts.length, feed.loadFeed]);
 
+  // ── The Pulse header (founder request 2026-10-22) ─────────
+  // One header block over the content, which fills the screen: sticky over the list, overlaid on
+  // the full-screen map. It slides away as the list scrolls down or the map is dragged up, and
+  // comes back on the way up (usePulseQuickReturn). Nothing on it is removed.
+  const reducedMotion = useReducedMotion();
+  const listHasNothingToScroll = feed.loading || areaResolving || areaFailed || feed.error || feed.posts.length === 0;
+  const quick = usePulseQuickReturn({
+    mode: viewMode,
+    // Beacons keeps its header, as in the apps; the list keeps it while loading, empty or failed.
+    canHide: feed.surface !== 'personas' && (viewMode === 'map' || !listHasNothingToScroll),
+    resetKey: [
+      viewMode, feed.surface, feed.filter, feed.topic ?? '', feed.sportsMode ?? '',
+      area.viewingLat ?? '', area.viewingLng ?? '', area.radiusMiles ?? '', area.showAreaPicker ? 'search' : '',
+    ].join('|'),
+    listScrollRef: feedScrollRef,
+  });
+  const headerElement = useRef<HTMLDivElement | null>(null);
+  const quickHeaderRef = quick.headerRef;
+  const setHeaderElement = useCallback((el: HTMLDivElement | null) => {
+    headerElement.current = el;
+    quickHeaderRef(el);
+  }, [quickHeaderRef]);
+  // Map mode: the map's intent chips and post count render into the header (FeedMap portals them).
+  const [mapHeaderSlot, setMapHeaderSlot] = useState<HTMLDivElement | null>(null);
+  const tabBarHeight = useMobileTabBarHeight(viewMode === 'map');
+
+  const showHeader = quick.show;
+  const revealHeader = useCallback(() => {
+    showHeader();
+    // The capsule goes away: keyboard focus continues in the header.
+    requestAnimationFrame(() => headerElement.current?.focus({ preventScroll: true }));
+  }, [showHeader]);
+
+  // Slide normally; cross-fade with Reduce Motion. Hidden, it takes no clicks.
+  const headerMotionClass = `pulse-header-motion duration-200 ease-out outline-none ${
+    reducedMotion ? 'transition-opacity' : 'transition-transform'
+  } ${quick.hidden ? '[&_*]:!pointer-events-none' : ''}`;
+  const headerMotionStyle: CSSProperties = reducedMotion
+    ? { opacity: quick.hidden ? 0 : 1 }
+    : { transform: quick.hidden ? 'translateY(calc(-100% - 12px))' : 'translateY(0)' };
+
   const rootClassName = viewMode === 'map'
-    ? 'h-[calc(100vh-64px)] bg-app flex flex-col'
+    // The map fills the content area: under the top bar, beside the sidebar, above the phone tab bar.
+    ? 'fixed inset-x-0 top-14 bg-app md:absolute md:!bottom-0'
     : 'min-h-screen bg-app';
+  const rootStyle: CSSProperties | undefined = viewMode === 'map'
+    ? { bottom: tabBarHeight ?? TAB_BAR_FALLBACK }
+    : undefined;
 
-  return (
-    <div className={rootClassName}>
-      <h1 className="sr-only">Pulse</h1>
-      <div className={viewMode === 'map' ? 'flex-1 min-h-0 flex flex-col' : ''}>
-        {/* Header: Nearby's Pulse | Neighborhood switch, then View Toggle + Surface Tabs */}
-        <div className="bg-surface border-b border-app/60 dark:backdrop-blur-sm">
-          <div className="max-w-2xl mx-auto px-4 py-2">
-            <NearbyTabs active="pulse" className="mb-2" />
-            <div className="rounded-2xl border border-app bg-surface overflow-hidden shadow-sm/80 dark:border-slate-700/80">
-              <div className="flex items-center justify-between px-4 py-2 border-b border-app">
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setViewMode('list')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition ${
-                      viewMode === 'list'
-                        ? 'bg-primary-600 text-white'
-                        : 'bg-surface-muted text-app-muted hover-bg-app'
-                    }`}
-                  >
-                    <ClipboardList className="w-4 h-4" /> List
-                  </button>
-                  <button
-                    onClick={() => setViewMode('map')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition ${
-                      viewMode === 'map'
-                        ? 'bg-primary-600 text-white'
-                        : 'bg-surface-muted text-app-muted hover-bg-app'
-                    }`}
-                  >
-                    <MapIcon className="w-4 h-4" /> Map
-                  </button>
-                </div>
-                <button
-                  onClick={() => prefs.setShowPrefs(true)}
-                  className="p-2 rounded-lg hover-bg-app transition text-app-muted"
-                  title="Pulse preferences"
-                >
-                  <Settings className="w-5 h-5" />
-                </button>
-              </div>
-
-              <div className="flex border-b border-app">
-                {SURFACE_TABS.map((tab) => (
-                  <button
-                    key={tab.key}
-                    onClick={() => {
-                      feed.handleSurfaceChange(tab.key);
-                      const params = new URLSearchParams(searchParams?.toString() ?? '');
-                      params.set('surface', tab.key);
-                      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-                    }}
-                    className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium border-b-2 transition-colors ${
-                      feed.surface === tab.key
-                        ? 'border-primary-600 text-primary-600'
-                        : 'border-transparent text-app-muted hover:text-app'
-                    }`}
-                  >
-                    <span>{tab.icon}</span>
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-
-              {feed.surface === 'personas' && (
-                <nav aria-label="Beacon discovery" className="flex flex-wrap gap-4 text-sm font-semibold text-primary-600">
-                  <Link href="/app/beacons">Find Beacons and manage following</Link>
-                </nav>
-              )}
-              {/* Area picker (Place surface only) */}
-              {feed.surface === 'place' && (
-                <div className="border-b border-app px-4 py-2.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="text-xs text-app-muted">
-                      <span className="font-semibold text-app">Viewing:</span>{' '}
-                      <span className="truncate">{area.viewingLabel}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        onClick={area.useCurrentArea}
-                        className="px-2 py-1 text-[11px] rounded-md bg-surface-muted text-app-muted hover-bg-app transition"
-                      >
-                        Use my location
-                      </button>
-                      <button
-                        onClick={() => area.setShowAreaPicker((v) => !v)}
-                        className="px-2 py-1 text-[11px] rounded-md bg-primary-50 text-primary-700 hover:bg-primary-100 transition"
-                      >
-                        {area.showAreaPicker ? 'Close' : 'Change area'}
-                      </button>
-                    </div>
-                  </div>
-                  {area.showAreaPicker && (
-                    <div className="mt-2 space-y-2">
-                      <input
-                        value={area.areaQuery}
-                        onChange={(e) => area.setAreaQuery(e.target.value)}
-                        placeholder="Search city, address, neighborhood..."
-                        className="w-full px-3 py-2 text-sm border border-app bg-surface text-app placeholder:text-app-muted rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                      />
-                      <div className="max-h-52 overflow-auto border border-app rounded-lg bg-surface">
-                        {area.areaSearching ? (
-                          <div className="px-3 py-2 text-xs text-app-muted">Searching…</div>
-                        ) : area.areaSuggestions.length === 0 ? (
-                          <div className="px-3 py-2 text-xs text-app-muted">No matches yet</div>
-                        ) : (
-                          area.areaSuggestions.map((s: Record<string, any>, idx: number) => {
-                            const label = typeof s.label === 'string' ? s.label : '';
-                            const text = typeof s.text === 'string' ? s.text : label || 'Unknown place';
-
-                            return (
-                              <button
-                                key={`${String(s.place_id || s.label || 'area')}-${idx}`}
-                                onClick={() => area.selectAreaSuggestion(s)}
-                                className="w-full text-left px-3 py-2 border-b last:border-b-0 border-app hover-bg-app transition"
-                              >
-                                <div className="text-xs font-medium text-app truncate">{text}</div>
-                                {label && <div className="text-[11px] text-app-muted truncate">{label}</div>}
-                              </button>
-                            );
-                          })
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+  // Header: Nearby's Pulse | Neighborhood switch, then View Toggle + Surface Tabs and the area.
+  const headerContent = (
+    <div className="max-w-2xl mx-auto px-4 py-2">
+      <NearbyTabs active="pulse" className="mb-2" />
+      <div className="rounded-2xl border border-app bg-surface overflow-hidden shadow-sm/80 dark:border-slate-700/80">
+        <div className="flex items-center justify-between px-4 py-2 border-b border-app">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setViewMode('list')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition ${
+                viewMode === 'list'
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-surface-muted text-app-muted hover-bg-app'
+              }`}
+            >
+              <ClipboardList className="w-4 h-4" /> List
+            </button>
+            <button
+              onClick={() => setViewMode('map')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition ${
+                viewMode === 'map'
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-surface-muted text-app-muted hover-bg-app'
+              }`}
+            >
+              <MapIcon className="w-4 h-4" /> Map
+            </button>
           </div>
+          <button
+            onClick={() => prefs.setShowPrefs(true)}
+            className="p-2 rounded-lg hover-bg-app transition text-app-muted"
+            title="Pulse preferences"
+          >
+            <Settings className="w-5 h-5" />
+          </button>
         </div>
 
-        {/* Map View */}
-        {viewMode === 'map' ? (
-          <div className="flex-1 min-h-0 relative">
-            <FeedMap
-              postTypeFilter={feed.filter}
-              onFilterChange={(f) => feed.setFilter(f as FilterType)}
-              surface={feed.surface}
-              userLat={area.viewingLat}
-              userLng={area.viewingLng}
-              onUseCurrentLocation={area.handleMapUseCurrentLocation}
-              onViewPost={handleOpenDetail}
-            />
+        <div className="flex border-b border-app">
+          {SURFACE_TABS.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => {
+                feed.handleSurfaceChange(tab.key);
+                const params = new URLSearchParams(searchParams?.toString() ?? '');
+                params.set('surface', tab.key);
+                router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+              }}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium border-b-2 transition-colors ${
+                feed.surface === tab.key
+                  ? 'border-primary-600 text-primary-600'
+                  : 'border-transparent text-app-muted hover:text-app'
+              }`}
+            >
+              <span>{tab.icon}</span>
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {feed.surface === 'personas' && (
+          <nav aria-label="Beacon discovery" className="flex flex-wrap gap-4 text-sm font-semibold text-primary-600">
+            <Link href="/app/beacons">Find Beacons and manage following</Link>
+          </nav>
+        )}
+        {/* Area picker (Place surface only) */}
+        {feed.surface === 'place' && (
+          <div className="border-b border-app px-4 py-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-xs text-app-muted">
+                <span className="font-semibold text-app">Viewing:</span>{' '}
+                <span className="truncate">{area.viewingLabel}</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={area.useCurrentArea}
+                  className="px-2 py-1 text-[11px] rounded-md bg-surface-muted text-app-muted hover-bg-app transition"
+                >
+                  Use my location
+                </button>
+                <button
+                  onClick={() => area.setShowAreaPicker((v) => !v)}
+                  className="px-2 py-1 text-[11px] rounded-md bg-primary-50 text-primary-700 hover:bg-primary-100 transition"
+                >
+                  {area.showAreaPicker ? 'Close' : 'Change area'}
+                </button>
+              </div>
+            </div>
+            {area.showAreaPicker && (
+              <div className="mt-2 space-y-2">
+                <input
+                  value={area.areaQuery}
+                  onChange={(e) => area.setAreaQuery(e.target.value)}
+                  placeholder="Search city, address, neighborhood..."
+                  className="w-full px-3 py-2 text-sm border border-app bg-surface text-app placeholder:text-app-muted rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                />
+                <div className="max-h-52 overflow-auto border border-app rounded-lg bg-surface">
+                  {area.areaSearching ? (
+                    <div className="px-3 py-2 text-xs text-app-muted">Searching…</div>
+                  ) : area.areaSuggestions.length === 0 ? (
+                    <div className="px-3 py-2 text-xs text-app-muted">No matches yet</div>
+                  ) : (
+                    area.areaSuggestions.map((s: Record<string, any>, idx: number) => {
+                      const label = typeof s.label === 'string' ? s.label : '';
+                      const text = typeof s.text === 'string' ? s.text : label || 'Unknown place';
+
+                      return (
+                        <button
+                          key={`${String(s.place_id || s.label || 'area')}-${idx}`}
+                          onClick={() => area.selectAreaSuggestion(s)}
+                          className="w-full text-left px-3 py-2 border-b last:border-b-0 border-app hover-bg-app transition"
+                        >
+                          <div className="text-xs font-medium text-app truncate">{text}</div>
+                          {label && <div className="text-[11px] text-app-muted truncate">{label}</div>}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
           </div>
-        ) : (
-          /* List View */
+        )}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className={rootClassName} style={rootStyle}>
+      <h1 className="sr-only">Pulse</h1>
+      {viewMode === 'map' ? (
+        /* Map View: the map fills the screen; the header floats over its top. */
+        <div className="absolute inset-0 isolate overflow-hidden">
+          <FeedMap
+            postTypeFilter={feed.filter}
+            onFilterChange={(f) => feed.setFilter(f as FilterType)}
+            surface={feed.surface}
+            userLat={area.viewingLat}
+            userLng={area.viewingLng}
+            onUseCurrentLocation={area.handleMapUseCurrentLocation}
+            onViewPost={handleOpenDetail}
+            headerSlot={mapHeaderSlot}
+            topInset={quick.hidden ? REVEAL_CAPSULE_BOTTOM_PX : quick.headerHeight}
+            onUserPanStart={quick.mapPanStart}
+            onUserPan={quick.mapPan}
+          />
+
+          <div
+            ref={setHeaderElement}
+            data-testid="pulseHeader"
+            tabIndex={-1}
+            {...quick.headerFocusProps}
+            className={`absolute inset-x-0 top-0 z-[1100] pointer-events-none ${headerMotionClass}`}
+            style={headerMotionStyle}
+          >
+            {/* Phones: full width. Wider screens: the centred card, hanging from the top bar. */}
+            <div className="pointer-events-auto bg-surface border-b border-app/60 md:mx-auto md:max-w-2xl md:rounded-b-2xl md:border-x md:shadow-lg dark:backdrop-blur-sm">
+              {headerContent}
+            </div>
+            <div ref={setMapHeaderSlot} />
+          </div>
+
+          {quick.hidden && (
+            <button
+              type="button"
+              data-testid="pulseHeaderReveal"
+              aria-label="Show the Pulse header"
+              onClick={revealHeader}
+              className="absolute left-1/2 top-2 z-[1100] flex h-8 -translate-x-1/2 items-center gap-1.5 rounded-full border border-app bg-app-surface/80 px-3 text-xs font-semibold text-app shadow-md backdrop-blur-md animate-fade-in hover-bg-app"
+            >
+              <ChevronDown className="h-4 w-4" aria-hidden="true" />
+              <span>Pulse · {mapFilterLabel(feed.surface === 'place' ? feed.filter : 'all')}</span>
+            </button>
+          )}
+        </div>
+      ) : (
+        <div>
+          <div
+            ref={setHeaderElement}
+            data-testid="pulseHeader"
+            tabIndex={-1}
+            {...quick.headerFocusProps}
+            className={`sticky top-14 z-30 ${headerMotionClass}`}
+            style={headerMotionStyle}
+          >
+            <div className="bg-surface border-b border-app/60 dark:backdrop-blur-sm">
+              {headerContent}
+            </div>
+          </div>
+
+          {/* List View */}
           <div className="px-4 py-6 space-y-4 max-w-2xl mx-auto">
             {feed.surface === 'place' && <NeighborhoodPulse posts={pulsePosts} />}
 
@@ -617,8 +754,8 @@ export default function FeedPage() {
               </>
             )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Compose Modal (shared by list + map) */}
       {showCompose && (
