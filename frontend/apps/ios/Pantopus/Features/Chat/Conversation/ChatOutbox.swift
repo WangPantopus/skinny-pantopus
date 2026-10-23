@@ -19,7 +19,13 @@ final class ChatOutbox {
     private var socketTask: Task<Void, Never>?
     private var connectionTask: Task<Void, Never>?
     private var wakeTask: Task<Void, Never>?
-    private var workers: [String: Task<Void, Never>] = [:]
+    private struct Worker {
+        let id: UUID
+        let messageId: String
+        let task: Task<Void, Never>
+    }
+
+    private var workers: [String: Worker] = [:]
     private var listeners: [UUID: AsyncStream<Event>.Continuation] = [:]
     private let storage = ChatLocalStore.shared
     private let api = APIClient.shared
@@ -75,8 +81,8 @@ final class ChatOutbox {
         socketTask?.cancel()
         connectionTask?.cancel()
         wakeTask?.cancel()
-        for task in workers.values {
-            task.cancel()
+        for worker in workers.values {
+            worker.task.cancel()
         }
         workers.removeAll()
         messages.removeAll()
@@ -120,21 +126,33 @@ final class ChatOutbox {
     }
 
     func confirm(_ message: ChatMessageDTO) {
-        guard let id = message.clientMessageId, messages.contains(where: { $0.id == id }) else { return }
+        guard let id = message.clientMessageId, let accepted = messages.first(where: { $0.id == id }) else { return }
         messages.removeAll { $0.id == id }
         publish(.accepted(message))
         publish(.changed)
         let version = version
         Task { await storage.removeOutbox(id, version: version) }
+        releaseWorker(for: accepted)
+        pump()
     }
 
     func discard(_ id: String) async {
         guard let message = messages.first(where: { $0.id == id }) else { return }
         messages.removeAll { $0.id == id }
-        workers[message.threadKey]?.cancel()
+        releaseWorker(for: message)
         publish(.changed)
         await storage.removeOutbox(id, version: version)
         pump()
+    }
+
+    /// A socket/history acknowledgement is enough to release the next send,
+    /// even while the accepted POST response is delayed or lost. Match the
+    /// message as well as the thread so discarding a later item leaves the
+    /// current send alone; the worker token guards its eventual completion.
+    private func releaseWorker(for message: ChatOutboxMessage) {
+        guard let worker = workers[message.threadKey], worker.messageId == message.id else { return }
+        workers[message.threadKey] = nil
+        worker.task.cancel()
     }
 
     private func publish(_ event: Event) {
@@ -156,13 +174,15 @@ final class ChatOutbox {
             }
             guard workers.count < 3 else { continue }
             let started = lifetime
-            workers[thread] = Task { [weak self] in
+            let workerId = UUID()
+            let task = Task { [weak self] in
                 guard let self else { return }
                 await transmit(message, lifetime: started)
-                guard lifetime == started else { return }
+                guard lifetime == started, workers[thread]?.id == workerId else { return }
                 workers[thread] = nil
                 pump()
             }
+            workers[thread] = Worker(id: workerId, messageId: message.id, task: task)
         }
         if let nextWake {
             wakeTask = Task { [weak self] in
