@@ -19,6 +19,7 @@ import app.pantopus.android.data.api.models.chats.ChatMessageSender
 import app.pantopus.android.data.api.models.chats.ChatMessagesResponse
 import app.pantopus.android.data.api.models.chats.ChatReactionSummary
 import app.pantopus.android.data.api.models.chats.ChatReadReceipt
+import app.pantopus.android.data.api.models.chats.ChatRoomDetail
 import app.pantopus.android.data.api.models.chats.ChatTopic
 import app.pantopus.android.data.api.models.chats.FindOrCreateTopicBody
 import app.pantopus.android.data.api.models.chats.SendChatMessageBody
@@ -300,9 +301,10 @@ class ChatConversationViewModel
 
         // Person-mode direct room — resolved once via `POST /api/chat/direct`
         // (find-or-create, idempotent server-side) and cached for the VM's
-        // lifetime. Person threads must always send here, never to a shared
-        // gig/group room surfaced by the aggregated fetch.
+        // lifetime. Ordinary person messages send here. Replies may preserve another verified
+        // direct room for the same pair, never a shared gig/group audience from the aggregate.
         private var directRoomId: String? = null
+        private val replyRoomDetails = mutableMapOf<String, ChatRoomDetail>()
 
         // In-flight direct-room resolution, shared so concurrent sends make
         // a single `POST /api/chat/direct`.
@@ -346,6 +348,8 @@ class ChatConversationViewModel
          */
         private data class PendingSendContext(
             val text: String,
+            val target: ChatSendTarget,
+            val roomId: String,
             val fileIds: List<String>? = null,
             val replyToId: String? = null,
             val topicId: String? = null,
@@ -462,6 +466,7 @@ class ChatConversationViewModel
                 directRoomDeferred?.cancel()
                 directRoomDeferred = null
                 directRoomId = null
+                replyRoomDetails.clear()
                 activeRoomIds = emptySet()
                 visibleReadThroughId = null
                 visibleReadThroughByRoom.clear()
@@ -1119,25 +1124,32 @@ class ChatConversationViewModel
                 enqueueRich(messageText, messageType, metadata, topicForPerson)
                 return
             }
+            val target = sendTarget() ?: return
+            val reply = _replyingTo.value
+            val roomId = replyRoomForSend(target, reply) ?: return
+            val revision = composerRevision
             _isSending.value = true
             viewModelScope.launch {
                 try {
                     val topicId = resolveTopicIdForShare(topicForPerson)
+                    if (target != sendTarget() || revision != composerRevision) return@launch
                     val clientId = newClientMessageId()
                     val pending =
                         optimisticRich(
                             text = messageText,
                             clientId = clientId,
-                            roomId = knownRoomIdHint(),
+                            roomId = roomId,
                             messageType = messageType,
                             metadata = metadata,
-                            replyToId = _replyingTo.value?.messageId,
+                            replyToId = reply?.messageId,
                         ).copy(topicId = topicId)
                     pendingByClientId[clientId] = pending
                     sendContextsByClientId[clientId] =
                         PendingSendContext(
                             text = messageText,
-                            replyToId = _replyingTo.value?.messageId,
+                            target = target,
+                            roomId = roomId,
+                            replyToId = reply?.messageId,
                             topicId = topicId,
                             messageType = messageType,
                             metadata = metadata,
@@ -1191,7 +1203,7 @@ class ChatConversationViewModel
                 messageText = text,
                 messageType = messageType,
                 metadata = metadata,
-                replyToId = sanitizedReplyToId(replyToId, roomId),
+                replyToId = replyToId,
                 clientMessageId = clientId,
                 createdAt = Instant.now().toString(),
                 sender =
@@ -1233,6 +1245,7 @@ class ChatConversationViewModel
             }
         }
 
+        @Suppress("ReturnCount") // Refuse an unsupported reply before clearing any composer content.
         private fun sendImmediately() {
             val trimmed = _composerText.value.trim()
             val hasQueuedFiles = _queuedAttachments.value.any { it.bytes != null }
@@ -1249,10 +1262,13 @@ class ChatConversationViewModel
                 startAiStream(trimmed)
                 return
             }
+            val mutationTarget = sendTarget()
+            val reply = _replyingTo.value
+            val replyRoom = if (_editingMessageId.value == null && mutationTarget != null) replyRoomForSend(mutationTarget, reply) else ""
+            if (replyRoom == null) return
             _composerText.value = ""
             emitTypingStop()
             _isSending.value = true
-            val mutationTarget = sendTarget()
 
             viewModelScope.launch {
                 try {
@@ -1276,14 +1292,16 @@ class ChatConversationViewModel
                         optimistic(
                             text = trimmed.ifEmpty { "Attachment" },
                             clientId = clientId,
-                            roomId = knownRoomIdHint(),
-                            replyToId = _replyingTo.value?.messageId,
+                            roomId = replyRoom,
+                            replyToId = reply?.messageId,
                         )
                     pendingByClientId[clientId] = pending
                     sendContextsByClientId[clientId] =
                         PendingSendContext(
                             text = trimmed,
-                            replyToId = _replyingTo.value?.messageId,
+                            target = mutationTarget ?: return@launch,
+                            roomId = replyRoom,
+                            replyToId = reply?.messageId,
                             topicId = _selectedTopicId.value,
                         )
                     // The sending bubble quotes the original now, and a retry keeps the reply.
@@ -1305,8 +1323,8 @@ class ChatConversationViewModel
             val queue = outbox ?: return
             val target = sendTarget() ?: return
             val clientId = newClientMessageId()
-            val roomId = knownRoomIdHint()
-            val replyId = sanitizedReplyToId(_replyingTo.value?.messageId, roomId)
+            val roomId = replyRoomForSend(target, _replyingTo.value) ?: return
+            val replyId = _replyingTo.value?.messageId
             val pending = optimisticRich(text, clientId, roomId, type, metadata, replyId).copy(topicId = _selectedTopicId.value)
             val entry =
                 ChatOutboxEntry(
@@ -1384,7 +1402,9 @@ class ChatConversationViewModel
                             failedClientIds.remove(id)
                             refusedClientIds.remove(id)
                         }
-                        if (mode is ChatThreadMode.Person) directRoomId = message.roomId
+                        if (mode is ChatThreadMode.Person && directRoomId == null && message.replyToId == null) {
+                            directRoomId = message.roomId
+                        }
                         activeRoomIds = activeRoomIds + message.roomId
                         if (matchesTopicFilter(message)) upsert(message)
                         refreshUnknownTopics(listOf(message))
@@ -1398,6 +1418,7 @@ class ChatConversationViewModel
         }
 
         /** Persist the complete send snapshot before clearing the composer; network delivery continues independently. */
+        @Suppress("ReturnCount") // Every validation failure leaves the original composer and attachments intact.
         private fun enqueueComposer() {
             val queue = outbox ?: return
             val target = sendTarget() ?: return
@@ -1407,8 +1428,8 @@ class ChatConversationViewModel
             if (text.isEmpty() && attachments.isEmpty()) return
             if (_isSending.value || _composerClosedNote.value != null) return
             val clientId = newClientMessageId()
-            val roomId = knownRoomIdHint()
-            val replyId = sanitizedReplyToId(_replyingTo.value?.messageId, roomId)
+            val roomId = replyRoomForSend(target, _replyingTo.value) ?: return
+            val replyId = _replyingTo.value?.messageId
             val pending = optimistic(text.ifEmpty { "Attachment" }, clientId, roomId, replyId)
             val entry =
                 ChatOutboxEntry(
@@ -1492,16 +1513,12 @@ class ChatConversationViewModel
          * composer's queued attachments at most once, and POSTs under the
          * pending row's idempotency key.
          */
+        @Suppress("ReturnCount") // Account changes and each failed preparation step stop this captured send.
         private suspend fun performSend(clientId: String): Boolean {
             var context = sendContextsByClientId[clientId] ?: return false
-            val roomId = ensureRoomId()
-            if (roomId == null) {
-                directRoomFailure?.takeIf(::isSendRefused)?.let { markRefused(clientId, it) }
-                directRoomFailure = null
-                failedClientIds.add(clientId)
-                rebuild()
-                return false
-            }
+            if (!pendingSendIsCurrent(clientId, context)) return false
+            val roomId = pendingRoomId(clientId, context) ?: return false
+            if (!validatePendingReply(clientId, context, roomId)) return false
             if (context.messageType == null && context.fileIds == null) {
                 context =
                     try {
@@ -1515,6 +1532,7 @@ class ChatConversationViewModel
                 sendContextsByClientId[clientId] = context
             }
             val fileIds = context.fileIds.orEmpty()
+            if (!pendingSendIsCurrent(clientId, context)) return false
             val result =
                 repo.sendMessage(
                     SendChatMessageBody(
@@ -1523,10 +1541,10 @@ class ChatConversationViewModel
                         messageType = context.messageType ?: if (fileIds.isEmpty()) "text" else "file",
                         fileIds = fileIds.ifEmpty { null },
                         clientMessageId = clientId,
-                        replyToId = sanitizedReplyToId(context.replyToId, roomId),
+                        replyToId = context.replyToId,
                         topicId = context.topicId,
                         metadata = context.metadata,
-                        asBusinessUserId = asBusinessUserId,
+                        asBusinessUserId = context.target.asBusinessUserId,
                     ),
                 )
             return when (result) {
@@ -1561,6 +1579,42 @@ class ChatConversationViewModel
                     false
                 }
             }
+        }
+
+        private fun pendingSendIsCurrent(
+            clientId: String,
+            context: PendingSendContext,
+        ): Boolean = context.target == sendTarget() && clientId in sendContextsByClientId
+
+        private suspend fun pendingRoomId(
+            clientId: String,
+            context: PendingSendContext,
+        ): String? {
+            val roomId = context.roomId.takeIf { it.isNotEmpty() } ?: ensureRoomId()
+            if (roomId == null && pendingSendIsCurrent(clientId, context)) {
+                directRoomFailure?.takeIf(::isSendRefused)?.let { markRefused(clientId, it) }
+                directRoomFailure = null
+                failedClientIds.add(clientId)
+                rebuild()
+            }
+            return roomId.takeIf { pendingSendIsCurrent(clientId, context) }
+        }
+
+        private suspend fun validatePendingReply(
+            clientId: String,
+            context: PendingSendContext,
+            roomId: String,
+        ): Boolean {
+            if (context.replyToId == null) return true
+            val checked = repo.validateReplyRoom(context.target, roomId)
+            if (!pendingSendIsCurrent(clientId, context)) return false
+            if (checked is NetworkResult.Failure) {
+                _actionFailure.value = checked.error.message
+                failedClientIds.add(clientId)
+                if (checked.error.code?.let { it in 400..499 && it != 429 } == true) refusedClientIds.add(clientId)
+                rebuild()
+            }
+            return checked is NetworkResult.Success
         }
 
         /**
@@ -1598,26 +1652,37 @@ class ChatConversationViewModel
                 error.code == 429 &&
                 error.body?.contains("PRE_BID_LIMIT") == true
 
-        /**
-         * The wire `replyToId` is accepted only when it points at a
-         * persisted message that lives in the room we're actually sending
-         * to. The backend rejects the whole send (400) if the reply target
-         * is missing, soft-deleted, or in a different room
-         * (`backend/routes/chats.js:1654`). Two cases this guards:
-         * - person threads aggregate messages across every shared room
-         *   (direct + gig + group), but we always send to the direct room —
-         *   a reply to a gig/group bubble would 400;
-         * - an optimistic (`client_`-prefixed) row isn't a UUID and isn't
-         *   persisted yet.
-         * In either case we drop the linkage and still deliver the text,
-         * rather than failing the message permanently.
-         */
-        private fun sanitizedReplyToId(
-            replyToId: String?,
-            roomId: String,
+        /** Keep the original destination in a reply, including an offline draft restored after process death. */
+        private fun replyRoomForSend(
+            target: ChatSendTarget,
+            reply: ChatReplyPreview?,
         ): String? {
-            if (replyToId == null) return null
-            return messages.firstOrNull { it.id == replyToId && it.roomId == roomId }?.id
+            if (reply == null) return knownRoomIdHint()
+            val roomId = reply.roomId ?: messages.firstOrNull { it.id == reply.messageId }?.roomId
+            val known = roomId?.let(replyRoomDetails::get)
+            val unsupported =
+                roomId.isNullOrBlank() || reply.messageId.startsWith("client_") ||
+                    (target.kind == "room" && roomId != target.id) ||
+                    (known != null && !repo.replyRoomAllowed(target, roomId, known))
+            if (unsupported) {
+                _actionFailure.value = "Open the original conversation to reply to this message. Your draft is still here."
+                return null
+            }
+            // Unknown audience stays queued offline. The worker checks it before uploading or sending.
+            return roomId
+        }
+
+        private fun rememberReplyRoom(roomId: String) {
+            val target = sendTarget() ?: return
+            if (roomId.isBlank() || replyRoomDetails.containsKey(roomId)) return
+            val context = historyContext()
+            viewModelScope.launch {
+                when (val result = repo.room(roomId, target.asBusinessUserId)) {
+                    is NetworkResult.Success ->
+                        if (target == sendTarget() && context == historyContext()) replyRoomDetails[roomId] = result.data.room
+                    is NetworkResult.Failure -> Unit // Offline drafting remains available; delivery will revalidate.
+                }
+            }
         }
 
         /**
@@ -1914,9 +1979,11 @@ class ChatConversationViewModel
                     messageId = message.id,
                     senderName = replyNameOf(message),
                     text = message.resolvedText,
+                    roomId = message.roomId,
                 )
             _editingMessageId.value = null
             composerChanged()
+            rememberReplyRoom(message.roomId)
         }
 
         fun beginEdit(messageId: String) {
@@ -2344,6 +2411,7 @@ class ChatConversationViewModel
                 replyMessageId = reply?.messageId,
                 replyName = reply?.senderName,
                 replyText = reply?.text,
+                replyRoomId = reply?.roomId,
                 editingMessageId = _editingMessageId.value,
             )
         }
@@ -2385,9 +2453,10 @@ class ChatConversationViewModel
                         }
                     _replyingTo.value =
                         draft.replyMessageId?.let {
-                            ChatReplyPreview(it, draft.replyName.orEmpty(), draft.replyText.orEmpty())
+                            ChatReplyPreview(it, draft.replyName.orEmpty(), draft.replyText.orEmpty(), draft.replyRoomId)
                         }
                     _editingMessageId.value = draft.editingMessageId
+                    draft.replyRoomId?.let(::rememberReplyRoom)
                 }
         }
 
@@ -2597,7 +2666,7 @@ class ChatConversationViewModel
 
         /**
          * Resolve the room to send into. Room threads use their fixed id.
-         * Person threads always send to the pair's direct room — found or
+         * Ordinary person messages send to the pair's direct room — found or
          * created via `POST /api/chat/direct` and cached — never to a
          * shared gig/group room surfaced by the aggregated fetch, which
          * would misfile plain DMs and trip gig pre-bid send limits.
@@ -3917,6 +3986,7 @@ class ChatConversationViewModel
                 messageId = original.id,
                 senderName = replyNameOf(original),
                 text = original.resolvedText,
+                roomId = original.roomId,
             )
         }
 
@@ -3977,7 +4047,7 @@ class ChatConversationViewModel
                 messageText = text,
                 messageType = "text",
                 topicId = _selectedTopicId.value,
-                replyToId = sanitizedReplyToId(replyToId, roomId),
+                replyToId = replyToId,
                 clientMessageId = clientId,
                 createdAt = Instant.now().toString(),
                 sender =

@@ -6,6 +6,7 @@ import app.pantopus.android.data.api.models.chats.ChatMessagesResponse
 import app.pantopus.android.data.api.models.chats.ChatNotificationPreferencesBody
 import app.pantopus.android.data.api.models.chats.ChatNotificationPreferencesResponse
 import app.pantopus.android.data.api.models.chats.ChatReadResponse
+import app.pantopus.android.data.api.models.chats.ChatRoomDetail
 import app.pantopus.android.data.api.models.chats.ChatRoomDetailResponse
 import app.pantopus.android.data.api.models.chats.ChatSearchResponse
 import app.pantopus.android.data.api.models.chats.ChatStatsResponse
@@ -21,6 +22,7 @@ import app.pantopus.android.data.api.models.chats.SendChatMessageBody
 import app.pantopus.android.data.api.models.chats.SendChatMessageResponse
 import app.pantopus.android.data.api.models.chats.UnifiedConversationDto
 import app.pantopus.android.data.api.models.chats.UnifiedConversationsResponse
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.conditionalApiCall
 import app.pantopus.android.data.api.net.mapFresh
@@ -40,6 +42,7 @@ import retrofit2.HttpException
 import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection.HTTP_BAD_METHOD
+import java.net.HttpURLConnection.HTTP_BAD_REQUEST
 import java.net.HttpURLConnection.HTTP_NOT_FOUND
 import java.net.URLEncoder
 import javax.inject.Inject
@@ -128,6 +131,38 @@ class ChatRepository
             roomId: String,
             asBusinessUserId: String? = null,
         ): NetworkResult<ChatRoomDetailResponse> = safeApiCall { api.room(roomId, asBusinessUserId) }
+
+        /** A person reply may use an older direct room, but never a different audience or represented identity. */
+        fun replyRoomAllowed(
+            target: ChatSendTarget,
+            roomId: String,
+            room: ChatRoomDetail,
+        ): Boolean {
+            if (room.isActive != true) return false
+            return when (target.kind) {
+                "room" -> roomId == target.id
+                "person" ->
+                    room.type == "direct" && room.participants?.size == 2 &&
+                        room.participants.mapNotNull { it.userId }.toSet() == setOf(target.asBusinessUserId ?: target.accountId, target.id)
+                else -> false
+            }
+        }
+
+        suspend fun validateReplyRoom(
+            target: ChatSendTarget,
+            roomId: String,
+        ): NetworkResult<Unit> =
+            when (val result = room(roomId, target.asBusinessUserId)) {
+                is NetworkResult.Failure -> result
+                is NetworkResult.Success ->
+                    if (replyRoomAllowed(target, roomId, result.data.room)) {
+                        NetworkResult.Success(Unit)
+                    } else {
+                        NetworkResult.Failure(
+                            NetworkError.ClientError(HTTP_BAD_REQUEST, "Open the original conversation to reply to this message."),
+                        )
+                    }
+            }
 
         suspend fun roomMessages(
             roomId: String,

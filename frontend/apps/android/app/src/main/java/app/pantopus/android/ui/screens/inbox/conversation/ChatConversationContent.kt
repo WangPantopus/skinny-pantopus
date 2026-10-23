@@ -333,6 +333,7 @@ data class ChatReplyPreview(
     val messageId: String,
     val senderName: String,
     val text: String,
+    val roomId: String? = null,
 )
 
 @Immutable

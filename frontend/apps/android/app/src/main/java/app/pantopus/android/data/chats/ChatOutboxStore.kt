@@ -60,6 +60,7 @@ data class ChatComposerDraft(
     val replyText: String? = null,
     val editingMessageId: String? = null,
     val queuedClientId: String? = null,
+    val replyRoomId: String? = null,
 )
 
 @Suppress("LongParameterList")

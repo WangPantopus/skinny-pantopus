@@ -26,6 +26,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
+import java.net.HttpURLConnection.HTTP_BAD_REQUEST
 import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -288,6 +289,15 @@ class ChatOutbox
             if (!current(entry, revision) || !saveProgress(entry, revision)) return
             entry = resolveTopic(entry, revision) ?: return
             entry = resolveRoom(entry, revision) ?: return
+            if (entry.body.replyToId != null) {
+                when (val result = repo.validateReplyRoom(entry.target, entry.body.roomId)) {
+                    is NetworkResult.Failure -> {
+                        fail(entry, result.error, revision)
+                        return
+                    }
+                    is NetworkResult.Success -> if (!current(entry, revision)) return
+                }
+            }
             entry = uploadAttachments(entry, revision) ?: return
             if (!current(entry, revision)) return
             when (val result = repo.sendMessage(entry.body)) {
@@ -334,6 +344,14 @@ class ChatOutbox
         ): ChatOutboxEntry? {
             if (!current(entry, revision)) return null
             if (entry.body.roomId.isNotEmpty()) return entry
+            if (entry.body.replyToId != null) {
+                fail(
+                    entry,
+                    NetworkError.ClientError(HTTP_BAD_REQUEST, "Open the original conversation to reply to this message."),
+                    revision,
+                )
+                return null
+            }
             return when (val result = repo.createDirectChat(entry.target.id)) {
                 is NetworkResult.Failure -> {
                     fail(entry, result.error, revision)
