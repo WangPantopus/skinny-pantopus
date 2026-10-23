@@ -230,7 +230,8 @@ async function read({ homeId, actorId, includeHealthScore = false }) {
   // Pending, future, ended and unknown-role rows are not active household members.
   const members = rawMembers.filter(member => currentOccupancy(member) && resolveHomeRole(member));
   // Members show by the name they show neighbors (a made-up username never stands in for it), with the handle and photo
-  // they show neighbors (services/chatPeople.js: their Local Profile's, or the account's).
+  // they show neighbors (services/chatPeople.js: their Local Profile's, or the account's). Someone who removed their
+  // Local Profile photo shows none, so the account photo doesn't stand in for it either.
   const [ownerRows, memberNames, memberPeople] = members.length ? await Promise.all([
     rows(db.from('HomeOwner').select('subject_id, owner_status, verification_tier')
       .eq('home_id', homeId).eq('subject_type', 'user').in('subject_id', members.map(member => member.user_id)).neq('owner_status', 'revoked')),
@@ -242,7 +243,8 @@ async function read({ homeId, actorId, includeHealthScore = false }) {
     const owner = owners.get(member.user_id);
     const person = memberPeople.get(String(member.user_id));
     const user = member.user && { ...member.user, display_name: memberNames.get(String(member.user_id)) || 'Household member',
-      ...(person && { handle: person.handle || member.user.username, avatar_url: person.avatarUrl || null }) };
+      ...(person && { handle: person.handle || member.user.username, avatar_url: person.avatarUrl || null,
+        profile_picture_url: person.avatarUrl || null }) };
     return { user_id: member.user_id, role: member.role, role_base: member.role_base, is_active: member.is_active, user: serializeUserAsLocalIdentity(user),
       display_role: ({ verified: 'owner', pending: 'pending_owner', disputed: 'disputed_owner' })[owner?.owner_status] || member.role,
       ownership_status: owner?.owner_status || null, verification_tier: owner?.verification_tier || null };
