@@ -11,6 +11,7 @@ const validate = require('../middleware/validate');
 const Joi = require('joi');
 const logger = require('../utils/logger');
 const notificationService = require('../services/notificationService');
+const { loadChatPeople, reviewerRow } = require('../services/chatPeople');
 const { chosenUsernameOrNull } = require('../utils/personalUsername');
 const {
   hydrateListingCreatorIdentities,
@@ -200,12 +201,16 @@ router.get('/user/:userId', async (req, res) => {
         return res.status(500).json({ error: 'Failed to fetch reviews' });
       }
 
-      // Hydrate reviewer info
+      // Hydrate reviewer info: a writer goes by their Local Profile, as on their posts and comments
+      // (services/chatPeople.js).
       const reviewerIds = [...new Set(fallbackReviews.map(r => r.reviewer_id))];
-      const { data: reviewers } = await supabaseAdmin
-        .from('User')
-        .select('id, username, name, first_name, last_name, profile_picture_url')
-        .in('id', reviewerIds);
+      const [{ data: reviewers }, people] = await Promise.all([
+        supabaseAdmin
+          .from('User')
+          .select('id, username, name, first_name, last_name, profile_picture_url')
+          .in('id', reviewerIds),
+        loadChatPeople(reviewerIds),
+      ]);
 
       // Hydrate gig role context (worker vs poster)
       const gigIds = [...new Set(fallbackReviews.map(r => r.gig_id).filter(Boolean))];
@@ -219,7 +224,7 @@ router.get('/user/:userId', async (req, res) => {
       }
 
       const reviewerMap = {};
-      (reviewers || []).forEach(u => { reviewerMap[u.id] = u; });
+      (reviewers || []).forEach(u => { reviewerMap[u.id] = reviewerRow(u, people); });
 
       const enriched = fallbackReviews.map(r => ({
         ...r,
@@ -252,16 +257,22 @@ router.get('/user/:userId', async (req, res) => {
       });
     }
 
-    // Enrich with reviewer_name
-    const enriched = (reviews || []).map(r => ({
-      ...r,
-      reviewer_name: r.reviewer?.name ||
-                     r.reviewer?.first_name ||
-                     chosenUsernameOrNull(r.reviewer?.username) || 'Anonymous',
-      reviewer_avatar: r.reviewer?.profile_picture_url || null,
-      reviewer_username: chosenUsernameOrNull(r.reviewer?.username),
-      received_as: resolveReceivedAs(r, userId),
-    }));
+    // Enrich with reviewer_name: a writer goes by their Local Profile, as on their posts and comments
+    // (services/chatPeople.js).
+    const people = await loadChatPeople((reviews || []).map(r => r.reviewer_id));
+    const enriched = (reviews || []).map(r => {
+      const reviewer = reviewerRow(r.reviewer, people);
+      return {
+        ...r,
+        reviewer,
+        reviewer_name: reviewer?.name ||
+                       reviewer?.first_name ||
+                       chosenUsernameOrNull(reviewer?.username) || 'Anonymous',
+        reviewer_avatar: reviewer?.profile_picture_url || null,
+        reviewer_username: chosenUsernameOrNull(reviewer?.username),
+        received_as: resolveReceivedAs(r, userId),
+      };
+    });
 
     // Compute average
     const totalRating = enriched.reduce((sum, r) => sum + r.rating, 0);
@@ -306,15 +317,19 @@ router.get('/gig/:gigId', async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch reviews' });
     }
 
-    // Hydrate reviewer info
+    // Hydrate reviewer info: a writer goes by their Local Profile, as on their posts and comments
+    // (services/chatPeople.js).
     const reviewerIds = [...new Set(reviews.map(r => r.reviewer_id))];
     let reviewerMap = {};
     if (reviewerIds.length > 0) {
-      const { data: reviewers } = await supabaseAdmin
-        .from('User')
-        .select('id, username, name, first_name, profile_picture_url')
-        .in('id', reviewerIds);
-      (reviewers || []).forEach(u => { reviewerMap[u.id] = u; });
+      const [{ data: reviewers }, people] = await Promise.all([
+        supabaseAdmin
+          .from('User')
+          .select('id, username, name, first_name, profile_picture_url')
+          .in('id', reviewerIds),
+        loadChatPeople(reviewerIds),
+      ]);
+      (reviewers || []).forEach(u => { reviewerMap[u.id] = reviewerRow(u, people); });
     }
 
     const enriched = reviews.map(r => ({
