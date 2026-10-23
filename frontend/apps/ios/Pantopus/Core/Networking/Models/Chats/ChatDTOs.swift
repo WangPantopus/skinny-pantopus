@@ -620,9 +620,36 @@ public struct ChatMessagesResponse: Decodable, Sendable, Hashable {
     /// older servers, which leave the key out.
     public var sendRefusal: ChatSendRefusal?
     public var syncCursors: [String: Int64]?
+    public var anchorMessageId: String?
+    public var hasMoreAfter: Bool?
 
     private enum CodingKeys: String, CodingKey {
-        case messages, hasMore, nextCursor, roomIds, sendRefusal, syncCursors
+        case messages, hasMore, nextCursor, roomIds, sendRefusal, syncCursors, anchorMessageId, hasMoreAfter
+    }
+}
+
+public struct ChatSearchResponse: Decodable, Sendable {
+    public let messages: [ChatMessageDTO]
+    public let roomContexts: [String: ChatSearchRoomContext]
+    public let hasMore: Bool
+    public let nextCursor: String?
+}
+
+public struct ChatSearchRoomContext: Decodable, Sendable {
+    public let conversationId: String
+    public let kind: String
+    public let name: String
+    public let identity: Identity?
+
+    public struct Identity: Decodable, Sendable {
+        public let identityKind: String?
+        public let verified: Bool?
+        public let badges: [String]?
+
+        private enum CodingKeys: String, CodingKey {
+            case identityKind = "identity_kind"
+            case verified, badges
+        }
     }
 }
 

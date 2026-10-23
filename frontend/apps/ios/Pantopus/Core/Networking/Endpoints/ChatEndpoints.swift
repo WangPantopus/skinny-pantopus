@@ -13,9 +13,10 @@ import Foundation
 public enum ChatEndpoints {
     /// `GET /api/chat/unified-conversations` — person-grouped chat list.
     /// Route `backend/routes/chats.js:2211`.
-    public static func unifiedConversations(limit: Int = 100, before: String? = nil) -> Endpoint {
+    public static func unifiedConversations(limit: Int = 100, before: String? = nil, query text: String? = nil) -> Endpoint {
         var query = ["limit": String(limit)]
         if let before { query["before"] = before }
+        if let text { query["q"] = text }
         return Endpoint(
             method: .get,
             path: "/api/chat/unified-conversations",
@@ -106,6 +107,29 @@ public enum ChatEndpoints {
             method: .post,
             path: "/api/chat/\(collection)/\(conversationId)/changes",
             body: ChatChangesBody(cursor: cursor, until: until, asBusinessUserId: asBusinessUserId),
+            cachePolicy: .reloadIgnoringLocalCacheData
+        )
+    }
+
+    public static func search(query text: String, before: String? = nil) -> Endpoint {
+        var query = ["q": text, "limit": "50"]
+        if let before { query["before"] = before }
+        return Endpoint(method: .get, path: "/api/chat/search", query: query, cachePolicy: .reloadIgnoringLocalCacheData)
+    }
+
+    public static func messageContext(
+        conversationId: String,
+        isRoom: Bool,
+        messageId: String,
+        asBusinessUserId: String? = nil
+    ) -> Endpoint {
+        let collection = isRoom ? "rooms" : "conversations"
+        var query = ["limit": "25"]
+        if let asBusinessUserId { query["asBusinessUserId"] = asBusinessUserId }
+        return Endpoint(
+            method: .get,
+            path: "/api/chat/\(collection)/\(conversationId)/messages/\(messageId)/context",
+            query: query,
             cachePolicy: .reloadIgnoringLocalCacheData
         )
     }

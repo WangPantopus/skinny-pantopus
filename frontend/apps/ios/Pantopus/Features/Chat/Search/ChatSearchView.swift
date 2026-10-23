@@ -28,14 +28,28 @@ public struct ChatSearchView: View {
             ),
             results: viewModel.results,
             isLoading: viewModel.isLoading,
+            filters: viewModel
+                .searchFailed ? AnyView(Button("Try again") { viewModel.setQuery(viewModel.query) }.padding(Spacing.s3)) : nil,
             emptyState: viewModel.emptyState,
             row: { result in
-                ChatSearchResultRow(result: result, onOpen: viewModel.onOpenResult)
+                VStack(spacing: 0) {
+                    ChatSearchResultRow(result: result, onOpen: viewModel.onOpenResult)
+                    if result.id == viewModel.results.last?.id, viewModel.hasMore {
+                        Button(viewModel.isLoadingMore ? "Loading…" : "Load more results") {
+                            Task { await viewModel.loadMore() }
+                        }
+                        .frame(minHeight: 44)
+                        .disabled(viewModel.isLoadingMore)
+                        .task(id: result.id) { await viewModel.loadMore() }
+                    }
+                }
             },
             onCancel: { viewModel.onCancel() }
         )
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
+        .refreshFailureToast($viewModel.failureMessage)
         .task { await viewModel.load() }
+        .onDisappear { viewModel.teardown() }
         .accessibilityIdentifier("chatSearch")
     }
 }

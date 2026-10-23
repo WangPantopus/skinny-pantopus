@@ -387,6 +387,7 @@ public final class ChatConversationViewModel {
     /// message that is present in the loaded page; the view clears it via
     /// `consumePendingScroll()` after scrolling.
     public private(set) var pendingScrollTargetId: String?
+    public private(set) var isViewingSearchContext = false
 
     /// True while the screen was opened from Chat Search (or at a nudge) and
     /// the matched message hasn't been scrolled to yet — the view skips its
@@ -1100,6 +1101,11 @@ public final class ChatConversationViewModel {
         let generation = historyGeneration
         await loadTopicsIfNeeded()
         guard generation == historyGeneration, !Task.isCancelled else { return }
+        if isViewingSearchContext {
+            didResolveScrollTarget = false
+            await fetch(.reload)
+            return
+        }
         if case .error = state {
             await fetch(.reload)
         } else {
@@ -1119,9 +1125,21 @@ public final class ChatConversationViewModel {
     }
 
     public func selectTopic(_ topicId: String?) async {
+        isViewingSearchContext = false
+        scrollToMessageId = nil
         selectedTopicId = selectedTopicId == topicId ? nil : topicId
         sendLimitNotice = nil
         await fetch(.reload)
+    }
+
+    public func returnToLatest() async {
+        isViewingSearchContext = false
+        scrollToMessageId = nil
+        didResolveScrollTarget = false
+        awaitingTargetScroll = false
+        pendingScrollTargetId = nil
+        await fetch(.reload)
+        pendingScrollTargetId = "chat_bottom_anchor"
     }
 
     /// Dismiss the send notice banner.
@@ -1145,6 +1163,8 @@ public final class ChatConversationViewModel {
         composerText = ""
         isSending = true
         defer { isSending = false }
+
+        if isViewingSearchContext, editingMessageId == nil { await returnToLatest() }
 
         if let editingMessageId {
             do {
@@ -1434,6 +1454,7 @@ public final class ChatConversationViewModel {
     /// Insert a persisted message, replacing any copy that already
     /// arrived through a socket-triggered refetch.
     private func upsert(_ message: ChatMessageDTO) {
+        guard !isViewingSearchContext || messages.contains(where: { $0.id == message.id }) else { return }
         historyTouchedIds.insert(message.id)
         guard selectedTopicId == nil || message.topicId == selectedTopicId else { return }
         if let index = messages.firstIndex(where: { $0.id == message.id }) {
@@ -2313,6 +2334,7 @@ public final class ChatConversationViewModel {
         guard !isSending else { return }
         isSending = true
         defer { isSending = false }
+        if isViewingSearchContext { await returnToLatest() }
 
         let topicId = await resolveTopicIdForShare(topicForPerson)
         let clientId = Self.newClientMessageId()
@@ -2569,7 +2591,7 @@ public final class ChatConversationViewModel {
             var page = response
             // Refresh every already-loaded range. This fills arbitrarily large reconnect gaps
             // and reconciles offline edits/deletes without discarding older loaded history.
-            if case .merge = kind, let earliest = held.min(by: Self.messagePrecedes) {
+            if case .merge = kind, response.anchorMessageId == nil, let earliest = held.min(by: Self.messagePrecedes) {
                 var cursors: Set<String> = []
                 while page.hasMore == true,
                       let oldest = page.messages.min(by: Self.messagePrecedes),
@@ -2593,6 +2615,7 @@ public final class ChatConversationViewModel {
                 messages.removeAll { !allowedRooms.contains($0.roomId) }
             }
             historyConfirmedAt = Date()
+            if response.anchorMessageId != nil { isViewingSearchContext = true }
             if before == nil { syncCursors = topicId == nil ? response.syncCursors : nil }
             apply(response: response, kind: kind, fetchedMessages: fetched)
             scheduleMarkRead()
@@ -2696,6 +2719,18 @@ public final class ChatConversationViewModel {
 
     private func requestHistory(before: String?, topicId: String?) async throws -> ChatMessagesResponse {
         let endpoint: Endpoint
+        if before == nil, topicId == nil, let messageId = scrollToMessageId, !didResolveScrollTarget || isViewingSearchContext {
+            isViewingSearchContext = true
+            switch mode {
+            case let .room(roomId):
+                return try await api.request(ChatEndpoints.messageContext(
+                    conversationId: roomId, isRoom: true, messageId: messageId, asBusinessUserId: asBusinessUserId
+                ))
+            case let .person(otherUserId):
+                return try await api.request(ChatEndpoints.messageContext(conversationId: otherUserId, isRoom: false, messageId: messageId))
+            case .ai: break
+            }
+        }
         switch mode {
         case let .room(roomId):
             endpoint = ChatEndpoints.roomMessages(roomId: roomId, before: before, asBusinessUserId: asBusinessUserId)
@@ -3328,8 +3363,7 @@ public final class ChatConversationViewModel {
 
     /// Resolve the Chat Search scroll target once: if the deep-linked
     /// message is present in the loaded page, publish its row id for the
-    /// view to scroll to. The matched message is guaranteed to be in the
-    /// first page because search indexes the same most-recent page.
+    /// view to scroll to. Server search loads an authorized bounded context.
     private func resolveScrollTargetIfNeeded(rows: [ChatTimelineRow]) {
         guard !didResolveScrollTarget, let target = scrollToMessageId else { return }
         let rowId = "bubble_\(target)"

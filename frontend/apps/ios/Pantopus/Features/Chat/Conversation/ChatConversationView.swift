@@ -193,6 +193,21 @@ public struct ChatConversationView: View {
                     Task { await viewModel.selectTopic(topicId) }
                 }
             }
+            if viewModel.isViewingSearchContext {
+                HStack {
+                    Text("Showing a search match")
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                    Spacer()
+                    Button("Return to latest") {
+                        hasLandedAtLatest = false
+                        Task { await viewModel.returnToLatest() }
+                    }
+                }
+                .font(.footnote)
+                .padding(.horizontal, Spacing.s4)
+                .frame(minHeight: 44)
+                .accessibilityIdentifier("chatReturnToLatest")
+            }
             content
             if viewModel.isCounterpartyTyping {
                 ChatTypingIndicator(initials: incomingInitials ?? initials(of: viewModel.counterparty.displayName))
