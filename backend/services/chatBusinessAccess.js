@@ -12,6 +12,30 @@
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const { hasPermission } = require('../utils/businessPermissions');
+const { unpublishedBusinessIds } = require('../utils/visibilityPolicy');
+
+// A draft or closed business isn't public, so no chat names or reaches it (POST /direct). Nor does it start a
+// conversation or write in a direct one as itself: the person would see neither who wrote nor a way to answer. Its
+// inbox still lists and opens the conversations it has.
+const UNPUBLISHED_BUSINESS_REFUSAL = {
+  error: "This business isn't published, so it can't message people. Publish its profile first.",
+  code: 'NOT_PUBLISHED',
+};
+
+// Nor does a person write to one in a direct conversation they already have: they can't see the business or reach it.
+const UNPUBLISHED_BUSINESS_RECIPIENT_REFUSAL = {
+  error: "This business isn't taking messages right now.",
+  code: 'NOT_PUBLISHED',
+};
+
+// The refusal for writing as senderUserId in a direct room with these other active members when the sender or one of
+// them is a draft or closed business; otherwise null. A failed read throws, so callers fail closed.
+async function unpublishedDirectRoomRefusal(senderUserId, otherMemberIds) {
+  const others = (otherMemberIds || []).map(String).filter((id) => id !== String(senderUserId));
+  const unpublished = await unpublishedBusinessIds([senderUserId, ...others]);
+  if (unpublished.has(String(senderUserId))) return UNPUBLISHED_BUSINESS_REFUSAL;
+  return others.some((id) => unpublished.has(id)) ? UNPUBLISHED_BUSINESS_RECIPIENT_REFUSAL : null;
+}
 
 async function isBusinessAccount(userId) {
   const { data: user } = await supabaseAdmin
@@ -152,6 +176,9 @@ async function dropStaffMembership(roomId, actorUserId, businessUserId) {
 }
 
 module.exports = {
+  UNPUBLISHED_BUSINESS_REFUSAL,
+  UNPUBLISHED_BUSINESS_RECIPIENT_REFUSAL,
+  unpublishedDirectRoomRefusal,
   isBusinessAccount,
   canActAsBusiness,
   businessStaff,

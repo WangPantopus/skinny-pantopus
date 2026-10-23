@@ -12,7 +12,7 @@ const Joi = require('joi');
 const logger = require('../utils/logger');
 const { escapeIlike } = require('../utils/escapeIlike');
 // A letter sent as a business names the business to everyone it reaches, never the person who sent it.
-const { presentMailSender, presentMailSenders } = require('../utils/mailSenderView');
+const { presentMailSender, presentMailSenders, nameMailSender, nameMailSenders } = require('../utils/mailSenderView');
 
 // ============ VALIDATION SCHEMAS ============
 
@@ -416,7 +416,7 @@ router.get('/booklet/:mailId', async (req, res, next) => {
 
     await logMailEvent(req.user.id, 'booklet_opened', mailId, { page_count: mail.page_count });
 
-    res.json({ booklet: presentMailSender(mail, req.user.id), pages: pages || [] });
+    res.json({ booklet: presentMailSender(await nameMailSender(mail, req.user.id), req.user.id), pages: pages || [] });
   } catch (err) { next(err); }
 });
 
@@ -490,7 +490,10 @@ router.get('/bundle/:bundleId/items', async (req, res, next) => {
       item_count: (items || []).length,
     });
 
-    res.json({ bundle: presentMailSender(bundle, req.user.id), items: presentMailSenders(items || [], req.user.id) });
+    res.json({
+      bundle: presentMailSender(await nameMailSender(bundle, req.user.id), req.user.id),
+      items: presentMailSenders(await nameMailSenders(items || [], req.user.id), req.user.id),
+    });
   } catch (err) { next(err); }
 });
 
@@ -651,7 +654,7 @@ router.get('/certified/:mailId', async (req, res, next) => {
 
     await logMailEvent(req.user.id, 'certified_mail_delivered', mailId);
 
-    res.json({ mail: presentMailSender(mail, req.user.id) });
+    res.json({ mail: presentMailSender(await nameMailSender(mail, req.user.id), req.user.id) });
   } catch (err) { next(err); }
 });
 
@@ -755,7 +758,7 @@ router.post('/certified/:mailId/reject', async (req, res, next) => {
 router.get('/certified/:mailId/proof', async (req, res, next) => {
   try {
     const { mailId } = req.params;
-    const { data: mail } = await supabaseAdmin
+    const { data: stored } = await supabaseAdmin
       .from('Mail')
       .select('*')
       .eq('id', mailId)
@@ -763,6 +766,8 @@ router.get('/certified/:mailId/proof', async (req, res, next) => {
       .is('deleted_at', null)
       .single();
 
+    // The proof names a person who sent it as neighbors see them (their Local Profile).
+    const mail = await nameMailSender(stored, req.user.id);
     if (!mail) return res.status(404).json({ error: 'Certified mail not found' });
     // Same rule as the other certified routes: only the named recipient.
     if (mail.recipient_user_id !== req.user.id) {
@@ -1014,7 +1019,7 @@ router.get('/party/active', async (req, res, next) => {
 
     const { data: sessions } = await supabaseAdmin
       .from('MailPartySession')
-      .select('*, Mail!inner(id, sender_display, subject, sender_trust)')
+      .select('*, Mail!inner(id, sender_display, subject, sender_trust, sender_user_id, sender_entity_id, sender_business_name)')
       .in('home_id', homeIds)
       .is('Mail.deleted_at', null)
       .in('status', ['pending', 'active'])
@@ -1027,7 +1032,15 @@ router.get('/party/active', async (req, res, next) => {
       return elapsed <= 90000;
     });
 
-    res.json({ sessions: active });
+    // The letter's sender as the household sees them (a person by their Local Profile); the sender fields read for
+    // that stay out of the response.
+    const letters = await nameMailSenders(active.map((s) => s.Mail), req.user.id);
+    res.json({
+      sessions: active.map((s, i) => {
+        const { sender_user_id: _u, sender_entity_id: _e, sender_business_name: _b, ...letter } = letters[i] || {};
+        return { ...s, Mail: letter };
+      }),
+    });
   } catch (err) { next(err); }
 });
 
@@ -1142,7 +1155,7 @@ router.get('/vault/folder/:folderId/items', async (req, res, next) => {
       folder_id: folderId,
     });
 
-    res.json({ items: presentMailSenders(items || [], req.user.id), total: count || 0 });
+    res.json({ items: presentMailSenders(await nameMailSenders(items || [], req.user.id), req.user.id), total: count || 0 });
   } catch (err) { next(err); }
 });
 
@@ -1302,13 +1315,21 @@ router.get('/vault/search', async (req, res, next) => {
       .order('id', { ascending: false })
       .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
 
-    const { data: results, count } = await query;
+    const { data: found, count } = await query;
+    // Each sender as neighbors see them now (their Local Profile). A text search matched the name stored when the
+    // letter came: a letter only that older name matched is left out, so no one finds a sender by a name they no
+    // longer show.
+    const named = await nameMailSenders(found || [], req.user.id);
+    const textSearch = !amountMatch && !/^[a-z]+ \d{4}$/i.test(q);
+    const lq = q.toLowerCase();
+    const results = textSearch
+      ? named.filter((item) => [item.sender_display, item.subject, item.content].some((text) => text?.toLowerCase().includes(lq)))
+      : named;
 
     // Add highlight info
-    const enhanced = (results || []).map(item => {
+    const enhanced = results.map(item => {
       let matchedField = '';
       let matchExcerpt = '';
-      const lq = q.toLowerCase();
       if (item.sender_display?.toLowerCase().includes(lq)) {
         matchedField = 'sender';
         matchExcerpt = item.sender_display;
@@ -1323,7 +1344,7 @@ router.get('/vault/search', async (req, res, next) => {
       return { ...presentMailSender(item, req.user.id), _matchField: matchedField, _matchExcerpt: matchExcerpt };
     });
 
-    res.json({ results: enhanced, total: count || 0, query: q });
+    res.json({ results: enhanced, total: Math.max(0, (count || 0) - (named.length - results.length)), query: q });
   } catch (err) { next(err); }
 });
 

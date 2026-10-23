@@ -19,6 +19,8 @@ const {
 const { verifiedResidentUserIds } = require('../utils/identityProfiles');
 const { isUnpublishedBusiness } = require('../utils/visibilityPolicy');
 const {
+  UNPUBLISHED_BUSINESS_REFUSAL,
+  unpublishedDirectRoomRefusal,
   isBusinessAccount,
   canActAsBusiness,
   businessStaff,
@@ -223,14 +225,6 @@ const reactToMessageSchema = Joi.object({
   reacted: Joi.boolean(),
 });
 
-// A draft or closed business isn't public, so no chat names or reaches it (POST /direct). Nor does it start a
-// conversation or write in a direct one as itself: the person would see neither who wrote nor a way to answer. Its
-// inbox still lists and opens the conversations it has.
-const UNPUBLISHED_BUSINESS_REFUSAL = {
-  error: "This business isn't published, so it can't message people. Publish its profile first.",
-  code: 'NOT_PUBLISHED',
-};
-
 // The business identity an actor may act as here, or none (their own id always counts).
 async function verifiedBusinessIdentity(asBusinessUserId, actorUserId) {
   if (!asBusinessUserId) return [];
@@ -240,6 +234,29 @@ async function verifiedBusinessIdentity(asBusinessUserId, actorUserId) {
 // Whether an assigned task's gig room is closed to this actor (services/chatGigRoomAccess).
 async function gigRoomClosed(roomId, actorUserId, asBusinessUserId) {
   return isGigRoomClosedTo(roomId, actorUserId, await verifiedBusinessIdentity(asBusinessUserId, actorUserId));
+}
+
+// Whether an actor may edit or delete a message, and the identities they act through: [] for a message their own
+// account sent, [business] for one they wrote for a business while they may still act for it in that room. Nobody
+// changes a message someone else wrote, a teammate's for the same business included. Null when they may not.
+async function messageWriterIdentities(message, actorUserId) {
+  if (!message) return null;
+  if (String(message.user_id) === String(actorUserId)) return [];
+  if (!message.actor_user_id || String(message.actor_user_id) !== String(actorUserId)) return null;
+  return (await businessMembership(message.room_id, actorUserId, message.user_id)) ? [String(message.user_id)] : null;
+}
+
+// The refusal for writing as senderUserId in a direct room with a draft or closed business, else null.
+async function unpublishedRoomRefusal(roomId, senderUserId) {
+  const [{ data: room, error: roomError }, { data: members, error: membersError }] = await Promise.all([
+    supabaseAdmin.from('ChatRoom').select('type').eq('id', roomId).maybeSingle(),
+    supabaseAdmin.from('ChatParticipant').select('user_id').eq('room_id', roomId).eq('is_active', true),
+  ]);
+  if (roomError || membersError || !Array.isArray(members)) {
+    throw new Error(roomError?.message || membersError?.message || 'chat room unavailable');
+  }
+  if (room?.type !== 'direct') return null;
+  return unpublishedDirectRoomRefusal(senderUserId, members.map((member) => member.user_id));
 }
 
 async function getBusinessMessagingMemberIds(businessUserId) {
@@ -731,7 +748,11 @@ function sendChatReadError(res, error, fallback) {
 // `options.people` (loadChatPeople) names the sender as the chat list does.
 function serializeChatMessageForViewer(message, options = {}) {
   if (!message) return null;
-  const base = options.includeActorIdentity ? message : stripActorIdentity(message);
+  // Who wrote for a business stays internal, but the person who wrote it sees their own id (options.viewerId): their
+  // apps offer to edit or delete it. Room broadcasts are serialized without a viewer.
+  const viewerWroteIt = Boolean(options.viewerId && message.actor_user_id
+    && String(message.actor_user_id) === String(options.viewerId));
+  const base = options.includeActorIdentity || viewerWroteIt ? message : stripActorIdentity(message);
   const { sender, ...safe } = base;
   const bodyText = safe.message_text ?? safe.message ?? null;
   const bodyType = safe.message_type ?? safe.type ?? 'text';
@@ -1640,12 +1661,18 @@ router.get('/conversations/:otherUserId/messages', verifyToken, async (req, res)
     // Batch-fetch reactions and senders for all visible messages to avoid N+1 queries
     const visibleMessages = (messages || []).reverse();
     const messageIds = visibleMessages.map((m) => m.id).filter(Boolean);
-    const [reactionMap, people] = await Promise.all([
+    const [reactionMap, people, sendRefusal] = await Promise.all([
       buildReactionSummary(messageIds, userId),
       loadMessageSenders(visibleMessages),
+      // The thread sends into the pair's direct room, which takes nothing to or from a draft or closed business:
+      // the apps lock the composer with this sentence instead of letting a message fail.
+      unpublishedDirectRoomRefusal(asBusinessUserId || userId, [otherUserId]).catch((refusalError) => {
+        logger.warn('chat.send_refusal_unavailable', { requestId: req.requestId, userId, error: refusalError.message });
+        return null; // sends are still checked when they arrive
+      }),
     ]);
     const messagesWithReactions = visibleMessages.map((m) => ({
-      ...serializeChatMessageForViewer(m, { people }),
+      ...serializeChatMessageForViewer(m, { people, viewerId: userId }),
       reactions: reactionMap.get(m.id) || [],
     }));
 
@@ -1655,6 +1682,7 @@ router.get('/conversations/:otherUserId/messages', verifyToken, async (req, res)
       hasMore,
       nextCursor: hasMore ? buildNextCursor(visibleMessages) : null,
       roomIds: sharedRoomIds,
+      sendRefusal,
     });
   } catch (err) {
     logger.error('Canonical conversation fetch error', { requestId: req.requestId, userId: req.user?.id, error: err.message });
@@ -1822,12 +1850,18 @@ router.get('/rooms/:roomId/messages', verifyToken, async (req, res) => {
     // Batch-fetch reactions and senders for all visible messages to avoid N+1 queries
     const visibleMessages = (messages || []).reverse();
     const messageIds = visibleMessages.map((m) => m.id).filter(Boolean);
-    const [reactionMap, people] = await Promise.all([
+    const [reactionMap, people, sendRefusal] = await Promise.all([
       buildReactionSummary(messageIds, userId),
       loadMessageSenders(visibleMessages),
+      // Whether the room takes messages from the identity reading it (the business's for its staff): a direct room
+      // with a draft or closed business doesn't, and the apps lock the composer with this sentence.
+      unpublishedRoomRefusal(roomId, participant.user_id).catch((refusalError) => {
+        logger.warn('chat.send_refusal_unavailable', { requestId: req.requestId, userId, roomId, error: refusalError.message });
+        return null; // sends are still checked when they arrive
+      }),
     ]);
     const messagesWithReactions = visibleMessages.map((m) => ({
-      ...serializeChatMessageForViewer(m, { people }),
+      ...serializeChatMessageForViewer(m, { people, viewerId: userId }),
       reactions: reactionMap.get(m.id) || [],
     }));
 
@@ -1837,6 +1871,7 @@ router.get('/rooms/:roomId/messages', verifyToken, async (req, res) => {
       messages: messagesWithReactions,
       hasMore,
       nextCursor: hasMore ? buildNextCursor(visibleMessages) : null,
+      sendRefusal,
     });
 
   } catch (err) {
@@ -1894,6 +1929,7 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
 
     // ─── Block check for direct chats ───
     // For gig/group chats, blocking is handled differently (not enforced here).
+    let directMemberIds = [];
     if (room && room.type === 'direct') {
       const { data: otherParticipants, error: participantsError } = await supabaseAdmin
         .from('ChatParticipant')
@@ -1907,6 +1943,7 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
           return res.status(403).json({ error: 'Unable to message this user' });
         }
       }
+      directMemberIds = otherParticipants.map((participant) => participant.user_id);
     }
 
     // ─── Business Identity for Direct Chats ───
@@ -1921,9 +1958,6 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
       if (!canAct) {
         return res.status(403).json({ error: 'You do not have permission to message as this business' });
       }
-      if (await isUnpublishedBusiness(asBusinessUserId)) {
-        return res.status(403).json(UNPUBLISHED_BUSINESS_REFUSAL);
-      }
       const { data: businessParticipant } = await supabaseAdmin
         .from('ChatParticipant')
         .select('id')
@@ -1936,6 +1970,13 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
         return res.status(400).json({ error: 'This business is not a participant in the chat room' });
       }
       senderUserId = asBusinessUserId;
+    }
+
+    // A draft or closed business takes no messages in a direct room, whether it writes (as itself or through its
+    // staff) or a person writes to it in a conversation they already have.
+    if (room && room.type === 'direct') {
+      const refusal = await unpublishedDirectRoomRefusal(senderUserId, directMemberIds);
+      if (refusal) return res.status(403).json(refusal);
     }
 
     if (room && room.type === 'gig' && room.gig_id) {
@@ -2104,7 +2145,7 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
     const senderPeople = loadChatPeople([senderUserId]);
     if (clientMessageId) {
       const existingMsg = await findRetryMessage();
-      if (existingMsg) return res.json({ message: serializeChatMessageForViewer(existingMsg, { people: await senderPeople }) });
+      if (existingMsg) return res.json({ message: serializeChatMessageForViewer(existingMsg, { people: await senderPeople, viewerId: userId }) });
     }
 
     // Insert message
@@ -2190,7 +2231,7 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
     if (error?.code === '23505' && clientMessageId) {
       // A concurrent same-scope insert may have won after the initial lookup.
       const existingMsg = await findRetryMessage();
-      if (existingMsg) return res.json({ message: serializeChatMessageForViewer(existingMsg, { people: await senderPeople }) });
+      if (existingMsg) return res.json({ message: serializeChatMessageForViewer(existingMsg, { people: await senderPeople, viewerId: userId }) });
       return res.status(409).json({ error: 'Message retry key is already in use' });
     }
 
@@ -2216,7 +2257,7 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
     recordHistogram('chat.message.send_latency_ms', sendDurationMs);
     logger.info('message_send_complete', { requestId, roomId, userId, senderUserId, messageId: message.id, durationMs: sendDurationMs });
 
-    res.status(201).json({ message: serializeChatMessageForViewer(message, { people }) });
+    res.status(201).json({ message: serializeChatMessageForViewer(message, { people, viewerId: userId }) });
     
   } catch (err) {
     if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
@@ -2239,22 +2280,26 @@ router.put('/messages/:messageId', verifyToken, messageEditLimiter, async (req, 
       return res.status(400).json({ error: 'Message text required' });
     }
     
-    // Verify ownership
+    // Verify ownership: the person who wrote it, for themselves or for a business they still act for.
     const { data: message } = await supabaseAdmin
       .from('ChatMessage')
-      .select('user_id, room_id')
+      .select('user_id, actor_user_id, room_id')
       .eq('id', messageId)
       .single();
 
-    if (!message || message.user_id !== userId) {
+    const writerIdentities = await messageWriterIdentities(message, userId);
+    if (!writerIdentities) {
       return res.status(403).json({ error: 'Not authorized' });
     }
-    if (await isGigRoomClosedTo(message.room_id, userId)) {
+    if (await isGigRoomClosedTo(message.room_id, userId, writerIdentities)) {
       return res.status(403).json({ error: 'Not authorized' });
     }
     if (await isRoomClosedForWrites(message.room_id)) {
       return res.status(403).json({ error: 'This chat has closed.', code: 'ROOM_INACTIVE' });
     }
+    // An edit writes too: not in a direct room with a draft or closed business (a delete still goes through).
+    const unpublishedRefusal = await unpublishedRoomRefusal(message.room_id, message.user_id);
+    if (unpublishedRefusal) return res.status(403).json(unpublishedRefusal);
 
     const { data: updated, error } = await supabaseAdmin
       .from('ChatMessage')
@@ -2277,7 +2322,8 @@ router.put('/messages/:messageId', verifyToken, messageEditLimiter, async (req, 
 
     incCounter('chat.message.edited');
     // The edited row names its sender as the room's messages do, so the edit doesn't blank the bubble's name.
-    const responseMessage = serializeChatMessageForViewer(updated, { people: await loadMessageSenders([updated]) });
+    const people = await loadMessageSenders([updated]);
+    const responseMessage = serializeChatMessageForViewer(updated, { people });
 
     // Broadcast via socket
     const io = req.app.get('io');
@@ -2285,7 +2331,7 @@ router.put('/messages/:messageId', verifyToken, messageEditLimiter, async (req, 
       io.to(message.room_id).emit('message:edited', { messageId, message: responseMessage });
     }
 
-    res.json({ message: responseMessage });
+    res.json({ message: serializeChatMessageForViewer(updated, { people, viewerId: userId }) });
     
   } catch (err) {
     logger.error('Message edit error', { requestId: req.requestId, userId: req.user?.id, messageId: req.params.messageId, error: err.message });
@@ -2306,17 +2352,19 @@ router.delete('/messages/:messageId', verifyToken, messageDeleteLimiter, async (
     // Keep RPC path as fallback for environments that already rely on it.
     const { data: message, error: messageErr } = await supabaseAdmin
       .from('ChatMessage')
-      .select('id, user_id, room_id, deleted, attachments')
+      .select('id, user_id, actor_user_id, room_id, deleted, attachments')
       .eq('id', messageId)
       .single();
 
     if (messageErr || !message) {
       return res.status(404).json({ error: 'Message not found' });
     }
-    if (String(message.user_id) !== String(userId)) {
+    // The person who wrote it, for themselves or for a business they still act for.
+    const writerIdentities = await messageWriterIdentities(message, userId);
+    if (!writerIdentities) {
       return res.status(403).json({ error: 'Not authorized' });
     }
-    if (await isGigRoomClosedTo(message.room_id, userId)) {
+    if (await isGigRoomClosedTo(message.room_id, userId, writerIdentities)) {
       return res.status(403).json({ error: 'Not authorized' });
     }
     // A deleted message's files go with it: the file route answers 410 for a deleted file, so the

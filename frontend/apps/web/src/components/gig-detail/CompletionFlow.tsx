@@ -1,6 +1,6 @@
 'use client';
 
-import { getErrorMessage, chosenUsername } from '@pantopus/utils';
+import { getErrorMessage } from '@pantopus/utils';
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -25,7 +25,8 @@ import { launchFeatures } from '@/lib/featureFlags';
 interface CompletionGigData {
   price?: number | string;
   accepted_by?: string | null;
-  acceptedBy?: string | null;
+  /** The worker as the task names them (their Local Profile), sent to the poster and the worker. */
+  acceptedBy?: { displayName?: string | null } | null;
   payment_status?: string;
   completion_photos?: string[];
   completion_review?: string | null;
@@ -33,12 +34,6 @@ interface CompletionGigData {
   completion_checklist?: Array<{ item: string; done: boolean }>;
   worker_completed_at?: string | null;
   owner_confirmed_at?: string | null;
-  accepted_bid?: {
-    bidder?: {
-      name?: string;
-      username?: string;
-    };
-  };
   [key: string]: unknown;
 }
 
@@ -95,7 +90,7 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
   const isCompleted = gigStatus === 'completed';
   const canCancel = (isOwner || isWorker) && ['open', 'assigned', 'in_progress'].includes(gigStatus);
   const isPaidGig = Number(gig?.price || 0) > 0;
-  const acceptedBy = gig?.accepted_by ?? gig?.acceptedBy ?? null;
+  const acceptedBy = gig?.accepted_by ?? null;
   const completionPhotos = gig.completion_photos ?? [];
   const completionChecklist = gig.completion_checklist ?? [];
   const iAmWorkerAssigned = isWorker && isAssigned;
@@ -858,11 +853,7 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
           workerId={acceptedBy}
           recoveryRequestId={tipRecoveryRequestId}
           gigId={gigId}
-          workerName={
-            gig?.accepted_bid?.bidder?.name ||
-            chosenUsername(gig?.accepted_bid?.bidder?.username) ||
-            'the worker'
-          }
+          workerName={gig?.acceptedBy?.displayName || 'the worker'}
           onSuccess={(tipAmount) => {
             setShowTipModal(false);
             const url = new URL(window.location.href);
