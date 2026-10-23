@@ -566,6 +566,14 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
           throw error;
         }
         if (!current()) return;
+        if (result.removedRoomIds.length) {
+          await retireChatHistoryRooms(currentUserId, result.removedRoomIds);
+          if (!isCurrentScope() || historyViewRef.current !== historyView) return;
+          // The delta proved removal. Only a new authorized fetch may adopt the
+          // new fence; the staged pre-revocation batch cannot be retained.
+          historyGeneration = await activateChatStorage(currentUserId).then(readChatHistoryGeneration).catch(() => null);
+          return fullRefresh();
+        }
         if (result.resetRequired) return fullRefresh();
         changes.push(...result.messages);
         receipts.push(...result.readReceipts);
@@ -575,14 +583,6 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
         cursor = result.syncCursors;
         until = result.untilCursors;
       } while (result.hasMore);
-      if (result.removedRoomIds.length) {
-        await retireChatHistoryRooms(currentUserId, result.removedRoomIds);
-        if (!isCurrentScope() || historyViewRef.current !== historyView) return;
-        // The delta proved removal. Only a new authorized fetch may adopt the
-        // new fence; the staged pre-revocation batch cannot be retained.
-        historyGeneration = await activateChatStorage(currentUserId).then(readChatHistoryGeneration).catch(() => null);
-        return fullRefresh();
-      }
       for (const message of changes) {
         if ('deleted' in message && message.deleted) {
           tombstonesRef.current.set(String(message.id), Math.max(tombstonesRef.current.get(String(message.id)) ?? 0, Number(message.sync_version) || 0));
