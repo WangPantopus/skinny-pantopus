@@ -653,6 +653,7 @@ public final class ChatConversationViewModel {
     private var historyAccessRefused = false
     private var joinedRoomIds: Set<String> = []
     private var joiningRooms: [String: Task<Void, Never>] = [:]
+    private var roomSubscriptionIds: [String: String] = [:]
     private var roomJoinRetryAt: [String: Date] = [:]
     private var roomJoinAttempts: [String: Int] = [:]
     private var roomJoinGeneration = 0
@@ -3255,14 +3256,23 @@ public final class ChatConversationViewModel {
 
     private func resetRoomJoins() {
         roomJoinGeneration += 1
+        for (roomId, subscriptionId) in roomSubscriptionIds {
+            leaveRoomSubscription(roomId, subscriptionId: subscriptionId)
+        }
         joiningRooms.values.forEach { $0.cancel() }
         joiningRooms.removeAll()
+        roomSubscriptionIds.removeAll()
         joinedRoomIds.removeAll()
         refusedRoomJoins.removeAll()
         roomJoinRetryAt.removeAll()
         roomJoinAttempts.removeAll()
         roomJoinWakeTask?.cancel()
         roomJoinWakeTask = nil
+    }
+
+    private func leaveRoomSubscription(_ roomId: String, subscriptionId: String) {
+        guard socket.connectionState == .connected else { return }
+        socket.emit("room:leave", payload: ["roomId": roomId, "subscriptionId": subscriptionId])
     }
 
     private func joinActiveRoomsIfPossible() {
@@ -3275,11 +3285,16 @@ public final class ChatConversationViewModel {
             }
         }
         for roomId in joinedRoomIds.subtracting(activeRoomIds) {
-            socket.emit("room:leave", payload: ["roomId": roomId])
+            if let subscriptionId = roomSubscriptionIds.removeValue(forKey: roomId) {
+                leaveRoomSubscription(roomId, subscriptionId: subscriptionId)
+            }
             joinedRoomIds.remove(roomId)
         }
         for (roomId, task) in joiningRooms where !activeRoomIds.contains(roomId) {
             task.cancel()
+            if let subscriptionId = roomSubscriptionIds[roomId] {
+                leaveRoomSubscription(roomId, subscriptionId: subscriptionId)
+            }
         }
         refusedRoomJoins.formIntersection(activeRoomIds)
         roomJoinWakeTask?.cancel()
@@ -3290,16 +3305,25 @@ public final class ChatConversationViewModel {
         let generation = roomJoinGeneration
         let session = AuthManager.shared.requestSessionGeneration
         for roomId in ready.prefix(max(0, 4 - joiningRooms.count)) {
+            let subscriptionId = UUID().uuidString
+            roomSubscriptionIds[roomId] = subscriptionId
             joiningRooms[roomId] = Task { [weak self] in
                 guard let self else { return }
                 let ack: RoomSubscriptionAck? = await socket.emitWithAck(
-                    "room:join", payload: ["roomId": roomId], as: RoomSubscriptionAck.self
+                    "room:join",
+                    payload: ["roomId": roomId, "subscriptionId": subscriptionId, "includeBackfill": false],
+                    as: RoomSubscriptionAck.self
                 )
-                guard generation == roomJoinGeneration, session == AuthManager.shared.requestSessionGeneration else { return }
+                guard session == AuthManager.shared.requestSessionGeneration else { return }
+                guard generation == roomJoinGeneration, roomSubscriptionIds[roomId] == subscriptionId else {
+                    leaveRoomSubscription(roomId, subscriptionId: subscriptionId)
+                    return
+                }
                 joiningRooms[roomId] = nil
-                if !activeRoomIds.contains(roomId) {
-                    socket.emit("room:leave", payload: ["roomId": roomId])
-                } else if !Task.isCancelled {
+                if !activeRoomIds.contains(roomId) || Task.isCancelled {
+                    leaveRoomSubscription(roomId, subscriptionId: subscriptionId)
+                    roomSubscriptionIds[roomId] = nil
+                } else {
                     completeRoomJoin(roomId, ack: ack)
                 }
                 joinActiveRoomsIfPossible()
@@ -3327,6 +3351,9 @@ public final class ChatConversationViewModel {
             roomJoinAttempts[roomId] = nil
             roomJoinRetryAt[roomId] = nil
             return
+        }
+        if let subscriptionId = roomSubscriptionIds.removeValue(forKey: roomId) {
+            leaveRoomSubscription(roomId, subscriptionId: subscriptionId)
         }
         let denied = ack?.error?.localizedCaseInsensitiveContains("access denied") == true
             || ["FORBIDDEN", "CHAT_ACCESS_DENIED"].contains(ack?.code ?? "")
@@ -4049,9 +4076,6 @@ extension ChatConversationViewModel {
 
     private func discardSavedThread() {
         historyAccessRefused = true
-        for roomId in activeRoomIds {
-            socket.emit("room:leave", payload: ["roomId": roomId])
-        }
         activeRoomIds.removeAll()
         resetRoomJoins()
         activeThreadTracker.clear(owner: ObjectIdentifier(self))
