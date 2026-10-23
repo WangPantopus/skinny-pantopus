@@ -113,19 +113,32 @@ export default function ChatRoomView({
   useEffect(() => {
     if (!currentUserId) { setRepresentedUserIds((prev) => (prev.length ? [] : prev)); return; }
     const represented = new Set<string>([String(currentUserId)]);
-    const participantIds = participantIdsKey ? participantIdsKey.split(',') : [];
+    const participantIds = new Set(participantIdsKey ? participantIdsKey.split(',') : []);
     let cancelled = false;
-    Promise.all(
-      participantIds.map(async (candidateId) => {
-        if (!candidateId || candidateId === String(currentUserId)) return;
-        try {
-          const access = await ((api.businessIam as Record<string, any>).getMyBusinessAccess as ((id: string) => Promise<{ hasAccess?: boolean; isOwner?: boolean; permissions?: string[] }>) | undefined)?.(candidateId);
-          if (access?.hasAccess && (access?.isOwner || (Array.isArray(access?.permissions) && (access.permissions.includes('gigs.manage') || access.permissions.includes('gigs.post'))))) {
-            represented.add(candidateId);
-          }
-        } catch {}
-      }),
-    ).then(() => {
+    const resolveBusinesses = async () => {
+      if (!participantIds.size) return;
+      // Only businesses this account belongs to can represent it. Probing every
+      // participant turned a large personal group into hundreds of IAM requests.
+      const memberships = await api.businesses.getMyBusinesses();
+      if (cancelled) return;
+      const candidates = Array.from(new Set((memberships.businesses || [])
+        .map((membership) => String(membership.business_user_id))
+        .filter((id) => id !== String(currentUserId) && participantIds.has(id))));
+      const worker = async () => {
+        while (!cancelled) {
+          const candidateId = candidates.shift();
+          if (!candidateId) return;
+          try {
+            const access = await api.businessIam.getMyBusinessAccess(candidateId);
+            if (!cancelled && access?.hasAccess && (access.isOwner || access.permissions?.some((permission) => permission === 'gigs.manage' || permission === 'gigs.post'))) {
+              represented.add(candidateId);
+            }
+          } catch {}
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(4, candidates.length) }, worker));
+    };
+    void resolveBusinesses().catch(() => {}).then(() => {
       if (cancelled) return;
       const next = Array.from(represented).sort();
       setRepresentedUserIds((prev) => (prev.length === next.length && prev.every((id, i) => id === next[i]) ? prev : next));
