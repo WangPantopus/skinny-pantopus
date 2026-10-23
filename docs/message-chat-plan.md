@@ -229,6 +229,17 @@ and matched the public alias while rejecting a distinct private account name.
 Function lint, migration policy and syntax passed. Browser/native search checks
 are pending; existing design and navigation are unchanged.
 
+## Push account binding
+
+Durable chat and business-chat push envelopes now include `recipient_user_id`
+for the destination account, separate from the represented message sender. The
+recipient is included only in that recipient's private push envelope, never in
+room-readable message DTOs. Native handlers can reject a delayed delivery or tap
+after account switch instead of opening the old account's thread. Android's
+matching display/tap guard and stable OS notification ID are a separate client
+slice; it requires this backend contract before release. iOS foreground/tap
+handling is being checked. Physical background push remains unverified.
+
 ## Authoritative muted badge totals
 
 Both native apps currently subtract muted row counts from the all-unread total.

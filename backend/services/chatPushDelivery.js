@@ -46,7 +46,8 @@ async function deliver(job) {
     let freshNotice = null;
     let payload = {
       title: senderName, body: preview,
-      data: { type: 'chat_message', room_id: message.room_id, message_id: message.id,
+      data: { type: 'chat_message', recipient_user_id: job.recipient_user_id,
+        room_id: message.room_id, message_id: message.id,
         notificationId: job.id, link: `/chat/${message.room_id}` },
     };
     if (job.business_notice) {
@@ -60,7 +61,8 @@ async function deliver(job) {
         freshNotice = result.notice;
       }
       payload = { title: result.notice.title, body: result.notice.body,
-        data: { type: 'business_message', notificationId: result.notice.id, link: result.notice.link, ...result.notice.metadata } };
+        data: { type: 'business_message', notificationId: result.notice.id, link: result.notice.link,
+          ...result.notice.metadata, recipient_user_id: job.recipient_user_id } };
     }
     // Identity/notice work can take time: recheck authorization, read/mute and deletion
     // immediately before contacting a provider. A database failure retries, never allows.
