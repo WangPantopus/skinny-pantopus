@@ -101,6 +101,7 @@ class ScreenStore
             var marks = 0L
 
             /** Live memory updates must not hide an access refusal from a read already in flight. */
+            @Volatile
             var memoryEdits = 0L
             var refusals = 0L
 
@@ -304,12 +305,13 @@ class ScreenStore
         }
 
         /**
-         * Keep a memory-only copy in step with confirmed live changes. Capture before reading or revalidating
+         * Keep a live copy in step with confirmed changes, including the encrypted conversation window. Capture before
+         * reading or revalidating
          * the screen context. This cannot recreate an evicted, cleared or refused copy, or follow a session switch.
          * Unlike [writer], it leaves an in-flight access check running; a refusal still removes the entire copy.
          */
         fun <T : Any> memoryUpdater(key: StoreKey<T>): (T) -> Unit {
-            require(!key.savable)
+            require(!key.savable || key.kind == StoreKind.CONVERSATION)
             val account = accountId() ?: return {}
             return synchronized(slots) {
                 val slot = slotLocked(key, account)
@@ -325,7 +327,9 @@ class ScreenStore
                             slot.memoryEdits++
                             slot.etag = null
                             slot.stale = true
-                            slot.state.value = current.copy(data = data)
+                            val now = System.currentTimeMillis()
+                            slot.state.value = current.copy(data = data, fetchedAt = now)
+                            writeSaved(data, slot, now, etag = null)
                         }
                     }
                 }
@@ -487,7 +491,7 @@ class ScreenStore
         ) {
             val type = slot.key.type ?: return
             if (!slot.key.savable) return
-            val copy = saved.load<Any>(account, slot.key.id, type) ?: return
+            val copy = saved.load<Any>(account, slot.key.id, type, kind = slot.key.kind) ?: return
             if (!slot.key.permitsSavedCopy(copy.data)) {
                 deleteSaved(slot.key.id, account)
                 return
@@ -520,12 +524,14 @@ class ScreenStore
             }
             if (slot.key.type == null) return
             val edits = slot.edits
+            val liveEdits = slot.memoryEdits
             val gen = generation
             scope.launch {
                 synchronized(diskLock) {
                     // A wipe, a newer own edit, ended access or a reader that stopped vouching for the viewer since
                     // this reply was settled: it is not written.
-                    if (gen == generation && edits == slot.edits && slot.persist) {
+                    val current = gen == generation && edits == slot.edits && liveEdits == slot.memoryEdits
+                    if (current && slot.persist) {
                         saved.save(account, slot.key, data, fetchedAt, etag, slot.stale)
                     }
                 }

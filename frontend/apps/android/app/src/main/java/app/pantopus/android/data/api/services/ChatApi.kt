@@ -1,6 +1,8 @@
 package app.pantopus.android.data.api.services
 
 import app.pantopus.android.data.api.models.chats.ChatMessagesResponse
+import app.pantopus.android.data.api.models.chats.ChatNotificationPreferencesBody
+import app.pantopus.android.data.api.models.chats.ChatNotificationPreferencesResponse
 import app.pantopus.android.data.api.models.chats.ChatRoomDetailResponse
 import app.pantopus.android.data.api.models.chats.ChatStatsResponse
 import app.pantopus.android.data.api.models.chats.ConversationTopicsResponse
@@ -21,6 +23,7 @@ import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.Headers
+import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Path
@@ -45,6 +48,18 @@ interface ChatApi {
         @Query("limit") limit: Int,
         @Header("If-None-Match") etag: String?,
     ): Response<UnifiedConversationsResponse>
+
+    @PATCH("api/chat/conversations/{otherUserId}/preferences")
+    suspend fun conversationPreferences(
+        @Path("otherUserId") otherUserId: String,
+        @Body body: ChatNotificationPreferencesBody,
+    ): ChatNotificationPreferencesResponse
+
+    @PATCH("api/chat/rooms/{roomId}/preferences")
+    suspend fun roomPreferences(
+        @Path("roomId") roomId: String,
+        @Body body: ChatNotificationPreferencesBody,
+    ): ChatNotificationPreferencesResponse
 
     /** `GET /api/chat/stats`. */
     @GET("api/chat/stats")

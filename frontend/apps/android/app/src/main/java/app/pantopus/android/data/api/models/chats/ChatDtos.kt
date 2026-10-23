@@ -86,6 +86,7 @@ data class UnifiedConversationDto(
     @Json(name = "total_unread") val totalUnread: Int = 0,
     @Json(name = "last_message_at") val lastMessageAt: String? = null,
     @Json(name = "last_message_preview") val lastMessagePreview: String? = null,
+    @Json(name = "notifications_enabled") val notificationsEnabled: Boolean? = null,
 )
 
 /** `GET /api/chat/unified-conversations` envelope. */
@@ -94,6 +95,18 @@ data class UnifiedConversationsResponse(
     val conversations: List<UnifiedConversationDto>,
     val total: Int? = null,
     val totalUnread: Int? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class ChatNotificationPreferencesBody(
+    val notificationsEnabled: Boolean,
+    val asBusinessUserId: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class ChatNotificationPreferencesResponse(
+    val notificationsEnabled: Boolean,
+    val roomIds: List<String> = emptyList(),
 )
 
 /** Stats payload from `GET /api/chat/stats`. */
@@ -221,6 +234,8 @@ data class ChatMessagesResponse(
      * NOT_PUBLISHED). Null from older servers, which leave the key out.
      */
     val sendRefusal: ChatSendRefusal? = null,
+    /** First-page anchor only; older pages never advance the saved recovery cursor. */
+    val syncCursors: Map<String, Long> = emptyMap(),
 )
 
 /** Why a conversation takes no messages, as the server words it (`backend/routes/chats.js` `unpublishedDirectRoomRefusal`). */

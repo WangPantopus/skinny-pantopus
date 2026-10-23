@@ -300,7 +300,7 @@ object StoreKeys {
     fun post(postId: String) =
         StoreKey<PostDetailResponse>("api/posts/$postId", kind = StoreKind.POST, topics = setOf("post:$postId", StoreTopics.POSTS))
 
-    /** Message history is memory only: no Moshi type means these keys can never be saved. */
+    /** The recent message window is saved only through the encrypted, account-scoped chat cache. */
     fun roomMessages(
         roomId: String,
         limit: Int,
@@ -310,6 +310,7 @@ object StoreKeys {
         mapOf("limit" to limit.toString(), "asBusinessUserId" to asBusinessUserId),
         kind = StoreKind.CONVERSATION,
         topics = setOf("chat:$roomId", StoreTopics.CHATS),
+        type = ChatMessagesResponse::class.java,
     )
 
     fun conversationMessages(
@@ -321,11 +322,12 @@ object StoreKeys {
         mapOf("limit" to limit.toString(), "topicId" to topicId),
         kind = StoreKind.CONVERSATION,
         topics = setOf("chat:*", StoreTopics.CHATS),
+        type = ChatMessagesResponse::class.java,
     )
 
     /**
      * The Messages list (contract §4 "Messages list"): names, last-message previews and unread counts, fresh for 30
-     * seconds, shared by the Messages tab and its badge. Message history never enters the store (founder decision 7).
+     * seconds, shared by the Messages tab and its badge. Recent message history has a separate encrypted budget.
      */
     val conversations =
         StoreKey<UnifiedConversationsResponse>(

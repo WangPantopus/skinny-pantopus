@@ -8,7 +8,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Device-local mute/hide state for the chat list. Keys match Expo mobile
+ * Device-local hide state and a mirror of server mute preferences for the chat list. Keys match Expo mobile
  * (`@chat_hidden_conversations`, `@chat_muted_conversations`) and use
  * `person:` / `room:` conversation ids.
  */
@@ -63,6 +63,14 @@ class ChatConversationPreferences
                 }
             persist(MUTED_STORAGE_KEY, next)
             return nowMuted
+        }
+
+        /** Keep local badges in step with server-authoritative notification choices. */
+        fun syncMuted(values: Map<String, Boolean>) {
+            val previous = mutedKeys()
+            val next = previous.toMutableSet()
+            values.forEach { (key, muted) -> if (muted) next.add(key) else next.remove(key) }
+            if (next != previous) persist(MUTED_STORAGE_KEY, next)
         }
 
         /**

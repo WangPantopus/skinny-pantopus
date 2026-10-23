@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.chats.UnifiedConversationDto
 import app.pantopus.android.data.api.models.chats.UnifiedConversationsResponse
+import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.chats.ChatBadgeCoordinator
 import app.pantopus.android.data.chats.ChatConversationPreferences
 import app.pantopus.android.data.chats.ChatRepository
@@ -52,6 +53,21 @@ class ChatListViewModel
         private var serverTotalUnread: Int = 0
         private var hiddenKeys: Set<String> = emptySet()
         private var mutedKeys: Set<String> = emptySet()
+        private val pendingMutes = mutableSetOf<String>()
+        private var muteRevision = 0L
+        private var visibleGeneration = 0L
+        private var messageRevision = 0L
+        private val rowRevisions = mutableMapOf<String, Long>()
+        private val messageTimes = LinkedHashMap<String, Instant>()
+        private var fetchJob: Job? = null
+        private var followUpRead = false
+        private var followUpForce = false
+        private val _actionError = MutableStateFlow<String?>(null)
+        val actionError: StateFlow<String?> = _actionError.asStateFlow()
+
+        fun dismissActionError() {
+            _actionError.value = null
+        }
 
         /** The pinned assistant row. The empty state shows it too: before a first conversation it is the only way in. */
         val aiRow =
@@ -81,7 +97,7 @@ class ChatListViewModel
          * just read and the messages that arrived meanwhile show (as on iOS).
          */
         fun load() {
-            if (_state.value !is ChatListUiState.Loaded) repo.conversationsCopy()?.let(::show)
+            if (_state.value !is ChatListUiState.Loaded) repo.conversationsCopy()?.let { show(it, syncMutes = false) }
             subscribeToSockets()
             fetch(force = false)
         }
@@ -111,15 +127,43 @@ class ChatListViewModel
         }
 
         fun toggleMute(storageKey: String) {
-            if (storageKey == aiRow.storageKey) return
-            preferences.toggleMute(storageKey)
-            mutedKeys = preferences.mutedKeys()
-            decorateRowsWithMuteState()
-            applyFilter()
-            publishBadgeSnapshot()
+            val row = allRows.firstOrNull { it.storageKey == storageKey } ?: return
+            if (!pendingMutes.add(storageKey)) return
+            val generation = visibleGeneration
+            val enableNotifications = row.isMuted
+            viewModelScope.launch {
+                try {
+                    val result =
+                        if (row.variant is ConversationRowVariant.Group) {
+                            repo.setRoomNotifications(row.id, enableNotifications)
+                        } else {
+                            repo.setConversationNotifications(row.id, enableNotifications)
+                        }
+                    if (generation != visibleGeneration) return@launch
+                    when (result) {
+                        is NetworkResult.Success -> {
+                            muteRevision++
+                            preferences.syncMuted(mapOf(storageKey to !result.data.notificationsEnabled))
+                            mutedKeys = preferences.mutedKeys()
+                            decorateRowsWithMuteState()
+                            applyFilter()
+                            publishBadgeSnapshot()
+                            fetch(force = true)
+                        }
+                        is NetworkResult.Failure -> _actionError.value = result.error.message
+                    }
+                } finally {
+                    pendingMutes.remove(storageKey)
+                }
+            }
         }
 
         fun teardown() {
+            visibleGeneration++
+            fetchJob?.cancel()
+            fetchJob = null
+            followUpRead = false
+            followUpForce = false
             badgeJob?.cancel()
             messageJob?.cancel()
             badgeJob = null
@@ -135,23 +179,75 @@ class ChatListViewModel
 
         /** Reads the list through the store; a failed read keeps the rows on screen (the store keeps its copy too). */
         private fun fetch(force: Boolean) {
-            viewModelScope.launch {
-                val stored = repo.conversationsStored(force)
-                _refreshing.value = false
-                val response = stored.data
-                when {
-                    response != null -> show(response)
-                    _state.value is ChatListUiState.Loaded || _state.value == ChatListUiState.Empty -> Unit
-                    else -> _state.value = ChatListUiState.Error(stored.failure?.message ?: "Couldn't load conversations.")
-                }
+            if (fetchJob?.isActive == true) {
+                followUpRead = true
+                followUpForce = followUpForce || force
+                return
             }
+            val revision = muteRevision
+            val messagesAtStart = messageRevision
+            val generation = visibleGeneration
+            fetchJob =
+                viewModelScope.launch {
+                    try {
+                        val stored = repo.conversationsStored(force)
+                        if (generation != visibleGeneration) return@launch
+                        _refreshing.value = false
+                        val response = stored.data
+                        when {
+                            response != null -> {
+                                val live = allRows.filter { (rowRevisions[it.storageKey] ?: 0) > messagesAtStart }
+                                show(response, syncMutes = stored.failure == null && revision == muteRevision, liveRows = live)
+                            }
+                            _state.value is ChatListUiState.Loaded || _state.value == ChatListUiState.Empty -> Unit
+                            else -> _state.value = ChatListUiState.Error(stored.failure?.message ?: "Couldn't load conversations.")
+                        }
+                    } finally {
+                        if (generation == visibleGeneration) {
+                            fetchJob = null
+                            if (followUpRead) {
+                                val forceNext = followUpForce
+                                followUpRead = false
+                                followUpForce = false
+                                fetch(force = forceNext)
+                            }
+                        }
+                    }
+                }
         }
 
         /** Projects a list reply: rows, the unread total (the list's own `totalUnread`) and the tab badge. */
-        private fun show(response: UnifiedConversationsResponse) {
+        private fun show(
+            response: UnifiedConversationsResponse,
+            syncMutes: Boolean = true,
+            liveRows: List<ConversationRowContent> = emptyList(),
+        ) {
+            if (syncMutes) {
+                val known =
+                    response.conversations.mapNotNull { dto ->
+                        val enabled = dto.notificationsEnabled ?: return@mapNotNull null
+                        val key =
+                            if (dto.type == "room") {
+                                dto.id?.let { ChatConversationPreferences.roomKey(it) }
+                            } else {
+                                dto.otherParticipantId?.let { ChatConversationPreferences.personKey(it) }
+                            } ?: return@mapNotNull null
+                        key to !enabled
+                    }.toMap()
+                preferences.syncMuted(known)
+            }
             loadPreferences()
             serverTotalUnread = response.totalUnread ?: response.conversations.sumOf { it.totalUnread }
             allRows = response.conversations.map { project(it, mutedKeys) }
+            liveRows.forEach { live ->
+                val fetched = allRows.firstOrNull { it.storageKey == live.storageKey }
+                if (fetched != null && messageTime(live.lastMessageAt) >= messageTime(fetched.lastMessageAt)) {
+                    serverTotalUnread += live.unread - fetched.unread
+                    allRows = allRows.filterNot { it.storageKey == live.storageKey } + live.copy(isMuted = live.storageKey in mutedKeys)
+                }
+            }
+            allRows = allRows.sortedByDescending { messageTime(it.lastMessageAt) }
+            rowRevisions.keys.retainAll(allRows.map { it.storageKey }.toSet())
             applyFilter()
             publishBadgeSnapshot()
         }
@@ -259,16 +355,24 @@ class ChatListViewModel
                 return
             }
             val original = allRows[index]
+            messageRevision++
+            rowRevisions[original.storageKey] = messageRevision
             val unreadFor =
                 if (json.has("unread_for")) json.optInt("unread_for") else original.unread + 1
             val preview = json.optString("preview").ifEmpty { original.preview }
             val createdAt = json.optString("created_at").ifEmpty { null }
             val timeLabel = createdAt?.let { relativeTimestamp(it) } ?: "now"
-            val updated = original.copy(preview = preview, timeLabel = timeLabel, unread = unreadFor)
-            allRows = allRows.toMutableList().also { it[index] = updated }
-            if (unreadFor > original.unread) {
-                serverTotalUnread += unreadFor - original.unread
-            }
+            val newer = messageTime(createdAt) >= messageTime(original.lastMessageAt)
+            val updated =
+                if (newer) {
+                    original.copy(preview = preview, timeLabel = timeLabel, unread = unreadFor, lastMessageAt = createdAt)
+                } else {
+                    original.copy(unread = unreadFor)
+                }
+            allRows =
+                (listOf(updated) + allRows.filterNot { it.storageKey == updated.storageKey })
+                    .sortedByDescending { messageTime(it.lastMessageAt) }
+            serverTotalUnread = (serverTotalUnread + unreadFor - original.unread).coerceAtLeast(0)
             applyFilter()
             publishBadgeSnapshot()
         }
@@ -333,7 +437,17 @@ class ChatListViewModel
                         ConversationRowTopic(title = title, topicType = type)
                     },
                 gigId = if (isRoom) dto.gigId else null,
+                lastMessageAt = dto.lastMessageAt,
             )
+        }
+
+        private fun messageTime(value: String?): Instant {
+            if (value == null) return Instant.EPOCH
+            return messageTimes[value] ?: runCatching { Instant.parse(value.replace("+00:00", "Z")) }
+                .getOrDefault(Instant.EPOCH).also {
+                    if (messageTimes.size >= 512) messageTimes.remove(messageTimes.keys.first())
+                    messageTimes[value] = it
+                }
         }
 
         private fun initials(name: String): String {

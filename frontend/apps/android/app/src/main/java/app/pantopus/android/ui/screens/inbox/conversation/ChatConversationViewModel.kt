@@ -2099,7 +2099,7 @@ class ChatConversationViewModel
             _state.value = ChatConversationUiState.Error(error.message)
         }
 
-        /** The newest hundred server messages, held only in the account-scoped memory store. */
+        /** The newest hundred server messages, restored from the account-scoped encrypted recent-history cache. */
         private fun showHistoryCopy(): Boolean {
             val copy =
                 when (val target = mode) {
@@ -2912,6 +2912,7 @@ class ChatConversationViewModel
                         nextCursor = oldestCursor.takeIf { hasMore },
                         roomIds = if (page != null) page.roomIds else activeRoomIds.toList(),
                         sendRefusal = page?.sendRefusal,
+                        syncCursors = page?.syncCursors.orEmpty(),
                     ),
                 )
             }

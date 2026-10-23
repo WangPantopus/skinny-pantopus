@@ -1,6 +1,8 @@
 package app.pantopus.android.data.chats
 
 import app.pantopus.android.data.api.models.chats.ChatMessagesResponse
+import app.pantopus.android.data.api.models.chats.ChatNotificationPreferencesBody
+import app.pantopus.android.data.api.models.chats.ChatNotificationPreferencesResponse
 import app.pantopus.android.data.api.models.chats.ChatRoomDetailResponse
 import app.pantopus.android.data.api.models.chats.ChatStatsResponse
 import app.pantopus.android.data.api.models.chats.ConversationTopicsResponse
@@ -55,7 +57,7 @@ class ChatRepository
          * its badge share it, so a visit right after launch sends nothing.
          */
         suspend fun conversationsStored(force: Boolean = false): Stored<UnifiedConversationsResponse> =
-            // Founder decision 7: the list (names, previews, unread counts) is saved on the phone; history never is.
+            // The list and the separately encrypted recent-history window both survive a process restart.
             store.read(StoreKeys.conversations, force, persist = true) { etag ->
                 conditionalApiCall { api.unifiedConversationsConditional(limit = CONVERSATIONS_LIMIT, etag = etag) }
             }
@@ -105,7 +107,7 @@ class ChatRepository
             }
             val count = limit.coerceIn(1, HISTORY_LIMIT)
             val stored =
-                store.read(StoreKeys.roomMessages(roomId, count, asBusinessUserId), force) { etag ->
+                store.read(StoreKeys.roomMessages(roomId, count, asBusinessUserId), force, persist = true) { etag ->
                     conditionalApiCall { api.roomMessagesConditional(roomId, count, etag, asBusinessUserId) }.mapFresh(::boundedHistory)
                 }
             return stored.data?.let { NetworkResult.Success(it) } ?: stored.asResult()
@@ -130,7 +132,7 @@ class ChatRepository
             }
             val count = limit.coerceIn(1, HISTORY_LIMIT)
             val stored =
-                store.read(StoreKeys.conversationMessages(otherUserId, topicId, count), force) { etag ->
+                store.read(StoreKeys.conversationMessages(otherUserId, topicId, count), force, persist = true) { etag ->
                     conditionalApiCall { api.conversationMessagesConditional(otherUserId, count, topicId, etag) }.mapFresh(::boundedHistory)
                 }
             return stored.data?.let { NetworkResult.Success(it) } ?: stored.asResult()
@@ -252,6 +254,19 @@ class ChatRepository
             safeApiCall {
                 api.markConversationRead(otherUserId, throughMessageId?.let { mapOf("throughMessageId" to it) }.orEmpty())
             }.chatsChanged()
+
+        suspend fun setConversationNotifications(
+            otherUserId: String,
+            enabled: Boolean,
+        ): NetworkResult<ChatNotificationPreferencesResponse> =
+            safeApiCall { api.conversationPreferences(otherUserId, ChatNotificationPreferencesBody(enabled)) }.chatsChanged()
+
+        suspend fun setRoomNotifications(
+            roomId: String,
+            enabled: Boolean,
+            asBusinessUserId: String? = null,
+        ): NetworkResult<ChatNotificationPreferencesResponse> =
+            safeApiCall { api.roomPreferences(roomId, ChatNotificationPreferencesBody(enabled, asBusinessUserId)) }.chatsChanged()
 
         suspend fun conversationTopics(otherUserId: String): NetworkResult<ConversationTopicsResponse> =
             safeApiCall { api.conversationTopics(otherUserId) }

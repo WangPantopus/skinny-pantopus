@@ -22,8 +22,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -72,6 +74,15 @@ fun ChatListScreen(
     val activeFilter by viewModel.activeFilter.collectAsStateWithLifecycle()
     val unreadByFilter by viewModel.unreadByFilter.collectAsStateWithLifecycle()
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
+    val actionError by viewModel.actionError.collectAsStateWithLifecycle()
+    actionError?.let { message ->
+        AlertDialog(
+            onDismissRequest = viewModel::dismissActionError,
+            title = { Text("Couldn't update notifications") },
+            text = { Text(message) },
+            confirmButton = { TextButton(onClick = viewModel::dismissActionError) { Text("OK") } },
+        )
+    }
 
     LaunchedEffect(Unit) { viewModel.load() }
     RefreshOnStoreChange(viewModel::load)

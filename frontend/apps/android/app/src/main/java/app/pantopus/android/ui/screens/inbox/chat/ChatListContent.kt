@@ -82,6 +82,7 @@ data class ConversationRowContent(
     val topics: List<ConversationRowTopic> = emptyList(),
     /** Backing gig for gig-room rows — plumbs the A15 pinned context strip. */
     val gigId: String? = null,
+    val lastMessageAt: String? = null,
 )
 
 /** Filter-tab entry the view renders. */
