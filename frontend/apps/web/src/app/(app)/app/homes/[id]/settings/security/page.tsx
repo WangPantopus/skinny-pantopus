@@ -88,7 +88,7 @@ function SecurityContent() {
     finally { setSaving(false); }
   }, [homeId, security]);
 
-  if (loading) return <div className="flex items-center justify-center min-h-[50vh]"><div className="animate-spin h-8 w-8 border-3 border-emerald-600 border-t-transparent rounded-full" /></div>;
+  if (loading) return <div className="flex items-center justify-center min-h-[50vh]"><div className="animate-spin h-8 w-8 border-2 border-emerald-600 border-t-transparent rounded-full" /></div>;
 
   const header = (
     <div className="flex items-center gap-3 mb-6">

@@ -1390,6 +1390,13 @@ private fun GigChangeOrderRow(
                 order.description?.takeIf { it.isNotBlank() }?.let { description ->
                     Text(text = description, fontSize = 13.sp, color = PantopusColors.appTextSecondary)
                 }
+                Text(
+                    text = changeRequesterLine(order, viewerIsRequester),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = PantopusColors.appTextMuted,
+                    modifier = Modifier.testTag("gigDetail.change_${order.id}.requester"),
+                )
             }
             changeAmountLabel(order)?.let { delta ->
                 Text(
@@ -1463,6 +1470,23 @@ private fun ChangeOrderStatusChip(status: String?) {
                 .padding(horizontal = Spacing.s2, vertical = Spacing.s1),
     ) {
         Text(text = label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = tint)
+    }
+}
+
+/**
+ * Who asked for the change, named as the task names its people (`displayName`: their Local Profile, or the business;
+ * older servers sent only the account name).
+ */
+private fun changeRequesterLine(
+    order: GigChangeOrderDto,
+    viewerIsRequester: Boolean,
+): String {
+    val requester = order.requester
+    return when {
+        viewerIsRequester -> "From you"
+        // No requester means the person has deleted their account.
+        requester == null -> "From a former member"
+        else -> "From ${requester.resolvedDisplayName()}"
     }
 }
 

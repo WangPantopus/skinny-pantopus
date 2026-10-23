@@ -332,7 +332,7 @@ export default function AdminReviewClaimsPage() {
         </div>
 
         {detailLoading ? (
-          <div className="flex-1 flex items-center justify-center"><div className="animate-spin h-8 w-8 border-3 border-violet-600 border-t-transparent rounded-full" /></div>
+          <div className="flex-1 flex items-center justify-center"><div className="animate-spin h-8 w-8 border-2 border-violet-600 border-t-transparent rounded-full" /></div>
         ) : claimDetail ? (
           <div className="flex-1 overflow-y-auto p-5 space-y-5">
             {/* Home info */}
@@ -475,7 +475,7 @@ export default function AdminReviewClaimsPage() {
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center py-24"><div className="animate-spin h-8 w-8 border-3 border-violet-600 border-t-transparent rounded-full" /></div>
+        <div className="flex items-center justify-center py-24"><div className="animate-spin h-8 w-8 border-2 border-violet-600 border-t-transparent rounded-full" /></div>
       ) : claims.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24">
           <CheckCircle className="w-14 h-14 text-emerald-500 mb-4" />

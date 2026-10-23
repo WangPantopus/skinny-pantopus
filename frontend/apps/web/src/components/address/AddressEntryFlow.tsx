@@ -208,7 +208,7 @@ export default function AddressEntryFlow({
   if (phase === 'validating') {
     return (
       <div className="flex flex-col items-center justify-center py-12 space-y-4">
-        <div className="w-10 h-10 border-3 border-app-border border-t-primary-500 rounded-full animate-spin" />
+        <div className="w-10 h-10 border-2 border-app-border border-t-primary-500 rounded-full animate-spin" />
         <p className="text-sm text-app-text-secondary font-medium">Validating your address...</p>
         <p className="text-xs text-app-text-muted">Checking with Google, USPS, and local records</p>
       </div>

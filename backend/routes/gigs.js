@@ -57,6 +57,7 @@ const {
 const {
   hydrateListingCreatorIdentities,
   hydrateTaskPeople,
+  loadTaskPersonName,
   loadTaskPosterFields,
   serializeTaskPerson,
   withoutAccountPoster,
@@ -3437,7 +3438,6 @@ router.post('/:gigId/report', verifyToken, validate(reportGigSchema), async (req
 // ============ BROWSE SECTIONS ENDPOINT ============
 
 const { getGigClusters } = require('../services/gig/clusterService');
-const { chosenUsernameOrNull } = require('../utils/personalUsername');
 
 /**
  * GET /api/gigs/browse
@@ -4135,19 +4135,14 @@ router.post('/:gigId/bids', verifyToken, async (req, res) => {
     }
 
     // ─── Notify gig poster: new bid received ───
-    const [{ data: bidder }, bidCountResult] = await Promise.all([
-      supabaseAdmin
-        .from('User')
-        .select('name, username')
-        .eq('id', userId)
-        .single(),
+    const [bidderName, bidCountResult] = await Promise.all([
+      loadTaskPersonName(userId, 'Someone'),
       supabaseAdmin
         .from('GigBid')
         .select('id', { count: 'exact', head: true })
         .eq('gig_id', gigId)
         .in('status', ['pending', 'accepted', 'countered']),
     ]);
-    const bidderName = bidder?.name || bidder?.username || 'Someone';
     const activeBidCount = bidCountResult.error ? null : bidCountResult.count;
 
     notifyBidReceived({
@@ -5046,12 +5041,7 @@ router.post('/:gigId/bids/:bidId/counter/accept', verifyToken, async (req, res) 
 
     // Notify the requester
     if (gig) {
-      const { data: bidder } = await supabaseAdmin
-        .from('User')
-        .select('name, username')
-        .eq('id', userId)
-        .single();
-      const bidderName = bidder?.name || bidder?.username || 'The bidder';
+      const bidderName = await loadTaskPersonName(userId, 'The bidder');
 
       createNotification({
         userId: gig.user_id,
@@ -5128,12 +5118,7 @@ router.post('/:gigId/bids/:bidId/counter/decline', verifyToken, async (req, res)
 
     // Notify the requester
     if (gig) {
-      const { data: bidder } = await supabaseAdmin
-        .from('User')
-        .select('name, username')
-        .eq('id', userId)
-        .single();
-      const bidderName = bidder?.name || bidder?.username || 'The bidder';
+      const bidderName = await loadTaskPersonName(userId, 'The bidder');
 
       createNotification({
         userId: gig.user_id,
@@ -5294,12 +5279,7 @@ router.delete('/:gigId/bids/:bidId', verifyToken, async (req, res) => {
       .single();
 
     if (gigData) {
-      const { data: bidder } = await supabaseAdmin
-        .from('User')
-        .select('name, username')
-        .eq('id', userId)
-        .single();
-      const bidderName = bidder?.name || bidder?.username || 'A bidder';
+      const bidderName = await loadTaskPersonName(userId, 'A bidder');
 
       createNotification({
         userId: gigData.user_id,
@@ -5419,12 +5399,7 @@ router.post('/:gigId/start', verifyToken, async (req, res) => {
     }
 
     // ─── Notify gig poster: worker started ───
-    const { data: worker } = await supabaseAdmin
-      .from('User')
-      .select('name, username')
-      .eq('id', userId)
-      .single();
-    const workerName = worker?.name || chosenUsernameOrNull(worker?.username) || 'The worker';
+    const workerName = await loadTaskPersonName(userId, 'The worker');
 
     const ownerRecipients = await getGigOwnerNotificationRecipients(gig.user_id, userId);
     if (ownerRecipients.length > 0) {
@@ -6341,13 +6316,7 @@ router.post('/:gigId/change-orders', verifyToken, async (req, res) => {
 
     // Notify the other party
     const otherUserId = isPoster ? gig.accepted_by : gig.user_id;
-    const { data: requester } = await supabaseAdmin
-      .from('User')
-      .select('name, username')
-      .eq('id', userId)
-      .single();
-    const requesterName =
-      requester?.name || chosenUsernameOrNull(requester?.username) || (isPoster ? 'The poster' : 'The worker');
+    const requesterName = await loadTaskPersonName(userId, isPoster ? 'The poster' : 'The worker');
     const gigTitle = gig.title || 'a gig';
 
     const changeLabel =
@@ -6898,14 +6867,10 @@ router.post('/:gigId/questions', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to post question' });
     }
 
-    // Notify gig poster
+    // Notify gig poster, naming the asker as the question does
+    await hydrateTaskPeople([q], ['asker']);
     if (String(gig.user_id) !== String(userId)) {
-      const { data: asker } = await supabaseAdmin
-        .from('User')
-        .select('name, username')
-        .eq('id', userId)
-        .single();
-      const askerName = asker?.name || asker?.username || 'Someone';
+      const askerName = serializeTaskPerson(q.asker)?.displayName || 'Someone';
 
       createNotification({
         userId: gig.user_id,
@@ -6919,7 +6884,6 @@ router.post('/:gigId/questions', verifyToken, async (req, res) => {
     }
 
     emitGigUpdate(req, gigId, 'qa-update');
-    await hydrateTaskPeople([q], ['asker']);
     res.status(201).json({ question: serializeGigQuestionForViewer(q) });
   } catch (err) {
     logger.error('Question create error', { error: err.message });
@@ -7519,12 +7483,7 @@ router.post('/:gigId/report-no-show', verifyToken, async (req, res) => {
     // 4) Notify the no-show party. The worker's report shares one notice per
     // task with its recovery paths, so a retry or a recorded webhook never repeats it.
     if (isPoster) {
-      const { data: reporter } = await supabaseAdmin
-        .from('User')
-        .select('name, username')
-        .eq('id', userId)
-        .single();
-      const reporterName = reporter?.name || chosenUsernameOrNull(reporter?.username) || 'The other party';
+      const reporterName = await loadTaskPersonName(userId, 'The other party');
       createNotification({
         userId: reportedAgainst,
         type: 'no_show_reported',
