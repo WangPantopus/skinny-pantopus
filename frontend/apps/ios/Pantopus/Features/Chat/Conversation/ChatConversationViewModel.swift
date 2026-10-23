@@ -648,6 +648,7 @@ public final class ChatConversationViewModel {
     private var historyTouchedIds: Set<String> = []
     private var refreshInProgress = false
     private var fallbackRefreshTask: Task<Void, Never>?
+    private var topicsRefreshTask: Task<Void, Never>?
     private var markReadTask: Task<Void, Never>?
     private var isTimelineAtBottom = false
     private var lastReadMessageId: String?
@@ -1768,6 +1769,8 @@ public final class ChatConversationViewModel {
         historyRequestId = nil
         fallbackRefreshTask?.cancel()
         fallbackRefreshTask = nil
+        topicsRefreshTask?.cancel()
+        topicsRefreshTask = nil
         rememberThread()
         emitTypingStopIfNeeded()
         markReadTask?.cancel()
@@ -2809,10 +2812,27 @@ public final class ChatConversationViewModel {
             joinActiveRoomsIfPossible()
         }
         guard activeRoomIds.contains(message.roomId) else { return }
+        if let topicId = message.topicId, !topics.contains(where: { $0.id == topicId }) {
+            scheduleTopicsRefresh()
+        }
         if let clientId = message.clientMessageId { retireConfirmedSend(clientId: clientId) }
         upsert(message)
         rebuild()
         scheduleMarkRead()
+    }
+
+    /// A peer can introduce a topic while this screen stays open. Refresh only
+    /// its metadata; the complete live message already supplies the new bubble.
+    private func scheduleTopicsRefresh() {
+        guard case .person = mode, topicsRefreshTask == nil else { return }
+        topicsRefreshTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 150_000_000)
+            guard let self, !Task.isCancelled else { return }
+            await loadTopicsIfNeeded()
+            guard !Task.isCancelled else { return }
+            rebuild()
+            topicsRefreshTask = nil
+        }
     }
 
     private func handleUpdate(_ event: ChatRealtimeMessageUpdate) {
