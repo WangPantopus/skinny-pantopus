@@ -399,8 +399,8 @@ class ChatConversationViewModel
         // Typing indicator (item: typing realtime). Incoming: socket
         // `typing:user` / `typing:stopped` flip [_isCounterpartyTyping] with
         // a 5s auto-clear. Outgoing: `typing:start` is emitted at most every
-        // 6s while the composer changes (backend rate limit is 10/min,
-        // backend/socket/chatSocketio.js:345), `typing:stop` on send/clear.
+        // 3s while the composer changes (backend rate limit is 30/min),
+        // `typing:stop` on send/clear.
         private var typingUserJob: Job? = null
         private var typingStoppedJob: Job? = null
         private var typingClearJob: Job? = null
@@ -3879,15 +3879,10 @@ private val ATTACHMENT_PLACEHOLDER = Regex("""^(\[.+ attachments?]|Photo|Video|D
 /** The documents the assistant reads (AI assistant phase 2 §7.1). */
 private const val PDF_MIME = "application/pdf"
 
-/**
- * Min gap between `typing:start` emits. The backend rate-limits the event
- * to 10/min per socket and silently drops the excess
- * (backend/socket/chatSocketio.js:23), so the throttle must be ≥6s to
- * bound continuous typing at the cap.
- */
 // Backend Joi cap for report `details` (`backend/routes/users.js:4140`).
 private const val MAX_REPORT_DETAILS = 1000
 
+/** Refresh before the 5s display expiry, within the backend's 30/min start limit. */
 private const val TYPING_EMIT_THROTTLE_MS = 3_000L
 
 /** Clear a stale counterparty typing indicator after this long. */
