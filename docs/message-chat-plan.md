@@ -212,6 +212,23 @@ connection delivered the current count. Database-wide room counts matched
 message rows, and application-function lint passed. App checks of this server
 slice are pending; physical-device push delivery remains unverified.
 
+## Inbox search across all pages
+
+`GET /api/chat/unified-conversations?q=literal` filters authorized room/train
+names, all active topic titles, and public counterpart display names/handles
+before pagination. Keep the same query with `before`; `total` and `totalUnread`
+continue to describe the whole authorized inbox. An empty query preserves the
+existing reader. Candidate person IDs are checked through the inbox's existing
+identity serializer, so a private account-name match behind a different public
+alias is discarded. Failed profile reads fail the search rather than falling
+back to private names.
+
+The live API returned all 65 tied-timestamp synthetic groups in seven searched
+pages, found a Unicode/literal-wildcard topic outside the five displayed topics,
+and matched the public alias while rejecting a distinct private account name.
+Function lint, migration policy and syntax passed. Browser/native search checks
+are pending; existing design and navigation are unchanged.
+
 ## Remaining repair sequence
 
 | Area | Work remaining after immediate repairs |

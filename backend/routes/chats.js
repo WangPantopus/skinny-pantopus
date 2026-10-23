@@ -69,7 +69,7 @@ const LOCAL_PROFILE_IDENTITY_SELECT = [
   'show_gig_history',
 ].join(', ');
 
-async function loadLocalIdentityMapForUsers(users) {
+async function loadLocalIdentityMapForUsers(users, { requireProfiles = false } = {}) {
   const userRows = (users || []).filter(Boolean);
   const usersById = new Map();
   for (const user of userRows) {
@@ -87,6 +87,7 @@ async function loadLocalIdentityMapForUsers(users) {
   ]);
 
   if (error) {
+    if (requireProfiles) throw error;
     logger.warn('chat.local_profile_identity_lookup_error', { error: error.message });
   }
 
@@ -107,6 +108,34 @@ async function loadLocalIdentityMapForUsers(users) {
     );
   }
   return identitiesByUserId;
+}
+
+// Search uses the exact public identity shown in the inbox. Candidate IDs can
+// include a private account-name match, which is discarded when the public
+// alias differs. No candidate names are returned before this check.
+async function matchingInboxPeople(userId, query) {
+  const matching = [];
+  const needle = query.toLowerCase();
+  let after = null;
+  for (;;) {
+    const { data: candidates, error } = await supabaseAdmin.rpc('get_chat_inbox_search_candidates', {
+      p_user_id: userId, p_query: query, p_after: after,
+    });
+    if (error || !Array.isArray(candidates)) throw error || new Error('Inbox search unavailable');
+    if (!candidates.length) break;
+    const { data: users, error: usersError } = await supabaseAdmin.from('User')
+      .select('id, username, name, first_name, middle_name, last_name, profile_picture_url')
+      .in('id', candidates.map((candidate) => candidate.user_id));
+    if (usersError || !Array.isArray(users)) throw usersError || new Error('Inbox identity unavailable');
+    const identities = await loadLocalIdentityMapForUsers(users, { requireProfiles: true });
+    for (const [id, identity] of identities) {
+      if ([identity.displayName, identity.handle, identity.handle && `@${identity.handle}`]
+        .some((value) => value && value.toLowerCase().includes(needle))) matching.push(id);
+    }
+    if (candidates.length < 200) break;
+    after = candidates.at(-1).user_id;
+  }
+  return matching;
 }
 
 // ============ CHAT RATE LIMITERS ============
@@ -3010,6 +3039,10 @@ router.get('/unified-conversations', verifyToken, async (req, res) => {
     if (since && (!/^\d{4}-\d{2}-\d{2}T/.test(since) || !Number.isFinite(Date.parse(since)))) {
       return res.status(400).json({ error: 'invalid since' });
     }
+    const query = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+    if ((req.query.q != null && typeof req.query.q !== 'string') || query.length > 160) {
+      return res.status(400).json({ error: 'Invalid inbox search' });
+    }
     let before = null;
     if (req.query.before != null) {
       try {
@@ -3019,10 +3052,12 @@ router.get('/unified-conversations', verifyToken, async (req, res) => {
           || !/^(conversation|room):[0-9a-f-]{36}$/i.test(before.key || '')) throw new Error();
       } catch { return res.status(400).json({ error: 'Invalid inbox cursor' }); }
     }
+    const matchingPeople = query ? await matchingInboxPeople(userId, query) : [];
     const [result, preferences] = await Promise.all([
       supabaseAdmin.rpc('get_chat_inbox_page', {
         p_user_id: userId, p_limit: lim, p_before_at: before?.at || null,
         p_before_key: before?.key || null, p_since: since || null,
+        ...(query ? { p_query: query, p_matching_people: matchingPeople } : {}),
       }),
       supabaseAdmin.from('UserNotificationPreferences').select('chat_muted_user_ids').eq('user_id', userId).maybeSingle(),
     ]);
