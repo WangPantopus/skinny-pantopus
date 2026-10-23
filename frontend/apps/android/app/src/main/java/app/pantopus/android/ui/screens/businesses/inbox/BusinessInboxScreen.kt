@@ -70,8 +70,8 @@ fun BusinessInboxScreen(
     val totalUnread by viewModel.totalUnread.collectAsStateWithLifecycle()
 
     LifecycleResumeEffect(Unit) {
-        viewModel.refresh()
-        onPauseOrDispose { }
+        viewModel.setForeground(true)
+        onPauseOrDispose { viewModel.setForeground(false) }
     }
 
     Column(
