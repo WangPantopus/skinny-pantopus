@@ -3917,12 +3917,16 @@ router.get('/public/join/:code', async (req, res) => {
       .eq('id', referral.referrer_id)
       .single();
 
-    const referrerName = referrer?.name || referrer?.first_name || chosenUsernameOrNull(referrer?.username) || 'A neighbor';
+    // Whoever opens the link sees the inviter as neighbors do: by their Local Profile's name and photo, a business (or
+    // anyone without one) by the account (services/chatPeople.js).
+    const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
+    const shownReferrer = referrer ? chatPersonRow(referrer, await loadChatPeople([referrer.id])) : null;
+    const referrerName = shownReferrer?.name || shownReferrer?.first_name || chosenUsernameOrNull(shownReferrer?.username) || 'A neighbor';
 
     res.json({
       valid: true,
       referrer_name: referrerName,
-      referrer_avatar: referrer?.profile_picture_url || null,
+      referrer_avatar: shownReferrer?.profile_picture_url || null,
       code: referral.invite_code,
     });
   } catch (err) {
@@ -4658,13 +4662,10 @@ router.post('/:id/follow', verifyToken, async (req, res) => {
     }
 
     const notificationService = require('../services/notificationService');
-    const { data: followerUser } = await supabaseAdmin
-      .from('User')
-      .select('username, name, first_name')
-      .eq('id', followerId)
-      .maybeSingle();
-
-    const followerName = followerUser?.name || followerUser?.first_name || chosenUsernameOrNull(followerUser?.username) || 'Someone';
+    const { loadChatPeople } = require('../services/chatPeople');
+    // The notice names the follower as their posts and chats do: a person by their Local Profile's name, a business
+    // (or anyone without one) by the account (services/chatPeople.js).
+    const followerName = (await loadChatPeople([followerId])).get(String(followerId))?.displayName || 'Someone';
     notificationService.createNotification({
       userId: followingId,
       type: 'new_follower',
@@ -4729,7 +4730,11 @@ router.get('/:id/followers', verifyToken, async (req, res) => {
     }
 
     const filtered = (followers || []).filter(f => f.follower?.account_type !== 'curator');
-    res.json({ followers: filtered });
+    // Each person goes by the name, handle and photo neighbors see on their posts and in chats: their Local Profile's,
+    // or a business's (or anyone else's) account as before (services/chatPeople.js). `id` stays the account id.
+    const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
+    const people = await loadChatPeople(filtered.map(f => f.follower?.id));
+    res.json({ followers: filtered.map(f => ({ ...f, follower: chatPersonRow(f.follower, people) })) });
   } catch (err) {
     logger.error('Followers fetch error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch followers' });
@@ -4754,7 +4759,10 @@ router.get('/:id/following', verifyToken, async (req, res) => {
     }
 
     const filtered = (following || []).filter(f => f.following?.account_type !== 'curator');
-    res.json({ following: filtered });
+    // Named as in the followers list above.
+    const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
+    const people = await loadChatPeople(filtered.map(f => f.following?.id));
+    res.json({ following: filtered.map(f => ({ ...f, following: chatPersonRow(f.following, people) })) });
   } catch (err) {
     logger.error('Following fetch error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch following list' });

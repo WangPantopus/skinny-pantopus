@@ -21,6 +21,7 @@ const validate = require('../middleware/validate');
 const logger = require('../utils/logger');
 const { writeIdentityAuditLog } = require('../utils/identityAudit');
 const { syncLocalProfileLocality } = require('../utils/identityProfiles');
+const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
 
 // ============================================================
 // Validation schemas
@@ -182,7 +183,10 @@ router.get('/blocks', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to load blocks' });
     }
 
-    res.json({ blocks: blocks || [] });
+    // A blocked person goes by the name, handle and photo neighbors see on their posts and in chats: their Local
+    // Profile's, or a business's (or anyone else's) account as before (services/chatPeople.js).
+    const people = await loadChatPeople((blocks || []).map((b) => b.blocked_user_id));
+    res.json({ blocks: (blocks || []).map((b) => ({ ...b, blocked: chatPersonRow(b.blocked, people) })) });
   } catch (err) {
     logger.error('GET /privacy/blocks error', { error: err.message });
     res.status(500).json({ error: 'Failed to load blocks' });

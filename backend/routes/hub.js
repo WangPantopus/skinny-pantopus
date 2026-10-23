@@ -27,6 +27,7 @@ const { recordFunnelEvent, APP_POSTABLE_EVENT_TYPES } = require('../services/fun
 const { validTimezone } = require('../utils/timezone');
 const { resolveNotificationTimezone } = require('../services/context/locationResolver');
 const { chosenUsernameOrNull } = require('../utils/personalUsername');
+const { loadChatPeople, reviewerRow } = require('../services/chatPeople');
 
 // Authenticated pilot beacons: account identity comes only from verifyToken.
 // The app-wide JSON parser runs first, so enforce the small body here.
@@ -980,13 +981,16 @@ router.get('/discovery', verifyToken, async (req, res) => {
         const posterIds = Array.from(
           new Set((gigs || []).map((g) => g.user_id).filter(Boolean))
         );
-        const posters = posterIds.length
-          ? (await supabaseAdmin
-              .from('User')
-              .select('id, name, first_name, username')
-              .in('id', posterIds)).data || []
-          : [];
-        const posterById = new Map(posters.map((u) => [u.id, u]));
+        const [posters, posterPeople] = await Promise.all([
+          posterIds.length
+            ? supabaseAdmin.from('User').select('id, name, first_name, username').in('id', posterIds)
+            : { data: [] },
+          loadChatPeople(posterIds),
+        ]);
+        // Someone with a Local Profile goes by its name, as on their tasks and posts, and not by the account's first
+        // name (services/chatPeople.js; reviewerRow names review writers the same way). A business, or anyone without
+        // one, keeps the account row, so their name reads as before.
+        const posterById = new Map((posters.data || []).map((u) => [u.id, reviewerRow(u, posterPeople)]));
         const posterDisplayName = (id) => {
           const u = posterById.get(id);
           if (!u) return null;
@@ -1112,13 +1116,14 @@ router.get('/discovery', verifyToken, async (req, res) => {
         const sellerIds = Array.from(
           new Set((listings || []).map((l) => l.user_id).filter(Boolean))
         );
-        const sellers = sellerIds.length
-          ? (await supabaseAdmin
-              .from('User')
-              .select('id, name, first_name, username, city')
-              .in('id', sellerIds)).data || []
-          : [];
-        const sellerById = new Map(sellers.map((u) => [u.id, u]));
+        const [sellers, sellerPeople] = await Promise.all([
+          sellerIds.length
+            ? supabaseAdmin.from('User').select('id, name, first_name, username, city').in('id', sellerIds)
+            : { data: [] },
+          loadChatPeople(sellerIds),
+        ]);
+        // Named as the gigs rail names posters.
+        const sellerById = new Map((sellers.data || []).map((u) => [u.id, reviewerRow(u, sellerPeople)]));
 
         items = (listings || []).map((l) => {
           const seller = sellerById.get(l.user_id);

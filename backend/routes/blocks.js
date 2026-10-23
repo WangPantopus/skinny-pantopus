@@ -9,6 +9,7 @@ const { invalidateFilterCache } = require('../services/feedService');
 const marketplaceService = require('../services/marketplace/marketplaceService');
 const { writeIdentityAuditLog } = require('../utils/identityAudit');
 const { chosenUsernameOrNull } = require('../utils/personalUsername');
+const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
 
 /**
  * POST /api/users/:userId/block
@@ -175,10 +176,17 @@ router.get('/blocked', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch blocked users' });
     }
 
+    // A blocked person goes by the name, handle and photo neighbors see on their posts and in chats: their Local
+    // Profile's, or a business's (or anyone else's) account as before (services/chatPeople.js).
+    const people = await loadChatPeople((data || [])
+      .filter((b) => b.reason !== 'neighbor_message')
+      .map((b) => b.blocked_user_id));
+    const blocks = (data || []).map((b) => ({ ...b, blocked_user: chatPersonRow(b.blocked_user, people) }));
+
     res.json({
       // Keep the existing list/unblock contract, but never expose an anonymous
       // note's sender. Older clients can still unblock using this opaque handle.
-      blocked: (data || []).map((b) => b.reason === 'neighbor_message' ? {
+      blocked: blocks.map((b) => b.reason === 'neighbor_message' ? {
         id: b.id,
         user_id: `anonymous:${b.id}`,
         username: null,
