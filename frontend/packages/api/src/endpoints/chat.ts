@@ -439,6 +439,7 @@ export async function getArchivedRooms(): Promise<{ rooms: ChatRoomWithDetails[]
  * Get person-grouped conversations list (one row per person + group/home rooms)
  */
 export async function getUnifiedConversations(params?: {
+  q?: string;
   limit?: number;
   before?: string;
   since?: string;

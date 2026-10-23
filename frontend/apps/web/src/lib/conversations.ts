@@ -17,11 +17,12 @@ export type ConversationsReply = Awaited<ReturnType<typeof api.chat.getUnifiedCo
 export const CONVERSATIONS_LIMIT = 50;
 export const CONVERSATIONS_FRESH_MS = 30 * 1000;
 
-export function conversationsQuery() {
+export function conversationsQuery(search = '') {
+  const q = search.trim();
   return {
-    queryKey: queryKeys.conversations(),
+    queryKey: q ? [...queryKeys.conversations(), 'search', q] : queryKeys.conversations(),
     queryFn: async (): Promise<ConversationsReply> => ({
-      ...await api.chat.getUnifiedConversations({ limit: CONVERSATIONS_LIMIT }), refreshId: crypto.randomUUID(),
+      ...await api.chat.getUnifiedConversations({ limit: CONVERSATIONS_LIMIT, ...(q ? { q } : {}) }), refreshId: crypto.randomUUID(),
     }),
     staleTime: CONVERSATIONS_FRESH_MS,
   };
@@ -40,15 +41,17 @@ export function compareConversationTime(a?: string | null, b?: string | null): n
 
 /** Older pages belong to this authoritative first-page snapshot. A refresh
  * drops them, so revoked memberships never linger in a stale tail. */
-export function useConversationPages() {
+export function useConversationPages(search = '') {
+  const q = search.trim();
   const client = useQueryClient();
-  const query = useQuery(conversationsQuery());
+  const query = useQuery(conversationsQuery(q));
   const head = query.data;
   const generation = head?.refreshId;
   const [loadingMore, setLoadingMore] = useState(false);
   const [moreError, setMoreError] = useState<string | null>(null);
-  const current = useRef(generation);
-  current.current = generation;
+  const scope = `${q}:${generation || ''}`;
+  const current = useRef(scope);
+  current.current = scope;
   const request = useRef(0);
   const inFlight = useRef(false);
   const validTail = head?.keptTail?.generation === generation ? head?.keptTail : null;
@@ -56,7 +59,7 @@ export function useConversationPages() {
     request.current += 1; inFlight.current = false;
     setLoadingMore(false); setMoreError(null);
     return () => { request.current += 1; };
-  }, [generation]);
+  }, [scope]);
   const conversations = useMemo(() => {
     const seen = new Set<string>();
     return [...(head?.conversations || []), ...(validTail?.rows || [])].filter((conversation) => {
@@ -73,18 +76,18 @@ export function useConversationPages() {
     const marker = api.authSessionMarker();
     inFlight.current = true; setLoadingMore(true); setMoreError(null);
     try {
-      const page = await api.chat.getUnifiedConversations({ limit: CONVERSATIONS_LIMIT, before: nextCursor });
-      if (ownRequest !== request.current || current.current !== generation || marker !== api.authSessionMarker()) return;
-      client.setQueryData<ConversationsReply>(queryKeys.conversations(), (previous) => previous?.refreshId === generation ? ({ ...previous,
+      const page = await api.chat.getUnifiedConversations({ limit: CONVERSATIONS_LIMIT, before: nextCursor, ...(q ? { q } : {}) });
+      if (ownRequest !== request.current || current.current !== scope || marker !== api.authSessionMarker()) return;
+      client.setQueryData<ConversationsReply>(conversationsQuery(q).queryKey, (previous) => previous?.refreshId === generation ? ({ ...previous,
         keptTail: { generation, rows: [...(validTail?.rows || []), ...page.conversations],
           nextCursor: page.nextCursor, hasMore: page.hasMore } }) : previous);
     } catch (error) {
-      if (ownRequest === request.current && current.current === generation && marker === api.authSessionMarker()) {
+      if (ownRequest === request.current && current.current === scope && marker === api.authSessionMarker()) {
         setMoreError(error instanceof Error ? error.message : 'Could not load more conversations.');
       }
     } finally {
       if (ownRequest === request.current) { inFlight.current = false; setLoadingMore(false); }
     }
-  }, [nextCursor, hasMore, generation, client, validTail]);
+  }, [nextCursor, hasMore, generation, scope, q, client, validTail]);
   return { query, conversations, hasMore, loadMore, loadingMore, moreError };
 }

@@ -118,6 +118,11 @@ export default function ChatListPage() {
   const queryClient = useQueryClient();
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [inboxSearch, setInboxSearch] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setInboxSearch(search.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
   const [newChatOpen, setNewChatOpen] = useState(false);
   const newChatTitleId = useId();
   const [newChatQuery, setNewChatQuery] = useState('');
@@ -132,12 +137,12 @@ export default function ChatListPage() {
   const seenMessageEvents = useRef(new Set<string>());
 
   // ── Conversations via useQuery ─────────────────────────────
-  const conversationsKey = queryKeys.conversations();
-  const pages = useConversationPages();
+  const conversationsKey = useMemo(() => inboxSearch ? [...queryKeys.conversations(), 'search', inboxSearch] : queryKeys.conversations(), [inboxSearch]);
+  const pages = useConversationPages(inboxSearch);
   const conversationsQuery = pages.query;
   const conversations = pages.conversations;
   const totalUnread = Number(conversationsQuery.data?.totalUnread || 0);
-  const loading = conversationsQuery.isPending;
+  const loading = search.trim() !== inboxSearch || conversationsQuery.isPending;
   // A failed first read has no list to describe: no count, no empty-inbox card.
   const listFailed = conversationsQuery.isError && !conversationsQuery.data;
   const error = conversationsQuery.error
@@ -344,17 +349,8 @@ export default function ChatListPage() {
     }
   };
 
-  const filteredConversations = useMemo(() => conversations.filter((conv) => {
-    if (!search.trim()) return true;
-    const q = search.toLowerCase();
-    const isRoom = conv._type === 'room';
-    const name = isRoom
-      ? (conv.room_name || '').toLowerCase()
-      : (conv.other_participant_name || conv.other_participant_username || '').toLowerCase();
-    const preview = (conv.last_message_preview || '').toLowerCase();
-    const topicTitles = (conv.topics || []).map((t: ConversationTopic) => (t.title || '').toLowerCase()).join(' ');
-    return name.includes(q) || preview.includes(q) || topicTitles.includes(q);
-  }), [conversations, search]);
+  // The server filters authorized names and all topics before pagination.
+  const filteredConversations = conversations;
 
   // ── Virtualize conversation list ──────────────────────────
   const listScrollRef = useRef<HTMLDivElement>(null);
@@ -427,7 +423,7 @@ export default function ChatListPage() {
               </div>
             ))}
           </div>
-        ) : listFailed ? null : conversations.length === 0 ? (
+        ) : listFailed ? null : conversations.length === 0 && !inboxSearch ? (
           <>
           {/* Before a first conversation the assistant is still reachable here. */}
           <div className="bg-surface rounded-xl border border-app shadow-sm overflow-hidden">
@@ -447,7 +443,7 @@ export default function ChatListPage() {
           <div className="bg-surface rounded-2xl border border-app shadow-sm p-10 text-center mt-4">
             <div className="mb-3 flex justify-center"><Search className="w-8 h-8 text-app-muted" /></div>
             <div className="text-app font-semibold text-lg">No matches</div>
-            <div className="text-sm text-app-text-secondary mt-1">No {pages.hasMore ? 'loaded ' : ''}conversations match &ldquo;{search}&rdquo;</div>
+            <div className="text-sm text-app-text-secondary mt-1">No conversations match &ldquo;{search}&rdquo;</div>
           </div>
         ) : (
           <div className="bg-surface rounded-xl border border-app shadow-sm overflow-hidden">
@@ -572,8 +568,8 @@ export default function ChatListPage() {
             </div>
           </div>
         )}
-        {pages.moreError && <p role="alert" className="mt-3 text-sm text-red-600">{pages.moreError}</p>}
-        {pages.hasMore && <button className="mt-3 w-full rounded-lg border border-app px-3 py-2 text-sm text-app hover-bg-app disabled:opacity-50"
+        {!loading && pages.moreError && <p role="alert" className="mt-3 text-sm text-red-600">{pages.moreError}</p>}
+        {!loading && pages.hasMore && <button className="mt-3 w-full rounded-lg border border-app px-3 py-2 text-sm text-app hover-bg-app disabled:opacity-50"
           disabled={pages.loadingMore} onClick={() => void pages.loadMore()}>{pages.loadingMore ? 'Loading conversations…' : 'Load more conversations'}</button>}
       </div>
 
