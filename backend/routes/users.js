@@ -380,6 +380,37 @@ function applyLocalProfilePublicOverlay(userData, localProfile) {
   };
 }
 
+// Someone else sees a person by their Local Profile, as on the person's posts, comments, tasks and chats
+// (services/chatPeople.js): its name, handle and photo, and no first, middle or last name, which belong to the
+// private account (identity firewall §2.1). The owner, a business and a person without a Local Profile see the account
+// as before, and `id` stays the account id that Follow and Connect use. `routeLocalProfile` is the Local Profile the
+// route was looked up by, if any. An unreadable Local Profile fails the request rather than show the account's name.
+async function withLocalProfileNameForViewer(shown, userData, viewerId, routeLocalProfile = null) {
+  if (viewerId === userData.id || userData.account_type === 'business') return shown;
+  let localProfile = routeLocalProfile;
+  if (!localProfile) {
+    const { data, error } = await supabaseAdmin
+      .from('LocalProfile')
+      .select(LOCAL_PROFILE_SEARCH_SELECT)
+      .eq('user_id', userData.id)
+      .maybeSingle();
+    if (error) throw error;
+    localProfile = data;
+  }
+  if (!localProfile) return shown;
+  const { handle, displayName, avatarUrl } = require('../serializers/identitySerializers')
+    .serializeLocalProfileForViewer({ ...localProfile, user: userData });
+  return {
+    ...shown,
+    username: handle,
+    name: displayName,
+    first_name: null,
+    middle_name: null,
+    last_name: null,
+    profile_picture_url: avatarUrl,
+  };
+}
+
 const PUBLIC_USER_PROFILE_SELECT = [
   'id',
   'username',
@@ -3540,7 +3571,8 @@ router.get('/id/:id', optionalAuth, async (req, res) => {
     if (!canAccess) {
       return res.status(403).json({ error: 'This profile is private' });
     }
-    const publicUserData = applyLocalProfilePublicOverlay(userData, localProfileRouteMatch);
+    const publicUserData = await withLocalProfileNameForViewer(
+      applyLocalProfilePublicOverlay(userData, localProfileRouteMatch), userData, viewerId, localProfileRouteMatch);
 
     // Compute live gig counts + fetch skills in parallel
     const [postedRes, skillsRes] = await Promise.allSettled([
@@ -3887,7 +3919,7 @@ router.get('/:username', optionalAuth, async (req, res) => {
 
     const { data: userData, error } = await supabaseAdmin
       .from('User')
-      .select('id, username, name, first_name, middle_name, last_name, bio, city, state, profile_picture_url, created_at, profile_visibility')
+      .select('id, username, name, first_name, middle_name, last_name, bio, city, state, profile_picture_url, created_at, profile_visibility, account_type')
       .eq('username', username)
       .single();
 
@@ -3900,20 +3932,21 @@ router.get('/:username', optionalAuth, async (req, res) => {
     if (!(await canAccessPublicUserProfile(viewerId, userData.id, profileVisibility))) {
       return res.status(403).json({ error: 'This profile is private' });
     }
+    const shownUser = await withLocalProfileNameForViewer(userData, userData, viewerId);
 
     res.json({
       user: {
-        id: userData.id,
-        username: userData.username,
-        name: userData.name,
-        firstName: userData.first_name,
-        middleName: userData.middle_name,
-        lastName: userData.last_name,
-        bio: userData.bio,
-        city: userData.city,
-        state: userData.state,
-        profile_picture_url: userData.profile_picture_url,
-        memberSince: userData.created_at,
+        id: shownUser.id,
+        username: shownUser.username,
+        name: shownUser.name,
+        firstName: shownUser.first_name,
+        middleName: shownUser.middle_name,
+        lastName: shownUser.last_name,
+        bio: shownUser.bio,
+        city: shownUser.city,
+        state: shownUser.state,
+        profile_picture_url: shownUser.profile_picture_url,
+        memberSince: shownUser.created_at,
         profile_visibility: profileVisibility,
       },
     });
@@ -4425,7 +4458,8 @@ router.get('/username/:username', optionalAuth, async (req, res) => {
     if (!canAccess) {
       return res.status(403).json({ error: 'This profile is private' });
     }
-    const publicUserData = applyLocalProfilePublicOverlay(userData, localProfileRouteMatch);
+    const publicUserData = await withLocalProfileNameForViewer(
+      applyLocalProfilePublicOverlay(userData, localProfileRouteMatch), userData, viewerId, localProfileRouteMatch);
 
     // Compute live gig counts + fetch skills in parallel
     const [postedRes, skillsRes2] = await Promise.allSettled([
