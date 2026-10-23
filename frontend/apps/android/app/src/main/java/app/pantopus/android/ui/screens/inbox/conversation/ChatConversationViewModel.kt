@@ -290,7 +290,10 @@ class ChatConversationViewModel
         private var activeRoomIds: Set<String> = emptySet()
         private val joinedRoomIds = mutableSetOf<String>()
         private val roomJoinJobs = mutableMapOf<String, Job>()
+        private val roomSubscriptionIds = mutableMapOf<String, String>()
         private val roomJoinGate = Semaphore(ROOM_JOIN_CONCURRENCY)
+        private val deferredRoomJoins = mutableMapOf<String, HistoryReadContext>()
+        private var joinRecoveryContext: HistoryReadContext? = null
         private var backfillProjectionJob: Job? = null
         private val historyReadsInFlight = mutableSetOf<Pair<HistoryReadContext, String?>>()
         private val changedDuringCatchUp = mutableSetOf<String>()
@@ -819,6 +822,7 @@ class ChatConversationViewModel
          * flash, no lost scroll); only an error or an empty first load starts over.
          */
         fun refresh() {
+            resetRoomSubscriptions()
             // An access refusal tears listeners down. Retry must restore live updates as well as the first page.
             if (connectionJob == null) subscribeToSockets()
             loadTopicsIfNeeded()
@@ -829,6 +833,7 @@ class ChatConversationViewModel
             persistComposerDraft()
             clearContextWindow()
             historyGeneration++
+            resetRoomSubscriptions()
             catchUpJob?.cancel()
             visibleReadThroughId = null
             visibleReadThroughByRoom.clear()
@@ -2183,6 +2188,7 @@ class ChatConversationViewModel
                 activeChatThread.clear()
                 markReadJob?.cancel()
                 stopFallbackPolling()
+                resetRoomSubscriptions()
             }
         }
 
@@ -3162,45 +3168,103 @@ class ChatConversationViewModel
             backfillProjectionJob = null
             roomJoinJobs.values.forEach { it.cancel() }
             roomJoinJobs.clear()
+            roomSubscriptionIds.forEach { (roomId, subscriptionId) -> leaveRoomSubscription(roomId, subscriptionId) }
+            roomSubscriptionIds.clear()
             joinedRoomIds.clear()
+            deferredRoomJoins.clear()
+            joinRecoveryContext = null
         }
 
         private fun roomNeedsJoin(roomId: String): Boolean =
-            roomId in activeRoomIds && roomId !in joinedRoomIds && socket.connectionState.value == SocketManager.ConnectionState.Connected
+            isForeground && roomId in activeRoomIds && roomId !in joinedRoomIds &&
+                deferredRoomJoins[roomId] != historyContext() && socket.connectionState.value == SocketManager.ConnectionState.Connected
 
         private fun joinActiveRoomsIfPossible() {
-            if (socket.connectionState.value != SocketManager.ConnectionState.Connected) return
+            if (!isForeground || socket.connectionState.value != SocketManager.ConnectionState.Connected) return
+            pruneRoomSubscriptions()
             val pending = activeRoomIds - joinedRoomIds - roomJoinJobs.keys
-            pending.forEach { roomId ->
+            pending.filter(::roomNeedsJoin).forEach { roomId ->
                 val context = historyContext()
                 roomJoinJobs[roomId] =
                     viewModelScope.launch {
-                        var retryDelay = ROOM_JOIN_RETRY_INITIAL_MS
-                        while (context == historyContext() && roomNeedsJoin(roomId)) {
-                            val ack =
-                                roomJoinGate.withPermit {
-                                    if (context == historyContext() && roomNeedsJoin(roomId)) {
-                                        socket.emitWithAck("room:join", JSONObject().put("roomId", roomId))
-                                    } else {
-                                        null
-                                    }
-                                }
-                            if (context != historyContext() || roomId !in activeRoomIds) break
-                            if (ack?.optBoolean("success") == true) {
-                                joinedRoomIds.add(roomId)
-                                val backfill = withContext(Dispatchers.Default) { parseMessages(ack.optJSONArray("messages")) }
-                                if (context == historyContext() && roomId in activeRoomIds) mergeBackfill(backfill)
-                            } else {
-                                // A lost ACK must not leave this room permanently marked as joined.
-                                val advised = ack?.optLong("retryAfterMs", retryDelay) ?: retryDelay
-                                delay(advised.coerceIn(ROOM_JOIN_RETRY_INITIAL_MS, ROOM_JOIN_RETRY_MAX_MS) + Random.nextLong(250))
-                                retryDelay = (retryDelay * 2).coerceAtMost(ROOM_JOIN_RETRY_MAX_MS)
-                            }
-                        }
+                        joinRoomWithRetry(roomId, context)
                         roomJoinJobs.remove(roomId)
                         if (context != historyContext()) joinActiveRoomsIfPossible()
                     }
             }
+        }
+
+        private suspend fun joinRoomWithRetry(
+            roomId: String,
+            context: HistoryReadContext,
+        ) {
+            var retryDelay = ROOM_JOIN_RETRY_INITIAL_MS
+            var attempts = 0
+            while (context == historyContext() && roomNeedsJoin(roomId)) {
+                val subscriptionId = UUID.randomUUID().toString()
+                val payload = JSONObject().put("roomId", roomId).put("subscriptionId", subscriptionId)
+                val ack =
+                    roomJoinGate.withPermit {
+                        if (context == historyContext() && roomNeedsJoin(roomId)) {
+                            socket.emitWithAck("room:join", payload, cancelEvent = "room:leave")
+                        } else {
+                            null
+                        }
+                    }
+                if (context != historyContext() || !roomNeedsJoin(roomId)) {
+                    leaveRoomSubscription(roomId, subscriptionId)
+                    return
+                }
+                if (ack?.optBoolean("success") == true) {
+                    joinedRoomIds.add(roomId)
+                    roomSubscriptionIds[roomId] = subscriptionId
+                    val backfill = withContext(Dispatchers.Default) { parseMessages(ack.optJSONArray("messages")) }
+                    if (context == historyContext() && roomId in activeRoomIds) mergeBackfill(backfill)
+                    return
+                }
+                if (joinWasRefused(ack) || ++attempts >= ROOM_JOIN_MAX_ATTEMPTS) {
+                    deferRoomJoin(roomId, context)
+                    return
+                }
+                val advised = ack?.optLong("retryAfterMs", retryDelay) ?: retryDelay
+                delay(advised.coerceIn(ROOM_JOIN_RETRY_INITIAL_MS, ROOM_JOIN_RETRY_MAX_MS) + Random.nextLong(250))
+                retryDelay = (retryDelay * 2).coerceAtMost(ROOM_JOIN_RETRY_MAX_MS)
+            }
+        }
+
+        private fun leaveRoomSubscription(
+            roomId: String,
+            subscriptionId: String,
+        ) {
+            socket.emit("room:leave", JSONObject().put("roomId", roomId).put("subscriptionId", subscriptionId))
+        }
+
+        private fun pruneRoomSubscriptions() {
+            (roomJoinJobs.keys - activeRoomIds).forEach { roomJoinJobs.remove(it)?.cancel() }
+            (joinedRoomIds - activeRoomIds).forEach { roomId ->
+                roomSubscriptionIds.remove(roomId)?.let { leaveRoomSubscription(roomId, it) }
+                joinedRoomIds.remove(roomId)
+            }
+        }
+
+        private fun joinWasRefused(ack: JSONObject?): Boolean =
+            ack != null && (
+                ack.has("retryable") && !ack.optBoolean("retryable") ||
+                    ack.optString("error") in setOf("Access denied", "Invalid room", "Forbidden") ||
+                    ack.optString("code") in setOf("FORBIDDEN", "ACCESS_DENIED", "UNAUTHORIZED")
+            )
+
+        private fun deferRoomJoin(
+            roomId: String,
+            context: HistoryReadContext,
+        ) {
+            deferredRoomJoins[roomId] = context
+            _actionFailure.value = "Couldn't restore live updates. Pull to refresh."
+            // A burst of refusals shares one canonical membership/history repair for this scope.
+            // Manual refresh, foreground/reconnect, or a new scope permits another bounded join attempt.
+            if (joinRecoveryContext == context) return
+            joinRecoveryContext = context
+            catchUpMessages()
         }
 
         /**
@@ -4151,6 +4215,7 @@ private const val REACTION_REFETCH_DEBOUNCE_MS = 300L
 private const val SOCKET_FALLBACK_INITIAL_MS = 2_000L
 private const val SOCKET_FALLBACK_POLL_MS = 15_000L
 private const val ROOM_JOIN_CONCURRENCY = 4
+private const val ROOM_JOIN_MAX_ATTEMPTS = 6
 private const val ROOM_BACKFILL_PROJECTION_MS = 100L
 private const val ROOM_JOIN_RETRY_INITIAL_MS = 1_000L
 private const val ROOM_JOIN_RETRY_MAX_MS = 15_000L
