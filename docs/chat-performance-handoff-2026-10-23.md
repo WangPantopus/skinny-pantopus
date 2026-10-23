@@ -1,6 +1,6 @@
 # Messages / Chat performance and reliability handoff — October 23, 2026
 
-**Final handoff checkpoint: October 23, 2026, approximately 23:40 UTC.** The founder requested this handoff after the resumed repair/verification session. This is a continuation checkpoint, not a release approval.
+**Final handoff checkpoint: October 23, 2026, approximately 23:45 UTC.** The founder requested this handoff after the resumed repair/verification session. This is a continuation checkpoint, not a release approval.
 
 The original **63 stacked draft PRs (#2665–#2727)** were preserved. This effort now has **131 open draft PRs: the original 63 plus 68 resumed slices, including documentation and integration PRs, through #2801**. The complete current register below excludes six intervening PRs belonging to other sessions. All implementation source is committed and pushed; generated artifacts and private operator evidence stay local. No chat-stack PR was merged or deployed by this session.
 
@@ -106,7 +106,7 @@ The approved topic protocol was verified with interleaved selected/unselected me
 2. Recover the iOS 383 build outcome; preserve its signed artifact with hash if successful, then install without wiping account state. Run topic offline reopen, 600+ timeline/Latest, durable retirement/late inbox response, receipt eligibility, and 67-row business checks. Preserve 299 comparison.
 3. Keep web 63107 d561 until the genuine false-Read cache is recorded. Coordinate the isolated 90d replacement at the same origin, then verify cached old Read, held authorized canonical response, correction to Sent, queued older-delta ordering, and reload. Also check anchored offline send with no latest-window cache. Do not use API-only evidence as the UI pass.
 4. Continue Android 7c original-room reply08 with photo/PDF, recipient and reload; explicit refusal and recovery; sender-side selected-topic and missed-receipt correction; per-page access loss and process interruption. Keep all fault/membership restoration explicit.
-5. #2801: review locking/compatibility, run fresh schema replay and function lint in the intended disposable workflow, apply only locally after validation, verify invalid room/pair/represented sender and membership races, then valid actual web/iOS/Android topic flows. Migration 20261024002500 is currently absent. Existing migrations must not change.
+5. #2801: review locking/compatibility, inspect the successful exact CI schema replay/function lint, apply only locally after review, verify invalid room/pair/represented sender and membership races, then valid actual web/iOS/Android topic flows. Migration 20261024002500 is currently absent. Existing migrations must not change.
 
 ### P1 — Complete the reproduced reliability/privacy repairs
 
@@ -185,7 +185,7 @@ The local schema is preserved, not reset. The original 17 chat migrations are:
 
 Also applied and immutable: **20261024001000** approved topic-read state; unchanged upstream **20261023072000** auth-session change signal and **20261023072100** PostGIS client-write guard. Private manifests record hashes and application.
 
-**20261024002500_chat_topic_room_binding.sql (#2801) is UNAPPLIED.** JavaScript syntax, diff and migration policy passed. Function/trigger creation succeeded in a transaction that was rolled back; local plpgsql_check was unavailable. No runtime behavior or functional race pass is claimed.
+**20261024002500_chat_topic_room_binding.sql (#2801) is UNAPPLIED.** JavaScript syntax, diff and migration policy passed. Function/trigger creation succeeded in a transaction that was rolled back; local plpgsql_check was unavailable. Exact CI run40040499880 subsequently passed fresh schema replay, function lint and SQL contracts, privacy, Docker and safeguards; Jest remained red with 31 failures/6,602 passing/16 skipped. No local runtime behavior or functional race pass is claimed.
 
 ## 7. Complete current PR register
 
@@ -195,8 +195,8 @@ CI headline:
 - Backend ba1 (#2790), run40036282110: **31 failed / 6,602 passed / 16 skipped**, same 31 named failures as cdf; privacy, Docker, schema/SQL contracts and safeguards passed. Integration locally showed four additional nonchat transport failures that all passed a focused 104-case rerun; do not erase the full-run failure.
 - Web later slices: **one stats-call expectation failure**, 122 suites/2,382 assertions passed; exact newest #2800 additionally runs integrated backend/native jobs and already has backend/web failures. Exact #2800 classification: web notificationStreams.test.tsx:114 expects two stats calls/observes one; integrated backend authStepUp.test.js:116 rejects a damaged signature inconsistently (341 suites/6,632 passing, 16 skipped). Identity/safeguards passed; native/schema were pending. No repair attempted after freeze.
 - Android exact7c (#2789): **14 unique failures / 42 including retries, 5,074 cases, 76 skipped**; same named failures as #2775/#2783/#2785; emulator job passed.
-- iOS earlier artifacts: two documented history/local-mute assertion failures. New 383 slice lint/bundle jobs were still running/queued at freeze; never inherit an earlier CI result.
-- #2801 and this updated docs commit require fresh check inspection. No tests were written or modified.
+- iOS exact299/#2782 run40033322510: 11 named runtime failures, the same as51 (four conversation attachment/refresh/reply expectations, mute filtering and six old search expectations). Bundle/lint/schema/safeguards passed; runtime/CI failed. Private exact logs classify them. New383 jobs were still running/queued at freeze; never inherit an earlier CI result.
+- #2801 run40040499880 completed: 31 failed/6,602 passed/16 skipped, exactly the same failure names as ba1. Privacy, Docker, complete schema replay/function lint/SQL contracts and safeguards passed. Local application/races/apps remain unverified. This updated docs commit still requires fresh check inspection. No tests were written or modified.
 
 | PR | Title | Head / revision | Base | CI snapshot |
 | --- | --- | --- | --- | --- |
@@ -330,7 +330,7 @@ CI headline:
 | [#2798](https://github.com/WangPantopus/skinny-pantopus/pull/2798) | Honor explicit iOS chat receipt eligibility | codex/chat-ios-receipt-eligibility @ 045fc9d20 | codex/chat-ios-history-retirement | Running |
 | [#2799](https://github.com/WangPantopus/skinny-pantopus/pull/2799) | Fence retired iOS inbox memory and in-flight snapshots | codex/chat-ios-retired-inbox-fence @ 3837b1f96 | codex/chat-ios-receipt-eligibility | Running |
 | [#2800](https://github.com/WangPantopus/skinny-pantopus/pull/2800) | Integrate current master with the chat reliability web build | codex/chat-web-master-integration @ 90d453f1d | codex/chat-web-local-context-transition | Red + running |
-| [#2801](https://github.com/WangPantopus/skinny-pantopus/pull/2801) | Bind chat topics to their displayed pair and current room | codex/chat-topic-room-binding @ 7239311c2 | codex/chat-direct-receipt-eligibility | Running |
+| [#2801](https://github.com/WangPantopus/skinny-pantopus/pull/2801) | Bind chat topics to their displayed pair and current room | codex/chat-topic-room-binding @ 7239311c2 | codex/chat-direct-receipt-eligibility | Red |
 
 ## 8. Worktrees, runtime recovery and private evidence
 
