@@ -38,14 +38,17 @@ async function deliver(job) {
     let current = await rpc('read_chat_push_delivery', { p_id: job.id, p_lease: job.lease_id });
     if (!current) return await finish(job, 'suppressed');
     const message = current.message;
-    const people = await loadChatPeople([message.user_id, ...(job.business_notice ? [job.identity_user_id] : [])]);
+    const people = job.business_notice
+      ? await loadChatPeople([message.user_id, job.identity_user_id]) : new Map();
     const senderName = people.get(String(message.user_id))?.displayName || 'Someone';
     const preview = message.type === 'text'
       ? String(message.message || '').slice(0, 100) + (String(message.message || '').length > 100 ? '…' : '')
       : message.type === 'file' ? '📎 Sent an attachment' : '💬 New message';
     let freshNotice = null;
     let payload = {
-      title: senderName, body: preview,
+      // A delayed alert may display after account switch before native code runs.
+      // Keep message content in authenticated chat/bell views, never the OS payload.
+      title: 'New message', body: 'Open Pantopus to read it.',
       data: { type: 'chat_message', recipient_user_id: job.recipient_user_id,
         room_id: message.room_id, message_id: message.id,
         notificationId: job.id, link: `/chat/${message.room_id}` },
@@ -60,7 +63,7 @@ async function deliver(job) {
         await notificationService.publishStoredNotification(result.notice);
         freshNotice = result.notice;
       }
-      payload = { title: result.notice.title, body: result.notice.body,
+      payload = { title: 'New business message', body: 'Open Pantopus to read it.',
         data: { type: 'business_message', notificationId: result.notice.id, link: result.notice.link,
           ...result.notice.metadata, recipient_user_id: job.recipient_user_id } };
     }

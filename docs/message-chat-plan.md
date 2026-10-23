@@ -251,6 +251,14 @@ photo rechecks are continuing; cold thumbnails still depend on original storage.
 
 ## Push account binding
 
+The default lock-screen payload now uses generic chat text. iOS can display an
+already accepted background push before application account guards run, and the
+app has no Notification Service Extension. Generic title/body remove sender and
+message text from that delayed OS surface; authenticated chat and business bell
+previews remain unchanged. The founder was offered the preview preference and
+the generic default was stated while implementation continued. This is not a
+claim that delivered OS alerts can be recalled or that physical push was verified.
+
 Durable chat and business-chat push envelopes now include `recipient_user_id`
 for the destination account, separate from the represented message sender. The
 recipient is included only in that recipient's private push envelope, never in
