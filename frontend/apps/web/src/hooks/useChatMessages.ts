@@ -9,6 +9,8 @@ import { useSocket, useSocketConnected } from './useSocket';
 import { useSocketEvent, useSocketEmit } from './useSocket';
 import { chosenUsername } from '@pantopus/utils';
 import { queryKeys } from '@/lib/query-keys';
+import { activateChatStorage, deleteChatRecords, readChatRecord, writeChatRecords } from '@/components/chat/chatStorage';
+import { enqueueChatSend, pendingChatMessage, removeChatSend, resumeChatOutbox, retryChatSend, startChatOutbox, subscribeChatOutbox } from '@/components/chat/chatOutbox';
 
 // Re-export shared helpers so existing consumers don't break
 export { getDateKey, formatDateLabel };
@@ -38,7 +40,7 @@ function mergeMessageRecord(existing: ChatMessage | undefined, incoming: ChatMes
   // including when the last reaction was removed while this device was offline.
   if (incoming.reactions === undefined && existing?.reactions !== undefined) merged.reactions = existing.reactions;
   if (!(incoming as Record<string, any>)._optimistic && !(incoming as Record<string, any>)._failed) {
-    Object.assign(merged, { _optimistic: false, _failed: false, _refused: false });
+    Object.assign(merged, { _optimistic: false, _failed: false, _refused: false, _outbox: false, _queued: false, _error: undefined });
   }
   return merged;
 }
@@ -82,9 +84,8 @@ function insertMessageSorted(messages: ChatMessage[], incoming: ChatMessage): Ch
   return result;
 }
 
-// ── Kept conversations (Instant Screens contract §4: memory only) ──
-// Coming back to a conversation shows what was there at once, then catches up
-// quietly. Nothing is written to browser storage; sign-out replaces the cache.
+// In-memory visits remain instant; encrypted recent history also survives a
+// reload. Both are account-scoped and retired on sign-out.
 
 interface ConversationSnapshot {
   messages: ChatMessage[];
@@ -233,22 +234,12 @@ export interface UseChatMessagesReturn {
   beginReply: (target: ChatReplyTarget) => void;
   cancelReply: () => void;
   retryMessage: (messageId: string) => Promise<void>;
+  removePendingMessage: (messageId: string) => Promise<void>;
   loadOlder: () => Promise<void>;
   refresh: () => Promise<void>;
   onVisibleMessage: (messageId: string) => void;
   /** `reacted`: the state asked for; by default the opposite of the message's current state. */
   reactToMessage: (messageId: string, emoji: string, reacted?: boolean) => Promise<void>;
-}
-
-/** A send refused by the server (403): resending cannot succeed. */
-function isRefusal(err: unknown): boolean {
-  return (err as { statusCode?: number } | null)?.statusCode === 403;
-}
-
-/** A refusal that holds for the whole conversation (a draft or closed business), not just this message. */
-function isConversationRefusal(err: unknown): boolean {
-  const e = err as { statusCode?: number; code?: unknown; data?: { code?: unknown } } | null;
-  return e?.statusCode === 403 && (e.code === 'NOT_PUBLISHED' || e.data?.code === 'NOT_PUBLISHED');
 }
 
 /** The server's own sentence for a failed send, when the client carried one. */
@@ -280,6 +271,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
   const scopeRef = useRef({ key: cacheKeyId, generation: 0 });
   if (scopeRef.current.key !== cacheKeyId) scopeRef.current = { key: cacheKeyId, generation: scopeRef.current.generation + 1 };
   const scopeGeneration = scopeRef.current.generation;
+  const deniedScopeRef = useRef<number | null>(null);
   const mountedRef = useRef(true);
   useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
   const isCurrentScope = useCallback(() => mountedRef.current && scopeRef.current.key === cacheKeyId && scopeRef.current.generation === scopeGeneration, [cacheKeyId, scopeGeneration]);
@@ -297,8 +289,6 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
   const [loadFailure, setLoadFailure] = useState<ChatLoadFailure | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [sending, setSending] = useState(false);
-  const attachmentSendInFlight = useRef(false);
-  const pendingAttachmentSend = useRef<{ draft: string; clientMessageId: string } | null>(null);
   const [hasMore, setHasMore] = useState(() => initialSnapshot?.hasMore ?? false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [resolvedRoomId, setResolvedRoomId] = useState<string | null>(() => roomId || initialSnapshot?.resolvedRoomId || null);
@@ -427,12 +417,22 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
         refreshed.filter((m) => !changedAfterStart(String(m.id))),
       ));
       applyPage(page);
-    })().finally(() => {
+    })().catch((error: unknown) => {
+      const status = (error as { statusCode?: number })?.statusCode;
+      if (isCurrentScope() && (status === 403 || status === 404)) {
+        deniedScopeRef.current = scopeGeneration;
+        if (cacheKey) queryClient.removeQueries({ queryKey: cacheKey, exact: true });
+        setMessages([]);
+        setLoadFailure(status === 403 ? 'forbidden' : 'notFound');
+        if (currentUserId) void activateChatStorage(currentUserId).then((saved) => deleteChatRecords(saved, [{ kind: 'history', key: cacheKeyId }])).catch(() => {});
+      }
+      throw error;
+    }).finally(() => {
       if (refreshInFlightRef.current?.promise === promise) refreshInFlightRef.current = null;
     });
     refreshInFlightRef.current = { scope: scopeGeneration, promise };
     return promise;
-  }, [scopeGeneration, fetchMessages, applyPage, isCurrentScope]);
+  }, [scopeGeneration, fetchMessages, applyPage, isCurrentScope, cacheKey, cacheKeyId, currentUserId, queryClient]);
 
   // ── Tab/window foreground resume ──────────────────────────
   // When the tab becomes visible again, refresh messages to catch anything
@@ -473,7 +473,11 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
         if (!cancelled && result?.otherUser) setDirectChatPeer(result.otherUser as User);
       } catch (err) {
         if (!cancelled) {
+          const status = (err as { statusCode?: number })?.statusCode;
+          if (status !== 403 && status !== 404) return;
+          deniedScopeRef.current = scopeRef.current.generation;
           setDirectChatPeer(null);
+          setResolvedRoomId(null);
           // Say why, instead of letting a typed message vanish on Send (e.g. 403
           // "Unable to message this user" when the other person blocked you).
           const reason = sendFailureReason(err) || "We couldn't start this conversation. Try again later.";
@@ -488,12 +492,25 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
   useEffect(() => {
     if (!roomId && !otherUserId) { setLoading(false); return; }
     let cancelled = false;
-    const kept = loadAttempt === 0 ? readSnapshot() : undefined;
-    setMessages(kept?.messages ?? []);
-    messagesRef.current = kept?.messages ?? [];
-    setHasMore(kept?.hasMore ?? false);
-    nextCursorRef.current = kept?.nextCursor ?? null;
-    setLoading(!kept);
+    let kept = loadAttempt === 0 ? readSnapshot() : undefined;
+    const showKept = (snapshot?: ConversationSnapshot) => {
+      if (snapshot && deniedScopeRef.current === scopeGeneration) return;
+      const initial = mergeMessages(snapshot?.messages ?? [], messagesRef.current.filter(isUnsent));
+      setMessages(initial);
+      messagesRef.current = initial;
+      setHasMore(snapshot?.hasMore ?? false);
+      nextCursorRef.current = snapshot?.nextCursor ?? null;
+      setLoading(!snapshot);
+      if (snapshot) {
+        setConversationRoomIds(snapshot.roomIds);
+        setResolvedRoomId(roomId || snapshot.resolvedRoomId);
+        setDirectChatPeer(snapshot.peer);
+        if (snapshot.resolvedRoomId) setDirectChatError(null);
+      }
+    };
+    // A scope switch must not carry outgoing bubbles from another conversation.
+    messagesRef.current = [];
+    showKept(kept);
     setLoadingOlder(false);
     setSending(false);
     setError(null);
@@ -502,31 +519,53 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     liveChangesRef.current.clear();
     visibleThroughRef.current = null;
     readAcknowledgedRef.current = null;
-    void refresh().catch((e: unknown) => {
+    void (async () => {
+      if (!kept && currentUserId && loadAttempt === 0) {
+        try {
+          await startChatOutbox(currentUserId);
+          const saved = await activateChatStorage(currentUserId);
+          const disk = await readChatRecord<ConversationSnapshot>(saved, 'history', cacheKeyId);
+          if (cancelled || !isCurrentScope()) return;
+          if (disk && Array.isArray(disk.messages)) { kept = disk; showKept(disk); }
+        } catch { /* The network remains usable when device storage is disabled. */ }
+      }
+      if (!cancelled && isCurrentScope()) await refresh();
+    })().catch((e: unknown) => {
       if (cancelled || !isCurrentScope()) return;
       const status = (e as { statusCode?: number } | null)?.statusCode;
       if (!kept || status === 403 || status === 404) {
         if (cacheKey) queryClient.removeQueries({ queryKey: cacheKey, exact: true });
+        if (currentUserId && (status === 403 || status === 404)) {
+          void activateChatStorage(currentUserId).then((saved) => deleteChatRecords(saved, [{ kind: 'history', key: cacheKeyId }])).catch(() => {});
+        }
         shownKeyRef.current = null;
-        setMessages([]);
+        setMessages((previous) => previous.filter(isUnsent));
         setLoadFailure(status === 403 ? 'forbidden' : status === 404 ? 'notFound' : 'unavailable');
       }
     }).finally(() => { if (!cancelled && isCurrentScope()) setLoading(false); });
     return () => { cancelled = true; };
   }, [cacheKeyId, loadAttempt]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Keep the conversation for the next visit (memory only), without sends still in flight.
+  // Recent accepted history is encrypted on this device; pending originals
+  // are retained separately until acceptance. Never persist received media.
   useEffect(() => {
     if (!cacheKey || loading || loadFailure || shownKeyRef.current !== cacheKeyId) return;
-    queryClient.setQueryData<ConversationSnapshot>(cacheKey, {
-      messages: messages.filter((m) => !(m as Record<string, any>)._optimistic),
-      hasMore,
-      nextCursor: nextCursorRef.current,
-      roomIds: conversationRoomIds,
-      resolvedRoomId,
-      peer: directChatPeer,
-    });
-  }, [queryClient, cacheKey, cacheKeyId, loading, loadFailure, messages, hasMore, conversationRoomIds, resolvedRoomId, directChatPeer]);
+    const accepted = messages.filter((message) => !isUnsent(message));
+    const snapshot = { messages: accepted, hasMore, nextCursor: nextCursorRef.current,
+      roomIds: conversationRoomIds, resolvedRoomId, peer: directChatPeer };
+    queryClient.setQueryData<ConversationSnapshot>(cacheKey, snapshot);
+    if (!currentUserId) return;
+    const timer = setTimeout(() => {
+      const recent = accepted.slice(-100);
+      const trimmed = accepted.length > recent.length;
+      const saved = { ...snapshot, messages: recent, hasMore: hasMore || trimmed,
+        nextCursor: trimmed ? `${recent[0].created_at}|${recent[0].id}` : snapshot.nextCursor };
+      void activateChatStorage(currentUserId).then((scope) => {
+        if (isCurrentScope()) return writeChatRecords(scope, [{ kind: 'history', key: cacheKeyId, value: saved }]);
+      }).catch(() => {});
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [queryClient, cacheKey, cacheKeyId, currentUserId, loading, loadFailure, messages, hasMore, conversationRoomIds, resolvedRoomId, directChatPeer, isCurrentScope]);
 
   const retryLoad = useCallback(() => setLoadAttempt((n) => n + 1), []);
 
@@ -561,6 +600,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
       // ── Reconnect (false → true) ──
       // Clear joined rooms to force re-join (server may have changed instances)
       joinedRoomsRef.current.clear();
+      void resumeChatOutbox();
       void refresh().catch(() => {});
     }
 
@@ -580,6 +620,21 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
 
   const belongsToTopic = useCallback((message: ChatMessage) => !topicId || isRoomMode
     || String((message as Record<string, any>).topic_id || '') === String(topicId), [topicId, isRoomMode]);
+
+  useEffect(() => {
+    if (!currentUserId) return;
+    const unsubscribe = subscribeChatOutbox((pending, accepted) => {
+      if (!isCurrentScope()) return;
+      const outgoing = pending.filter((message) => message.asBusinessUserId === asBusinessUserId
+        && (isRoomMode ? message.roomId === roomId : message.otherUserId === otherUserId || activeRoomIds.includes(message.roomId)))
+        .map((message) => pendingChatMessage(message, currentUserId)).filter(belongsToTopic);
+      const incoming = accepted && activeRoomIds.includes(accepted.room_id) && belongsToTopic(accepted) ? [accepted] : [];
+      if (accepted) noteLiveChange(String(accepted.id));
+      setMessages((previous) => mergeMessages(previous.filter((message) => !(message as ChatMessage & { _outbox?: boolean })._outbox), [...outgoing, ...incoming]));
+    });
+    void startChatOutbox(currentUserId).catch(() => {});
+    return unsubscribe;
+  }, [currentUserId, asBusinessUserId, isRoomMode, roomId, otherUserId, activeRoomIds, belongsToTopic, isCurrentScope, noteLiveChange]);
 
   useEffect(() => {
     if (!socket || !connected || activeRoomIds.length === 0) return;
@@ -735,208 +790,31 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     }
   }, [cacheKeyId, hasMore, fetchMessages, applyPage, isCurrentScope]);
 
-  // ── Send message (useMutation with optimistic + mark-failed rollback) ──
-
-  const sendMessageMutation = useMutation({
-    mutationFn: async (vars: { text: string; files?: File[]; targetRoomId: string; clientMessageId: string; replyToId?: string; scope: number; topic?: string | null }) => {
-      const { text, files, targetRoomId, clientMessageId, replyToId } = vars;
-      const trimmed = text.trim();
-      const hasFiles = (files?.length || 0) > 0;
-
-      let uploadedFiles: Record<string, any>[] = [];
-      if (hasFiles && files) {
-        const uploadRes = await api.upload.uploadChatMedia(targetRoomId, files, clientMessageId);
-        uploadedFiles = (uploadRes?.media as Record<string, any>[]) || [];
-      }
-
-      const fileIds = uploadedFiles.map((f: Record<string, any>) => f.id).filter(Boolean);
-      const messageType = fileIds.length > 0
-        ? (uploadedFiles.length === 1 && String(uploadedFiles[0]?.mime_type || '').startsWith('image/') ? 'image' : 'file')
-        : 'text';
-
-      const payload = {
-        roomId: targetRoomId,
-        messageText: trimmed || undefined,
-        messageType: messageType as 'text' | 'image' | 'video' | 'file' | 'audio' | 'location' | 'gig_offer' | 'listing_offer',
-        ...(fileIds.length > 0 ? { fileIds } : {}),
-        ...(replyToId ? { replyToId } : {}),
-        ...(asBusinessUserId ? { asBusinessUserId } : {}),
-        clientMessageId,
-        ...(vars.topic ? { topicId: vars.topic } : {}),
-      };
-      try {
-        return await api.chat.sendMessage(payload);
-      } catch (error) {
-        const accepted = messagesRef.current.find((message) => !isUnsent(message) && clientMessageId === (message as Record<string, any>).client_message_id);
-        if (accepted) return { message: accepted };
-        const status = (error as { statusCode?: number })?.statusCode;
-        if (status && status < 500 && status !== 408) throw error;
-        // A dropped HTTP response can follow a successful insert. Retry the same
-        // intent once; the server's unique client ID makes this idempotent.
-        return api.chat.sendMessage(payload);
-      }
-    },
-    onMutate: (vars) => {
-      if (scopeRef.current.generation !== vars.scope) return;
-      const { text, files, clientMessageId } = vars;
-      const trimmed = text.trim();
-      const hasFiles = (files?.length || 0) > 0;
-      setSending(true);
-      // Optimistic rendering for text-only messages
-      if (trimmed && !hasFiles) {
-        setMessages(prev => [
-          ...prev,
-          {
-            id: clientMessageId,
-            room_id: vars.targetRoomId,
-            sender_id: asBusinessUserId || currentUserId || 'self',
-            user_id: asBusinessUserId || currentUserId || 'self',
-            sender: { id: asBusinessUserId || currentUserId || 'self', username: '', name: '', profile_picture_url: '' },
-            message_text: trimmed,
-            message_type: 'text',
-            // The reply quotes its original while it sends.
-            ...(vars.replyToId ? { reply_to_id: vars.replyToId } : {}),
-            created_at: new Date().toISOString(),
-            attachments: [],
-            metadata: {},
-            is_edited: false,
-            is_deleted: false,
-            _optimistic: true,
-            _clientMessageId: clientMessageId,
-            ...(vars.topic ? { topic_id: vars.topic } : {}),
-          },
-        ]);
-      }
-    },
-    onSuccess: async (sendResult, vars) => {
-      if (!isCurrentScope() || scopeRef.current.generation !== vars.scope) return;
-      setError(null);
-      const accepted = sendResult?.message as ChatMessage | undefined;
-      if (accepted?.id) {
-        noteLiveChange(String(accepted.id));
-        setMessages((previous) => insertMessageSorted(previous, accepted));
-      } else {
-        await refresh();
-      }
-    },
-    onError: (err, vars) => {
-      if (!isCurrentScope() || scopeRef.current.generation !== vars.scope) return;
-      // Mark optimistic message as failed instead of removing it. A 403 is a
-      // refusal (blocked, not a participant): no Retry, and show the reason.
-      const { clientMessageId } = vars;
-      const refused = isRefusal(err);
-      setMessages(prev => prev.map(m =>
-        m.id === clientMessageId ? { ...m, _failed: true, _refused: refused, _optimistic: false } : m
-      ));
-      if (isConversationRefusal(err)) setSendRefusal(sendFailureReason(err));
-    },
-    onSettled: (_data, _error, vars) => {
-      if (isCurrentScope() && scopeRef.current.generation === vars.scope) setSending(false);
-    },
-  });
-
+  // Persist the original intent before returning control to the composer. The
+  // account worker keeps sending after navigation and resumes after a reload.
   const sendMessage = useCallback(async (text: string, files?: File[]) => {
-    const trimmed = text.trim();
-    const hasFiles = (files?.length || 0) > 0;
     const targetRoomId = isRoomMode ? roomId : resolvedRoomId;
-    if ((!trimmed && !hasFiles) || sending) return;
-    // Throwing keeps the draft in the composer, which restores it with the reason.
-    if (!targetRoomId) throw new Error(directChatError || "This conversation isn't ready yet. Try again in a moment.");
-
-    if (attachmentSendInFlight.current) return;
-    attachmentSendInFlight.current = true;
+    if (!text.trim() && !files?.length) return;
+    if (!targetRoomId || !currentUserId) throw new Error(directChatError || "This conversation isn't ready yet. Try again in a moment.");
+    setSending(true);
     try {
-      let clientMessageId = crypto.randomUUID();
-      if (hasFiles && files) {
-        const fingerprints = await Promise.all(files.map(async (file) => [file.name, file.type,
-          Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', await file.arrayBuffer())))
-            .map(byte => byte.toString(16).padStart(2, '0')).join(''),
-        ]));
-        const draft = JSON.stringify([targetRoomId, currentUserId, asBusinessUserId, trimmed,
-          fingerprints, localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY)]);
-        if (pendingAttachmentSend.current?.draft !== draft) {
-          pendingAttachmentSend.current = { draft, clientMessageId };
-        }
-        clientMessageId = pendingAttachmentSend.current.clientMessageId;
-      }
-      // The reply bar clears as the send goes out (its bubble quotes the original), and comes back with the
-      // draft if the send fails.
-      const reply = replyingTo;
-      const replyToId = replyTargetIn(messagesRef.current, reply?.messageId, targetRoomId);
-      setReplyingTo(null);
-      // Keep both upload and message identity across an uncertain reply. Only a
-      // completed send starts a new intent for an identical subsequent attachment.
-      try {
-        await sendMessageMutation.mutateAsync({ text, files, targetRoomId, clientMessageId, replyToId, scope: scopeGeneration, topic: topicId });
-      } catch (err) {
-        if (isCurrentScope()) {
-          if (!hasFiles) {
-            // The failed bubble owns its retry ID. Restoring another copy in the
-            // composer would turn an uncertain send into a second message.
-            setError(sendFailureReason(err));
-            return;
-          }
-          setReplyingTo((current) => current ?? reply);
-        }
-        throw err;
-      }
-      pendingAttachmentSend.current = null;
-    } finally {
-      attachmentSendInFlight.current = false;
-    }
-  }, [isRoomMode, roomId, resolvedRoomId, sending, sendMessageMutation, directChatError, currentUserId, asBusinessUserId, replyingTo, scopeGeneration, topicId, isCurrentScope]);
+      await enqueueChatSend(currentUserId, { clientMessageId: crypto.randomUUID(), roomId: targetRoomId,
+        otherUserId, text: text.trim(), asBusinessUserId, topicId: topicId || undefined,
+        replyToId: replyTargetIn(messagesRef.current, replyingTo?.messageId, targetRoomId) }, files);
+      if (isCurrentScope()) { setReplyingTo(null); setError(null); }
+    } finally { if (isCurrentScope()) setSending(false); }
+  }, [isRoomMode, roomId, resolvedRoomId, currentUserId, directChatError, otherUserId, asBusinessUserId, topicId, replyingTo, isCurrentScope]);
 
   const beginReply = useCallback((target: ChatReplyTarget) => setReplyingTo(target), []);
   const cancelReply = useCallback(() => setReplyingTo(null), []);
-
-  // ── Retry failed message ────────────────────────────
-
   const retryMessage = useCallback(async (messageId: string) => {
-    const failedMsg = messagesRef.current.find(m => m.id === messageId && (m as Record<string, any>)._failed);
-    if (!failedMsg || (failedMsg as Record<string, any>)._refused) return;
-
-    const targetRoomId = isRoomMode ? roomId : resolvedRoomId;
-    if (!targetRoomId) return;
-
-    const clientMessageId = ((failedMsg as Record<string, any>)._clientMessageId as string) || messageId;
-    const msgText = failedMsg.message_text || failedMsg.message || '';
-
-    // Mark as sending again
-    setMessages(prev => prev.map(m =>
-      m.id === messageId ? { ...m, _failed: false, _optimistic: true } : m
-    ));
-
-    try {
-      const replyToId = replyTargetIn(messagesRef.current, failedMsg.reply_to_id, targetRoomId);
-      const sendResult = await api.chat.sendMessage({
-        roomId: targetRoomId,
-        messageText: msgText || undefined,
-        messageType: 'text',
-        ...(replyToId ? { replyToId } : {}),
-        ...(asBusinessUserId ? { asBusinessUserId } : {}),
-        clientMessageId,
-        ...((failedMsg as Record<string, any>).topic_id ? { topicId: (failedMsg as Record<string, any>).topic_id } : {}),
-      });
-
-      if (!isCurrentScope()) return;
-      setError(null);
-      const delivered = sendResult?.message as ChatMessage | undefined;
-      if (delivered?.id) {
-        noteLiveChange(String(delivered.id));
-        setMessages((previous) => insertMessageSorted(previous, delivered));
-      } else {
-        await refresh();
-      }
-    } catch (err) {
-      if (!isCurrentScope()) return;
-      const refused = isRefusal(err);
-      setMessages(prev => prev.map(m =>
-        m.id === messageId ? { ...m, _failed: true, _refused: refused, _optimistic: false } : m
-      ));
-      if (refused) setError(sendFailureReason(err) || "You can't send messages in this conversation.");
-      if (isConversationRefusal(err)) setSendRefusal(sendFailureReason(err));
-    }
-  }, [isRoomMode, roomId, resolvedRoomId, asBusinessUserId, refresh, isCurrentScope, noteLiveChange]);
+    try { await retryChatSend(messageId); }
+    catch (error) { if (isCurrentScope()) setError(sendFailureReason(error)); }
+  }, [isCurrentScope]);
+  const removePendingMessage = useCallback(async (messageId: string) => {
+    try { await removeChatSend(messageId); }
+    catch (error) { if (isCurrentScope()) setError(sendFailureReason(error)); }
+  }, [isCurrentScope]);
 
   // ── React to message ────────────────────────────────
 
@@ -1006,6 +884,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     beginReply,
     cancelReply,
     retryMessage,
+    removePendingMessage,
     loadOlder,
     refresh: refreshWithFeedback,
     onVisibleMessage,

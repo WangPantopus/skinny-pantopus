@@ -7,6 +7,8 @@ import { subscribeConnectivity } from '@/lib/connectivity';
 import { clearCachedMapTiles } from '@/utils/tilePrefetch';
 import { AUTH_SESSION_CHANGE_KEY, getAuthToken, onTokenChange } from '@pantopus/api';
 import { setActiveQueryClient } from '@/lib/active-query-client';
+import { clearChatStorage } from '@/components/chat/chatStorage';
+import { suspendChatOutbox } from '@/components/chat/chatOutbox';
 
 // Queries pause while offline. React Query's own detection believes the
 // browser's offline event, which can be wrong while requests still work.
@@ -28,6 +30,8 @@ function clearAccountDeviceData(sessionEnded: boolean) {
       .forEach((key) => window.localStorage.removeItem(key));
   } catch { /* storage disabled: nothing was kept */ }
   clearCachedMapTiles();
+  suspendChatOutbox();
+  void clearChatStorage().catch(() => {});
 }
 
 // Instant Screens (contract §6): the web keeps what it loaded in memory only,
@@ -98,6 +102,8 @@ export default function QueryProvider({ children }: { children: React.ReactNode 
 
   useEffect(() => {
     const retire = () => {
+      suspendChatOutbox();
+      if (getAuthToken() === null) void clearChatStorage().catch(() => {});
       try { window.sessionStorage.removeItem('pantopus_pending_withdrawal'); } catch {}
       // Retire both cached queries and component-local state belonging to the
       // previous account. A fresh client cannot accept an old pending result.

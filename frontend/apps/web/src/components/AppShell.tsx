@@ -60,6 +60,7 @@ import type { CSSProperties } from 'react';
 import { Search, MessageCircle, Menu, X, ChevronsLeft, ChevronsRight, WifiOff, UserRound, type LucideIcon } from 'lucide-react';
 import { useOnlineStatus } from '@/components/map/OfflineIndicator';
 import { chosenUsername } from '@pantopus/utils';
+import { startChatOutbox } from '@/components/chat/chatOutbox';
 
 // ── Constants ──────────────────────────────────────────────────
 const SIDEBAR_EXPANDED = 240;
@@ -243,6 +244,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   // ── You: the shared profile entry (lib/me.ts) ─────────────
   const { data: me } = useMe({ enabled: mounted && !!getAuthToken() });
   const user: User | null = me ?? null;
+  useEffect(() => { if (user?.id) void startChatOutbox(user.id).catch(() => {}); }, [user?.id]);
 
   // ── Tile prefetch for home area ──────────────────────────────
   const { viewerHome } = useViewerHome();

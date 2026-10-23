@@ -22,6 +22,7 @@ import { toast } from '../ui/toast-store';
 import { launchFeatures } from '@/lib/featureFlags';
 import { usernameHandle } from '@pantopus/utils';
 import { fetchMe } from '@/lib/me';
+import { readCachedChatAccountId } from './chatStorage';
 import { queryKeys } from '@/lib/query-keys';
 
 // ============================================================
@@ -104,7 +105,12 @@ export default function ConversationView({
       setCurrentUserId(null);
       const current = captureSafetyScope();
       if (api.getAuthToken()) {
+        let confirmed = false;
+        void readCachedChatAccountId().then((id) => {
+          if (current() && !confirmed && id) setCurrentUserId(id);
+        }).catch(() => {});
         void fetchMe().then(user => {
+          confirmed = true;
           if (current()) setCurrentUserId(user?.id || null);
         }).catch(() => {});
       }
@@ -437,6 +443,7 @@ export default function ConversationView({
           onImageClick={handleImageClick}
           onReact={handleReact}
           onRetry={chat.retryMessage}
+          onRemovePending={chat.removePendingMessage}
           onReply={chat.directChatError || chat.sendRefusal ? undefined : chat.beginReply}
         />
       </div>

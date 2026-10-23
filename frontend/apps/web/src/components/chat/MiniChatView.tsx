@@ -10,6 +10,7 @@ import GigPickerModal from './GigPickerModal';
 import ListingPickerModal from './ListingPickerModal';
 import type { ChatMessage } from './ChatMessageBubble';
 import { fetchMe } from '@/lib/me';
+import { readCachedChatAccountId } from './chatStorage';
 
 interface MiniChatViewProps {
   roomId?: string;
@@ -27,12 +28,16 @@ export default function MiniChatView({ roomId, otherUserId, name, avatar, onBack
   const [showListingPicker, setShowListingPicker] = useState(false);
 
   useEffect(() => {
-    (async () => {
-      try {
-        const userData = await fetchMe() as { id?: string };
-        setCurrentUserId(userData?.id || null);
-      } catch {}
-    })();
+    let cancelled = false;
+    let confirmed = false;
+    void readCachedChatAccountId().then((id) => {
+      if (!cancelled && !confirmed && id) setCurrentUserId(id);
+    }).catch(() => {});
+    void fetchMe().then((user) => {
+      confirmed = true;
+      if (!cancelled) setCurrentUserId(user?.id || null);
+    }).catch(() => {});
+    return () => { cancelled = true; };
   }, []);
 
   const chat = useChatMessages({
@@ -170,6 +175,8 @@ export default function MiniChatView({ roomId, otherUserId, name, avatar, onBack
           onVisibleMessage={chat.onVisibleMessage}
           isOwnMessage={isOwnMessage}
           onReact={handleReact}
+          onRetry={chat.retryMessage}
+          onRemovePending={chat.removePendingMessage}
           onReply={chat.sendRefusal ? undefined : chat.beginReply}
         />
       </div>

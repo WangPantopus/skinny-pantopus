@@ -40,6 +40,7 @@ interface ChatMessageBubbleProps {
   onImageClick?: (url: string, title?: string) => void;
   onReact?: (messageId: string, emoji: string) => void;
   onRetry?: (messageId: string) => void;
+  onRemovePending?: (messageId: string) => void;
   /** Picked from the message's actions menu: the composer replies to this message. */
   onReply?: (msg: ChatMessage) => void;
 }
@@ -48,7 +49,7 @@ interface ChatMessageBubbleProps {
 const MENU_WIDTH = 304;
 const MENU_HEIGHT = 150;
 
-function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClick, onReact, onRetry, onReply }: ChatMessageBubbleProps) {
+function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClick, onReact, onRetry, onRemovePending, onReply }: ChatMessageBubbleProps) {
   const [preview, setPreview] = useState<{ url: string; title?: string; mimeType?: string; liveUrl?: string } | null>(null);
   const [hovered, setHovered] = useState(false);
   const [showQuickPicker, setShowQuickPicker] = useState(false);
@@ -67,6 +68,7 @@ function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClic
   const isOptimistic = msg._optimistic;
   const isFailed = msg._failed;
   const isRefused = msg._refused;
+  const pending = msg as ChatMessage & { _queued?: boolean; _outbox?: boolean; _error?: string };
   const receipt = isMine ? ((msg as ChatMessage & { read_at?: string }).read_at ? 'Read' : 'Sent') : null;
   // Launch cut #3 (Marketplace): a shared listing card is not shown.
   if (msgType === 'listing_offer' && !launchFeatures.marketplace) return null;
@@ -353,7 +355,11 @@ function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClic
                 </button>
               )}
             </span>
-          ) : isOptimistic ? 'Sending…' : <>{isEdited && <span>edited · </span>}{ts}{receipt && ` · ${receipt}`}</>}
+          ) : isOptimistic ? (pending._queued ? 'Queued' : 'Sending…') : <>{isEdited && <span>edited · </span>}{ts}{receipt && ` · ${receipt}`}</>}
+          {pending._outbox && (isFailed || pending._queued) && onRemovePending && (
+            <button type="button" className="ml-2 underline" onClick={() => onRemovePending(msg.id)}>Remove</button>
+          )}
+          {isFailed && pending._error && <div className="text-red-500">{pending._error}</div>}
         </div>
         {reactionBar}
         {actionsMenu}
@@ -373,5 +379,6 @@ export default React.memo(ChatMessageBubble, (prev, next) => {
     && prev.onReact === next.onReact
     && prev.onImageClick === next.onImageClick
     && prev.onRetry === next.onRetry
+    && prev.onRemovePending === next.onRemovePending
     && prev.onReply === next.onReply;
 });

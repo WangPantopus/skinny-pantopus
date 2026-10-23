@@ -4,12 +4,10 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/components/ui/toast-store';
+import { clearChatStorage } from '@/components/chat/chatStorage';
 
-// Settings → Storage & data, web (Instant Screens contract §7, exact wording).
-// The browser keeps the pages you opened in this tab's memory only: the query
-// cache and the router's visited routes. Clearing drops every kept page that
-// isn't on screen, reads this page again quietly and empties the router's
-// kept routes. Drafts, unfinished actions, the sign-in and settings stay.
+// Clear recent history and inactive pages while preserving pending originals,
+// unfinished actions, the sign-in and settings.
 export default function StorageDataSection() {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -18,6 +16,7 @@ export default function StorageDataSection() {
   const clear = async () => {
     setClearing(true);
     try {
+      await clearChatStorage(true);
       queryClient.removeQueries({ predicate: (query) => query.getObserversCount() === 0 });
       router.refresh();
       await queryClient.invalidateQueries({ type: 'active' });
@@ -31,7 +30,7 @@ export default function StorageDataSection() {
     <div className="bg-surface rounded-xl border border-app p-6">
       <h2 className="text-lg font-semibold text-app mb-2">Storage &amp; data</h2>
       <p className="text-sm text-app-secondary">
-        Pantopus keeps the pages you&apos;ve opened in this tab&apos;s memory so going back is instant. It doesn&apos;t save your homes or messages in this browser.
+        Pantopus keeps recent messages encrypted in this browser for up to seven days (up to 20 conversations, 100 messages each). Photos and videos you receive are not saved. Pending messages and attachments stay encrypted until sent. Clearing saved data keeps pending messages.
       </p>
       <p className="text-sm text-app-secondary mt-2 mb-4">
         Signing out clears everything Pantopus kept in this browser. If you use a shared computer, sign out when you&apos;re done.

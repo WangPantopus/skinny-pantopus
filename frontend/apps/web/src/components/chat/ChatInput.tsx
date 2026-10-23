@@ -31,6 +31,7 @@ export default function ChatInput({ onSend, sending, disabled = false, placehold
   const inputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const emojiBtnRef = useRef<HTMLButtonElement>(null);
+  const retainingRef = useRef(false);
 
   // Starting a reply puts the cursor in the field.
   useEffect(() => {
@@ -40,7 +41,8 @@ export default function ChatInput({ onSend, sending, disabled = false, placehold
   const handleSend = async () => {
     const trimmed = text.trim();
     const hasFiles = selectedFiles.length > 0;
-    if ((!trimmed && !hasFiles) || sending || disabled) return;
+    if ((!trimmed && !hasFiles) || retainingRef.current || sending || disabled) return;
+    retainingRef.current = true;
 
     const savedText = trimmed;
     const savedFiles = [...selectedFiles];
@@ -60,9 +62,9 @@ export default function ChatInput({ onSend, sending, disabled = false, placehold
     } catch (e: unknown) {
       const errMsg = e instanceof Error ? e.message : 'Failed to send';
       setError(errMsg);
-      setText(savedText);
-      setSelectedFiles(savedFiles);
-    }
+      setText((current) => current ? `${savedText} ${current}`.trim() : savedText);
+      setSelectedFiles((current) => [...savedFiles, ...current]);
+    } finally { retainingRef.current = false; }
   };
 
   const handlePickFiles = (e: React.ChangeEvent<HTMLInputElement>) => {

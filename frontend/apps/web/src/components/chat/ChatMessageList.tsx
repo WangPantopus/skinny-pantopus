@@ -27,6 +27,7 @@ interface ChatMessageListProps {
   onReact?: (messageId: string, emoji: string) => void;
   /** Called when the user retries a failed (not refused) send */
   onRetry?: (messageId: string) => void;
+  onRemovePending?: (messageId: string) => void;
   /** Called when the user picks Reply on a message; leave it out where the composer can't send. */
   onReply?: (target: ChatReplyTarget) => void;
 }
@@ -59,6 +60,7 @@ export default function ChatMessageList({
   onImageClick,
   onReact,
   onRetry,
+  onRemovePending,
   onReply,
 }: ChatMessageListProps) {
   const scrollRef = useRef<HTMLElement | null>(null);
@@ -228,7 +230,7 @@ export default function ChatMessageList({
                 const reply = original ? replyQuote(original, isOwnMessage(original)) : undefined;
 
                 nodes.push(
-                  <ChatMessageBubble key={msg.id} msg={msg} isMine={isMine} showSender={showSender} reply={reply} onImageClick={onImageClick} onReact={onReact} onRetry={onRetry} onReply={onReply ? handleReply : undefined} />
+                  <ChatMessageBubble key={msg.id} msg={msg} isMine={isMine} showSender={showSender} reply={reply} onImageClick={onImageClick} onReact={onReact} onRetry={onRetry} onRemovePending={onRemovePending} onReply={onReply ? handleReply : undefined} />
                 );
 
                 return nodes;

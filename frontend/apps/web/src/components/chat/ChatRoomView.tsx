@@ -19,6 +19,7 @@ import MessageReactionBar from './MessageReactionBar';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import { launchFeatures } from '@/lib/featureFlags';
 import { fetchMe } from '@/lib/me';
+import { readCachedChatAccountId } from './chatStorage';
 import { queryKeys } from '@/lib/query-keys';
 
 // Launch cut #4 (Open Gigs): bidding is hidden, so the pre-bid chat limit does not point to it.
@@ -54,12 +55,16 @@ export default function ChatRoomView({
 
   // ── Load current user ─────────────────────────────────
   useEffect(() => {
-    (async () => {
-      try {
-        const userData = await fetchMe() as { id?: string };
-        setCurrentUserId(userData?.id || null);
-      } catch {}
-    })();
+    let cancelled = false;
+    let confirmed = false;
+    void readCachedChatAccountId().then((id) => {
+      if (!cancelled && !confirmed && id) setCurrentUserId(id);
+    }).catch(() => {});
+    void fetchMe().then((user) => {
+      confirmed = true;
+      if (!cancelled) setCurrentUserId(user?.id || null);
+    }).catch(() => {});
+    return () => { cancelled = true; };
   }, []);
 
   // ── Room info: kept with the conversation (the header shows at once on return) ──
@@ -461,6 +466,7 @@ export default function ChatRoomView({
           onImageClick={handleImageClick}
           onReact={handleReact}
           onRetry={chat.retryMessage}
+          onRemovePending={chat.removePendingMessage}
           onReply={inputDisabled || chat.sendRefusal ? undefined : chat.beginReply}
         />
       </div>
