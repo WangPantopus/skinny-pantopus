@@ -238,7 +238,6 @@ struct PlansMapSheet: View {
             handle
             PlansSheetContent(viewModel: viewModel, actions: actions, onStop: onStop)
                 .frame(maxHeight: .infinity, alignment: .top)
-                .coordinateSpace(.named(PlansSheetSpace.content))
         }
         .padding(.bottom, layout.bottomInset)
         .frame(maxWidth: .infinity)
@@ -393,8 +392,6 @@ struct PlansSheetScroll<Content: View>: View {
         ScrollViewReader { proxy in
             ScrollView {
                 content
-                    // The lines that set the stops measure from the top of the content, scrolled or not.
-                    .coordinateSpace(.named(PlansSheetSpace.content))
                     .id(PlansSheetSpace.scrollTop)
                     .onGeometryChange(for: CGFloat.self) { geometry in
                         max(geometry.frame(in: .named(PlansSheetSpace.scroll)).minY, 0)
@@ -411,9 +408,8 @@ struct PlansSheetScroll<Content: View>: View {
     }
 }
 
-/// The sheet's coordinate spaces: its content, for the lines that set its stops, and its list.
+/// The sheet's list: its coordinate space, for the pull past its top, and its top.
 private enum PlansSheetSpace {
-    static let content = "plansSheetContent"
     static let scroll = "plansSheetScroll"
     static let scrollTop = "plansSheetScrollTop"
 }
@@ -438,9 +434,10 @@ extension View {
         modifier(PlansSheetDragArea())
     }
 
-    /// The sheet's lowest stop shows `part` down to the bottom of this view (when `isOn`).
-    func plansSheetPeekEnd(_ part: PlansSheetPart, isOn: Bool = true) -> some View {
-        modifier(PlansSheetMeasure(peek: true, part: part, isOn: isOn))
+    /// The sheet's lowest stop shows `part` down to the bottom of this view,
+    /// which starts at the top of the content.
+    func plansSheetPeek(_ part: PlansSheetPart) -> some View {
+        modifier(PlansSheetMeasure(peek: true, part: part))
     }
 
     /// The middle stop fits this whole card or message (`part`) when there's room.
@@ -466,14 +463,13 @@ private struct PlansSheetDragArea: ViewModifier {
 private struct PlansSheetMeasure: ViewModifier {
     let peek: Bool
     let part: PlansSheetPart
-    var isOn = true
     @Environment(PlansSheetDrag.self) private var drag: PlansSheetDrag?
 
     func body(content: Content) -> some View {
-        content.onGeometryChange(for: CGFloat.self) { [peek] geometry in
-            peek ? geometry.frame(in: .named(PlansSheetSpace.content)).maxY : geometry.size.height
-        } action: { value in
-            if isOn { drag?.measured(value, peek: peek, part: part) }
+        // A height, never a position: a frame inside the sheet trails the sheet's offset
+        // by an update while it moves, so the glide a measure starts would move the stop.
+        content.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { value in
+            drag?.measured(value, peek: peek, part: part)
         }
     }
 }

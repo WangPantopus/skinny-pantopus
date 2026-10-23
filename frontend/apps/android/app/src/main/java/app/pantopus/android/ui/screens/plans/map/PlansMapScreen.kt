@@ -313,7 +313,11 @@ private fun PlansSheetHost(
                     state,
                     onHost = actions.onHost,
                     onInvite = actions.onInvite,
-                    onShowElsewhere = { onZoomOut(state.elsewhere?.miles ?: ELSEWHERE_DEFAULT_MILES) },
+                    // The sheet goes down so the town with plans shows in the open map (as on iOS).
+                    onShowElsewhere = {
+                        onStop(PlanSheetStop.Peek)
+                        onZoomOut(state.elsewhere?.miles ?: ELSEWHERE_DEFAULT_MILES)
+                    },
                 )
             current == PlanSheetStop.Peek ->
                 PlansPeekContent(
@@ -425,7 +429,6 @@ private fun PlansMap(
     }
     LaunchedEffect(zoomOutMiles) {
         if (zoomOutMiles <= 0 || location == null) return@LaunchedEffect
-        onZoomedOut()
         // Show a town 5 to 15 miles away (F4 "Show"): zoom out until that radius fits.
         val zoom =
             (START_ZOOM - kotlin.math.log2((zoomOutMiles + 1) / START_RADIUS_MILES)).toFloat().coerceIn(
@@ -438,6 +441,8 @@ private fun PlansMap(
         )
         delay(VIEWPORT_SETTLE_MS)
         reportViewport()
+        // Last: clearing the request changes this effect's key, which cancels the zoom still running.
+        onZoomedOut()
     }
     LaunchedEffect(recenter) {
         if (recenter == 0 || location == null) return@LaunchedEffect

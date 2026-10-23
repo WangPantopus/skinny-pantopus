@@ -33,27 +33,29 @@ struct PlanPinCard: View {
     private func content(_ card: PlanCardDTO) -> some View {
         PlansSheetScroll {
             VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    PlanTypeTag(kind: card.kind)
-                    Spacer()
-                    closeButton
+                // Pulled down, the card keeps its type, title, when and where over the map.
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        PlanTypeTag(kind: card.kind)
+                        Spacer()
+                        closeButton
+                    }
+                    Button { actions.openPlan(card, card.id, .view) } label: {
+                        Text(card.title)
+                            .planFont(.h3)
+                            .foregroundStyle(Theme.Color.appText)
+                            .multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Opens the plan")
+                    Text(PlanCardLines.whenWhere(card))
+                        .planFont(.small)
+                        .monospacedDigit()
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                Button { actions.openPlan(card, card.id, .view) } label: {
-                    Text(card.title)
-                        .planFont(.h3)
-                        .foregroundStyle(Theme.Color.appText)
-                        .multilineTextAlignment(.leading)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .buttonStyle(.plain)
-                .accessibilityHint("Opens the plan")
-                Text(PlanCardLines.whenWhere(card))
-                    .planFont(.small)
-                    .monospacedDigit()
-                    .foregroundStyle(Theme.Color.appTextSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    // Pulled down, the card keeps its type, title, when and where over the map.
-                    .plansSheetPeekEnd(.card(planId))
+                .plansSheetPeek(.card(planId))
                 PlanHostRow(host: card.host, kind: card.kind)
                 // Someone already in (or hosting) doesn't need to hear how to get in.
                 PlanSpotsBlock(
@@ -110,7 +112,7 @@ struct PlanPinCard: View {
             Shimmer(width: nil, height: 40, cornerRadius: Radii.lg)
         }
         .padding(.bottom, Spacing.s4)
-        .plansSheetPeekEnd(.card(planId))
+        .plansSheetPeek(.card(planId))
         .plansSheetFit(.card(planId))
         .plansSheetDragArea()
         .accessibilityElement()
@@ -131,7 +133,7 @@ struct PlanPinCard: View {
                 .foregroundStyle(Theme.Color.appTextSecondary)
         }
         .padding(.bottom, Spacing.s4)
-        .plansSheetPeekEnd(.card(planId))
+        .plansSheetPeek(.card(planId))
         .plansSheetFit(.card(planId))
         .plansSheetDragArea()
     }

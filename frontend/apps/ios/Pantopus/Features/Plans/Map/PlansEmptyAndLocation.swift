@@ -17,18 +17,21 @@ struct PlansEmptyCard: View {
     var body: some View {
         PlansSheetScroll {
             VStack(alignment: .leading, spacing: Spacing.s3) {
-                VStack(alignment: .leading, spacing: Spacing.s1) {
-                    Text("Nothing planned yet")
-                        .planFont(.h3)
-                        .foregroundStyle(Theme.Color.appText)
-                        .accessibilityAddTraits(.isHeader)
-                    Text("Plans here start with one neighbor. Yours could be the first.")
-                        .planFont(.small)
-                        .foregroundStyle(Theme.Color.appTextSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                // The lowest stop shows the title and the suggestion over the map.
+                VStack(alignment: .leading, spacing: Spacing.s3) {
+                    VStack(alignment: .leading, spacing: Spacing.s1) {
+                        Text("Nothing planned yet")
+                            .planFont(.h3)
+                            .foregroundStyle(Theme.Color.appText)
+                            .accessibilityAddTraits(.isHeader)
+                        Text("Plans here start with one neighbor. Yours could be the first.")
+                            .planFont(.small)
+                            .foregroundStyle(Theme.Color.appTextSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    watchNudge
                 }
-                // The lowest stop shows down to here: the title and the suggestion over the map.
-                watchNudge.plansSheetPeekEnd(.empty)
+                .plansSheetPeek(.empty)
                 Text("Or start something else")
                     .planFont(.small)
                     .foregroundStyle(Theme.Color.appTextSecondary)

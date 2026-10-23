@@ -40,6 +40,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
@@ -243,7 +244,8 @@ fun PlanSheet(
     reduceMotion: Boolean = false,
     content: @Composable ColumnScope.(PlanSheetStop) -> Unit,
 ) {
-    BoxWithConstraints(modifier = modifier) {
+    // The sheet hangs below the box at its lower stops: clip it there, so nothing shows through the bottom bar.
+    BoxWithConstraints(modifier = modifier.clipToBounds()) {
         val density = LocalDensity.current
         val box = with(density) { maxHeight.toPx() }
         val tops =
