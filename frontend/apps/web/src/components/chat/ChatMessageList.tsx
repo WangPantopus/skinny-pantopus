@@ -14,6 +14,7 @@ interface ChatMessageListProps {
   hasMore: boolean;
   loadingOlder: boolean;
   onLoadOlder: () => void;
+  onVisibleMessage?: (messageId: string) => void;
   /** Check if a message is from the current user */
   isOwnMessage: (msg: ChatMessage) => boolean;
   /** Optional extra items to render before the main messages (e.g. historical messages) */
@@ -51,6 +52,7 @@ export default function ChatMessageList({
   hasMore,
   loadingOlder,
   onLoadOlder,
+  onVisibleMessage,
   isOwnMessage,
   headerContent,
   renderTopicDivider,
@@ -126,6 +128,30 @@ export default function ChatMessageList({
     followingRef.current = el.scrollHeight - el.scrollTop - el.clientHeight <= FOLLOW_SLACK_PX;
     if (followingRef.current) setNewBelow(false);
   }, []);
+
+  useEffect(() => {
+    const root = scrollRef.current;
+    if (!root || !onVisibleMessage || typeof IntersectionObserver === 'undefined') return;
+    const order = new Map(messages.map((message, index) => [String(message.id), index]));
+    const visible = new Set<string>();
+    const report = () => {
+      if (document.visibilityState !== 'visible') return;
+      let newest: string | undefined;
+      for (const id of visible) if (newest === undefined || (order.get(id) ?? -1) > (order.get(newest) ?? -1)) newest = id;
+      if (newest) onVisibleMessage(newest);
+    };
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        const id = (entry.target as HTMLElement).dataset.chatMessageId;
+        if (!id) continue;
+        if (entry.isIntersecting) visible.add(id); else visible.delete(id);
+      }
+      report();
+    }, { root, threshold: 0.01 });
+    root.querySelectorAll('[data-chat-message-id]').forEach((element) => observer.observe(element));
+    document.addEventListener('visibilitychange', report);
+    return () => { observer.disconnect(); document.removeEventListener('visibilitychange', report); };
+  }, [messages, onVisibleMessage]);
 
   return (
     <section

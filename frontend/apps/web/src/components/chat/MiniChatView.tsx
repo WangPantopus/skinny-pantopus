@@ -167,6 +167,7 @@ export default function MiniChatView({ roomId, otherUserId, name, avatar, onBack
           hasMore={chat.hasMore}
           loadingOlder={chat.loadingOlder}
           onLoadOlder={chat.loadOlder}
+          onVisibleMessage={chat.onVisibleMessage}
           isOwnMessage={isOwnMessage}
           onReact={handleReact}
           onReply={chat.sendRefusal ? undefined : chat.beginReply}

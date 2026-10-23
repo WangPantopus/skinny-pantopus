@@ -155,7 +155,6 @@ export default function ChatRoomView({
     let cancelled = false;
     (async () => {
       try {
-        try { await ((api.chat as Record<string, any>).markConversationAsRead as ((id: string, opts?: Record<string, any>) => Promise<void>) | undefined)?.(historyPeerId, { ...(asBusinessUserId ? { asBusinessUserId } : {}) }); } catch {}
         const convResp = await ((api.chat as Record<string, any>).getConversationMessages as ((id: string, opts?: Record<string, any>) => Promise<{ messages?: ChatMessage[]; roomIds?: string[] }>) | undefined)?.(historyPeerId, {
           limit: 1000,
           ...(asBusinessUserId ? { asBusinessUserId } : {}),
@@ -285,11 +284,12 @@ export default function ChatRoomView({
   const otherUser = (otherParticipant as Record<string, any>)?.user as Record<string, any> | undefined;
   // A Support Train's chat goes by the train's title, and its title opens the train.
   const supportTrainId = roomInfo?.type === 'support_train' ? roomInfo.support_train_id || null : null;
-  const chatTitle = (supportTrainId ? roomInfo?.name : null)
-    || chatPersonName(otherUser)
+  const isPersonRoom = roomInfo?.type === 'direct' || roomInfo?.type === 'gig';
+  const chatTitle = (!isPersonRoom ? roomInfo?.name || roomInfo?.room_name : null)
+    || (isPersonRoom ? chatPersonName(otherUser) : null)
     || roomInfo?.name
     || 'Conversation';
-  const otherProfileHref = supportTrainId ? `/app/support-trains/${supportTrainId}` : chatPersonHref(otherUser);
+  const otherProfileHref = supportTrainId ? `/app/support-trains/${supportTrainId}` : isPersonRoom ? chatPersonHref(otherUser) : null;
 
   // ── Historical messages header ────────────────────────
   const historicalHeader = historicalMessages.length > 0 ? (
@@ -455,6 +455,7 @@ export default function ChatRoomView({
           hasMore={chat.hasMore}
           loadingOlder={chat.loadingOlder}
           onLoadOlder={chat.loadOlder}
+          onVisibleMessage={chat.onVisibleMessage}
           isOwnMessage={isOwnMessage}
           headerContent={historicalHeader}
           onImageClick={handleImageClick}

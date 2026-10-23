@@ -67,6 +67,7 @@ function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClic
   const isOptimistic = msg._optimistic;
   const isFailed = msg._failed;
   const isRefused = msg._refused;
+  const receipt = isMine ? ((msg as ChatMessage & { read_at?: string }).read_at ? 'Read' : 'Sent') : null;
   // Launch cut #3 (Marketplace): a shared listing card is not shown.
   if (msgType === 'listing_offer' && !launchFeatures.marketplace) return null;
 
@@ -171,7 +172,7 @@ function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClic
   // Rich card types get a special rendering
   if (msgType === 'location' || msgType === 'gig_offer' || msgType === 'listing_offer') {
     return (
-      <div className={`flex mb-1 ${isMine ? 'justify-end' : 'justify-start'}`}>
+      <div data-chat-message-id={msg.id} className={`flex mb-1 ${isMine ? 'justify-end' : 'justify-start'}`}>
         <div
           className={`max-w-[75%] ${isMine ? 'order-1' : ''} relative`}
           onMouseEnter={() => setHovered(true)}
@@ -195,7 +196,7 @@ function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClic
             <ChatRichCard msgType={msgType} metadata={metadata} msgText={msgText} isMine={isMine} />
           </div>
           <div className={`text-[10px] text-app-muted mt-0.5 ${isMine ? 'text-right mr-1' : 'ml-1'}`}>
-            {isEdited && <span>edited · </span>}{ts}
+            {isEdited && <span>edited · </span>}{ts}{receipt && ` · ${receipt}`}
           </div>
           {reactionBar}
           {actionsMenu}
@@ -209,7 +210,7 @@ function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClic
 
   // Standard text + attachment message
   return (
-    <div className={`flex mb-1 ${isMine ? 'justify-end' : 'justify-start'}`}>
+    <div data-chat-message-id={msg.id} className={`flex mb-1 ${isMine ? 'justify-end' : 'justify-start'}`}>
       <div
         className={`max-w-[75%] ${isMine ? 'order-1' : ''} relative`}
         onMouseEnter={() => setHovered(true)}
@@ -352,7 +353,7 @@ function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClic
                 </button>
               )}
             </span>
-          ) : isOptimistic ? 'Sending…' : <>{isEdited && <span>edited · </span>}{ts}</>}
+          ) : isOptimistic ? 'Sending…' : <>{isEdited && <span>edited · </span>}{ts}{receipt && ` · ${receipt}`}</>}
         </div>
         {reactionBar}
         {actionsMenu}
@@ -364,16 +365,11 @@ function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClic
 }
 
 export default React.memo(ChatMessageBubble, (prev, next) => {
-  return prev.msg.id === next.msg.id
-    && prev.msg.is_edited === next.msg.is_edited
-    && prev.msg._optimistic === next.msg._optimistic
-    && prev.msg._failed === next.msg._failed
-    && prev.msg._refused === next.msg._refused
+  return prev.msg === next.msg
     && prev.isMine === next.isMine
     && prev.showSender === next.showSender
     && prev.reply?.senderName === next.reply?.senderName
     && prev.reply?.text === next.reply?.text
-    && prev.msg.reactions === next.msg.reactions
     && prev.onReact === next.onReact
     && prev.onImageClick === next.onImageClick
     && prev.onRetry === next.onRetry

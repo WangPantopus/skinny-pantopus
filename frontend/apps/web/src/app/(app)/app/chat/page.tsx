@@ -21,6 +21,7 @@ import { fetchMe } from '@/lib/me';
 import { conversationsQuery as conversationsListQuery, type ConversationsReply } from '@/lib/conversations';
 
 type IncomingChatMessage = {
+  id?: string;
   room_id?: string;
   message?: string;
   message_text?: string;
@@ -127,7 +128,7 @@ export default function ChatListPage() {
   // Refs for batching badge syncs and throttling reload
   const badgeSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastReloadTimeRef = useRef(0);
-  const activeConversationRoomRef = useRef<string | null>(null);
+  const seenMessageEvents = useRef(new Set<string>());
 
   // ── Conversations via useQuery ─────────────────────────────
   const conversationsKey = queryKeys.conversations();
@@ -265,15 +266,14 @@ export default function ChatListPage() {
   }, [newChatOpen, newChatQuery]);
 
   const handleIncomingListMessage = useCallback((msg: IncomingChatMessage) => {
-    if (!msg?.room_id) return;
+    if (!msg?.room_id || !msg.id || seenMessageEvents.current.has(String(msg.id))) return;
+    seenMessageEvents.current.add(String(msg.id));
+    if (seenMessageEvents.current.size > 1000) seenMessageEvents.current.delete(seenMessageEvents.current.values().next().value!);
     const roomId = String(msg.room_id);
     const preview = msg.message || msg.message_text || '';
     const timestamp = msg.created_at || new Date().toISOString();
     const senderId = String(msg.user_id || msg.sender_id || msg?.sender?.id || '');
     const isOwn = !!currentUserId && senderId === String(currentUserId);
-    // Don't increment unread for the conversation the user is currently viewing
-    // (the useChatMessages hook is already handling it via its own socket listener)
-    const isActiveRoom = activeConversationRoomRef.current === roomId;
     let shouldReload = false;
     setTotalMessages((prev) => prev + 1);
 
@@ -293,16 +293,17 @@ export default function ChatListPage() {
 
       const updated = [...prev];
       const conv = { ...updated[idx] };
-      conv.last_message_preview = String(preview);
-      conv.last_message_at = timestamp;
-      if (!isOwn && !isActiveRoom) conv.total_unread = (conv.total_unread || 0) + 1;
+      if (!conv.last_message_at || Date.parse(timestamp) >= Date.parse(conv.last_message_at)) {
+        conv.last_message_preview = String(preview);
+        conv.last_message_at = timestamp;
+      }
+      if (!isOwn) conv.total_unread = (conv.total_unread || 0) + 1;
 
-      // Move to top
-      updated.splice(idx, 1);
-      updated.unshift(conv as UnifiedConversationItem);
+      updated[idx] = conv as UnifiedConversationItem;
+      updated.sort((a, b) => Date.parse(b.last_message_at || '1970-01-01') - Date.parse(a.last_message_at || '1970-01-01'));
       return {
         conversations: updated,
-        totalUnread: (!isOwn && !isActiveRoom) ? prevTotalUnread + 1 : prevTotalUnread,
+        totalUnread: (!isOwn) ? prevTotalUnread + 1 : prevTotalUnread,
       };
     });
     // Throttle full reload to at most once per 10 seconds
@@ -326,28 +327,9 @@ export default function ChatListPage() {
   };
 
   const handleConversationPress = (conv: UnifiedConversationItem) => {
-    const unread = Number(conv.total_unread || 0);
-    if (unread > 0) {
-      updateConversations((prev, prevTotalUnread) => ({
-        conversations: prev.map((item) => {
-          const sameConv = item._type === 'room' && conv._type === 'room'
-            ? String(item.id) === String(conv.id)
-            : item._type === 'conversation' && conv._type === 'conversation'
-            ? String(item.other_participant_id) === String(conv.other_participant_id)
-            : false;
-          return sameConv ? { ...item, total_unread: 0 } : item;
-        }),
-        totalUnread: Math.max(0, prevTotalUnread - unread),
-      }));
-    }
-
-    // Only unread conversations need a read receipt here; the conversation also
-    // marks itself read once it loads.
     if (conv._type === 'room') {
-      if (unread > 0) void api.chat.markMessagesAsRead(String(conv.id)).catch(() => {});
       router.push(`/app/chat/${conv.id}`);
     } else {
-      if (unread > 0) void api.chat.markConversationAsRead(String(conv.other_participant_id)).catch(() => {});
       router.push(`/app/chat/conversation/${conv.other_participant_id}`);
     }
   };

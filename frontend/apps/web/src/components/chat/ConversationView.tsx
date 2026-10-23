@@ -431,6 +431,7 @@ export default function ConversationView({
           hasMore={chat.hasMore}
           loadingOlder={chat.loadingOlder}
           onLoadOlder={chat.loadOlder}
+          onVisibleMessage={chat.onVisibleMessage}
           isOwnMessage={isOwnMessage}
           renderTopicDivider={renderTopicDivider}
           onImageClick={handleImageClick}

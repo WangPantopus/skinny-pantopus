@@ -15,84 +15,70 @@ export { getDateKey, formatDateLabel };
 
 // ── Helpers ─────────────────────────────────────────────────
 
+/** Same total order as the API cursor, including sub-millisecond timestamps. */
+function compareMessages(a: ChatMessage, b: ChatMessage): number {
+  const time = messageTime(a) - messageTime(b);
+  if (time) return time;
+  const fraction = (m: ChatMessage) => (m.created_at?.match(/\.(\d+)/)?.[1] || '').padEnd(6, '0');
+  return fraction(a).localeCompare(fraction(b)) || String(a.id).localeCompare(String(b.id));
+}
+
 function sortAsc(items: ChatMessage[]): ChatMessage[] {
-  return [...items].sort((a, b) => {
-    const ta = a?.created_at ? new Date(a.created_at).getTime() : 0;
-    const tb = b?.created_at ? new Date(b.created_at).getTime() : 0;
-    return ta - tb;
-  });
+  return [...items].sort(compareMessages);
+}
+
+function clientMessageId(message: ChatMessage): string | undefined {
+  const id = (message as Record<string, any>).client_message_id || (message as Record<string, any>)._clientMessageId;
+  return id ? `${message.room_id}:${message.user_id || message.sender_id || message.sender?.id}:${id}` : undefined;
 }
 
 function mergeMessageRecord(existing: ChatMessage | undefined, incoming: ChatMessage): ChatMessage {
-  if (!existing) return incoming;
-
-  const existingWithReactions = existing as unknown as { reactions?: unknown[] };
-  const incomingWithReactions = incoming as unknown as { reactions?: unknown[] };
   const merged = { ...existing, ...incoming } as ChatMessage;
-  if (incomingWithReactions.reactions === undefined && existingWithReactions.reactions !== undefined) {
-    (merged as unknown as { reactions?: unknown }).reactions = existingWithReactions.reactions;
-  } else if (
-    Array.isArray(incomingWithReactions.reactions) &&
-    incomingWithReactions.reactions.length === 0 &&
-    Array.isArray(existingWithReactions.reactions) &&
-    existingWithReactions.reactions.length > 0
-  ) {
-    (merged as unknown as { reactions?: unknown }).reactions = existingWithReactions.reactions;
+  // Omitted reactions are a partial socket payload. An explicit [] is authoritative,
+  // including when the last reaction was removed while this device was offline.
+  if (incoming.reactions === undefined && existing?.reactions !== undefined) merged.reactions = existing.reactions;
+  if (!(incoming as Record<string, any>)._optimistic && !(incoming as Record<string, any>)._failed) {
+    Object.assign(merged, { _optimistic: false, _failed: false, _refused: false });
   }
   return merged;
 }
 
+/** Every source retires the same pending send, including history after a lost ACK. */
 function mergeMessages(prev: ChatMessage[], next: ChatMessage[]): ChatMessage[] {
-  const map = new Map<string, ChatMessage>();
-  for (const m of prev) if (m?.id) map.set(String(m.id), m);
-  for (const m of next) {
-    if (!m?.id) continue;
-    const key = String(m.id);
-    map.set(key, mergeMessageRecord(map.get(key), m));
+  const byId = new Map<string, ChatMessage>();
+  const byClientId = new Map<string, string>();
+  for (const message of [...prev, ...next]) {
+    if (!message?.id) continue;
+    const id = String(message.id);
+    const clientId = clientMessageId(message);
+    const pendingId = clientId ? byClientId.get(clientId) : undefined;
+    const previous = byId.get(id) || (pendingId ? byId.get(pendingId) : undefined);
+    // A late pending state must never replace a message already accepted by the server.
+    if (previous && !(previous as Record<string, any>)._optimistic && !(previous as Record<string, any>)._failed
+        && ((message as Record<string, any>)._optimistic || (message as Record<string, any>)._failed)) continue;
+    if (pendingId && pendingId !== id) byId.delete(pendingId);
+    byId.set(id, mergeMessageRecord(previous, message));
+    if (clientId) byClientId.set(clientId, id);
   }
-  return sortAsc(Array.from(map.values()));
+  return sortAsc(Array.from(byId.values()));
 }
 
-// Binary-insert a single message into a sorted-ascending array.
-// - If id exists, merges reactions via mergeMessageRecord in place.
-// - Fast path: newest message → O(1) append.
-// - Otherwise binary-searches insertion point by created_at → O(log n).
-// Used for single-message socket events; mergeMessages() is still used
-// for batch operations (initial load, backfill, poll, older fetch).
-function insertMessageSorted(messages: ChatMessage[], newMsg: ChatMessage): ChatMessage[] {
-  if (!newMsg?.id) return messages;
-  const newIdStr = String(newMsg.id);
-
-  // If the id already exists, merge (preserves reactions) in place.
-  const existingIdx = messages.findIndex((m) => String(m?.id) === newIdStr);
-  if (existingIdx !== -1) {
-    const result = messages.slice();
-    result[existingIdx] = mergeMessageRecord(messages[existingIdx], newMsg);
-    return result;
-  }
-
-  const newTime = newMsg?.created_at ? new Date(newMsg.created_at).getTime() : 0;
-  const n = messages.length;
-  if (n === 0) return [newMsg];
-
-  const lastTime = messages[n - 1]?.created_at ? new Date(messages[n - 1].created_at).getTime() : 0;
-  if (newTime >= lastTime) {
-    // Fast path: newest message — simple append.
-    return [...messages, newMsg];
-  }
-
-  // Binary search for insertion index.
+function insertMessageSorted(messages: ChatMessage[], incoming: ChatMessage): ChatMessage[] {
+  if (!incoming?.id) return messages;
+  const clientId = clientMessageId(incoming);
+  const existing = messages.find((m) => String(m.id) === String(incoming.id)
+    || (clientId && clientMessageId(m) === clientId));
+  const message = mergeMessageRecord(existing, incoming);
+  const result = existing ? messages.filter((m) => String(m.id) !== String(incoming.id)
+    && !(clientId && clientMessageId(m) === clientId)) : messages.slice();
   let lo = 0;
-  let hi = n;
+  let hi = result.length;
   while (lo < hi) {
     const mid = (lo + hi) >> 1;
-    const midTime = messages[mid]?.created_at ? new Date(messages[mid].created_at).getTime() : 0;
-    if (midTime < newTime) lo = mid + 1;
+    if (compareMessages(result[mid], message) < 0) lo = mid + 1;
     else hi = mid;
   }
-
-  const result = messages.slice();
-  result.splice(lo, 0, newMsg);
+  result.splice(lo, 0, message);
   return result;
 }
 
@@ -109,28 +95,21 @@ interface ConversationSnapshot {
   peer: User | null;
 }
 
-function conversationCacheKey(roomId?: string, otherUserId?: string, topicId?: string | null, asBusinessUserId?: string) {
-  if (roomId) return queryKeys.chatMessages(`room:${roomId}:${asBusinessUserId ?? 'me'}`);
-  if (otherUserId) return queryKeys.chatMessages(`person:${otherUserId}:${topicId ?? 'all'}`);
+function conversationCacheKey(roomId?: string, otherUserId?: string, topicId?: string | null, asBusinessUserId?: string, accountId?: string | null) {
+  if (roomId) return queryKeys.chatMessages(`${accountId ?? 'loading'}:room:${roomId}:${asBusinessUserId ?? 'me'}`);
+  if (otherUserId) return queryKeys.chatMessages(`${accountId ?? 'loading'}:person:${otherUserId}:${topicId ?? 'all'}:${asBusinessUserId ?? 'me'}`);
   return null;
 }
 
 const messageTime = (m: ChatMessage) => (m?.created_at ? new Date(m.created_at).getTime() : 0);
-const isUnsent = (m: ChatMessage) => Boolean((m as Record<string, any>)._failed);
+const isUnsent = (m: ChatMessage) => Boolean((m as Record<string, any>)._failed || (m as Record<string, any>)._optimistic);
 
-/**
- * A fresh first page replaces the newest part of a kept conversation: messages
- * deleted meanwhile go, older pages already loaded stay, unsent ones stay.
- * When more than a page arrived while away (`gap`), only the page is kept.
- */
-function mergeFirstPage(kept: ChatMessage[], page: ChatMessage[], pageSize: number): { messages: ChatMessage[]; gap: boolean } {
-  const pageIds = new Set(page.map((m) => String(m.id)));
-  const complete = page.length < pageSize;
-  const oldest = page.length ? Math.min(...page.map(messageTime)) : Infinity;
-  const keptNewest = Math.max(0, ...kept.filter((m) => !isUnsent(m)).map(messageTime));
-  const gap = !complete && oldest > keptNewest;
-  const survivors = kept.filter((m) => isUnsent(m) || pageIds.has(String(m.id)) || (!complete && !gap && messageTime(m) < oldest));
-  return { messages: mergeMessages(survivors, page), gap };
+interface MessagePage {
+  messages: ChatMessage[];
+  hasMore: boolean;
+  nextCursor: string | null;
+  roomIds?: string[];
+  sendRefusal?: { error?: string } | null;
 }
 
 type ChatMessageLike = Partial<ChatMessage> & {
@@ -256,6 +235,7 @@ export interface UseChatMessagesReturn {
   retryMessage: (messageId: string) => Promise<void>;
   loadOlder: () => Promise<void>;
   refresh: () => Promise<void>;
+  onVisibleMessage: (messageId: string) => void;
   /** `reacted`: the state asked for; by default the opposite of the message's current state. */
   reactToMessage: (messageId: string, emoji: string, reacted?: boolean) => Promise<void>;
 }
@@ -295,8 +275,14 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
   const isRoomMode = Boolean(roomId);
 
   const queryClient = useQueryClient();
-  const cacheKey = useMemo(() => conversationCacheKey(roomId, otherUserId, topicId, asBusinessUserId), [roomId, otherUserId, topicId, asBusinessUserId]);
-  const cacheKeyId = cacheKey ? JSON.stringify(cacheKey) : '';
+  const cacheKey = useMemo(() => conversationCacheKey(roomId, otherUserId, topicId, asBusinessUserId, currentUserId), [roomId, otherUserId, topicId, asBusinessUserId, currentUserId]);
+  const cacheKeyId = `${currentUserId ?? ''}:${cacheKey ? JSON.stringify(cacheKey) : ''}`;
+  const scopeRef = useRef({ key: cacheKeyId, generation: 0 });
+  if (scopeRef.current.key !== cacheKeyId) scopeRef.current = { key: cacheKeyId, generation: scopeRef.current.generation + 1 };
+  const scopeGeneration = scopeRef.current.generation;
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+  const isCurrentScope = useCallback(() => mountedRef.current && scopeRef.current.key === cacheKeyId && scopeRef.current.generation === scopeGeneration, [cacheKeyId, scopeGeneration]);
   const readSnapshot = useCallback(
     () => (cacheKey ? queryClient.getQueryData<ConversationSnapshot>(cacheKey) : undefined),
     [queryClient, cacheKey],
@@ -337,51 +323,31 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
   const joinedRoomsRef = useRef<Set<string>>(new Set());
   const prevConnectedRef = useRef(connected);
   const [roomJoinGeneration, setRoomJoinGeneration] = useState(0);
-  // Incremented on reconnect; stale poll responses with an older generation are discarded
-  const pollGenerationRef = useRef(0);
 
   // ── Fetch functions ─────────────────────────────────────
 
-  const fetchMessages = useCallback(async (
-    cursor?: { before?: string; after?: string },
-    rethrow = false,
-  ): Promise<ChatMessage[]> => {
-    try {
-      const before = cursor?.before;
-      const after = cursor?.after;
-      if (isRoomMode && roomId) {
-        const resp = await (api.chat as Record<string, any> & typeof api.chat).getMessages?.(roomId, {
-          limit: 100,
-          ...(before ? { before } : {}),
-          ...(after ? { after } : {}),
-          ...(asBusinessUserId ? { asBusinessUserId } : {}),
-        }) as Record<string, any> | undefined;
-        if (resp?.nextCursor !== undefined) nextCursorRef.current = (resp.nextCursor as string | null);
-        if (resp && 'sendRefusal' in resp) setSendRefusal((resp.sendRefusal as { error?: string } | null)?.error || null);
-        return (resp?.messages as ChatMessage[]) || [];
-      } else if (otherUserId) {
-        const params: Record<string, any> = { limit: 100 };
-        if (before) params.before = before;
-        if (after) params.after = after;
-        if (topicId) params.topicId = topicId;
-        const result = await api.chat.getConversationMessages(otherUserId, params as Parameters<typeof api.chat.getConversationMessages>[1]) as Record<string, any>;
-        if (result?.nextCursor !== undefined) nextCursorRef.current = (result.nextCursor as string | null);
-        if (result && 'sendRefusal' in result) setSendRefusal((result.sendRefusal as { error?: string } | null)?.error || null);
-        const rawRoomIds = Array.isArray(result?.roomIds) ? (result.roomIds as unknown[]) : [];
-        const nextRoomIds = Array.from(new Set(rawRoomIds.map((id) => String(id)).filter(Boolean))).sort();
-        setConversationRoomIds((prev) => (
-          prev.length === nextRoomIds.length && prev.every((id, i) => id === nextRoomIds[i])
-            ? prev
-            : nextRoomIds
-        ));
-        return (result?.messages as ChatMessage[]) || [];
-      }
-      return [];
-    } catch (err) {
-      if (rethrow) throw err;
-      return [];
-    }
+  const fetchMessages = useCallback(async (cursor?: { before?: string }): Promise<MessagePage> => {
+    const params = { limit: 100, ...cursor, ...(asBusinessUserId ? { asBusinessUserId } : {}) };
+    const result = isRoomMode && roomId
+      ? await api.chat.getMessages(roomId, params)
+      : otherUserId
+        ? await api.chat.getConversationMessages(otherUserId, { ...params, ...(topicId ? { topicId } : {}) })
+        : { messages: [], hasMore: false };
+    return { ...result, nextCursor: result.nextCursor ?? null };
   }, [isRoomMode, roomId, otherUserId, topicId, asBusinessUserId]);
+
+  // Network reads have no side effects: stale responses cannot corrupt another
+  // conversation's pagination, room subscriptions, or send permission.
+  const applyPage = useCallback((page: MessagePage) => {
+    if (!isCurrentScope()) return;
+    nextCursorRef.current = page.nextCursor;
+    setHasMore(page.hasMore);
+    if ('sendRefusal' in page) setSendRefusal(page.sendRefusal?.error || null);
+    if (page.roomIds) {
+      const ids = Array.from(new Set(page.roomIds.map(String))).sort();
+      setConversationRoomIds((previous) => previous.join(',') === ids.join(',') ? previous : ids);
+    }
+  }, [isCurrentScope]);
 
   useEffect(() => {
     if (isRoomMode || !otherUserId) {
@@ -389,44 +355,84 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     }
   }, [isRoomMode, otherUserId]);
 
+  const visibleThroughRef = useRef<ChatMessage | null>(null);
+  const readAcknowledgedRef = useRef<string | null>(null);
   const markRead = useCallback(async () => {
+    if (!isCurrentScope() || topicId || document.visibilityState !== 'visible') return;
+    const through = visibleThroughRef.current;
+    if (!through || isUnsent(through) || readAcknowledgedRef.current === through.id) return;
     try {
-      if (isRoomMode && roomId) {
-        if (asBusinessUserId && (api.chat as Record<string, any>).markMessagesAsReadForIdentity) {
-          await ((api.chat as Record<string, any>).markMessagesAsReadForIdentity as (roomId: string, opts: Record<string, any>) => Promise<void>)(roomId, { asBusinessUserId });
-        } else {
-          await ((api.chat as Record<string, any>).markMessagesAsRead as ((roomId: string) => Promise<void>) | undefined)?.(roomId);
-        }
-      } else if (otherUserId) {
-        await api.chat.markConversationAsRead(otherUserId);
-      }
+      const options = { throughMessageId: String(through.id), ...(asBusinessUserId ? { asBusinessUserId } : {}) };
+      if (isRoomMode && roomId) await api.chat.markMessagesAsReadForIdentity(roomId, options);
+      else if (otherUserId) await api.chat.markConversationAsRead(otherUserId, options);
+      if (isCurrentScope()) readAcknowledgedRef.current = String(through.id);
     } catch {}
-  }, [isRoomMode, roomId, otherUserId, asBusinessUserId]);
+  }, [isRoomMode, roomId, otherUserId, asBusinessUserId, topicId, isCurrentScope]);
 
-  // Debounced wrapper: collapses rapid markRead calls into one trailing call
-  const debouncedMarkRead = useCallback(() => {
+  const onVisibleMessage = useCallback((messageId: string) => {
+    if (!isCurrentScope() || topicId) return;
+    const message = messagesRef.current.find((m) => String(m.id) === messageId);
+    if (!message || isUnsent(message)) return;
+    if (!visibleThroughRef.current || compareMessages(message, visibleThroughRef.current) > 0) visibleThroughRef.current = message;
     if (markReadTimerRef.current) clearTimeout(markReadTimerRef.current);
     markReadTimerRef.current = setTimeout(() => {
-      markRead();
+      void markRead();
       markReadTimerRef.current = null;
-    }, 2000);
-  }, [markRead]);
+    }, 250);
+  }, [markRead, topicId, isCurrentScope]);
 
   // Clean up debounce timer on unmount
   useEffect(() => {
     return () => {
       if (markReadTimerRef.current) clearTimeout(markReadTimerRef.current);
     };
-  }, []);
+  }, [cacheKeyId]);
 
   // ── Initial load ────────────────────────────────────────
 
-  const refresh = useCallback(async () => {
-    const msgs = await fetchMessages();
-    setMessages(prev => mergeMessages(prev, msgs));
-    setHasMore(msgs.length >= 100);
-    await markRead();
-  }, [fetchMessages, markRead]);
+  const refreshInFlightRef = useRef<{ scope: number; promise: Promise<void> } | null>(null);
+  // Socket edits/deletes/new sends that arrive during a history read win over its
+  // older snapshot. Reset per scope; no message content is persisted here.
+  const liveChangesRef = useRef(new Map<string, number>());
+  const changeVersionRef = useRef(0);
+  const noteLiveChange = useCallback((id: string) => {
+    liveChangesRef.current.set(String(id), ++changeVersionRef.current);
+  }, []);
+
+  const refresh = useCallback((): Promise<void> => {
+    if (!isCurrentScope()) return Promise.resolve();
+    if (refreshInFlightRef.current?.scope === scopeGeneration) return refreshInFlightRef.current.promise;
+    const promise = (async () => {
+      const startedVersion = changeVersionRef.current;
+      const loaded = messagesRef.current.filter((m) => !isUnsent(m));
+      const oldest = loaded[0];
+      let page = await fetchMessages();
+      if (!isCurrentScope()) return;
+      let refreshed = page.messages;
+      const seenCursors = new Set<string>();
+      // Walk every missing page and the entire loaded range. This repairs missed
+      // changes as well as new messages, even after more than 50/100 arrivals.
+      while (oldest && page.hasMore && page.nextCursor
+        && (!refreshed.length || compareMessages(refreshed[0], oldest) > 0)) {
+        if (seenCursors.has(page.nextCursor)) throw new Error('Message history did not advance. Try again.');
+        seenCursors.add(page.nextCursor);
+        page = await fetchMessages({ before: page.nextCursor });
+        if (!isCurrentScope()) return;
+        refreshed = mergeMessages(page.messages, refreshed);
+      }
+      const changedAfterStart = (id: string) => (liveChangesRef.current.get(String(id)) || 0) > startedVersion;
+      setMessages((previous) => mergeMessages(
+        previous.filter((m) => isUnsent(m) || changedAfterStart(String(m.id))
+          || (page.hasMore && refreshed[0] && compareMessages(m, refreshed[0]) < 0)),
+        refreshed.filter((m) => !changedAfterStart(String(m.id))),
+      ));
+      applyPage(page);
+    })().finally(() => {
+      if (refreshInFlightRef.current?.promise === promise) refreshInFlightRef.current = null;
+    });
+    refreshInFlightRef.current = { scope: scopeGeneration, promise };
+    return promise;
+  }, [scopeGeneration, fetchMessages, applyPage, isCurrentScope]);
 
   // ── Tab/window foreground resume ──────────────────────────
   // When the tab becomes visible again, refresh messages to catch anything
@@ -456,12 +462,12 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     // A kept conversation shows its room and header at once while this re-checks.
     const kept = readSnapshot();
     setDirectChatPeer(kept?.peer ?? null);
-    if (kept?.resolvedRoomId) setResolvedRoomId(kept.resolvedRoomId);
+    setResolvedRoomId(kept?.resolvedRoomId ?? null);
     setDirectChatError(null);
     let cancelled = false;
     (async () => {
       try {
-        const result = await api.chat.createDirectChat(otherUserId);
+        const result = await api.chat.createDirectChat(otherUserId, { asBusinessUserId });
         const rid = result?.roomId;
         if (!cancelled && rid) setResolvedRoomId(String(rid));
         if (!cancelled && result?.otherUser) setDirectChatPeer(result.otherUser as User);
@@ -477,73 +483,37 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
       }
     })();
     return () => { cancelled = true; };
-  }, [otherUserId, isRoomMode]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [otherUserId, isRoomMode, asBusinessUserId, currentUserId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    const key = roomId || otherUserId;
-    if (!key) { setLoading(false); return; }
+    if (!roomId && !otherUserId) { setLoading(false); return; }
     let cancelled = false;
     const kept = loadAttempt === 0 ? readSnapshot() : undefined;
-    if (kept) {
-      // Coming back: the conversation as it was, then only what changed.
-      setMessages(kept.messages);
-      setHasMore(kept.hasMore);
-      nextCursorRef.current = kept.nextCursor;
-      setLoading(false);
-      setError(null);
-      setLoadFailure(null);
-      shownKeyRef.current = cacheKeyId;
-      (async () => {
-        try {
-          const page = await fetchMessages(undefined, true);
-          if (cancelled) return;
-          const merged = mergeFirstPage(messagesRef.current, page, 100);
-          setMessages(merged.messages);
-          // Older pages already loaded keep their cursor; after a gap the page's cursor is the one.
-          if (!merged.gap && kept.messages.length > page.length) nextCursorRef.current = kept.nextCursor;
-          else setHasMore(page.length >= 100);
-          await markRead();
-        } catch (e: unknown) {
-          if (cancelled) return;
-          // Access ended: forget the kept copy and show the server's answer.
-          // Anything else (offline, a server error) keeps what is shown.
-          const status = (e as { statusCode?: number } | null)?.statusCode;
-          if (status === 403 || status === 404) {
-            if (cacheKey) queryClient.removeQueries({ queryKey: cacheKey, exact: true });
-            shownKeyRef.current = null;
-            setMessages([]);
-            setLoadFailure(status === 403 ? 'forbidden' : 'notFound');
-          }
-        }
-      })();
-      return () => { cancelled = true; };
-    }
-    (async () => {
-      setLoading(true);
-      setError(null);
-      setLoadFailure(null);
-      try {
-        // The first page must not fail silently: an empty list would read as
-        // "No messages yet" under a live composer (e.g. a room the viewer
-        // isn't in answers 403).
-        const msgs = await fetchMessages(undefined, true);
-        if (!cancelled) {
-          setMessages(sortAsc(msgs));
-          setHasMore(msgs.length >= 100);
-          shownKeyRef.current = cacheKeyId;
-          await markRead();
-        }
-      } catch (e: unknown) {
-        if (!cancelled) {
-          const status = (e as { statusCode?: number } | null)?.statusCode;
-          setLoadFailure(status === 403 ? 'forbidden' : status === 404 ? 'notFound' : 'unavailable');
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
+    setMessages(kept?.messages ?? []);
+    messagesRef.current = kept?.messages ?? [];
+    setHasMore(kept?.hasMore ?? false);
+    nextCursorRef.current = kept?.nextCursor ?? null;
+    setLoading(!kept);
+    setLoadingOlder(false);
+    setSending(false);
+    setError(null);
+    setLoadFailure(null);
+    shownKeyRef.current = cacheKeyId;
+    liveChangesRef.current.clear();
+    visibleThroughRef.current = null;
+    readAcknowledgedRef.current = null;
+    void refresh().catch((e: unknown) => {
+      if (cancelled || !isCurrentScope()) return;
+      const status = (e as { statusCode?: number } | null)?.statusCode;
+      if (!kept || status === 403 || status === 404) {
+        if (cacheKey) queryClient.removeQueries({ queryKey: cacheKey, exact: true });
+        shownKeyRef.current = null;
+        setMessages([]);
+        setLoadFailure(status === 403 ? 'forbidden' : status === 404 ? 'notFound' : 'unavailable');
       }
-    })();
+    }).finally(() => { if (!cancelled && isCurrentScope()) setLoading(false); });
     return () => { cancelled = true; };
-  }, [roomId, otherUserId, loadAttempt]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cacheKeyId, loadAttempt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keep the conversation for the next visit (memory only), without sends still in flight.
   useEffect(() => {
@@ -560,33 +530,14 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
 
   const retryLoad = useCallback(() => setLoadAttempt((n) => n + 1), []);
 
-  // ── Refetch on topic change (person-based mode) ─────────
-
-  const shownTopicRef = useRef(topicId);
-  useEffect(() => {
-    if (shownTopicRef.current === topicId) return;
-    shownTopicRef.current = topicId;
-    if (isRoomMode || loading || !otherUserId) return;
-    const kept = readSnapshot();
-    if (kept) {
-      setMessages(kept.messages);
-      setHasMore(kept.hasMore);
-      shownKeyRef.current = cacheKeyId;
-    } else {
-      shownKeyRef.current = null;
+  const refreshWithFeedback = useCallback(async () => {
+    try {
+      await refresh();
+      if (isCurrentScope()) setError(null);
+    } catch {
+      if (isCurrentScope()) setError("Couldn't refresh messages. Check your connection and try again.");
     }
-    let cancelled = false;
-    (async () => {
-      const msgs = await fetchMessages();
-      if (!cancelled) {
-        const merged = kept ? mergeFirstPage(messagesRef.current, msgs, 100) : null;
-        setMessages(merged ? merged.messages : sortAsc(msgs));
-        setHasMore(merged && !merged.gap && kept && kept.messages.length > msgs.length ? kept.hasMore : msgs.length >= 100);
-        shownKeyRef.current = cacheKeyId;
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [topicId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [refresh, isCurrentScope]);
 
   // ── Socket.IO: join room + listen for new messages ──────
 
@@ -608,17 +559,16 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
 
     if (!wasConnected && connected) {
       // ── Reconnect (false → true) ──
-      // Invalidate any in-flight poll responses so they don't overwrite fresh data
-      pollGenerationRef.current += 1;
       // Clear joined rooms to force re-join (server may have changed instances)
       joinedRoomsRef.current.clear();
+      void refresh().catch(() => {});
     }
 
     if (wasConnected && !connected) {
       // ── Disconnect (true → false) ──
       joinedRoomsRef.current.clear();
     }
-  }, [connected]);
+  }, [connected, refresh]);
 
   // When the room we're viewing changes, force re-join so we're definitely in the right room
   // (fixes mobile→web messages/reactions not arriving when web wasn't in room)
@@ -628,59 +578,69 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     setRoomJoinGeneration((g) => g + 1);
   }, [activeRoomIdsKey]);
 
+  const belongsToTopic = useCallback((message: ChatMessage) => !topicId || isRoomMode
+    || String((message as Record<string, any>).topic_id || '') === String(topicId), [topicId, isRoomMode]);
+
   useEffect(() => {
     if (!socket || !connected || activeRoomIds.length === 0) return;
-    // Join each active room (we may have just cleared joinedRoomsRef when room changed)
-    for (const activeRoomId of activeRoomIds) {
-      if (joinedRoomsRef.current.has(activeRoomId)) continue;
+    let cancelled = false;
+    const timers = new Set<ReturnType<typeof setTimeout>>();
+    const join = (activeRoomId: string) => {
+      if (cancelled || !socket.connected || !isCurrentScope()) return;
+      let answered = false;
+      const startedVersion = changeVersionRef.current;
+      const timeout = setTimeout(() => {
+        timers.delete(timeout);
+        if (!answered) { answered = true; join(activeRoomId); }
+      }, 5000);
+      timers.add(timeout);
       emit('room:join', { roomId: activeRoomId }, (response: { success?: boolean; messages?: ChatMessage[] }) => {
+        if (answered) return;
+        answered = true;
+        clearTimeout(timeout);
+        timers.delete(timeout);
+        if (cancelled || !isCurrentScope()) return;
         if (response?.success) {
           joinedRoomsRef.current.add(activeRoomId);
-          // Merge any backfill messages returned by the server (reconnect recovery)
-          const backfill = response.messages;
-          if (Array.isArray(backfill) && backfill.length > 0) {
-            setMessages(prev => mergeMessages(prev, backfill));
-          }
+          const backfill = (response.messages || []).filter((message) => belongsToTopic(message)
+            && (liveChangesRef.current.get(String(message.id)) || 0) <= startedVersion);
+          const unseen = backfill.filter((message) => !messagesRef.current.some((existing) => String(existing.id) === String(message.id)));
+          unseen.forEach((message) => noteLiveChange(String(message.id)));
+          setMessages((previous) => mergeMessages(previous, unseen));
         }
       });
-    }
-  }, [socket, connected, activeRoomIds, emit, roomJoinGeneration]);
+    };
+    for (const id of activeRoomIds) if (!joinedRoomsRef.current.has(id)) join(id);
+    return () => { cancelled = true; timers.forEach(clearTimeout); };
+  }, [socket, connected, activeRoomIds, emit, roomJoinGeneration, belongsToTopic, isCurrentScope, noteLiveChange]);
 
   const handleIncomingMessage = useCallback((msg: ChatMessage) => {
     if (activeRoomIds.length === 0) return;
     const msgRoomId = msg?.room_id;
     if (!activeRoomIds.includes(String(msgRoomId))) return;
-    setMessages(prev => {
-      // Skip if already have this message (dedup)
-      if (prev.some(m => String(m.id) === String(msg.id) && !(m as Record<string, any>)._optimistic)) return prev;
-      // Replace any optimistic message matching by client_message_id
-      const msgClientId = (msg as Record<string, any>).client_message_id;
-      const filtered = msgClientId
-        ? prev.filter(m => (m as Record<string, any>)._clientMessageId !== msgClientId && m.id !== msgClientId)
-        : prev;
-      // Binary insert: O(log n) insertion (vs O(n log n) via full sort).
-      return insertMessageSorted(filtered, msg);
-    });
-    // Schedule debounced markRead instead of calling on every message
-    debouncedMarkRead();
-  }, [activeRoomIds, debouncedMarkRead]);
+    if (!belongsToTopic(msg) || !isCurrentScope()) return;
+    noteLiveChange(String(msg.id));
+    setMessages((previous) => insertMessageSorted(previous, msg));
+  }, [activeRoomIds, belongsToTopic, isCurrentScope, noteLiveChange]);
 
   // Listen for incoming messages via socket (new + legacy event names)
   // ── Socket event handlers (extracted for stable identity + profiling) ──
   const handleMessageDeleted = useCallback((data: Record<string, any>) => {
-    if (!data?.messageId) return;
+    if (!data?.messageId || !isCurrentScope()) return;
+    noteLiveChange(String(data.messageId));
     setMessages(prev => prev.filter(m => String(m.id) !== String(data.messageId)));
-  }, []);
+  }, [isCurrentScope, noteLiveChange]);
 
   const handleMessageEdited = useCallback((data: Record<string, any>) => {
-    if (!data?.messageId || !data?.message) return;
+    if (!data?.messageId || !data?.message || !isCurrentScope()) return;
+    noteLiveChange(String(data.messageId));
     const updated = data.message as ChatMessage;
     setMessages(prev => prev.map(m =>
       String(m.id) === String(data.messageId)
         ? { ...m, ...updated }
         : m
     ));
-  }, []);
+  }, [isCurrentScope, noteLiveChange]);
 
   type ReactionUpdatedPayload = {
     messageId: string;
@@ -692,7 +652,8 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     }>;
   };
   const handleReactionUpdated = useCallback((data: ReactionUpdatedPayload) => {
-    if (!data?.messageId) return;
+    if (!data?.messageId || !isCurrentScope()) return;
+    noteLiveChange(String(data.messageId));
     // Recalculate reacted_by_me for the current user since the server
     // broadcasts the same payload to all users in the room.
     const adjustedReactions = (data.reactions || []).map(r => ({
@@ -709,7 +670,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     if (!hasMessage) {
       void refresh().catch(() => {});
     }
-  }, [currentUserId, refresh]);
+  }, [currentUserId, refresh, isCurrentScope, noteLiveChange]);
 
   useSocketEvent('message:new', handleIncomingMessage);
   useSocketEvent('newMessage', handleIncomingMessage);
@@ -717,48 +678,67 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
   useSocketEvent('message:edited', handleMessageEdited);
   useSocketEvent('message:reaction_updated', handleReactionUpdated);
 
-  // ── Degraded fallback polling (only when socket is disconnected) ──
-  // When socket is down, poll at 30s as a degraded experience.
-  // Socket handles primary real-time delivery; reconnect gap-fill is
-  // handled by room:join backfill + the visibility-change handler above.
+  const handleMessagesRead = useCallback((data: { userId?: string; roomId?: string; readAt?: string; throughMessageId?: string }) => {
+    // A group member reading is not a receipt from every recipient. Person
+    // conversations only show Read when that particular peer acknowledges it.
+    if (!otherUserId || data.userId !== otherUserId || !data.roomId || !data.readAt || !isCurrentScope()) return;
+    const through = messagesRef.current.find((message) => message.id === data.throughMessageId);
+    if (data.throughMessageId && !through) return;
+    setMessages((previous) => previous.map((message) => {
+      if (isUnsent(message) || message.room_id !== data.roomId
+        || (message.user_id || message.sender_id) !== (asBusinessUserId || currentUserId)
+        || (through ? compareMessages(message, through) > 0 : messageTime(message) > Date.parse(data.readAt!))) return message;
+      noteLiveChange(String(message.id));
+      return { ...message, read_at: data.readAt };
+    }));
+  }, [otherUserId, asBusinessUserId, currentUserId, isCurrentScope, noteLiveChange]);
+  useSocketEvent('messages:read', handleMessagesRead);
 
+  // Poll immediately when realtime is unavailable, then back off. Hidden tabs
+  // wait for visibilitychange; one coalesced refresh runs at a time.
   useEffect(() => {
-    const key = roomId || otherUserId;
-    if (!key || connected) return;
-    const gen = pollGenerationRef.current;
-    const t = setInterval(async () => {
-      try {
-        const msgs = await fetchMessages();
-        if (pollGenerationRef.current !== gen) return;
-        setMessages(prev => mergeMessages(prev, msgs));
-      } catch {}
-    }, 30_000);
-    return () => clearInterval(t);
-  }, [roomId, otherUserId, connected, fetchMessages]);
+    if ((!roomId && !otherUserId) || connected) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    let delay = 2000;
+    const poll = async () => {
+      if (cancelled) return;
+      if (document.visibilityState === 'visible') {
+        try { await refresh(); } catch {}
+      }
+      if (!cancelled) {
+        timer = setTimeout(poll, delay + Math.random() * 500);
+        delay = Math.min(15000, delay * 1.5);
+      }
+    };
+    void poll();
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [roomId, otherUserId, connected, refresh]);
 
-  // ── Load older messages ─────────────────────────────────
-
+  const olderRequestRef = useRef<string | null>(null);
   const loadOlder = useCallback(async () => {
-    if (loadingOlder || !hasMore || messagesRef.current.length === 0) return;
+    if (!isCurrentScope() || olderRequestRef.current === cacheKeyId || !hasMore) return;
+    const before = nextCursorRef.current;
+    if (!before) return;
+    olderRequestRef.current = cacheKeyId;
     setLoadingOlder(true);
     try {
-      // Prefer composite cursor for stable pagination; fall back to timestamp
-      const cursor = nextCursorRef.current;
-      const oldest = messagesRef.current[0];
-      const before = cursor || oldest?.created_at;
-      if (!before) return;
-      const older = await fetchMessages({ before });
-      setMessages(prev => mergeMessages(older, prev));
-      setHasMore(older.length >= 100);
+      const page = await fetchMessages({ before });
+      if (!isCurrentScope()) return;
+      setMessages((previous) => mergeMessages(page.messages, previous));
+      applyPage(page);
+    } catch {
+      if (isCurrentScope()) setError("Couldn't load earlier messages. Try again.");
     } finally {
-      setLoadingOlder(false);
+      if (olderRequestRef.current === cacheKeyId) olderRequestRef.current = null;
+      if (isCurrentScope()) setLoadingOlder(false);
     }
-  }, [loadingOlder, hasMore, fetchMessages]);
+  }, [cacheKeyId, hasMore, fetchMessages, applyPage, isCurrentScope]);
 
   // ── Send message (useMutation with optimistic + mark-failed rollback) ──
 
   const sendMessageMutation = useMutation({
-    mutationFn: async (vars: { text: string; files?: File[]; targetRoomId: string; clientMessageId: string; replyToId?: string }) => {
+    mutationFn: async (vars: { text: string; files?: File[]; targetRoomId: string; clientMessageId: string; replyToId?: string; scope: number; topic?: string | null }) => {
       const { text, files, targetRoomId, clientMessageId, replyToId } = vars;
       const trimmed = text.trim();
       const hasFiles = (files?.length || 0) > 0;
@@ -774,7 +754,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
         ? (uploadedFiles.length === 1 && String(uploadedFiles[0]?.mime_type || '').startsWith('image/') ? 'image' : 'file')
         : 'text';
 
-      return api.chat.sendMessage({
+      const payload = {
         roomId: targetRoomId,
         messageText: trimmed || undefined,
         messageType: messageType as 'text' | 'image' | 'video' | 'file' | 'audio' | 'location' | 'gig_offer' | 'listing_offer',
@@ -782,9 +762,22 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
         ...(replyToId ? { replyToId } : {}),
         ...(asBusinessUserId ? { asBusinessUserId } : {}),
         clientMessageId,
-      });
+        ...(vars.topic ? { topicId: vars.topic } : {}),
+      };
+      try {
+        return await api.chat.sendMessage(payload);
+      } catch (error) {
+        const accepted = messagesRef.current.find((message) => !isUnsent(message) && clientMessageId === (message as Record<string, any>).client_message_id);
+        if (accepted) return { message: accepted };
+        const status = (error as { statusCode?: number })?.statusCode;
+        if (status && status < 500 && status !== 408) throw error;
+        // A dropped HTTP response can follow a successful insert. Retry the same
+        // intent once; the server's unique client ID makes this idempotent.
+        return api.chat.sendMessage(payload);
+      }
     },
     onMutate: (vars) => {
+      if (scopeRef.current.generation !== vars.scope) return;
       const { text, files, clientMessageId } = vars;
       const trimmed = text.trim();
       const hasFiles = (files?.length || 0) > 0;
@@ -796,9 +789,9 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
           {
             id: clientMessageId,
             room_id: vars.targetRoomId,
-            sender_id: currentUserId || 'self',
-            user_id: currentUserId || 'self',
-            sender: { id: currentUserId || 'self', username: '', name: '', profile_picture_url: '' },
+            sender_id: asBusinessUserId || currentUserId || 'self',
+            user_id: asBusinessUserId || currentUserId || 'self',
+            sender: { id: asBusinessUserId || currentUserId || 'self', username: '', name: '', profile_picture_url: '' },
             message_text: trimmed,
             message_type: 'text',
             // The reply quotes its original while it sends.
@@ -810,28 +803,24 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
             is_deleted: false,
             _optimistic: true,
             _clientMessageId: clientMessageId,
+            ...(vars.topic ? { topic_id: vars.topic } : {}),
           },
         ]);
       }
     },
     onSuccess: async (sendResult, vars) => {
-      const { clientMessageId } = vars;
+      if (!isCurrentScope() || scopeRef.current.generation !== vars.scope) return;
       setError(null);
-      const deliveredMessage = sendResult?.message as ChatMessage | undefined;
-      if (deliveredMessage?.id) {
-        setMessages((prev) => {
-          // Remove optimistic message matching this clientMessageId
-          const withoutOptimistic = prev.filter((m) => m.id !== clientMessageId && (m as Record<string, any>)._clientMessageId !== clientMessageId);
-          if (withoutOptimistic.some((m) => String(m.id) === String(deliveredMessage.id))) {
-            return withoutOptimistic;
-          }
-          return mergeMessages(withoutOptimistic, [deliveredMessage]);
-        });
+      const accepted = sendResult?.message as ChatMessage | undefined;
+      if (accepted?.id) {
+        noteLiveChange(String(accepted.id));
+        setMessages((previous) => insertMessageSorted(previous, accepted));
       } else {
         await refresh();
       }
     },
     onError: (err, vars) => {
+      if (!isCurrentScope() || scopeRef.current.generation !== vars.scope) return;
       // Mark optimistic message as failed instead of removing it. A 403 is a
       // refusal (blocked, not a participant): no Retry, and show the reason.
       const { clientMessageId } = vars;
@@ -841,8 +830,8 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
       ));
       if (isConversationRefusal(err)) setSendRefusal(sendFailureReason(err));
     },
-    onSettled: () => {
-      setSending(false);
+    onSettled: (_data, _error, vars) => {
+      if (isCurrentScope() && scopeRef.current.generation === vars.scope) setSending(false);
     },
   });
 
@@ -878,16 +867,24 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
       // Keep both upload and message identity across an uncertain reply. Only a
       // completed send starts a new intent for an identical subsequent attachment.
       try {
-        await sendMessageMutation.mutateAsync({ text, files, targetRoomId, clientMessageId, replyToId });
+        await sendMessageMutation.mutateAsync({ text, files, targetRoomId, clientMessageId, replyToId, scope: scopeGeneration, topic: topicId });
       } catch (err) {
-        setReplyingTo((current) => current ?? reply);
+        if (isCurrentScope()) {
+          if (!hasFiles) {
+            // The failed bubble owns its retry ID. Restoring another copy in the
+            // composer would turn an uncertain send into a second message.
+            setError(sendFailureReason(err));
+            return;
+          }
+          setReplyingTo((current) => current ?? reply);
+        }
         throw err;
       }
       pendingAttachmentSend.current = null;
     } finally {
       attachmentSendInFlight.current = false;
     }
-  }, [isRoomMode, roomId, resolvedRoomId, sending, sendMessageMutation, directChatError, currentUserId, asBusinessUserId, replyingTo]);
+  }, [isRoomMode, roomId, resolvedRoomId, sending, sendMessageMutation, directChatError, currentUserId, asBusinessUserId, replyingTo, scopeGeneration, topicId, isCurrentScope]);
 
   const beginReply = useCallback((target: ChatReplyTarget) => setReplyingTo(target), []);
   const cancelReply = useCallback(() => setReplyingTo(null), []);
@@ -918,20 +915,20 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
         ...(replyToId ? { replyToId } : {}),
         ...(asBusinessUserId ? { asBusinessUserId } : {}),
         clientMessageId,
+        ...((failedMsg as Record<string, any>).topic_id ? { topicId: (failedMsg as Record<string, any>).topic_id } : {}),
       });
 
+      if (!isCurrentScope()) return;
       setError(null);
       const delivered = sendResult?.message as ChatMessage | undefined;
       if (delivered?.id) {
-        setMessages(prev => {
-          const withoutOptimistic = prev.filter(m => m.id !== messageId && (m as Record<string, any>)._clientMessageId !== clientMessageId);
-          if (withoutOptimistic.some(m => String(m.id) === String(delivered.id))) return withoutOptimistic;
-          return mergeMessages(withoutOptimistic, [delivered]);
-        });
+        noteLiveChange(String(delivered.id));
+        setMessages((previous) => insertMessageSorted(previous, delivered));
       } else {
         await refresh();
       }
     } catch (err) {
+      if (!isCurrentScope()) return;
       const refused = isRefusal(err);
       setMessages(prev => prev.map(m =>
         m.id === messageId ? { ...m, _failed: true, _refused: refused, _optimistic: false } : m
@@ -939,13 +936,13 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
       if (refused) setError(sendFailureReason(err) || "You can't send messages in this conversation.");
       if (isConversationRefusal(err)) setSendRefusal(sendFailureReason(err));
     }
-  }, [isRoomMode, roomId, resolvedRoomId, asBusinessUserId, refresh]);
+  }, [isRoomMode, roomId, resolvedRoomId, asBusinessUserId, refresh, isCurrentScope, noteLiveChange]);
 
   // ── React to message ────────────────────────────────
 
   // ── React to message (useMutation — swallows errors per original) ──
   type ReactResult = { reactions?: Array<{ reaction: string; count: number; users: Array<{ id: string; name: string }>; reacted_by_me: boolean }> };
-  const reactMutation = useMutation<ReactResult, Error, { messageId: string; emoji: string; reacted?: boolean }>({
+  const reactMutation = useMutation<ReactResult, Error, { messageId: string; emoji: string; reacted?: boolean; scope: number }>({
     mutationFn: async ({ messageId, emoji, reacted }) => {
       if (socket?.connected) {
         return new Promise<ReactResult>((resolve, reject) => {
@@ -958,11 +955,13 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
             }
             resolve(response);
           });
-        });
+        }).catch(() => api.chat.reactToMessage(messageId, emoji, reacted));
       }
       return api.chat.reactToMessage(messageId, emoji, reacted);
     },
     onSuccess: (result, vars) => {
+      if (!isCurrentScope() || vars.scope !== scopeRef.current.generation) return;
+      noteLiveChange(vars.messageId);
       const reactions = (result?.reactions || []).map((reaction) => ({
         ...reaction,
         reacted_by_me: currentUserId ? reaction.users.some((user) => user.id === currentUserId) : false,
@@ -981,11 +980,11 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     const message = messagesRef.current.find((m) => String(m.id) === String(messageId));
     const wanted = reacted ?? (message ? !(message.reactions || []).some((r) => r.reaction === emoji && r.reacted_by_me) : undefined);
     try {
-      await reactMutation.mutateAsync({ messageId, emoji, reacted: wanted });
+      await reactMutation.mutateAsync({ messageId, emoji, reacted: wanted, scope: scopeGeneration });
     } catch {
       // Swallow errors to preserve original behavior
     }
-  }, [reactMutation]);
+  }, [reactMutation, scopeGeneration]);
 
   return {
     messages,
@@ -1008,7 +1007,8 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     cancelReply,
     retryMessage,
     loadOlder,
-    refresh,
+    refresh: refreshWithFeedback,
+    onVisibleMessage,
     reactToMessage,
   };
 }
