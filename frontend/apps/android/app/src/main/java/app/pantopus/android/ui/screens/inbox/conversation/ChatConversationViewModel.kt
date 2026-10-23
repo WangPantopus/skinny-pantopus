@@ -54,6 +54,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import timber.log.Timber
@@ -249,6 +250,8 @@ class ChatConversationViewModel
         private var scrollToMessageId: String? = null
         private var didResolveScrollTarget = false
         private var messages: MutableList<ChatMessageDto> = mutableListOf()
+        private val messageTimes = LinkedHashMap<String, Instant>()
+        private val messageOrder = compareBy<ChatMessageDto> { messageInstant(it.createdAt) }.thenBy { it.id }
         private val pendingByClientId = LinkedHashMap<String, ChatMessageDto>()
         private val failedClientIds = mutableSetOf<String>()
 
@@ -265,6 +268,9 @@ class ChatConversationViewModel
         private var oldestCursor: String? = null
         private var activeRoomIds: Set<String> = emptySet()
         private val joinedRoomIds = mutableSetOf<String>()
+        private val roomJoinJobs = mutableMapOf<String, Job>()
+        private val historyReadsInFlight = mutableSetOf<Pair<HistoryReadContext, String?>>()
+        private val changedDuringCatchUp = mutableSetOf<String>()
 
         // Person-mode direct room — resolved once via `POST /api/chat/direct`
         // (find-or-create, idempotent server-side) and cached for the VM's
@@ -331,6 +337,10 @@ class ChatConversationViewModel
         // What the assistant is doing while a tool runs ("Drafting your post…"), shown on the pending reply.
         private var aiStatus: String? = null
         private var markReadJob: Job? = null
+        private var isForeground = true
+        private var visibleReadThroughId: String? = null
+        private var lastReadMessageId: String? = null
+        private var readReceiptJob: Job? = null
         private var connectionJob: Job? = null
         private var messageJob: Job? = null
         private var updateJob: Job? = null
@@ -347,7 +357,7 @@ class ChatConversationViewModel
         // but a reaction burst collapses into one fetch.
         private var reactionRefetchJob: Job? = null
 
-        // 30s fallback refresh while the socket is down — started by the
+        // Adaptive fallback refresh while the socket is down — started by the
         // connectionState collector, cancelled on connect / teardown.
         private var fallbackPollJob: Job? = null
         private var catchUpJob: Job? = null
@@ -390,6 +400,23 @@ class ChatConversationViewModel
             aiNudgeId: String? = null,
             aiConversationId: String? = null,
         ) {
+            if (this.currentUserId != null && (this.currentUserId != currentUserId || this.mode != mode)) {
+                teardown()
+                messages.clear()
+                pendingByClientId.clear()
+                sendContextsByClientId.clear()
+                failedClientIds.clear()
+                refusedClientIds.clear()
+                directRoomDeferred?.cancel()
+                directRoomDeferred = null
+                directRoomId = null
+                activeRoomIds = emptySet()
+                visibleReadThroughId = null
+                lastReadMessageId = null
+                _selectedTopicId.value = null
+                _topics.value = emptyList()
+                _state.value = ChatConversationUiState.Loading
+            }
             this.mode = mode
             this.currentUserId = currentUserId
             this._counterparty.value = counterparty
@@ -734,6 +761,9 @@ class ChatConversationViewModel
         }
 
         fun selectTopic(topicId: String?) {
+            historyGeneration++
+            catchUpJob?.cancel()
+            visibleReadThroughId = null
             _selectedTopicId.value = if (_selectedTopicId.value == topicId) null else topicId
             // A stale PRE_BID_LIMIT banner shouldn't survive a topic switch
             // (mirrors iOS selectTopic).
@@ -994,7 +1024,7 @@ class ChatConversationViewModel
                             messageType = messageType,
                             metadata = metadata,
                             replyToId = _replyingTo.value?.messageId,
-                        )
+                        ).copy(topicId = topicId)
                     pendingByClientId[clientId] = pending
                     sendContextsByClientId[clientId] =
                         PendingSendContext(
@@ -1312,8 +1342,11 @@ class ChatConversationViewModel
          * arrived through a socket-triggered refetch.
          */
         private fun upsert(message: ChatMessageDto) {
+            changedDuringCatchUp.add(message.id)
+            if (!matchesTopicFilter(message)) return
             val index = messages.indexOfFirst { it.id == message.id }
             if (index >= 0) messages[index] = message else messages.add(message)
+            messages.sortWith(messageOrder)
         }
 
         /**
@@ -1630,6 +1663,7 @@ class ChatConversationViewModel
             viewModelScope.launch {
                 when (val result = repo.deleteMessage(messageId)) {
                     is NetworkResult.Success -> {
+                        changedDuringCatchUp.add(messageId)
                         messages.removeAll { it.id == messageId }
                         rebuild()
                     }
@@ -1825,7 +1859,10 @@ class ChatConversationViewModel
                 var failed = 0
                 ids.forEach { id ->
                     when (val result = repo.deleteMessage(id)) {
-                        is NetworkResult.Success -> messages.removeAll { it.id == id }
+                        is NetworkResult.Success -> {
+                            changedDuringCatchUp.add(id)
+                            messages.removeAll { it.id == id }
+                        }
                         is NetworkResult.Failure -> {
                             failed++
                             Timber.w("bulk delete failed for $id: ${result.error.message}")
@@ -1841,20 +1878,52 @@ class ChatConversationViewModel
             }
         }
 
+        fun setForeground(foreground: Boolean) {
+            if (isForeground == foreground) return
+            isForeground = foreground
+            if (foreground) {
+                publishViewedRooms()
+                catchUpMessages()
+                scheduleMarkRead()
+                if (socket.connectionState.value != SocketManager.ConnectionState.Connected) startFallbackPollingIfNeeded()
+            } else {
+                activeChatThread.clear()
+                markReadJob?.cancel()
+                stopFallbackPolling()
+            }
+        }
+
+        fun markVisibleMessageRead(messageId: String) {
+            val visible = messages.firstOrNull { it.id == messageId } ?: return
+            val previous = messages.firstOrNull { it.id == visibleReadThroughId }
+            if (previous != null && messageOrder.compare(visible, previous) < 0) return
+            visibleReadThroughId = messageId
+            scheduleMarkRead()
+        }
+
         fun scheduleMarkRead() {
+            if (!isForeground || _selectedTopicId.value != null) return
+            val throughId = visibleReadThroughId ?: return
+            if (throughId == lastReadMessageId || messages.none { it.id == throughId } || throughId.startsWith("client_")) return
+            val context = historyContext()
             markReadJob?.cancel()
             markReadJob =
                 viewModelScope.launch {
                     delay(600)
-                    when (val target = mode) {
-                        is ChatThreadMode.Room -> repo.markRoomRead(target.id, target.asBusinessUserId)
-                        is ChatThreadMode.Person -> repo.markConversationRead(target.otherUserId)
-                        ChatThreadMode.Ai -> Unit
-                    }
+                    if (!isForeground || context != historyContext()) return@launch
+                    val result =
+                        when (val target = context.mode) {
+                            is ChatThreadMode.Room -> repo.markRoomRead(target.id, target.asBusinessUserId, throughId)
+                            is ChatThreadMode.Person -> repo.markConversationRead(target.otherUserId, throughId)
+                            ChatThreadMode.Ai -> return@launch
+                        }
+                    if (result is NetworkResult.Success && context == historyContext()) lastReadMessageId = throughId
                 }
         }
 
         fun teardown() {
+            historyGeneration++
+            resetRoomSubscriptions()
             // Don't leave the counterparty staring at a stale "typing…" row.
             emitTypingStop()
             // Leaving the screen — chat pushes for these rooms notify again.
@@ -1865,6 +1934,7 @@ class ChatConversationViewModel
             updateJob?.cancel()
             deleteJob?.cancel()
             reactJob?.cancel()
+            readReceiptJob?.cancel()
             presenceOnlineJob?.cancel()
             presenceOfflineJob?.cancel()
             reactionRefetchJob?.cancel()
@@ -1880,6 +1950,7 @@ class ChatConversationViewModel
             updateJob = null
             deleteJob = null
             reactJob = null
+            readReceiptJob = null
             presenceOnlineJob = null
             presenceOfflineJob = null
             reactionRefetchJob = null
@@ -1919,43 +1990,49 @@ class ChatConversationViewModel
             force: Boolean = false,
         ) {
             val context = historyContext()
+            val requestKey = context to before
+            if (!historyReadsInFlight.add(requestKey)) return
             if (initial || context != historyCopyContext) followHistoryCopy(context)
             val copied = initial && !quiet && showHistoryCopy()
             val keepMessages = quiet || copied
             viewModelScope.launch {
-                if (initial && !keepMessages) {
-                    _state.value = ChatConversationUiState.Loading
-                    messages = mutableListOf()
-                    // Pending / failed optimistic rows survive refetches —
-                    // socket fallbacks refetch the thread, and eating an
-                    // in-flight or failed send here would lose the message
-                    // and its retry CTA. Confirmed rows are retired below by
-                    // `client_message_id` match.
-                    oldestCursor = null
-                    hasMore = false
-                }
-                if (mode is ChatThreadMode.Ai) {
-                    // The assistant's transcript lives in this view model; a quiet read leaves it alone.
-                    if (!keepMessages) _state.value = ChatConversationUiState.Empty
-                    return@launch
-                }
-                val response =
-                    when (val target = context.mode) {
-                        is ChatThreadMode.Room ->
-                            repo.roomMessages(
-                                target.id,
-                                before,
-                                force = force,
-                                asBusinessUserId = target.asBusinessUserId,
-                            )
-                        is ChatThreadMode.Person ->
-                            repo.conversationMessages(target.otherUserId, before, topicId = context.topicId, force = force)
-                        ChatThreadMode.Ai -> return@launch
+                try {
+                    if (initial && !keepMessages) {
+                        _state.value = ChatConversationUiState.Loading
+                        messages = mutableListOf()
+                        // Pending / failed optimistic rows survive refetches —
+                        // socket fallbacks refetch the thread, and eating an
+                        // in-flight or failed send here would lose the message
+                        // and its retry CTA. Confirmed rows are retired below by
+                        // `client_message_id` match.
+                        oldestCursor = null
+                        hasMore = false
                     }
-                // The topic changed while this page was in flight (the opening topic
-                // resolves alongside the first fetch); the fetch for it owns the thread.
-                if (context != historyContext()) return@launch
-                publishHistoryPage(response, keepMessages, initial, firstPage = before == null)
+                    if (mode is ChatThreadMode.Ai) {
+                        // The assistant's transcript lives in this view model; a quiet read leaves it alone.
+                        if (!keepMessages) _state.value = ChatConversationUiState.Empty
+                        return@launch
+                    }
+                    val response =
+                        when (val target = context.mode) {
+                            is ChatThreadMode.Room ->
+                                repo.roomMessages(
+                                    target.id,
+                                    before,
+                                    force = force,
+                                    asBusinessUserId = target.asBusinessUserId,
+                                )
+                            is ChatThreadMode.Person ->
+                                repo.conversationMessages(target.otherUserId, before, topicId = context.topicId, force = force)
+                            ChatThreadMode.Ai -> return@launch
+                        }
+                    // The topic changed while this page was in flight (the opening topic
+                    // resolves alongside the first fetch); the fetch for it owns the thread.
+                    if (context != historyContext()) return@launch
+                    publishHistoryPage(response, keepMessages, initial, firstPage = before == null)
+                } finally {
+                    historyReadsInFlight.remove(requestKey)
+                }
             }
         }
 
@@ -2060,7 +2137,7 @@ class ChatConversationViewModel
             // so the held list stays oldest-first regardless of which
             // page these rows came from.
             messages.addAll(page.filterNot { existingIds.contains(it.id) })
-            messages.sortBy { it.createdAt }
+            messages.sortWith(messageOrder)
             return false
         }
 
@@ -2071,11 +2148,11 @@ class ChatConversationViewModel
          */
         private fun mergeNewestPage(page: List<ChatMessageDto>): Boolean {
             val pageIds = page.mapTo(HashSet()) { it.id }
-            val oldest = page.minOfOrNull { it.createdAt }
-            val newest = page.maxOfOrNull { it.createdAt }
-            val older = messages.filter { it.id !in pageIds && oldest != null && it.createdAt < oldest }
-            val newer = messages.filter { it.id !in pageIds && newest != null && it.createdAt > newest }
-            messages = (older + page + newer).sortedBy { it.createdAt }.toMutableList()
+            val oldest = page.minWithOrNull(messageOrder)
+            val newest = page.maxWithOrNull(messageOrder)
+            val older = messages.filter { it.id !in pageIds && oldest != null && messageOrder.compare(it, oldest) < 0 }
+            val newer = messages.filter { it.id !in pageIds && newest != null && messageOrder.compare(it, newest) > 0 }
+            messages = (older + page + newer).sortedWith(messageOrder).toMutableList()
             return older.isNotEmpty()
         }
 
@@ -2148,6 +2225,7 @@ class ChatConversationViewModel
 
         private fun loadTopicsIfNeeded() {
             val target = mode as? ChatThreadMode.Person ?: return
+            val context = historyContext()
             viewModelScope.launch {
                 val pendingInitial = initialTopic
                 if (pendingInitial != null && _selectedTopicId.value == null) {
@@ -2163,16 +2241,21 @@ class ChatConversationViewModel
                             )
                     ) {
                         is NetworkResult.Success -> {
+                            if (context != historyContext()) return@launch
+                            historyGeneration++
                             _selectedTopicId.value = result.data.topic.id
                             // The first fetch may already have left unfiltered.
                             fetch(initial = true)
                         }
                         is NetworkResult.Failure -> Timber.w("find/create topic failed: ${result.error.message}")
                     }
+                    if (context.mode != mode || context.user != currentUserId) return@launch
                     initialTopic = null
                 }
+                val topicsContext = historyContext()
                 when (val result = repo.conversationTopics(target.otherUserId)) {
                     is NetworkResult.Success -> {
+                        if (topicsContext != historyContext()) return@launch
                         _topics.value =
                             result.data.topics.mapNotNull { topic ->
                                 val id = topic.id ?: return@mapNotNull null
@@ -2210,7 +2293,7 @@ class ChatConversationViewModel
          * is reading it ([ActiveChatThread]).
          */
         private fun publishViewedRooms() {
-            activeChatThread.viewedRoomIds = activeRoomIds
+            if (isForeground) activeChatThread.viewedRoomIds = activeRoomIds
         }
 
         // MARK: - Realtime
@@ -2222,12 +2305,13 @@ class ChatConversationViewModel
                         var connectedBefore = false
                         socket.connectionState.collect { state ->
                             if (state == SocketManager.ConnectionState.Connected) {
-                                if (connectedBefore) catchUpMessages()
+                                if (connectedBefore || messages.isNotEmpty()) catchUpMessages()
                                 connectedBefore = true
                                 stopFallbackPolling()
-                                joinedRoomIds.clear()
+                                resetRoomSubscriptions()
                                 joinActiveRoomsIfPossible()
                             } else {
+                                resetRoomSubscriptions()
                                 startFallbackPollingIfNeeded()
                             }
                         }
@@ -2249,6 +2333,12 @@ class ChatConversationViewModel
                 deleteJob =
                     viewModelScope.launch {
                         socket.eventsOf("message:deleted").collect { handleDelete(it) }
+                    }
+            }
+            if (readReceiptJob == null) {
+                readReceiptJob =
+                    viewModelScope.launch {
+                        socket.eventsOf("messages:read").collect { handleReadReceipt(it) }
                     }
             }
             if (reactJob == null) {
@@ -2306,26 +2396,20 @@ class ChatConversationViewModel
             _counterparty.value = person.copy(online = online)
         }
 
-        /**
-         * Socket-down fallback: while disconnected, refresh the loaded
-         * thread every 30s so the conversation doesn't silently freeze.
-         * AI threads stream over HTTP and need no polling.
-         *
-         * The timer runs on [Dispatchers.Default] deliberately: a
-         * self-re-arming `delay` loop on the Main test dispatcher would
-         * spin `runTest`'s virtual-clock advanceUntilIdle forever. The
-         * loop only reads thread-safe StateFlows and [refresh] launches
-         * its work on [viewModelScope] internally, so the hop is safe.
-         */
+        /** Keep a visible conversation responsive when HTTP works but realtime is unavailable. */
         private fun startFallbackPollingIfNeeded() {
-            if (fallbackPollJob != null) return
-            if (mode is ChatThreadMode.Ai) return
+            if (fallbackPollJob != null || mode is ChatThreadMode.Ai || !isForeground) return
             fallbackPollJob =
                 viewModelScope.launch(Dispatchers.Default) {
+                    var interval = SOCKET_FALLBACK_INITIAL_MS
                     while (socket.connectionState.value != SocketManager.ConnectionState.Connected) {
-                        delay(SOCKET_FALLBACK_POLL_MS)
-                        if (socket.connectionState.value == SocketManager.ConnectionState.Connected) break
-                        if (_state.value is ChatConversationUiState.Loaded) refresh()
+                        withContext(Dispatchers.Main.immediate) {
+                            if (_state.value is ChatConversationUiState.Loaded || _state.value is ChatConversationUiState.Empty) {
+                                catchUpMessages()
+                            }
+                        }
+                        delay(interval)
+                        interval = (interval * 2).coerceAtMost(SOCKET_FALLBACK_POLL_MS)
                     }
                 }
         }
@@ -2376,55 +2460,122 @@ class ChatConversationViewModel
             _isCounterpartyTyping.value = false
         }
 
-        /** Reconnect fills the gap after the newest held message, without replacing the reading position. */
+        /**
+         * Re-read every loaded page after reconnect. New-message-only backfill cannot repair a missed edit,
+         * reaction or deletion, and a fixed newest-page window can leave a gap after a busy disconnection.
+         * Apply once at the end so the reader keeps the same timeline and scroll anchor during recovery.
+         */
         private fun catchUpMessages() {
-            val after = messages.maxByOrNull { it.createdAt }?.createdAt ?: return
             if (catchUpJob?.isActive == true || mode is ChatThreadMode.Ai) return
             val context = historyContext()
-            val target = context.mode
-            val topic = context.topicId
+            val oldest = messages.minWithOrNull(messageOrder)
+            changedDuringCatchUp.clear()
             catchUpJob =
                 viewModelScope.launch {
                     var before: String? = null
+                    val authoritative = LinkedHashMap<String, ChatMessageDto>()
+                    var firstPage: ChatMessagesResponse? = null
                     do {
-                        val result =
-                            when (target) {
-                                is ChatThreadMode.Room ->
-                                    repo.roomMessages(target.id, before = before, after = after, asBusinessUserId = target.asBusinessUserId)
-                                is ChatThreadMode.Person ->
-                                    repo.conversationMessages(target.otherUserId, before = before, after = after, topicId = topic)
-                                ChatThreadMode.Ai -> return@launch
-                            }
+                        val result = readHistoryPage(context, before)
                         if (context != historyContext()) return@launch
                         when (result) {
                             is NetworkResult.Success -> {
-                                mergeBackfill(result.data.messages)
-                                val cursor = result.data.nextCursor
-                                before = cursor.takeIf { result.data.hasMore == true && it != before && result.data.messages.isNotEmpty() }
+                                val page = result.data
+                                if (firstPage == null) firstPage = page
+                                page.messages.forEach { authoritative[it.id] = it }
+                                before = nextCatchUpCursor(page, before, oldest)
+                                if (before == null) applyCaughtUpHistory(authoritative.values, oldest, page)
                             }
                             is NetworkResult.Failure -> {
                                 if (historyAccessEnded(result.error)) refuseHistory(result.error)
-                                before = null
+                                return@launch
                             }
                         }
                     } while (before != null)
+                    firstPage?.let { page ->
+                        historyPage = page
+                        _composerClosedNote.value = page.sendRefusal?.error
+                        updateActiveRooms(page)
+                    }
+                    retireConfirmedSends(authoritative.values.toList())
+                    rebuild()
+                    joinActiveRoomsIfPossible()
+                    scheduleMarkRead()
                 }
+        }
+
+        private suspend fun readHistoryPage(
+            context: HistoryReadContext,
+            before: String?,
+        ): NetworkResult<ChatMessagesResponse> =
+            when (val target = context.mode) {
+                is ChatThreadMode.Room ->
+                    repo.roomMessages(target.id, before = before, asBusinessUserId = target.asBusinessUserId, networkOnly = true)
+                is ChatThreadMode.Person ->
+                    repo.conversationMessages(target.otherUserId, before = before, topicId = context.topicId, networkOnly = true)
+                ChatThreadMode.Ai -> NetworkResult.Success(ChatMessagesResponse(emptyList()))
+            }
+
+        private fun nextCatchUpCursor(
+            page: ChatMessagesResponse,
+            before: String?,
+            oldest: ChatMessageDto?,
+        ): String? {
+            val earliest = page.messages.minWithOrNull(messageOrder)
+            if (oldest == null || earliest == null || messageOrder.compare(earliest, oldest) <= 0) return null
+            return page.nextCursor.takeIf { page.hasMore == true && it != before }
+        }
+
+        private fun applyCaughtUpHistory(
+            authoritative: Collection<ChatMessageDto>,
+            oldest: ChatMessageDto?,
+            page: ChatMessagesResponse,
+        ) {
+            val olderLoadedMeanwhile = messages.filter { oldest != null && messageOrder.compare(it, oldest) < 0 }
+            val liveRows = messages.filter { it.id in changedDuringCatchUp }
+            val refreshed = authoritative.filter { it.id !in changedDuringCatchUp }
+            messages = (refreshed + liveRows + olderLoadedMeanwhile).distinctBy { it.id }.sortedWith(messageOrder).toMutableList()
+            if (olderLoadedMeanwhile.isEmpty()) {
+                hasMore = page.hasMore == true
+                oldestCursor = page.nextCursor ?: paginationCursor(messages.firstOrNull())
+            }
         }
 
         private fun historyAccessEnded(error: NetworkError): Boolean =
             error is NetworkError.Forbidden || error == NetworkError.NotFound || error == NetworkError.Unauthorized
 
+        private fun resetRoomSubscriptions() {
+            roomJoinJobs.values.forEach { it.cancel() }
+            roomJoinJobs.clear()
+            joinedRoomIds.clear()
+        }
+
+        private fun roomNeedsJoin(roomId: String): Boolean =
+            roomId in activeRoomIds && roomId !in joinedRoomIds && socket.connectionState.value == SocketManager.ConnectionState.Connected
+
         private fun joinActiveRoomsIfPossible() {
             if (socket.connectionState.value != SocketManager.ConnectionState.Connected) return
-            val pending = activeRoomIds - joinedRoomIds
+            val pending = activeRoomIds - joinedRoomIds - roomJoinJobs.keys
             pending.forEach { roomId ->
-                joinedRoomIds.add(roomId)
-                viewModelScope.launch {
-                    val ack = socket.emitWithAck("room:join", JSONObject().put("roomId", roomId))
-                    if (ack?.optBoolean("success") != true || roomId !in activeRoomIds) return@launch
-                    val backfill = parseMessages(ack.optJSONArray("messages"))
-                    if (backfill.isNotEmpty()) mergeBackfill(backfill)
-                }
+                val context = historyContext()
+                roomJoinJobs[roomId] =
+                    viewModelScope.launch {
+                        var retryDelay = ROOM_JOIN_RETRY_INITIAL_MS
+                        while (context == historyContext() && roomNeedsJoin(roomId)) {
+                            val ack = socket.emitWithAck("room:join", JSONObject().put("roomId", roomId))
+                            if (context != historyContext() || roomId !in activeRoomIds) break
+                            if (ack?.optBoolean("success") == true) {
+                                joinedRoomIds.add(roomId)
+                                mergeBackfill(parseMessages(ack.optJSONArray("messages")))
+                            } else {
+                                // A lost ACK must not leave this room permanently marked as joined.
+                                delay(retryDelay)
+                                retryDelay = (retryDelay * 2).coerceAtMost(ROOM_JOIN_RETRY_MAX_MS)
+                            }
+                        }
+                        roomJoinJobs.remove(roomId)
+                        if (context != historyContext()) joinActiveRoomsIfPossible()
+                    }
             }
         }
 
@@ -2464,13 +2615,15 @@ class ChatConversationViewModel
                 if (retiredPending) rebuild()
                 return
             }
+            changedDuringCatchUp.addAll(fresh.map { it.id })
             messages.addAll(fresh)
-            messages.sortBy { it.createdAt }
+            messages.sortWith(messageOrder)
             rebuild()
             scheduleMarkRead()
         }
 
         private fun applyUpdatedMessage(updated: ChatMessageDto) {
+            changedDuringCatchUp.add(updated.id)
             val index = messages.indexOfFirst { it.id == updated.id }
             if (index >= 0) {
                 messages[index] = keepingWriter(updated, messages[index])
@@ -2495,6 +2648,7 @@ class ChatConversationViewModel
         ) {
             val index = messages.indexOfFirst { it.id == messageId }
             if (index < 0) return
+            changedDuringCatchUp.add(messageId)
             messages[index] = messages[index].copy(reactions = reactions)
             rebuild()
         }
@@ -2587,12 +2741,13 @@ class ChatConversationViewModel
 
         /** Dedupe by id, insert sorted by createdAt, rebuild, mark read. */
         private fun insertIncoming(message: ChatMessageDto) {
+            changedDuringCatchUp.add(message.id)
             val index = messages.indexOfFirst { it.id == message.id }
             if (index >= 0) {
                 messages[index] = keepingWriter(message, messages[index])
             } else {
                 messages.add(message)
-                messages.sortBy { it.createdAt }
+                messages.sortWith(messageOrder)
             }
             rebuild()
             scheduleMarkRead()
@@ -2632,6 +2787,27 @@ class ChatConversationViewModel
                 .onFailure { Timber.w(it, "socket message decode failed") }
                 .getOrNull()
 
+        private fun handleReadReceipt(json: JSONObject) {
+            val person = mode as? ChatThreadMode.Person ?: return
+            val roomId = json.optStringValue("roomId")
+            val reader = json.optStringValue("userId")
+            val throughId = json.optStringValue("throughMessageId")
+            val readAt = json.optStringValue("readAt")
+            if (roomId == null || throughId == null || readAt == null) return
+            if (roomId != directRoomId || reader != person.otherUserId) return
+            // The last-read cursor is needed: a server clock timestamp alone could mark a newer send as read.
+            val through = messages.firstOrNull { it.id == throughId && it.roomId == roomId } ?: return
+            messages.replaceAll { message ->
+                if (message.roomId == roomId && message.userId == messageIdentityId && messageOrder.compare(message, through) <= 0) {
+                    changedDuringCatchUp.add(message.id)
+                    message.copy(readAt = message.readAt ?: readAt)
+                } else {
+                    message
+                }
+            }
+            rebuild()
+        }
+
         private fun handleDelete(json: JSONObject) {
             val roomId = json.optStringValue("room_id") ?: json.optStringValue("roomId")
             if (roomId != null && !activeRoomIds.contains(roomId)) return
@@ -2640,6 +2816,7 @@ class ChatConversationViewModel
                     ?: json.optStringValue("message_id")
                     ?: json.optStringValue("messageId")
                     ?: return
+            changedDuringCatchUp.add(id)
             val index = messages.indexOfFirst { it.id == id }
             if (index >= 0) {
                 messages.removeAt(index)
@@ -2733,10 +2910,12 @@ class ChatConversationViewModel
                         hasMore = hasMore,
                         nextCursor = oldestCursor.takeIf { hasMore },
                         roomIds = if (page != null) page.roomIds else activeRoomIds.toList(),
+                        sendRefusal = page?.sendRefusal,
                     ),
                 )
             }
-            val combined = messages + pendingByClientId.values
+            val combined = messages + pendingByClientId.values.filter(::matchesTopicFilter)
+            val messagesById = combined.associateBy { it.id }
             if (combined.isEmpty()) {
                 _state.value = ChatConversationUiState.Empty
                 return
@@ -2789,7 +2968,7 @@ class ChatConversationViewModel
                     } else if (message.readAt != null) {
                         ChatDeliveryState.Read
                     } else {
-                        ChatDeliveryState.Delivered
+                        ChatDeliveryState.Sent
                     }
                 // The stamp row is the ONLY surface for "Failed to send" +
                 // Retry and the "Sending..." spinner — force it for in-flight
@@ -2802,7 +2981,7 @@ class ChatConversationViewModel
                         deliveryState == ChatDeliveryState.Sending
                 val stamp = if (showStamp) stampLabel(message) else null
                 val body = bodyOf(message)
-                val replyPreview = replyPreviewOf(message, combined)
+                val replyPreview = replyPreviewOf(message, messagesById)
                 val reactions =
                     message.reactions.map {
                         ChatBubbleReaction(
@@ -2969,10 +3148,10 @@ class ChatConversationViewModel
 
         private fun replyPreviewOf(
             message: ChatMessageDto,
-            allMessages: List<ChatMessageDto>,
+            allMessages: Map<String, ChatMessageDto>,
         ): ChatReplyPreview? {
             val replyToId = message.replyToId ?: return null
-            val original = allMessages.firstOrNull { it.id == replyToId } ?: return null
+            val original = allMessages[replyToId] ?: return null
             return ChatReplyPreview(
                 messageId = original.id,
                 senderName = replyNameOf(original),
@@ -3036,6 +3215,7 @@ class ChatConversationViewModel
                 userId = messageIdentityId,
                 messageText = text,
                 messageType = "text",
+                topicId = _selectedTopicId.value,
                 replyToId = sanitizedReplyToId(replyToId, roomId),
                 clientMessageId = clientId,
                 createdAt = Instant.now().toString(),
@@ -3082,6 +3262,11 @@ class ChatConversationViewModel
             return buildList {
                 for (index in 0 until array.length()) {
                     val json = array.optJSONObject(index) ?: continue
+                    val decoded = decodeSocketMessage(json)
+                    if (decoded != null) {
+                        add(decoded)
+                        continue
+                    }
                     add(
                         ChatMessageDto(
                             id = json.optStringValue("id") ?: continue,
@@ -3112,6 +3297,13 @@ class ChatConversationViewModel
             }
         }
 
+        private fun messageInstant(iso: String): Instant =
+            messageTimes.get(iso) ?: runCatching { Instant.parse(iso.replace("+00:00", "Z")) }
+                .getOrDefault(Instant.EPOCH).also {
+                    if (messageTimes.size >= 2_048) messageTimes.remove(messageTimes.keys.first())
+                    messageTimes[iso] = it
+                }
+
         private fun dayKey(iso: String): String =
             runCatching { Instant.parse(iso).atZone(ZoneId.systemDefault()).toLocalDate().toString() }
                 .getOrDefault(iso)
@@ -3123,7 +3315,7 @@ class ChatConversationViewModel
                 when (date) {
                     today -> "Today"
                     today.minusDays(1) -> "Yesterday"
-                    else -> date.format(DateTimeFormatter.ofPattern("MMM d")).uppercase()
+                    else -> date.format(dayFormatter).uppercase()
                 }
             }.getOrDefault(iso)
 
@@ -3141,7 +3333,7 @@ class ChatConversationViewModel
                     Instant
                         .parse(message.createdAt)
                         .atZone(ZoneId.systemDefault())
-                        .format(DateTimeFormatter.ofPattern("h:mm a"))
+                        .format(stampFormatter)
                 // Replies sent as the business are this viewer's own outgoing messages here.
                 if (message.userId == messageIdentityId) {
                     time
@@ -3266,7 +3458,13 @@ private const val TYPING_AUTO_CLEAR_MS = 5_000L
 private const val REACTION_REFETCH_DEBOUNCE_MS = 300L
 
 /** Refresh cadence while the socket is disconnected (fallback polling). */
-private const val SOCKET_FALLBACK_POLL_MS = 30_000L
+private const val SOCKET_FALLBACK_INITIAL_MS = 2_000L
+private const val SOCKET_FALLBACK_POLL_MS = 15_000L
+private const val ROOM_JOIN_RETRY_INITIAL_MS = 1_000L
+private const val ROOM_JOIN_RETRY_MAX_MS = 15_000L
+
+private val dayFormatter = DateTimeFormatter.ofPattern("MMM d")
+private val stampFormatter = DateTimeFormatter.ofPattern("h:mm a")
 
 /** How many lists of 50 "Delete conversation" works through before it gives up. */
 private const val AI_DELETE_ROUNDS = 20

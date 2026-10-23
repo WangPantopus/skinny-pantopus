@@ -117,6 +117,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.core.routing.DeepLinkRouter
@@ -376,6 +377,10 @@ fun ChatConversationScreen(
         )
         viewModel.load()
     }
+    LifecycleStartEffect(viewModel) {
+        viewModel.setForeground(true)
+        onStopOrDispose { viewModel.setForeground(false) }
+    }
     DisposableEffect(Unit) {
         onDispose { viewModel.teardown() }
     }
@@ -495,6 +500,7 @@ fun ChatConversationScreen(
                             rows = s.rows,
                             onRetry = viewModel::retry,
                             onLoadOlder = viewModel::loadOlder,
+                            onVisibleMessage = viewModel::markVisibleMessageRead,
                             scrollToRowId = pendingScroll,
                             onScrollConsumed = viewModel::consumePendingScroll,
                             conversationMode = conversationMode,
@@ -2715,6 +2721,7 @@ internal fun PopulatedFrame(
     rows: List<ChatTimelineRow>,
     onRetry: (String) -> Unit,
     onLoadOlder: () -> Unit,
+    onVisibleMessage: (String) -> Unit = {},
     scrollToRowId: String? = null,
     onScrollConsumed: () -> Unit = {},
     conversationMode: ChatConversationMode = ChatConversationMode.Dm,
@@ -2773,6 +2780,14 @@ internal fun PopulatedFrame(
             listState.animateScrollToItem(lastIndex)
         } else {
             newMessageCount += appended
+        }
+    }
+    val rowsByKey = remember(rows) { rows.associateBy { it.rowId } }
+    LaunchedEffect(listState, rowsByKey) {
+        snapshotFlow { listState.layoutInfo.visibleItemsInfo.map { it.key } }.collect { visibleKeys ->
+            visibleKeys.asReversed().firstNotNullOfOrNull { key ->
+                (rowsByKey[key] as? ChatTimelineRow.Bubble)?.content?.id
+            }?.let(onVisibleMessage)
         }
     }
     LaunchedEffect(listState) {
@@ -4932,7 +4947,7 @@ private fun StampRow(
         when (content.deliveryState) {
             ChatDeliveryState.Read -> "Read $stamp"
             // Delivered is conveyed by the small check icon, not a loud word (RN).
-            ChatDeliveryState.Delivered -> stamp
+            ChatDeliveryState.Sent, ChatDeliveryState.Delivered -> stamp
             ChatDeliveryState.Sending -> "Sending..."
             ChatDeliveryState.Failed -> "Failed to send"
             ChatDeliveryState.Refused -> "Not sent"
@@ -4957,10 +4972,10 @@ private fun StampRow(
         if (content.side == ChatMessageSide.Outgoing && content.deliveryState != ChatDeliveryState.Read) {
             when (content.deliveryState) {
                 ChatDeliveryState.Read -> Unit
-                ChatDeliveryState.Delivered ->
+                ChatDeliveryState.Sent, ChatDeliveryState.Delivered ->
                     PantopusIconImage(
                         icon = PantopusIcon.Check,
-                        contentDescription = null,
+                        contentDescription = if (content.deliveryState == ChatDeliveryState.Sent) "Sent" else "Delivered",
                         size = 10.dp,
                         tint = PantopusColors.appTextMuted,
                         modifier = Modifier.padding(start = Spacing.s1),

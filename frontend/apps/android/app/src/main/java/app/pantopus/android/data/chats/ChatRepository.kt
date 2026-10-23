@@ -98,8 +98,9 @@ class ChatRepository
             limit: Int = HISTORY_LIMIT,
             force: Boolean = false,
             asBusinessUserId: String? = null,
+            networkOnly: Boolean = false,
         ): NetworkResult<ChatMessagesResponse> {
-            if (before != null || after != null) {
+            if (networkOnly || before != null || after != null) {
                 return safeApiCall { api.roomMessages(roomId, limit, before, after, asBusinessUserId) }
                     .forgetRefusedHistory(StoreKeys.roomMessages(roomId, HISTORY_LIMIT, asBusinessUserId))
             }
@@ -123,8 +124,9 @@ class ChatRepository
             limit: Int = HISTORY_LIMIT,
             topicId: String? = null,
             force: Boolean = false,
+            networkOnly: Boolean = false,
         ): NetworkResult<ChatMessagesResponse> {
-            if (before != null || after != null) {
+            if (networkOnly || before != null || after != null) {
                 return safeApiCall { api.conversationMessages(otherUserId, limit, before, after, topicId) }
                     .forgetRefusedHistory(StoreKeys.conversationMessages(otherUserId, topicId, HISTORY_LIMIT))
             }
@@ -233,13 +235,25 @@ class ChatRepository
         suspend fun markRoomRead(
             roomId: String,
             asBusinessUserId: String? = null,
+            throughMessageId: String? = null,
         ): NetworkResult<Unit> =
             safeApiCall {
-                api.markRoomRead(roomId, asBusinessUserId?.let { mapOf("asBusinessUserId" to it) }.orEmpty())
+                api.markRoomRead(
+                    roomId,
+                    buildMap {
+                        asBusinessUserId?.let { put("asBusinessUserId", it) }
+                        throughMessageId?.let { put("throughMessageId", it) }
+                    },
+                )
             }.chatsChanged()
 
-        suspend fun markConversationRead(otherUserId: String): NetworkResult<Unit> =
-            safeApiCall { api.markConversationRead(otherUserId) }.chatsChanged()
+        suspend fun markConversationRead(
+            otherUserId: String,
+            throughMessageId: String? = null,
+        ): NetworkResult<Unit> =
+            safeApiCall {
+                api.markConversationRead(otherUserId, throughMessageId?.let { mapOf("throughMessageId" to it) }.orEmpty())
+            }.chatsChanged()
 
         suspend fun conversationTopics(otherUserId: String): NetworkResult<ConversationTopicsResponse> =
             safeApiCall { api.conversationTopics(otherUserId) }

@@ -156,6 +156,7 @@ interface ChatApi {
     @POST("api/chat/conversations/{otherUserId}/read")
     suspend fun markConversationRead(
         @Path("otherUserId") otherUserId: String,
+        @Body body: Map<String, String> = emptyMap(),
     ): Unit
 
     /** `GET /api/chat/conversations/:otherUserId/topics` — route `chats.js:2466`. */
