@@ -2605,6 +2605,24 @@ const refreshDpop = authRouteDpop((req) => {
   return rt && typeof rt === 'string' ? { refreshToken: rt } : {};
 });
 
+/**
+ * The registry session `sessionId` when it was signed out: its row is revoked, or this process
+ * holds a logout it couldn't save yet. An unreadable row counts as not signed out: GoTrue has
+ * already rotated the pair, and a 503 would leave the client only its spent refresh token.
+ */
+async function signedOutSession(sessionId) {
+  if (!authSessionService.isUuid(sessionId)) return null;
+  if (authSessionService.signOutPending(sessionId)) return { id: sessionId, revoked_reason: 'logout' };
+  try {
+    const row = await authSessionService.getSessionById(sessionId);
+    return row?.revoked_at ? row : null;
+  } catch (err) {
+    if (!err.authBusy) throw err;
+    logger.warn('auth.refresh.minted_session_unreadable', { sessionId });
+    return null;
+  }
+}
+
 router.post('/refresh', refreshLimiter, refreshDpop, async (req, res) => {
   const refreshToken = getRefreshTokenFromRequest(req);
   if (!refreshToken || typeof refreshToken !== 'string') {
@@ -2699,6 +2717,19 @@ router.post('/refresh', refreshLimiter, refreshDpop, async (req, res) => {
         await revokeSessionByAccessToken(session.access_token, { source: 'refresh_foreign_token' });
         clearAuthCookies(res);
         return res.status(401).json({ error: authDeviceService.SECURITY_MESSAGES.DEVICE_MISMATCH, code: 'DEVICE_MISMATCH' });
+      }
+    } else {
+      // No row matched: a pre-registry session, or a rotation whose hashes weren't saved (a blip
+      // during an earlier refresh). The new pair still names its session, and one that was signed
+      // out stays signed out; the fresh token also ends the provider session it kept.
+      const mintedId = authSessionService.sessionClaimsFromAccessToken(session.access_token)?.id || null;
+      const signedOut = await signedOutSession(mintedId);
+      if (signedOut) {
+        const code = authDeviceService.codeForRevokedSession(signedOut);
+        logger.warn('auth.refresh_refused', { errorCode: code, sessionId: mintedId, ip: req.ip });
+        await revokeSessionByAccessToken(session.access_token, { source: 'refresh_signed_out_session' });
+        clearAuthCookies(res);
+        return res.status(401).json({ error: authDeviceService.SECURITY_MESSAGES[code], code });
       }
     }
 
@@ -5939,6 +5970,117 @@ router.post('/:userId/report', verifyToken, validate(reportUserSchema), async (r
 //            session's bound key verifies the DPoP (rth checked).
 //   others / global — verifyToken (+CSRF for cookies) + X-Step-Up
 //            (`revoke_sessions`), then revokeOthers / revokeAll (lockdown).
+//
+// A local logout whose revocation can't be saved answers 503, and nobody
+// repeats it: the apps wipe their tokens and the web clears its cookies first.
+// This process repeats it instead, with backoff, for about five minutes, and
+// meanwhile reads the verified session as signed out
+// (authSessionService.markSignOutPending). A restart forgets the retries.
+const LOGOUT_RETRY_WINDOW_MS = 5 * 60 * 1000;
+const LOGOUT_RETRY_MAX_DELAY_MS = 30 * 1000;
+const LOGOUT_RETRY_MAX_PENDING = 500;
+const pendingLogouts = new Map(); // hash of the presented token -> sign-out
+
+/** One local logout's work. runLocalSignOut repeats only the steps that haven't succeeded. */
+function localSignOut(req, { accessToken, refreshToken, deviceId, dpop }) {
+  const token = accessToken || refreshToken;
+  return {
+    key: token ? authSessionService.hashToken(token) : null,
+    accessToken,
+    refreshToken,
+    deviceId,
+    dpop,
+    // The security event keeps only the address and user agent of the request.
+    req: { ip: req.ip, headers: { 'user-agent': getHeader(req, 'user-agent') } },
+    verified: !accessToken,
+    userId: null,
+    sessionId: null,
+    registryDone: false,
+    providerDone: false,
+    attempts: 0,
+    until: 0,
+    running: null,
+  };
+}
+
+/** One attempt at a time: a repeated logout can meet a retry in flight. */
+function attemptLocalSignOut(s) {
+  const attempt = (s.running || Promise.resolve()).catch(() => {}).then(() => runLocalSignOut(s));
+  s.running = attempt;
+  return attempt;
+}
+
+async function runLocalSignOut(s) {
+  s.attempts += 1;
+  if (!s.verified) {
+    // Verify the signed token even when GoTrue already removed its session in a
+    // previous partial attempt. The registry must still be revocable on retry.
+    const { verifyAccessToken } = require('../services/accessTokenVerifier');
+    const verified = await verifyAccessToken(s.accessToken, { authClient: supabase, allowExpiredForRevocation: true });
+    if (!verified.ok && verified.reason === 'busy') throw authSessionService.authUnavailableError(verified.error);
+    if (verified.ok) {
+      s.userId = verified.user.id;
+      s.sessionId = authSessionService.sessionClaimsFromAccessToken(s.accessToken)?.id || null;
+    }
+    s.verified = true;
+  }
+  if (!s.registryDone) {
+    if (s.userId || (s.refreshToken && s.dpop)) {
+      await authDeviceService.logoutLocal({
+        userId: s.userId, bearerSessionId: s.sessionId, deviceId: s.deviceId, refreshToken: s.refreshToken, dpop: s.dpop, req: s.req,
+      });
+    }
+    s.registryDone = true;
+  }
+  if (!s.providerDone) {
+    // Commit application revocation before removing the provider session.
+    // Invalid/missing credentials still allow idempotent local cookie clearing.
+    if (s.accessToken && !(await revokeSessionByAccessToken(s.accessToken, { source: 'logout' }))) {
+      throw authSessionService.authUnavailableError();
+    }
+    s.providerDone = true;
+  }
+}
+
+/** Keep retrying a local sign-out that failed. False when it can't be queued. */
+function retryLocalSignOut(s) {
+  // Worth repeating: a proven session, or a token whose check couldn't run.
+  const proven = s.userId || (s.refreshToken && s.dpop);
+  if (!s.key || (s.verified && !proven)) return false;
+  if (!pendingLogouts.has(s.key)) {
+    if (pendingLogouts.size >= LOGOUT_RETRY_MAX_PENDING) {
+      logger.error('auth.logout.retry_queue_full', { pending: pendingLogouts.size });
+      return false;
+    }
+    s.until = Date.now() + LOGOUT_RETRY_WINDOW_MS;
+    pendingLogouts.set(s.key, s);
+    scheduleLocalSignOut(s, 1000);
+  }
+  if (s.sessionId) authSessionService.markSignOutPending(s.sessionId, s.userId, s.until);
+  return true;
+}
+
+function scheduleLocalSignOut(s, delayMs) {
+  const timer = setTimeout(async () => {
+    if (pendingLogouts.get(s.key) !== s) return;
+    try {
+      await attemptLocalSignOut(s);
+      pendingLogouts.delete(s.key);
+      logger.info('auth.logout.retry_saved', { userId: s.userId, sessionId: s.sessionId, attempts: s.attempts });
+    } catch (err) {
+      const nextMs = Math.min(delayMs * 2, LOGOUT_RETRY_MAX_DELAY_MS);
+      if (Date.now() + nextMs > s.until) {
+        pendingLogouts.delete(s.key);
+        logger.error('auth.logout.retry_gave_up', { userId: s.userId, sessionId: s.sessionId, attempts: s.attempts, errorCode: err.code || null });
+        return;
+      }
+      if (s.sessionId) authSessionService.markSignOutPending(s.sessionId, s.userId, s.until);
+      scheduleLocalSignOut(s, nextMs);
+    }
+  }, delayMs * (0.8 + Math.random() * 0.4));
+  timer.unref();
+}
+
 router.post(
   '/logout',
   logoutLimiter,
@@ -5987,45 +6129,32 @@ router.post(
     // This browser's saved data goes with the session (Instant Screens contract §5).
     res.set('Clear-Site-Data', '"storage"');
 
-    const accessToken = getLogoutAccessToken(req);
+    const presentedAccess = getLogoutAccessToken(req);
+    const accessToken = typeof presentedAccess === 'string' && presentedAccess ? presentedAccess : null;
+    const presentedRefresh = req.body?.refreshToken || req.body?.refresh_token;
+    const refreshToken = typeof presentedRefresh === 'string' && presentedRefresh ? presentedRefresh : null;
+    const deviceId = typeof req.body?.deviceId === 'string' && req.body.deviceId ? req.body.deviceId : undefined;
+    // A proof is checked once (its jti is spent); retries reuse the result.
+    let dpop = null;
+    if (getHeader(req, 'dpop')) {
+      const result = await verifyDpop(req, refreshToken ? { refreshToken } : {});
+      if (result.ok) dpop = result.dpop;
+      else logger.warn('auth.logout.dpop_invalid', { errorCode: result.code });
+    }
 
-    // Verify the signed token even when GoTrue already removed its session in a
-    // previous partial attempt. The registry must still be revocable on retry.
-    let proofUserId = null;
-    let proofSessionId = null;
+    const fresh = localSignOut(req, { accessToken, refreshToken, deviceId, dpop });
+    // The same token again continues the sign-out already being retried.
+    const pending = fresh.key ? pendingLogouts.get(fresh.key) : null;
+    const signOut = pending || fresh;
     try {
-      if (accessToken && typeof accessToken === 'string') {
-        const { verifyAccessToken } = require('../services/accessTokenVerifier');
-        const verified = await verifyAccessToken(accessToken, { authClient: supabase, allowExpiredForRevocation: true });
-        if (!verified.ok && verified.reason === 'busy') throw authSessionService.authUnavailableError(verified.error);
-        if (verified.ok) {
-          proofUserId = verified.user.id;
-          proofSessionId = authSessionService.sessionClaimsFromAccessToken(accessToken)?.id || null;
-        }
-      }
-      const refreshToken = req.body?.refreshToken || req.body?.refresh_token || null;
-      const deviceId = typeof req.body?.deviceId === 'string' && req.body.deviceId ? req.body.deviceId : undefined;
-      let dpop = null;
-      if (getHeader(req, 'dpop')) {
-        const result = await verifyDpop(req, refreshToken ? { refreshToken } : {});
-        if (result.ok) dpop = result.dpop;
-        else logger.warn('auth.logout.dpop_invalid', { errorCode: result.code });
-      }
-      if (proofUserId || (refreshToken && dpop)) {
-        await authDeviceService.logoutLocal({
-          userId: proofUserId, bearerSessionId: proofSessionId, deviceId, refreshToken, dpop, req,
-        });
-      }
-      // Commit application revocation before removing the provider session.
-      // Invalid/missing credentials still allow idempotent local cookie clearing.
-      if (accessToken && !(await revokeSessionByAccessToken(accessToken, { source: 'logout' }))) {
-        throw authSessionService.authUnavailableError();
-      }
+      await attemptLocalSignOut(signOut);
     } catch (err) {
-      logger.warn('auth.logout.incomplete', { code: err.code || 'AUTH_UNAVAILABLE' });
+      const retrying = retryLocalSignOut(signOut);
+      logger.warn('auth.logout.incomplete', { errorCode: err.code || 'AUTH_UNAVAILABLE', retrying });
       return res.status(503).json({ code: 'AUTH_UNAVAILABLE',
         error: 'Local sign-in data was cleared, but server sign-out could not be confirmed. Please try again.' });
     }
+    if (pending) pendingLogouts.delete(pending.key);
 
     logger.info('Logout completed', {
       hasAccessToken: Boolean(accessToken),

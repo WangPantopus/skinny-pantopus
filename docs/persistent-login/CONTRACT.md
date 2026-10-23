@@ -56,6 +56,13 @@ that response as confirmed server revocation. A signed access token can retry it
 registry cleanup even when the provider session has already been removed (auth-js
 reports GoTrue's `session_not_found` as `AuthSessionMissingError`, status 400; it
 counts as already signed out, like 401/403/404).
+No client repeats a `local` logout (the apps wipe their tokens and the web clears its
+cookies first), so the API process that answered 503 repeats it: verify the token, revoke
+the registry session, end the GoTrue session, each step until it succeeds once, with
+backoff for about five minutes. Meanwhile that process refuses the verified session's
+access token, sockets and refresh; other processes refuse it once the row is saved, and a
+restart forgets the retries. A refresh that rotates a token the registry never saw (a
+rotation that couldn't be saved) is refused when the session it names was signed out.
 
 ### `POST /api/users/reauthenticate`
 Response adds `{ stepUpToken, expiresAt, purpose:"generic" }` — token is valid for any purpose EXCEPT it is still refused for `restored` sessions on `delete_account`/`revoke_*` (they must present password — which reauthenticate does, so this is fine) — i.e. reauthenticate == step-up method `password`, purpose wildcard.

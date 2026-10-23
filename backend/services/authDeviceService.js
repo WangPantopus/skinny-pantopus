@@ -703,7 +703,8 @@ async function checkRefresh({ refreshToken, sessionId, accessToken, dpop, req, c
     return { ok: true, session: null, device: null, legacy: true, adopt: false, matchedBy: null, tokenResolved };
   }
 
-  if (session.revoked_at) {
+  // A logout this process could not save yet counts as saved here (routes/users.js retries it).
+  if (session.revoked_at || authSessionService.signOutPending(session.id)) {
     return { ...fail(codeForRevokedSession(session), { session }), tokenResolved };
   }
 
