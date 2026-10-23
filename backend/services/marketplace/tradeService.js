@@ -10,6 +10,7 @@ const supabaseAdmin = require('../../config/supabaseAdmin');
 const logger = require('../../utils/logger');
 const notificationService = require('../notificationService');
 const { assertListingInteractionAllowed } = require('./listingBlocks');
+const { loadTaskPersonName } = require('../../utils/listingCreatorIdentity');
 
 // ─── Helpers ─────────────────────────────────────────────────
 
@@ -122,14 +123,8 @@ async function proposeTrade({ targetListingId, proposerId, offeredListingIds, me
     throw new Error(`Failed to create trade: ${insertErr.message}`);
   }
 
-  // 5. Notify target user (non-blocking)
-  const { data: proposerProfile } = await supabaseAdmin
-    .from('User')
-    .select('display_name')
-    .eq('id', proposerId)
-    .single();
-
-  const proposerName = proposerProfile?.display_name || 'Someone';
+  // 5. Notify target user (non-blocking), naming the proposer by their Local Profile as listing offers do
+  const proposerName = await loadTaskPersonName(proposerId, 'Someone');
   notificationService.createNotification({
     userId: targetUserId,
     type: 'listing_trade_proposed',
