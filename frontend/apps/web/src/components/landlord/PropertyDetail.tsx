@@ -105,7 +105,7 @@ export default function PropertyDetail({ homeId }: Props) {
     return (
       <div className="max-w-5xl mx-auto px-4 py-6">
         <div className="flex flex-col items-center justify-center py-16">
-          <div className="w-10 h-10 border-3 border-app-border border-t-primary-500 rounded-full animate-spin" />
+          <div className="w-10 h-10 border-2 border-app-border border-t-primary-500 rounded-full animate-spin" />
           <p className="text-sm text-app-text-secondary mt-4">Loading property...</p>
         </div>
       </div>

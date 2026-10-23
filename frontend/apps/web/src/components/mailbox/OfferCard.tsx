@@ -42,7 +42,7 @@ export default function OfferCard({ item, onOpen, isOpening }: OfferCardProps) {
       {/* Opening animation overlay */}
       {isOpening && (
         <div className="px-4 py-6 flex flex-col items-center">
-          <div className="w-12 h-12 border-3 border-amber-300 border-t-amber-600 rounded-full animate-spin" />
+          <div className="w-12 h-12 border-2 border-amber-300 border-t-amber-600 rounded-full animate-spin" />
           <p className="text-sm font-medium text-amber-700 dark:text-amber-300 mt-3">Opening your offer...</p>
         </div>
       )}
