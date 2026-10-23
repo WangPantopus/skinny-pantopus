@@ -50,6 +50,16 @@ interface ChatMessageBubbleProps {
 // The actions menu's size (its row of quick reactions sets the width), to keep it on screen next to its button.
 const MENU_WIDTH = 304;
 
+/** Only private chat files support this bounded, authorization-checked preview. */
+function chatImagePreview(url: string): string {
+  try {
+    const parsed = new URL(url, 'https://pantopus.invalid');
+    if (!/^\/api\/chat\/files\/[a-f0-9-]+$/i.test(parsed.pathname)) return url;
+    parsed.searchParams.set('variant', 'thumbnail');
+    return url.startsWith('/') ? `${parsed.pathname}${parsed.search}${parsed.hash}` : parsed.href;
+  } catch { return url; }
+}
+
 
 function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClick, onReact, onRetry, onRemovePending, onReply, onEdit, onDelete }: ChatMessageBubbleProps) {
   const [preview, setPreview] = useState<{ url: string; title?: string; mimeType?: string; liveUrl?: string } | null>(null);
@@ -320,7 +330,13 @@ function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClic
                         {live && <span className="block px-2 py-1 text-xs">● LIVE</span>}
                         {/* Native img: user URLs + cookies on /api/chat/files/; avoids next/image dev sizing warnings. */}
                         <img
-                          src={url}
+                          src={chatImagePreview(url)}
+                          onError={(event) => {
+                            // Older servers or an unavailable preview still allow
+                            // the same authorized original, without a retry loop.
+                            const original = new URL(url, window.location.href).href;
+                            if (event.currentTarget.src !== original) event.currentTarget.src = original;
+                          }}
                           alt={showText ? `Photo: ${msgText}` : 'Photo'}
                           className="rounded-lg transition-opacity hover:opacity-90"
                           loading="lazy"
