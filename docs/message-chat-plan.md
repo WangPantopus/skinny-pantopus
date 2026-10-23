@@ -229,6 +229,26 @@ and matched the public alias while rejecting a distinct private account name.
 Function lint, migration policy and syntax passed. Browser/native search checks
 are pending; existing design and navigation are unchanged.
 
+## Bounded thumbnail work
+
+Private thumbnail reads previously downloaded and decoded the original on every
+request. Identical requests now share work and reuse a memory cache capped at
+16 MiB / 128 entries for ten minutes. Only bounded 512-pixel WebP derivatives
+enter that cache. The uploader and reader share one image-processing slot;
+pending thumbnail work is capped and times out. No derivative files or extra
+storage objects are created. Each HTTP request still checks current File state
+and room/business/task authorization before consulting the cache.
+
+Real local HTTP/storage checks: 20 simultaneous cold reads generated one image
+(seven shared the in-flight request, twelve found the completed cache); the next
+20 reads were cache hits with no conversion. A 1600×1200 upload produced 512×384
+thumbnails while full-size download retained 1600×1200. Conditional raw HTTP
+returned 304. Warm-cache access still refused nonmembers/revoked members (403)
+and deleted files (410). Errors use no-store so temporary failures cannot inherit
+the immutable image cache policy. Database read failures now answer retryable
+503 rather than incorrectly reporting a missing/deauthorized file. Real app
+photo rechecks are continuing; cold thumbnails still depend on original storage.
+
 ## Push account binding
 
 Durable chat and business-chat push envelopes now include `recipient_user_id`

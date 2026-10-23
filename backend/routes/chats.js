@@ -50,7 +50,6 @@ const pushService = require('../services/pushService');
 const notificationService = require('../services/notificationService');
 const rateLimit = require('express-rate-limit');
 const { pipeline } = require('stream/promises');
-const sharp = require('sharp');
 const { chosenUsernameOrNull } = require('../utils/personalUsername');
 const CHAT_DELETED_REDACT_DAYS = Math.max(parseInt(process.env.CHAT_DELETED_REDACT_DAYS || '180', 10) || 180, 1);
 const REDACTED_DELETED_MESSAGE = '[deleted message]';
@@ -3442,6 +3441,7 @@ function chatFileByteRange(header, size) {
 }
 
 router.get('/files/:fileId', tokenFromQuery, verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
   try {
     const userId = req.user.id;
     const { fileId } = req.params;
@@ -3457,9 +3457,8 @@ router.get('/files/:fileId', tokenFromQuery, verifyToken, async (req, res) => {
       .eq('id', fileId)
       .maybeSingle();
 
-    if (fileErr || !file) {
-      return res.status(404).json({ error: 'File not found' });
-    }
+    if (fileErr) return res.status(503).json({ error: 'File access is temporarily unavailable. Please retry.' });
+    if (!file) return res.status(404).json({ error: 'File not found' });
 
     if (file.is_deleted) {
       return res.status(410).json({ error: 'File has been deleted' });
@@ -3473,13 +3472,14 @@ router.get('/files/:fileId', tokenFromQuery, verifyToken, async (req, res) => {
 
     // Verify the requesting user is an active participant in the room, or acts for a business that is (its inbox
     // shows the room's photos; owners and staff aren't members of their business's rooms)
-    const { data: participant } = await supabaseAdmin
+    const { data: participant, error: membershipError } = await supabaseAdmin
       .from('ChatParticipant')
       .select('id')
       .eq('room_id', roomId)
       .eq('user_id', userId)
       .eq('is_active', true)
       .maybeSingle();
+    if (membershipError) return res.status(503).json({ error: 'File access is temporarily unavailable. Please retry.' });
     const actingFor = participant ? null : await actingBusinessInRoom(roomId, userId);
 
     if (!participant && !actingFor) {
@@ -3508,23 +3508,25 @@ router.get('/files/:fileId', tokenFromQuery, verifyToken, async (req, res) => {
       if (req.fresh) return res.status(304).end();
       let object;
       try {
+        if (thumbnail) {
+          const buffer = await require('../services/chatThumbnails').getThumbnail(file);
+          if (res.destroyed) return;
+          trackAccess();
+          return res.type('image/webp').send(buffer);
+        }
         object = await s3Service.getObjectStream(file.file_path);
       } catch (storageErr) {
         if (storageErr?.name === 'NoSuchKey' || storageErr?.$metadata?.httpStatusCode === 404) {
+          res.set('Cache-Control', 'private, no-store');
+          res.removeHeader('ETag');
           return res.status(404).json({ error: 'File not found' });
         }
         throw storageErr;
       }
-      res.type(thumbnail ? 'image/webp' : file.mime_type);
-      if (!thumbnail && Number.isSafeInteger(object.contentLength)) res.set('Content-Length', String(object.contentLength));
+      res.type(file.mime_type);
+      if (Number.isSafeInteger(object.contentLength)) res.set('Content-Length', String(object.contentLength));
       trackAccess();
-      // Inline photos cache this bounded first frame, never the original bytes. Failed decoding must not
-      // fall back to the original; full-screen viewers keep the existing URL without a variant.
-      const streams = thumbnail
-        ? [object.body, sharp({ limitInputPixels: 64 * 1024 * 1024 }).rotate()
-          .resize(512, 512, { fit: 'inside', withoutEnlargement: true }).webp({ quality: 80 }), res]
-        : [object.body, res];
-      return pipeline(...streams).catch((streamErr) => {
+      return pipeline(object.body, res).catch((streamErr) => {
         logger.warn('Chat file stream ended early', { requestId: req.requestId, fileId, error: streamErr.message });
       });
     }
@@ -3563,7 +3565,12 @@ router.get('/files/:fileId', tokenFromQuery, verifyToken, async (req, res) => {
     });
   } catch (err) {
     logger.error('Chat file download error', { requestId: req.requestId, userId: req.user?.id, fileId: req.params.fileId, error: err.message });
-    res.status(500).json({ error: 'Failed to load the file' });
+    if (res.destroyed || res.headersSent) return;
+    res.set('Cache-Control', 'private, no-store');
+    res.removeHeader('ETag');
+    const status = err.status || (err.name === 'AbortError' ? 503 : 500);
+    if (status === 503) res.set('Retry-After', '2');
+    res.status(status).json({ error: status === 503 ? 'File access is temporarily unavailable. Please retry.' : 'Failed to load the file' });
   }
 });
 

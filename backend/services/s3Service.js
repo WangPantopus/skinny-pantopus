@@ -421,8 +421,8 @@ async function getPresignedDownloadUrl(key, expiresIn = 3600) {
 
 // An object's bytes as a stream, for the API to serve under its own address. With `range` (one HTTP byte range, as a
 // Range header), storage may answer with just those bytes: contentRange then says which.
-async function getObjectStream(key, bucket = S3_BUCKET, range) {
-  const response = await s3Client.send(new GetObjectCommand({ Bucket: bucket, Key: key, ...(range ? { Range: range } : {}) }));
+async function getObjectStream(key, bucket = S3_BUCKET, range, { abortSignal } = {}) {
+  const response = await s3Client.send(new GetObjectCommand({ Bucket: bucket, Key: key, ...(range ? { Range: range } : {}) }), { abortSignal });
   const partial = Boolean(range) && response.$metadata?.httpStatusCode === 206 && response.ContentRange;
   return { body: response.Body, contentLength: response.ContentLength, contentRange: partial ? response.ContentRange : undefined };
 }

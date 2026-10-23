@@ -163,3 +163,6 @@ module.exports = function chatMediaUpload({ validateFileMime, sharp }) {
 
   return { receive, prepare };
 };
+
+// Reuse the same bounded processor for private thumbnail reads.
+module.exports.processImage = processImage;
