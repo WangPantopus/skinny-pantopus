@@ -381,13 +381,15 @@ public final class FeedMapViewModel {
     /// The smallest cluster radius, in degrees, however far the map zooms in.
     static let minClusterRadius = 0.0005
 
-    /// Widen the cluster radius as the camera zooms out and vice versa.
+    /// Widen the cluster radius as the camera zooms out and vice versa:
+    /// about an eighth of the view's height, so neighbouring cluster bubbles
+    /// (up to 60 pt) don't overlap.
     public func clusterRadius(for region: FeedMapRegion) -> Double {
         clusterRadius(latitudeDelta: region.latitudeDelta)
     }
 
     private func clusterRadius(latitudeDelta: Double) -> Double {
-        max(Self.minClusterRadius, min(latitudeDelta * 0.08, 0.05))
+        max(Self.minClusterRadius, min(latitudeDelta * 0.12, 0.05))
     }
 
     // MARK: - Fetch
