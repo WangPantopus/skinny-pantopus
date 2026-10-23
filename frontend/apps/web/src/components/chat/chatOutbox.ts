@@ -30,7 +30,9 @@ export interface PendingChatSend {
 // active membership; keep the captured send until it can be verified.
 export function directReplyRoomStatus(room: ChatRoomWithDetails, roomId: string, identityId: string, peerId: string): 'ready' | 'unavailable' | 'unsupported' {
   if (room.id !== roomId || (room.type || room.room_type) !== 'direct') return 'unsupported';
-  if (!Array.isArray(room.participants)) return 'unavailable';
+  const roomActive = (room as ChatRoomWithDetails & { is_active?: boolean }).is_active;
+  if (roomActive === false) return 'unsupported';
+  if (roomActive !== true || !Array.isArray(room.participants)) return 'unavailable';
   const members = room.participants;
   const ids = new Set(members.map((member) => member.user_id || member.user?.id));
   if (members.length !== 2 || ids.size !== 2 || !ids.has(identityId) || !ids.has(peerId)) return 'unsupported';
@@ -200,6 +202,8 @@ export async function removeChatSend(id: string): Promise<void> {
 async function drain(): Promise<void> {
   if (running === scope || !current(scope) || !navigator.onLine) return;
   const saved = scope;
+  const actorId = accountId;
+  if (!actorId) return;
   running = saved;
   const work = async () => {
     try {
@@ -221,7 +225,7 @@ async function drain(): Promise<void> {
         if (message.replyToId && message.otherUserId) {
           const result = await api.chat.getChatRoom(message.roomId, { asBusinessUserId: message.asBusinessUserId });
           if (!current(saved)) return;
-          const audience = directReplyRoomStatus(result.room, message.roomId, message.asBusinessUserId || saved.account, message.otherUserId);
+          const audience = directReplyRoomStatus(result.room, message.roomId, message.asBusinessUserId || actorId, message.otherUserId);
           if (audience !== 'ready') throw Object.assign(new Error(audience === 'unsupported' ? REPLY_AUDIENCE_REFUSAL
             : 'The original conversation could not yet be verified. Your reply is saved and will retry.'), { statusCode: audience === 'unsupported' ? 403 : 503 });
         }
