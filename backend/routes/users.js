@@ -2605,24 +2605,6 @@ const refreshDpop = authRouteDpop((req) => {
   return rt && typeof rt === 'string' ? { refreshToken: rt } : {};
 });
 
-/**
- * The registry session `sessionId` when it was signed out: its row is revoked, or this process
- * holds a logout it couldn't save yet. An unreadable row counts as not signed out: GoTrue has
- * already rotated the pair, and a 503 would leave the client only its spent refresh token.
- */
-async function signedOutSession(sessionId) {
-  if (!authSessionService.isUuid(sessionId)) return null;
-  if (authSessionService.signOutPending(sessionId)) return { id: sessionId, revoked_reason: 'logout' };
-  try {
-    const row = await authSessionService.getSessionById(sessionId);
-    return row?.revoked_at ? row : null;
-  } catch (err) {
-    if (!err.authBusy) throw err;
-    logger.warn('auth.refresh.minted_session_unreadable', { sessionId });
-    return null;
-  }
-}
-
 router.post('/refresh', refreshLimiter, refreshDpop, async (req, res) => {
   const refreshToken = getRefreshTokenFromRequest(req);
   if (!refreshToken || typeof refreshToken !== 'string') {
@@ -2631,7 +2613,7 @@ router.post('/refresh', refreshLimiter, refreshDpop, async (req, res) => {
 
   try {
     // (1)+(2) registry: session resolve, revocation, inactivity, device binding.
-    const check = await preCheckRefresh(req, refreshToken);
+    let check = await preCheckRefresh(req, refreshToken);
     if (!check.ok) {
       // Security codes terminate the session on the client; 503 = retry.
       if (check.status === 401) clearAuthCookies(res);
@@ -2720,16 +2702,26 @@ router.post('/refresh', refreshLimiter, refreshDpop, async (req, res) => {
       }
     } else {
       // No row matched: a pre-registry session, or a rotation whose hashes weren't saved (a blip
-      // during an earlier refresh). The new pair still names its session, and one that was signed
-      // out stays signed out; the fresh token also ends the provider session it kept.
+      // during an earlier refresh). The new pair still names its session. A row it has gets the
+      // checks above (a signed-out session stays signed out, a bound one needs its key) and keeps
+      // its binding and context; only a session with no row gets a new one. A refusal also ends
+      // the provider session the fresh token kept. A 503 (row unreadable) leaves it: GoTrue
+      // re-issues its current token when the client retries with its own.
       const mintedId = authSessionService.sessionClaimsFromAccessToken(session.access_token)?.id || null;
-      const signedOut = await signedOutSession(mintedId);
-      if (signedOut) {
-        const code = authDeviceService.codeForRevokedSession(signedOut);
-        logger.warn('auth.refresh_refused', { errorCode: code, sessionId: mintedId, ip: req.ip });
-        await revokeSessionByAccessToken(session.access_token, { source: 'refresh_signed_out_session' });
-        clearAuthCookies(res);
-        return res.status(401).json({ error: authDeviceService.SECURITY_MESSAGES[code], code });
+      check = await authDeviceService.checkMintedSession({
+        sessionId: mintedId,
+        refreshToken,
+        dpop: req.dpop || null,
+        cookieTransport: isCookieTransport(req),
+        req,
+      });
+      if (!check.ok) {
+        logger.warn('auth.refresh_refused', { errorCode: check.code, sessionId: mintedId, ip: req.ip });
+        if (check.status === 401) {
+          await revokeSessionByAccessToken(session.access_token, { source: 'refresh_minted_session_refused' });
+          clearAuthCookies(res);
+        }
+        return res.status(check.status || 401).json({ error: check.error, code: check.code });
       }
     }
 

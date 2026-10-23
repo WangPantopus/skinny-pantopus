@@ -149,6 +149,8 @@ function userAgent(req) {
 /**
  * Insert (or refresh) the AuthSession row for a freshly issued Supabase session.
  * Idempotent on id (a second /oauth/token call with the same pair updates).
+ * `replace: false` only creates a missing row: it returns null, writing nothing,
+ * when the session already has one.
  */
 async function insertSession({
   id,
@@ -159,6 +161,7 @@ async function insertSession({
   boundAtIssue = false,
   refreshToken = null,
   req = null,
+  replace = true,
 }) {
   const row = {
     id,
@@ -179,13 +182,14 @@ async function insertSession({
   };
   const { data, error } = await supabaseAdmin
     .from('AuthSession')
-    .upsert(row, { onConflict: 'id' })
+    .upsert(row, { onConflict: 'id', ignoreDuplicates: !replace })
     .select('*')
-    .single();
+    .maybeSingle();
   if (error) {
     logger.error('auth.session.insert_failed', { sessionId: id, userId, error: error.message });
     return null;
   }
+  if (!data && !replace) return null;
   return data || row;
 }
 
