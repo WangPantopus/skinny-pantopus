@@ -28,7 +28,7 @@ const { checkHomePermission, getActiveOccupancy, mapLegacyRole } = require('../u
 const { computeUtilityScore } = require('../utils/feedRanking');
 const s3 = require('../services/s3Service');
 const feedService = require('../services/feedService');
-const { loadChatPeople } = require('../services/chatPeople');
+const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
 const marketplaceService = require('../services/marketplace/marketplaceService');
 const { generateNeighborhoodFacts } = require('../services/ai/neighborhoodFactService');
 const { encodeGeohash6: _encodeGeohash6 } = require('../utils/geohash');
@@ -2339,12 +2339,19 @@ router.get('/mute', verifyToken, async (req, res) => {
     const ids = [...new Set((mutes || []).map((m) => m.muted_entity_id))];
     let accounts = new Map();
     if (ids.length > 0) {
-      const { data: users, error: usersError } = await supabaseAdmin
-        .from('User')
-        .select('id, username, name, first_name, last_name, profile_picture_url')
-        .in('id', ids);
+      const [{ data: users, error: usersError }, people] = await Promise.all([
+        supabaseAdmin
+          .from('User')
+          .select('id, username, name, first_name, last_name, profile_picture_url')
+          .in('id', ids),
+        loadChatPeople(ids),
+      ]);
       if (usersError) throw usersError;
-      accounts = new Map((users || []).map((u) => [u.id, u]));
+      // Muted people go by the name their posts and comments show: a person by their Local Profile's name, handle and
+      // photo, a business (or anyone without a Local Profile) by the account. loadChatPeople leaves everyone out when
+      // its read fails; the list fails then rather than show the accounts' names.
+      if ((users || []).some((u) => !people.has(String(u.id)))) throw new Error('Muted people could not be named');
+      accounts = new Map((users || []).map((u) => [u.id, chatPersonRow(u, people)]));
     }
 
     // A mute of a deleted account has no one to show and no effect, so it isn't listed.
