@@ -7,7 +7,13 @@
  * whether it is verified, never the owner or staff member behind the seat. Letters stored before sender_entity_id
  * was set name the business by sender_business_name alone; since 2026-09-23 that column holds only a business the
  * sender could send mail for (resolveSenderBusiness in routes/mailbox.js).
+ *
+ * A letter a person sent in their own name names them the way neighbors see them (nameMailSenders): by their Local
+ * Profile, read from sender_user_id whenever the letter is read, so a changed Local Profile shows. The name stored in
+ * sender_display when it was sent is only the fallback for a sender who can't be read.
  */
+
+const { loadChatPeople } = require('../services/chatPeople');
 
 function sentAsBusiness(mail) {
   if (!mail || typeof mail !== 'object') return false;
@@ -57,6 +63,42 @@ function presentMailSenders(rows, viewerId = null) {
   return Array.isArray(rows) ? rows.map((row) => presentMailSender(row, viewerId)) : rows;
 }
 
+// A letter a person sent in their own name, to someone else. The business fields must have been read: without them a
+// business letter can't be told apart, and is left as stored rather than named after the person behind the seat.
+function namedByPerson(mail, viewerId) {
+  if (!mail || typeof mail !== 'object' || !mail.sender_user_id) return false;
+  if (!('sender_entity_id' in mail) || !('sender_business_name' in mail) || sentAsBusiness(mail)) return false;
+  return !(viewerId && String(mail.sender_user_id) === String(viewerId));
+}
+
+/**
+ * The letters with each person who sent one in their own name named as neighbors see them: their Local Profile's name
+ * (a business account, or anyone without a Local Profile, by the account; services/chatPeople.js) in sender_display, in
+ * `field` when a read aliased sender_display (e.g. 'sender_name'), and in a joined `sender`. Letters sent as a business,
+ * the viewer's own letters and senders who can't be read keep what was stored. Rows must carry sender_user_id,
+ * sender_entity_id and sender_business_name. Never throws.
+ */
+async function nameMailSenders(rows, viewerId = null, { field = 'sender_display' } = {}) {
+  if (!Array.isArray(rows)) return rows;
+  const senderIds = rows.filter((row) => namedByPerson(row, viewerId)).map((row) => row.sender_user_id);
+  if (senderIds.length === 0) return rows;
+  const people = await loadChatPeople(senderIds);
+  return rows.map((row) => {
+    const person = namedByPerson(row, viewerId) ? people.get(String(row.sender_user_id)) : null;
+    if (!person) return row;
+    const { displayName, handle } = person;
+    const named = { ...row, [field]: displayName };
+    if ('sender_display' in row) named.sender_display = displayName;
+    // The joined account row keeps its shape, with the Local Profile's handle and name (as chatPersonRow does).
+    if (row.sender && typeof row.sender === 'object') named.sender = { ...row.sender, username: handle || null, name: displayName };
+    return named;
+  });
+}
+
+async function nameMailSender(mail, viewerId = null) {
+  return (await nameMailSenders([mail], viewerId))[0];
+}
+
 /**
  * The public claim page's sender (a token link, no sign-in). A letter sent as a business shows the business's name
  * and whether the business is verified; `person` (the sender's own name and verified state) is used otherwise.
@@ -72,6 +114,8 @@ module.exports = {
   sentAsBusiness,
   presentMailSender,
   presentMailSenders,
+  nameMailSender,
+  nameMailSenders,
   objectForRecipient,
   payloadForRecipient,
   claimPageSender,

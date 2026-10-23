@@ -1,19 +1,17 @@
 'use client';
 
 // 23:30 — the close. Night, one window still lit, and the address field
-// again: picking an address opens its preview on /start. The store
-// badges show only once both public listings exist and the QR codes are
-// marked ready, as the old closing section did.
+// again: picking an address opens its preview on /start. Below it, the
+// app: the phone's own store badge on a phone, or the QR code that opens
+// /get and both badges on a computer. /get sends computers here
+// (#get-the-app).
 
 import { useState } from 'react';
-import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { ANDROID_PLAY_STORE_URL, IOS_APP_STORE_URL } from '@pantopus/utils';
 import AddressAutocomplete, { type SelectedAddress } from '@/components/place/AddressAutocomplete';
+import AppDownload from './AppDownload';
 import LivingSky from './LivingSky';
 import styles from './home.module.css';
-
-const STORES_READY = !!(IOS_APP_STORE_URL && ANDROID_PLAY_STORE_URL && process.env.NEXT_PUBLIC_STORE_QR_CODES_READY === 'true');
 
 export default function CloseSection() {
   const router = useRouter();
@@ -21,7 +19,7 @@ export default function CloseSection() {
   const open = (place: SelectedAddress | null) => router.push(place ? `/start?address=${encodeURIComponent(place.label)}` : '/start');
 
   return (
-    <section className={styles.close} aria-labelledby="close-title">
+    <section id="get-the-app" className={styles.close} aria-labelledby="close-title">
       <LivingSky className={styles.sky} hour={23.5} rise={false} orbX={0.84} homes={0.75} houseX={0.72} houseXNarrow={0.4} horizon={0.86} label="Late at night, one window still lit" />
       <div className={styles.closeInner}>
         <span className={styles.label} style={{ color: '#C9D3E3', fontSize: 12 }}>23:30 · One window still lit</span>
@@ -47,17 +45,7 @@ export default function CloseSection() {
           </div>
         </div>
         <p className={styles.note} style={{ color: '#C9D3E3' }}>Free to look. No account needed.</p>
-        {STORES_READY ? (
-          <div className={styles.stores}>
-            <a href={IOS_APP_STORE_URL} target="_blank" rel="noopener noreferrer">
-              <Image src="/landing/badge-appstore-dark.svg" alt="Download on the App Store" width={132} height={44} />
-            </a>
-            <a href={ANDROID_PLAY_STORE_URL} target="_blank" rel="noopener noreferrer">
-              <Image src="/landing/badge-playstore-dark.svg" alt="Get it on Google Play" width={140} height={44} />
-            </a>
-            <Image src="/landing/qr-ios.png" alt="QR code for the iPhone app" width={96} height={96} className={styles.qr} />
-          </div>
-        ) : null}
+        <AppDownload variant="close" />
       </div>
       <div className={styles.closeSpace} aria-hidden="true" />
     </section>

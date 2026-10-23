@@ -235,7 +235,7 @@ export default function ListingDetailPage() {
         open={showReviewModal}
         onClose={() => setShowReviewModal(false)}
         reviewedId={listing.user_id || listing.seller_id || ''}
-        reviewedName={listing.seller?.name || listing.seller?.username || 'the seller'}
+        reviewedName={listing.creator?.displayName || 'the seller'}
         listingId={listingId}
         context="listing_sale"
         onReviewSubmitted={handleStatusChange}

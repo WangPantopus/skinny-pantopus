@@ -2,7 +2,7 @@ const crypto = require('crypto');
 const db = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const verificationAge = require('../utils/verificationAge');
-const { nameUnlessMadeUp } = require('../utils/personalUsername');
+const { personName } = require('./homeInvitationService');
 
 const MESSAGES = {
   CLAIM_MERGE_INVALID: 'Check the claim invitation details and try again.',
@@ -50,7 +50,7 @@ async function issueClaimInvitation({ homeId, claimId, userId, note = null }) {
   if (!result.replayed) {
     try {
       await require('./notificationService').notifyHomeInvite({ inviteeUserId: result.invitation.invitee_user_id,
-        inviterName: nameUnlessMadeUp(result.actor_name, 'Someone'), homeName: result.home_label, homeId, inviteToken: result.token });
+        inviterName: await personName(userId, 'Someone'), homeName: result.home_label, homeId, inviteToken: result.token });
     } catch (err) { logger.warn('Claim invitation notification failed after commit', { errorCode: err.code, claimId }); }
   }
   // The raw token is delivery-only in this existing endpoint, never part of its response.
@@ -69,7 +69,7 @@ async function acceptClaimMerge({ homeId, claimId, userId, invitationId = null }
   if (!result.replayed) {
     try {
       await require('./notificationService').notifyHomeInviteAccepted({ inviterUserId: result.inviter_id,
-        accepterName: nameUnlessMadeUp(result.actor_name, 'Someone'), homeName: result.home_label, homeId });
+        accepterName: await personName(userId, 'Someone'), homeName: result.home_label, homeId });
     } catch (err) { logger.warn('Claim acceptance notification failed after commit', { errorCode: err.code, claimId }); }
   }
   return result;

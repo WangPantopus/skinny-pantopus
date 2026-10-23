@@ -218,6 +218,13 @@ export interface UseChatMessagesOptions {
 /** Why the first page of a conversation could not load (null when it did). */
 export type ChatLoadFailure = 'forbidden' | 'notFound' | 'unavailable';
 
+/** The message the next send replies to, as the composer's reply bar and the reply's quote show it. */
+export interface ChatReplyTarget {
+  messageId: string;
+  senderName: string;
+  text: string;
+}
+
 export interface UseChatMessagesReturn {
   messages: ChatMessage[];
   loading: boolean;
@@ -236,7 +243,16 @@ export interface UseChatMessagesReturn {
   directChatPeer: User | null;
   /** Person-based mode: why the conversation could not be started (null when it was). */
   directChatError: string | null;
+  /**
+   * Why this conversation takes no messages from you, as the server says it (a draft or closed business: code
+   * NOT_PUBLISHED), or null. The composer shows this line instead of a field.
+   */
+  sendRefusal: string | null;
   sendMessage: (text: string, files?: File[]) => Promise<void>;
+  /** The message the next send replies to (the composer shows "Replying to …"), or null. */
+  replyingTo: ChatReplyTarget | null;
+  beginReply: (target: ChatReplyTarget) => void;
+  cancelReply: () => void;
   retryMessage: (messageId: string) => Promise<void>;
   loadOlder: () => Promise<void>;
   refresh: () => Promise<void>;
@@ -249,10 +265,27 @@ function isRefusal(err: unknown): boolean {
   return (err as { statusCode?: number } | null)?.statusCode === 403;
 }
 
+/** A refusal that holds for the whole conversation (a draft or closed business), not just this message. */
+function isConversationRefusal(err: unknown): boolean {
+  const e = err as { statusCode?: number; code?: unknown; data?: { code?: unknown } } | null;
+  return e?.statusCode === 403 && (e.code === 'NOT_PUBLISHED' || e.data?.code === 'NOT_PUBLISHED');
+}
+
 /** The server's own sentence for a failed send, when the client carried one. */
 function sendFailureReason(err: unknown): string | null {
   const message = (err as { message?: unknown } | null)?.message;
   return typeof message === 'string' && message.trim() ? message.trim() : null;
+}
+
+/**
+ * The reply a send can carry: the server refuses a whole send whose reply target isn't a sent message of that room,
+ * so a reply to a message still sending, or to another room's message in a person view, goes without its quote.
+ */
+function replyTargetIn(messages: ChatMessage[], replyToId: string | null | undefined, roomId: string): string | undefined {
+  if (!replyToId) return undefined;
+  const original = messages.find((m) => String(m.id) === String(replyToId)) as Record<string, any> | undefined;
+  if (!original || original._optimistic || original._failed) return undefined;
+  return String(original.room_id || '') === String(roomId) ? String(original.id) : undefined;
 }
 
 // ── Hook ────────────────────────────────────────────────────
@@ -287,6 +320,10 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
   const [directChatError, setDirectChatError] = useState<string | null>(null);
   const [conversationRoomIds, setConversationRoomIds] = useState<string[]>(() => initialSnapshot?.roomIds ?? []);
   const nextCursorRef = useRef<string | null>(initialSnapshot?.nextCursor ?? null);
+  const [replyingTo, setReplyingTo] = useState<ChatReplyTarget | null>(null);
+  const [sendRefusal, setSendRefusal] = useState<string | null>(null);
+  // A reply, and a reason the conversation takes no messages, belong to the conversation they came from.
+  useEffect(() => { setReplyingTo(null); setSendRefusal(null); }, [cacheKeyId]);
 
   const messagesRef = useRef<ChatMessage[]>([]);
   messagesRef.current = messages;
@@ -320,6 +357,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
           ...(asBusinessUserId ? { asBusinessUserId } : {}),
         }) as Record<string, any> | undefined;
         if (resp?.nextCursor !== undefined) nextCursorRef.current = (resp.nextCursor as string | null);
+        if (resp && 'sendRefusal' in resp) setSendRefusal((resp.sendRefusal as { error?: string } | null)?.error || null);
         return (resp?.messages as ChatMessage[]) || [];
       } else if (otherUserId) {
         const params: Record<string, any> = { limit: 100 };
@@ -328,6 +366,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
         if (topicId) params.topicId = topicId;
         const result = await api.chat.getConversationMessages(otherUserId, params as Parameters<typeof api.chat.getConversationMessages>[1]) as Record<string, any>;
         if (result?.nextCursor !== undefined) nextCursorRef.current = (result.nextCursor as string | null);
+        if (result && 'sendRefusal' in result) setSendRefusal((result.sendRefusal as { error?: string } | null)?.error || null);
         const rawRoomIds = Array.isArray(result?.roomIds) ? (result.roomIds as unknown[]) : [];
         const nextRoomIds = Array.from(new Set(rawRoomIds.map((id) => String(id)).filter(Boolean))).sort();
         setConversationRoomIds((prev) => (
@@ -719,8 +758,8 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
   // ── Send message (useMutation with optimistic + mark-failed rollback) ──
 
   const sendMessageMutation = useMutation({
-    mutationFn: async (vars: { text: string; files?: File[]; targetRoomId: string; clientMessageId: string }) => {
-      const { text, files, targetRoomId, clientMessageId } = vars;
+    mutationFn: async (vars: { text: string; files?: File[]; targetRoomId: string; clientMessageId: string; replyToId?: string }) => {
+      const { text, files, targetRoomId, clientMessageId, replyToId } = vars;
       const trimmed = text.trim();
       const hasFiles = (files?.length || 0) > 0;
 
@@ -740,6 +779,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
         messageText: trimmed || undefined,
         messageType: messageType as 'text' | 'image' | 'video' | 'file' | 'audio' | 'location' | 'gig_offer' | 'listing_offer',
         ...(fileIds.length > 0 ? { fileIds } : {}),
+        ...(replyToId ? { replyToId } : {}),
         ...(asBusinessUserId ? { asBusinessUserId } : {}),
         clientMessageId,
       });
@@ -761,6 +801,8 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
             sender: { id: currentUserId || 'self', username: '', name: '', profile_picture_url: '' },
             message_text: trimmed,
             message_type: 'text',
+            // The reply quotes its original while it sends.
+            ...(vars.replyToId ? { reply_to_id: vars.replyToId } : {}),
             created_at: new Date().toISOString(),
             attachments: [],
             metadata: {},
@@ -797,6 +839,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
       setMessages(prev => prev.map(m =>
         m.id === clientMessageId ? { ...m, _failed: true, _refused: refused, _optimistic: false } : m
       ));
+      if (isConversationRefusal(err)) setSendRefusal(sendFailureReason(err));
     },
     onSettled: () => {
       setSending(false);
@@ -827,14 +870,27 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
         }
         clientMessageId = pendingAttachmentSend.current.clientMessageId;
       }
+      // The reply bar clears as the send goes out (its bubble quotes the original), and comes back with the
+      // draft if the send fails.
+      const reply = replyingTo;
+      const replyToId = replyTargetIn(messagesRef.current, reply?.messageId, targetRoomId);
+      setReplyingTo(null);
       // Keep both upload and message identity across an uncertain reply. Only a
       // completed send starts a new intent for an identical subsequent attachment.
-      await sendMessageMutation.mutateAsync({ text, files, targetRoomId, clientMessageId });
+      try {
+        await sendMessageMutation.mutateAsync({ text, files, targetRoomId, clientMessageId, replyToId });
+      } catch (err) {
+        setReplyingTo((current) => current ?? reply);
+        throw err;
+      }
       pendingAttachmentSend.current = null;
     } finally {
       attachmentSendInFlight.current = false;
     }
-  }, [isRoomMode, roomId, resolvedRoomId, sending, sendMessageMutation, directChatError, currentUserId, asBusinessUserId]);
+  }, [isRoomMode, roomId, resolvedRoomId, sending, sendMessageMutation, directChatError, currentUserId, asBusinessUserId, replyingTo]);
+
+  const beginReply = useCallback((target: ChatReplyTarget) => setReplyingTo(target), []);
+  const cancelReply = useCallback(() => setReplyingTo(null), []);
 
   // ── Retry failed message ────────────────────────────
 
@@ -854,10 +910,12 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     ));
 
     try {
+      const replyToId = replyTargetIn(messagesRef.current, failedMsg.reply_to_id, targetRoomId);
       const sendResult = await api.chat.sendMessage({
         roomId: targetRoomId,
         messageText: msgText || undefined,
         messageType: 'text',
+        ...(replyToId ? { replyToId } : {}),
         ...(asBusinessUserId ? { asBusinessUserId } : {}),
         clientMessageId,
       });
@@ -879,6 +937,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
         m.id === messageId ? { ...m, _failed: true, _refused: refused, _optimistic: false } : m
       ));
       if (refused) setError(sendFailureReason(err) || "You can't send messages in this conversation.");
+      if (isConversationRefusal(err)) setSendRefusal(sendFailureReason(err));
     }
   }, [isRoomMode, roomId, resolvedRoomId, asBusinessUserId, refresh]);
 
@@ -942,7 +1001,11 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     resolvedRoomId,
     directChatPeer,
     directChatError,
+    sendRefusal,
     sendMessage,
+    replyingTo,
+    beginReply,
+    cancelReply,
     retryMessage,
     loadOlder,
     refresh,

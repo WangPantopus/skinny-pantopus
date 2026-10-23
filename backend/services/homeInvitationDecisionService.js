@@ -32,7 +32,8 @@ async function prepare({ actorId, token }) {
     || r.preview.invitation.status !== 'pending' || typeof r.preview.invitation.proposed_role !== 'string'
     || !date(r.preview.invitation.created_at)
     || !(r.preview.invitation.expires_at === null || date(r.preview.invitation.expires_at))) throw failure();
-  return { home_id: r.home_id, invitation_id: r.invitation_id, decision_token: r.decision_token, preview: r.preview };
+  return { home_id: r.home_id, invitation_id: r.invitation_id, decision_token: r.decision_token,
+    preview: await invitations.namePreview(r.preview) };
 }
 function validateResult(r, args) {
   if (!STATES.includes(r.state) || !uuid(r.home_id) || !uuid(r.invitation_id)

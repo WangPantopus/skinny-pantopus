@@ -39,76 +39,6 @@ public enum FeedViewMode: String, Sendable, Hashable, CaseIterable {
     }
 }
 
-/// A viewport as the map reports it — centre plus span, mirroring RN's
-/// `Region`.
-public struct FeedMapRegion: Sendable, Hashable {
-    public var latitude: Double
-    public var longitude: Double
-    public var latitudeDelta: Double
-    public var longitudeDelta: Double
-
-    public init(latitude: Double, longitude: Double, latitudeDelta: Double, longitudeDelta: Double) {
-        self.latitude = latitude
-        self.longitude = longitude
-        self.latitudeDelta = latitudeDelta
-        self.longitudeDelta = longitudeDelta
-    }
-
-    /// RN default region (`src/constants/feed.ts` `DEFAULT_REGION`).
-    public static let fallback = FeedMapRegion(
-        latitude: 40.7484,
-        longitude: -73.9857,
-        latitudeDelta: 0.12,
-        longitudeDelta: 0.12
-    )
-
-    /// South / west / north / east — the four params `/api/posts/map`
-    /// requires (`backend/routes/posts.js:1652`). A named box rather than a
-    /// 4-tuple so the edges cannot be transposed at the call site.
-    public struct Bounds: Sendable, Equatable {
-        public let south: Double
-        public let west: Double
-        public let north: Double
-        public let east: Double
-    }
-
-    public var bounds: Bounds {
-        Bounds(
-            south: latitude - latitudeDelta / 2,
-            west: longitude - longitudeDelta / 2,
-            north: latitude + latitudeDelta / 2,
-            east: longitude + longitudeDelta / 2
-        )
-    }
-
-    /// RN's `regionChangedSignificantly` — ignore sub-10% jitter so a
-    /// settling camera doesn't spam the endpoint.
-    public func changedSignificantly(from other: FeedMapRegion) -> Bool {
-        let latThreshold = max(other.latitudeDelta * 0.1, 0.0005)
-        let lonThreshold = max(other.longitudeDelta * 0.1, 0.0005)
-        return abs(latitude - other.latitude) > latThreshold
-            || abs(longitude - other.longitude) > lonThreshold
-            || abs(latitudeDelta - other.latitudeDelta) > latThreshold
-            || abs(longitudeDelta - other.longitudeDelta) > lonThreshold
-    }
-
-    /// MapKit fits a requested region to the map's shape: the centre and one
-    /// side of the span stay, the other side widens. True when this settled
-    /// viewport is `requested` fitted that way (within the same 10% jitter),
-    /// so nobody moved the map.
-    public func isMapFit(of requested: FeedMapRegion) -> Bool {
-        let latThreshold = max(requested.latitudeDelta * 0.1, 0.0005)
-        let lonThreshold = max(requested.longitudeDelta * 0.1, 0.0005)
-        let keepsLatitude = abs(latitudeDelta - requested.latitudeDelta) <= latThreshold
-        let keepsLongitude = abs(longitudeDelta - requested.longitudeDelta) <= lonThreshold
-        return abs(latitude - requested.latitude) <= latThreshold
-            && abs(longitude - requested.longitude) <= lonThreshold
-            && latitudeDelta >= requested.latitudeDelta - latThreshold
-            && longitudeDelta >= requested.longitudeDelta - lonThreshold
-            && (keepsLatitude || keepsLongitude)
-    }
-}
-
 /// The two request dimensions the map mode re-fetches on: which feed
 /// surface is active (`place` / `connections`) and which chip-row intent
 /// is selected. Used as the `.task(id:)` key so a change re-requests the
@@ -130,44 +60,6 @@ public enum FeedMapState: Sendable {
     case error(message: String)
 }
 
-/// A successful viewport fetch.
-public struct FeedMapLoaded: Sendable, Hashable {
-    public let entities: [ExploreEntity]
-    public let markers: [ExploreMarker]
-    public let userCoordinate: UserCoordinate?
-    public let selectedId: String?
-    /// Backend hint offered when the viewport was empty
-    /// (`backend/routes/posts.js:1854`).
-    public let nearestActivityCenter: FeedMapRegion?
-    /// Posts of the tapped cluster shown as a list (one zooming can't split).
-    public let clusterPostIds: Set<String>
-
-    public init(
-        entities: [ExploreEntity],
-        markers: [ExploreMarker],
-        userCoordinate: UserCoordinate?,
-        selectedId: String? = nil,
-        nearestActivityCenter: FeedMapRegion? = nil,
-        clusterPostIds: Set<String> = []
-    ) {
-        self.entities = entities
-        self.markers = markers
-        self.userCoordinate = userCoordinate
-        self.selectedId = selectedId
-        self.nearestActivityCenter = nearestActivityCenter
-        self.clusterPostIds = clusterPostIds
-    }
-
-    public var isEmpty: Bool {
-        entities.isEmpty
-    }
-
-    /// The listed cluster's posts, nearest first.
-    public var clusterPosts: [ExploreEntity] {
-        entities.filter { clusterPostIds.contains($0.id) }
-    }
-}
-
 /// Pulse map-mode view model.
 @Observable
 @MainActor
@@ -178,8 +70,15 @@ public final class FeedMapViewModel {
 
     public private(set) var state: FeedMapState = .loading
 
-    /// Current camera viewport. The view mirrors this into `MapCameraPosition`.
+    /// The viewport posts are read for: where the camera settled, or where
+    /// the view model sent it.
     public private(set) var region: FeedMapRegion = .fallback
+
+    /// The latest camera move asked of the view (`FeedMapView` follows it).
+    public private(set) var cameraRequest: FeedMapCameraRequest?
+
+    /// Where the camera last settled; nil until it first does.
+    public private(set) var lastCamera: FeedMapCamera?
 
     /// True once the camera moved off the last fetched viewport — drives
     /// the floating "Search this area" pill.
@@ -200,6 +99,13 @@ public final class FeedMapViewModel {
     private var pendingRegion: FeedMapRegion?
     private var debounceTask: Task<Void, Never>?
     private var fetchTask: Task<Void, Never>?
+    private var cameraRequestCount = 0
+    /// The viewport the shown posts were read for.
+    private var fetchedRegion: FeedMapRegion?
+    /// The latitude span a straight-down map would show around the camera's
+    /// centre. Pins are spaced by it: a tilted map's region reaches much
+    /// further than its foreground, which would cluster near pins too eagerly.
+    private var clusterLatitudeDelta: Double?
 
     init(
         api: APIClient = .shared,
@@ -254,9 +160,7 @@ public final class FeedMapViewModel {
             latitudeDelta: region.latitudeDelta,
             longitudeDelta: region.longitudeDelta
         )
-        region = next
-        pendingRegion = nil
-        viewportDirty = false
+        moveCamera(to: next)
         await fetchMarkers(for: next)
         return true
     }
@@ -273,7 +177,7 @@ public final class FeedMapViewModel {
         }
         shownArea = payload.viewingLocation
         if let area = shownArea {
-            region = openingRegion(latitude: area.latitude, longitude: area.longitude)
+            moveCamera(to: openingRegion(latitude: area.latitude, longitude: area.longitude))
         }
         if userCoordinate == nil {
             userCoordinate = locationProvider.cachedCoordinate()
@@ -284,10 +188,20 @@ public final class FeedMapViewModel {
             userCoordinate = await locationProvider.requestCurrent(timeoutSeconds: 4)
         }
         if shownArea == nil, let center = await fallbackCenter(homes: payload.homes) {
-            region = openingRegion(latitude: center.latitude, longitude: center.longitude)
+            moveCamera(to: openingRegion(latitude: center.latitude, longitude: center.longitude))
         }
         await fetchMarkers(for: region)
         isReady = true
+    }
+
+    /// Sends the camera to `next` (the view follows `cameraRequest`) and
+    /// makes it the viewport, with nothing left to search.
+    private func moveCamera(to next: FeedMapRegion) {
+        region = next
+        pendingRegion = nil
+        viewportDirty = false
+        cameraRequestCount += 1
+        cameraRequest = FeedMapCameraRequest(id: cameraRequestCount, region: next)
     }
 
     /// `GET /api/location`, read the way the Pulse list reads it.
@@ -331,17 +245,39 @@ public final class FeedMapViewModel {
     /// "Search this area" pill appears) and debounces the follow-up
     /// region commit — the refetch itself waits for the explicit tap,
     /// matching RN. With nothing pending, settling on `region` as MapKit
-    /// fitted it to the map's shape (opening the map, Recenter, a new area)
-    /// isn't a move.
-    public func cameraDidSettle(on next: FeedMapRegion) {
+    /// fitted it to the map's shape isn't a move. The pins regroup for the
+    /// new zoom straight away, so zooming in splits a cluster.
+    ///
+    /// `byUser` false is the settle of a move the view made itself (opening
+    /// and tilting the map, a `cameraRequest`): not a move by the person. A
+    /// tilted camera sees further than the region asked for, so its region
+    /// becomes the viewport, read again when it reaches past what was read.
+    /// `clusterLatitudeDelta` is the span a straight-down map would show at
+    /// the camera's centre.
+    public func cameraDidSettle(
+        on next: FeedMapRegion,
+        camera: FeedMapCamera? = nil,
+        clusterLatitudeDelta: Double? = nil,
+        byUser: Bool = true
+    ) {
+        if let camera { lastCamera = camera }
+        if let clusterLatitudeDelta { self.clusterLatitudeDelta = clusterLatitudeDelta }
+        guard byUser else {
+            adoptSettledRegion(next)
+            return
+        }
         if let pendingRegion {
-            guard next.changedSignificantly(from: pendingRegion) else { return }
+            guard next.changedSignificantly(from: pendingRegion) else {
+                regroupPins(keepingSelection: true)
+                return
+            }
         } else if next.isMapFit(of: region) {
+            regroupPins(keepingSelection: true)
             return
         }
         pendingRegion = next
         viewportDirty = true
-        clearSelection()
+        regroupPins(keepingSelection: false)
         debounceTask?.cancel()
         debounceTask = Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: FeedMapViewModel.regionDebounceNanoseconds)
@@ -353,6 +289,31 @@ public final class FeedMapViewModel {
     private func commitPendingRegion() {
         guard let pendingRegion else { return }
         region = pendingRegion
+    }
+
+    /// The view's own move settled. Its region is the viewport now; posts
+    /// are read again only when it shows more than was read.
+    private func adoptSettledRegion(_ next: FeedMapRegion) {
+        guard isReady, pendingRegion == nil else { return }
+        region = next
+        regroupPins(keepingSelection: true)
+        if let fetchedRegion, next.isCovered(by: fetchedRegion) { return }
+        Task { await fetchMarkers(for: next) }
+    }
+
+    /// Regroups the loaded pins for the camera's zoom. A move by the person
+    /// closes the preview card and the cluster list, as it always has.
+    private func regroupPins(keepingSelection: Bool) {
+        guard case let .loaded(loaded) = state else { return }
+        let markers = ExploreMapViewModel.cluster(
+            entities: loaded.entities,
+            radiusDegrees: clusterRadius(latitudeDelta: clusterLatitudeDelta ?? region.latitudeDelta)
+        )
+        state = .loaded(loaded.with(
+            markers: markers,
+            selectedId: keepingSelection ? loaded.selectedId : nil,
+            clusterPostIds: keepingSelection ? loaded.clusterPostIds : []
+        ))
     }
 
     /// "Search this area" — re-request the viewport the user dragged to.
@@ -379,9 +340,7 @@ public final class FeedMapViewModel {
             latitudeDelta: region.latitudeDelta,
             longitudeDelta: region.longitudeDelta
         )
-        region = next
-        pendingRegion = nil
-        viewportDirty = false
+        moveCamera(to: next)
         await fetchMarkers(for: next)
     }
 
@@ -395,9 +354,7 @@ public final class FeedMapViewModel {
             latitudeDelta: region.latitudeDelta,
             longitudeDelta: region.longitudeDelta
         )
-        region = next
-        pendingRegion = nil
-        viewportDirty = false
+        moveCamera(to: next)
         await fetchMarkers(for: next)
     }
 
@@ -407,14 +364,7 @@ public final class FeedMapViewModel {
     /// a tapped cluster's posts as a list in its place.
     public func selectEntity(_ id: String?, clusterPostIds: Set<String> = []) {
         guard case let .loaded(loaded) = state else { return }
-        state = .loaded(FeedMapLoaded(
-            entities: loaded.entities,
-            markers: loaded.markers,
-            userCoordinate: loaded.userCoordinate,
-            selectedId: id,
-            nearestActivityCenter: loaded.nearestActivityCenter,
-            clusterPostIds: clusterPostIds
-        ))
+        state = .loaded(loaded.with(selectedId: id, clusterPostIds: clusterPostIds))
     }
 
     /// Lists `cluster`'s posts in the preview card's place.
@@ -428,16 +378,18 @@ public final class FeedMapViewModel {
         return loaded.entities.first { $0.id == id }
     }
 
-    private func clearSelection() {
-        selectEntity(nil)
-    }
-
     /// The smallest cluster radius, in degrees, however far the map zooms in.
     static let minClusterRadius = 0.0005
 
-    /// Widen the cluster radius as the camera zooms out and vice versa.
+    /// Widen the cluster radius as the camera zooms out and vice versa:
+    /// about an eighth of the view's height, so neighbouring cluster bubbles
+    /// (up to 60 pt) don't overlap.
     public func clusterRadius(for region: FeedMapRegion) -> Double {
-        max(Self.minClusterRadius, min(region.latitudeDelta * 0.08, 0.05))
+        clusterRadius(latitudeDelta: region.latitudeDelta)
+    }
+
+    private func clusterRadius(latitudeDelta: Double) -> Double {
+        max(Self.minClusterRadius, min(latitudeDelta * 0.12, 0.05))
     }
 
     // MARK: - Fetch
@@ -478,15 +430,22 @@ public final class FeedMapViewModel {
                         longitudeDelta: target.longitudeDelta
                     )
                 }
+                let now = Date()
+                var pinStyles: [String: FeedMapPinStyle] = [:]
+                for marker in response.markers where marker.layerType == "post" {
+                    pinStyles[marker.id] = FeedMapPinStyle.of(marker, now: now)
+                }
+                fetchedRegion = target
                 state = .loaded(FeedMapLoaded(
                     entities: entities.sorted { $0.distanceMiles < $1.distanceMiles },
                     markers: ExploreMapViewModel.cluster(
                         entities: entities,
-                        radiusDegrees: clusterRadius(for: target)
+                        radiusDegrees: clusterRadius(latitudeDelta: clusterLatitudeDelta ?? target.latitudeDelta)
                     ),
                     userCoordinate: userCoordinate,
                     selectedId: nil,
-                    nearestActivityCenter: hint
+                    nearestActivityCenter: hint,
+                    pinStyles: pinStyles
                 ))
             } catch {
                 guard !Task.isCancelled else { return }

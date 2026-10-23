@@ -45,13 +45,14 @@ export function gradientFor(seed: string): string {
   return AVATAR_GRADIENTS[hashString(seed) % AVATAR_GRADIENTS.length];
 }
 
+/** A household member by the name they show neighbors (the roster's display_name), else the account's. */
 export function toMember(u: {
   id: string;
   name?: string | null;
   username?: string | null;
   profile_picture_url?: string | null;
-}): HomeMember {
-  const name = u.name || u.username || "Member";
+}, displayName?: string | null): HomeMember {
+  const name = displayName || u.name || u.username || "Member";
   return {
     id: u.id,
     name,

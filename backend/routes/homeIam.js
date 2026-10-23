@@ -37,6 +37,7 @@ const { OLD_TO_NEW_PERM, homeAccessExpiresAt } = require('../utils/homeAccessPol
 const homeAuthorityService = require('../services/homeAuthorityService');
 const homeExternalShareService = require('../services/homeExternalShareService');
 const { describeHomeActivity } = require('../utils/homeActivityLabels');
+const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
 const {
   checkHomePermission,
   getUserAccess,
@@ -336,8 +337,11 @@ router.get('/:id/audit-log', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch audit log' });
     }
 
-    // A readable sentence beside each raw code, the same one the Home activity timeline shows.
-    res.json({ entries: (data || []).map((entry) => ({ ...entry, description: describeHomeActivity(entry) })) });
+    // A readable sentence beside each raw code, the same one the Home activity timeline shows. Actors go by the Local
+    // Profile they show neighbors (services/chatPeople.js), as on the timeline.
+    const people = await loadChatPeople((data || []).map((entry) => entry.actor?.id));
+    res.json({ entries: (data || []).map((entry) => ({ ...entry, actor: chatPersonRow(entry.actor, people),
+      description: describeHomeActivity(entry) })) });
   } catch (err) {
     logger.error('Audit log error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch audit log' });

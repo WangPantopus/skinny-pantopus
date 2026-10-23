@@ -20,6 +20,7 @@ import * as api from '@pantopus/api';
 import AddressAutocomplete, { type SelectedAddress } from '@/components/place/AddressAutocomplete';
 import { PantopusMark } from '@/components/brand/PantopusMark';
 import LivingSky from './LivingSky';
+import AppDownload from './AppDownload';
 import ScaleGlyph from './ScaleGlyph';
 import { heroFacts, scaleWord } from './heroFacts';
 import { HERO_ID, formatHour, isNightHour, skyColorsAt } from './skyScene';
@@ -169,6 +170,7 @@ export default function HomeHero() {
           ) : (
             <p className={styles.heroNote}>Free to look. No account needed. What’s available varies by location.</p>
           )}
+          <AppDownload variant="hero" />
         </div>
 
         <div className={styles.facts}>

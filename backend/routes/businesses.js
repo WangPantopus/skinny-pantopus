@@ -88,7 +88,7 @@ const { generateNewBusinessSignal } = require('../services/businessSignalService
 const membershipService = require('../services/businessMembershipService');
 const { chosenUsernameOrNull } = require('../utils/personalUsername');
 const { isUnpublishedBusiness } = require('../utils/visibilityPolicy');
-const { loadChatPeople, reviewerRow } = require('../services/chatPeople');
+const { loadChatPeople, chatPersonRow, reviewerRow } = require('../services/chatPeople');
 
 
 // ============ CONSTANTS ============
@@ -3539,7 +3539,9 @@ router.get('/:businessId/pages/:pageId/revisions', verifyToken, async (req, res)
       return res.status(500).json({ error: 'Failed to fetch revisions' });
     }
 
-    res.json({ revisions: revisions || [] });
+    // The teammate who published goes by their Local Profile, as the team list names them.
+    const people = await loadChatPeople((revisions || []).map((rev) => rev.publisher?.id));
+    res.json({ revisions: (revisions || []).map((rev) => ({ ...rev, publisher: chatPersonRow(rev.publisher, people) })) });
   } catch (err) {
     logger.error('Get revisions error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch revisions' });
@@ -4545,9 +4547,11 @@ router.get('/:businessId/matched-posts', verifyToken, async (req, res) => {
     }
 
     const readable = await readablePosts(posts || [], userId);
+    // Each writer goes by their Local Profile, as on the post itself (services/chatPeople.js).
+    const people = await loadChatPeople(readable.map((post) => post.creator?.id));
     res.json({
       posts: readable.map(({ id, title, content, post_type, like_count, comment_count, created_at, user_id, creator }) => (
-        { id, title, content, post_type, like_count, comment_count, created_at, user_id, creator })),
+        { id, title, content, post_type, like_count, comment_count, created_at, user_id, creator: chatPersonRow(creator, people) })),
       pagination: {
         page,
         page_size: pageSize,
@@ -5035,20 +5039,20 @@ async function captureInvoicePayment(paymentId) {
 /**
  * Tells the business's owner that an invoice was paid, when it is: the money reaches the business's payout account
  * (or, without one, the owner's wallet) after the 48-hour review (processPendingTransfers says so again then), but
- * they should not have to open the app to find out.
+ * they should not have to open the app to find out. The payer goes by their Local Profile, as on the invoice list.
  */
 async function notifyInvoicePaid(invoice) {
   const ownerId = await getBusinessPrimaryOwnerId(invoice.business_user_id);
   if (!ownerId) return;
-  const [{ data: payer }, { data: payment }, { data: business }] = await Promise.all([
-    supabaseAdmin.from('User').select('name, username').eq('id', invoice.recipient_user_id).maybeSingle(),
+  const [people, { data: payment }, { data: business }] = await Promise.all([
+    loadChatPeople([invoice.recipient_user_id]),
     invoice.payment_id
       ? supabaseAdmin.from('Payment').select('amount_to_payee, payee_id').eq('id', invoice.payment_id).maybeSingle()
       : Promise.resolve({ data: null }),
     supabaseAdmin.from('User').select('name').eq('id', invoice.business_user_id).maybeSingle(),
   ]);
   const total = `$${(invoice.total_cents / 100).toFixed(2)}`;
-  const payerName = payer?.name || chosenUsernameOrNull(payer?.username) || 'A customer';
+  const payerName = people.get(String(invoice.recipient_user_id))?.displayName || 'A customer';
   const net = payment?.amount_to_payee ? `$${(payment.amount_to_payee / 100).toFixed(2)}` : null;
   const toBusiness = payment?.payee_id === invoice.business_user_id;
   const destination = toBusiness ? `${business?.name || "the business"}'s payout account` : 'your wallet';
@@ -5213,9 +5217,9 @@ async function knownInvoiceRecipients(businessId, senderId, onlyUserId = null) {
 /**
  * GET /:businessId/invoice-recipients?q= — the people this crew can pick when sending an
  * invoice: those it already knows (knownInvoiceRecipients: invoiced before, booked with it,
- * hired it for a task, wrote to it) and the sender's own connections, matched by name or
- * username. Never an open member search. Without q, the most recent ones. Editors and up, like
- * sending an invoice.
+ * hired it for a task, wrote to it) and the sender's own connections, each by their Local
+ * Profile (services/chatPeople.js) and matched by that name or handle. Never an open member
+ * search. Without q, the most recent ones. Editors and up, like sending an invoice.
  */
 router.get('/:businessId/invoice-recipients', verifyToken, async (req, res) => {
   try {
@@ -5238,20 +5242,25 @@ router.get('/:businessId/invoice-recipients', verifyToken, async (req, res) => {
     const order = [...relationById.keys()];
     if (order.length === 0) return res.json({ people: [] });
 
-    // Looked up in chunks so a crew that knows many people doesn't send one huge id list.
+    // Looked up (and named) in chunks so a crew that knows many people doesn't send one huge id list.
     const chunks = [];
     for (let i = 0; i < order.length; i += 100) chunks.push(order.slice(i, i + 100));
-    const lookups = await Promise.all(chunks.map((ids) => supabaseAdmin
-      .from('User')
-      .select('id, name, username, profile_picture_url, account_type')
-      .in('id', ids)));
+    const [lookups, namedChunks] = await Promise.all([
+      Promise.all(chunks.map((ids) => supabaseAdmin
+        .from('User')
+        .select('id, name, username, profile_picture_url, account_type')
+        .in('id', ids))),
+      Promise.all(chunks.map((ids) => loadChatPeople(ids))),
+    ]);
     const failed = lookups.find((r) => r.error);
     if (failed) throw failed.error;
 
     const byId = new Map(lookups.flatMap((r) => r.data || []).map((u) => [u.id, u]));
+    const named = new Map(namedChunks.flatMap((chunk) => [...chunk]));
     const people = order
       .map((id) => byId.get(id))
       .filter((u) => u && u.account_type !== 'business')
+      .map((u) => chatPersonRow(u, named))
       .filter((u) => !query
         || (u.name || '').toLowerCase().includes(query)
         || (u.username || '').toLowerCase().includes(query))
@@ -5463,8 +5472,10 @@ router.get('/:businessId/invoices', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch invoices' });
     }
 
+    // Each customer goes by their Local Profile, as in the recipient picker (services/chatPeople.js).
+    const people = await loadChatPeople((invoices || []).map((inv) => inv.recipient?.id));
     res.json({
-      invoices: invoices || [],
+      invoices: (invoices || []).map((inv) => ({ ...inv, recipient: chatPersonRow(inv.recipient, people) })),
       pagination: { page, page_size: pageSize, total: count || 0 },
     });
   } catch (err) {
@@ -5497,7 +5508,8 @@ router.get('/:businessId/invoices/:invoiceId', verifyToken, async (req, res) => 
       return res.status(404).json({ error: 'Invoice not found', code: 'NOT_FOUND' });
     }
 
-    res.json({ invoice });
+    const people = await loadChatPeople([invoice.recipient?.id]);
+    res.json({ invoice: { ...invoice, recipient: chatPersonRow(invoice.recipient, people) } });
   } catch (err) {
     logger.error('Get invoice error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch invoice', code: 'INTERNAL_ERROR' });
