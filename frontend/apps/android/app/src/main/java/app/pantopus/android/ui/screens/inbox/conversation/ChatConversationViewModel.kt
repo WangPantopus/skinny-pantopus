@@ -63,6 +63,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -75,6 +77,7 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.util.UUID
 import javax.inject.Inject
+import kotlin.random.Random
 
 @HiltViewModel
 class ChatConversationViewModel
@@ -287,6 +290,8 @@ class ChatConversationViewModel
         private var activeRoomIds: Set<String> = emptySet()
         private val joinedRoomIds = mutableSetOf<String>()
         private val roomJoinJobs = mutableMapOf<String, Job>()
+        private val roomJoinGate = Semaphore(ROOM_JOIN_CONCURRENCY)
+        private var backfillProjectionJob: Job? = null
         private val historyReadsInFlight = mutableSetOf<Pair<HistoryReadContext, String?>>()
         private val changedDuringCatchUp = mutableSetOf<String>()
 
@@ -3153,6 +3158,8 @@ class ChatConversationViewModel
             error is NetworkError.Forbidden || error == NetworkError.NotFound || error == NetworkError.Unauthorized
 
         private fun resetRoomSubscriptions() {
+            backfillProjectionJob?.cancel()
+            backfillProjectionJob = null
             roomJoinJobs.values.forEach { it.cancel() }
             roomJoinJobs.clear()
             joinedRoomIds.clear()
@@ -3170,14 +3177,23 @@ class ChatConversationViewModel
                     viewModelScope.launch {
                         var retryDelay = ROOM_JOIN_RETRY_INITIAL_MS
                         while (context == historyContext() && roomNeedsJoin(roomId)) {
-                            val ack = socket.emitWithAck("room:join", JSONObject().put("roomId", roomId))
+                            val ack =
+                                roomJoinGate.withPermit {
+                                    if (context == historyContext() && roomNeedsJoin(roomId)) {
+                                        socket.emitWithAck("room:join", JSONObject().put("roomId", roomId))
+                                    } else {
+                                        null
+                                    }
+                                }
                             if (context != historyContext() || roomId !in activeRoomIds) break
                             if (ack?.optBoolean("success") == true) {
                                 joinedRoomIds.add(roomId)
-                                mergeBackfill(parseMessages(ack.optJSONArray("messages")))
+                                val backfill = withContext(Dispatchers.Default) { parseMessages(ack.optJSONArray("messages")) }
+                                if (context == historyContext() && roomId in activeRoomIds) mergeBackfill(backfill)
                             } else {
                                 // A lost ACK must not leave this room permanently marked as joined.
-                                delay(retryDelay)
+                                val advised = ack?.optLong("retryAfterMs", retryDelay) ?: retryDelay
+                                delay(advised.coerceIn(ROOM_JOIN_RETRY_INITIAL_MS, ROOM_JOIN_RETRY_MAX_MS) + Random.nextLong(250))
                                 retryDelay = (retryDelay * 2).coerceAtMost(ROOM_JOIN_RETRY_MAX_MS)
                             }
                         }
@@ -3214,25 +3230,33 @@ class ChatConversationViewModel
         }
 
         private fun mergeBackfill(backfill: List<ChatMessageDto>) {
-            // Backfill is exactly the gap a lost POST response plus a missed
-            // `message:new` echo leaves, so confirmed sends are retired here too.
-            refreshUnknownTopics(backfill)
+            // Confirm accepted outbox ids even when their old messages are outside the loaded window.
             val retiredPending = retireConfirmedSends(backfill)
-            val existing = messages.map { it.id }.toSet()
-            // The room backfill carries every topic; a topic view keeps its own.
+            val existing = messages.mapTo(mutableSetOf()) { it.id }
+            val oldest = messages.firstOrNull()
             val fresh =
                 backfill.filter {
-                    !existing.contains(it.id) && matchesTopicFilter(it) && canMerge(it) && belongsInContextWindow(it)
+                    it.id !in existing && (oldest == null || messageOrder.compare(it, oldest) >= 0) &&
+                        matchesTopicFilter(it) && canMerge(it) && belongsInContextWindow(it)
                 }
-            if (fresh.isEmpty()) {
-                if (retiredPending) rebuild()
-                return
-            }
+            if (fresh.isEmpty() && !retiredPending) return
+            refreshUnknownTopics(fresh)
             changedDuringCatchUp.addAll(fresh.map { it.id })
             messages.addAll(fresh)
             messages.sortWith(messageOrder)
-            rebuild()
-            scheduleMarkRead()
+            boundTimelineWindow()
+            // Hundreds of join ACKs must not synchronously rebuild the whole timeline once per room.
+            // This never advances the REST delta cursor; its authoritative replay still repairs mutations.
+            if (backfillProjectionJob?.isActive == true) return
+            val context = historyContext()
+            backfillProjectionJob =
+                viewModelScope.launch {
+                    delay(ROOM_BACKFILL_PROJECTION_MS)
+                    if (context == historyContext()) {
+                        rebuild()
+                        scheduleMarkRead()
+                    }
+                }
         }
 
         private fun applyUpdatedMessage(updated: ChatMessageDto) {
@@ -3571,8 +3595,9 @@ class ChatConversationViewModel
             val showTopicDividers =
                 mode is ChatThreadMode.Person && _selectedTopicId.value == null && _topics.value.isNotEmpty()
             val topicTitlesById = _topics.value.associate { it.id to it.title }
+            val dayKeys = combined.map { dayKey(it.createdAt) }
             combined.forEachIndexed { index, message ->
-                val dayKey = dayKey(message.createdAt)
+                val dayKey = dayKeys[index]
                 if (dayKey != lastDayKey) {
                     rows.add(ChatTimelineRow.DayDivider(ChatDayDivider(id = dayKey, label = dayLabel(message.createdAt))))
                     lastDayKey = dayKey
@@ -3594,8 +3619,8 @@ class ChatConversationViewModel
                     return@forEachIndexed
                 }
                 val side = if (message.userId == messageIdentityId) ChatMessageSide.Outgoing else ChatMessageSide.Incoming
-                val previousSameSide = sharesBubbleGroup(message, combined.getOrNull(index - 1))
-                val nextSameSide = sharesBubbleGroup(message, combined.getOrNull(index + 1))
+                val previousSameSide = sharesBubbleGroup(message, combined.getOrNull(index - 1), dayKey == dayKeys.getOrNull(index - 1))
+                val nextSameSide = sharesBubbleGroup(message, combined.getOrNull(index + 1), dayKey == dayKeys.getOrNull(index + 1))
                 val hasTail = !nextSameSide
                 val deliveryState =
                     if (side != ChatMessageSide.Outgoing) {
@@ -3992,9 +4017,10 @@ class ChatConversationViewModel
         private fun sharesBubbleGroup(
             message: ChatMessageDto,
             neighbor: ChatMessageDto?,
+            sameDay: Boolean,
         ): Boolean =
             neighbor != null && neighbor.resolvedType !in setOf("system", "broadcast_reference") &&
-                neighbor.userId == message.userId && dayKey(neighbor.createdAt) == dayKey(message.createdAt)
+                neighbor.userId == message.userId && sameDay
 
         private fun stampLabel(message: ChatMessageDto): String? =
             runCatching {
@@ -4124,6 +4150,8 @@ private const val REACTION_REFETCH_DEBOUNCE_MS = 300L
 /** Refresh cadence while the socket is disconnected (fallback polling). */
 private const val SOCKET_FALLBACK_INITIAL_MS = 2_000L
 private const val SOCKET_FALLBACK_POLL_MS = 15_000L
+private const val ROOM_JOIN_CONCURRENCY = 4
+private const val ROOM_BACKFILL_PROJECTION_MS = 100L
 private const val ROOM_JOIN_RETRY_INITIAL_MS = 1_000L
 private const val ROOM_JOIN_RETRY_MAX_MS = 15_000L
 
