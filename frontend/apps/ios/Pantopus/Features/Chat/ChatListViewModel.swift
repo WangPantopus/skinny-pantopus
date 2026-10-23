@@ -12,8 +12,7 @@ import Observation
 public final class ChatListViewModel {
     /// Current render state.
     public private(set) var state: ChatListState = .loading
-    /// Set when a refresh fails while conversations are on screen: they stay
-    /// and this shows as a toast. The view clears it after display.
+    /// Failed refreshes keep conversations visible and show a toast.
     public var refreshFailureMessage: String?
     public private(set) var isLoadingMore = false
     public var nextPageCursor: String? {
@@ -23,8 +22,7 @@ public final class ChatListViewModel {
     /// Active filter tab.
     public private(set) var activeFilter: ChatFilter = .all
 
-    /// Set when a filter other than All has no matches. The state then holds
-    /// only the AI row, and the view says what the filter found nothing for.
+    /// Empty filters retain the assistant row and explain what has no matches.
     public private(set) var emptyFilter: ChatFilter?
 
     /// The Unread filter's badge; other filter badges remain hidden.
@@ -43,6 +41,7 @@ public final class ChatListViewModel {
     private var refreshTask: Task<Void, Never>?
     private var inboxResponse: UnifiedConversationsResponse?
     private var fetchGeneration = 0
+    private var activeFetchGeneration: Int?
 
     private var serverTotalUnread: Int = 0
     private var serverTotalUnmutedUnread: Int?
@@ -50,8 +49,7 @@ public final class ChatListViewModel {
     private var preferencesTask: Task<Void, Never>?
     private var hiddenKeys: Set<String> = []
     private var mutedKeys: Set<String> = []
-    /// The pinned assistant row. The empty state shows it too: before a
-    /// first conversation it is the only way into the assistant.
+    /// Keep the assistant reachable before the first conversation.
     let aiRow: ConversationRowContent = .init(
         id: "ai_assistant",
         variant: .aiAssistant,
@@ -109,7 +107,7 @@ public final class ChatListViewModel {
 
     /// Older inbox rows are fetched when their existing list reaches the end.
     public func loadMore() async {
-        guard !isLoadingMore, let cursor = nextPageCursor, let current = inboxResponse else { return }
+        guard activeFetchGeneration == nil, !isLoadingMore, let cursor = nextPageCursor, let current = inboxResponse else { return }
         isLoadingMore = true
         defer { isLoadingMore = false }
         let generation = fetchGeneration
@@ -232,6 +230,8 @@ public final class ChatListViewModel {
     private func fetch(force: Bool) async {
         fetchGeneration += 1
         let generation = fetchGeneration
+        activeFetchGeneration = generation
+        defer { if activeFetchGeneration == generation { activeFetchGeneration = nil } }
         let session = AuthManager.shared.requestSessionGeneration
         let cacheVersion = ChatLocalStore.shared.version
         let scope = localCacheScope
