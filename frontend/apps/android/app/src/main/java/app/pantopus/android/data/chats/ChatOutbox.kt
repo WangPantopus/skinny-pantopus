@@ -32,6 +32,7 @@ import javax.inject.Singleton
 
 /** One account's ordered, durable outgoing queue. Network work does not occupy the composer's Send button. */
 @Singleton
+@Suppress("TooManyFunctions") // Draft promotion and delivery share one account-scoped writer and logout boundary.
 class ChatOutbox
     @Inject
     constructor(
@@ -57,6 +58,21 @@ class ChatOutbox
 
         @Volatile private var generation = 0L
         private var request: Job? = null
+        private val draftRevisions = mutableMapOf<Pair<ChatSendTarget, String?>, Long>()
+
+        @Synchronized
+        private fun reviseDraft(draft: ChatComposerDraft): Long {
+            val key = draft.target to draft.topicId
+            val revision = (draftRevisions[key] ?: 0L) + 1L
+            draftRevisions[key] = revision
+            return revision
+        }
+
+        @Synchronized
+        private fun isCurrentDraft(
+            draft: ChatComposerDraft,
+            revision: Long,
+        ) = draftRevisions[draft.target to draft.topicId] == revision
 
         init {
             scope.launch {
@@ -87,6 +103,36 @@ class ChatOutbox
             foreground = false
         }
 
+        /** Keep draft writes independent of the screen's lifetime, but serialized with logout and sends. */
+        fun saveDraft(
+            draft: ChatComposerDraft,
+            files: List<UploadFile>,
+            onFailure: (String) -> Unit,
+        ) {
+            val revision = reviseDraft(draft)
+            scope.launch {
+                synchronizeAccount()
+                lock.withLock {
+                    if (account != draft.target.accountId || !isCurrentDraft(draft, revision)) return@withLock
+                    runCatching { store.saveDraft(draft, files) }.onFailure {
+                        onFailure("Couldn't save this draft on the device. Free some storage and try again.")
+                    }
+                }
+            }
+        }
+
+        suspend fun loadDraft(
+            target: ChatSendTarget,
+            topicId: String?,
+        ): Pair<ChatComposerDraft, List<UploadFile>>? =
+            withContext(Dispatchers.IO) {
+                synchronizeAccount()
+                lock.withLock {
+                    if (account != target.accountId) return@withLock null
+                    runCatching { store.loadDraft(target, topicId) }.getOrNull()
+                }
+            }
+
         private suspend fun synchronizeAccount() {
             val user = tokens.userId()
             val session = tokens.sessionMarker()
@@ -107,13 +153,19 @@ class ChatOutbox
         suspend fun enqueue(
             entry: ChatOutboxEntry,
             files: List<UploadFile>,
+            draft: ChatComposerDraft? = null,
         ): String? =
             withContext(Dispatchers.IO) {
                 synchronizeAccount()
                 lock.withLock {
                     if (account != entry.target.accountId) return@withLock "Your account changed. Open the conversation and try again."
                     try {
-                        val saved = store.insert(entry, files)
+                        val submittedDraft = draft?.copy(queuedClientId = entry.clientId)
+                        if (submittedDraft != null) {
+                            reviseDraft(submittedDraft)
+                            store.saveDraft(submittedDraft, files)
+                        }
+                        val saved = store.insert(entry, files, submittedDraft)
                         _entries.value = _entries.value + saved
                         wake.trySend(Unit)
                         null
@@ -180,6 +232,7 @@ class ChatOutbox
                     request = null
                     account = null
                     _entries.value = emptyList()
+                    synchronized(this@ChatOutbox) { draftRevisions.clear() }
                     store.clear()
                 }
             }

@@ -33,7 +33,9 @@ import app.pantopus.android.data.api.net.readableForbiddenMessage
 import app.pantopus.android.data.api.services.GeoApi
 import app.pantopus.android.data.blocks.BlocksRepository
 import app.pantopus.android.data.chats.ActiveChatThread
+import app.pantopus.android.data.chats.ChatComposerDraft
 import app.pantopus.android.data.chats.ChatOutbox
+import app.pantopus.android.data.chats.ChatOutboxAttachment
 import app.pantopus.android.data.chats.ChatOutboxEntry
 import app.pantopus.android.data.chats.ChatOutboxTopic
 import app.pantopus.android.data.chats.ChatRepository
@@ -309,6 +311,14 @@ class ChatConversationViewModel
         private var outboxJob: Job? = null
         private var outboxAcceptedJob: Job? = null
         private val outboxClientIds = mutableSetOf<String>()
+        private var draftSaveJob: Job? = null
+        private var draftLoadJob: Job? = null
+        private var draftScope: Pair<ChatSendTarget, String?>? = null
+        private var composerRevision = 0L
+        private var draftSaveFailed = false
+        private var draftReady = false
+        private var draftLoadRevision = 0L
+        private var submittingDraft: ChatComposerDraft? = null
 
         /**
          * Inputs needed to (re)send one optimistic message. Captured at
@@ -429,6 +439,8 @@ class ChatConversationViewModel
                 _composerText.value = ""
                 _queuedAttachments.value = emptyList()
                 _replyingTo.value = null
+                _editingMessageId.value = null
+                draftScope = null
                 failedClientIds.clear()
                 refusedClientIds.clear()
                 directRoomDeferred?.cancel()
@@ -473,6 +485,7 @@ class ChatConversationViewModel
 
         fun load() {
             observeOutbox()
+            restoreComposerDraft()
             if (_state.value is ChatConversationUiState.Loaded) {
                 // Back on screen after teardown() (a pushed screen, a tab
                 // switch): listen again. Re-joining the rooms backfills what
@@ -794,11 +807,18 @@ class ChatConversationViewModel
         }
 
         fun selectTopic(topicId: String?) {
+            persistComposerDraft()
             clearContextWindow()
             historyGeneration++
             catchUpJob?.cancel()
             visibleReadThroughId = null
             _selectedTopicId.value = if (_selectedTopicId.value == topicId) null else topicId
+            _composerText.value = ""
+            _queuedAttachments.value = emptyList()
+            _replyingTo.value = null
+            _editingMessageId.value = null
+            draftScope = null
+            restoreComposerDraft()
             // A stale PRE_BID_LIMIT banner shouldn't survive a topic switch
             // (mirrors iOS selectTopic).
             _sendLimitNotice.value = null
@@ -832,6 +852,7 @@ class ChatConversationViewModel
 
         fun setComposerText(value: String) {
             _composerText.value = value
+            composerChanged()
             if (value.isBlank()) {
                 emitTypingStop()
             } else {
@@ -895,6 +916,7 @@ class ChatConversationViewModel
 
         fun removeQueuedAttachment(id: String) {
             _queuedAttachments.value = _queuedAttachments.value.filterNot { it.id == id }
+            composerChanged()
         }
 
         fun queueAttachment(
@@ -929,6 +951,7 @@ class ChatConversationViewModel
         private fun appendQueuedAttachment(attachment: ChatQueuedAttachment) {
             if (_queuedAttachments.value.any { it.id == attachment.id }) return
             _queuedAttachments.value = (_queuedAttachments.value + attachment).take(5)
+            composerChanged()
         }
 
         fun loadShareableGigs() {
@@ -1375,11 +1398,14 @@ class ChatConversationViewModel
                 )
             val files = attachments.map { UploadFile(it.filename, it.mimeType, requireNotNull(it.bytes)) }
             val attachmentIds = attachments.mapTo(mutableSetOf()) { it.id }
+            draftSaveJob?.cancel()
+            val savedDraft = composerDraft(target, _selectedTopicId.value, attachments)
+            submittingDraft = savedDraft
             _isSending.value = true
             viewModelScope.launch {
                 try {
-                    val error = queue.enqueue(entry, files)
-                    if (target != sendTarget()) return@launch
+                    val error = queue.enqueue(entry, files, savedDraft)
+                    if (target != sendTarget() || savedDraft.topicId != _selectedTopicId.value) return@launch
                     if (error != null) {
                         _actionFailure.value = error
                         return@launch
@@ -1388,8 +1414,11 @@ class ChatConversationViewModel
                     if (_composerText.value == draft) _composerText.value = ""
                     _queuedAttachments.value = _queuedAttachments.value.filterNot { it.id in attachmentIds }
                     if (_replyingTo.value?.messageId == replyId) _replyingTo.value = null
+                    composerChanged()
+                    persistComposerDraft()
                     emitTypingStop()
                 } finally {
+                    if (submittingDraft == savedDraft) submittingDraft = null
                     if (target == sendTarget()) _isSending.value = false
                 }
             }
@@ -1857,6 +1886,7 @@ class ChatConversationViewModel
                     text = message.resolvedText,
                 )
             _editingMessageId.value = null
+            composerChanged()
         }
 
         fun beginEdit(messageId: String) {
@@ -1864,11 +1894,13 @@ class ChatConversationViewModel
             _editingMessageId.value = messageId
             _replyingTo.value = null
             _composerText.value = message.resolvedText
+            composerChanged()
         }
 
         fun cancelMessageAction() {
             _replyingTo.value = null
             _editingMessageId.value = null
+            composerChanged()
         }
 
         /**
@@ -2118,6 +2150,7 @@ class ChatConversationViewModel
                 scheduleMarkRead()
                 if (socket.connectionState.value != SocketManager.ConnectionState.Connected) startFallbackPollingIfNeeded()
             } else {
+                persistComposerDraft()
                 activeChatThread.clear()
                 markReadJob?.cancel()
                 stopFallbackPolling()
@@ -2153,6 +2186,9 @@ class ChatConversationViewModel
         }
 
         fun teardown() {
+            persistComposerDraft()
+            draftLoadJob?.cancel()
+            draftLoadJob = null
             outboxJob?.cancel()
             outboxJob = null
             outboxAcceptedJob?.cancel()
@@ -2203,6 +2239,95 @@ class ChatConversationViewModel
         override fun onCleared() {
             super.onCleared()
             teardown()
+        }
+
+        private fun composerChanged() {
+            composerRevision++
+            draftSaveJob?.cancel()
+            draftSaveJob =
+                viewModelScope.launch {
+                    delay(300)
+                    persistComposerDraft()
+                }
+        }
+
+        private fun persistComposerDraft() {
+            draftSaveJob?.cancel()
+            draftSaveJob = null
+            val target = sendTarget() ?: return
+            val topic = _selectedTopicId.value
+            if (draftScope != (target to topic) || (!draftReady && composerRevision == draftLoadRevision)) return
+            val attachments = _queuedAttachments.value.filter { it.bytes != null }
+            val draft = composerDraft(target, topic, attachments)
+            if (draft == submittingDraft) return
+            val files = attachments.map { UploadFile(it.filename, it.mimeType, requireNotNull(it.bytes)) }
+            outbox?.saveDraft(draft, files) { message ->
+                if (sendTarget() == target && !draftSaveFailed) {
+                    draftSaveFailed = true
+                    _actionFailure.value = message
+                }
+            }
+        }
+
+        private fun composerDraft(
+            target: ChatSendTarget,
+            topic: String?,
+            attachments: List<ChatQueuedAttachment>,
+        ): ChatComposerDraft {
+            val reply = _replyingTo.value
+            return ChatComposerDraft(
+                target = target,
+                topicId = topic,
+                text = _composerText.value,
+                attachments = attachments.map { ChatOutboxAttachment(it.id, it.filename, it.mimeType, requireNotNull(it.bytes).size) },
+                replyMessageId = reply?.messageId,
+                replyName = reply?.senderName,
+                replyText = reply?.text,
+                editingMessageId = _editingMessageId.value,
+            )
+        }
+
+        private fun restoreComposerDraft() {
+            val target = sendTarget() ?: return
+            val topic = _selectedTopicId.value
+            val scope = target to topic
+            if (draftScope == scope) return
+            draftScope = scope
+            draftSaveFailed = false
+            draftReady = false
+            val revision = composerRevision
+            draftLoadRevision = revision
+            draftLoadJob?.cancel()
+            draftLoadJob =
+                viewModelScope.launch {
+                    val saved = outbox?.loadDraft(target, topic)
+                    if (sendTarget() != target || _selectedTopicId.value != topic) return@launch
+                    draftReady = true
+                    if (composerRevision != revision || saved == null) return@launch
+                    val (draft, files) = saved
+                    _composerText.value = draft.text
+                    _queuedAttachments.value =
+                        draft.attachments.zip(files).map { (attachment, file) ->
+                            val kind =
+                                if (attachment.mimeType.startsWith("image/")) {
+                                    ChatQueuedAttachmentKind.Image
+                                } else {
+                                    ChatQueuedAttachmentKind.Document
+                                }
+                            ChatQueuedAttachment(
+                                attachment.id,
+                                kind,
+                                attachment.filename,
+                                attachment.mimeType,
+                                file.bytes,
+                            )
+                        }
+                    _replyingTo.value =
+                        draft.replyMessageId?.let {
+                            ChatReplyPreview(it, draft.replyName.orEmpty(), draft.replyText.orEmpty())
+                        }
+                    _editingMessageId.value = draft.editingMessageId
+                }
         }
 
         // MARK: - Fetch
@@ -2489,7 +2614,14 @@ class ChatConversationViewModel
                                 is NetworkResult.Success -> {
                                     if (context != historyContext()) return@launch
                                     historyGeneration++
+                                    persistComposerDraft()
                                     _selectedTopicId.value = result.data.topic.id
+                                    _composerText.value = ""
+                                    _queuedAttachments.value = emptyList()
+                                    _replyingTo.value = null
+                                    _editingMessageId.value = null
+                                    draftScope = null
+                                    restoreComposerDraft()
                                     // The first fetch may already have left unfiltered.
                                     fetch(initial = true)
                                 }

@@ -13,6 +13,7 @@ import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody
 import okio.BufferedSink
 import timber.log.Timber
+import java.io.ByteArrayOutputStream
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.File
@@ -41,10 +42,25 @@ data class ChatOutboxAttachment(
     val filename: String,
     val mimeType: String,
     val size: Int,
+    val encryptionScope: String? = null,
 )
 
 @JsonClass(generateAdapter = true)
 data class ChatOutboxTopic(val type: String, val referenceId: String, val title: String)
+
+@Suppress("LongParameterList")
+@JsonClass(generateAdapter = true)
+data class ChatComposerDraft(
+    val target: ChatSendTarget,
+    val topicId: String?,
+    val text: String,
+    val attachments: List<ChatOutboxAttachment> = emptyList(),
+    val replyMessageId: String? = null,
+    val replyName: String? = null,
+    val replyText: String? = null,
+    val editingMessageId: String? = null,
+    val queuedClientId: String? = null,
+)
 
 @Suppress("LongParameterList")
 @JsonClass(generateAdapter = true)
@@ -78,30 +94,41 @@ class ChatOutboxStore
     ) {
         private val root = File(context.noBackupFilesDir, "chat-outbox")
         private val adapter = moshi.adapter(ChatOutboxEntry::class.java)
+        private val draftAdapter = moshi.adapter(ChatComposerDraft::class.java)
 
         fun load(account: String): List<ChatOutboxEntry> {
             val folder = accountFolder(account)
             // An account switch never exposes or retries the previous account's unsent work.
             root.listFiles().orEmpty().filter { it != folder }.forEach { it.deleteRecursively() }
             folder.listFiles().orEmpty().filter { it.name.endsWith(".tmp") }.forEach { it.deleteRecursively() }
-            return folder.listFiles().orEmpty().filter { it.isDirectory }.mapNotNull { directory ->
-                runCatching {
-                    val file = File(directory, "message.enc")
-                    val entry = adapter.fromJson(cipher.decrypt(file.readBytes(), scope(file)).toString(Charsets.UTF_8))
-                    entry?.takeIf { it.target.accountId == account && it.clientId == directory.name }
-                }.onFailure { Timber.w("An encrypted unsent chat could not be opened") }.getOrNull()
-            }.sortedWith(compareBy<ChatOutboxEntry> { Instant.parse(it.pending.createdAt) }.thenBy { it.clientId })
+            val entries =
+                folder.listFiles().orEmpty().filter { it.isDirectory && !it.name.startsWith("draft-") }.mapNotNull { directory ->
+                    runCatching {
+                        val file = File(directory, "message.enc")
+                        val entry = adapter.fromJson(cipher.decrypt(file.readBytes(), scope(file)).toString(Charsets.UTF_8))
+                        entry?.takeIf { it.target.accountId == account && it.clientId == directory.name }
+                    }.onFailure { Timber.w("An encrypted unsent chat could not be opened") }.getOrNull()
+                }.sortedWith(compareBy<ChatOutboxEntry> { Instant.parse(it.pending.createdAt) }.thenBy { it.clientId })
+            val queuedIds = entries.mapTo(mutableSetOf()) { it.clientId }
+            folder.listFiles().orEmpty().filter { it.name.startsWith("draft-") }.forEach { draftFolder ->
+                if (runCatching { readDraftMetadata(draftFolder)?.queuedClientId in queuedIds }.getOrDefault(false)) {
+                    draftFolder.deleteRecursively()
+                }
+            }
+            return entries
         }
 
         fun insert(
             entry: ChatOutboxEntry,
             files: List<UploadFile>,
+            draft: ChatComposerDraft? = null,
         ): ChatOutboxEntry {
             val folder = accountFolder(entry.target.accountId)
-            check(folder.listFiles().orEmpty().count { it.isDirectory } < MAX_MESSAGES) {
+            check(folder.listFiles().orEmpty().count { it.isDirectory && !it.name.startsWith("draft-") } < MAX_MESSAGES) {
                 "There are too many unsent messages. Send or remove some before trying again."
             }
-            val needed = files.sumOf { it.bytes.size.toLong() }
+            val sourceDraft = draft?.takeIf { it.target == entry.target && readDraftMetadata(draftFolder(it.target, it.topicId)) == it }
+            val needed = if (sourceDraft == null) files.sumOf { it.bytes.size.toLong() } else 0L
             val held = root.walkTopDown().filter { it.isFile }.sumOf { it.length() }
             check(needed <= MAX_BYTES && held + needed <= MAX_BYTES) {
                 "Unsent attachments have filled the device queue. Send or remove some before adding more."
@@ -111,19 +138,35 @@ class ChatOutboxStore
             val temporary = File(folder, "${entry.clientId}.tmp")
             check(temporary.mkdirs()) { "Couldn't save the message on this device." }
             try {
-                val attachments = files.map { ChatOutboxAttachment(UUID.randomUUID().toString(), it.filename, it.mimeType, it.bytes.size) }
+                val attachments =
+                    sourceDraft?.attachments?.map { attachment ->
+                        val source = File(draftFolder(sourceDraft.target, sourceDraft.topicId), "${attachment.id}.enc")
+                        attachment.copy(encryptionScope = scope(source))
+                    } ?: files.map { ChatOutboxAttachment(UUID.randomUUID().toString(), it.filename, it.mimeType, it.bytes.size) }
                 val saved = entry.copy(attachments = attachments)
                 files.zip(attachments).forEach { (input, attachment) ->
                     val temporaryFile = File(temporary, "${attachment.id}.enc")
-                    writeAttachment(temporaryFile, input.bytes, scope(File(destination, temporaryFile.name)))
+                    if (sourceDraft != null) {
+                        // Both paths reference the same encrypted bytes until the durable send replaces the draft.
+                        // A crash before the final rename leaves the original draft intact; startup drops .tmp links.
+                        Files.createLink(
+                            temporaryFile.toPath(),
+                            File(draftFolder(sourceDraft.target, sourceDraft.topicId), temporaryFile.name).toPath(),
+                        )
+                    } else {
+                        writeAttachment(temporaryFile, input.bytes, scope(File(destination, temporaryFile.name)))
+                    }
                 }
                 val metadata = File(destination, "message.enc")
                 atomicWrite(File(temporary, metadata.name), cipher.encrypt(adapter.toJson(saved).toByteArray(), scope(metadata)))
-                val storedBytes = temporary.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+                val storedBytes =
+                    temporary.walkTopDown()
+                        .filter { it.isFile && (sourceDraft == null || it.name == "message.enc") }.sumOf { it.length() }
                 check(held + storedBytes <= MAX_BYTES) {
                     "Unsent attachments have filled the device queue. Send or remove some before adding more."
                 }
                 Files.move(temporary.toPath(), destination.toPath(), StandardCopyOption.ATOMIC_MOVE)
+                sourceDraft?.let { draftFolder(it.target, it.topicId).deleteRecursively() }
                 return saved
             } finally {
                 temporary.deleteRecursively()
@@ -145,13 +188,96 @@ class ChatOutboxStore
 
                         override fun contentLength() = attachment.size.toLong()
 
-                        override fun writeTo(sink: BufferedSink) = writeDecryptedAttachment(file, attachment.size, sink.outputStream())
+                        override fun writeTo(sink: BufferedSink) =
+                            writeDecryptedAttachment(file, attachment.size, sink.outputStream(), attachment.encryptionScope ?: scope(file))
                     }
                 UploadFile(attachment.filename, attachment.mimeType, streamingBody = body)
             }
 
         fun remove(entry: ChatOutboxEntry) {
             entryFolder(entry).deleteRecursively()
+        }
+
+        /** Drafts share the queue's encryption, account boundary and byte budget; they are never submitted. */
+        fun saveDraft(
+            draft: ChatComposerDraft,
+            files: List<UploadFile>,
+        ) {
+            val folder = draftFolder(draft.target, draft.topicId)
+            val hasAction = draft.replyMessageId != null || draft.editingMessageId != null
+            if (draft.text.isEmpty() && draft.attachments.isEmpty() && !hasAction) {
+                folder.deleteRecursively()
+                return
+            }
+            check(files.size == draft.attachments.size)
+            val draftCount = accountFolder(draft.target.accountId).listFiles().orEmpty().count { it.name.startsWith("draft-") }
+            check(folder.exists() || draftCount < MAX_DRAFTS) {
+                "There are too many saved chat drafts. Send or clear one before saving another."
+            }
+            check(folder.exists() || folder.mkdirs()) { "Couldn't save the chat draft on this device." }
+            val old = readDraftMetadata(folder)
+            var saved = false
+            try {
+                draft.attachments.zip(files).forEach { (attachment, input) ->
+                    val file = File(folder, "${UUID.fromString(attachment.id)}.enc")
+                    if (old?.attachments?.contains(attachment) == true && file.isFile) return@forEach
+                    check(root.walkTopDown().filter { it.isFile }.sumOf { it.length() } + input.bytes.size <= MAX_BYTES) {
+                        "Unsent attachments have filled the device queue. Send or remove some before saving more."
+                    }
+                    writeAttachment(file, input.bytes, scope(file))
+                }
+                val metadata = File(folder, "draft.enc")
+                val encoded = draftAdapter.toJson(draft).toByteArray()
+                check(encoded.size <= MAX_DRAFT_METADATA_BYTES) { "This chat draft is too large to save on the device." }
+                val encrypted = cipher.encrypt(encoded, scope(metadata))
+                check(root.walkTopDown().filter { it.isFile }.sumOf { it.length() } + encrypted.size <= MAX_BYTES) {
+                    "Unsent attachments have filled the device queue. Send or remove some before saving more."
+                }
+                atomicWrite(metadata, encrypted)
+                saved = true
+            } finally {
+                val retainedAttachments = if (saved) draft.attachments else old?.attachments.orEmpty()
+                val retained = retainedAttachments.mapTo(mutableSetOf()) { "${it.id}.enc" } + "draft.enc"
+                folder.listFiles().orEmpty().filter { it.name !in retained }.forEach { it.delete() }
+            }
+        }
+
+        fun loadDraft(
+            target: ChatSendTarget,
+            topicId: String?,
+        ): Pair<ChatComposerDraft, List<UploadFile>>? {
+            val folder = draftFolder(target, topicId)
+            val draft = readDraftMetadata(folder)?.takeIf { it.target == target && it.topicId == topicId } ?: return null
+            if (draft.queuedClientId?.let { File(accountFolder(target.accountId), "$it/message.enc").isFile } == true) {
+                folder.deleteRecursively()
+                return null
+            }
+            val files =
+                draft.attachments.map { attachment ->
+                    val file = File(folder, "${UUID.fromString(attachment.id)}.enc")
+                    val bytes =
+                        ByteArrayOutputStream(attachment.size).use { output ->
+                            writeDecryptedAttachment(file, attachment.size, output)
+                            output.toByteArray()
+                        }
+                    UploadFile(attachment.filename, attachment.mimeType, bytes)
+                }
+            return draft to files
+        }
+
+        private fun readDraftMetadata(folder: File): ChatComposerDraft? {
+            val file = File(folder, "draft.enc")
+            if (!file.isFile) return null
+            return draftAdapter.fromJson(cipher.decrypt(file.readBytes(), scope(file)).toString(Charsets.UTF_8))
+        }
+
+        private fun draftFolder(
+            target: ChatSendTarget,
+            topicId: String?,
+        ): File {
+            val key = listOf(target.kind, target.id, target.asBusinessUserId.orEmpty(), topicId.orEmpty()).joinToString("|")
+            val hash = MessageDigest.getInstance("SHA-256").digest(key.toByteArray()).joinToString("") { "%02x".format(it) }
+            return File(accountFolder(target.accountId), "draft-$hash")
         }
 
         fun clear() {
@@ -185,6 +311,7 @@ class ChatOutboxStore
             file: File,
             size: Int,
             output: OutputStream,
+            encryptionScope: String = scope(file),
         ) {
             require(size.toLong() in 0..MAX_BYTES)
             DataInputStream(file.inputStream().buffered()).use { input ->
@@ -195,7 +322,7 @@ class ChatOutboxStore
                     require(length in 1..MAX_CHUNK_BYTES)
                     val encrypted = ByteArray(length)
                     input.readFully(encrypted)
-                    val plain = cipher.decrypt(encrypted, "${scope(file)}:$index:$size")
+                    val plain = cipher.decrypt(encrypted, "$encryptionScope:$index:$size")
                     require(plain.size == (size - offset).coerceAtMost(CHUNK_BYTES))
                     output.write(plain)
                     offset += plain.size
@@ -234,6 +361,8 @@ class ChatOutboxStore
 
         private companion object {
             const val MAX_MESSAGES = 200
+            const val MAX_DRAFTS = 20
+            const val MAX_DRAFT_METADATA_BYTES = 128 * 1024
             const val MAX_BYTES = 100L * 1024 * 1024
             const val CHUNK_BYTES = 1024 * 1024
             const val MAX_CHUNK_BYTES = CHUNK_BYTES + 64
