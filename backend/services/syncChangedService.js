@@ -245,12 +245,30 @@ async function flush() {
   };
 
   for (const [userId, entry] of batch.user) add(userId, entry.topics);
+  const roomIdentities = new Set();
   for (const scope of ['home', 'room', 'train']) {
     const entries = batch[scope];
     if (entries.size === 0) continue;
     const members = await resolvers[scope]([...entries.keys()]);
     for (const [id, entry] of entries) {
-      for (const userId of new Set([...(members.get(id) || []), ...entry.users])) add(userId, entry.topics);
+      for (const userId of new Set([...(members.get(id) || []), ...entry.users])) {
+        add(userId, entry.topics);
+        if (scope === 'room') roomIdentities.add(userId);
+      }
+    }
+  }
+
+  // Business owners/staff act through the business membership, so they are not
+  // in the room's personal-recipient set. Invalidate only their inbox: no room
+  // id or content is disclosed, including when the business just left a room.
+  if (roomIdentities.size) {
+    try {
+      const { businessStaff } = require('./chatBusinessAccess');
+      for (const staff of await businessStaff([...roomIdentities], { include: (id) => _connectedUsers.has(id) })) {
+        add(staff.userId, ['chats']);
+      }
+    } catch (error) {
+      logger.warn('chat_business_inbox_recipients_unavailable', { code: error.code });
     }
   }
 

@@ -67,12 +67,22 @@ async function canActAsBusiness(businessUserId, actorUserId) {
 // can't be read.
 async function businessStaff(businessUserIds, { include = () => true } = {}) {
   if (!Array.isArray(businessUserIds) || businessUserIds.length === 0) return [];
-  const { data: team, error } = await supabaseAdmin
-    .from('BusinessTeam')
-    .select('business_user_id, user_id')
-    .in('business_user_id', businessUserIds)
-    .eq('is_active', true);
-  if (error || !Array.isArray(team)) throw new Error(error?.message || 'business team unavailable');
+  const team = [];
+  const ids = [...new Set(businessUserIds)];
+  for (let offset = 0; offset < ids.length; offset += 100) {
+    let after;
+    for (;;) {
+      let query = supabaseAdmin.from('BusinessTeam')
+        .select('business_user_id, user_id').in('business_user_id', ids.slice(offset, offset + 100))
+        .eq('is_active', true).order('business_user_id').order('user_id').limit(500);
+      if (after) query = query.or(`business_user_id.gt.${after.business_user_id},and(business_user_id.eq.${after.business_user_id},user_id.gt.${after.user_id})`);
+      const { data, error } = await query;
+      if (error || !Array.isArray(data)) throw new Error(error?.message || 'business team unavailable');
+      team.push(...data);
+      if (data.length < 500) break;
+      after = data.at(-1);
+    }
+  }
   const staff = [];
   for (const row of team) {
     const userId = String(row.user_id);
