@@ -1163,7 +1163,7 @@ extension ChatConversationView {
                 // oldest-first), and the bottom stays anchored when new
                 // rows land while the user is already at the bottom.
                 .defaultScrollAnchor(.bottom)
-                .refreshable { await viewModel.refresh() }
+                .refreshable { await viewModel.refresh(retryRoomSubscriptions: true) }
                 .accessibilityIdentifier("chatConversationContent")
                 .task {
                     guard !isLoadOlderArmed else { return }
@@ -1442,7 +1442,7 @@ extension ChatConversationView {
                 .font(.system(size: 13.5))
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .multilineTextAlignment(.center)
-            Button { Task { await viewModel.refresh() } } label: {
+            Button { Task { await viewModel.refresh(retryRoomSubscriptions: true) } } label: {
                 Text("Try again")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(Theme.Color.appTextInverse)

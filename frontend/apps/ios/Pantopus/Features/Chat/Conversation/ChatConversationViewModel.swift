@@ -650,7 +650,26 @@ public final class ChatConversationViewModel {
     /// with no Retry, since resending cannot succeed.
     private var refusedClientIds: Set<String> = []
     private var activeRoomIds: Set<String> = []
+    private var historyAccessRefused = false
     private var joinedRoomIds: Set<String> = []
+    private var joiningRooms: [String: Task<Void, Never>] = [:]
+    private var roomJoinRetryAt: [String: Date] = [:]
+    private var roomJoinAttempts: [String: Int] = [:]
+    private var roomJoinGeneration = 0
+    private let roomJoinAccountSession = AuthManager.shared.requestSessionGeneration
+    private var refusedRoomJoins: Set<String> = []
+    private var roomJoinWakeTask: Task<Void, Never>?
+    private var lastJoinRecoveryAt = Date.distantPast
+
+    /// Membership ACKs subscribe only; canonical history/delta owns recovery.
+    /// Ignore the legacy backfill array instead of decoding hundreds of unused rows.
+    private struct RoomSubscriptionAck: Decodable {
+        let success: Bool?
+        let code: String?
+        let retryAfterMs: Int?
+        let error: String?
+    }
+
     private var hasMore: Bool = false
     private var oldestCursor: String?
     /// A topic change or leaving the screen invalidates every suspended history request.
@@ -1188,7 +1207,12 @@ public final class ChatConversationViewModel {
         }
     }
 
-    public func refresh() async {
+    public func refresh(retryRoomSubscriptions: Bool = false) async {
+        if retryRoomSubscriptions {
+            refusedRoomJoins.removeAll()
+            roomJoinRetryAt.removeAll()
+            joinActiveRoomsIfPossible()
+        }
         guard !refreshInProgress else { return }
         refreshInProgress = true
         defer { refreshInProgress = false }
@@ -1565,6 +1589,7 @@ public final class ChatConversationViewModel {
     /// Insert a persisted message, replacing any copy that already
     /// arrived through a socket-triggered refetch.
     private func upsert(_ message: ChatMessageDTO) {
+        guard !historyAccessRefused else { return }
         guard !isViewingSearchContext || messages.contains(where: { $0.id == message.id }) else { return }
         historyTouchedIds.insert(message.id)
         guard selectedTopicId == nil || message.topicId == selectedTopicId else { return }
@@ -2082,6 +2107,7 @@ public final class ChatConversationViewModel {
     }
 
     public func teardown() {
+        resetRoomJoins()
         scheduleDraftSave(immediate: true)
         outboxTask?.cancel()
         outboxTask = nil
@@ -2728,6 +2754,7 @@ public final class ChatConversationViewModel {
                 messages.removeAll { !allowedRooms.contains($0.roomId) }
             }
             historyConfirmedAt = Date()
+            historyAccessRefused = false
             if response.anchorMessageId != nil { isViewingSearchContext = true }
             if before == nil {
                 hasLatestHistoryWindow = response.anchorMessageId == nil && topicId == nil
@@ -3169,8 +3196,8 @@ public final class ChatConversationViewModel {
     }
 
     private func handleConnectionState(_ state: SocketClient.ConnectionState) {
+        resetRoomJoins()
         if state == .connected {
-            joinedRoomIds.removeAll()
             joinActiveRoomsIfPossible()
             scheduleFallbackRefresh()
         } else {
@@ -3226,29 +3253,102 @@ public final class ChatConversationViewModel {
         }
     }
 
+    private func resetRoomJoins() {
+        roomJoinGeneration += 1
+        joiningRooms.values.forEach { $0.cancel() }
+        joiningRooms.removeAll()
+        joinedRoomIds.removeAll()
+        refusedRoomJoins.removeAll()
+        roomJoinRetryAt.removeAll()
+        roomJoinAttempts.removeAll()
+        roomJoinWakeTask?.cancel()
+        roomJoinWakeTask = nil
+    }
+
     private func joinActiveRoomsIfPossible() {
-        guard socket.connectionState == .connected else { return }
-        let pendingRooms = activeRoomIds.subtracting(joinedRoomIds)
-        guard !pendingRooms.isEmpty else { return }
-        for roomId in pendingRooms {
-            joinedRoomIds.insert(roomId)
-            socketTasks.append(Task { [weak self] in
+        guard socket.connectionState == .connected, !historyAccessRefused else { return }
+        if api === APIClient.shared {
+            guard roomJoinAccountSession == AuthManager.shared.requestSessionGeneration,
+                  case let .signedIn(user) = AuthManager.shared.state, user.id == currentUserId else {
+                resetRoomJoins()
+                return
+            }
+        }
+        for roomId in joinedRoomIds.subtracting(activeRoomIds) {
+            socket.emit("room:leave", payload: ["roomId": roomId])
+            joinedRoomIds.remove(roomId)
+        }
+        for (roomId, task) in joiningRooms where !activeRoomIds.contains(roomId) {
+            task.cancel()
+        }
+        refusedRoomJoins.formIntersection(activeRoomIds)
+        roomJoinWakeTask?.cancel()
+        roomJoinWakeTask = nil
+        let pending = activeRoomIds.subtracting(joinedRoomIds).subtracting(joiningRooms.keys).subtracting(refusedRoomJoins)
+        let now = Date()
+        let ready = pending.filter { (roomJoinRetryAt[$0] ?? .distantPast) <= now }.sorted()
+        let generation = roomJoinGeneration
+        let session = AuthManager.shared.requestSessionGeneration
+        for roomId in ready.prefix(max(0, 4 - joiningRooms.count)) {
+            joiningRooms[roomId] = Task { [weak self] in
                 guard let self else { return }
-                let ack: ChatRoomJoinAck? = await socket.emitWithAck(
-                    "room:join",
-                    payload: ["roomId": roomId],
-                    as: ChatRoomJoinAck.self
+                let ack: RoomSubscriptionAck? = await socket.emitWithAck(
+                    "room:join", payload: ["roomId": roomId], as: RoomSubscriptionAck.self
                 )
-                guard !Task.isCancelled, activeRoomIds.contains(roomId) else { return }
-                guard ack?.success == true else {
-                    joinedRoomIds.remove(roomId)
-                    scheduleFallbackRefresh()
-                    return
+                guard generation == roomJoinGeneration, session == AuthManager.shared.requestSessionGeneration else { return }
+                joiningRooms[roomId] = nil
+                if !activeRoomIds.contains(roomId) {
+                    socket.emit("room:leave", payload: ["roomId": roomId])
+                } else if !Task.isCancelled {
+                    completeRoomJoin(roomId, ack: ack)
                 }
-                // Joining subscribes to future changes. Canonical REST catch-up,
-                // shared by all room acknowledgements, fills every missed page.
-                scheduleFallbackRefresh()
-            })
+                joinActiveRoomsIfPossible()
+                if joiningRooms.isEmpty, activeRoomIds.isSubset(of: joinedRoomIds) {
+                    // One canonical catch-up after all subscriptions settle,
+                    // rather than one refresh per room acknowledgement.
+                    scheduleFallbackRefresh()
+                }
+            }
+        }
+        guard joiningRooms.count < 4,
+              let next = pending.compactMap({ roomJoinRetryAt[$0] }).filter({ $0 > now }).min() else { return }
+        roomJoinWakeTask = Task { [weak self] in
+            do { try await Task.sleep(nanoseconds: UInt64(max(0.1, next.timeIntervalSinceNow) * 1_000_000_000)) } catch { return }
+            guard let self, !Task.isCancelled, generation == roomJoinGeneration,
+                  session == AuthManager.shared.requestSessionGeneration else { return }
+            roomJoinWakeTask = nil
+            joinActiveRoomsIfPossible()
+        }
+    }
+
+    private func completeRoomJoin(_ roomId: String, ack: RoomSubscriptionAck?) {
+        if ack?.success == true {
+            joinedRoomIds.insert(roomId)
+            roomJoinAttempts[roomId] = nil
+            roomJoinRetryAt[roomId] = nil
+            return
+        }
+        let denied = ack?.error?.localizedCaseInsensitiveContains("access denied") == true
+            || ["FORBIDDEN", "CHAT_ACCESS_DENIED"].contains(ack?.code ?? "")
+        if denied {
+            // Canonical REST removes revoked rooms. A permanent socket refusal
+            // is retried only on an explicit refresh/reopen/reconnect.
+            refusedRoomJoins.insert(roomId)
+            roomJoinRetryAt[roomId] = nil
+        } else {
+            // Attempts remain retryable; only the exponential backoff is capped.
+            let attempt = min(6, (roomJoinAttempts[roomId] ?? 0) + 1)
+            roomJoinAttempts[roomId] = attempt
+            let backoff = min(30, pow(2, Double(attempt - 1)))
+            let requested = Double(max(1000, ack?.retryAfterMs ?? 1000)) / 1000
+            let delay = max(backoff, requested)
+            roomJoinRetryAt[roomId] = Date().addingTimeInterval(min(30, delay + Double.random(in: 0...min(1, delay * 0.2))))
+        }
+        // A refusal can signal removed membership. Resolve it canonically,
+        // with a global bound even when hundreds of rooms fail together.
+        if Date().timeIntervalSince(lastJoinRecoveryAt) >= 5 {
+            lastJoinRecoveryAt = Date()
+            scheduleFallbackRefresh()
         }
     }
 
@@ -3267,6 +3367,7 @@ public final class ChatConversationViewModel {
     }
 
     private func handleIncoming(_ event: ChatRealtimeMessageEnvelope) {
+        guard !historyAccessRefused else { return }
         let message = event.message
         if case let .person(otherUserId) = mode, event.otherUserId == otherUserId,
            activeRoomIds.insert(message.roomId).inserted {
@@ -3947,6 +4048,13 @@ extension ChatConversationViewModel {
     }
 
     private func discardSavedThread() {
+        historyAccessRefused = true
+        for roomId in activeRoomIds {
+            socket.emit("room:leave", payload: ["roomId": roomId])
+        }
+        activeRoomIds.removeAll()
+        resetRoomJoins()
+        activeThreadTracker.clear(owner: ObjectIdentifier(self))
         historySaveTask?.cancel()
         historySaveTask = nil
         historyConfirmedAt = nil
