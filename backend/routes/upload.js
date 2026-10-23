@@ -185,7 +185,7 @@ async function validateAndStripUploads(req, res, next) {
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 100 * 1024 * 1024, files: 10 },
+  limits: { fieldNameSize: 100, fieldNestingDepth: 3, fieldArrayIndexLimit: 32, fileSize: 100 * 1024 * 1024, files: 10, fields: 32, parts: 42, fieldSize: 32768 },
   fileFilter: (req, file, cb) => {
     if (s3.isAllowedType(file.mimetype)) {
       cb(null, true);
@@ -199,7 +199,7 @@ const upload = multer({
 // is a Live Photo (a still plus its companion clip).
 const postMediaUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 100 * 1024 * 1024, files: 18, fieldSize: 4096 },
+  limits: { fieldNameSize: 100, fieldNestingDepth: 3, fieldArrayIndexLimit: 32, fileSize: 100 * 1024 * 1024, files: 18, fields: 32, parts: 50, fieldSize: 4096 },
   fileFilter: (_req, file, cb) => {
     const allowed = s3.ALLOWED_IMAGE_TYPES.includes(file.mimetype)
       || s3.ALLOWED_VIDEO_TYPES.includes(file.mimetype) || file.mimetype === 'application/pdf';

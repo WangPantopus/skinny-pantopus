@@ -285,7 +285,7 @@ router.delete('/devices/:id', verifyToken, attachSession, requireStepUp('revoke_
     return res.json({ ok: true, revokedSessions: result.revokedSessions });
   } catch (err) {
     logger.error('auth.devices.revoke_error', { userId: req.user?.id, error: err.message, stack: err.stack });
-    return res.status(500).json({ error: 'Could not remove device', code: 'INTERNAL' });
+    return res.status(err.authBusy ? 503 : 500).json({ error: 'Could not remove device', code: err.authBusy ? 'AUTH_UNAVAILABLE' : 'INTERNAL' });
   }
 });
 
@@ -303,7 +303,7 @@ router.post('/sessions/revoke-others', verifyToken, attachSession, requireStepUp
     return res.json({ revoked: result.revoked });
   } catch (err) {
     logger.error('auth.sessions.revoke_others_error', { userId: req.user?.id, error: err.message, stack: err.stack });
-    return res.status(500).json({ error: 'Could not sign out other devices', code: 'INTERNAL' });
+    return res.status(err.authBusy ? 503 : 500).json({ error: 'Could not sign out other devices', code: err.authBusy ? 'AUTH_UNAVAILABLE' : 'INTERNAL' });
   }
 });
 
@@ -327,7 +327,7 @@ router.post('/sessions/revoke-all', verifyToken, attachSession, requireStepUp('r
     return res.json({ ok: true });
   } catch (err) {
     logger.error('auth.sessions.revoke_all_error', { userId: req.user?.id, error: err.message, stack: err.stack });
-    return res.status(500).json({ error: 'Could not sign out everywhere', code: 'INTERNAL' });
+    return res.status(err.authBusy ? 503 : 500).json({ error: 'Could not sign out everywhere', code: err.authBusy ? 'AUTH_UNAVAILABLE' : 'INTERNAL' });
   }
 });
 

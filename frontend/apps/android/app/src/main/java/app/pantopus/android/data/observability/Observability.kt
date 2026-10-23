@@ -54,6 +54,9 @@ class Observability
                 // P15: scrub PII from every event + breadcrumb before send.
                 options.beforeSend =
                     SentryOptions.BeforeSendCallback { event, _ ->
+                        // A link preview the server couldn't load is routine, and its
+                        // failed-request event would carry the chat link.
+                        if (isLinkPreview(event.request?.url)) return@BeforeSendCallback null
                         scrubPII(event)
                         event
                     }
@@ -61,6 +64,13 @@ class Observability
                     SentryOptions.BeforeBreadcrumbCallback { breadcrumb, _ ->
                         scrubPII(breadcrumb)
                         breadcrumb
+                    }
+                options.beforeSendTransaction =
+                    SentryOptions.BeforeSendTransactionCallback { transaction, _ ->
+                        transaction.spans
+                            .filter { isLinkPreview(it.description) }
+                            .forEach { span -> span.data = span.data?.filterKeys { it != HTTP_QUERY } }
+                        transaction
                     }
 
                 // Route Timber.e/w into Sentry breadcrumbs + events automatically.
@@ -131,7 +141,14 @@ class Observability
             event.breadcrumbs?.forEach { scrubPII(it) }
         }
 
+        /**
+         * `GET /api/link-preview?url=` carries a chat message's link in its
+         * query string, which never leaves the device.
+         */
+        private fun isLinkPreview(url: String?): Boolean = url?.substringBefore('?')?.endsWith("/api/link-preview") == true
+
         private fun scrubPII(breadcrumb: Breadcrumb) {
+            if (isLinkPreview(breadcrumb.data["url"] as? String)) breadcrumb.removeData(HTTP_QUERY)
             breadcrumb.data
                 .toMutableMap()
                 .also { scrubInPlace(it) }
@@ -208,6 +225,9 @@ class Observability
             Sentry.addBreadcrumb(crumb)
         }
     }
+
+/** Sentry's key for an HTTP request's query string (breadcrumbs and spans). */
+private const val HTTP_QUERY = "http.query"
 
 private fun SentryLevel.toTimberPriority(): Int =
     when (this) {

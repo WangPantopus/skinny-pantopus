@@ -478,13 +478,18 @@ final class APIClient: @unchecked Sendable {
             let message = String(data: data, encoding: .utf8)
             throw APIError.clientError(status: http.statusCode, message: message)
         default:
-            await Observability.shared.capture(
-                message: "API \(endpoint.method.rawValue) \(endpoint.path) -> \(http.statusCode)",
-                level: .error
-            )
+            await reportServerError(endpoint, status: http.statusCode)
             let body = String(data: data, encoding: .utf8) ?? ""
             throw APIError.server(status: http.statusCode, body: body)
         }
+    }
+
+    private func reportServerError(_ endpoint: Endpoint, status: Int) async {
+        guard endpoint.reportsServerErrors else { return }
+        await Observability.shared.capture(
+            message: "API \(endpoint.method.rawValue) \(endpoint.path) -> \(status)",
+            level: .error
+        )
     }
 
     private func unauthorizedError(_ data: Data, endpoint: Endpoint) -> APIError {
@@ -645,6 +650,10 @@ public struct Endpoint: Sendable {
     /// and without signing the user out. The pre-flight refresh still runs,
     /// so the Bearer itself is fresh when the call goes out.
     public let verifiesCredential: Bool
+    /// Report a 5xx answer as an app error. Off where a 5xx is a routine
+    /// answer: `/api/link-preview` answers 502 for every link whose page
+    /// didn't load.
+    public let reportsServerErrors: Bool
 
     public init(
         method: Method,
@@ -658,6 +667,7 @@ public struct Endpoint: Sendable {
         timeout: TimeInterval? = nil,
         requiresDPoP: Bool = false,
         verifiesCredential: Bool = false,
+        reportsServerErrors: Bool = true,
         dispatchGuard: (@MainActor @Sendable () throws -> Void)? = nil
     ) {
         self.dispatchGuard = dispatchGuard
@@ -672,6 +682,7 @@ public struct Endpoint: Sendable {
         self.timeout = timeout
         self.requiresDPoP = requiresDPoP
         self.verifiesCredential = verifiesCredential
+        self.reportsServerErrors = reportsServerErrors
     }
 }
 
