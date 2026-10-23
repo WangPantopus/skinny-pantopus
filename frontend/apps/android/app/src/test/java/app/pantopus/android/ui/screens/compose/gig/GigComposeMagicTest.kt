@@ -135,8 +135,8 @@ class GigComposeMagicTest {
     }
 
     @Test
-    fun manualPickerUsesEightConcreteArchetypes() {
-        assertEquals(8, gigComposeManualPickerCategories.size)
+    fun manualPickerUsesEveryConcreteCategory() {
+        assertEquals(GigComposeCategory.entries.size - 1, gigComposeManualPickerCategories.size)
         assertFalse(gigComposeManualPickerCategories.contains(GigComposeCategory.Other))
     }
 

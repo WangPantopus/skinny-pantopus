@@ -404,6 +404,7 @@ extension GigComposeViewModel {
     static let archetypeKeywords: [(category: GigComposeCategory, keywords: [String])] = [
         (.moving, ["move", "moving", "haul", "u-haul", "load boxes"]),
         (.cleaning, ["clean", "tidy", "scrub", "vacuum", "mop"]),
+        (.gardening, ["mow", "lawn", "garden", "weed", "hedge", "landscap", "yard"]),
         (
             .handyman,
             [
@@ -414,8 +415,11 @@ extension GigComposeViewModel {
         (.petcare, ["dog", "cat", " pet", "puppy", "litter", "groom", "walk"]),
         (.childcare, ["babysit", "nanny", "kids", "child", "daycare"]),
         (.tutoring, ["tutor", "lesson", "math", "homework", "test prep", "teach"]),
+        (.photography, ["photo", "portrait", "headshot"]),
+        (.cooking, ["cook", "chef", "meal", "cater"]),
         (.delivery, ["deliver", "pickup", "pick up", "drop off", "errand", "courier"]),
-        (.tech, ["wifi", "wi-fi", "computer", "laptop", "printer", "router", "troubleshoot", "setup"])
+        (.tech, ["wifi", "wi-fi", "computer", "laptop", "printer", "router", "troubleshoot", "setup"]),
+        (.eventHelp, ["event", "party", "birthday", "decorat"])
     ]
 
     /// Deterministic keyword → archetype map. Synchronous fallback for

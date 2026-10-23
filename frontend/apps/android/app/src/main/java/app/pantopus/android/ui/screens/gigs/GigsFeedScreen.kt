@@ -406,7 +406,7 @@ internal fun GigsCategoryChipRow(
         horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        GigsCategory.entries.forEach { category ->
+        GigsCategory.filterCases(including = active).forEach { category ->
             val isActive = category == active
             Box(
                 modifier =

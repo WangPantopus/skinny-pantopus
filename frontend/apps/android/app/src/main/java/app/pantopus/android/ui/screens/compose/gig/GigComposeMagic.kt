@@ -45,6 +45,7 @@ import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.pantopus.android.ui.screens.gigs.tasks_map.taskCategoryGlyph
 import app.pantopus.android.ui.screens.shared.wizard.blocks.HeadlineBlock
 import app.pantopus.android.ui.screens.shared.wizard.blocks.SubcopyBlock
 import app.pantopus.android.ui.theme.PantopusColors
@@ -111,7 +112,11 @@ internal fun magicCategoryKeywords(category: GigComposeCategory): List<String> =
         GigComposeCategory.Tutoring -> listOf("tutor", "lesson", "math", "homework", "test prep", "teach")
         GigComposeCategory.Delivery -> listOf("deliver", "pickup", "pick up", "drop off", "errand", "courier")
         GigComposeCategory.Tech -> listOf("wifi", "wi-fi", "computer", "laptop", "printer", "router", "troubleshoot", "setup")
-        GigComposeCategory.Other -> emptyList()
+        GigComposeCategory.Gardening -> listOf("mow", "lawn", "garden", "weed", "hedge", "landscap", "yard")
+        GigComposeCategory.Photography -> listOf("photo", "portrait", "headshot")
+        GigComposeCategory.Cooking -> listOf("cook", "chef", "meal", "cater")
+        GigComposeCategory.EventHelp -> listOf("event", "party", "birthday", "decorat")
+        else -> emptyList()
     }
 
 /** Merge overlapping / adjacent inclusive ranges, sorted by start. */
@@ -259,7 +264,7 @@ fun stepForModulePrompt(id: String): GigComposeStep =
 
 // MARK: - Category accent helpers
 
-/** A12.8 manual path renders the eight concrete archetypes; `Other` remains valid for restored state. */
+/** A12.8 manual path renders every concrete category; `Other` remains valid for restored state. */
 val gigComposeManualPickerCategories: List<GigComposeCategory> =
     GigComposeCategory.entries.filter { it != GigComposeCategory.Other }
 
@@ -275,6 +280,8 @@ val GigComposeCategory.tileIcon: PantopusIcon
             GigComposeCategory.Delivery -> PantopusIcon.Send
             GigComposeCategory.Tech -> PantopusIcon.Laptop
             GigComposeCategory.Other -> PantopusIcon.MoreHorizontal
+            // The categories past the first eight use the feed's glyph.
+            else -> taskCategoryGlyph(gigsCategory)
         }
 
 val GigComposeCategory.accent: Color
@@ -289,6 +296,8 @@ val GigComposeCategory.accent: Color
             GigComposeCategory.Delivery -> PantopusColors.delivery
             GigComposeCategory.Tech -> PantopusColors.tech
             GigComposeCategory.Other -> PantopusColors.appTextSecondary
+            // The categories past the first eight use the feed's color.
+            else -> gigsCategory.color
         }
 
 val GigComposeCategory.examples: String
@@ -302,6 +311,21 @@ val GigComposeCategory.examples: String
             GigComposeCategory.Tutoring -> "Math · music · test prep"
             GigComposeCategory.Delivery -> "Pickups · drops · errands"
             GigComposeCategory.Tech -> "Wifi · setup · troubleshoot"
+            GigComposeCategory.Photography -> "Portraits · events · listings"
+            GigComposeCategory.Cooking -> "Meal prep · dinners · baking"
+            GigComposeCategory.Gardening -> "Weeding · planting · mowing"
+            GigComposeCategory.EventHelp -> "Setup · serving · cleanup"
+            GigComposeCategory.Errands -> "Returns · post office · lines"
+            GigComposeCategory.GroceryPickup -> "Store runs · curbside · lists"
+            GigComposeCategory.Plumbing -> "Leaks · drains · fixtures"
+            GigComposeCategory.Electrical -> "Outlets · lights · panels"
+            GigComposeCategory.Hvac -> "Furnace · AC · filters"
+            GigComposeCategory.Roofing -> "Leaks · shingles · gutters"
+            GigComposeCategory.GeneralContractor -> "Remodels · additions · permits"
+            GigComposeCategory.LandscapingPro -> "Design · hardscape · trees"
+            GigComposeCategory.HomeInspector -> "Pre-purchase · safety · reports"
+            GigComposeCategory.PaintingPro -> "Interior · exterior · trim"
+            GigComposeCategory.Flooring -> "Hardwood · tile · carpet"
             GigComposeCategory.Other -> "Anything else"
         }
 

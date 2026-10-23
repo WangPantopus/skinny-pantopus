@@ -188,7 +188,7 @@ public struct NearbyMapView: View {
     private var categoryChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                ForEach(GigsCategory.allCases, id: \.self) { category in
+                ForEach(GigsCategory.filterCases(including: viewModel.activeCategory), id: \.self) { category in
                     let active = category == viewModel.activeCategory
                     Button {
                         Task { await viewModel.selectCategory(category) }
@@ -738,6 +738,7 @@ private func iconFor(category: GigsCategory, kind: MapEntityKind) -> PantopusIco
     case .tech: return .lightbulb
     case .delivery: return .send
     case .all: return .circle
+    default: return taskCategoryGlyph(category)
     }
 }
 

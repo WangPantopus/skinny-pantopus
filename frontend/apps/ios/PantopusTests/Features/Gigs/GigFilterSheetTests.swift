@@ -36,7 +36,7 @@ final class GigFilterSheetTests: XCTestCase {
         guard case let .chipGroup(options, _)? = GigFilterCriteria().sections().first(where: { $0.id == "category" })?.control
         else { return XCTFail("Expected a category chip group") }
         XCTAssertFalse(options.contains { $0.id == GigsCategory.all.rawValue })
-        XCTAssertEqual(options.count, GigsCategory.allCases.count - 1)
+        XCTAssertEqual(options.count, GigsCategory.filterCases.count - 1)
     }
 
     func testParseRoundTripPreservesEverySelection() {
