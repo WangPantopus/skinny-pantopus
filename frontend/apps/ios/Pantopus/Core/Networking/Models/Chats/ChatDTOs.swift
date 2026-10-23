@@ -317,6 +317,10 @@ public struct ChatMessageDTO: Decodable, Sendable, Hashable, Identifiable {
     public let sender: ChatMessageSender?
     public let reactions: [ChatReactionSummary]
     public let attachments: [ChatAttachmentDTO]
+    /// The person who wrote a message sent as a business (`actor_user_id`). The
+    /// server names that only to the writer, so it is set on the business's
+    /// messages you wrote yourself and nil everywhere else.
+    public let actorUserId: String?
 
     private enum CodingKeys: String, CodingKey {
         case id
@@ -338,6 +342,7 @@ public struct ChatMessageDTO: Decodable, Sendable, Hashable, Identifiable {
         case sender
         case reactions
         case attachments
+        case actorUserId = "actor_user_id"
     }
 
     public init(from decoder: any Decoder) throws {
@@ -364,6 +369,7 @@ public struct ChatMessageDTO: Decodable, Sendable, Hashable, Identifiable {
         sender = try c.decodeIfPresent(ChatMessageSender.self, forKey: .sender)
         reactions = try c.decodeIfPresent([ChatReactionSummary].self, forKey: .reactions) ?? []
         attachments = try c.decodeIfPresent([ChatAttachmentDTO].self, forKey: .attachments) ?? []
+        actorUserId = try c.decodeIfPresent(String.self, forKey: .actorUserId)
     }
 
     public func replacingReactions(_ reactions: [ChatReactionSummary]) -> ChatMessageDTO {
@@ -384,7 +390,8 @@ public struct ChatMessageDTO: Decodable, Sendable, Hashable, Identifiable {
             readAt: readAt,
             sender: sender,
             reactions: reactions,
-            attachments: attachments
+            attachments: attachments,
+            actorUserId: actorUserId
         )
     }
 
@@ -405,7 +412,8 @@ public struct ChatMessageDTO: Decodable, Sendable, Hashable, Identifiable {
         readAt: String?,
         sender: ChatMessageSender?,
         reactions: [ChatReactionSummary] = [],
-        attachments: [ChatAttachmentDTO] = []
+        attachments: [ChatAttachmentDTO] = [],
+        actorUserId: String? = nil
     ) {
         self.id = id
         self.roomId = roomId
@@ -424,6 +432,7 @@ public struct ChatMessageDTO: Decodable, Sendable, Hashable, Identifiable {
         self.sender = sender
         self.reactions = reactions
         self.attachments = attachments
+        self.actorUserId = actorUserId
     }
 }
 
@@ -494,10 +503,21 @@ public struct ChatMessagesResponse: Decodable, Sendable, Hashable {
     public let hasMore: Bool?
     public let nextCursor: String?
     public let roomIds: [String]?
+    /// Set when the conversation takes no messages from you: a direct chat
+    /// with a draft or closed business (`code` NOT_PUBLISHED). Nil from
+    /// older servers, which leave the key out.
+    public var sendRefusal: ChatSendRefusal?
 
     private enum CodingKeys: String, CodingKey {
-        case messages, hasMore, nextCursor, roomIds
+        case messages, hasMore, nextCursor, roomIds, sendRefusal
     }
+}
+
+/// Why a conversation takes no messages, as the server words it (`backend/routes/chats.js`
+/// `unpublishedDirectRoomRefusal`).
+public struct ChatSendRefusal: Decodable, Sendable, Hashable {
+    public let error: String
+    public let code: String?
 }
 
 /// `POST /api/chat/messages` envelope.
