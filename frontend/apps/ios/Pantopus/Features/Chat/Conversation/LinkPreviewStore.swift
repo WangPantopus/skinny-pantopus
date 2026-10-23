@@ -2,25 +2,26 @@
 //  LinkPreviewStore.swift
 //  Pantopus
 //
-//  A15.2 `.link-bubble` — in-memory Open Graph metadata cache for chat
-//  link-preview cards. Fetches the first ~120KB of an http(s) page,
-//  regex-parses `og:title` / `og:description` / `og:image` with a
-//  `<title>` fallback, and caches results (including negative results)
-//  by URL, capped at ~50 entries. No third-party dependencies; views
-//  observe per-URL state via the published `entries` dictionary.
+//  A15.2 `.link-bubble` — in-memory cache of chat link previews. The
+//  server reads each page (`GET /api/link-preview`) and answers with its
+//  title, description and site name, so this device never contacts the
+//  linked host and whoever controls a link can't learn recipients' IP
+//  addresses. Results, including links the server can't preview, are
+//  cached by URL, capped at ~50 entries; views observe per-URL state via
+//  the published `entries` dictionary.
 //
 
 import Foundation
 import Observation
 
-/// Parsed Open Graph metadata for one URL. A card is only rendered
-/// when at least a `title` resolved.
+/// One link's preview text. A card is only rendered when a title or a
+/// description resolved.
 struct LinkPreviewMetadata: Equatable {
     let url: URL
-    let host: String
-    let title: String
+    /// The page's site name, else the link's host without `www.`.
+    let site: String
+    let title: String?
     let description: String?
-    let imageURL: URL?
 }
 
 @MainActor
@@ -31,34 +32,29 @@ final class LinkPreviewStore {
     enum Entry: Equatable {
         /// Metadata resolved — render the card.
         case loaded(LinkPreviewMetadata)
-        /// Fetch or parse failed — cached so we never retry; no card.
+        /// The server can't preview the link (blocked, or not a web page)
+        /// or found nothing to show — cached so we never ask again; no card.
         case unavailable
     }
 
     /// Per-URL terminal state. Views read `entries[url]` and re-render
-    /// when the fetch lands. In-flight URLs have no entry yet.
+    /// when the request lands. In-flight URLs, and URLs whose last request
+    /// failed for a passing reason, have no entry.
     private(set) var entries: [String: Entry] = [:]
 
+    /// One request per URL, shared by every bubble that shows the link.
     private var inFlight: Set<String> = []
     /// FIFO insertion order backing the ~50-entry cache cap.
     private var insertionOrder: [String] = []
-    /// Bumped by `clear()` so a fetch started for the previous account
+    /// Bumped by `clear()` so a request started for the previous account
     /// doesn't land in the next one's cache.
     private var generation = 0
     private static let maxEntries = 50
-    private static let maxBytes = 120 * 1024
 
-    private let session: URLSession
+    private let client: APIClient
 
-    init(session: URLSession? = nil) {
-        if let session {
-            self.session = session
-        } else {
-            let config = URLSessionConfiguration.ephemeral
-            config.timeoutIntervalForRequest = 5
-            config.timeoutIntervalForResource = 5
-            self.session = URLSession(configuration: config)
-        }
+    init(client: APIClient = .shared) {
+        self.client = client
     }
 
     func metadata(for url: URL) -> LinkPreviewMetadata? {
@@ -66,8 +62,8 @@ final class LinkPreviewStore {
         return nil
     }
 
-    /// Idempotent — no-ops when the URL is cached (positively or
-    /// negatively) or already in flight. http/https only.
+    /// Idempotent — no-ops when the URL is cached or already in flight.
+    /// http/https only.
     func fetchIfNeeded(_ url: URL) async {
         let key = url.absoluteString
         guard entries[key] == nil, !inFlight.contains(key) else { return }
@@ -75,33 +71,10 @@ final class LinkPreviewStore {
         inFlight.insert(key)
         let startedIn = generation
         defer { if generation == startedIn { inFlight.remove(key) } }
-
-        var entry = Entry.unavailable
-        do {
-            var request = URLRequest(url: url)
-            request.httpMethod = "GET"
-            request.timeoutInterval = 5
-            let (bytes, response) = try await session.bytes(for: request)
-            if let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) {
-                // Read at most ~120KB — og: tags live in <head>.
-                var data = Data()
-                data.reserveCapacity(Self.maxBytes)
-                for try await byte in bytes {
-                    data.append(byte)
-                    if data.count >= Self.maxBytes { break }
-                }
-                // Lossy UTF-8 decode by design — malformed bytes shouldn't
-                // abort og: parsing, so keep the non-failable initializer.
-                // swiftlint:disable:next optional_data_string_conversion
-                let html = String(decoding: data, as: UTF8.self)
-                if let meta = Self.parse(html: html, url: url) {
-                    entry = .loaded(meta)
-                }
-            }
-        } catch {
-            // Negative-cached below — never retried this session.
-        }
-        guard generation == startedIn else { return }
+        // Its own task: the bubble that asked scrolling away must not cancel
+        // the request other bubbles showing the same link are waiting on.
+        let entry = await Task { await load(url) }.value
+        guard generation == startedIn, let entry else { return }
         store(entry, for: key)
     }
 
@@ -111,6 +84,21 @@ final class LinkPreviewStore {
         entries.removeAll()
         inFlight.removeAll()
         insertionOrder.removeAll()
+    }
+
+    /// `nil` when the answer may change: the server busy (429) or in
+    /// trouble (5xx), the device offline, or the session ending. Nothing is
+    /// cached then, so the link's next appearance asks again.
+    private func load(_ url: URL) async -> Entry? {
+        do {
+            let preview: LinkPreviewDTO = try await client.request(LinkPreviewEndpoints.preview(url: url.absoluteString))
+            return Self.metadata(from: preview, url: url).map(Entry.loaded) ?? .unavailable
+        } catch let APIError.clientError(status, _) where status == 400 || status == 422 {
+            // An invalid or blocked link (400), or not a web page (422).
+            return .unavailable
+        } catch {
+            return nil
+        }
     }
 
     private func store(_ entry: Entry, for key: String) {
@@ -124,71 +112,25 @@ final class LinkPreviewStore {
         entries[key] = entry
     }
 
-    // MARK: - Parsing
-
-    /// `og:title` / `og:description` / `og:image` with `<title>`
-    /// fallback. Returns nil when no title resolves — the caller
-    /// negative-caches and renders no card.
-    static func parse(html: String, url: URL) -> LinkPreviewMetadata? {
-        let title = metaContent(in: html, property: "og:title") ?? htmlTitle(in: html)
-        guard let title, !title.isEmpty else { return nil }
-        let description = metaContent(in: html, property: "og:description")
-        let imageURL = metaContent(in: html, property: "og:image")
-            .flatMap { URL(string: $0, relativeTo: url)?.absoluteURL }
-            .flatMap { ["http", "https"].contains($0.scheme?.lowercased() ?? "") ? $0 : nil }
+    /// Text only — the server never offers the page's image. Returns nil
+    /// when neither a title nor a description resolved; the caller caches
+    /// that and renders no card.
+    static func metadata(from preview: LinkPreviewDTO, url: URL) -> LinkPreviewMetadata? {
+        let title = nonEmpty(preview.title)
+        let description = nonEmpty(preview.description)
+        guard title != nil || description != nil else { return nil }
+        let host = url.host.map { $0.hasPrefix("www.") ? String($0.dropFirst(4)) : $0 } ?? url.absoluteString
         return LinkPreviewMetadata(
             url: url,
-            host: url.host?.replacingOccurrences(of: "www.", with: "") ?? url.absoluteString,
+            site: nonEmpty(preview.siteName) ?? host,
             title: title,
-            description: description.flatMap { $0.isEmpty ? nil : $0 },
-            imageURL: imageURL
+            description: description
         )
     }
 
-    /// `<meta property="og:x" content="…">` in either attribute order.
-    private static func metaContent(in html: String, property: String) -> String? {
-        let escaped = NSRegularExpression.escapedPattern(for: property)
-        let patterns = [
-            "<meta[^>]+(?:property|name)\\s*=\\s*[\"']\(escaped)[\"'][^>]*?content\\s*=\\s*[\"']([^\"']*)[\"']",
-            "<meta[^>]+content\\s*=\\s*[\"']([^\"']*)[\"'][^>]*?(?:property|name)\\s*=\\s*[\"']\(escaped)[\"']"
-        ]
-        for pattern in patterns {
-            if let value = firstCapture(pattern, in: html), !value.isEmpty {
-                return decodeEntities(value)
-            }
-        }
-        return nil
-    }
-
-    private static func htmlTitle(in html: String) -> String? {
-        firstCapture("<title[^>]*>([^<]*)</title>", in: html)
-            .map(decodeEntities)?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private static func firstCapture(_ pattern: String, in html: String) -> String? {
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive, .dotMatchesLineSeparators]) else {
-            return nil
-        }
-        let range = NSRange(html.startIndex..., in: html)
-        guard let match = regex.firstMatch(in: html, range: range),
-              match.numberOfRanges > 1,
-              let captureRange = Range(match.range(at: 1), in: html) else { return nil }
-        return String(html[captureRange])
-    }
-
-    /// Minimal HTML-entity decoding — the handful that show up in
-    /// og: content in practice.
-    private static func decodeEntities(_ text: String) -> String {
-        text
-            .replacingOccurrences(of: "&amp;", with: "&")
-            .replacingOccurrences(of: "&quot;", with: "\"")
-            .replacingOccurrences(of: "&#39;", with: "'")
-            .replacingOccurrences(of: "&#x27;", with: "'")
-            .replacingOccurrences(of: "&apos;", with: "'")
-            .replacingOccurrences(of: "&lt;", with: "<")
-            .replacingOccurrences(of: "&gt;", with: ">")
-            .replacingOccurrences(of: "&nbsp;", with: " ")
+    private static func nonEmpty(_ text: String?) -> String? {
+        guard let text = text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { return nil }
+        return text
     }
 }
 

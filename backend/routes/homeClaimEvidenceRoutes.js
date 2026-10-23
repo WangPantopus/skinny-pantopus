@@ -3,7 +3,7 @@ const evidence = require('../services/homeClaimEvidenceService');
 const { MAX_BYTES } = require('../services/homeClaimEvidenceStorage');
 const { getRequestSessionScope, requireExpectedSessionScope } = require('../utils/requestSessionScope');
 
-const multipart = multer({ storage: multer.memoryStorage(), limits: {
+const multipart = multer({ storage: multer.memoryStorage(), limits: { fieldNameSize: 100, fieldNestingDepth: 3, fieldArrayIndexLimit: 32,
   fileSize: MAX_BYTES, files: 1, fields: 2, fieldSize: 100, parts: 4,
 } }).single('file');
 function args(req) {

@@ -2184,13 +2184,16 @@ class ChatConversationViewModel
         /**
          * Resolve link-preview metadata for [url] once (in-flight and
          * resolved URLs are skipped) and publish it into [linkPreviews].
-         * Failures are recorded as null so the bubble renders no card.
+         * A link with no card for good is recorded as null; a failure that
+         * may pass (busy, offline) records nothing, so the bubble's next
+         * appearance asks again.
          */
         fun resolveLinkPreview(url: String) {
             if (_linkPreviews.value.containsKey(url) || !linkPreviewsInFlight.add(url)) return
             viewModelScope.launch {
-                val preview = linkPreviewRepo.preview(url)
-                _linkPreviews.value = _linkPreviews.value + (url to preview)
+                linkPreviewRepo.preview(url).onSuccess { preview ->
+                    _linkPreviews.value = _linkPreviews.value + (url to preview)
+                }
                 linkPreviewsInFlight.remove(url)
             }
         }

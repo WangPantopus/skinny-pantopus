@@ -167,7 +167,7 @@ async function getDevice(deviceRowId) {
     .maybeSingle();
   if (error) {
     logger.warn('auth.device.lookup_failed', { deviceRowId, error: error.message });
-    return null;
+    throw authSessionService.authUnavailableError(error);
   }
   return data || null;
 }
@@ -680,17 +680,22 @@ async function markReuse({ session, req }) {
  * activity" alert without holding a single credential. Hints still resolve the
  * row so a rotation we failed to persist can be recovered (and so the row is
  * never clobbered by `recordRefresh`), and a *valid* proof over that row is
- * still accepted — only the failure paths are made inert.
+ * still accepted — only the failure paths are made inert. A row named by the
+ * pair GoTrue minted for the presented token (`mintedSession`, see
+ * checkMintedSession) is no hint: GoTrue has just accepted the token for it.
  *
  * @returns {Promise<{ok:true, session:object|null, device:object|null, legacy:boolean, adopt:boolean, matchedBy:string|null, tokenResolved:boolean}
  *                  |{ok:false, status:number, code:string, error:string, tokenResolved:boolean}>}
  */
-async function checkRefresh({ refreshToken, sessionId, accessToken, dpop, req, cookieTransport = false }) {
+async function checkRefresh({ refreshToken, sessionId, accessToken, dpop, req, cookieTransport = false, mintedSession = null }) {
   const mode = authPolicy.deviceBindingMode();
-  const { session, matchedBy } = await resolveSessionForRefresh({ refreshToken, sessionId, accessToken });
-  // True only when the PRESENTED refresh token hashes to this row (current or
-  // previous generation) — i.e. the caller really holds a token of this session.
-  const tokenResolved = matchedBy === 'hash' || matchedBy === 'prev_hash';
+  const { session, matchedBy } = mintedSession
+    ? { session: mintedSession, matchedBy: 'minted' }
+    : await resolveSessionForRefresh({ refreshToken, sessionId, accessToken });
+  // True only when the caller really holds a token of this session: the
+  // PRESENTED refresh token hashes to this row (current or previous
+  // generation), or GoTrue rotated it into a pair that names this row.
+  const tokenResolved = matchedBy === 'hash' || matchedBy === 'prev_hash' || matchedBy === 'minted';
   // See SECURITY (`webExemption`) above: a client-declared header alone may not
   // buy an opt-out from `required` mode.
   const webExemption = cookieTransport && !looksNativeRequest(req) && !sessionLooksNative(session);
@@ -703,7 +708,8 @@ async function checkRefresh({ refreshToken, sessionId, accessToken, dpop, req, c
     return { ok: true, session: null, device: null, legacy: true, adopt: false, matchedBy: null, tokenResolved };
   }
 
-  if (session.revoked_at) {
+  // A logout this process could not save yet counts as saved here (routes/users.js retries it).
+  if (session.revoked_at || authSessionService.signOutPending(session.id)) {
     return { ...fail(codeForRevokedSession(session), { session }), tokenResolved };
   }
 
@@ -772,12 +778,34 @@ async function checkRefresh({ refreshToken, sessionId, accessToken, dpop, req, c
 }
 
 /**
+ * /refresh once GoTrue has rotated a refresh token that matched no row: a
+ * pre-registry session, or a rotation whose hashes weren't saved (a blip during
+ * an earlier refresh). The new pair names its session. A row that session
+ * already has gets every checkRefresh rule (a bound row needs a proof from its
+ * key), and recordRefresh records the rotation on it: writing a new row over it
+ * dropped its device binding and its `restored` context. GoTrue has just
+ * accepted the presented token for this session, so a refusal has the effects
+ * it has for a row the token's hash found: a copied token without the key ends
+ * the session (DEVICE_MISMATCH). `session: null` only when the session has no
+ * row at all; recordRefresh then creates one.
+ */
+async function checkMintedSession({ sessionId, refreshToken, dpop, req, cookieTransport = false }) {
+  const noRow = { ok: true, session: null, device: null, legacy: true, adopt: false, matchedBy: null, tokenResolved: false };
+  if (!isUuid(sessionId)) return noRow;
+  // A logout this process could not save yet counts as saved, row or no row (routes/users.js retries it).
+  if (authSessionService.signOutPending(sessionId)) return { ...fail('SESSION_REVOKED'), tokenResolved: true };
+  const session = await authSessionService.getSessionById(sessionId);
+  if (!session) return noRow;
+  return checkRefresh({ refreshToken, dpop, req, cookieTransport, mintedSession: session });
+}
+
+/**
  * Persist a successful refreshSession: hashes, last_refresh/seen/ip, device
  * last_seen; optionally adopt a legacy session onto the presenting key
  * (only when checkRefresh said `adopt` and the client sent a deviceId).
  *
  * @param {object} p
- * @param {object|null} p.session       row from checkRefresh (null ⇒ pre-registry, a row is created)
+ * @param {object|null} p.session       row from checkRefresh / checkMintedSession (null ⇒ the session has no row, one is created)
  * @param {object} p.newSession         Supabase session returned by refreshSession
  * @param {string} p.oldRefreshToken
  * @param {object} [p.dpop]
@@ -798,7 +826,8 @@ async function recordRefresh({ session, newSession, oldRefreshToken, dpop, adopt
     if (!session) {
       const userId = claims?.sub || null;
       if (userId) {
-        await authSessionService.insertSession({
+        // Never over a row the session already has (one written since checkMintedSession read it).
+        const created = await authSessionService.insertSession({
           id: sessionId,
           userId,
           deviceRowId: null,
@@ -807,11 +836,14 @@ async function recordRefresh({ session, newSession, oldRefreshToken, dpop, adopt
           boundAtIssue: false,
           refreshToken: newSession.refresh_token,
           req,
+          replace: false,
         });
-        await supabaseAdmin
-          .from('AuthSession')
-          .update({ prev_refresh_token_hash: oldRefreshToken ? hashToken(oldRefreshToken) : null, last_refresh_at: nowIso() })
-          .eq('id', sessionId);
+        if (created) {
+          await supabaseAdmin
+            .from('AuthSession')
+            .update({ prev_refresh_token_hash: oldRefreshToken ? hashToken(oldRefreshToken) : null, last_refresh_at: nowIso() })
+            .eq('id', sessionId);
+        }
       }
       return out;
     }
@@ -1099,7 +1131,9 @@ async function listDevices(userId, currentSessionId) {
 // ---------------------------------------------------------------------------
 
 async function revokeDeviceRow(deviceRow, reason) {
-  return updateDevice(deviceRow.id, { revoked_at: nowIso(), revoked_reason: reason, require_step_up: false });
+  const row = await updateDevice(deviceRow.id, { revoked_at: nowIso(), revoked_reason: reason, require_step_up: false });
+  if (!row) throw authSessionService.authUnavailableError();
+  return row;
 }
 
 /**
@@ -1115,16 +1149,21 @@ async function revokeDevice({ userId, deviceRowId, reason = 'user', req, actorSe
   if (!row || row.user_id !== userId) {
     return { ok: false, status: 404, code: 'NOT_FOUND', error: 'Device not found' };
   }
-  if (row.revoked_at) return { ok: true, revokedSessions: 0, already: true };
+  // Retry all durable cleanup even if a previous attempt already marked the
+  // device revoked but failed before revoking its resume grants.
+  const already = Boolean(row.revoked_at);
 
-  try {
-    await pushService.sendToDevice(userId, row.device_id, {
-      title: 'Signed out',
-      body: 'This device was signed out of Pantopus.',
-      data: { type: 'session_revoked', reason },
-    });
-  } catch (err) {
-    logger.debug('auth.revoke_device.push_failed', { error: err.message });
+  // The device was told the first time; a retry only finishes the cleanup.
+  if (!already) {
+    try {
+      await pushService.sendToDevice(userId, row.device_id, {
+        title: 'Signed out',
+        body: 'This device was signed out of Pantopus.',
+        data: { type: 'session_revoked', reason },
+      });
+    } catch (err) {
+      logger.debug('auth.revoke_device.push_failed', { error: err.message });
+    }
   }
 
   const revokedSessions = await authSessionService.revokeSessionsForDevice(row.id, 'device_revoked', { userId });
@@ -1139,8 +1178,8 @@ async function revokeDevice({ userId, deviceRowId, reason = 'user', req, actorSe
     req,
     meta: { reason, revokedSessions, name: row.name || row.model || null, platform: row.platform },
   });
-  if (notify) await authNotifyService.deviceRemoved({ userId, device: row, req, byUser: reason === 'user' });
-  return { ok: true, revokedSessions };
+  if (notify && !already) await authNotifyService.deviceRemoved({ userId, device: row, req, byUser: reason === 'user' });
+  return { ok: true, revokedSessions, ...(already ? { already: true } : {}) };
 }
 
 async function revokeOtherDevices(userId, keepDeviceRowId, reason) {
@@ -1177,12 +1216,14 @@ async function currentSessionForSignOut(currentSessionId) {
  * @returns {Promise<{revoked:number}>}
  */
 async function revokeOthers({ userId, currentSessionId, accessToken, req, reason = 'user', eventType = 'revoke_others' }) {
-  await authSessionService.signOutSupabase(accessToken, 'others', { source: eventType, userId });
   const current = await currentSessionForSignOut(currentSessionId);
   const revoked = await authSessionService.revokeSessionsForUser(userId, { exceptSessionId: currentSessionId || null, reason });
   const revokedDevices = await revokeOtherDevices(userId, current?.device_id || null, reason);
   // Grants: keep only the current device's.
   await revokeGrantsExcept(userId, current?.device_id || null);
+  if (accessToken && !(await authSessionService.signOutSupabase(accessToken, 'others', { source: eventType, userId }))) {
+    throw authSessionService.authUnavailableError();
+  }
   await authSessionService.recordSecurityEvent({
     userId,
     deviceRowId: current?.device_id || null,
@@ -1201,10 +1242,12 @@ async function revokeGrantsExcept(userId, keepDeviceRowId) {
     .eq('user_id', userId)
     .is('used_at', null)
     .is('revoked_at', null);
-  if (error || !data) return 0;
+  if (error) throw authSessionService.authUnavailableError(error);
+  if (!data) return 0;
   const ids = data.filter((g) => !keepDeviceRowId || g.device_id !== keepDeviceRowId).map((g) => g.id);
   if (ids.length === 0) return 0;
-  await supabaseAdmin.from('AuthResumeGrant').update({ revoked_at: nowIso() }).in('id', ids);
+  const { error: revokeError } = await supabaseAdmin.from('AuthResumeGrant').update({ revoked_at: nowIso() }).in('id', ids);
+  if (revokeError) throw authSessionService.authUnavailableError(revokeError);
   return ids.length;
 }
 
@@ -1215,13 +1258,17 @@ async function revokeGrantsExcept(userId, keepDeviceRowId) {
  * revoked, sessions_valid_after=now.
  */
 async function revokeAll({ userId, accessToken = null, req, reason = 'lockdown', eventType = 'lockdown', notify = true }) {
-  if (accessToken) await authSessionService.signOutSupabase(accessToken, 'global', { source: eventType, userId });
+  // Establish the cutoff first. Any later failure leaves old access tokens
+  // refused, and never turns a partial lockdown into a successful response.
+  const validAfter = new Date();
+  await authSessionService.setSessionsValidAfter(userId, validAfter);
   const revoked = await authSessionService.revokeSessionsForUser(userId, { reason });
   const revokedDevices = await revokeOtherDevices(userId, null, reason);
   await pushService.removeAllTokens(userId);
   await authSessionService.revokeGrantsForUser(userId);
-  const validAfter = new Date();
-  await authSessionService.setSessionsValidAfter(userId, validAfter);
+  if (accessToken && !(await authSessionService.signOutSupabase(accessToken, 'global', { source: eventType, userId }))) {
+    throw authSessionService.authUnavailableError();
+  }
   await authSessionService.recordSecurityEvent({
     userId,
     type: eventType,
@@ -1679,6 +1726,7 @@ module.exports = {
   resolveSessionForRefresh,
   verifyRefreshProof,
   checkRefresh,
+  checkMintedSession,
   recordRefresh,
   markReuse,
   markMismatch,

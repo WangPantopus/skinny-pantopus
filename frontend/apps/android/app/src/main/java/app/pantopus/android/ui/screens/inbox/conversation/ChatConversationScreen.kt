@@ -165,8 +165,8 @@ import kotlin.math.roundToInt
  * A15 design parity notes — intentionally NOT implemented (design-only,
  * no backend support yet): voice bubbles + mic button, and the A15.2
  * person preview card with stats in the empty state. A15.2 link-preview
- * card-bubbles ARE implemented (tappable URLs + Open-Graph card below
- * the bubble, metadata via [app.pantopus.android.data.links.LinkPreviewRepository]). The pinned gig context strip (`.ctx-strip`) renders for
+ * card-bubbles ARE implemented (tappable URLs + a text-only card below
+ * the bubble, read via [app.pantopus.android.data.links.LinkPreviewRepository]). The pinned gig context strip (`.ctx-strip`) renders for
  * gig rooms whose route carried a `gigId` (chat-list room rows); the
  * listing variant stays deferred — no listing id reaches the thread.
  */
@@ -3560,8 +3560,10 @@ private fun LinkifiedBubbleText(
 }
 
 /**
- * A15.2 `.link-bubble` preview card under a text bubble: optional image
- * strip, host overline, title, description. Tapping opens the URL.
+ * A15.2 `.link-bubble` preview card under a text bubble: site overline,
+ * title, description. Text only: the page's own image would load from a
+ * host the sender picked, showing it the recipient's IP address. Tapping
+ * opens the URL.
  */
 @Composable
 private fun LinkPreviewCard(
@@ -3579,49 +3581,37 @@ private fun LinkPreviewCard(
                 .background(PantopusColors.appSurface)
                 .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.lg))
                 .clickable(onClick = onOpen)
-                .testTag("chatLinkPreview_${preview.url.hashCode()}"),
+                .testTag("chatLinkPreview_${preview.url.hashCode()}")
+                .padding(horizontal = Spacing.s3, vertical = Spacing.s2),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        preview.imageUrl?.let { imageUrl ->
-            AsyncImage(
-                model = imageUrl,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .height(88.dp),
-            )
-        }
-        Column(
-            modifier = Modifier.padding(horizontal = Spacing.s3, vertical = Spacing.s2),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
+        Text(
+            text = preview.site.uppercase(),
+            fontSize = 9.5.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.5.sp,
+            color = PantopusColors.appTextMuted,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        preview.title?.let { title ->
             Text(
-                text = preview.host.uppercase(),
-                fontSize = 9.5.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 0.5.sp,
-                color = PantopusColors.appTextMuted,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = preview.title,
+                text = title,
                 fontSize = 12.5.sp,
                 fontWeight = FontWeight.Bold,
                 color = PantopusColors.appText,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-            preview.description?.takeIf { it.isNotBlank() }?.let { description ->
-                Text(
-                    text = description,
-                    fontSize = 11.sp,
-                    color = PantopusColors.appTextSecondary,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
+        }
+        preview.description?.let { description ->
+            Text(
+                text = description,
+                fontSize = 11.sp,
+                color = PantopusColors.appTextSecondary,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
