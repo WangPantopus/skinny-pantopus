@@ -136,9 +136,15 @@ router.get('/:businessId/members', verifyToken, async (req, res) => {
 
     // Teammates name each other as everyone else names them, by the Local Profile's name, handle and photo
     // (services/chatPeople.js), not by the account behind the seat (identity firewall design §9.3). `id` stays the
-    // account id the role, permission and removal routes take.
+    // account id the role, permission and removal routes take. An account's email is its owner's alone: each member
+    // sees only their own.
     const people = await loadChatPeople((members || []).map((m) => m.user?.id));
-    res.json({ members: (members || []).map((m) => ({ ...m, user: chatPersonRow(m.user, people) })) });
+    res.json({
+      members: (members || []).map((m) => {
+        const user = chatPersonRow(m.user, people);
+        return { ...m, user: user && String(user.id) !== String(userId) ? { ...user, email: null } : user };
+      }),
+    });
   } catch (err) {
     logger.error('Business members error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch members' });
