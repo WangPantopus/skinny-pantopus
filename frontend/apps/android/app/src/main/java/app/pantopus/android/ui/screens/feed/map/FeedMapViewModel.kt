@@ -2,6 +2,7 @@
 
 package app.pantopus.android.ui.screens.feed.map
 
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.postsmap.PostsMapResponse
@@ -20,6 +21,7 @@ import app.pantopus.android.ui.screens.explore.ExploreKind
 import app.pantopus.android.ui.screens.explore.ExploreMapViewModel
 import app.pantopus.android.ui.screens.explore.ExploreMarker
 import app.pantopus.android.ui.screens.feed.FeedSurface
+import app.pantopus.android.ui.screens.feed.pulse.PulseIntent
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -27,6 +29,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.time.Duration
+import java.time.Instant
+import java.time.OffsetDateTime
 import javax.inject.Inject
 import kotlin.math.abs
 import kotlin.math.max
@@ -88,6 +93,33 @@ data class FeedMapRegion(
 }
 
 /**
+ * What the map shows once its camera settles. The map opens tilted (3D), and a
+ * tilted or turned view covers a trapezoid whose bounding box is wider than
+ * the region the camera was asked to frame, so "did the person move the map?"
+ * reads [camera] while a search fetches [visible].
+ */
+data class FeedMapViewport(
+    /** The camera's target and zoom as a north-up, untilted region of the map's size. */
+    val camera: FeedMapRegion,
+    /** The bounding box of what the screen shows. */
+    val visible: FeedMapRegion,
+)
+
+/** What a Pulse pin draws: its post's intent, and whether the post is live (posted in the last 24 hours). */
+@Immutable
+data class PulsePinStyle(
+    val intent: PulseIntent,
+    val isLive: Boolean,
+)
+
+/** What a Pulse cluster draws: its posts' intents with their counts (most first), and whether any of them is live. */
+@Immutable
+data class PulseClusterStyle(
+    val mix: List<Pair<PulseIntent, Int>>,
+    val isLive: Boolean,
+)
+
+/**
  * The two request dimensions the map mode re-fetches on: which feed surface
  * is active (`place` / `connections`) and which chip-row intent is selected.
  */
@@ -112,6 +144,10 @@ sealed interface FeedMapUiState {
         val nearestActivityCenter: FeedMapRegion? = null,
         /** Posts of the tapped cluster shown as a list (one zooming can't split). */
         val clusterPostIds: Set<String> = emptySet(),
+        /** Each post pin's intent and live state, by post id. */
+        val pinStyles: Map<String, PulsePinStyle> = emptyMap(),
+        /** Each cluster's intent mix and live state, by cluster id. */
+        val clusterStyles: Map<String, PulseClusterStyle> = emptyMap(),
     ) : FeedMapUiState {
         val isEmpty: Boolean get() = entities.isEmpty()
 
@@ -161,11 +197,17 @@ class FeedMapViewModel
         private var isReady = false
         private var query = FeedMapQuery(FeedSurface.Pulse, null)
         private var userCoordinate: UserCoordinate? = null
+
+        /** Where the person moved the camera (its untilted region), and what the screen showed there. */
         private var pendingRegion: FeedMapRegion? = null
+        private var pendingBounds: FeedMapRegion? = null
         private var debounceJob: Job? = null
         private var readJob: Job? = null
         private var fetchGeneration = 0
+
+        /** The region the shown markers were fetched for, and the bounds the request asked for. */
         private var shownRegion: FeedMapRegion? = null
+        private var shownBounds: FeedMapRegion? = null
         private var shownQuery: FeedMapQuery? = null
         private var selectedArea: Pair<Double, Double>? = null
         private var defaultArea: Pair<Double, Double>? = null
@@ -235,7 +277,7 @@ class FeedMapViewModel
             selectedArea = next
             if (next != null) {
                 _region.value = _region.value.copy(latitude = next.first, longitude = next.second)
-                pendingRegion = null
+                clearPending()
                 _viewportDirty.value = false
             } else {
                 isReady = false
@@ -266,16 +308,22 @@ class FeedMapViewModel
          * "Search this area" pill appears) and debounces the follow-up region
          * commit — the refetch itself waits for the explicit tap, matching RN.
          * With nothing pending, settling on [region] as the map framed it
-         * (opening the map, Recenter, a new area) isn't a move.
+         * (opening the map and its fly-in, Recenter, a new area) isn't a move.
+         * Only the camera's target and zoom count: tilting or turning the map
+         * widens what it shows but doesn't move it.
          */
-        fun cameraDidSettle(next: FeedMapRegion) {
+        fun cameraDidSettle(next: FeedMapViewport) {
+            val camera = next.camera
+            // The pins regroup for the new zoom straight away, so zooming in splits a cluster (iOS does the same).
+            regroup(camera)
             val pending = pendingRegion
             if (pending != null) {
-                if (!next.changedSignificantly(pending)) return
-            } else if (next.isMapFit(_region.value)) {
+                if (!camera.changedSignificantly(pending)) return
+            } else if (camera.isMapFit(_region.value)) {
                 return
             }
-            pendingRegion = next
+            pendingRegion = camera
+            pendingBounds = next.visible
             _viewportDirty.value = true
             selectEntity(null)
             debounceJob?.cancel()
@@ -286,7 +334,7 @@ class FeedMapViewModel
                 }
         }
 
-        /** "Search this area" — re-request the viewport the user dragged to. */
+        /** "Search this area" — re-request the viewport the user dragged to (everything the screen shows there). */
         fun searchThisArea() {
             debounceJob?.cancel()
             debounceJob = null
@@ -294,10 +342,26 @@ class FeedMapViewModel
             _region.value = target
             launchRead {
                 fetchMarkers(target, force = true)
-                pendingRegion = null
+                clearPending()
                 _viewportDirty.value = false
             }
         }
+
+        private fun clearPending() {
+            pendingRegion = null
+            pendingBounds = null
+        }
+
+        /**
+         * The bounds a fetch for [target] asks for: what the screen showed when the person moved there, the bounds
+         * the shown markers came from, or else [target] itself (opening the map, Recenter, a new area).
+         */
+        private fun boundsFor(target: FeedMapRegion): FeedMapRegion =
+            when (target) {
+                pendingRegion -> pendingBounds ?: target
+                shownRegion -> shownBounds ?: target
+                else -> target
+            }
 
         /**
          * Recenter — re-resolve the device location, move the camera back,
@@ -315,7 +379,7 @@ class FeedMapViewModel
                         longitudeDelta = _region.value.longitudeDelta,
                     )
                 _region.value = next
-                pendingRegion = null
+                clearPending()
                 _viewportDirty.value = false
                 fetchMarkers(next)
             }
@@ -335,7 +399,7 @@ class FeedMapViewModel
                     longitudeDelta = _region.value.longitudeDelta,
                 )
             _region.value = next
-            pendingRegion = null
+            clearPending()
             _viewportDirty.value = false
             launchRead { fetchMarkers(next, force = true) }
         }
@@ -346,42 +410,52 @@ class FeedMapViewModel
             _state.value = current.copy(selectedId = id, clusterPostIds = emptySet())
         }
 
+        /** Regroups the loaded pins for [camera]'s zoom, keeping the selection and the listed cluster. */
+        private fun regroup(camera: FeedMapRegion) {
+            val current = _state.value as? FeedMapUiState.Loaded ?: return
+            val markers = ExploreMapViewModel.cluster(current.entities, clusterRadius(camera))
+            if (markers == current.markers) return
+            _state.value = current.copy(markers = markers, clusterStyles = clusterStyles(markers, current.pinStyles))
+        }
+
         /** Lists [cluster]'s posts in the preview card's place. */
         fun showClusterPosts(cluster: ExploreCluster) {
             val current = _state.value as? FeedMapUiState.Loaded ?: return
             _state.value = current.copy(selectedId = null, clusterPostIds = cluster.entityIds.toSet())
         }
 
+        /** Fetches the markers for [target]: the bounds the screen shows there ([boundsFor]), clustered by its span. */
         private suspend fun fetchMarkers(
             target: FeedMapRegion,
             force: Boolean = false,
         ) {
             val generation = ++fetchGeneration
             val requestedQuery = query
-            val sameView = shownRegion == target && shownQuery == requestedQuery
+            val bounds = boundsFor(target)
+            val sameView = shownRegion == target && shownBounds == bounds && shownQuery == requestedQuery
             val copy =
                 postsMapRepository.postsCopy(
-                    target.south,
-                    target.west,
-                    target.north,
-                    target.east,
+                    bounds.south,
+                    bounds.west,
+                    bounds.north,
+                    bounds.east,
                     requestedQuery.postType,
                     requestedQuery.surface.backendSurface,
                 )
             if (!sameView || _state.value !is FeedMapUiState.Loaded) {
                 _refreshNotice.value = null
                 if (copy.data != null) {
-                    publish(copy.data, target, requestedQuery, keepSelection = false)
+                    publish(copy.data, target, bounds, requestedQuery, keepSelection = false)
                 } else {
                     _state.value = FeedMapUiState.Loading
                 }
             }
             val stored =
                 postsMapRepository.postsStored(
-                    target.south,
-                    target.west,
-                    target.north,
-                    target.east,
+                    bounds.south,
+                    bounds.west,
+                    bounds.north,
+                    bounds.east,
                     requestedQuery.postType,
                     requestedQuery.surface.backendSurface,
                     force,
@@ -391,16 +465,18 @@ class FeedMapViewModel
                 if (stored.showsRefreshFailure(StoreKind.NEARBY)) RefreshNotice(stored.fetchedAt, ::refresh) else null
             if (stored.data == null) {
                 shownRegion = null
+                shownBounds = null
                 shownQuery = null
                 _state.value = FeedMapUiState.Error(stored.failure?.message ?: "Couldn't load the map. Try again.")
             } else {
-                publish(stored.data, target, requestedQuery, keepSelection = sameView)
+                publish(stored.data, target, bounds, requestedQuery, keepSelection = sameView)
             }
         }
 
         private fun publish(
             data: PostsMapResponse,
             target: FeedMapRegion,
+            bounds: FeedMapRegion,
             requestedQuery: FeedMapQuery,
             keepSelection: Boolean,
         ) {
@@ -412,21 +488,59 @@ class FeedMapViewModel
                 data.nearestActivityCenter?.let {
                     FeedMapRegion(it.latitude, it.longitude, target.latitudeDelta, target.longitudeDelta)
                 }
+            val markers = ExploreMapViewModel.cluster(entities, clusterRadius(target))
+            val pinStyles = pinStyles(data, Instant.now())
             shownRegion = target
+            shownBounds = bounds
             shownQuery = requestedQuery
             _state.value =
                 FeedMapUiState.Loaded(
                     entities = entities.sortedBy { it.distanceMiles },
-                    markers = ExploreMapViewModel.cluster(entities, clusterRadius(target)),
+                    markers = markers,
                     userCoordinate = userCoordinate,
                     selectedId = previous?.selectedId?.takeIf { it in ids },
                     nearestActivityCenter = hint,
                     clusterPostIds = previous?.clusterPostIds.orEmpty().filterTo(HashSet()) { it in ids },
+                    pinStyles = pinStyles,
+                    clusterStyles = clusterStyles(markers, pinStyles),
                 )
         }
 
-        /** Widen the cluster radius as the camera zooms out and vice versa. */
-        private fun clusterRadius(target: FeedMapRegion): Double = (target.latitudeDelta * 0.08).coerceIn(MIN_CLUSTER_RADIUS, 0.05)
+        /** Each post's intent (its `post_type`) and whether it was posted in the last 24 hours, by post id. */
+        private fun pinStyles(
+            data: PostsMapResponse,
+            now: Instant,
+        ): Map<String, PulsePinStyle> =
+            data.markers
+                .filter { it.layerType == "post" }
+                .associate { marker ->
+                    val createdAt = parseInstant(marker.createdAt)
+                    val isLive = createdAt != null && Duration.between(createdAt, now) < LIVE_WINDOW
+                    marker.id to PulsePinStyle(PulseIntent.fromPostType(marker.postType), isLive)
+                }
+
+        /** Each cluster's intent mix (most first) and whether it holds a live post, by cluster id. */
+        private fun clusterStyles(
+            markers: List<ExploreMarker>,
+            pinStyles: Map<String, PulsePinStyle>,
+        ): Map<String, PulseClusterStyle> =
+            markers.filterIsInstance<ExploreMarker.Cluster>().associate { marker ->
+                val styles = marker.cluster.entityIds.mapNotNull { pinStyles[it] }
+                val mix =
+                    styles
+                        .groupingBy { it.intent }
+                        .eachCount()
+                        .entries
+                        .sortedWith(compareByDescending<Map.Entry<PulseIntent, Int>> { it.value }.thenBy { it.key.ordinal })
+                        .map { it.key to it.value }
+                marker.cluster.id to PulseClusterStyle(mix = mix, isLive = styles.any { it.isLive })
+            }
+
+        /**
+         * Widen the cluster radius as the camera zooms out and vice versa: about an eighth of the view's height, so
+         * neighbouring cluster bubbles (up to 56 dp) don't overlap.
+         */
+        private fun clusterRadius(target: FeedMapRegion): Double = (target.latitudeDelta * 0.12).coerceIn(MIN_CLUSTER_RADIUS, 0.05)
 
         companion object {
             /**
@@ -437,5 +551,15 @@ class FeedMapViewModel
 
             /** The smallest cluster radius, in degrees, however far the map zooms in. */
             const val MIN_CLUSTER_RADIUS = 0.0005
+
+            /** A post this new is "live" on the map: its pin (and its cluster) gets a halo. */
+            private val LIVE_WINDOW: Duration = Duration.ofHours(24)
+
+            /** The backend's timestamps: `…Z` or with an offset (`…+00:00`). */
+            private fun parseInstant(raw: String?): Instant? {
+                if (raw.isNullOrBlank()) return null
+                return runCatching { OffsetDateTime.parse(raw).toInstant() }.getOrNull()
+                    ?: runCatching { Instant.parse(raw) }.getOrNull()
+            }
         }
     }

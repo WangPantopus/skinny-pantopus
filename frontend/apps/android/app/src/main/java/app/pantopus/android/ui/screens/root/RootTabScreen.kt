@@ -2911,8 +2911,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     } else {
                         NearbyTab(
                             onOpenMenu = openMenu,
-                            pulse = {
+                            // The segment row is the first row of the feed's collapsible header.
+                            pulse = { segmentRow ->
                                 FeedScreen(
+                                    header = segmentRow,
                                     onOpenPost = { postId -> navController.navigate(ChildRoutes.pulsePost(postId)) },
                                     onCompose = { intent -> navController.navigate(ChildRoutes.composePost(intent.key)) },
                                     onComposeStarter = { starter ->

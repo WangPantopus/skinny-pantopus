@@ -8,6 +8,9 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.EaseOut
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -20,6 +23,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -56,6 +60,9 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -69,6 +76,8 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -103,18 +112,28 @@ import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
+import app.pantopus.android.ui.theme.rememberReduceMotion
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 /**
  * Pulse tab — the public neighborhood feed reached from
  * Hub → pillar(.pulse). Replaces the legacy List-of-strings stub.
+ *
+ * The list or the map fills the page; every header item is one collapsible
+ * block over it ([PulseHeaderLayout], `pulseHeader`) that slides away while the
+ * person scrolls into the posts or drags the map, and back as they scroll back.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 @Suppress("CyclomaticComplexMethod")
 fun FeedScreen(
     surface: FeedSurface = FeedSurface.Pulse,
+    /**
+     * Drawn first in the collapsible header, so it slides away with it: the Nearby tab's Pulse | Neighborhood row and
+     * side-menu button. Null elsewhere.
+     */
+    header: (@Composable () -> Unit)? = null,
     onOpenPost: (String) -> Unit = {},
     onCompose: (PulseIntent) -> Unit = {},
     onEmptyCta: (() -> Unit)? = null,
@@ -181,10 +200,37 @@ fun FeedScreen(
             if (results.values.any { it }) contextBarViewModel.useMyLocation() else contextBarViewModel.locationPermissionDenied()
         }
     var showsSearch by remember { mutableStateOf(false) }
+    var searchFocused by remember { mutableStateOf(false) }
     var showsIntentPicker by remember { mutableStateOf(false) }
     // List / Map segment — mirrors RN `FeedHeader.tsx:35-52`. Saved, so coming back from a post opened on the map (or
     // an activity recreation) shows the map again, as on iOS.
     var viewMode by rememberSaveable { mutableStateOf(FeedViewMode.List) }
+    val mapMode = viewMode == FeedViewMode.Map && surface.supportsMapMode
+
+    // The collapsible header. It stays in view with a screen reader on, while the search field has focus, on Beacons,
+    // and while there is nothing to scroll (loading, empty, error); it comes back whenever what the page shows changes.
+    val headerState = rememberPulseHeaderState()
+    val reduceMotion = rememberReduceMotion()
+    val touchExploration = rememberTouchExplorationEnabled()
+    val headerCanHide =
+        !touchExploration && !(showsSearch && searchFocused) &&
+            surface != FeedSurface.Beacons && activeSurface != FeedSurface.Beacons &&
+            (mapMode || state is PulseFeedUiState.Loaded)
+    LaunchedEffect(headerCanHide) { headerState.canHide = headerCanHide }
+    LaunchedEffect(viewMode, activeSurface, activeIntent, activeTopic, sportsMode, contextLabel, contextRadius, showsSearch) {
+        headerState.show()
+    }
+    LifecycleResumeEffect(headerState) {
+        headerState.show()
+        onPauseOrDispose { }
+    }
+    val headerProgress =
+        animateFloatAsState(
+            targetValue = if (headerState.isHidden) 1f else 0f,
+            animationSpec = tween(durationMillis = PULSE_HEADER_MS, easing = EaseOut),
+            label = "pulseHeader",
+        )
+    val revealFallbackPx = revealFallbackBottomPx()
     // The quiet-state card belongs to the Nearby posts, not the Connections surface.
     val topCard = quietStateCard?.takeIf { activeSurface == FeedSurface.Pulse }
     // A pull or a retry on the Nearby posts reads the quiet-state card's meter again too, as the Nearby tab's pull did.
@@ -244,191 +290,225 @@ fun FeedScreen(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg).testTag("pulseFeed")) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            TopBar(
-                title = surface.title,
-                onBack = onBack,
-                onSearchTap = {
-                    showsSearch = !showsSearch
-                    if (!showsSearch) viewModel.setSearchText("")
-                },
-                onFilterTap = { showsIntentPicker = true },
-                onPreferencesTap = { viewModel.openPreferences() },
-                topMenu = topMenu,
-                viewMode = viewMode.takeIf { surface.supportsMapMode },
-                onViewModeChange = { viewMode = it },
-                onAskTap = onAsk?.takeIf { surface == FeedSurface.Pulse }?.let { ask -> { ask(AIScreenContext.nearby()) } },
-            )
-            if (surface == FeedSurface.Beacons) {
-                Row(modifier = Modifier.padding(horizontal = Spacing.s4)) {
-                    onEmptyCta?.let { action ->
-                        TextButton(onClick = action, modifier = Modifier.testTag("beacons.find")) { Text("Find Beacons") }
-                    }
-                    onFollowing?.let { action ->
-                        TextButton(onClick = action, modifier = Modifier.testTag("beacons.following")) { Text("Following") }
-                    }
-                }
-            }
-            if (surface in FeedSurface.toggleSurfaces) {
-                FeedSurfaceTabs(active = activeSurface) { next ->
-                    viewMode = FeedViewMode.List
-                    viewModel.selectSurface(next)
-                }
-            }
-            if (showsSearch) {
-                OutlinedTextField(
-                    value = searchText,
-                    onValueChange = { viewModel.setSearchText(it) },
-                    placeholder = { Text("Search posts", fontSize = 14.sp) },
-                    singleLine = true,
-                    shape = RoundedCornerShape(Radii.pill),
-                    trailingIcon = {
-                        Box(
-                            modifier =
-                                Modifier
-                                    .size(32.dp)
-                                    .clickable {
-                                        showsSearch = false
-                                        viewModel.setSearchText("")
-                                    }
-                                    .semantics { contentDescription = "Clear search" },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            PantopusIconImage(
-                                icon = PantopusIcon.X,
-                                contentDescription = null,
-                                size = 14.dp,
-                                tint = PantopusColors.appTextSecondary,
-                            )
-                        }
+    // Clipped, so the header slides under the page's top edge, not over the status bar.
+    Box(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg).clipToBounds().testTag("pulseFeed")) {
+        PulseHeaderLayout(
+            state = headerState,
+            progress = { headerProgress.value },
+            reduceMotion = reduceMotion,
+            headerItems = {
+                header?.invoke()
+                TopBar(
+                    title = surface.title,
+                    onBack = onBack,
+                    onSearchTap = {
+                        showsSearch = !showsSearch
+                        if (!showsSearch) viewModel.setSearchText("")
                     },
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = Spacing.s4, vertical = Spacing.s1)
-                            .testTag("pulseSearchField"),
+                    onFilterTap = { showsIntentPicker = true },
+                    onPreferencesTap = { viewModel.openPreferences() },
+                    topMenu = topMenu,
+                    viewMode = viewMode.takeIf { surface.supportsMapMode },
+                    onViewModeChange = { viewMode = it },
+                    onAskTap = onAsk?.takeIf { surface == FeedSurface.Pulse }?.let { ask -> { ask(AIScreenContext.nearby()) } },
                 )
-            }
-            if (activeSurface == FeedSurface.Pulse) {
-                FeedContextBar(
-                    label = contextLabel,
-                    radiusMiles = contextRadius,
-                    onOpen = { contextBarViewModel.openSwitcher() },
+                if (surface == FeedSurface.Beacons) {
+                    Row(modifier = Modifier.padding(horizontal = Spacing.s4)) {
+                        onEmptyCta?.let { action ->
+                            TextButton(onClick = action, modifier = Modifier.testTag("beacons.find")) { Text("Find Beacons") }
+                        }
+                        onFollowing?.let { action ->
+                            TextButton(onClick = action, modifier = Modifier.testTag("beacons.following")) { Text("Following") }
+                        }
+                    }
+                }
+                if (surface in FeedSurface.toggleSurfaces) {
+                    FeedSurfaceTabs(active = activeSurface) { next ->
+                        viewMode = FeedViewMode.List
+                        viewModel.selectSurface(next)
+                    }
+                }
+                if (showsSearch) {
+                    OutlinedTextField(
+                        value = searchText,
+                        onValueChange = { viewModel.setSearchText(it) },
+                        placeholder = { Text("Search posts", fontSize = 14.sp) },
+                        singleLine = true,
+                        shape = RoundedCornerShape(Radii.pill),
+                        trailingIcon = {
+                            Box(
+                                modifier =
+                                    Modifier
+                                        .size(32.dp)
+                                        .clickable {
+                                            showsSearch = false
+                                            viewModel.setSearchText("")
+                                        }
+                                        .semantics { contentDescription = "Clear search" },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                PantopusIconImage(
+                                    icon = PantopusIcon.X,
+                                    contentDescription = null,
+                                    size = 14.dp,
+                                    tint = PantopusColors.appTextSecondary,
+                                )
+                            }
+                        },
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = Spacing.s4, vertical = Spacing.s1)
+                                .onFocusChanged { searchFocused = it.isFocused }
+                                .testTag("pulseSearchField"),
+                    )
+                }
+                if (activeSurface == FeedSurface.Pulse) {
+                    FeedContextBar(
+                        label = contextLabel,
+                        radiusMiles = contextRadius,
+                        onOpen = { contextBarViewModel.openSwitcher() },
+                    )
+                }
+                PulseTopicChipRow(
+                    topics = viewModel.availableTopics,
+                    activeTopic = activeTopic,
+                    onSelect = { viewModel.selectTopic(it) },
                 )
-            }
-            PulseTopicChipRow(
-                topics = viewModel.availableTopics,
-                activeTopic = activeTopic,
-                onSelect = { viewModel.selectTopic(it) },
-            )
-            // Inside a topic lane the post-type row is replaced by the
-            // lane's own mode chips — RN `FeedScreen.tsx:129`.
-            if (viewModel.isInSportsLane) {
-                val modeChips = viewModel.sportsModeChips()
-                if (modeChips.isNotEmpty()) {
+                // Inside a topic lane the post-type row is replaced by the
+                // lane's own mode chips — RN `FeedScreen.tsx:129`.
+                if (viewModel.isInSportsLane) {
+                    val modeChips = viewModel.sportsModeChips()
+                    if (modeChips.isNotEmpty()) {
+                        FeedChipRow(
+                            chips = modeChips.map { FeedChipItem(id = it.first.key, label = it.second) },
+                            activeId = sportsMode.key,
+                            onSelect = { id -> viewModel.selectSportsMode(PulseSportsMode.fromKey(id)) },
+                            skeleton = state is PulseFeedUiState.Loading,
+                        )
+                    }
+                } else {
                     FeedChipRow(
-                        chips = modeChips.map { FeedChipItem(id = it.first.key, label = it.second) },
-                        activeId = sportsMode.key,
-                        onSelect = { id -> viewModel.selectSportsMode(PulseSportsMode.fromKey(id)) },
+                        chips = PulseIntent.filterEntries.map { FeedChipItem(id = it.key, label = it.label) },
+                        activeId = activeIntent.key,
+                        onSelect = { id -> viewModel.selectIntent(PulseIntent.fromKey(id)) },
                         skeleton = state is PulseFeedUiState.Loading,
                     )
                 }
-            } else {
-                FeedChipRow(
-                    chips = PulseIntent.filterEntries.map { FeedChipItem(id = it.key, label = it.label) },
-                    activeId = activeIntent.key,
-                    onSelect = { id -> viewModel.selectIntent(PulseIntent.fromKey(id)) },
-                    skeleton = state is PulseFeedUiState.Loading,
-                )
-            }
-            if (viewModel.isInSportsLane) {
-                primarySportsEvent?.let { event ->
-                    PulseSportsEventModule(
-                        event = event,
-                        onSeeThreads = { viewModel.selectSportsEvent(event.eventKey) },
-                        onStartThread = { onCompose(activeIntent) },
-                    )
+                if (viewModel.isInSportsLane) {
+                    primarySportsEvent?.let { event ->
+                        PulseSportsEventModule(
+                            event = event,
+                            onSeeThreads = { viewModel.selectSportsEvent(event.eventKey) },
+                            onStartThread = { onCompose(activeIntent) },
+                        )
+                    }
                 }
-            }
-            if (activeSurface == FeedSurface.Pulse) {
-                radiusSuggestion?.let { suggestion ->
-                    FeedRadiusSuggestionBanner(
-                        suggestion = suggestion,
-                        onApply = {
-                            contextBarViewModel.applyRadius(suggestion.suggestedRadius) { applied ->
-                                if (applied) viewModel.setViewingRadiusMiles(suggestion.suggestedRadius)
-                            }
-                        },
-                        onDismiss = { viewModel.dismissRadiusSuggestion() },
-                    )
+                if (activeSurface == FeedSurface.Pulse) {
+                    radiusSuggestion?.let { suggestion ->
+                        FeedRadiusSuggestionBanner(
+                            suggestion = suggestion,
+                            onApply = {
+                                contextBarViewModel.applyRadius(suggestion.suggestedRadius) { applied ->
+                                    if (applied) viewModel.setViewingRadiusMiles(suggestion.suggestedRadius)
+                                }
+                            },
+                            onDismiss = { viewModel.dismissRadiusSuggestion() },
+                        )
+                    }
                 }
-            }
-            if (viewMode == FeedViewMode.Map && surface.supportsMapMode) {
-                FeedMapSection(
-                    query = FeedMapQuery(surface = activeSurface, postType = activeIntent.postType),
-                    onOpenPost = onOpenPost,
-                )
-            } else {
-                when (val s = state) {
-                    is PulseFeedUiState.Loading -> LoadingFrame()
-                    is PulseFeedUiState.Empty ->
-                        // With the quiet-state card above it, the empty state scrolls with the card (large text).
-                        Column(
-                            modifier =
-                                Modifier
-                                    .fillMaxSize()
-                                    .then(if (topCard != null) Modifier.verticalScroll(emptyScroll) else Modifier),
-                        ) {
-                            topCard?.let { card -> Box(modifier = Modifier.padding(Spacing.s3)) { card() } }
-                            Box(modifier = if (topCard != null) Modifier else Modifier.weight(1f)) {
-                                FeedEmptyState(content = s.content) {
-                                    when {
-                                        s.needsArea -> contextBarViewModel.openSwitcher()
-                                        s.clearsTopic -> viewModel.selectTopic(null)
-                                        else -> onEmptyCta?.invoke() ?: onCompose(activeIntent)
+            },
+            content = { headerHeight ->
+                if (mapMode) {
+                    FeedMapSection(
+                        query = FeedMapQuery(surface = activeSurface, postType = activeIntent.postType),
+                        onOpenPost = onOpenPost,
+                        topInset = { headerState.mapTopInsetPx(headerProgress.value, reduceMotion, revealFallbackPx) },
+                        // Dragging the map counts as scrolling; never with a screen reader on.
+                        onVerticalPan =
+                            if (touchExploration) {
+                                null
+                            } else {
+                                { contentMovedUp -> if (contentMovedUp) headerState.hide() else headerState.show() }
+                            },
+                    )
+                } else {
+                    when (val s = state) {
+                        is PulseFeedUiState.Loading ->
+                            Box(modifier = Modifier.padding(top = headerHeight)) { LoadingFrame() }
+                        is PulseFeedUiState.Empty ->
+                            // With the quiet-state card above it, the empty state scrolls with the card (large text).
+                            Column(
+                                modifier =
+                                    Modifier
+                                        .fillMaxSize()
+                                        .padding(top = headerHeight)
+                                        .then(if (topCard != null) Modifier.verticalScroll(emptyScroll) else Modifier),
+                            ) {
+                                topCard?.let { card -> Box(modifier = Modifier.padding(Spacing.s3)) { card() } }
+                                Box(modifier = if (topCard != null) Modifier else Modifier.weight(1f)) {
+                                    FeedEmptyState(content = s.content) {
+                                        when {
+                                            s.needsArea -> contextBarViewModel.openSwitcher()
+                                            s.clearsTopic -> viewModel.selectTopic(null)
+                                            else -> onEmptyCta?.invoke() ?: onCompose(activeIntent)
+                                        }
                                     }
                                 }
+                                // Sports lane starter prompts — tapping one
+                                // opens the composer pre-filled.
+                                if (viewModel.isInSportsLane && onComposeStarter != null) {
+                                    PulseSportsStarterRow(onSelect = onComposeStarter)
+                                }
                             }
-                            // Sports lane starter prompts — tapping one
-                            // opens the composer pre-filled.
-                            if (viewModel.isInSportsLane && onComposeStarter != null) {
-                                PulseSportsStarterRow(onSelect = onComposeStarter)
+                        is PulseFeedUiState.Loaded ->
+                            PopulatedFrame(
+                                state = s,
+                                header = topCard,
+                                collapsingHeader = headerState,
+                                contentTop = headerHeight,
+                                headerBottom = { headerState.visibleBottomPx(headerProgress.value, reduceMotion) },
+                                newPostCount = newPostCount,
+                                onShowNewPosts = viewModel::showNewPosts,
+                                onReadingPosition = viewModel::readingPosition,
+                                onTapPost = {
+                                    app.pantopus.android.core.perf.ScreenTiming.navigationTapped("post")
+                                    viewModel.seedPostForOpen(it)
+                                    onOpenPost(it)
+                                },
+                                onTapReaction = viewModel::tapReaction,
+                                isRefreshing = isRefreshing,
+                                onRefresh = refreshFeed,
+                                isLoadingMore = isLoadingMore,
+                                loadMoreError = loadMoreError,
+                                onRetryLoadMore = viewModel::retryLoadMore,
+                                onRowAppeared = viewModel::loadMoreIfNeeded,
+                                searchActive = searchText.isNotBlank(),
+                                rowActions =
+                                    PulseFeedRowActions(
+                                        onOverflow = viewModel::openOverflow,
+                                        onDismissSeeded = viewModel::dismissSeededFact,
+                                        onToggleSave = viewModel::toggleSave,
+                                        onToggleRepost = viewModel::toggleRepost,
+                                    ),
+                            )
+                        is PulseFeedUiState.Error ->
+                            Box(modifier = Modifier.padding(top = headerHeight)) {
+                                ErrorFrame(message = s.message, onRetry = refreshFeed)
                             }
-                        }
-                    is PulseFeedUiState.Loaded ->
-                        PopulatedFrame(
-                            state = s,
-                            header = topCard,
-                            newPostCount = newPostCount,
-                            onShowNewPosts = viewModel::showNewPosts,
-                            onReadingPosition = viewModel::readingPosition,
-                            onTapPost = {
-                                app.pantopus.android.core.perf.ScreenTiming.navigationTapped("post")
-                                viewModel.seedPostForOpen(it)
-                                onOpenPost(it)
-                            },
-                            onTapReaction = viewModel::tapReaction,
-                            isRefreshing = isRefreshing,
-                            onRefresh = refreshFeed,
-                            isLoadingMore = isLoadingMore,
-                            loadMoreError = loadMoreError,
-                            onRetryLoadMore = viewModel::retryLoadMore,
-                            onRowAppeared = viewModel::loadMoreIfNeeded,
-                            searchActive = searchText.isNotBlank(),
-                            rowActions =
-                                PulseFeedRowActions(
-                                    onOverflow = viewModel::openOverflow,
-                                    onDismissSeeded = viewModel::dismissSeededFact,
-                                    onToggleSave = viewModel::toggleSave,
-                                    onToggleRepost = viewModel::toggleRepost,
-                                ),
-                        )
-                    is PulseFeedUiState.Error ->
-                        ErrorFrame(message = s.message, onRetry = refreshFeed)
+                    }
                 }
-            }
-        }
+            },
+        )
+        // Map mode with the header hidden: the capsule that brings it back.
+        PulseHeaderReveal(
+            visible = mapMode && headerState.isHidden,
+            label = "${surface.title} · ${activeTopic?.label ?: activeIntent.label}",
+            reduceMotion = reduceMotion,
+            onReveal = headerState::show,
+            onMeasured = { headerState.revealBottomPx = it },
+            modifier = Modifier.align(Alignment.TopCenter),
+        )
         toast?.let { message ->
             Box(
                 modifier =
@@ -1284,11 +1364,19 @@ internal fun FeedEmptyState(
     }
 }
 
+/**
+ * The loaded posts. The list scrolls under the Pulse header: its first row starts [contentTop] down, the header
+ * follows the scroll ([collapsingHeader]), and the "new posts" pill and the pull-to-refresh indicator sit below the
+ * header's bottom edge ([headerBottom], px).
+ */
 @OptIn(ExperimentalMaterialApi::class)
 @Composable
 private fun PopulatedFrame(
     state: PulseFeedUiState.Loaded,
     header: (@Composable () -> Unit)? = null,
+    collapsingHeader: PulseHeaderState? = null,
+    contentTop: Dp = 0.dp,
+    headerBottom: () -> Int = { 0 },
     onTapPost: (String) -> Unit,
     onTapReaction: (String) -> Unit,
     isRefreshing: Boolean,
@@ -1330,11 +1418,13 @@ private fun PopulatedFrame(
     LaunchedEffect(header != null) {
         if (header != null && listState.firstVisibleItemIndex <= 1) listState.scrollToItem(0)
     }
-    Box(modifier = Modifier.fillMaxSize().pullRefresh(pullState)) {
+    val headerScroll = rememberPulseHeaderScroll(collapsingHeader, listState)
+    Box(modifier = Modifier.fillMaxSize().nestedScroll(headerScroll).pullRefresh(pullState)) {
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize().testTag("pulseFeedList"),
-            contentPadding = PaddingValues(Spacing.s3),
+            contentPadding =
+                PaddingValues(start = Spacing.s3, top = contentTop + Spacing.s3, end = Spacing.s3, bottom = Spacing.s3),
             verticalArrangement = Arrangement.spacedBy(Spacing.s2),
         ) {
             header?.let { card -> item(key = "quietStateCard") { card() } }
@@ -1397,7 +1487,7 @@ private fun PopulatedFrame(
                     onShowNewPosts()
                 },
                 modifier =
-                    Modifier.align(Alignment.TopCenter).padding(top = Spacing.s2)
+                    Modifier.align(Alignment.TopCenter).offset { IntOffset(0, headerBottom()) }.padding(top = Spacing.s2)
                         .clip(RoundedCornerShape(Radii.pill)).background(PantopusColors.appSurface)
                         .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.pill))
                         .testTag("pulseNewPosts"),
@@ -1408,7 +1498,7 @@ private fun PopulatedFrame(
         PullRefreshIndicator(
             refreshing = isRefreshing,
             state = pullState,
-            modifier = Modifier.align(Alignment.TopCenter),
+            modifier = Modifier.align(Alignment.TopCenter).offset { IntOffset(0, headerBottom()) },
             contentColor = PantopusColors.primary600,
         )
     }
