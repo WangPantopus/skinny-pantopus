@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as api from '@pantopus/api';
 import { EVERYTHING, RECONNECTED, onSyncTopic } from '@/lib/syncSignals';
+import { onChatHistoryRetired } from '@/components/chat/chatStorage';
 
 type Reply = Awaited<ReturnType<typeof api.chat.getBusinessChatRooms>>;
 export type BusinessChatRoom = Reply['rooms'][number] & { other_participant_name?: string | null;
@@ -68,6 +69,13 @@ export function useBusinessChatRooms(businessId: string, enabled = true) {
   }, [businessId, enabled, key]);
   const refresh = useCallback(() => load(), [load]);
   const loadMore = useCallback(() => load(true), [load]);
+  useEffect(() => onChatHistoryRetired(({ rooms }) => {
+    const denied = new Set(rooms);
+    if (!latest.current.rooms.some((room) => denied.has(room.id))) return;
+    scope.current.generation++; scope.current.more = false; scope.current.refreshing = false;
+    setState((previous) => ({ ...previous, rooms: previous.rooms.filter((room) => !denied.has(room.id)), loadingMore: false }));
+    if (enabled && navigator.onLine) void refresh();
+  }), [enabled, refresh]);
   useEffect(() => {
     if (!enabled) return;
     void refresh();

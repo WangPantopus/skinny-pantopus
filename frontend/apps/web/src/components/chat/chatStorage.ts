@@ -7,7 +7,7 @@ const HISTORY_BYTES = 5 * 1024 * 1024;
 const OUTBOX_BYTES = 100 * 1024 * 1024;
 const OUTBOX_FULL = 'Your pending messages and drafts are full (100 items or 100 MB). Send or remove an item before adding more.';
 type Kind = 'history' | 'outbox' | 'media' | 'draft';
-interface Metadata { id: string; account: string; kind: Kind; key: string; at: number; bytes: number; revision?: string }
+interface Metadata { id: string; account: string; kind: Kind; key: string; at: number; bytes: number; revision?: string; rooms?: string[] }
 export interface ChatDraftCommit { key: string; revision: string; mediaKeys: string[] }
 export interface ChatRecordMutation {
   expectedDraft?: { key: string; revision: string | null };
@@ -23,6 +23,60 @@ export interface ChatStorageScope { account: string; marker: string; generation:
 let database: Promise<IDBDatabase> | undefined;
 let generation = 0;
 let active: ChatStorageScope | null = null;
+const HISTORY_RETIREMENT = 'pantopus-chat-history-retired';
+type HistoryRetirement = { account: string; marker: string; generation: number; rooms: string[] };
+const historyGenerations = new Map<string, number>();
+const receivedHistoryGenerations = new Map<string, number>();
+const historyListeners = new Set<(event: HistoryRetirement) => void>();
+let historyChannel: BroadcastChannel | null = null;
+let listeningForHistory = false;
+const HISTORY_FENCE = 'history-generation';
+type HistoryFence = { account: string; generation: number };
+
+/** All routes containing a room share its access decision, including topic views. */
+export function chatHistoryRooms(value: unknown): string[] {
+  const snapshot = value as { roomIds?: string[]; resolvedRoomId?: string; messages?: Array<{ room_id?: string }> } | null;
+  return [...new Set([...(Array.isArray(snapshot?.roomIds) ? snapshot.roomIds : []), snapshot?.resolvedRoomId,
+    ...(Array.isArray(snapshot?.messages) ? snapshot.messages.map((message) => message.room_id) : [])]
+    .filter((room): room is string => typeof room === 'string' && room.length > 0))];
+}
+
+function receiveHistoryRetirement(event: HistoryRetirement) {
+  if (!event || event.marker !== sessionMarker() || !getAuthToken() || typeof event.account !== 'string'
+    || !Number.isSafeInteger(event.generation) || !Array.isArray(event.rooms)) return;
+  if ((receivedHistoryGenerations.get(event.account) ?? -1) >= event.generation) return;
+  receivedHistoryGenerations.set(event.account, event.generation);
+  historyGenerations.set(event.account, Math.max(historyGenerations.get(event.account) ?? 0, event.generation));
+  historyListeners.forEach((listener) => listener(event));
+}
+
+export function onChatHistoryRetired(listener: (event: HistoryRetirement) => void): () => void {
+  if (!listeningForHistory && typeof window !== 'undefined') {
+    listeningForHistory = true;
+    try {
+      historyChannel = new BroadcastChannel(HISTORY_RETIREMENT);
+      historyChannel.onmessage = (event) => receiveHistoryRetirement(event.data);
+    } catch { /* The storage event below also reaches other same-origin tabs. */ }
+    window.addEventListener('storage', (event) => {
+      if (event.key !== HISTORY_RETIREMENT || !event.newValue) return;
+      try { receiveHistoryRetirement(JSON.parse(event.newValue)); } catch { /* Ignore invalid signals. */ }
+    });
+  }
+  historyListeners.add(listener);
+  return () => { historyListeners.delete(listener); };
+}
+
+export function isChatHistoryGenerationCurrent(accountId: string, value: number): boolean {
+  return (historyGenerations.get(JSON.stringify([getApiBaseUrl(), accountId])) ?? 0) === value;
+}
+
+export async function readChatHistoryGeneration(scope: ChatStorageScope): Promise<number> {
+  const fence = await readTaskRecoveryValue<HistoryFence>(await open(), 'metadata', HISTORY_FENCE);
+  const value = fence?.account === scope.account ? fence.generation : 0;
+  if (!isChatStorageCurrent(scope)) throw new Error('This chat session ended.');
+  historyGenerations.set(scope.account, Math.max(historyGenerations.get(scope.account) ?? 0, value));
+  return historyGenerations.get(scope.account)!;
+}
 
 function sessionMarker(): string { try { return localStorage.getItem(AUTH_SESSION_CHANGE_KEY) || ''; } catch { return ''; } }
 
@@ -85,6 +139,8 @@ function mutate(db: IDBDatabase, scope: ChatStorageScope | null, action: (transa
 export async function activateChatStorage(accountId: string): Promise<ChatStorageScope> {
   const account = JSON.stringify([getApiBaseUrl(), accountId]);
   if (active?.account === account && isChatStorageCurrent(active)) return active;
+  for (const key of historyGenerations.keys()) if (key !== account) historyGenerations.delete(key);
+  for (const key of receivedHistoryGenerations.keys()) if (key !== account) receivedHistoryGenerations.delete(key);
   const scope = { account, marker: authSessionMarker(), generation: ++generation };
   active = scope;
   const db = await open();
@@ -108,7 +164,7 @@ export async function activateChatStorage(accountId: string): Promise<ChatStorag
 }
 
 export async function clearChatStorage(historyOnly = false): Promise<void> {
-  if (!historyOnly) suspendChatStorage();
+  if (!historyOnly) { suspendChatStorage(); historyGenerations.clear(); receivedHistoryGenerations.clear(); }
   const db = await open();
   const entries = historyOnly ? await metadata(db) : [];
   await mutate(db, null, (transaction) => {
@@ -137,6 +193,7 @@ export async function readChatRecord<T>(scope: ChatStorageScope, kind: Kind, key
 
 export async function readChatBytes(scope: ChatStorageScope, kind: Kind, key: string): Promise<ArrayBuffer | null> {
   const db = await open();
+  const historyGeneration = kind === 'history' ? await readChatHistoryGeneration(scope) : null;
   const id = recordId(scope, kind, key);
   // Read the envelope and key in one snapshot: another tab may accept/remove
   // the pending message or clear its account while this read is in flight.
@@ -153,7 +210,51 @@ export async function readChatBytes(scope: ChatStorageScope, kind: Kind, key: st
   const bytes = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: sealed.iv,
     additionalData: new TextEncoder().encode(id) }, secret, sealed.ciphertext);
   if (!isChatStorageCurrent(scope)) return null;
+  // A denial in another tab can retire this snapshot while decryption runs.
+  if (historyGeneration !== null && await readChatHistoryGeneration(scope) !== historyGeneration) return null;
   return bytes;
+}
+
+/** Fence late writes first, then remove only snapshots containing denied rooms.
+ * The generation is one bounded value per account, not an ever-growing deny list. */
+export async function retireChatHistoryRooms(accountId: string, roomIds: string[]): Promise<void> {
+  const rooms = [...new Set(roomIds.filter(Boolean))];
+  if (!rooms.length) return;
+  const denied = new Set(rooms);
+  const scope = await activateChatStorage(accountId);
+  const db = await open();
+  // Older snapshots predate the metadata room index. There are at most 20.
+  const legacy = new Set<string>();
+  for (const entry of await metadata(db)) {
+    if (entry.account !== scope.account || entry.kind !== 'history' || entry.rooms) continue;
+    try {
+      const value = await readChatRecord(scope, 'history', entry.key);
+      if (!value || chatHistoryRooms(value).some((room) => denied.has(room))) legacy.add(entry.id);
+    } catch { legacy.add(entry.id); }
+  }
+  const next = await new Promise<number>((resolve, reject) => {
+    const transaction = db.transaction(['metadata', 'payloads'], 'readwrite');
+    const metas = transaction.objectStore('metadata');
+    const request = metas.getAll();
+    const fence = metas.get(HISTORY_FENCE);
+    let generation = 0;
+    fence.onsuccess = () => {
+      if (!isChatStorageCurrent(scope)) { transaction.abort(); return; }
+      generation = (fence.result?.account === scope.account ? Number(fence.result.generation) || 0 : 0) + 1;
+      metas.put({ account: scope.account, generation }, HISTORY_FENCE);
+      for (const entry of request.result as Metadata[]) if (entry.account === scope.account && entry.kind === 'history'
+        && (legacy.has(entry.id) || entry.rooms?.some((room) => denied.has(room)))) {
+        metas.delete(entry.id); transaction.objectStore('payloads').delete(entry.id);
+      }
+    };
+    transaction.oncomplete = () => resolve(generation);
+    transaction.onabort = transaction.onerror = () => reject(new Error('Revoked chat history could not be removed.'));
+  });
+  if (!isChatStorageCurrent(scope)) return;
+  const event = { account: scope.account, marker: sessionMarker(), generation: next, rooms };
+  receiveHistoryRetirement(event);
+  try { historyChannel?.postMessage(event); } catch { /* Use the storage fallback. */ }
+  try { localStorage.setItem(HISTORY_RETIREMENT, JSON.stringify(event)); } catch { /* The encrypted fence still protects reloads and writes. */ }
 }
 
 export async function listChatRecordKeys(scope: ChatStorageScope, kind: Kind): Promise<string[]> {
@@ -190,6 +291,7 @@ export async function writeChatRecords(scope: ChatStorageScope, records: Array<{
     const bytes = 'bytes' in record ? record.bytes : new TextEncoder().encode(JSON.stringify(record.value)).buffer;
     const sealed = await seal(scope, id, bytes);
     return { meta: { id, account: scope.account, kind: record.kind, key: record.key, at: Date.now(), bytes: sealed.ciphertext.byteLength,
+      ...(record.kind === 'history' ? { rooms: chatHistoryRooms(record.value) } : {}),
       ...('revision' in record ? { revision: record.revision } : {}) }, sealed };
   }));
   const db = await open();
@@ -198,9 +300,16 @@ export async function writeChatRecords(scope: ChatStorageScope, records: Array<{
     const metas = transaction.objectStore('metadata');
     const payloads = transaction.objectStore('payloads');
     const request = metas.getAll();
+    const historyFence = metas.get(HISTORY_FENCE);
     let reason = 'Chat could not be saved. Free some device storage and try again.';
-    request.onsuccess = () => {
+    historyFence.onsuccess = () => {
       if (!isChatStorageCurrent(scope)) { reason = 'This chat session ended.'; transaction.abort(); return; }
+      const expected = historyFence.result?.account === scope.account ? Number(historyFence.result.generation) || 0 : 0;
+      if (records.some((record) => record.kind === 'history'
+        && Number((record.value as { historyGeneration?: number })?.historyGeneration ?? 0) !== expected)) {
+        reason = 'Chat access changed. Refresh before retaining this history.';
+        transaction.abort(); return;
+      }
       if (mutation.expectedDraft) {
         const actual = (request.result as Metadata[]).find((entry) => entry.id === recordId(scope, 'draft', mutation.expectedDraft!.key));
         if ((actual?.revision ?? null) !== mutation.expectedDraft.revision) {

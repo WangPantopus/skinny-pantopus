@@ -11,7 +11,8 @@ import { useChatTyping } from './useChatTyping';
 import { chosenUsername } from '@pantopus/utils';
 import { confirmStore } from '@/components/ui/confirm-store';
 import { queryKeys } from '@/lib/query-keys';
-import { activateChatStorage, deleteChatRecords, readChatRecord, writeChatRecords, type ChatDraftCommit } from '@/components/chat/chatStorage';
+import { activateChatStorage, deleteChatRecords, readChatRecord, writeChatRecords, readChatHistoryGeneration,
+  isChatHistoryGenerationCurrent, onChatHistoryRetired, retireChatHistoryRooms, type ChatDraftCommit } from '@/components/chat/chatStorage';
 import type { ChatDraftConfig, ChatDraftContext } from '@/components/chat/chatDrafts';
 import { enqueueChatSend, pendingChatMessage, removeChatSend, resumeChatOutbox, retryChatSend, startChatOutbox, subscribeChatOutbox, type PendingChatSend } from '@/components/chat/chatOutbox';
 
@@ -101,6 +102,7 @@ function insertMessageSorted(messages: ChatMessage[], incoming: ChatMessage): Ch
 // reload. Both are account-scoped and retired on sign-out.
 
 interface ConversationSnapshot {
+  historyGeneration?: number;
   messages: ChatMessage[];
   hasMore: boolean;
   nextCursor: string | null;
@@ -305,6 +307,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
   if (scopeRef.current.key !== cacheKeyId) scopeRef.current = { key: cacheKeyId, generation: scopeRef.current.generation + 1 };
   const scopeGeneration = scopeRef.current.generation;
   const deniedScopeRef = useRef<number | null>(null);
+  const historyDeniedScopeRef = useRef<number | null>(null);
   const mountedRef = useRef(true);
   useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
   const isCurrentScope = useCallback(() => mountedRef.current && scopeRef.current.key === cacheKeyId && scopeRef.current.generation === scopeGeneration, [cacheKeyId, scopeGeneration]);
@@ -313,6 +316,9 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     [queryClient, cacheKey],
   );
   const [initialSnapshot] = useState(readSnapshot);
+  const [retainedHistoryGeneration, setRetainedHistoryGeneration] = useState(initialSnapshot?.historyGeneration ?? 0);
+  const historyGenerationRef = useRef(retainedHistoryGeneration);
+  historyGenerationRef.current = retainedHistoryGeneration;
   // Which conversation the messages on screen belong to; only those are kept.
   const shownKeyRef = useRef<string | null>(initialSnapshot ? cacheKeyId : null);
 
@@ -334,6 +340,8 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
   const [directChatPeer, setDirectChatPeer] = useState<User | null>(() => initialSnapshot?.peer ?? null);
   const [directChatError, setDirectChatError] = useState<string | null>(null);
   const [conversationRoomIds, setConversationRoomIds] = useState<string[]>(() => initialSnapshot?.roomIds ?? []);
+  const conversationRoomIdsRef = useRef(conversationRoomIds);
+  conversationRoomIdsRef.current = conversationRoomIds;
   const nextCursorRef = useRef<string | null>(initialSnapshot?.nextCursor ?? null);
   const syncCursorsRef = useRef<api.chat.ChatSyncCursors | undefined>(initialSnapshot?.syncCursors);
   const tombstonesRef = useRef(new Map<string, number>(Object.entries(initialSnapshot?.tombstones ?? {})));
@@ -465,16 +473,42 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     liveChangesRef.current.set(String(id), ++changeVersionRef.current);
   }, []);
 
+  useEffect(() => onChatHistoryRetired((event) => {
+    if (!currentUserId || event.account !== JSON.stringify([api.getApiBaseUrl(), currentUserId]) || !isCurrentScope()) return;
+    const denied = new Set(event.rooms);
+    if (!(roomId && denied.has(roomId)) && !conversationRoomIdsRef.current.some((id) => denied.has(id))
+      && !messagesRef.current.some((message) => denied.has(message.room_id))) return;
+    setMessages((previous) => previous.filter((message) => isUnsent(message) || !denied.has(message.room_id)));
+    setConversationRoomIds((previous) => previous.filter((id) => !denied.has(id)));
+    setResolvedRoomId((previous) => previous && denied.has(previous) ? null : previous);
+    syncCursorsRef.current = undefined;
+    for (const id of denied) {
+      visibleThroughRef.current.delete(id); readAcknowledgedRef.current.delete(id); joinedRoomsRef.current.delete(id);
+    }
+    if (roomId && denied.has(roomId)) {
+      deniedScopeRef.current = scopeGeneration; historyDeniedScopeRef.current = scopeGeneration; setLoadFailure('forbidden');
+    }
+  }), [currentUserId, isCurrentScope, roomId, scopeGeneration]);
+
   const refresh = useCallback((): Promise<void> => {
     if (!isCurrentScope() || !currentUserId) return Promise.resolve();
     if (refreshInFlightRef.current?.scope === scopeGeneration) return refreshInFlightRef.current.promise;
     const historyView = historyViewRef.current;
-    const current = () => isCurrentScope() && historyViewRef.current === historyView;
+    let historyGeneration: number | null = null;
+    const current = () => isCurrentScope() && historyViewRef.current === historyView
+      && (historyGeneration === null || isChatHistoryGenerationCurrent(currentUserId, historyGeneration));
     const promise = (async () => {
+      // Disabled device storage must not prevent an otherwise authorized
+      // network read. Such results cannot be retained on this device.
+      historyGeneration = await activateChatStorage(currentUserId).then(readChatHistoryGeneration).catch(() => null);
+      if (!current()) return;
       const fullRefresh = async () => {
         if (contextWindowRef.current && initialMessageId) {
           const page = await api.chat.getMessageContext({ roomId, otherUserId }, initialMessageId, { asBusinessUserId });
           if (!current()) return;
+          setRetainedHistoryGeneration(historyGeneration ?? -1);
+          historyDeniedScopeRef.current = null;
+          setLoadFailure(null);
           setMessages((previous) => mergeMessages(previous.filter(isUnsent), page.messages.filter(survivesDeletion)));
           visibleThroughRef.current.clear();
           readAcknowledgedRef.current.clear();
@@ -502,6 +536,9 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
           refreshed = mergeMessages(page.messages, refreshed);
         }
         const changedAfterStart = (id: string) => (liveChangesRef.current.get(String(id)) || 0) > startedVersion;
+        setRetainedHistoryGeneration(historyGeneration ?? -1);
+        historyDeniedScopeRef.current = null;
+        setLoadFailure(null);
         setMessages((previous) => mergeMessages(
           previous.filter((m) => isUnsent(m) || changedAfterStart(String(m.id))
             || (page.hasMore && refreshed[0] && compareMessages(m, refreshed[0]) < 0)),
@@ -536,6 +573,14 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
         cursor = result.syncCursors;
         until = result.untilCursors;
       } while (result.hasMore);
+      if (result.removedRoomIds.length) {
+        await retireChatHistoryRooms(currentUserId, result.removedRoomIds);
+        if (!isCurrentScope() || historyViewRef.current !== historyView) return;
+        // The delta proved removal. Only a new authorized fetch may adopt the
+        // new fence; the staged pre-revocation batch cannot be retained.
+        historyGeneration = await activateChatStorage(currentUserId).then(readChatHistoryGeneration).catch(() => null);
+        return fullRefresh();
+      }
       for (const message of changes) {
         if ('deleted' in message && message.deleted) {
           tombstonesRef.current.set(String(message.id), Math.max(tombstonesRef.current.get(String(message.id)) ?? 0, Number(message.sync_version) || 0));
@@ -566,21 +611,29 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
         return merged;
       });
       if (!isRoomMode) setConversationRoomIds(result.roomIds);
+      setRetainedHistoryGeneration(historyGeneration ?? -1);
+      historyDeniedScopeRef.current = null;
+      setLoadFailure(null);
       // A failed intermediate page never commits a cursor or a partial batch.
       syncCursorsRef.current = cursor;
       completedRefreshRef.current += 1;
       setSyncGeneration((value) => value + 1);
-    })().catch((error: unknown) => {
+    })().catch(async (error: unknown) => {
       const status = (error as { statusCode?: number })?.statusCode;
       if (current() && initialMessageId && status === 404) {
         setMessages([]);
         setError('This message is no longer available.');
-      } else if (current() && (status === 403 || status === 404)) {
+      } else if (isCurrentScope() && historyViewRef.current === historyView && (status === 403 || status === 404)) {
         deniedScopeRef.current = scopeGeneration;
         if (cacheKey) queryClient.removeQueries({ queryKey: cacheKey, exact: true });
         setMessages([]);
         setLoadFailure(status === 403 ? 'forbidden' : 'notFound');
-        if (currentUserId) void activateChatStorage(currentUserId).then((saved) => deleteChatRecords(saved, [{ kind: 'history', key: cacheKeyId }])).catch(() => {});
+        const denied = roomId ? [roomId] : [...conversationRoomIdsRef.current, ...messagesRef.current.map((message) => message.room_id)];
+        if (historyDeniedScopeRef.current !== scopeGeneration) {
+          historyDeniedScopeRef.current = scopeGeneration;
+          await retireChatHistoryRooms(currentUserId, denied).catch(() => { historyDeniedScopeRef.current = null; });
+        }
+        void activateChatStorage(currentUserId).then((saved) => deleteChatRecords(saved, [{ kind: 'history', key: cacheKeyId }])).catch(() => {});
       }
       throw error;
     }).finally(() => {
@@ -665,6 +718,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
       nextCursorRef.current = snapshot?.nextCursor ?? null;
       syncCursorsRef.current = snapshot?.syncCursors;
       tombstonesRef.current = new Map(Object.entries(snapshot?.tombstones ?? {}));
+      setRetainedHistoryGeneration(snapshot?.historyGeneration ?? 0);
       setLoading(Boolean(initialMessageId) || !snapshot);
       if (snapshot) {
         setConversationRoomIds(snapshot.roomIds);
@@ -724,7 +778,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
   useEffect(() => {
     if (!cacheKey || loading || loadFailure || contextWindowRef.current || shownKeyRef.current !== cacheKeyId) return;
     const accepted = messages.filter((message) => !isUnsent(message));
-    const snapshot = { messages: accepted, hasMore, nextCursor: nextCursorRef.current,
+    const snapshot = { messages: accepted, hasMore, nextCursor: nextCursorRef.current, historyGeneration: retainedHistoryGeneration,
       roomIds: conversationRoomIds, resolvedRoomId, peer: directChatPeer,
       syncCursors: syncCursorsRef.current, tombstones: Object.fromEntries(tombstonesRef.current) };
     queryClient.setQueryData<ConversationSnapshot>(cacheKey, snapshot);
@@ -739,7 +793,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
       }).catch(() => {});
     }, 400);
     return () => clearTimeout(timer);
-  }, [queryClient, cacheKey, cacheKeyId, currentUserId, loading, loadFailure, messages, hasMore, conversationRoomIds, resolvedRoomId, directChatPeer, isCurrentScope, syncGeneration]);
+  }, [queryClient, cacheKey, cacheKeyId, currentUserId, loading, loadFailure, messages, hasMore, conversationRoomIds, resolvedRoomId, directChatPeer, isCurrentScope, syncGeneration, retainedHistoryGeneration]);
 
   const retryLoad = useCallback(() => setLoadAttempt((n) => n + 1), []);
 
@@ -828,13 +882,14 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     const join = async (activeRoomId: string) => {
       for (let attempt = 0; attempt < 3 && active(); attempt += 1) {
         const startedVersion = changeVersionRef.current;
+        const historyGeneration = historyGenerationRef.current;
         const response = await new Promise<JoinResponse | undefined>((resolve) => {
           // Socket.IO's timeout also releases the acknowledgement callback when
           // a reply is lost; our previous recursive timer retained it forever.
           socket.timeout(10_000).emit('room:join', { roomId: activeRoomId },
             (error: Error | null, result: JoinResponse) => resolve(error ? undefined : result));
         });
-        if (!active()) return;
+        if (!active() || currentUserId && !isChatHistoryGenerationCurrent(currentUserId, historyGeneration)) return;
         if (response?.success) {
           joinedRoomsRef.current.add(activeRoomId);
           const loaded = messagesRef.current;
@@ -867,7 +922,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
       timers.forEach((resolve, timer) => { clearTimeout(timer); resolve(); });
       timers.clear();
     };
-  }, [socket, connected, activeRoomIdsKey, belongsToTopic, isCurrentScope, noteLiveChange, survivesDeletion]);
+  }, [socket, connected, activeRoomIdsKey, belongsToTopic, isCurrentScope, noteLiveChange, survivesDeletion, currentUserId]);
 
   const handleIncomingMessage = useCallback((msg: ChatMessage) => {
     if (activeRoomIds.length === 0) return;
@@ -1008,17 +1063,28 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     olderRequestRef.current = cacheKeyId;
     setLoadingOlder(true);
     try {
+      const generation = currentUserId
+        ? await activateChatStorage(currentUserId).then(readChatHistoryGeneration).catch(() => null) : null;
       const page = await fetchMessages({ before });
-      if (!isCurrentScope() || historyView !== historyViewRef.current) return;
+      if (!isCurrentScope() || historyView !== historyViewRef.current
+        || currentUserId && generation !== null && !isChatHistoryGenerationCurrent(currentUserId, generation)) return;
       setMessages((previous) => mergeMessages(previous, page.messages.filter(survivesDeletion)));
       applyPage(page);
-    } catch {
-      if (isCurrentScope()) setError("Couldn't load earlier messages. Try again.");
+    } catch (error) {
+      if (isCurrentScope()) {
+        const status = (error as { statusCode?: number })?.statusCode;
+        if (currentUserId && (status === 403 || status === 404) && historyDeniedScopeRef.current !== scopeGeneration) {
+          const denied = roomId ? [roomId] : [...conversationRoomIdsRef.current, ...messagesRef.current.map((message) => message.room_id)];
+          historyDeniedScopeRef.current = scopeGeneration;
+          await retireChatHistoryRooms(currentUserId, denied).catch(() => { historyDeniedScopeRef.current = null; });
+        }
+        setError("Couldn't load earlier messages. Try again.");
+      }
     } finally {
       if (olderRequestRef.current === cacheKeyId) olderRequestRef.current = null;
       if (isCurrentScope()) setLoadingOlder(false);
     }
-  }, [cacheKeyId, hasMore, fetchMessages, applyPage, isCurrentScope, survivesDeletion]);
+  }, [cacheKeyId, hasMore, fetchMessages, applyPage, isCurrentScope, survivesDeletion, currentUserId, roomId, scopeGeneration]);
 
   // Persist the original intent before returning control to the composer. The
   // account worker keeps sending after navigation and resumes after a reload.

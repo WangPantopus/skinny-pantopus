@@ -7,8 +7,10 @@ import { subscribeConnectivity } from '@/lib/connectivity';
 import { clearCachedMapTiles } from '@/utils/tilePrefetch';
 import { AUTH_SESSION_CHANGE_KEY, getAuthToken, onTokenChange } from '@pantopus/api';
 import { setActiveQueryClient } from '@/lib/active-query-client';
-import { clearChatStorage } from '@/components/chat/chatStorage';
+import { chatHistoryRooms, clearChatStorage, onChatHistoryRetired } from '@/components/chat/chatStorage';
 import { suspendChatOutbox } from '@/components/chat/chatOutbox';
+import type { ConversationsReply } from '@/lib/conversations';
+import { queryKeys } from '@/lib/query-keys';
 
 // Queries pause while offline. React Query's own detection believes the
 // browser's offline event, which can be wrong while requests still work.
@@ -99,6 +101,28 @@ export default function QueryProvider({ children }: { children: React.ReactNode 
   const [sessionGeneration, setSessionGeneration] = useState(0);
   // Set while rendering, so children's first effects already read this session's cache.
   setActiveQueryClient(queryClient);
+
+  useEffect(() => onChatHistoryRetired(({ rooms }) => {
+    const denied = new Set(rooms);
+    queryClient.removeQueries({ predicate: (query) => query.queryKey[0] === 'chat'
+      && (query.queryKey[1] === 'messages' && chatHistoryRooms(query.state.data).some((room) => denied.has(room))
+        || query.queryKey[1] === 'room' && denied.has(String(query.queryKey[2]))) });
+    // Cancel a response started before the denial. A new refresh may safely
+    // restore authorized rows; an old tail may not append its stale preview.
+    void queryClient.cancelQueries({ queryKey: queryKeys.conversations() });
+    queryClient.setQueriesData<ConversationsReply>({ queryKey: queryKeys.conversations() }, (previous) => {
+      if (!previous) return previous;
+      const allowed = (row: ConversationsReply['conversations'][number]) => row._type === 'room'
+        ? !denied.has(row.id) : !row.room_ids.some((room) => denied.has(room));
+      const conversations = previous.conversations.filter(allowed);
+      const tail = previous.keptTail?.rows.filter(allowed);
+      if (conversations.length === previous.conversations.length && tail?.length === previous.keptTail?.rows.length) return previous;
+      const refreshId = crypto.randomUUID();
+      return { ...previous, conversations, refreshId,
+        ...(previous.keptTail ? { keptTail: { ...previous.keptTail, rows: tail ?? [], generation: refreshId } } : {}) };
+    });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.conversations() });
+  }), [queryClient]);
 
   useEffect(() => {
     const retire = () => {
