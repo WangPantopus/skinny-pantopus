@@ -263,6 +263,7 @@ export { getMySeats, getBusinessSeats as getSeats, getSeatDetail, createSeatInvi
 // Convenience exports from privacy (Identity Firewall)
 export { getPrivacySettings, updatePrivacySettings, getBlocks, createBlock, removeBlock } from './endpoints/privacy';
 export { getMyLocalProfile, updateMyLocalProfile, getLocalProfile, getLocalProfileActivity, getLocalProfileGigs, getLocalProfileListings } from './endpoints/localProfiles';
+export type { OwnLocalProfile, UpdateLocalProfilePayload } from './endpoints/localProfiles';
 export { createPersona, getMyPersona, getMyAudienceIdentity, getPersonaCategoryPolicies, updatePersona, getPersona, getPersonaPosts, followPersona, unfollowPersona, getPersonaFollowStatus, updatePersonaFollowPreferences, getPersonaFollowers, updatePersonaFollower } from './endpoints/personas';
 export type { AudienceIdentity, PersonaCategoryPolicy } from './endpoints/personas';
 export { listOwnerTiers, listPublicTiers, updateTier, setTierVisibility, deleteTier } from './endpoints/personaTiers';

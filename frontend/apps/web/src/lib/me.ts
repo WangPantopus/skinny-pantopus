@@ -24,6 +24,7 @@ import { activeQueryClient } from '@/lib/active-query-client';
 export type Me = Awaited<ReturnType<typeof api.users.getMyProfile>>;
 export type NotificationPreferences = Awaited<ReturnType<typeof api.getHubPreferences>>['preferences'];
 export type PrivacySettings = Awaited<ReturnType<typeof api.privacy.getPrivacySettings>>['settings'];
+export type OwnLocalProfile = api.OwnLocalProfile;
 
 export const ME_FRESH_MS = 10 * 60 * 1000;
 
@@ -86,4 +87,23 @@ export function usePrivacySettings(options?: { enabled?: boolean }) {
 /** Puts the privacy settings the server just saved into the entry. */
 export function setPrivacySettings(settings: PrivacySettings | null | undefined): void {
   if (settings) activeQueryClient()?.setQueryData(queryKeys.privacySettings(), settings);
+}
+
+/**
+ * How neighbors see you (Settings → Privacy & Blocks): your Local Profile's name and photo. An account edit can move
+ * them (while they still follow the account), so every visit asks again and shows the last copy meanwhile.
+ */
+export function useOwnLocalProfile(options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: queryKeys.ownLocalProfile(),
+    queryFn: () => api.localProfiles.getMyLocalProfile(),
+    staleTime: ME_FRESH_MS,
+    refetchOnMount: 'always',
+    ...options,
+  });
+}
+
+/** Puts the Local Profile the server just saved into the entry. */
+export function setOwnLocalProfile(view: OwnLocalProfile | null | undefined): void {
+  if (view) activeQueryClient()?.setQueryData(queryKeys.ownLocalProfile(), view);
 }

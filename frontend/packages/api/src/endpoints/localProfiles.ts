@@ -1,28 +1,27 @@
 import { get, patch } from '../client';
 import type { LocalProfile, Post } from '@pantopus/types';
 
+/** What How neighbors see you changes: the name and photo (null: no photo). A new photo is uploaded with
+ * upload.uploadLocalProfilePicture. The handle follows your username, the place your Neighborhood setting. */
 export type UpdateLocalProfilePayload = Partial<{
-  handle: string;
   display_name: string;
   avatar_url: string | null;
-  bio: string | null;
-  tagline: string | null;
-  public_city: string | null;
-  public_state: string | null;
-  public_neighborhood: string | null;
-  show_verified_resident_badge: boolean;
-  show_home_affiliation: boolean;
-  show_neighborhood: boolean;
-  show_gig_history: boolean;
-  profile_visibility: 'public' | 'followers' | 'connections' | 'private';
-  search_visibility: 'everyone' | 'mutuals' | 'nobody';
 }>;
 
-export async function getMyLocalProfile(): Promise<{ profile: LocalProfile }> {
+/** Your own Local Profile, as How neighbors see you shows it. */
+export interface OwnLocalProfile {
+  profile: LocalProfile;
+  /** Your account's name and photo, for "Use my account name" and "Use my account photo". */
+  account: { displayName: string; avatarUrl: string | null };
+  /** Whether each still follows your account's: true until you choose another one for neighbors. */
+  followsAccount: { displayName: boolean; avatarUrl: boolean };
+}
+
+export async function getMyLocalProfile(): Promise<OwnLocalProfile> {
   return get('/api/local-profiles/me');
 }
 
-export async function updateMyLocalProfile(payload: UpdateLocalProfilePayload): Promise<{ profile: LocalProfile }> {
+export async function updateMyLocalProfile(payload: UpdateLocalProfilePayload): Promise<OwnLocalProfile> {
   return patch('/api/local-profiles/me', payload);
 }
 

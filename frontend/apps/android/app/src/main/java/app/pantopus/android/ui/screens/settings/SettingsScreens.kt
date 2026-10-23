@@ -202,6 +202,7 @@ fun PrivacySettingsScreen(
     onOpenDataExport: () -> Unit = {},
     onOpenPrivacyPolicy: () -> Unit = {},
     viewModel: PrivacySettingsViewModel = hiltViewModel(),
+    neighborsViewModel: NeighborsSeeYouViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
@@ -216,6 +217,8 @@ fun PrivacySettingsScreen(
     val activity = context.findFragmentActivity()
     val toastController = remember { ToastController() }
     val shownToast by toastController.current.collectAsStateWithLifecycle()
+
+    NeighborsSeeYouEffects(neighborsViewModel, toastController)
 
     LifecycleResumeEffect(Unit) {
         viewModel.load()
@@ -253,6 +256,7 @@ fun PrivacySettingsScreen(
             refreshNotice = refreshNotice,
             onRefresh = viewModel::refresh,
             banner = banner,
+            header = { NeighborsSeeYouCard(neighborsViewModel) },
             callbacks =
                 GroupedListCallbacks(
                     onBack = onBack,
@@ -285,6 +289,30 @@ fun PrivacySettingsScreen(
 
 /** Mirrors iOS `privacySettingsToast`. */
 const val PRIVACY_SETTINGS_TOAST_TAG = "privacySettingsToast"
+
+/**
+ * How neighbors see you, the card in Privacy's header: it loads with the screen and again when the profile changes (an
+ * account edit elsewhere moves the name and photo while they are the account's), and its results show in the screen's
+ * toast.
+ */
+@Composable
+private fun NeighborsSeeYouEffects(
+    viewModel: NeighborsSeeYouViewModel,
+    toastController: ToastController,
+) {
+    val toast by viewModel.toast.collectAsStateWithLifecycle()
+    LifecycleResumeEffect(Unit) {
+        viewModel.load()
+        onPauseOrDispose { }
+    }
+    RefreshOnStoreChange(viewModel::load)
+    LaunchedEffect(toast) {
+        toast?.let {
+            toastController.show(it)
+            viewModel.consumeToast()
+        }
+    }
+}
 
 private fun Context.notificationsAllowed(): Boolean =
     runCatching { NotificationManagerCompat.from(this).areNotificationsEnabled() }.getOrDefault(true)

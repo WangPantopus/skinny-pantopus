@@ -66,6 +66,7 @@ import app.pantopus.android.data.api.services.IdentityCenterApi
 import app.pantopus.android.data.api.services.ListingOffersApi
 import app.pantopus.android.data.api.services.ListingsMutationApi
 import app.pantopus.android.data.api.services.ListingsReadApi
+import app.pantopus.android.data.api.services.LocalProfilesApi
 import app.pantopus.android.data.api.services.MailComposeApi
 import app.pantopus.android.data.api.services.MailDayApi
 import app.pantopus.android.data.api.services.MailboxApi
@@ -180,6 +181,8 @@ object NetworkModule {
             .add(app.pantopus.android.data.api.models.homes.UpdateMaintenanceRequestJsonAdapter())
             // A post edit's cleared event end goes out as explicit JSON null.
             .add(app.pantopus.android.data.api.models.posts.PostUpdateRequestJsonAdapter())
+            // How neighbors see you: "no photo" goes out as explicit JSON null.
+            .add(app.pantopus.android.data.api.models.identity.LocalProfileUpdateRequestJsonAdapter())
             .add(app.pantopus.android.data.api.models.homes.PollOptionAdapter())
             .add(app.pantopus.android.data.api.models.gigs.GigStopJsonAdapterFactory)
             // `gig.items` stored as a JSON string by older writers reads as the list inside it.
@@ -698,6 +701,10 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideIdentityCenterApi(retrofit: Retrofit): IdentityCenterApi = retrofit.create(IdentityCenterApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideLocalProfilesApi(retrofit: Retrofit): LocalProfilesApi = retrofit.create(LocalProfilesApi::class.java)
 
     @Provides
     @Singleton
