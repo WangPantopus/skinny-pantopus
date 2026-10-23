@@ -122,6 +122,16 @@ function conversationCacheKey(roomId?: string, otherUserId?: string, topicId?: s
 const messageTime = (m: ChatMessage) => (m?.created_at ? new Date(m.created_at).getTime() : 0);
 const isUnsent = (m: ChatMessage) => Boolean((m as Record<string, any>)._failed || (m as Record<string, any>)._optimistic);
 
+function showLatestAfterSend(contextMessageId?: string) {
+  if (!contextMessageId) return;
+  const url = new URL(window.location.href);
+  if (url.searchParams.get('message') !== contextMessageId) return;
+  url.searchParams.delete('message');
+  // Next's native history integration updates search params in the mounted
+  // route without a server navigation, so this also works while offline.
+  window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+}
+
 interface MessagePage {
   messages: ChatMessage[];
   hasMore: boolean;
@@ -1193,9 +1203,9 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     try {
       await enqueueChatSend(currentUserId, { clientMessageId: crypto.randomUUID(), ...target,
         otherUserId: isRoomMode ? undefined : otherUserId, text: text.trim(), asBusinessUserId, topicId: topicId || undefined }, files, draft);
-      if (isCurrentScope()) { setReplyingTo(null); setError(null); }
+      if (isCurrentScope()) { setReplyingTo(null); setError(null); showLatestAfterSend(initialMessageId); }
     } finally { if (isCurrentScope()) setSending(false); }
-  }, [resolveSendTarget, currentUserId, isRoomMode, otherUserId, asBusinessUserId, topicId, isCurrentScope]);
+  }, [resolveSendTarget, currentUserId, isRoomMode, otherUserId, asBusinessUserId, topicId, isCurrentScope, initialMessageId]);
 
   const sendSharedMessage = useCallback(async (message: Pick<PendingChatSend, 'text' | 'metadata' | 'topicRequest'> & { messageType: 'gig_offer' | 'listing_offer' }) => {
     if (!isCurrentScope()) return;
@@ -1204,12 +1214,12 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
       if (!currentUserId) throw new Error(CONVERSATION_NOT_READY);
       await enqueueChatSend(currentUserId, { ...message, clientMessageId: crypto.randomUUID(), ...target,
         otherUserId: isRoomMode ? undefined : otherUserId, asBusinessUserId, topicId: message.topicRequest ? undefined : topicId || undefined });
-      if (isCurrentScope()) { setReplyingTo(null); setError(null); }
+      if (isCurrentScope()) { setReplyingTo(null); setError(null); showLatestAfterSend(initialMessageId); }
     } catch (error) {
       if (isCurrentScope()) setError(shareFailureMessage(error));
       throw error;
     }
-  }, [resolveSendTarget, currentUserId, isRoomMode, otherUserId, asBusinessUserId, topicId, isCurrentScope]);
+  }, [resolveSendTarget, currentUserId, isRoomMode, otherUserId, asBusinessUserId, topicId, isCurrentScope, initialMessageId]);
 
   const beginReply = useCallback((target: ChatReplyTarget) => {
     setEditingMessage(null);
