@@ -7,7 +7,7 @@
 
 import * as api from '@pantopus/api';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, type QueryFunctionContext } from '@tanstack/react-query';
 import type { UnifiedConversationItem } from '@pantopus/types';
 import { queryKeys } from '@/lib/query-keys';
 
@@ -21,9 +21,36 @@ export function conversationsQuery(search = '') {
   const q = search.trim();
   return {
     queryKey: q ? [...queryKeys.conversations(), 'search', q] : queryKeys.conversations(),
-    queryFn: async (): Promise<ConversationsReply> => ({
-      ...await api.chat.getUnifiedConversations({ limit: CONVERSATIONS_LIMIT, ...(q ? { q } : {}) }), refreshId: crypto.randomUUID(),
-    }),
+    queryFn: async ({ client, queryKey, signal }: QueryFunctionContext): Promise<ConversationsReply> => {
+      const marker = api.authSessionMarker();
+      const previous = client.getQueryData<ConversationsReply>(queryKey);
+      const previousTail = previous?.keptTail?.generation === previous?.refreshId ? previous?.keptTail?.rows : [];
+      const pageCount = Math.max(1, Math.ceil(((previous?.conversations?.length || 0) + (previousTail?.length || 0)) / CONVERSATIONS_LIMIT));
+      const current = () => {
+        if (signal.aborted || marker !== api.authSessionMarker()) throw new DOMException('Inbox request cancelled', 'AbortError');
+      };
+      current();
+      const first = await api.chat.getUnifiedConversations({ limit: CONVERSATIONS_LIMIT, ...(q ? { q } : {}) });
+      current();
+      let page = first;
+      const tail: UnifiedConversationItem[] = [];
+      const cursors = new Set<string>();
+      for (let index = 1; index < pageCount && page.hasMore; index++) {
+        const before = page.nextCursor;
+        if (!before || cursors.has(before)) throw new Error('The inbox did not advance. Refresh and try again.');
+        cursors.add(before);
+        page = await api.chat.getUnifiedConversations({ limit: CONVERSATIONS_LIMIT, before, ...(q ? { q } : {}) });
+        current();
+        tail.push(...page.conversations);
+      }
+      if (page.hasMore && (!page.nextCursor || cursors.has(page.nextCursor))) {
+        throw new Error('The inbox did not advance. Refresh and try again.');
+      }
+      const refreshId = crypto.randomUUID();
+      return { ...first, refreshId,
+        ...(pageCount > 1 ? { keptTail: { generation: refreshId, rows: tail,
+          nextCursor: page.nextCursor, hasMore: page.hasMore } } : {}) };
+    },
     staleTime: CONVERSATIONS_FRESH_MS,
   };
 }
@@ -39,8 +66,8 @@ export function compareConversationTime(a?: string | null, b?: string | null): n
   return fraction(a).localeCompare(fraction(b));
 }
 
-/** Older pages belong to this authoritative first-page snapshot. A refresh
- * drops them, so revoked memberships never linger in a stale tail. */
+/** Refresh the previously loaded depth with authorized cursor pages before
+ * replacing it atomically. No unvalidated cached tail survives the refresh. */
 export function useConversationPages(search = '') {
   const q = search.trim();
   const client = useQueryClient();
@@ -71,13 +98,14 @@ export function useConversationPages(search = '') {
   const nextCursor = validTail ? validTail.nextCursor : head?.nextCursor;
   const hasMore = validTail ? validTail.hasMore : Boolean(head?.hasMore);
   const loadMore = useCallback(async () => {
-    if (!nextCursor || !hasMore || inFlight.current) return;
+    const revalidating = () => client.getQueryState(conversationsQuery(q).queryKey)?.fetchStatus === 'fetching';
+    if (!nextCursor || !hasMore || inFlight.current || revalidating()) return;
     const ownRequest = ++request.current;
     const marker = api.authSessionMarker();
     inFlight.current = true; setLoadingMore(true); setMoreError(null);
     try {
       const page = await api.chat.getUnifiedConversations({ limit: CONVERSATIONS_LIMIT, before: nextCursor, ...(q ? { q } : {}) });
-      if (ownRequest !== request.current || current.current !== scope || marker !== api.authSessionMarker()) return;
+      if (ownRequest !== request.current || current.current !== scope || marker !== api.authSessionMarker() || revalidating()) return;
       client.setQueryData<ConversationsReply>(conversationsQuery(q).queryKey, (previous) => previous && previous.refreshId === generation ? ({ ...previous,
         keptTail: { generation, rows: [...(validTail?.rows || []), ...page.conversations],
           nextCursor: page.nextCursor, hasMore: page.hasMore } }) : previous);
