@@ -43,7 +43,7 @@ const {
 } = require('../services/chatGigRoomAccess');
 const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
 const { markChatRead, applyDirectReadReceipts, timestampMicros } = require('../services/chatReadState');
-const { parseSyncCursor, chatSyncSnapshot, chatChanges, chatReadReceipts, buildReactionSummary } = require('../services/chatSync');
+const { parseSyncCursor, chatSyncSnapshot, chatChanges, chatReadReceipts, readChatRoomBatches, buildReactionSummary } = require('../services/chatSync');
 const chatRealtime = require('../services/chatRealtime');
 const { incCounter, recordHistogram, getSnapshot } = require('../services/chatMetrics');
 const pushService = require('../services/pushService');
@@ -1049,16 +1049,24 @@ async function roomPagePeople(roomIds, viewerId, activeOnly = false) {
   const people = [];
   // Bound GET URLs as well as result pages; 500 UUIDs can exceed proxy limits.
   for (let offset = 0; offset < roomIds.length; offset += 100) {
-    let query = supabaseAdmin.from('ChatParticipant')
-      .select('room_id, user:user_id(id, username, name, first_name, middle_name, last_name, profile_picture_url)')
-      .in('room_id', roomIds.slice(offset, offset + 100))
-      .neq('user_id', viewerId).order('is_active', { ascending: false });
-    if (activeOnly) query = query.eq('is_active', true);
-    const { data, error } = await query;
-    if (error) throw chatAccessUnavailable();
-    people.push(...data || []);
+    let after;
+    for (;;) {
+      let query = supabaseAdmin.from('ChatParticipant')
+        .select('id, room_id, is_active, user:user_id(id, username, name, first_name, middle_name, last_name, profile_picture_url)')
+        .in('room_id', roomIds.slice(offset, offset + 100))
+        .neq('user_id', viewerId).order('room_id').order('id').limit(500);
+      if (activeOnly) query = query.eq('is_active', true);
+      if (after) query = query.or(`room_id.gt.${after.room_id},and(room_id.eq.${after.room_id},id.gt.${after.id})`);
+      const { data, error } = await query;
+      if (error) throw chatAccessUnavailable();
+      people.push(...data || []);
+      if (!data || data.length < 500) break;
+      after = data.at(-1);
+    }
   }
-  return people;
+  // Prefer current members after reading every page. Sorting by activity in
+  // PostgREST alone truncated historical counterparts behind large groups.
+  return people.sort((a, b) => Number(b.is_active === true) - Number(a.is_active === true));
 }
 
 /** Build a nextCursor string from the oldest message in a result set. */
@@ -2719,12 +2727,13 @@ router.get('/conversations/:otherUserId/preferences', verifyToken, async (req, r
     const identity = asBusinessUserId || req.user.id;
     const [preferences, participants] = await Promise.all([
       supabaseAdmin.from('UserNotificationPreferences').select('chat_muted_user_ids').eq('user_id', identity).maybeSingle(),
-      supabaseAdmin.from('ChatParticipant').select('notifications_enabled').eq('user_id', identity).in('room_id', roomIds).eq('is_active', true),
+      readChatRoomBatches(roomIds, (ids) => supabaseAdmin.from('ChatParticipant')
+        .select('notifications_enabled').eq('user_id', identity).in('room_id', ids).eq('is_active', true)),
     ]);
-    if (preferences.error || participants.error) throw preferences.error || participants.error;
+    if (preferences.error) throw preferences.error;
     const muted = (preferences.data?.chat_muted_user_ids || []).includes(otherUserId);
     res.set('Cache-Control', 'private, no-store');
-    return res.json({ notificationsEnabled: !muted && (participants.data || []).some((p) => p.notifications_enabled !== false), roomIds });
+    return res.json({ notificationsEnabled: !muted && participants.some((p) => p.notifications_enabled !== false), roomIds });
   } catch (error) {
     logger.warn('chat_preferences_read_failed', { requestId: req.requestId, code: error.code });
     return res.status(error.status || 503).json({ error: 'Could not load chat preferences' });
