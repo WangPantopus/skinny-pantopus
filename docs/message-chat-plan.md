@@ -56,6 +56,19 @@ signals, and no additional signal for reading. Business-owner receipt and
 revocation suppression passed. Syntax, migration policy and identity-select
 guards passed. Real app icon synchronization is being verified next.
 
+## Bounded latency observations
+
+Chat latency histograms now use fixed 4,096-slot rings and discard observations
+older than five minutes on snapshot reads. This removes traffic-dependent
+array growth and repeated array-shift cleanup. Snapshots retain existing
+percentile fields and add the sample capacity, window and whether the sample
+limit was reached; these in-memory samples are not production-wide metrics.
+
+Real local API reads passed in twelve repetitions each of room list, room
+history and unified inbox. The metric endpoint returned twelve observations
+per route with the new bound metadata. This small local run is a functional
+check, not a production latency benchmark. Syntax and diff checks passed.
+
 ## Immediate contract
 
 - REST message history uses `(created_at, id)` for both `before` and `after`; both bounds can be combined. `nextCursor` pages backward and `hasMore` comes from an extra row.
