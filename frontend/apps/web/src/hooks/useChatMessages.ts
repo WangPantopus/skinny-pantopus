@@ -781,8 +781,9 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
         if (snapshot.resolvedRoomId) setDirectChatError(null);
       }
     };
-    // A scope switch must not carry outgoing bubbles from another conversation.
-    messagesRef.current = [];
+    // Changing this view's context may keep its own saved sends; an account or
+    // conversation switch must never carry outgoing bubbles across scopes.
+    messagesRef.current = shownKeyRef.current === cacheKeyId ? messagesRef.current.filter(isUnsent) : [];
     showKept(kept);
     setLoadingOlder(false);
     setSending(false);
@@ -819,9 +820,11 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
         if (currentUserId && (status === 403 || status === 404)) {
           void activateChatStorage(currentUserId).then((saved) => deleteChatRecords(saved, [{ kind: 'history', key: cacheKeyId }])).catch(() => {});
         }
-        shownKeyRef.current = null;
+        const retainedPending = status !== 403 && status !== 404 && messagesRef.current.some(isUnsent);
+        shownKeyRef.current = retainedPending ? cacheKeyId : null;
         setMessages((previous) => previous.filter(isUnsent));
-        setLoadFailure(status === 403 ? 'forbidden' : status === 404 ? 'notFound' : 'unavailable');
+        setLoadFailure(status === 403 ? 'forbidden' : status === 404 ? 'notFound'
+          : retainedPending ? null : 'unavailable');
       }
     }).finally(() => { if (!cancelled && isCurrentScope()) setLoading(false); });
     return () => { cancelled = true; };
