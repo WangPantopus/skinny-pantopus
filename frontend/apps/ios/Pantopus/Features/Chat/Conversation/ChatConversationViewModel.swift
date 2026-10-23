@@ -2913,7 +2913,7 @@ public final class ChatConversationViewModel {
         syncCursors = next
         historyConfirmedAt = Date()
         for receipt in finalPage.readReceipts ?? [] {
-            handleRead(receipt)
+            handleRead(receipt, recoverOtherRooms: false)
         }
         rebuild()
         joinActiveRoomsIfPossible()
@@ -3607,13 +3607,21 @@ public final class ChatConversationViewModel {
         applyUpdatedMessage(updated)
     }
 
-    private func handleRead(_ event: ChatRealtimeRead) {
+    private func handleRead(_ event: ChatRealtimeRead, recoverOtherRooms: Bool = true) {
         // A group's single reader must never imply that everyone has read it.
-        guard case let .person(otherUserId) = mode, event.userId == otherUserId, event.roomId == directRoomId,
+        guard !historyAccessRefused, roomJoinAccountSession == AuthManager.shared.requestSessionGeneration,
+              case let .person(otherUserId) = mode, event.userId == otherUserId,
+              activeRoomIds.contains(event.roomId),
               let throughMessageId = event.throughMessageId, let readAt = event.readAt else { return }
+        guard event.roomId == directRoomId else {
+            // Aggregate history also contains groups and older direct rooms.
+            // Only the server's per-message receipts can distinguish them here.
+            if recoverOtherRooms { scheduleFallbackRefresh() }
+            return
+        }
         let boundary = messages.first { $0.id == throughMessageId && $0.roomId == event.roomId }
         guard let createdAt = boundary?.createdAt ?? event.throughCreatedAt,
-              let boundaryDate = Self.parseISO(createdAt) else { return }
+              let boundaryDate = Self.parseISO(createdAt), Self.parseISO(readAt) != nil else { return }
         for index in messages.indices {
             let message = messages[index]
             guard message.roomId == event.roomId, message.userId == sendingIdentityId,
@@ -3630,6 +3638,10 @@ public final class ChatConversationViewModel {
               case let .person(peerId) = mode, event.userId == peerId,
               activeRoomIds.contains(event.roomId), selectedTopicId == nil || selectedTopicId == event.topicId,
               let throughId = event.throughMessageId, let readAt = event.readAt else { return }
+        guard event.roomId == directRoomId else {
+            scheduleFallbackRefresh()
+            return
+        }
         let boundary = messages.first { $0.id == throughId && $0.roomId == event.roomId && $0.topicId == event.topicId }
         guard let createdAt = boundary?.createdAt ?? event.throughCreatedAt,
               let boundaryDate = Self.parseISO(createdAt), Self.parseISO(readAt) != nil else { return }
