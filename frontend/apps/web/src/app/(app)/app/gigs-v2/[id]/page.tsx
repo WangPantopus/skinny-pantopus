@@ -614,7 +614,7 @@ function GigDetailV2Content() {
   if (loading || !session.active) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
-        <div className="animate-spin h-8 w-8 border-3 border-primary-600 border-t-transparent rounded-full" />
+        <div className="animate-spin h-8 w-8 border-2 border-primary-600 border-t-transparent rounded-full" />
       </div>
     );
   }
