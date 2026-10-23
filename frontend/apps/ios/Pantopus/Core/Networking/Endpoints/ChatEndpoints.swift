@@ -21,6 +21,17 @@ public enum ChatEndpoints {
         )
     }
 
+    public static func setPreferences(
+        conversationId: String, isRoom: Bool, notificationsEnabled: Bool
+    ) -> Endpoint {
+        let collection = isRoom ? "rooms" : "conversations"
+        return Endpoint(
+            method: .patch,
+            path: "/api/chat/\(collection)/\(conversationId)/preferences",
+            body: ["notificationsEnabled": notificationsEnabled]
+        )
+    }
+
     /// `GET /api/chat/rooms/:roomId` — the room's type and participants,
     /// for participants only. A chat link carries only the room id; this
     /// tells a direct room's other person apart.

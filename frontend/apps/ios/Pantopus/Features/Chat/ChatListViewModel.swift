@@ -40,6 +40,9 @@ public final class ChatListViewModel {
     private var refreshTask: Task<Void, Never>?
 
     private var serverTotalUnread: Int = 0
+    private var serverTotalUnmutedUnread: Int?
+    private var pendingMuteKeys: Set<String> = []
+    private var preferencesTask: Task<Void, Never>?
     private var hiddenKeys: Set<String> = []
     private var mutedKeys: Set<String> = []
     /// The pinned assistant row. The empty state shows it too: before a
@@ -126,6 +129,8 @@ public final class ChatListViewModel {
         messageTask?.cancel()
         badgeTask = nil
         messageTask = nil
+        preferencesTask?.cancel()
+        preferencesTask = nil
         refreshTask?.cancel()
         refreshTask = nil
     }
@@ -140,14 +145,43 @@ public final class ChatListViewModel {
         publishBadgeCount()
     }
 
-    /// Swipe action — exclude this conversation's unread from the tab badge.
+    /// Mute is confirmed by the server so other devices and push agree.
     public func toggleMute(storageKey: String) {
-        guard storageKey != aiRow.storageKey else { return }
-        preferences.toggleMute(storageKey)
-        mutedKeys = preferences.mutedKeys()
-        decorateRowsWithMuteState()
-        applyFilter()
-        publishBadgeCount()
+        guard storageKey != aiRow.storageKey,
+              let row = allRows.first(where: { $0.storageKey == storageKey }),
+              pendingMuteKeys.insert(storageKey).inserted else { return }
+        let session = AuthManager.shared.requestSessionGeneration
+        preferences.beginUserChange(storageKey)
+        Task { [self] in
+            defer {
+                pendingMuteKeys.remove(storageKey)
+                preferences.endUserChange(storageKey)
+            }
+            await preferences.waitForMigration(storageKey)
+            guard session == AuthManager.shared.requestSessionGeneration else { return }
+            do {
+                let response = try await api.request(
+                    ChatEndpoints.setPreferences(
+                        conversationId: row.id,
+                        isRoom: storageKey.hasPrefix("room:"),
+                        notificationsEnabled: row.isMuted
+                    ),
+                    as: ChatPreferencesResponse.self
+                )
+                guard session == AuthManager.shared.requestSessionGeneration else { return }
+                preferences.confirmServerMute(storageKey)
+                preferences.setMuted(storageKey, muted: !response.notificationsEnabled)
+                mutedKeys = preferences.mutedKeys()
+                decorateRowsWithMuteState()
+                applyFilter()
+                store.markStale(topics: [ScreenTopic.chats])
+                await fetch(force: true)
+                await ChatBadgeStore.shared.refresh()
+            } catch {
+                guard session == AuthManager.shared.requestSessionGeneration else { return }
+                refreshFailureMessage = "Couldn't change notifications. Try again."
+            }
+        }
     }
 
     // MARK: - Fetch
@@ -198,7 +232,9 @@ public final class ChatListViewModel {
     }
 
     private func apply(_ response: UnifiedConversationsResponse, stats: ChatStatsResponse.Stats?) {
+        preferences.applyServer(response.conversations)
         loadPreferences()
+        serverTotalUnmutedUnread = stats?.totalUnmutedUnread ?? response.totalUnmutedUnread
         serverTotalUnread = stats?.totalUnread ?? response.totalUnread ?? rowsUnreadTotal(from: response.conversations)
         activityDates = Dictionary(uniqueKeysWithValues: response.conversations.map {
             ($0.id, $0.lastMessageAt.flatMap(Self.parseISO) ?? .distantPast)
@@ -219,7 +255,7 @@ public final class ChatListViewModel {
     }
 
     private func updateUnreadByFilter() {
-        let adjustedUnread = ChatUnreadBadgeMath.adjustedTotal(
+        let adjustedUnread = serverTotalUnmutedUnread ?? ChatUnreadBadgeMath.adjustedTotal(
             serverTotal: serverTotalUnread,
             rows: allRows,
             mutedKeys: mutedKeys
@@ -235,6 +271,7 @@ public final class ChatListViewModel {
     private func publishBadgeCount() {
         ChatBadgeStore.shared.applyListSnapshot(
             totalUnread: serverTotalUnread,
+            totalUnmutedUnread: serverTotalUnmutedUnread,
             rows: allRows
         )
     }
@@ -326,12 +363,22 @@ public final class ChatListViewModel {
     // MARK: - Realtime
 
     private func subscribeToSockets() {
+        if preferencesTask == nil {
+            preferencesTask = Task { [weak self] in
+                guard let self else { return }
+                for await _ in socket.events(named: "chat:preferences_changed", as: JSONValue.self) {
+                    store.markStale(topics: [ScreenTopic.chats])
+                    refreshAfterChange()
+                }
+            }
+        }
         if badgeTask == nil {
             badgeTask = Task { [weak self] in
                 guard let self else { return }
                 let stream = socket.events(named: "badge:update", as: ChatBadgeUpdate.self)
                 for await update in stream {
                     serverTotalUnread = update.totalUnread
+                    serverTotalUnmutedUnread = update.totalUnmutedUnread
                     updateUnreadByFilter()
                     publishBadgeCount()
                 }
@@ -398,102 +445,7 @@ public final class ChatListViewModel {
 
     private static let activityPlainISOFormatter = ISO8601DateFormatter()
 
-    private static func parseISO(_ raw: String) -> Date? {
+    static func parseISO(_ raw: String) -> Date? {
         (try? activityISOStyle.parse(raw)) ?? activityPlainISOFormatter.date(from: raw)
-    }
-
-    // MARK: - Projection
-
-    private static func project(
-        _ dto: UnifiedConversation,
-        mutedKeys: Set<String>
-    ) -> ConversationRowContent {
-        let unread = dto.totalUnread
-        let preview = dto.lastMessagePreview ?? defaultPreview(for: dto)
-        let time = dto.lastMessageAt.flatMap(relative(timestamp:)) ?? ""
-        let identityChip = identityChip(for: dto)
-        let displayName = dto.name?.nilIfEmpty ?? defaultName(for: dto)
-        let storageKey =
-            switch dto.kind {
-            case .conversation: ChatConversationPreferences.personKey(dto.id)
-            case .room: ChatConversationPreferences.roomKey(dto.id)
-            }
-        return ConversationRowContent(
-            id: dto.id,
-            variant: variant(for: dto),
-            displayName: displayName,
-            initials: initials(from: displayName),
-            avatarURL: dto.avatarURL,
-            identityChip: identityChip,
-            verified: dto.isVerified ?? false,
-            preview: preview,
-            timeLabel: time,
-            unread: unread,
-            pinned: false,
-            topicKinds: Set(dto.topicKinds),
-            // Launch cut #3 (Marketplace): no listing topic pills; the
-            // direct-message thread itself stays.
-            topics: dto.topics.filter { LaunchFeatures.marketplace || !["listing", "marketplace"].contains($0.topicType) }.map {
-                ConversationRowTopic(id: $0.id, title: $0.title, topicType: $0.topicType)
-            },
-            gigId: dto.gigId,
-            storageKey: storageKey,
-            isMuted: mutedKeys.contains(storageKey)
-        )
-    }
-
-    private static func variant(for dto: UnifiedConversation) -> ConversationRowVariant {
-        switch dto.kind {
-        case .conversation:
-            .dm
-        case .room:
-            .group(extraAvatars: [], extraCount: 0)
-        }
-    }
-
-    private static func identityChip(for dto: UnifiedConversation) -> ConversationIdentityChip? {
-        switch (dto.kind, dto.identityKind, dto.roomType) {
-        case (.conversation, "business"?, _): .business
-        case (.conversation, "home"?, _): .home
-        case (.room, _, "home"?): .home
-        default: nil
-        }
-    }
-
-    private static func defaultName(for dto: UnifiedConversation) -> String {
-        switch dto.kind {
-        case .room: dto.name ?? "Group"
-        case .conversation: dto.name ?? "Pantopus user"
-        }
-    }
-
-    private static func defaultPreview(for dto: UnifiedConversation) -> String {
-        switch dto.kind {
-        case .conversation: "Start the conversation"
-        case .room: "No messages yet"
-        }
-    }
-
-    private static func initials(from name: String) -> String {
-        let parts = name.split(separator: " ").prefix(2)
-        let result = parts.compactMap { $0.first.map(String.init) }.joined().uppercased()
-        return result.isEmpty ? "?" : result
-    }
-
-    private static func relative(timestamp: String) -> String {
-        guard let date = parseISO(timestamp) else {
-            return timestamp
-        }
-        // A message can be a hair ahead of the phone's clock; "in 0 sec." reads as a bug.
-        if Date().timeIntervalSince(date) < 60 { return "Just now" }
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .short
-        return formatter.localizedString(for: date, relativeTo: Date())
-    }
-}
-
-private extension String {
-    var nilIfEmpty: String? {
-        isEmpty ? nil : self
     }
 }

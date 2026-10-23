@@ -153,7 +153,8 @@ final class ChatLocalStore: @unchecked Sendable {
                     let response = UnifiedConversationsResponse(
                         conversations: Array(memory.response.conversations.prefix(Self.threadLimit)),
                         total: memory.response.total,
-                        totalUnread: memory.response.totalUnread
+                        totalUnread: memory.response.totalUnread,
+                        totalUnmutedUnread: memory.response.totalUnmutedUnread
                     )
                     let bounded = ChatInboxMemory(response: response, stats: memory.stats, confirmedAt: memory.confirmedAt)
                     let bytes = try JSONEncoder().encode(SavedInbox(schema: 1, memory: bounded))

@@ -46,6 +46,8 @@ public struct UnifiedConversation: Codable, Sendable, Hashable, Identifiable {
     public let lastMessageAt: String?
     /// Aggregate unread across all rooms in this conversation.
     public let totalUnread: Int
+    public let notificationsEnabled: Bool?
+    public let unmutedUnread: Int?
     /// Topic tags attached to a person-conversation. `topic_type`
     /// values include `gig` and `marketplace`; we project them into
     /// `topicKinds` for filtering.
@@ -69,6 +71,8 @@ public struct UnifiedConversation: Codable, Sendable, Hashable, Identifiable {
         case otherParticipantAvatar = "other_participant_avatar"
         case otherParticipantIdentity = "other_participant_identity"
         case totalUnread = "total_unread"
+        case notificationsEnabled = "notifications_enabled"
+        case unmutedUnread = "unmuted_unread"
         case lastMessageAt = "last_message_at"
         case lastMessagePreview = "last_message_preview"
         case topics
@@ -95,6 +99,8 @@ public struct UnifiedConversation: Codable, Sendable, Hashable, Identifiable {
         let rawType = try c.decodeIfPresent(String.self, forKey: .type) ?? "conversation"
         kind = Kind(rawValue: rawType) ?? .conversation
         totalUnread = try c.decodeIfPresent(Int.self, forKey: .totalUnread) ?? 0
+        notificationsEnabled = try c.decodeIfPresent(Bool.self, forKey: .notificationsEnabled)
+        unmutedUnread = try c.decodeIfPresent(Int.self, forKey: .unmutedUnread)
         lastMessageAt = try c.decodeIfPresent(String.self, forKey: .lastMessageAt)
         lastMessagePreview = try c.decodeIfPresent(String.self, forKey: .lastMessagePreview)
 
@@ -150,6 +156,8 @@ public struct UnifiedConversation: Codable, Sendable, Hashable, Identifiable {
         var c = encoder.container(keyedBy: RootKeys.self)
         try c.encode(kind.rawValue, forKey: .type)
         try c.encode(totalUnread, forKey: .totalUnread)
+        try c.encodeIfPresent(notificationsEnabled, forKey: .notificationsEnabled)
+        try c.encodeIfPresent(unmutedUnread, forKey: .unmutedUnread)
         try c.encodeIfPresent(lastMessageAt, forKey: .lastMessageAt)
         try c.encodeIfPresent(lastMessagePreview, forKey: .lastMessagePreview)
         try c.encode(topics, forKey: .topics)
@@ -237,9 +245,10 @@ public struct UnifiedConversationsResponse: Codable, Sendable, Hashable {
     public let conversations: [UnifiedConversation]
     public let total: Int?
     public let totalUnread: Int?
+    public let totalUnmutedUnread: Int?
 
     private enum CodingKeys: String, CodingKey {
-        case conversations, total, totalUnread
+        case conversations, total, totalUnread, totalUnmutedUnread
     }
 }
 
@@ -251,6 +260,7 @@ public struct ChatStatsResponse: Codable, Sendable, Hashable {
 
     public struct Stats: Codable, Sendable, Hashable {
         public let totalUnread: Int
+        public let totalUnmutedUnread: Int?
         public let totalChats: Int?
         public let totalMessages: Int?
         public let directChats: Int?
@@ -259,6 +269,7 @@ public struct ChatStatsResponse: Codable, Sendable, Hashable {
 
         private enum CodingKeys: String, CodingKey {
             case totalUnread = "total_unread"
+            case totalUnmutedUnread = "total_unmuted_unread"
             case totalChats = "total_chats"
             case totalMessages = "total_messages"
             case directChats = "direct_chats"
@@ -277,10 +288,12 @@ public struct ChatStatsResponse: Codable, Sendable, Hashable {
 /// `badge:update` socket event payload.
 public struct ChatBadgeUpdate: Decodable, Sendable, Hashable {
     public let totalUnread: Int
+    public let totalUnmutedUnread: Int?
 
     private enum CodingKeys: String, CodingKey {
         case totalUnread
         case unreadMessages
+        case unmutedUnreadMessages
     }
 
     public init(from decoder: any Decoder) throws {
@@ -288,7 +301,13 @@ public struct ChatBadgeUpdate: Decodable, Sendable, Hashable {
         totalUnread = try c.decodeIfPresent(Int.self, forKey: .totalUnread)
             ?? c.decodeIfPresent(Int.self, forKey: .unreadMessages)
             ?? 0
+        totalUnmutedUnread = try c.decodeIfPresent(Int.self, forKey: .unmutedUnreadMessages)
     }
+}
+
+public struct ChatPreferencesResponse: Decodable, Sendable {
+    public let notificationsEnabled: Bool
+    public let roomIds: [String]
 }
 
 /// `message:new` socket event payload — just the fields the chat list

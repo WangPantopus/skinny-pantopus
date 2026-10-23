@@ -704,6 +704,7 @@ final class ChatBadgeStore {
     private var badgeTask: Task<Void, Never>?
     private var reconnectTask: Task<Void, Never>?
     private var serverTotalUnread: Int = 0
+    private var serverTotalUnmutedUnread: Int?
     private var countGeneration = 0
     private var refreshRequestId: UUID?
     private var hasAuthoritativeCount = false
@@ -730,7 +731,11 @@ final class ChatBadgeStore {
                 let rows = cached.response.conversations.map {
                     Self.snapshotRow(from: $0, mutedKeys: preferences.mutedKeys())
                 }
-                applyListSnapshot(totalUnread: cached.stats?.totalUnread ?? cached.response.totalUnread ?? 0, rows: rows)
+                applyListSnapshot(
+                    totalUnread: cached.stats?.totalUnread ?? cached.response.totalUnread ?? 0,
+                    totalUnmutedUnread: cached.stats?.totalUnmutedUnread ?? cached.response.totalUnmutedUnread,
+                    rows: rows
+                )
             }
         }
         await refresh()
@@ -744,6 +749,8 @@ final class ChatBadgeStore {
         refreshRequestId = requestId
         defer { if refreshRequestId == requestId { refreshRequestId = nil } }
         let generation = countGeneration
+        await preferences.migrateLegacyMutes(api: api)
+        guard generation == countGeneration, !Task.isCancelled else { return }
         let store = ScreenStore.store(for: api)
         let statsTask = Task { [self] in
             await optional {
@@ -769,7 +776,9 @@ final class ChatBadgeStore {
         guard generation == countGeneration, !Task.isCancelled else { return }
         hasAuthoritativeCount = true
         serverTotalUnread = stats.stats.totalUnread
+        serverTotalUnmutedUnread = stats.stats.totalUnmutedUnread
         if let conversations {
+            preferences.applyServer(conversations.conversations)
             let mutedKeys = preferences.mutedKeys()
             cachedRows = conversations.conversations.map {
                 Self.snapshotRow(from: $0, mutedKeys: mutedKeys)
@@ -780,8 +789,11 @@ final class ChatBadgeStore {
 
     /// Cached list counts can seed an offline launch, but cannot overwrite a
     /// newer server count while a covered list is still finishing its refresh.
-    func applyListSnapshot(totalUnread: Int, rows: [ConversationRowContent]) {
-        if !hasAuthoritativeCount { serverTotalUnread = totalUnread }
+    func applyListSnapshot(totalUnread: Int, totalUnmutedUnread: Int? = nil, rows: [ConversationRowContent]) {
+        if !hasAuthoritativeCount {
+            serverTotalUnread = totalUnread
+            serverTotalUnmutedUnread = totalUnmutedUnread
+        }
         cachedRows = rows
         applyAdjustedUnread()
     }
@@ -800,13 +812,14 @@ final class ChatBadgeStore {
     func reset() {
         stop()
         serverTotalUnread = 0
+        serverTotalUnmutedUnread = nil
         hasAuthoritativeCount = false
         cachedRows = []
         unreadMessages = 0
     }
 
     private func applyAdjustedUnread() {
-        unreadMessages = ChatUnreadBadgeMath.adjustedTotal(
+        unreadMessages = serverTotalUnmutedUnread ?? ChatUnreadBadgeMath.adjustedTotal(
             serverTotal: serverTotalUnread,
             rows: cachedRows,
             mutedKeys: preferences.mutedKeys()
@@ -857,6 +870,7 @@ final class ChatBadgeStore {
                     countGeneration += 1
                     hasAuthoritativeCount = true
                     serverTotalUnread = update.totalUnread
+                    serverTotalUnmutedUnread = update.totalUnmutedUnread
                     applyAdjustedUnread()
                 }
             }
