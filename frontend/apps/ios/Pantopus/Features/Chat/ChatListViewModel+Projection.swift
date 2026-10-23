@@ -1,6 +1,46 @@
 import Foundation
 
 extension ChatListViewModel {
+    static func rowsUnreadTotal(from conversations: [UnifiedConversation]) -> Int {
+        conversations.reduce(0) { $0 + $1.totalUnread }
+    }
+
+    static let assistantRow: ConversationRowContent = .init(
+        id: "ai_assistant",
+        variant: .aiAssistant,
+        displayName: "Pantopus AI",
+        initials: "AI",
+        avatarURL: nil,
+        identityChip: nil,
+        verified: false,
+        preview: "Pickup days, alerts, posts and more.",
+        timeLabel: "now",
+        unread: 0,
+        pinned: true,
+        topicKinds: [],
+        storageKey: "ai_assistant"
+    )
+
+    /// Revalidate the previously displayed depth before replacing its rows.
+    /// Do not splice an old tail onto a new authorized head: revoked entries
+    /// must disappear, and the cursor must match the rows actually retained.
+    static func revalidatedInbox(
+        _ head: UnifiedConversationsResponse, minimumCount: Int, api: APIClient, isCurrent: () -> Bool
+    ) async throws -> UnifiedConversationsResponse {
+        var result = head
+        guard result.hasMore != true || result.nextCursor != nil else { throw APIError.invalidResponse }
+        var cursors: Set<String> = []
+        while result.conversations.count < minimumCount, result.hasMore == true {
+            guard isCurrent() else { throw CancellationError() }
+            guard let cursor = result.nextCursor, cursors.insert(cursor).inserted else { throw APIError.invalidResponse }
+            let page: UnifiedConversationsResponse = try await api.request(ChatEndpoints.unifiedConversations(before: cursor))
+            guard isCurrent() else { throw CancellationError() }
+            guard page.hasMore != true || (page.nextCursor != nil && page.nextCursor != cursor) else { throw APIError.invalidResponse }
+            result = appending(page, to: result)
+        }
+        return result
+    }
+
     static func appending(_ page: UnifiedConversationsResponse, to current: UnifiedConversationsResponse) -> UnifiedConversationsResponse {
         var seen = Set(current.conversations.map { "\($0.kind):\($0.id)" })
         let appended = page.conversations.filter { seen.insert("\($0.kind):\($0.id)").inserted }

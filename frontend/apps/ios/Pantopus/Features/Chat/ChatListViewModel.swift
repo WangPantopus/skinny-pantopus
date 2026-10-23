@@ -1,5 +1,3 @@
-// Inbox projection, encrypted offline snapshot, and live message updates.
-
 import Foundation
 import Logging
 import Observation
@@ -12,24 +10,20 @@ import Observation
 public final class ChatListViewModel {
     /// Current render state.
     public private(set) var state: ChatListState = .loading
-    /// Failed refreshes keep conversations visible and show a toast.
     public var refreshFailureMessage: String?
     public private(set) var isLoadingMore = false
     public var nextPageCursor: String? {
         inboxResponse?.hasMore == true ? inboxResponse?.nextCursor : nil
     }
 
-    /// Active filter tab.
     public private(set) var activeFilter: ChatFilter = .all
 
-    /// Empty filters retain the assistant row and explain what has no matches.
     public private(set) var emptyFilter: ChatFilter?
 
     /// The Unread filter's badge; other filter badges remain hidden.
     public private(set) var unreadByFilter: [ChatFilter: Int] = [:]
 
     private let api: APIClient
-    /// Reuse the memory store and its request coalescing; disk previews are encrypted separately.
     private let store: ScreenStore
     private let socket: SocketClient
     private let preferences: ChatConversationPreferences
@@ -49,22 +43,9 @@ public final class ChatListViewModel {
     private var preferencesTask: Task<Void, Never>?
     private var hiddenKeys: Set<String> = []
     private var mutedKeys: Set<String> = []
-    /// Keep the assistant reachable before the first conversation.
-    let aiRow: ConversationRowContent = .init(
-        id: "ai_assistant",
-        variant: .aiAssistant,
-        displayName: "Pantopus AI",
-        initials: "AI",
-        avatarURL: nil,
-        identityChip: nil,
-        verified: false,
-        preview: "Pickup days, alerts, posts and more.",
-        timeLabel: "now",
-        unread: 0,
-        pinned: true,
-        topicKinds: [],
-        storageKey: "ai_assistant"
-    )
+    var aiRow: ConversationRowContent {
+        Self.assistantRow
+    }
 
     private var badgeTask: Task<Void, Never>?
     private var messageTask: Task<Void, Never>?
@@ -100,7 +81,6 @@ public final class ChatListViewModel {
         return ChatLocalStore.scope(server: api.apiBaseURL.absoluteString, account: user.id)
     }
 
-    /// Pull-to-refresh / retry.
     public func refresh() async {
         await fetch(force: true)
     }
@@ -158,14 +138,12 @@ public final class ChatListViewModel {
         }
     }
 
-    /// Tap a filter tab. Pure UI — no refetch.
     public func selectFilter(_ filter: ChatFilter) {
         guard filter != activeFilter else { return }
         activeFilter = filter
         applyFilter()
     }
 
-    /// Tear down socket subscriptions when the view disappears.
     public func teardown() {
         fetchGeneration += 1
         badgeTask?.cancel()
@@ -235,16 +213,23 @@ public final class ChatListViewModel {
         let session = AuthManager.shared.requestSessionGeneration
         let cacheVersion = ChatLocalStore.shared.version
         let scope = localCacheScope
-        async let conversationsTask: (response: UnifiedConversationsResponse, confirmedAt: Date)? = optional(refuseInbox: true) {
-            let snapshot = try await self.store.load(
-                ChatEndpoints.unifiedConversations(),
-                as: UnifiedConversationsResponse.self,
-                kind: .messagesList,
-                topics: [ScreenTopic.chats],
-                force: force
-            )
-            return (snapshot.value, snapshot.fetchedAt)
-        }
+        let minimumCount = inboxResponse?.conversations.count ?? 0
+        async let conversationsTask: (response: UnifiedConversationsResponse, confirmedAt: Date)? = optional(
+            refuseInbox: true,
+            isCurrent: {
+                generation == self.fetchGeneration && session == AuthManager.shared.requestSessionGeneration
+            },
+            {
+                let snapshot = try await self.store.load(
+                    ChatEndpoints.unifiedConversations(),
+                    as: UnifiedConversationsResponse.self,
+                    kind: .messagesList,
+                    topics: [ScreenTopic.chats],
+                    force: force
+                )
+                return (snapshot.value, snapshot.fetchedAt)
+            }
+        )
         async let statsTask: ChatStatsResponse? = optional {
             try await self.store.load(
                 ChatEndpoints.stats(),
@@ -256,7 +241,7 @@ public final class ChatListViewModel {
         }
         let fetched = await conversationsTask
         guard generation == fetchGeneration, session == AuthManager.shared.requestSessionGeneration, !Task.isCancelled else { return }
-        guard let response = fetched else {
+        guard var response = fetched else {
             switch state {
             case .loaded, .empty:
                 // Keep the list on screen; a failed refresh only toasts.
@@ -267,6 +252,23 @@ public final class ChatListViewModel {
             return
         }
         let stats = await statsTask?.stats
+        guard generation == fetchGeneration, session == AuthManager.shared.requestSessionGeneration, !Task.isCancelled else { return }
+        do {
+            response.response = try await Self.revalidatedInbox(response.response, minimumCount: minimumCount, api: api) {
+                generation == self.fetchGeneration && session == AuthManager.shared.requestSessionGeneration && !Task.isCancelled
+            }
+        } catch {
+            guard generation == fetchGeneration, session == AuthManager.shared.requestSessionGeneration, !Task.isCancelled else { return }
+            if ScreenStore.isRefusal(error) {
+                if let scope { ChatLocalStore.shared.removeInbox(scope: scope) }
+                inboxResponse = nil
+                allRows = []
+                state = .error(message: "Couldn't load conversations.")
+            } else {
+                refreshFailureMessage = "Couldn't refresh conversations."
+            }
+            return
+        }
         guard generation == fetchGeneration, session == AuthManager.shared.requestSessionGeneration, !Task.isCancelled else { return }
         apply(response.response, stats: stats)
         if let scope {
@@ -283,7 +285,7 @@ public final class ChatListViewModel {
         preferences.applyServer(response.conversations)
         loadPreferences()
         serverTotalUnmutedUnread = stats?.totalUnmutedUnread ?? response.totalUnmutedUnread
-        serverTotalUnread = stats?.totalUnread ?? response.totalUnread ?? rowsUnreadTotal(from: response.conversations)
+        serverTotalUnread = stats?.totalUnread ?? response.totalUnread ?? Self.rowsUnreadTotal(from: response.conversations)
         activityDates = Dictionary(uniqueKeysWithValues: response.conversations.map {
             ($0.id, $0.lastMessageAt.flatMap(Self.parseISO) ?? .distantPast)
         })
@@ -296,10 +298,6 @@ public final class ChatListViewModel {
     private func loadPreferences() {
         hiddenKeys = preferences.hiddenKeys()
         mutedKeys = preferences.mutedKeys()
-    }
-
-    private func rowsUnreadTotal(from conversations: [UnifiedConversation]) -> Int {
-        conversations.reduce(0) { $0 + $1.totalUnread }
     }
 
     private func updateUnreadByFilter() {
@@ -325,11 +323,14 @@ public final class ChatListViewModel {
     }
 
     private func optional<T: Sendable>(
-        refuseInbox: Bool = false, _ operation: @Sendable () async throws -> T
+        refuseInbox: Bool = false,
+        isCurrent: (@MainActor @Sendable () -> Bool)? = nil,
+        _ operation: @Sendable () async throws -> T
     ) async -> T? {
         do {
             return try await operation()
         } catch {
+            guard isCurrent?() != false else { return nil }
             logger.warning("Chat-list fetch failed: \(error)")
             if refuseInbox, ScreenStore.isRefusal(error) {
                 if let scope = localCacheScope { ChatLocalStore.shared.removeInbox(scope: scope) }
@@ -351,10 +352,6 @@ public final class ChatListViewModel {
             case .gigs: visibleRows.filter { $0.topicKinds.contains("gig") }
             case .market: visibleRows.filter { $0.topicKinds.contains("marketplace") }
             }
-        // Pin synthetic AI row on top of every filter. The verified
-        // floor is enforced by the empty-state copy + the absence of
-        // any unverified rows in `allRows` (the backend serializer
-        // already excludes unverified DMs).
         let rows = [aiRow] + filtered
         // Pinned-first ordering — AI is always pinned; user-pinned
         // conversations come next; rest follow.
