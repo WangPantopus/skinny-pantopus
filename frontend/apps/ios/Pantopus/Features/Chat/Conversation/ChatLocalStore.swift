@@ -150,14 +150,10 @@ final class ChatLocalStore: @unchecked Sendable {
                 try? lock.withLock {
                     guard generation == started else { throw CancellationError() }
                     let key = try prepare(scope: scope, generation: started)
-                    let response = UnifiedConversationsResponse(
-                        conversations: Array(memory.response.conversations.prefix(Self.threadLimit)),
-                        total: memory.response.total,
-                        totalUnread: memory.response.totalUnread,
-                        totalUnmutedUnread: memory.response.totalUnmutedUnread
-                    )
-                    let bounded = ChatInboxMemory(response: response, stats: memory.stats, confirmedAt: memory.confirmedAt)
-                    let bytes = try JSONEncoder().encode(SavedInbox(schema: 1, memory: bounded))
+                    // Keep rows and their paging cursor as one snapshot. A truncated
+                    // prefix paired with the loaded tail's cursor would skip rows.
+                    // An over-budget response leaves the prior complete snapshot.
+                    let bytes = try JSONEncoder().encode(SavedInbox(schema: 1, memory: memory))
                     guard bytes.count <= Self.historyLimit else { return }
                     let sealed = try AES.GCM.seal(bytes, using: key, authenticating: Data("\(scope)|inbox".utf8))
                     guard let combined = sealed.combined else { return }
