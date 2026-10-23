@@ -14,6 +14,7 @@ const { closedGigRoomIds, isGigRoomClosedTo, isRoomClosedForWrites } = require('
 const { actingBusinessInRoom, UNPUBLISHED_BUSINESS_REFUSAL } = require('../services/chatBusinessAccess');
 const { unpublishedBusinessIds } = require('../utils/visibilityPolicy');
 const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
+const { markChatRead } = require('../services/chatReadState');
 const { setGauge } = require('../services/chatMetrics');
 // Persistent login (design §6.4): the same JWT decode helper verifyToken
 // exposes as `decodeSessionClaims` (verifyToken.js delegates to it), the 15-s
@@ -23,17 +24,6 @@ const { verifyAccessToken } = require('../services/accessTokenVerifier');
 
 // Store connected users: { userId: Set<socketId> }
 const connectedUsers = new Map();
-
-// A read mark changes only a row with something unread (NULL counts too), as in the REST read routes: a repeated
-// read is no write, so the database's change signal doesn't reach every member of the room.
-function markRoomRead(roomId, userId) {
-  return supabaseAdmin
-    .from('ChatParticipant')
-    .update({ unread_count: 0, last_read_at: new Date().toISOString() })
-    .eq('room_id', roomId)
-    .eq('user_id', userId)
-    .or('unread_count.neq.0,unread_count.is.null');
-}
 
 // The gig room also serves public task watchers. Tracking belongs only to the
 // current owner/worker and only while their authenticated socket is subscribed.
@@ -465,6 +455,7 @@ module.exports = (io) => {
           .eq('room_id', roomId)
           .eq('deleted', false)
           .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
           .limit(50);
         const backfill = (messages || []).reverse();
         const [reactionMap, people] = await Promise.all([
@@ -485,8 +476,7 @@ module.exports = (io) => {
         });
         if (actingFor) return;
 
-        // Mark messages as read
-        await markRoomRead(roomId, userId);
+        // Joining subscribes to updates; the client marks only rendered messages read.
         
         // Notify room that user joined
         // Ids only: the first part of the person's email address is not for the other members to see.
@@ -518,16 +508,6 @@ module.exports = (io) => {
           return;
         }
 
-        // Insert/update typing indicator
-        await supabaseAdmin
-          .from('ChatTyping')
-          .upsert({
-            room_id: roomId,
-            user_id: userId,
-            started_at: new Date().toISOString(),
-            expires_at: new Date(Date.now() + 10000).toISOString()
-          });
-
         // Broadcast to room (except sender)
         socket.to(roomId).emit('typing:user', {
           userId,
@@ -549,12 +529,6 @@ module.exports = (io) => {
           return;
         }
 
-        await supabaseAdmin
-          .from('ChatTyping')
-          .delete()
-          .eq('room_id', roomId)
-          .eq('user_id', userId);
-
         socket.to(roomId).emit('typing:stopped', { userId, roomId });
 
       } catch (err) {
@@ -565,33 +539,22 @@ module.exports = (io) => {
     /**
      * Mark messages as read
      */
-    on('messages:read', async ({ roomId }, callback) => {
+    on('messages:read', async ({ roomId, throughMessageId }, callback) => {
+      const requestAt = new Date().toISOString();
       try {
         // Verify the socket has joined this room as a member (a business's read goes through the API)
         if (!socket.rooms.has(roomId) || businessRooms.has(String(roomId))) {
           return callback({ error: 'Not in room' });
         }
 
-        // Room-level mark-as-read: zero unread count and update last_read_at.
-        // Matches the REST endpoint POST /api/chat/rooms/:roomId/read.
-        const { error } = await markRoomRead(roomId, userId);
-
-        if (error) {
-          logger.error('Mark read error', { sessionId, userId, roomId, error: error.message });
-          return callback({ error: 'Failed to mark as read' });
-        }
-
-        // Notify room of read receipt
-        socket.to(roomId).emit('messages:read', {
-          userId,
-          roomId,
-          readAt: new Date().toISOString()
-        });
+        if (await isGigRoomClosedTo(roomId, userId)) return callback({ error: 'Access denied' });
+        const result = await markChatRead({ roomIds: [roomId], userId, throughMessageId, requestAt, io });
+        if (result.error) return callback({ error: 'Failed to mark as read' });
 
         // Update the reader's own badge counts (unread decreased)
         badgeService.emitBadgeUpdate(userId);
 
-        callback({ success: true });
+        callback({ success: true, unreadCount: result.unreadCount });
 
       } catch (err) {
         logger.error('Mark read error', { sessionId, userId, roomId, error: err.message });
@@ -811,18 +774,8 @@ module.exports = (io) => {
         userRooms.delete(userId);
       }
       
-      // Clean up typing indicators
-      try {
-        await supabaseAdmin
-          .from('ChatTyping')
-          .delete()
-          .eq('user_id', userId);
-      } catch (err) {
-        logger.error('Error cleaning typing indicators', { sessionId, userId, error: err.message });
-      }
-      
-      // Notify user is offline only when last socket disconnects (and no new
-      // one connected while the typing rows were cleaned up)
+      // Typing is ephemeral and expires in each client. Disconnect has no
+      // database write on the path to announcing the user's offline state.
       if (!stillOnline && !connectedUsers.has(userId)) {
         await emitPresence(socket, 'user:offline', userId, presenceRooms);
       }
@@ -836,23 +789,6 @@ module.exports = (io) => {
 
     await initialRoomsLoad;
   });
-  
-  // ============ PERIODIC CLEANUP ============
-  
-  // Clean up expired typing indicators every 30 seconds
-  const typingCleanupInterval = setInterval(async () => {
-    try {
-      const { data: deletedCount } = await supabaseAdmin.rpc('cleanup_expired_typing');
-      if (deletedCount > 0) {
-        logger.info('Cleaned up expired typing indicators', { count: deletedCount });
-      }
-    } catch (err) {
-      logger.error('Typing cleanup error', { error: err.message });
-    }
-  }, 30000);
-  if (typeof typingCleanupInterval.unref === 'function') {
-    typingCleanupInterval.unref();
-  }
   
   logger.info('Socket.IO chat server initialized');
 };

@@ -1,3 +1,46 @@
+# Chat reliability and latency repairs — October 23, 2026
+
+The founder requested repairs in the real web, iOS and Android apps, preserving the current design, with no unit tests or coverage work. This section tracks the current work; the older inventory below is background and contains items already shipped.
+
+Ownership: `codex/chat-reliability-backend` owns backend/database integration; `codex/chat-web-reliability`, `codex/chat-ios-reliability` and `codex/chat-android-reliability` own their clients. Shared TypeScript chat API changes belong to the web session. Other open LocalProfile/security work is preserved. No hosted configuration or database changes are part of local verification.
+
+## Immediate contract
+
+- REST message history uses `(created_at, id)` for both `before` and `after`; both bounds can be combined. `nextCursor` pages backward and `hasMore` comes from an extra row.
+- `room:join` subscribes and returns recent messages; it does not mark anything read. Sending also does not clear incoming unread messages.
+- Existing room/person `POST .../read` routes and socket `messages:read` accept optional `throughMessageId`. Clients send the newest **visible, server-accepted** message only while foregrounded, with no topic filter. They use the returned `unreadCount`, which may remain positive.
+- The service-only `mark_chat_read_through` RPC persists a monotonic participant cursor and recomputes remaining unread messages while holding the participant lock. Legacy callers omit the cursor and use the request's start time. Cursor IDs outside the authorized conversation are refused.
+- `messages:read` carries `{userId, roomId, readAt, throughMessageId}`. It describes that participant's read in that room. A single group participant's receipt never means everyone read it.
+- Direct-message history synthesizes existing `read_at` only from the other participant's real cursor. Old join/send timestamps do not count as read evidence. Server acceptance is **Sent**, not Delivered.
+- Typing broadcasts remain ephemeral; they no longer wait for database writes. Push recipients respect `ChatParticipant.notifications_enabled` as well as account push preferences.
+
+## Verification recorded so far
+
+On an isolated local database replayed from current migrations plus the additive read-cursor migration, with synthetic accounts only:
+
+- Real REST sends persisted successfully; a real Socket.IO room join preserved the recipient's unread count.
+- Sending a reply preserved unseen incoming messages. Reading through the first of three incoming messages left two unread, and repeating that read did not clear them.
+- Reloading direct history returned `read_at` for the message inside the read boundary and no receipt for the later unread message.
+- Equal-timestamp messages paginated without loss or duplicates using combined composite bounds in room and person history. A nonmember read was refused.
+- JavaScript syntax, migration policy, existing identity-select checks and whitespace checks passed. No unit tests or coverage work was written or run.
+- Web browser, iOS simulator and Android emulator verification is in progress. These API/socket observations do **not** substitute for the app checks.
+
+## Remaining repair sequence
+
+| Area | Work remaining after immediate repairs |
+| --- | --- |
+| Client reconciliation | Finish app verification of live payload merges, optimistic ID reconciliation, stale-response guards, full loaded-range reconnect, edits/deletions/reactions, inbox order and unread deltas. |
+| Sending | Durable account-scoped unsent outbox, preserved idempotency keys, bounded retries, consecutive composition, explicit retry state. Founder approved an encrypted account-scoped recent-history cache on October 23; reuse existing cache lifecycles, bound storage, clear on sign-out and reconcile edits/deletions after reconnect. |
+| Reads and mute | Verify viewport/foreground boundaries and persisted receipts; connect mute actions to server preferences. |
+| Server send path | Separate chat/read rate budgets; transactionally maintain summaries and delivery work; reduce redundant membership/identity queries. |
+| Recovery and inbox scale | Efficient durable change cursors, stable paginated inbox queries, server message search with authorized results and jump-to-message. |
+| Timeline performance | Lazy/windowed rendering, bounded projections and caches, stable scroll anchors and constant-time reply lookup. |
+| Attachments | Bounded streaming upload memory, progress/cancel/retry, precomputed private thumbnails, real file send/download/relaunch checks. |
+| Delivery and scale | Reuse existing durable job/notification infrastructure for retryable push; cross-process transport and user rooms with local multi-instance verification. |
+| Measurement | Measure visible-send, server acceptance, recipient arrival, open and recovery latency; separate cold build/emulator contention from runtime performance. |
+
+## Historical inventory
+
 This is the full production-readiness backlog for the current chat/message stack, based on backend/routes/chats.js, backend/socket/chatSocketio.js, backend/database/schema.sql, backend/routes/upload.js, frontend/apps/web/src/hooks/useChatMessages.ts, and frontend/apps/mobile/src/hooks/useChatMessages.ts.
 
 1. Access Control And Data Exposure

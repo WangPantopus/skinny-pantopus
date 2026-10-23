@@ -41,6 +41,7 @@ const {
   isRoomClosedForWrites,
 } = require('../services/chatGigRoomAccess');
 const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
+const { markChatRead, applyDirectReadReceipts } = require('../services/chatReadState');
 const { incCounter, recordHistogram, getSnapshot } = require('../services/chatMetrics');
 const pushService = require('../services/pushService');
 const notificationService = require('../services/notificationService');
@@ -50,9 +51,6 @@ const sharp = require('sharp');
 const { chosenUsernameOrNull } = require('../utils/personalUsername');
 const CHAT_DELETED_REDACT_DAYS = Math.max(parseInt(process.env.CHAT_DELETED_REDACT_DAYS || '180', 10) || 180, 1);
 const REDACTED_DELETED_MESSAGE = '[deleted message]';
-// Read marks update only rows with something unread (NULL counts too, so the unread trigger's `+ 1` works again).
-// A repeated read is then no write, and the database's change signal doesn't reach every member of the room.
-const HAS_UNREAD = 'unread_count.neq.0,unread_count.is.null';
 const LOCAL_PROFILE_IDENTITY_SELECT = [
   'id',
   'user_id',
@@ -553,17 +551,8 @@ async function deliverNewMessage(io, { room, message, actorUserId, senderUserId 
   }
 
   const stamp = new Date().toISOString();
-  await Promise.all([
-    supabaseAdmin
-      .from('ChatRoom')
-      .update({ updated_at: stamp })
-      .eq('id', roomId),
-    supabaseAdmin
-      .from('ChatParticipant')
-      .update({ unread_count: 0, last_read_at: stamp })
-      .eq('room_id', roomId)
-      .eq('user_id', actorUserId),
-  ]);
+  // Sending is not evidence that the sender has viewed incoming messages.
+  await supabaseAdmin.from('ChatRoom').update({ updated_at: stamp }).eq('id', roomId);
 
   // Push fresh badge counts (including total message count) immediately.
   const { data: participantRows } = await supabaseAdmin
@@ -604,7 +593,9 @@ async function deliverNewMessage(io, { room, message, actorUserId, senderUserId 
         .eq('push_notifications', false);
       if (prefsError) return;
       const disabled = new Set((disabledRows || []).map((r) => r.user_id));
-      const pushEnabledIds = recipientUserIds.filter((id) => !disabled.has(id));
+      const muted = new Set((participantRows || []).filter((row) => row.notifications_enabled === false)
+        .map((row) => String(row.user_id)));
+      const pushEnabledIds = recipientUserIds.filter((id) => !disabled.has(id) && !muted.has(id));
       if (pushEnabledIds.length === 0) return;
 
       const senderName = broadcast.sender?.displayName || 'Someone';
@@ -809,21 +800,28 @@ function buildNextCursor(messages) {
  * Uses (created_at, id) composite cursor for stable pagination.
  */
 function applyCursorPagination(q, before, after) {
+  const bounds = [];
   const { beforeTs, beforeId } = parseCursor(before);
   if (beforeTs) {
     if (beforeId) {
       // Composite cursor: WHERE (created_at < ts) OR (created_at = ts AND id < id)
-      q = q.or(`created_at.lt.${beforeTs},and(created_at.eq.${beforeTs},id.lt.${beforeId})`);
+      bounds.push(`or(created_at.lt.${beforeTs},and(created_at.eq.${beforeTs},id.lt.${beforeId}))`);
     } else {
       // Legacy: plain timestamp
       q = q.lt('created_at', beforeTs);
     }
   }
   if (after) {
-    // after is always a plain timestamp (used for polling new messages)
-    const afterTs = after.indexOf('|') !== -1 ? after.split('|')[0] : after;
-    q = q.gt('created_at', afterTs);
+    const { beforeTs: afterTs, beforeId: afterId } = parseCursor(after);
+    if (afterId) {
+      bounds.push(`or(created_at.gt.${afterTs},and(created_at.eq.${afterTs},id.gt.${afterId}))`);
+    } else {
+      q = q.gt('created_at', afterTs);
+    }
   }
+  // PostgREST only has one `or` query key. Preserve both bounds when paging a
+  // reconnect gap whose endpoints share a timestamp.
+  if (bounds.length) q = q.or(`and(${bounds.join(',')})`);
   return q;
 }
 
@@ -855,7 +853,7 @@ async function countMessagesByRoom(roomIds, batchSize = 20) {
             .eq('room_id', roomId));
         }
         if (error) {
-          logger.warn('Failed to count chat messages for room', { requestId: req.requestId, roomId, error: error.message });
+          logger.warn('Failed to count chat messages for room', { roomId, error: error.message });
           return { roomId, count: 0 };
         }
         return { roomId, count: Number(count || 0) };
@@ -1637,7 +1635,7 @@ router.get('/conversations/:otherUserId/messages', verifyToken, async (req, res)
         .eq('deleted', false)
         .order('created_at', { ascending: false })
         .order('id', { ascending: false })
-        .limit(lim);
+        .limit(lim + 1);
 
       if (topicId) q = q.eq('topic_id', topicId);
       q = applyCursorPagination(q, before, after);
@@ -1659,7 +1657,7 @@ router.get('/conversations/:otherUserId/messages', verifyToken, async (req, res)
     }
 
     // Batch-fetch reactions and senders for all visible messages to avoid N+1 queries
-    const visibleMessages = (messages || []).reverse();
+    const visibleMessages = (messages || []).slice(0, lim).reverse();
     const messageIds = visibleMessages.map((m) => m.id).filter(Boolean);
     const [reactionMap, people, sendRefusal] = await Promise.all([
       buildReactionSummary(messageIds, userId),
@@ -1670,13 +1668,14 @@ router.get('/conversations/:otherUserId/messages', verifyToken, async (req, res)
         logger.warn('chat.send_refusal_unavailable', { requestId: req.requestId, userId, error: refusalError.message });
         return null; // sends are still checked when they arrive
       }),
+      applyDirectReadReceipts(visibleMessages, userId),
     ]);
     const messagesWithReactions = visibleMessages.map((m) => ({
       ...serializeChatMessageForViewer(m, { people, viewerId: userId }),
       reactions: reactionMap.get(m.id) || [],
     }));
 
-    const hasMore = Array.isArray(messages) && messages.length === lim;
+    const hasMore = Array.isArray(messages) && messages.length > lim;
     res.json({
       messages: messagesWithReactions,
       hasMore,
@@ -1695,6 +1694,7 @@ router.get('/conversations/:otherUserId/messages', verifyToken, async (req, res)
  * Mark shared direct/task-room messages with a person as read.
  */
 router.post('/conversations/:otherUserId/read', verifyToken, async (req, res) => {
+  const requestAt = new Date().toISOString();
   try {
     const userId = req.user.id;
     const { otherUserId } = req.params;
@@ -1751,27 +1751,17 @@ router.post('/conversations/:otherUserId/read', verifyToken, async (req, res) =>
       return res.json({ unreadCount: 0, updatedRooms: 0 });
     }
 
-    const stamp = new Date().toISOString();
     const usersToClear = [String(readTargetUserId)];
-
-    const { error: updateErr } = await supabaseAdmin
-      .from('ChatParticipant')
-      .update({
-        unread_count: 0,
-        last_read_at: stamp
-      })
-      .in('room_id', sharedRoomIds)
-      .in('user_id', usersToClear)
-      .or(HAS_UNREAD);
-
-    if (updateErr) {
-      logger.error('Error updating participants for conversation read', { requestId: req.requestId, userId, otherUserId, error: updateErr.message });
-      return res.status(500).json({ error: 'Failed to mark conversation as read' });
+    const result = await markChatRead({ roomIds: sharedRoomIds, userId: readTargetUserId,
+      throughMessageId: req.body?.throughMessageId, requestAt, io: req.app.get('io') });
+    if (result.error) {
+      const status = result.error.code === '22023' ? 400 : result.error.code === '42501' ? 403 : 500;
+      return res.status(status).json({ error: status === 400 ? 'Invalid read cursor' : 'Failed to mark conversation as read' });
     }
-
     badgeService.emitBadgeUpdateToMany(usersToClear);
-    await readBusinessNotices(userId, asBusinessUserId, sharedRoomIds);
-    return res.json({ unreadCount: 0, updatedRooms: sharedRoomIds.length });
+    // Do not clear a later business notification outside the visible boundary.
+    if (result.unreadCount === 0) await readBusinessNotices(userId, asBusinessUserId, sharedRoomIds);
+    return res.json({ unreadCount: result.unreadCount, updatedRooms: result.data.length });
   } catch (err) {
     logger.error('Conversation read error', { requestId: req.requestId, userId: req.user?.id, error: err.message });
     return res.status(500).json({ error: 'Failed to mark conversation as read' });
@@ -1823,7 +1813,7 @@ router.get('/rooms/:roomId/messages', verifyToken, async (req, res) => {
         .eq('deleted', false)
         .order('created_at', { ascending: false })
         .order('id', { ascending: false })
-        .limit(lim);
+        .limit(lim + 1);
 
       if (leftAt) q = q.lte('created_at', leftAt);
       q = applyCursorPagination(q, before, after);
@@ -1848,7 +1838,7 @@ router.get('/rooms/:roomId/messages', verifyToken, async (req, res) => {
     }
 
     // Batch-fetch reactions and senders for all visible messages to avoid N+1 queries
-    const visibleMessages = (messages || []).reverse();
+    const visibleMessages = (messages || []).slice(0, lim).reverse();
     const messageIds = visibleMessages.map((m) => m.id).filter(Boolean);
     const [reactionMap, people, sendRefusal] = await Promise.all([
       buildReactionSummary(messageIds, userId),
@@ -1859,13 +1849,14 @@ router.get('/rooms/:roomId/messages', verifyToken, async (req, res) => {
         logger.warn('chat.send_refusal_unavailable', { requestId: req.requestId, userId, roomId, error: refusalError.message });
         return null; // sends are still checked when they arrive
       }),
+      applyDirectReadReceipts(visibleMessages, userId),
     ]);
     const messagesWithReactions = visibleMessages.map((m) => ({
       ...serializeChatMessageForViewer(m, { people, viewerId: userId }),
       reactions: reactionMap.get(m.id) || [],
     }));
 
-    const hasMore = Array.isArray(messages) && messages.length === lim;
+    const hasMore = Array.isArray(messages) && messages.length > lim;
     recordHistogram('chat.messages.load_latency_ms', Date.now() - msgsStartMs);
     res.json({
       messages: messagesWithReactions,
@@ -2420,6 +2411,7 @@ router.delete('/messages/:messageId', verifyToken, messageDeleteLimiter, async (
  * Mark messages as read
  */
 router.post('/rooms/:roomId/read', verifyToken, async (req, res) => {
+  const requestAt = new Date().toISOString();
   try {
     const { roomId } = req.params;
     const roomIdStr = String(roomId || '');
@@ -2447,25 +2439,15 @@ router.post('/rooms/:roomId/read', verifyToken, async (req, res) => {
     // Reading for a business marks the business's row read: the reader isn't a member of its conversations.
     const usersToClear = [String(readTargetUserId)];
 
-    // Update participant's read state directly; with nothing unread there is no row to change (count stays 0)
-    const { error } = await supabaseAdmin
-      .from('ChatParticipant')
-      .update({
-        unread_count: 0,
-        last_read_at: new Date().toISOString()
-      })
-      .eq('room_id', roomIdStr)
-      .in('user_id', usersToClear)
-      .or(HAS_UNREAD);
-
-    if (error) {
-      logger.error('Error marking messages read', { requestId: req.requestId, userId: req.user?.id, roomId: roomIdStr, error: error.message });
-      return res.status(500).json({ error: 'Failed to mark messages as read' });
+    const result = await markChatRead({ roomIds: [roomIdStr], userId: readTargetUserId,
+      throughMessageId: req.body?.throughMessageId, requestAt, io: req.app.get('io') });
+    if (result.error) {
+      const status = result.error.code === '22023' ? 400 : result.error.code === '42501' ? 403 : 500;
+      return res.status(status).json({ error: status === 400 ? 'Invalid read cursor' : 'Failed to mark messages as read' });
     }
-
     badgeService.emitBadgeUpdateToMany(usersToClear);
-    await readBusinessNotices(userId, asBusinessUserId, [roomIdStr]);
-    res.json({ unreadCount: 0 });
+    if (result.unreadCount === 0) await readBusinessNotices(userId, asBusinessUserId, [roomIdStr]);
+    res.json({ unreadCount: result.unreadCount });
     
   } catch (err) {
     logger.error('Mark read error', { requestId: req.requestId, userId: req.user?.id, error: err.message });
