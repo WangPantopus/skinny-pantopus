@@ -50,6 +50,12 @@ export default function ConversationView({
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(initialTopicId || null);
   const [showDrawer, setShowDrawer] = useState(false);
   const drawerTitleId = useId();
+  const selectTopic = (topicId: string | null) => {
+    if (initialMessageId) {
+      const query = topicId ? `?topic=${encodeURIComponent(topicId)}` : '';
+      router.replace(`/app/chat/conversation/${otherUserId}${query}`);
+    } else setSelectedTopicId(topicId);
+  };
 
   // Escape closes the Chat details drawer, unless a confirmation (Block) is open over it: Escape dismisses that first.
   useEffect(() => {
@@ -406,7 +412,7 @@ export default function ConversationView({
           <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
             <div className="flex items-center gap-2 overflow-x-auto">
               <button
-                onClick={() => setSelectedTopicId(null)}
+                onClick={() => selectTopic(null)}
                 className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
                   !selectedTopicId
                     ? 'bg-primary-100 text-primary-700 ring-1 ring-primary-300'
@@ -418,7 +424,7 @@ export default function ConversationView({
               {topics.map(topic => (
                 <button
                   key={topic.id}
-                  onClick={() => setSelectedTopicId(selectedTopicId === topic.id ? null : topic.id)}
+                  onClick={() => selectTopic(selectedTopicId === topic.id ? null : topic.id)}
                   className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-medium transition-colors flex items-center gap-1 ${
                     selectedTopicId === topic.id
                       ? 'bg-primary-100 text-primary-700 ring-1 ring-primary-300'
