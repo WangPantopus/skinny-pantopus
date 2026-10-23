@@ -2720,6 +2720,49 @@ router.post('/rooms/:roomId/read', verifyToken, async (req, res) => {
 
 // Mute is a server preference so another device and background push agree with
 // the existing inbox menu. Person preferences cover the pair's future task rooms.
+router.get('/conversations/:otherUserId/preferences', verifyToken, async (req, res) => {
+  try {
+    const { otherUserId } = req.params;
+    const asBusinessUserId = req.query.asBusinessUserId ? String(req.query.asBusinessUserId) : null;
+    if (Joi.string().uuid().validate(otherUserId).error || (asBusinessUserId && Joi.string().uuid().validate(asBusinessUserId).error)) {
+      return res.status(400).json({ error: 'Invalid person' });
+    }
+    const roomIds = await personChatRoomIds(req.user.id, otherUserId, asBusinessUserId);
+    if (!roomIds.length) return res.status(404).json({ error: 'Conversation not found' });
+    const identity = asBusinessUserId || req.user.id;
+    const [preferences, participants] = await Promise.all([
+      supabaseAdmin.from('UserNotificationPreferences').select('chat_muted_user_ids').eq('user_id', identity).maybeSingle(),
+      supabaseAdmin.from('ChatParticipant').select('notifications_enabled').eq('user_id', identity).in('room_id', roomIds).eq('is_active', true),
+    ]);
+    if (preferences.error || participants.error) throw preferences.error || participants.error;
+    const muted = (preferences.data?.chat_muted_user_ids || []).includes(otherUserId);
+    res.set('Cache-Control', 'private, no-store');
+    return res.json({ notificationsEnabled: !muted && (participants.data || []).some((p) => p.notifications_enabled !== false), roomIds });
+  } catch (error) {
+    logger.warn('chat_preferences_read_failed', { requestId: req.requestId, code: error.code });
+    return res.status(error.status || 503).json({ error: 'Could not load chat preferences' });
+  }
+});
+
+router.get('/rooms/:roomId/preferences', verifyToken, async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const asBusinessUserId = req.query.asBusinessUserId ? String(req.query.asBusinessUserId) : null;
+    if (Joi.string().uuid().validate(roomId).error || (asBusinessUserId && Joi.string().uuid().validate(asBusinessUserId).error)) {
+      return res.status(400).json({ error: 'Invalid room' });
+    }
+    if (asBusinessUserId && !await canActAsBusiness(asBusinessUserId, req.user.id)) return res.status(403).json({ error: 'Access denied' });
+    const participant = await roomMembership(roomId, req.user.id, asBusinessUserId, { activeOnly: true });
+    if (!participant || (asBusinessUserId && participant.user_id !== asBusinessUserId)
+      || await gigRoomClosed(roomId, req.user.id, asBusinessUserId)) return res.status(403).json({ error: 'Access denied' });
+    res.set('Cache-Control', 'private, no-store');
+    return res.json({ notificationsEnabled: participant.notifications_enabled !== false, roomIds: [roomId] });
+  } catch (error) {
+    logger.warn('chat_preferences_read_failed', { requestId: req.requestId, code: error.code });
+    return res.status(503).json({ error: 'Could not load chat preferences' });
+  }
+});
+
 router.patch('/conversations/:otherUserId/preferences', verifyToken, validate(chatPreferencesSchema), async (req, res) => {
   try {
     const { otherUserId } = req.params;
@@ -3018,225 +3061,78 @@ router.get('/unified-conversations', verifyToken, async (req, res) => {
   const ucStartMs = Date.now();
   try {
     const userId = req.user.id;
-    const { limit = 100 } = req.query;
-    const lim = Math.min(Math.max(parseInt(limit, 10) || 100, 1), 500);
-    // Only what's new (Instant Screens contract §8): `since` (an ISO time) keeps the rows with a message, a read
-    // mark, a new room or topic activity after it. `total` and `totalUnread` still count every row.
-    const sinceRaw = typeof req.query.since === 'string' ? req.query.since.trim() : '';
-    const sinceMs = sinceRaw ? Date.parse(sinceRaw) : null;
-    if (sinceRaw && (!/^\d{4}-\d{2}-\d{2}T/.test(sinceRaw) || !Number.isFinite(sinceMs))) {
+    const lim = Math.min(Math.max(parseInt(req.query.limit, 10) || 100, 1), 500);
+    const since = typeof req.query.since === 'string' ? req.query.since.trim() : '';
+    if (since && (!/^\d{4}-\d{2}-\d{2}T/.test(since) || !Number.isFinite(Date.parse(since)))) {
       return res.status(400).json({ error: 'invalid since' });
     }
-
-    // Step 1: Get all rooms the user participates in (active only)
-    const { data: myParticipants, error: partErr } = await supabaseAdmin
-      .from('ChatParticipant')
-      .select(`
-        room_id,
-        unread_count,
-        last_read_at,
-        notifications_enabled,
-        preferences_updated_at,
-        role,
-        is_active,
-        room:room_id(
-          id, type, name, description, gig_id, home_id, support_train_id, is_active, created_at, updated_at,
-          support_train:support_train_id(Activity(title))
-        )
-      `)
-      .eq('user_id', userId)
-      .eq('is_active', true);
-
-    if (partErr) {
-      logger.error('Error fetching unified conversations', { requestId: req.requestId, userId, error: partErr.message });
-      return res.status(500).json({ error: 'Failed to fetch conversations' });
+    let before = null;
+    if (req.query.before != null) {
+      try {
+        if (typeof req.query.before !== 'string' || req.query.before.length > 512) throw new Error();
+        before = JSON.parse(Buffer.from(req.query.before, 'base64url').toString('utf8'));
+        if (!before || typeof before.at !== 'string' || !/^\d{4}-\d{2}-\d{2}T/.test(before.at) || !Number.isFinite(Date.parse(before.at))
+          || !/^(conversation|room):[0-9a-f-]{36}$/i.test(before.key || '')) throw new Error();
+      } catch { return res.status(400).json({ error: 'Invalid inbox cursor' }); }
     }
-
-    // A leftover member of an assigned task's gig room doesn't see it.
-    const joinedRooms = (myParticipants || []).filter(p => p.room);
-    const closedRoomIds = await closedGigRoomIds(joinedRooms.map((p) => p.room), userId);
-    const roomList = joinedRooms.filter((p) => !closedRoomIds.has(String(p.room.id)));
-
-    // Separate group/home/plan/Support Train rooms (not mergeable) from direct/gig rooms (mergeable by person)
-    const mergeableParticipants = roomList.filter(p => p.room.type === 'direct' || p.room.type === 'gig');
-    const groupHomeParticipants = roomList.filter(p => ['group', 'home', 'plan', 'support_train'].includes(p.room.type));
-
-    // Step 2: For mergeable rooms, find other participants. The messages and topics of steps 4-5
-    // don't depend on them, so they're fetched in the same round trip (previews for every listed
-    // room, including any that end up without a counterpart).
-    const mergeableRoomIds = mergeableParticipants.map(p => p.room_id);
-    const previewRoomIds = [...mergeableRoomIds, ...groupHomeParticipants.map(p => p.room_id)];
-    const [{ data: otherParts }, { data: allConvMsgs }, { data: allTopics }, planByRoom, mutePreferences] = await Promise.all([
-      mergeableRoomIds.length > 0
-        ? supabaseAdmin
-          .from('ChatParticipant')
-          .select(`
-            room_id,
-            user_id,
-            user:user_id(id, username, name, first_name, middle_name, last_name, profile_picture_url)
-          `)
-          .in('room_id', mergeableRoomIds)
-          .neq('user_id', userId)
-          .eq('is_active', true)
-        : Promise.resolve({ data: [] }),
-      previewRoomIds.length > 0
-        ? supabaseAdmin.rpc('get_room_previews', { p_room_ids: previewRoomIds })
-        : Promise.resolve({ data: [] }),
-      supabaseAdmin
-        .from('ConversationTopic')
-        .select('id, topic_type, topic_ref_id, title, status, last_activity_at, conversation_user_id_1, conversation_user_id_2')
-        .or(`conversation_user_id_1.eq.${userId},conversation_user_id_2.eq.${userId}`)
-        .eq('status', 'active')
-        .order('last_activity_at', { ascending: false }),
-      loadPlanChatStates(groupHomeParticipants.map((p) => p.room)),
+    const [result, preferences] = await Promise.all([
+      supabaseAdmin.rpc('get_chat_inbox_page', {
+        p_user_id: userId, p_limit: lim, p_before_at: before?.at || null,
+        p_before_key: before?.key || null, p_since: since || null,
+      }),
       supabaseAdmin.from('UserNotificationPreferences').select('chat_muted_user_ids').eq('user_id', userId).maybeSingle(),
     ]);
-    if (mutePreferences.error) throw mutePreferences.error;
-    const mutedPeople = new Set(mutePreferences.data?.chat_muted_user_ids || []);
-    let allOtherParticipants = otherParts || [];
-    // Leftover members of an assigned task's gig room don't stand in for its counterpart.
-    const hiddenMembers = await hiddenGigRoomMembers(mergeableParticipants.map((p) => p.room), allOtherParticipants);
-    allOtherParticipants = allOtherParticipants.filter((op) => !hiddenMembers.has(`${op.room_id}:${op.user_id}`));
-    const identityByUserId = await loadLocalIdentityMapForUsers(
-      allOtherParticipants.map((participant) => participant.user)
-    );
-
-    // Step 3: Group rooms by other_participant_id
-    const conversationMap = new Map();
-    const otherByRoom = new Map();
-    for (const other of allOtherParticipants) if (!otherByRoom.has(other.room_id)) otherByRoom.set(other.room_id, other);
-
-    for (const p of mergeableParticipants) {
-      const roomId = p.room_id;
-      const otherP = otherByRoom.get(roomId);
-      if (!otherP || !otherP.user) continue;
-
-      const otherId = otherP.user.id;
-      if (!conversationMap.has(otherId)) {
-        const u = otherP.user;
-        const otherIdentity = identityByUserId.get(String(otherId)) || serializeUserAsLocalIdentity(u);
-        conversationMap.set(otherId, {
-          other_participant_id: otherId,
-          other_participant_name: otherIdentity?.displayName || null,
-          other_participant_username: otherIdentity?.handle || null,
-          other_participant_avatar: otherIdentity?.avatarUrl || null,
-          other_participant_identity: otherIdentity,
-          room_ids: [],
-          total_unread: 0,
-          notifications_enabled: false,
-          last_message_at: null,
-          last_message_preview: null,
-          topics: [],
-          _type: 'conversation',
-        });
-      }
-      const conv = conversationMap.get(otherId);
-      conv.room_ids.push(roomId);
-      conv.total_unread += (p.unread_count || 0);
-      conv.notifications_enabled ||= !mutedPeople.has(otherId) && p.notifications_enabled !== false;
-    }
-
-    // Step 4-5: Messages and topics, batch-fetched in step 2 (3 queries instead of 2N+M sequential)
-    // Index previews by room_id (RPC returns exactly one row per room)
-    const convMsgByRoom = await resolveRoomPreviewMap(allConvMsgs, req.requestId, 'unified_conversations');
-    // Build lookup: other_user_id -> topics
-    const topicsByOther = {};
-    for (const t of allTopics || []) {
-      const otherId = t.conversation_user_id_1 === userId ? t.conversation_user_id_2 : t.conversation_user_id_1;
-      if (!topicsByOther[otherId]) topicsByOther[otherId] = [];
-      topicsByOther[otherId].push(t);
-    }
-
-    const conversations = [];
-    for (const [otherId, conv] of conversationMap) {
-      // Find most recent message across this conversation's rooms
-      let bestMsg = null;
-      for (const rid of conv.room_ids) {
-        const msg = convMsgByRoom[rid];
-        if (msg && (!bestMsg || msg.created_at > bestMsg.created_at)) bestMsg = msg;
-      }
-      if (bestMsg) {
-        conv.last_message_preview = getVisibleMessagePreview(bestMsg);
-        conv.last_message_at = bestMsg.created_at;
-      }
-
-      conv.topics = (topicsByOther[otherId] || []).slice(0, 5);
-      conversations.push(conv);
-    }
-
-    // Step 5: Process group/home rooms using batch-fetched messages
-    for (const p of groupHomeParticipants) {
-      const roomId = p.room_id;
-      const lastMsg = convMsgByRoom[roomId] || null;
-      let lastMessagePreview = null;
-      let lastMessageAt = null;
-      if (lastMsg) {
-        lastMessagePreview = getVisibleMessagePreview(lastMsg);
-        lastMessageAt = lastMsg.created_at;
-      }
-
-      conversations.push({
-        id: roomId,
-        room_type: p.room.type,
-        // A Support Train's room goes by the train's title as it is now (the room was named at publish).
-        room_name: p.room.support_train?.Activity?.title || p.room.name,
-        description: p.room.description,
-        gig_id: p.room.gig_id,
-        home_id: p.room.home_id,
-        support_train_id: p.room.support_train_id || null,
-        total_unread: p.unread_count || 0,
-        notifications_enabled: p.notifications_enabled !== false,
-        last_message_at: lastMessageAt || p.room.updated_at,
-        last_message_preview: lastMessagePreview,
-        topics: [],
-        _type: 'room',
-        ...(p.room.type === 'plan' ? {
-          plan_id: planByRoom.get(String(roomId))?.post_id || null,
-          is_active: roomIsActive(p.room, planByRoom),
-        } : {}),
-      });
-    }
-
-    // Sort by last activity
-    conversations.sort((a, b) => {
-      const ta = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
-      const tb = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
-      return tb - ta;
-    });
-
-    let listed = conversations;
-    if (sinceMs !== null) {
-      const newer = (value) => Boolean(value) && Date.parse(value) > sinceMs;
-      const participantByRoom = new Map(roomList.map((p) => [String(p.room_id), p]));
-      const roomChanged = (roomId) => {
-        const p = participantByRoom.get(String(roomId));
-        return newer(convMsgByRoom[roomId]?.created_at) || newer(p?.last_read_at) || newer(p?.preferences_updated_at)
-          || newer(p?.room?.updated_at) || newer(p?.room?.created_at);
+    if (result.error || preferences.error) throw result.error || preferences.error;
+    const page = result.data;
+    if (!page || !Array.isArray(page.entries)) throw new Error('Inbox page unavailable');
+    const peopleIds = page.entries.map((entry) => entry.other_id).filter(Boolean);
+    const visibleRooms = page.entries.map((entry) => entry.room).filter(Boolean);
+    const trainIds = visibleRooms.map((room) => room.support_train_id).filter(Boolean);
+    const [users, planStates, trains] = await Promise.all([
+      peopleIds.length ? supabaseAdmin.from('User')
+        .select('id, username, name, first_name, middle_name, last_name, profile_picture_url').in('id', peopleIds) : { data: [] },
+      loadPlanChatStates(visibleRooms),
+      trainIds.length ? supabaseAdmin.from('SupportTrain').select('id, Activity(title)').in('id', trainIds) : { data: [] },
+    ]);
+    if (users.error || trains.error) throw users.error || trains.error;
+    const identities = await loadLocalIdentityMapForUsers(users.data || []);
+    const trainTitles = new Map((trains.data || []).map((train) => [train.id, train.Activity?.title]));
+    const muted = new Set(preferences.data?.chat_muted_user_ids || []);
+    const conversations = page.entries.map((entry) => {
+      const common = {
+        total_unread: Number(entry.total_unread) || 0,
+        notifications_enabled: entry.notifications_enabled && !muted.has(entry.other_id),
+        last_message_at: entry.last_message_at,
+        last_message_preview: getVisibleMessagePreview(entry.last_message),
+        topics: entry.topics || [],
       };
-      listed = conversations.filter((conv) => (conv._type === 'room'
-        ? roomChanged(conv.id)
-        : (conv.room_ids || []).some(roomChanged) || (conv.topics || []).some((t) => newer(t.last_activity_at))));
-    }
-
-    const visibleConversations = listed.slice(0, lim);
-    const visibleRoomIds = [];
-    for (const conv of visibleConversations) {
-      if (conv._type === 'room') {
-        visibleRoomIds.push(String(conv.id));
-      } else {
-        visibleRoomIds.push(...(conv.room_ids || []).map((id) => String(id)));
+      if (entry.other_id) {
+        const identity = identities.get(entry.other_id);
+        return { ...common, other_participant_id: entry.other_id,
+          other_participant_name: identity?.displayName || null,
+          other_participant_username: identity?.handle || null,
+          other_participant_avatar: identity?.avatarUrl || null,
+          other_participant_identity: identity || null,
+          room_ids: entry.room_ids, _type: 'conversation' };
       }
-    }
-    // Per-room message counts removed — the N+1 countMessagesByRoom queries
-    // scaled poorly (one SELECT count(*) per room). The total_message_count
-    // field is omitted; frontends already guard with (conv.total_message_count || 0).
-
-    recordHistogram('chat.unified_conversations.load_latency_ms', Date.now() - ucStartMs);
-    res.json({
-      conversations: visibleConversations,
-      total: conversations.length,
-      totalUnread: conversations.reduce((sum, c) => sum + (c.total_unread || 0), 0),
+      const room = entry.room;
+      return { ...common, id: room.id, room_type: room.type,
+        room_name: trainTitles.get(room.support_train_id) || room.name,
+        description: room.description, gig_id: room.gig_id, home_id: room.home_id,
+        support_train_id: room.support_train_id || null,
+        last_message_at: entry.last_message_at || room.updated_at,
+        _type: 'room',
+        ...(room.type === 'plan' ? { plan_id: planStates.get(room.id)?.post_id || null,
+          is_active: roomIsActive(room, planStates) } : {}),
+      };
     });
+    const last = page.entries.at(-1);
+    const nextCursor = page.hasMore && last
+      ? Buffer.from(JSON.stringify({ at: last.sort_at, key: last.entry_key })).toString('base64url') : null;
+    recordHistogram('chat.unified_conversations.load_latency_ms', Date.now() - ucStartMs);
+    res.set('Cache-Control', 'private, no-store');
+    res.json({ conversations, total: Number(page.total), totalUnread: Number(page.totalUnread),
+      hasMore: page.hasMore, nextCursor });
   } catch (err) {
     logger.error('Unified conversations list error', { requestId: req.requestId, userId: req.user?.id, error: err.message });
     sendChatReadError(res, err, 'Failed to fetch conversations');

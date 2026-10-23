@@ -147,6 +147,29 @@ the heavily loaded development host; these are not percentile benchmarks.
 Web and Android passed a real shared-group exchange, plus reload/relaunch
 persistence. iOS verification and the final cross-platform sweep remain open.
 
+## Paginated inbox and preference reads
+
+`GET /api/chat/unified-conversations` adds `hasMore` and an opaque `nextCursor`.
+Send it as `before` with the same `limit` and optional `since`. Ordering uses
+last activity and a stable person/room key, including timestamp ties. Clients
+deduplicate by person/room key while merging pages and refresh the top when
+live activity moves a row. `total` and `totalUnread` still span the full
+authorized inbox. The reader uses one indexed latest-message lookup per room
+and hydrates identities, plans, train titles and topics only for the page.
+It no longer silently stops at PostgREST's default 1,000 memberships.
+
+`GET` counterparts to both room/person `/preferences` routes return the same
+`{notificationsEnabled, roomIds}` shape as `PATCH`, with the existing
+`asBusinessUserId` query authorization. A chat opened directly can load its
+saved setting without scanning the inbox.
+
+The live API paged 1,031 local synthetic inbox rows in eleven pages without
+duplicates or omissions, including 1,030 tied timestamps. Existing inbox
+totals matched, and mute/unmute persisted through the preference read.
+An execution plan used the existing room-message, participant and topic
+indexes; its single observed database execution took 87 ms on the loaded
+development host. Browser/native pagination checks are still pending.
+
 ## Remaining repair sequence
 
 | Area | Work remaining after immediate repairs |
