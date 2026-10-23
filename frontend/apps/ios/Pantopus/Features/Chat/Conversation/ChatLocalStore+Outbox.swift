@@ -46,6 +46,7 @@ extension ChatLocalStore {
     func enqueue(
         _ message: ChatOutboxMessage, attachments: [ChatQueuedAttachment], scope: String, version: Int
     ) async throws {
+        try Self.validateAttachmentSizes(attachments)
         try await onQueue {
             let (key, staging) = try self.lock.withLock {
                 try self.requireSession(version)
@@ -80,6 +81,19 @@ extension ChatLocalStore {
                 try self.writeMessage(message, folder: staging, key: key, scope: scope)
                 guard self.outboxBytes() <= Self.outboxLimit else { throw ChatLocalStorageError.quota }
                 try FileManager.default.moveItem(at: staging, to: self.outboxURL(message.id))
+            }
+        }
+    }
+
+    /// Match the server's category limits before encrypting or uploading bytes.
+    private static func validateAttachmentSizes(_ attachments: [ChatQueuedAttachment]) throws {
+        for attachment in attachments {
+            let megabytes = attachment.mimeType.hasPrefix("image/") ? 10 : attachment.mimeType.hasPrefix("video/") ? 100 : 25
+            guard (attachment.data?.count ?? 0) <= megabytes * 1024 * 1024 else {
+                throw ChatLocalStorageError.attachmentLimit(megabytes: megabytes)
+            }
+            guard (attachment.liveVideo?.count ?? 0) <= 100 * 1024 * 1024 else {
+                throw ChatLocalStorageError.attachmentLimit(megabytes: 100)
             }
         }
     }
