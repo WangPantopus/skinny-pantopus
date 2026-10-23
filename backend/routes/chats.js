@@ -2985,69 +2985,11 @@ router.delete('/rooms/:roomId/participants/:participantUserId', verifyToken, par
  */
 router.get('/stats', verifyToken, async (req, res) => {
   try {
-    const userId = req.user.id;
-
-    // Lightweight query: sum unread_count from all rooms the user participates in
-    const { data: participants, error } = await supabaseAdmin
-      .from('ChatParticipant')
-      .select('room_id, unread_count, room:room_id(type, gig_id)')
-      .eq('user_id', userId)
-      .eq('is_active', true);
-
-    if (error) {
-      logger.error('Error fetching chat stats', { requestId: req.requestId, userId, error: error.message });
-      return res.status(500).json({ error: 'Failed to fetch stats' });
-    }
-
-    // A leftover member of an assigned task's gig room doesn't count it.
-    const closedRoomIds = await closedGigRoomIds(
-      (participants || []).map((p) => ({ id: p.room_id, type: p.room?.type, gig_id: p.room?.gig_id })),
-      userId
-    );
-    const rows = (participants || []).filter((p) => !closedRoomIds.has(String(p.room_id)));
-    const roomIds = rows.map((p) => String(p.room_id)).filter(Boolean);
-    let totalUnread = 0;
-    let directChats = 0;
-    let gigChats = 0;
-    let homeChats = 0;
-
-    for (const p of rows) {
-      totalUnread += (p.unread_count || 0);
-      const roomType = p.room?.type;
-      if (roomType === 'direct') directChats++;
-      else if (roomType === 'gig') gigChats++;
-      else if (roomType === 'home') homeChats++;
-    }
-    let totalMessages = 0;
-    if (roomIds.length > 0) {
-      let { count: totalCount, error: countErr } = await supabaseAdmin
-        .from('ChatMessage')
-        .select('id', { count: 'exact', head: true })
-        .in('room_id', roomIds)
-        .eq('deleted', false);
-      if (countErr && /deleted/i.test(String(countErr.message || ''))) {
-        ({ count: totalCount, error: countErr } = await supabaseAdmin
-          .from('ChatMessage')
-          .select('id', { count: 'exact', head: true })
-          .in('room_id', roomIds));
-      }
-      if (!countErr) totalMessages = Number(totalCount || 0);
-    }
-
-    res.json({
-      stats: {
-        total_chats: rows.length,
-        total_messages: totalMessages,
-        total_unread: totalUnread,
-        direct_chats: directChats,
-        gig_chats: gigChats,
-        home_chats: homeChats,
-      }
-    });
-
-  } catch (err) {
-    logger.error('Chat stats error', { requestId: req.requestId, userId: req.user?.id, error: err.message });
-    res.status(500).json({ error: 'Failed to fetch chat stats' });
+    const stats = await badgeService.getChatStatistics(req.user.id);
+    res.json({ stats });
+  } catch (error) {
+    logger.warn('Chat statistics unavailable', { requestId: req.requestId, code: error.code });
+    res.status(503).json({ error: 'Chat statistics are temporarily unavailable', code: 'CHAT_UNAVAILABLE' });
   }
 });
 

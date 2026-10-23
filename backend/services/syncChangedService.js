@@ -141,19 +141,24 @@ function chunks(ids) {
 }
 
 // Map<scopeId, Set<userId>> for the given ids; a failed read leaves those ids with no extra people.
-async function membersOf(table, keyColumn, ids, filter = (q) => q) {
+async function membersOf(table, keyColumn, ids, filter = (q) => q, paginate = false) {
   const members = new Map();
   for (const part of chunks(ids)) {
-    const { data, error } = await filter(supabaseAdmin.from(table).select(`${keyColumn}, user_id`).in(keyColumn, part));
-    if (error) {
-      logger.warn('sync:changed recipients unavailable', { table, error: error.message });
-      continue;
-    }
-    for (const row of data || []) {
-      if (!row.user_id) continue;
-      const key = String(row[keyColumn]).toLowerCase();
-      if (!members.has(key)) members.set(key, new Set());
-      members.get(key).add(String(row.user_id).toLowerCase());
+    for (let offset = 0; ; offset += 500) {
+      let query = filter(supabaseAdmin.from(table).select(`${keyColumn}, user_id`).in(keyColumn, part));
+      if (paginate) query = query.order(keyColumn).order('user_id').range(offset, offset + 499);
+      const { data, error } = await query;
+      if (error) {
+        logger.warn('sync:changed recipients unavailable', { table, error: error.message });
+        break;
+      }
+      for (const row of data || []) {
+        if (!row.user_id) continue;
+        const key = String(row[keyColumn]).toLowerCase();
+        if (!members.has(key)) members.set(key, new Set());
+        members.get(key).add(String(row.user_id).toLowerCase());
+      }
+      if (!paginate || (data || []).length < 500) break;
     }
   }
   return members;
@@ -227,7 +232,7 @@ async function flush() {
 
   const resolvers = {
     home: (ids) => membersOf('HomeOccupancy', 'home_id', ids, (q) => q.eq('is_active', true)),
-    room: (ids) => membersOf('ChatParticipant', 'room_id', ids, (q) => q.eq('is_active', true)),
+    room: (ids) => membersOf('ChatParticipant', 'room_id', ids, (q) => q.eq('is_active', true), true),
     train: trainPeople,
   };
   const byUser = new Map();
@@ -251,6 +256,9 @@ async function flush() {
   for (const [userId, topics] of byUser) {
     const payload = { topics: [...topics].sort(), at };
     for (const socketId of _connectedUsers.get(userId) || []) _io.to(socketId).emit(EVENT, payload);
+    // Reuse the already-resolved recipients to refresh badges on every API
+    // instance. The badge service coalesces bursts and serializes each user.
+    if (topics.has('chats') || topics.has('notifications')) require('./badgeService').emitBadgeUpdate(userId);
   }
   if (byUser.size) logger.debug('sync:changed sent', { users: byUser.size });
 }
@@ -318,6 +326,7 @@ async function connect() {
     const rooms = [...socket.rooms].filter((room) => UUID_RE.test(room));
     socket.emit(EVENT, { topics: ['chats', ...rooms.map((room) => `chat:${room}`)], at: new Date().toISOString() });
   }
+  if (_connectedUsers) for (const userId of _connectedUsers.keys()) require('./badgeService').emitBadgeUpdate(userId);
   // A pooled or NATed connection can die quietly; a small query proves it is alive.
   clearInterval(heartbeatTimer);
   heartbeatTimer = setInterval(() => {

@@ -190,6 +190,28 @@ result, including repeated room inputs. Application-function lint, JavaScript
 syntax, migration policy and identity guards passed. Final app verification of
 this slice is pending; no hosted configuration was changed.
 
+## Badge reconciliation and bounded counters
+
+Chat statistics now sum transactional room message counts instead of counting
+all message rows on each badge refresh. The existing room table holds the
+counter; inserts, soft deletion, restoration and hard deletion maintain it in
+the same transaction. Unread counters also remove deleted unread messages and
+respect the stored read boundary. The statistics RPC preserves existing fields,
+checks task-room eligibility and has no PostgREST membership row cap.
+
+The existing database change listener now refreshes badges on every API
+instance, reusing its authorized recipient resolution. Updates coalesce per
+person, run at most four computations concurrently, and serialize each person's
+results. Query failures retain the prior badge and retry with bounded backoff.
+Room invalidations page memberships instead of silently stopping at 1,000 rows.
+
+Local live checks confirmed insert badges, a read made through another API
+process, exact message-count maintenance and unread deletion/restoration. A
+network outage produced HTTP 503 and no false zero socket badge; restoring the
+connection delivered the current count. Database-wide room counts matched
+message rows, and application-function lint passed. App checks of this server
+slice are pending; physical-device push delivery remains unverified.
+
 ## Remaining repair sequence
 
 | Area | Work remaining after immediate repairs |
