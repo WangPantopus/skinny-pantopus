@@ -13,34 +13,41 @@ import Foundation
 
 /// `PATCH /api/posts/:id` body. Every field is optional — only keys the
 /// user actually changed get sent. Joi's `.min(1)` requires at least one.
+/// `clearEventEndDate` sends `eventEndDate: null`, which removes an event's end.
 public struct PostUpdateRequest: Encodable, Sendable, Hashable {
     public let content: String?
     public let title: String?
     public let visibility: String?
     public let eventDate: String?
+    public let eventEndDate: String?
     public let eventVenue: String?
     public let lostFoundType: String?
     public let serviceCategory: String?
     public let dealBusinessName: String?
+    public let clearEventEndDate: Bool
 
     public init(
         content: String? = nil,
         title: String? = nil,
         visibility: String? = nil,
         eventDate: String? = nil,
+        eventEndDate: String? = nil,
         eventVenue: String? = nil,
         lostFoundType: String? = nil,
         serviceCategory: String? = nil,
-        dealBusinessName: String? = nil
+        dealBusinessName: String? = nil,
+        clearEventEndDate: Bool = false
     ) {
         self.content = content
         self.title = title
         self.visibility = visibility
         self.eventDate = eventDate
+        self.eventEndDate = eventEndDate
         self.eventVenue = eventVenue
         self.lostFoundType = lostFoundType
         self.serviceCategory = serviceCategory
         self.dealBusinessName = dealBusinessName
+        self.clearEventEndDate = clearEventEndDate
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -48,6 +55,7 @@ public struct PostUpdateRequest: Encodable, Sendable, Hashable {
         case title
         case visibility
         case eventDate
+        case eventEndDate
         case eventVenue
         case lostFoundType
         case serviceCategory
@@ -62,6 +70,11 @@ public struct PostUpdateRequest: Encodable, Sendable, Hashable {
         try container.encodeIfPresent(title, forKey: .title)
         try container.encodeIfPresent(visibility, forKey: .visibility)
         try container.encodeIfPresent(eventDate, forKey: .eventDate)
+        if let eventEndDate {
+            try container.encode(eventEndDate, forKey: .eventEndDate)
+        } else if clearEventEndDate {
+            try container.encodeNil(forKey: .eventEndDate)
+        }
         try container.encodeIfPresent(eventVenue, forKey: .eventVenue)
         try container.encodeIfPresent(lostFoundType, forKey: .lostFoundType)
         try container.encodeIfPresent(serviceCategory, forKey: .serviceCategory)

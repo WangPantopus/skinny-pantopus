@@ -951,6 +951,7 @@ public final class PulseComposeViewModel {
             seedField(.title, value: post.title ?? "")
             seedField(.body, value: post.content)
             seedField(.eventDate, value: formatEventDateForPicker(post.eventDate))
+            seedField(.eventEndDate, value: formatEventDateForPicker(post.eventEndDate))
             seedField(.eventLocation, value: post.eventVenue ?? "")
         case .lost:
             let (lastSeen, body) = unwrapLostBody(post.content)
@@ -1468,11 +1469,15 @@ public final class PulseComposeViewModel {
         case .event:
             let venue = trimmedValue(.eventLocation)
             let dateRaw = trimmedValue(.eventDate)
+            let endRaw = trimmedValue(.eventEndDate)
             return PostUpdateRequest(
                 content: bodyValue,
                 title: titleValue.isEmpty ? nil : titleValue,
                 eventDate: dateRaw.isEmpty ? nil : isoDateTime(from: dateRaw),
-                eventVenue: venue.isEmpty ? nil : venue
+                eventEndDate: endRaw.isEmpty ? nil : isoDateTime(from: endRaw),
+                eventVenue: venue.isEmpty ? nil : venue,
+                // A cleared End field removes the saved end.
+                clearEventEndDate: endRaw.isEmpty && fields[.eventEndDate]?.isDirty == true
             )
         case .lost:
             let lastSeen = trimmedValue(.lostLastSeenLocation)
