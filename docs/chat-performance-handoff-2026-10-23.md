@@ -1,10 +1,70 @@
 # Messages / Chat performance and reliability handoff — October 23, 2026
 
-The founder requested a handoff instead of further implementation. This is the continuation record for this session and its three client agents. Read AGENTS.md, NEXT_STEPS.md and the current mobile pilot brief first. The founder's current instructions remain authoritative.
+The founder originally requested a handoff, then authorized resuming implementation and real-app verification with three client agents. Read AGENTS.md, NEXT_STEPS.md and the current mobile pilot brief first. The founder's current instructions remain authoritative. The resumed checkpoint below supersedes the historical status in sections 1–7 where they differ; the original PR register remains intact.
 
-**Outcome:** substantial reliability, privacy and performance repairs are implemented across backend, web, iOS and Android. There are **63 open draft PRs, #2665–#2727**, including the final reaction/handoff checkpoint. **None has been merged or deployed by this session.** The complete register below records exact titles, branches, bases, implementation revisions and CI snapshots.
+**Original handoff outcome:** substantial reliability, privacy and performance repairs were implemented across backend, web, iOS and Android in **63 draft PRs, #2665–#2727**, including the reaction/handoff checkpoint. **None was merged or deployed by this session.** The original register below records exact titles, branches, bases, implementation revisions and CI snapshots.
 
-This is not a claim that all issues are fixed, all final artifacts were tested, CI is green, or production performance matches WeChat/WhatsApp. Source revisions, installed artifacts and running backend revisions sometimes differed. Keep those distinctions. The three agents stopped at an account usage limit before this handoff; do not assume their turns or processes remain active.
+This is not a claim that all issues are fixed, all final artifacts were tested, CI is green, or production performance matches WeChat/WhatsApp. Source revisions, installed artifacts and running backend revisions sometimes differed. Keep those distinctions. The three agents stopped before the original handoff and were resumed for the checkpoint below; inspect current processes rather than assuming their state.
+
+## Resumed checkpoint — October 23, 19:51 UTC
+
+This checkpoint records ongoing work, not completion or release approval. The existing worktrees, original 63 drafts, database and built artifacts were reused. The fetched master revision was `1ea400a117b1f9321f1b901e691b9e7436c9a061`. All 17 recorded chat migrations remain unchanged. Both owned local API processes are healthy on backend source `a5efe49c1`. No hosted database/configuration change or backend merge was performed.
+
+### Recovered baseline and actual-app evidence
+
+- **Reaction checkpoint #2727:** the consolidated helper returned all 1,600 reactions through REST and room-join backfill. Adding/removing a literal `toString` value produced 1,601/1,600 entries with correct requesting-person state. Cross-process/reconnect delivery and native iOS, Android and browser reaction controls were checked, including counterpart reload/relaunch.
+- **iOS `61fdfbabf`:** preserved, installed and verified the already-completed signed artifact. Three sequential sends completed while accepted HTTP responses were held; socket acceptance released each outgoing worker. The browser received each once. Offline pending work survived force-kill and recovered once. PDF and photo counterpart checks, reaction persistence and the visible-read/badge transition passed. A 37-second foreground idle observation produced no history/topics/send/upload requests; this is a local observation, not a performance benchmark.
+- **Android `806a45c35`:** encrypted text/photo/reply/edit draft recovery, atomic media promotion, discard and account cleanup passed in the actual emulator. A photo accepted while responses and socket/history delivery were held survived force-stop/retry: two send requests, one upload and one logical message in the peer browser after reload. Logout removed the account's outbox and screen copies; switching accounts and returning did not resurrect discarded or pending work. Server mute survived relaunch. Actual search found an unloaded old message in a 600-message conversation.
+- **Web `acc62f25b`:** the complete original tip built successfully for production with 170 pages. Later fixes through `d26d57c5e` have real-browser checks on the development runtime; that exact production build is in progress at this checkpoint.
+- **Large recovery:** the old browser path reproduced a 24,055-character changes URL and an uncontrolled room-join burst. The new browser recovered a 532-room scope using a 90-character POST URL, paged 200/200/131 changes, recovered an edit and removed a deleted message. Browser joins were bounded to four. Old-server 404/405 fallbacks were exercised with faults removed afterward.
+- **Large groups:** the repaired room response included all 1,032 members. Both browser accounts sent, edited and reacted, and agreed after reload; a member beyond the former cap retained the Local Profile alias. The UI does not expose a member list, so the exact member count is response evidence rather than a UI count. A prior missed-delivery claim was not reproduced reliably and is not asserted.
+- **Business/personal inboxes:** the browser retained 67 business rows through live messages and refresh, removed revoked membership, and canceled delayed work during logout/account change. Personal loaded depth and revocation were also checked. A business live-invalidation defect was reproduced and repaired: after the fix a peer message updated the open preview without reload/reconnect while all 67 rows stayed visible.
+- **Room preview:** the existing preview now requests 50 messages, within the server limit. Its existing full-conversation link remains available even when the current room occupies the preview page, and server search opens older history outside that preview.
+
+### Regressions found during verification
+
+- Android `806a45c35` discarded its encrypted inbox copy after an ordinary read/send, leaving no inbox navigation on an offline cold launch. `e3fdd7d1d` retains stale encrypted rows for ordinary changes while revalidating authorization. Destructive edit/delete still retire the copy to avoid persisting obsolete previews; that offline-navigation limitation remains explicit. Its exact APK build is in progress after successful Kotlin/Java compilation.
+- Android older-history loading anchored a shared date divider, jumping from message 501 to 401; further paging could stall until moving away and back. Returning from search fetched the latest page but left the viewport at its oldest message. Source repair `dbba20b64` anchors a visible bubble and requests an explicit newest-message scroll. It is not in the currently building `e3fdd7d1d` artifact and needs repeated prepend, eviction and failure/retry checks.
+- The first iOS per-room-read head failed Swift type inference in CI. `96e30c481` corrected it and built the CI test bundles. The local `9221185ef` build initially used a stale generated project; regenerating through the existing XcodeGen flow included the new source. That exact baseline build is still running. Do not attribute later source behavior to the installed `61fdfbabf` app.
+- Review of both native and browser pagination found a refresh/load-more race. The source repairs reject a tail load while a head refresh owns the generation. Browser held-response checks passed; native artifact checks remain pending.
+
+### New draft slices after the original register
+
+Each row is a separate stacked draft. The original 63 remain open drafts. At this snapshot these 18 additional implementation drafts bring the chat total to 81; this documentation checkpoint and later work may add more. Bases remain the preceding slice in the same platform stack; inspect current remote metadata before retargeting.
+
+| PR | Area / behavior | Source checkpoint |
+| --- | --- | --- |
+| #2728 | iOS visible per-room read maps | `96e30c481` |
+| #2729 | Complete room counterpart and preference reads | `3450b928c` |
+| #2730 | Bounded socket join admission and retry signals | `bcc86e65d` |
+| #2731 | Android visible per-room read maps | `d0c14af57` |
+| #2732 | Android POST changes with bounded fallback | `9cb0b88a1` |
+| #2733 | Web POST changes and bounded reconnect joins | `2ea811177` |
+| #2735 | Complete group delivery membership paging | `77b6a3726` |
+| #2736 | Android business inbox paging | `1d7d76971` |
+| #2737 | Android encrypted inbox retention | `e3fdd7d1d` |
+| #2738 | Complete large-group identities and room members | `b5d780d05` |
+| #2739 | Bounded web business identity probes | `4c4d50e4b` |
+| #2740 | Current authorized inbox reader at socket startup | `d080afd82` |
+| #2741 | Bounded web history preview and full-history access | `ae993decf` |
+| #2742 | iOS staged POST change recovery | `f30d52514` |
+| #2743 | iOS keyset inbox paging and refresh ownership | `af9e5d6a8` |
+| #2744 | Live business inbox invalidation for current staff | `a5efe49c1` |
+| #2745 | Android prepend anchor and return-to-latest scroll | `dbba20b64` |
+| #2746 | Web authorized refresh of the loaded inbox depth | `d26d57c5e` |
+
+### Current CI and remaining verification
+
+No test code or migration was changed during this resumed work. CI failures remain release blockers, not waived expectations:
+
+- Backend `a5efe49c1`: 31 failing / 6,602 passing Jest assertions, with the same 31 failure names as the preceding backend slices. The failures cover old room/read/send contracts, direct relay mocks and attachment mocks; real attachment checks do not turn these checks green. Privacy gates, complete schema replay, migration/deployment safeguards and production image checks passed.
+- Web `d26d57c5e`: one failure at `notificationStreams.test.tsx:114` (two stats calls expected, one observed); 122 suites and 2,382 assertions passed. Identity Firewall, schema replay and safeguards passed.
+- Android earlier resumed heads: seven unique existing search/local-mute assertion failures (21 reported including retries); instrumented checks passed. Exact current retention/window heads still need fresh classification when their runs finish.
+- iOS `96e30c481`: CI bundle compilation passed; 4,826 tests, 164 skipped and two failures. The history-refresh fixture expects an omitted older row to survive despite a response saying no more rows; the local-mute fixture asserts before an unstubbed server preference response. These are exact-run diagnoses, not permission to alter tests or a substitute for app checks.
+
+Next: finish the current Android, iOS and web artifacts and check their exact changes; build/check the Android window fix and later iOS read-map/delta/paging slices; complete iOS server search/context, business paging, encrypted never-sent drafts and timeline bounds. iOS head refresh still drops loaded inbox tail pages. Newer-range accumulation in the iOS delta reader is not an absolute timeline-memory bound. Native-to-native pairings and final quota/expiry/revocation cases remain incomplete.
+
+The topic-read guard stays on. Durable recipient-device delivery receipts, OS background send scheduling, physical APNs/FCM proof, hosted release steps and controlled device/network performance measurements remain unfinished. Server acceptance remains Sent; it is not a durable Delivered receipt. No WeChat/WhatsApp parity claim is supported.
 
 ## 1. Decisions and constraints
 
