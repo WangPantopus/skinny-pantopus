@@ -9,7 +9,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import { getInitials } from '@pantopus/ui-utils';
 import type { ConversationTopic } from '@pantopus/types';
-import { useChatMessages, shareFailureMessage, CONVERSATION_NOT_READY, chatPersonAvatar, chatPersonHandle, chatPersonHref, chatPersonName } from '../../hooks/useChatMessages';
+import { useChatMessages, CONVERSATION_NOT_READY, chatPersonAvatar, chatPersonHandle, chatPersonHref, chatPersonName } from '../../hooks/useChatMessages';
 import ChatMessageList from './ChatMessageList';
 import ChatSearch from './ChatSearch';
 import ChatNotificationPreference from './ChatNotificationPreference';
@@ -242,28 +242,13 @@ export default function ConversationView({
 
   const gigSendMutation = useMutation({
     mutationFn: async (gig: { id: string; title: string; category: string | null; price: number | null; status: string }) => {
-      // Create/find a topic for this gig
-      const topicResult = await api.chat.findOrCreateTopic(otherUserId, {
-        topicType: 'task',
-        topicRefId: gig.id,
-        title: gig.title,
-      });
-      const topicId = topicResult?.topic?.id;
-
-      return api.chat.sendMessage({
-        roomId: chat.resolvedRoomId as string,
-        messageText: gig.title,
+      return chat.sendSharedMessage({
+        text: gig.title,
         messageType: 'gig_offer',
         metadata: { gigId: gig.id, title: gig.title, category: gig.category, price: gig.price, status: gig.status },
-        ...(topicId ? { topicId } : {}),
+        topicRequest: { topicType: 'task', topicRefId: gig.id, title: gig.title },
       });
     },
-    onSuccess: async () => {
-      if (!chat.connected) await chat.refresh();
-      fetchTopics();
-    },
-    // Say why instead of closing the picker with nothing sent.
-    onError: (err: unknown) => chat.setError(shareFailureMessage(err)),
   });
 
   const handleGigSelected = useCallback((gig: { id: string; title: string; category: string | null; price: number | null; status: string }) => {
@@ -278,28 +263,13 @@ export default function ConversationView({
 
   const listingSendMutation = useMutation({
     mutationFn: async (listing: { id: string; title: string; category: string | null; price: number | null; condition: string | null; status: string; imageUrl: string | null; isFree: boolean }) => {
-      // Create/find a topic for this listing
-      const topicResult = await api.chat.findOrCreateTopic(otherUserId, {
-        topicType: 'listing',
-        topicRefId: listing.id,
-        title: listing.title,
-      });
-      const topicId = topicResult?.topic?.id;
-
-      return api.chat.sendMessage({
-        roomId: chat.resolvedRoomId as string,
-        messageText: listing.title,
+      return chat.sendSharedMessage({
+        text: listing.title,
         messageType: 'listing_offer',
         metadata: { listingId: listing.id, title: listing.title, category: listing.category, price: listing.price, condition: listing.condition, status: listing.status, imageUrl: listing.imageUrl, isFree: listing.isFree },
-        ...(topicId ? { topicId } : {}),
+        topicRequest: { topicType: 'listing', topicRefId: listing.id, title: listing.title },
       });
     },
-    onSuccess: async () => {
-      if (!chat.connected) await chat.refresh();
-      fetchTopics();
-    },
-    // Say why instead of closing the picker with nothing sent.
-    onError: (err: unknown) => chat.setError(shareFailureMessage(err)),
   });
 
   const handleListingSelected = useCallback((listing: { id: string; title: string; category: string | null; price: number | null; condition: string | null; status: string; imageUrl: string | null; isFree: boolean }) => {

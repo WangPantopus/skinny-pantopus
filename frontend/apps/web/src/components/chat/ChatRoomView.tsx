@@ -7,7 +7,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import type { ChatRoomWithDetails, ChatMessage } from '@pantopus/types';
 import { getInitials } from '@pantopus/ui-utils';
-import { useChatMessages, getDateKey, formatDateLabel, extractAttachments, shareFailureMessage, chatPersonAvatar, chatPersonHandle, chatPersonHref, chatPersonName } from '../../hooks/useChatMessages';
+import { useChatMessages, getDateKey, formatDateLabel, extractAttachments, chatPersonAvatar, chatPersonHandle, chatPersonHref, chatPersonName } from '../../hooks/useChatMessages';
 import { useSocketEvent } from '../../hooks/useSocket';
 import ChatMessageList from './ChatMessageList';
 import ChatSearch from './ChatSearch';
@@ -217,19 +217,12 @@ export default function ChatRoomView({
 
   const gigSendMutation = useMutation({
     mutationFn: async (gig: { id: string; title: string; category: string | null; price: number | null; status: string }) => {
-      return api.chat.sendMessage({
-        roomId,
-        messageText: gig.title,
+      return chat.sendSharedMessage({
+        text: gig.title,
         messageType: 'gig_offer',
         metadata: { gigId: gig.id, title: gig.title, category: gig.category, price: gig.price, status: gig.status },
-        ...(asBusinessUserId ? { asBusinessUserId } : {}),
       });
     },
-    onSuccess: async () => {
-      if (!chat.connected) await chat.refresh();
-    },
-    // Say why instead of closing the picker with nothing sent.
-    onError: (err: unknown) => chat.setError(shareFailureMessage(err)),
   });
 
   const handleGigSelected = useCallback((gig: { id: string; title: string; category: string | null; price: number | null; status: string }) => {
@@ -239,18 +232,12 @@ export default function ChatRoomView({
 
   const listingSendMutation = useMutation({
     mutationFn: async (listing: { id: string; title: string; category: string | null; price: number | null; condition: string | null; status: string; imageUrl: string | null; isFree: boolean }) => {
-      return api.chat.sendMessage({
-        roomId,
-        messageText: listing.title,
+      return chat.sendSharedMessage({
+        text: listing.title,
         messageType: 'listing_offer',
         metadata: { listingId: listing.id, title: listing.title, category: listing.category, price: listing.price, condition: listing.condition, status: listing.status, imageUrl: listing.imageUrl, isFree: listing.isFree },
-        ...(asBusinessUserId ? { asBusinessUserId } : {}),
       });
     },
-    onSuccess: async () => {
-      if (!chat.connected) await chat.refresh();
-    },
-    onError: (err: unknown) => chat.setError(shareFailureMessage(err)),
   });
 
   const handleListingSelected = useCallback((listing: { id: string; title: string; category: string | null; price: number | null; condition: string | null; status: string; imageUrl: string | null; isFree: boolean }) => {

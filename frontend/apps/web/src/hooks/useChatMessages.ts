@@ -11,7 +11,7 @@ import { chosenUsername } from '@pantopus/utils';
 import { confirmStore } from '@/components/ui/confirm-store';
 import { queryKeys } from '@/lib/query-keys';
 import { activateChatStorage, deleteChatRecords, readChatRecord, writeChatRecords } from '@/components/chat/chatStorage';
-import { enqueueChatSend, pendingChatMessage, removeChatSend, resumeChatOutbox, retryChatSend, startChatOutbox, subscribeChatOutbox } from '@/components/chat/chatOutbox';
+import { enqueueChatSend, pendingChatMessage, removeChatSend, resumeChatOutbox, retryChatSend, startChatOutbox, subscribeChatOutbox, type PendingChatSend } from '@/components/chat/chatOutbox';
 
 type ChatMessage = BaseChatMessage & { sync_version?: number; read_at?: string | null };
 
@@ -246,6 +246,7 @@ export interface UseChatMessagesReturn {
    */
   sendRefusal: string | null;
   sendMessage: (text: string, files?: File[]) => Promise<void>;
+  sendSharedMessage: (message: Pick<PendingChatSend, 'text' | 'metadata' | 'topicRequest'> & { messageType: 'gig_offer' | 'listing_offer' }) => Promise<void>;
   /** The message the next send replies to (the composer shows "Replying to …"), or null. */
   replyingTo: ChatReplyTarget | null;
   beginReply: (target: ChatReplyTarget) => void;
@@ -774,12 +775,15 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
         && (isRoomMode ? message.roomId === roomId : message.otherUserId === otherUserId || activeRoomIds.includes(message.roomId)))
         .map((message) => pendingChatMessage(message, currentUserId)).filter(belongsToTopic);
       const incoming = accepted && activeRoomIds.includes(accepted.room_id) && belongsToTopic(accepted) && survivesDeletion(accepted) ? [accepted] : [];
-      if (accepted) noteLiveChange(String(accepted.id));
+      if (accepted) {
+        noteLiveChange(String(accepted.id));
+        if (otherUserId && accepted.topic_id && activeRoomIds.includes(accepted.room_id)) void queryClient.invalidateQueries({ queryKey: queryKeys.chatTopics(otherUserId) });
+      }
       setMessages((previous) => mergeMessages(previous.filter((message) => !(message as ChatMessage & { _outbox?: boolean })._outbox), [...outgoing, ...incoming]));
     });
     void startChatOutbox(currentUserId).catch(() => {});
     return unsubscribe;
-  }, [currentUserId, asBusinessUserId, isRoomMode, roomId, otherUserId, activeRoomIds, belongsToTopic, isCurrentScope, noteLiveChange, survivesDeletion]);
+  }, [currentUserId, asBusinessUserId, isRoomMode, roomId, otherUserId, activeRoomIds, belongsToTopic, isCurrentScope, noteLiveChange, survivesDeletion, queryClient]);
 
   useEffect(() => {
     if (!socket || !connected || activeRoomIds.length === 0) return;
@@ -975,6 +979,20 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     } finally { if (isCurrentScope()) setSending(false); }
   }, [isRoomMode, roomId, resolvedRoomId, currentUserId, directChatError, otherUserId, asBusinessUserId, topicId, replyingTo, isCurrentScope]);
 
+  const sendSharedMessage = useCallback(async (message: Pick<PendingChatSend, 'text' | 'metadata' | 'topicRequest'> & { messageType: 'gig_offer' | 'listing_offer' }) => {
+    const targetRoomId = isRoomMode ? roomId : resolvedRoomId;
+    if (!isCurrentScope()) return;
+    try {
+      if (!targetRoomId || !currentUserId) throw new Error(directChatError || CONVERSATION_NOT_READY);
+      await enqueueChatSend(currentUserId, { ...message, clientMessageId: crypto.randomUUID(), roomId: targetRoomId,
+        otherUserId, asBusinessUserId, topicId: message.topicRequest ? undefined : topicId || undefined });
+      if (isCurrentScope()) setError(null);
+    } catch (error) {
+      if (isCurrentScope()) setError(shareFailureMessage(error));
+      throw error;
+    }
+  }, [isRoomMode, roomId, resolvedRoomId, currentUserId, directChatError, otherUserId, asBusinessUserId, topicId, isCurrentScope]);
+
   const beginReply = useCallback((target: ChatReplyTarget) => { setEditingMessage(null); setReplyingTo(target); }, []);
   const cancelReply = useCallback(() => setReplyingTo(null), []);
   const retryMessage = useCallback(async (messageId: string) => {
@@ -1102,6 +1120,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     directChatError,
     sendRefusal,
     sendMessage,
+    sendSharedMessage,
     replyingTo,
     beginReply,
     cancelReply,

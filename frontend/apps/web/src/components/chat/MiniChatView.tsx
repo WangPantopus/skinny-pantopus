@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import * as api from '@pantopus/api';
 import { useChatMessages } from '../../hooks/useChatMessages';
 import ChatMessageList from './ChatMessageList';
 import ChatInput from './ChatInput';
@@ -76,17 +75,12 @@ export default function MiniChatView({ roomId, otherUserId, name, avatar, onBack
 
   const gigSendMutation = useMutation({
     mutationFn: async (gig: { id: string; title: string; category: string | null; price: number | null; status: string }) => {
-      return api.chat.sendMessage({
-        roomId: targetRoomId as string,
-        messageText: gig.title,
+      return chat.sendSharedMessage({
+        text: gig.title,
         messageType: 'gig_offer',
         metadata: { gigId: gig.id, title: gig.title, category: gig.category, price: gig.price, status: gig.status },
       });
     },
-    onSuccess: async () => {
-      if (!chat.connected) await chat.refresh();
-    },
-    onError: () => {},
   });
 
   const handleGigSelected = useCallback((gig: { id: string; title: string; category: string | null; price: number | null; status: string }) => {
@@ -97,17 +91,12 @@ export default function MiniChatView({ roomId, otherUserId, name, avatar, onBack
 
   const listingSendMutation = useMutation({
     mutationFn: async (listing: { id: string; title: string; category: string | null; price: number | null; condition: string | null; status: string; imageUrl: string | null; isFree: boolean }) => {
-      return api.chat.sendMessage({
-        roomId: targetRoomId as string,
-        messageText: listing.title,
+      return chat.sendSharedMessage({
+        text: listing.title,
         messageType: 'listing_offer',
         metadata: { listingId: listing.id, title: listing.title, category: listing.category, price: listing.price, condition: listing.condition, status: listing.status, imageUrl: listing.imageUrl, isFree: listing.isFree },
       });
     },
-    onSuccess: async () => {
-      if (!chat.connected) await chat.refresh();
-    },
-    onError: () => {},
   });
 
   const handleListingSelected = useCallback((listing: { id: string; title: string; category: string | null; price: number | null; condition: string | null; status: string; imageUrl: string | null; isFree: boolean }) => {

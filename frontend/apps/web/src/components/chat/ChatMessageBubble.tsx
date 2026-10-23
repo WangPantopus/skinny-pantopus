@@ -178,6 +178,31 @@ function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClic
     </div>
   );
 
+  const deliveryStatus = (
+    <>
+      {isFailed && isRefused ? (
+        <span className="text-red-500">Not sent</span>
+      ) : isFailed ? (
+        <span className="text-red-500">
+          Failed to send{' '}
+          {onRetry && (
+            <button
+              type="button"
+              className="underline hover:text-red-600 cursor-pointer"
+              onClick={() => onRetry(msg.id)}
+            >
+              Retry
+            </button>
+          )}
+        </span>
+      ) : isOptimistic ? (pending._queued ? 'Queued' : 'Sending…') : <>{isEdited && <span>edited · </span>}{ts}{receipt && ` · ${receipt}`}</>}
+      {pending._outbox && (isFailed || pending._queued) && onRemovePending && (
+        <button type="button" className="ml-2 underline" onClick={() => onRemovePending(msg.id)}>Remove</button>
+      )}
+      {isFailed && pending._error && <div className="text-red-500">{pending._error}</div>}
+    </>
+  );
+
   // Rich card types get a special rendering
   if (msgType === 'location' || msgType === 'gig_offer' || msgType === 'listing_offer') {
     return (
@@ -205,7 +230,7 @@ function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClic
             <ChatRichCard msgType={msgType} metadata={metadata} msgText={msgText} isMine={isMine} />
           </div>
           <div className={`text-[10px] text-app-muted mt-0.5 ${isMine ? 'text-right mr-1' : 'ml-1'}`}>
-            {isEdited && <span>edited · </span>}{ts}{receipt && ` · ${receipt}`}
+            {deliveryStatus}
           </div>
           {reactionBar}
           {actionsMenu}
@@ -347,26 +372,7 @@ function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClic
           )}
         </div>
         <div className={`text-[10px] text-app-muted mt-0.5 ${isMine ? 'text-right mr-1' : 'ml-1'}`}>
-          {isFailed && isRefused ? (
-            <span className="text-red-500">Not sent</span>
-          ) : isFailed ? (
-            <span className="text-red-500">
-              Failed to send{' '}
-              {onRetry && (
-                <button
-                  type="button"
-                  className="underline hover:text-red-600 cursor-pointer"
-                  onClick={() => onRetry(msg.id)}
-                >
-                  Retry
-                </button>
-              )}
-            </span>
-          ) : isOptimistic ? (pending._queued ? 'Queued' : 'Sending…') : <>{isEdited && <span>edited · </span>}{ts}{receipt && ` · ${receipt}`}</>}
-          {pending._outbox && (isFailed || pending._queued) && onRemovePending && (
-            <button type="button" className="ml-2 underline" onClick={() => onRemovePending(msg.id)}>Remove</button>
-          )}
-          {isFailed && pending._error && <div className="text-red-500">{pending._error}</div>}
+          {deliveryStatus}
         </div>
         {reactionBar}
         {actionsMenu}

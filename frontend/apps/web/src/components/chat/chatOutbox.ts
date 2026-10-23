@@ -12,6 +12,9 @@ export interface PendingChatSend {
   asBusinessUserId?: string;
   topicId?: string;
   text: string;
+  messageType?: 'gig_offer' | 'listing_offer';
+  metadata?: Record<string, unknown>;
+  topicRequest?: { topicType: 'task' | 'listing'; topicRefId: string; title: string };
   replyToId?: string;
   createdAt: string;
   files: PendingFile[];
@@ -152,7 +155,7 @@ export async function removeChatSend(id: string): Promise<void> {
 }
 
 async function drain(): Promise<void> {
-  if (running || !current(scope)) return;
+  if (running || !current(scope) || !navigator.onLine) return;
   const saved = scope;
   running = true;
   const work = async () => {
@@ -172,6 +175,12 @@ async function drain(): Promise<void> {
       pending = pending.map((entry) => entry.clientMessageId === message.clientMessageId ? message : entry);
       publish();
       try {
+        if (message.topicRequest && message.otherUserId && !message.topicId) {
+          const result = await api.chat.findOrCreateTopic(message.otherUserId, message.topicRequest);
+          if (!current(saved)) return;
+          message = { ...message, topicId: result.topic.id };
+          await save(saved, message);
+        }
         if (message.files.length && !message.uploadedFiles) {
           const files = await Promise.all(message.files.map(async (file) => {
             const bytes = await readChatBytes(saved, 'media', file.key);
@@ -185,9 +194,9 @@ async function drain(): Promise<void> {
         }
         if (!current(saved)) return;
         const uploaded = message.uploadedFiles ?? [];
-        const type = uploaded.length ? (uploaded.length === 1 && uploaded[0].mime_type?.startsWith('image/') ? 'image' : 'file') : 'text';
+        const type = message.messageType || (uploaded.length ? (uploaded.length === 1 && uploaded[0].mime_type?.startsWith('image/') ? 'image' : 'file') : 'text');
         const result = await api.chat.sendMessage({ roomId: message.roomId, messageText: message.text || undefined,
-          messageType: type, clientMessageId: message.clientMessageId, replyToId: message.replyToId,
+          messageType: type, metadata: message.metadata, clientMessageId: message.clientMessageId, replyToId: message.replyToId,
           topicId: message.topicId, asBusinessUserId: message.asBusinessUserId,
           ...(uploaded.length ? { fileIds: uploaded.map((file) => file.id) } : {}) });
         if (!current(saved)) return;
@@ -221,7 +230,7 @@ async function drain(): Promise<void> {
 
 export function pendingChatMessage(message: PendingChatSend, actorId: string): ChatMessage {
   return { id: message.clientMessageId, room_id: message.roomId, user_id: message.asBusinessUserId || actorId,
-    sender_id: message.asBusinessUserId || actorId, message_text: message.text, message_type: message.files.length ? 'file' : 'text',
+    sender_id: message.asBusinessUserId || actorId, message_text: message.text, message_type: message.messageType || (message.files.length ? 'file' : 'text'), metadata: message.metadata,
     created_at: message.createdAt, topic_id: message.topicId, reply_to_id: message.replyToId,
     attachments: message.uploadedFiles || message.files.map((file) => ({ original_filename: file.name, mime_type: file.type })),
     is_edited: false, is_deleted: false, _clientMessageId: message.clientMessageId,
