@@ -229,13 +229,17 @@ extension ChatLocalStore {
     ) throws -> Int {
         let existing = (try? readDraft(folder: folder, scope: scope, key: key))?.attachments ?? []
         let added = attachments.filter { !existing.contains(ChatOutboxAttachment($0)) }
-        let chunks = added.reduce(0) { total, attachment in
-            total + [attachment.data, attachment.liveVideo].compactMap { $0 }.reduce(0) { size, bytes in
-                size + bytes.count + ((bytes.count + Self.chunkSize - 1) / Self.chunkSize) * 32
+        var chunkBytes = 0
+        for attachment in added {
+            let payloads: [Data?] = [attachment.data, attachment.liveVideo]
+            for case let bytes? in payloads {
+                let chunkCount = (bytes.count + Self.chunkSize - 1) / Self.chunkSize
+                chunkBytes += bytes.count + chunkCount * 32
             }
         }
         // AES nonce/tag and every per-chunk length prefix count against quota.
-        return try chunks + JSONEncoder().encode(draft).count + 28
+        let manifestBytes = try JSONEncoder().encode(draft).count
+        return chunkBytes + manifestBytes + 28
     }
 
     private func writeDraftChunk(
