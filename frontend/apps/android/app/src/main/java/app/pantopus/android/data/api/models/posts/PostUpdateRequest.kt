@@ -60,8 +60,7 @@ class PostUpdateRequestJsonAdapter {
 
     @Suppress("UnusedParameter")
     @FromJson
-    fun fromJson(reader: JsonReader): PostUpdateRequest =
-        error("PostUpdateRequest is request-only; deserialization is not supported.")
+    fun fromJson(reader: JsonReader): PostUpdateRequest = error("PostUpdateRequest is request-only; deserialization is not supported.")
 }
 
 /**
