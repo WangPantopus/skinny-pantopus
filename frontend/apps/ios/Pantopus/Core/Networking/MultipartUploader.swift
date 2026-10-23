@@ -81,10 +81,12 @@ public final class MultipartUploader: @unchecked Sendable {
         boundary: String,
         body: Data = Data(),
         bodyFile: URL? = nil,
-        headers: [String: String] = [:]
+        headers: [String: String] = [:],
+        expectedSessionGeneration: Int? = nil
     ) async throws -> (Data, HTTPURLResponse) {
         let sessionOwner = auth
         let generation = sessionOwner.requestSessionGeneration
+        if let expectedSessionGeneration, generation != expectedSessionGeneration { throw CancellationError() }
         let checkSession: @MainActor () throws -> Void = { [self] in
             guard auth === sessionOwner else { throw CancellationError() }
             try sessionOwner.requireRequestSession(generation)
@@ -438,10 +440,14 @@ public final class MultipartUploader: @unchecked Sendable {
         return try decodeChatMedia(data, response: http)
     }
 
-    func uploadChatMedia(roomId: String, prepared: ChatOutboxUpload) async throws -> ChatMediaUploadResponse {
+    func uploadChatMedia(
+        roomId: String, prepared: ChatOutboxUpload, expectedSessionGeneration: Int
+    ) async throws -> ChatMediaUploadResponse {
         defer { try? FileManager.default.removeItem(at: prepared.url) }
         let url = environment.apiBaseURL.appendingPathComponent("/api/upload/chat-media/\(roomId)")
-        let (data, http) = try await performUpload(to: url, boundary: prepared.boundary, bodyFile: prepared.url)
+        let (data, http) = try await performUpload(
+            to: url, boundary: prepared.boundary, bodyFile: prepared.url, expectedSessionGeneration: expectedSessionGeneration
+        )
         return try decodeChatMedia(data, response: http)
     }
 

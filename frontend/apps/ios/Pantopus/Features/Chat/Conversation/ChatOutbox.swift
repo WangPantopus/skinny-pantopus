@@ -14,6 +14,7 @@ final class ChatOutbox {
     private var scope = ""
     private var version = 0
     private var lifetime = 0
+    private var requestGeneration = 0
     private var loadTask: Task<Void, Never>?
     private var socketTask: Task<Void, Never>?
     private var connectionTask: Task<Void, Never>?
@@ -30,6 +31,7 @@ final class ChatOutbox {
         self.account = account
         scope = ChatLocalStore.scope(server: api.apiBaseURL.absoluteString, account: account)
         version = storage.sessionVersion
+        requestGeneration = AuthManager.shared.requestSessionGeneration
         let started = lifetime
         loadTask = Task { [weak self] in
             guard let self else { return }
@@ -126,6 +128,15 @@ final class ChatOutbox {
         Task { await storage.removeOutbox(id, version: version) }
     }
 
+    func discard(_ id: String) async {
+        guard let message = messages.first(where: { $0.id == id }) else { return }
+        messages.removeAll { $0.id == id }
+        workers[message.threadKey]?.cancel()
+        publish(.changed)
+        await storage.removeOutbox(id, version: version)
+        pump()
+    }
+
     private func publish(_ event: Event) {
         for listener in listeners.values {
             listener.yield(event)
@@ -137,7 +148,7 @@ final class ChatOutbox {
         var visited = Set<String>()
         var nextWake: Date?
         for message in messages where message.status == .queued || message.status == .retrying {
-            let thread = "\(message.destination)|\(message.targetId)|\(message.businessUserId ?? "")"
+            let thread = message.threadKey
             guard visited.insert(thread).inserted, workers[thread] == nil else { continue }
             if let retryAt = message.retryAt, retryAt > Date() {
                 nextWake = min(nextWake ?? retryAt, retryAt)
@@ -162,6 +173,7 @@ final class ChatOutbox {
     }
 
     private func transmit(_ original: ChatOutboxMessage, lifetime started: Int) async {
+        guard lifetime == started, messages.contains(where: { $0.id == original.id }), !Task.isCancelled else { return }
         var message = original
         do {
             if message.roomId == nil {
@@ -169,7 +181,7 @@ final class ChatOutbox {
                     message.roomId = message.targetId
                 } else {
                     let response: CreateDirectChatResponse = try await api.request(
-                        ChatEndpoints.createDirectChat(otherUserId: message.targetId)
+                        ChatEndpoints.createDirectChat(otherUserId: message.targetId), expectedSessionGeneration: requestGeneration
                     )
                     message.roomId = response.roomId
                 }
@@ -185,7 +197,9 @@ final class ChatOutbox {
                         try? FileManager.default.removeItem(at: upload.url)
                         throw CancellationError()
                     }
-                    let response = try await MultipartUploader.shared.uploadChatMedia(roomId: roomId, prepared: upload)
+                    let response = try await MultipartUploader.shared.uploadChatMedia(
+                        roomId: roomId, prepared: upload, expectedSessionGeneration: requestGeneration
+                    )
                     message.fileIds = response.media.map(\.id)
                 }
                 // Persist successful upload ids before the message request. A
@@ -203,29 +217,34 @@ final class ChatOutbox {
                 topicId: message.topicId,
                 metadata: message.metadata,
                 asBusinessUserId: message.businessUserId
-            )))
+            )), expectedSessionGeneration: requestGeneration)
             guard lifetime == started else { return }
             confirm(response.message)
         } catch {
-            guard lifetime == started, messages.contains(where: { $0.id == message.id }), !Task.isCancelled else { return }
-            message.attempts += 1
-            message.failure = error.localizedDescription
-            if Self.isTransient(error) {
-                message.status = .retrying
-                message.retryAt = Date().addingTimeInterval(min(60, pow(2, Double(min(message.attempts, 6)))))
-            } else {
-                message.status = Self.isRefused(error) ? .refused : .failed
-                message.retryAt = nil
-            }
-            do {
-                try await saveProgress(message, lifetime: started)
-            } catch {
-                guard lifetime == started, let index = messages.firstIndex(where: { $0.id == message.id }) else { return }
-                message.status = .failed
-                message.failure = "Couldn't save send progress. Reopen the app to retry safely."
-                messages[index] = message
-                publish(.changed)
-            }
+            await recordFailure(error, message: message, lifetime: started)
+        }
+    }
+
+    private func recordFailure(_ error: any Error, message original: ChatOutboxMessage, lifetime started: Int) async {
+        var message = original
+        guard lifetime == started, messages.contains(where: { $0.id == message.id }), !Task.isCancelled else { return }
+        message.attempts += 1
+        message.failure = error.localizedDescription
+        if Self.isTransient(error) {
+            message.status = .retrying
+            message.retryAt = Date().addingTimeInterval(min(60, pow(2, Double(min(message.attempts, 6)))))
+        } else {
+            message.status = Self.isRefused(error) ? .refused : .failed
+            message.retryAt = nil
+        }
+        do {
+            try await saveProgress(message, lifetime: started)
+        } catch {
+            guard lifetime == started, let index = messages.firstIndex(where: { $0.id == message.id }) else { return }
+            message.status = .failed
+            message.failure = "Couldn't save send progress. Reopen the app to retry safely."
+            messages[index] = message
+            publish(.changed)
         }
     }
 

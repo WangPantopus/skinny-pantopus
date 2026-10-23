@@ -1815,12 +1815,24 @@ public final class ChatConversationViewModel {
             || (message.userId == sendingIdentityId && message.actorUserId == currentUserId)
     }
 
+    public func canDiscardMessage(_ messageId: String) -> Bool {
+        usesDurableOutbox && pendingByClientId[Self.bareClientId(messageId)] != nil
+    }
+
     public func cancelMessageAction() {
         replyingTo = nil
         editingMessageId = nil
     }
 
     public func delete(messageId: String) async {
+        if canDiscardMessage(messageId) {
+            let id = Self.bareClientId(messageId)
+            await ChatOutbox.shared.discard(id)
+            retireConfirmedSend(clientId: id)
+            sendLimitNotice = nil
+            applyOutboxSnapshot()
+            return
+        }
         guard canManageMessage(messageId) else { return }
         do {
             _ = try await api.request(ChatEndpoints.deleteMessage(id: messageId), as: EmptyResponse.self)

@@ -25,6 +25,10 @@ struct ChatOutboxMessage: Codable, Identifiable {
     var attempts = 0
     var retryAt: Date?
     var failure: String?
+
+    var threadKey: String {
+        "\(destination)|\(targetId)|\(businessUserId ?? "")"
+    }
 }
 
 struct ChatOutboxAttachment: Codable, Identifiable {
@@ -60,7 +64,7 @@ enum ChatLocalStorageError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .quota: "Unsent messages are using 100 MB. Let queued uploads finish, then try again."
+        case .quota: "Unsent messages are using 100 MB. Let uploads finish or discard a failed message, then try again."
         case .damagedAttachment: "That queued file could not be restored. Attach it again to send it."
         case .unavailable: "Couldn't save this message on your device. Reopen the app and try again."
         }

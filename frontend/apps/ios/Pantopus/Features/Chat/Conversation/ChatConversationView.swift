@@ -380,7 +380,7 @@ public struct ChatConversationView: View {
             Text("Deleted messages are removed for everyone in this conversation.")
         }
         .alert(
-            "Delete message?",
+            pendingDeleteId?.hasPrefix("client_") == true ? "Discard unsent message?" : "Delete message?",
             isPresented: Binding(
                 get: { pendingDeleteId != nil },
                 set: { if !$0 { pendingDeleteId = nil } }
@@ -388,11 +388,13 @@ public struct ChatConversationView: View {
             presenting: pendingDeleteId
         ) { messageId in
             Button("Cancel", role: .cancel) {}
-            Button("Delete", role: .destructive) {
+            Button(messageId.hasPrefix("client_") ? "Discard" : "Delete", role: .destructive) {
                 Task { await viewModel.delete(messageId: messageId) }
             }
-        } message: { _ in
-            Text("Deleted messages are removed for everyone in this conversation.")
+        } message: { messageId in
+            Text(messageId.hasPrefix("client_")
+                ? "This stops retries. If it has already been sent, it will remain in the conversation."
+                : "Deleted messages are removed for everyone in this conversation.")
         }
         .alert("Delete this conversation?", isPresented: $aiDeleteConfirmPresented) {
             Button("Cancel", role: .cancel) {}
@@ -1371,6 +1373,7 @@ extension ChatConversationView {
             incomingInitials: incomingInitials,
             aiStatus: viewModel.aiStatus,
             canManage: viewModel.canManageMessage(bubble.id),
+            canDiscard: viewModel.canDiscardMessage(bubble.id),
             onLockedAction: { upgradePromptPresented = true },
             onReply: { viewModel.beginReply(to: bubble.id) },
             onEdit: { viewModel.beginEdit(messageId: bubble.id) },
@@ -2674,6 +2677,7 @@ private struct ChatBubbleRow: View {
     /// What the assistant is doing while a reply is pending ("Drafting your post…").
     var aiStatus: String?
     let canManage: Bool
+    let canDiscard: Bool
     let onLockedAction: @MainActor () -> Void
     let onReply: @MainActor () -> Void
     let onEdit: @MainActor () -> Void
@@ -2740,6 +2744,9 @@ private struct ChatBubbleRow: View {
                 Button(role: .destructive) { onDelete() } label: {
                     Text("Delete")
                 }
+            }
+            if canDiscard {
+                Button(role: .destructive) { onDelete() } label: { Text("Discard") }
             }
         }
         // A reply with action cards or link buttons keeps each button its own element.
