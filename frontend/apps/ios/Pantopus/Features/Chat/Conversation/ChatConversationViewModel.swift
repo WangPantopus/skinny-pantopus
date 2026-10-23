@@ -1683,6 +1683,7 @@ public final class ChatConversationViewModel {
         guard canManageMessage(messageId) else { return }
         do {
             _ = try await api.request(ChatEndpoints.deleteMessage(id: messageId), as: EmptyResponse.self)
+            historyTouchedIds.insert(messageId)
             messages.removeAll { $0.id == messageId }
             rebuild()
         } catch {
