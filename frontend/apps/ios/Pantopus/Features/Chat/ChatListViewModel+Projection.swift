@@ -1,6 +1,19 @@
 import Foundation
 
 extension ChatListViewModel {
+    static func appending(_ page: UnifiedConversationsResponse, to current: UnifiedConversationsResponse) -> UnifiedConversationsResponse {
+        var seen = Set(current.conversations.map { "\($0.kind):\($0.id)" })
+        let appended = page.conversations.filter { seen.insert("\($0.kind):\($0.id)").inserted }
+        return UnifiedConversationsResponse(
+            conversations: current.conversations + appended,
+            total: page.total,
+            totalUnread: page.totalUnread,
+            totalUnmutedUnread: page.totalUnmutedUnread,
+            hasMore: page.hasMore,
+            nextCursor: page.nextCursor
+        )
+    }
+
     // MARK: - Projection
 
     static func project(

@@ -15,6 +15,10 @@ public final class ChatListViewModel {
     /// Set when a refresh fails while conversations are on screen: they stay
     /// and this shows as a toast. The view clears it after display.
     public var refreshFailureMessage: String?
+    public private(set) var isLoadingMore = false
+    public var nextPageCursor: String? {
+        inboxResponse?.hasMore == true ? inboxResponse?.nextCursor : nil
+    }
 
     /// Active filter tab.
     public private(set) var activeFilter: ChatFilter = .all
@@ -23,8 +27,7 @@ public final class ChatListViewModel {
     /// only the AI row, and the view says what the filter found nothing for.
     public private(set) var emptyFilter: ChatFilter?
 
-    /// Unread counts for the filter-tab badges. The `unread` tab uses
-    /// `unread` from this map; other tabs hide their badge.
+    /// The Unread filter's badge; other filter badges remain hidden.
     public private(set) var unreadByFilter: [ChatFilter: Int] = [:]
 
     private let api: APIClient
@@ -38,6 +41,8 @@ public final class ChatListViewModel {
     private var seenMessageIds: Set<String> = []
     private var recentMessageIds: [String] = []
     private var refreshTask: Task<Void, Never>?
+    private var inboxResponse: UnifiedConversationsResponse?
+    private var fetchGeneration = 0
 
     private var serverTotalUnread: Int = 0
     private var serverTotalUnmutedUnread: Int?
@@ -80,8 +85,6 @@ public final class ChatListViewModel {
         }
     }
 
-    // MARK: - Public API
-
     /// Restore offline navigation, then reconcile every return to the inbox.
     public func load() async {
         subscribeToSockets()
@@ -102,6 +105,47 @@ public final class ChatListViewModel {
     /// Pull-to-refresh / retry.
     public func refresh() async {
         await fetch(force: true)
+    }
+
+    /// Older inbox rows are fetched when their existing list reaches the end.
+    public func loadMore() async {
+        guard !isLoadingMore, let cursor = nextPageCursor, let current = inboxResponse else { return }
+        isLoadingMore = true
+        defer { isLoadingMore = false }
+        let generation = fetchGeneration
+        let session = AuthManager.shared.requestSessionGeneration
+        let scope = localCacheScope
+        let version = ChatLocalStore.shared.version
+        do {
+            let page: UnifiedConversationsResponse = try await api.request(ChatEndpoints.unifiedConversations(before: cursor))
+            guard generation == fetchGeneration, session == AuthManager.shared.requestSessionGeneration, !Task.isCancelled else { return }
+            guard page.hasMore != true || (page.nextCursor != nil && page.nextCursor != cursor) else { throw APIError.invalidResponse }
+            let combined = Self.appending(page, to: current)
+            // A socket may have updated a displayed preview while the older
+            // page was in flight. Appending must not restore its old snapshot.
+            let displayed = Dictionary(uniqueKeysWithValues: allRows.map { ($0.storageKey, $0) })
+            let displayedDates = activityDates
+            apply(combined, stats: nil)
+            allRows = allRows.map { displayed[$0.storageKey] ?? $0 }
+            activityDates.merge(displayedDates) { _, displayed in displayed }
+            applyFilter()
+            publishBadgeCount()
+            if let scope {
+                await ChatLocalStore.shared.saveInbox(
+                    ChatInboxMemory(response: combined, stats: nil, confirmedAt: Date()), scope: scope, version: version
+                )
+            }
+        } catch {
+            guard generation == fetchGeneration, session == AuthManager.shared.requestSessionGeneration, !Task.isCancelled else { return }
+            if ScreenStore.isRefusal(error) {
+                if let scope { ChatLocalStore.shared.removeInbox(scope: scope) }
+                inboxResponse = nil
+                allRows = []
+                state = .error(message: "Couldn't load conversations.")
+                return
+            }
+            refreshFailureMessage = "Couldn't load more conversations. Try again."
+        }
     }
 
     /// Several message/participant changes can describe the same inbox update.
@@ -125,6 +169,7 @@ public final class ChatListViewModel {
 
     /// Tear down socket subscriptions when the view disappears.
     public func teardown() {
+        fetchGeneration += 1
         badgeTask?.cancel()
         messageTask?.cancel()
         badgeTask = nil
@@ -184,9 +229,9 @@ public final class ChatListViewModel {
         }
     }
 
-    // MARK: - Fetch
-
     private func fetch(force: Bool) async {
+        fetchGeneration += 1
+        let generation = fetchGeneration
         let session = AuthManager.shared.requestSessionGeneration
         let cacheVersion = ChatLocalStore.shared.version
         let scope = localCacheScope
@@ -209,7 +254,9 @@ public final class ChatListViewModel {
                 force: force
             ).value
         }
-        guard let response = await conversationsTask else {
+        let fetched = await conversationsTask
+        guard generation == fetchGeneration, session == AuthManager.shared.requestSessionGeneration, !Task.isCancelled else { return }
+        guard let response = fetched else {
             switch state {
             case .loaded, .empty:
                 // Keep the list on screen; a failed refresh only toasts.
@@ -220,7 +267,7 @@ public final class ChatListViewModel {
             return
         }
         let stats = await statsTask?.stats
-        guard session == AuthManager.shared.requestSessionGeneration, !Task.isCancelled else { return }
+        guard generation == fetchGeneration, session == AuthManager.shared.requestSessionGeneration, !Task.isCancelled else { return }
         apply(response.response, stats: stats)
         if let scope {
             await ChatLocalStore.shared.saveInbox(
@@ -232,6 +279,7 @@ public final class ChatListViewModel {
     }
 
     private func apply(_ response: UnifiedConversationsResponse, stats: ChatStatsResponse.Stats?) {
+        inboxResponse = response
         preferences.applyServer(response.conversations)
         loadPreferences()
         serverTotalUnmutedUnread = stats?.totalUnmutedUnread ?? response.totalUnmutedUnread
@@ -285,6 +333,7 @@ public final class ChatListViewModel {
             logger.warning("Chat-list fetch failed: \(error)")
             if refuseInbox, ScreenStore.isRefusal(error) {
                 if let scope = localCacheScope { ChatLocalStore.shared.removeInbox(scope: scope) }
+                inboxResponse = nil
                 allRows = []
                 state = .error(message: "Couldn't load conversations.")
             }

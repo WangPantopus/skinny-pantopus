@@ -151,6 +151,23 @@ public struct ChatListView: View {
                 if let filter = viewModel.emptyFilter {
                     filterEmptyLine(filter)
                 }
+                if let cursor = viewModel.nextPageCursor {
+                    Button {
+                        Task { await viewModel.loadMore() }
+                    } label: {
+                        if viewModel.isLoadingMore {
+                            ProgressView()
+                        } else {
+                            Text("Load more conversations")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundStyle(Theme.Color.primaryInk)
+                        }
+                    }
+                    .frame(minHeight: 44)
+                    .disabled(viewModel.isLoadingMore)
+                    .task(id: cursor) { await viewModel.loadMore() }
+                    .accessibilityIdentifier("chatListLoadMore")
+                }
             }
         }
         .refreshable { await viewModel.refresh() }

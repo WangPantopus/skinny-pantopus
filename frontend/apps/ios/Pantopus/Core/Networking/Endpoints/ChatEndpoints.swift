@@ -13,11 +13,13 @@ import Foundation
 public enum ChatEndpoints {
     /// `GET /api/chat/unified-conversations` — person-grouped chat list.
     /// Route `backend/routes/chats.js:2211`.
-    public static func unifiedConversations(limit: Int = 100) -> Endpoint {
-        Endpoint(
+    public static func unifiedConversations(limit: Int = 100, before: String? = nil) -> Endpoint {
+        var query = ["limit": String(limit)]
+        if let before { query["before"] = before }
+        return Endpoint(
             method: .get,
             path: "/api/chat/unified-conversations",
-            query: ["limit": String(limit)]
+            query: query
         )
     }
 

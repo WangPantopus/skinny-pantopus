@@ -246,9 +246,11 @@ public struct UnifiedConversationsResponse: Codable, Sendable, Hashable {
     public let total: Int?
     public let totalUnread: Int?
     public let totalUnmutedUnread: Int?
+    public var hasMore: Bool?
+    public var nextCursor: String?
 
     private enum CodingKeys: String, CodingKey {
-        case conversations, total, totalUnread, totalUnmutedUnread
+        case conversations, total, totalUnread, totalUnmutedUnread, hasMore, nextCursor
     }
 }
 
