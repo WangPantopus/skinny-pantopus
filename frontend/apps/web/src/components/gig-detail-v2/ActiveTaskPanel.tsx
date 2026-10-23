@@ -237,14 +237,15 @@ export default function ActiveTaskPanel({
 
   if (!session.active) return null;
 
-  // User info
+  // User info: the task names both people by their Local Profile (displayName, handle, avatarUrl), a business as the
+  // business; older payloads' account keys stay as fallbacks.
   const worker = gig.acceptedBy || gig.accepted_by_user;
-  const workerName = worker?.name || chosenUsername(worker?.username) || 'Helper';
-  const workerAvatar = worker?.profile_picture_url || null;
+  const workerName = worker?.displayName || worker?.name || chosenUsername(worker?.handle || worker?.username) || 'Helper';
+  const workerAvatar = worker?.avatarUrl || worker?.profile_picture_url || null;
   const workerRating = worker?.average_rating;
 
   const poster = gig.creator || gig.user || gig.poster;
-  const posterName = poster?.name || chosenUsername(poster?.username) || 'Poster';
+  const posterName = poster?.displayName || poster?.name || chosenUsername(poster?.handle || poster?.username) || 'Poster';
 
   const badge = getStatusBadge(fulfillmentStatus);
   const currentStepIndex = fulfillmentStatus
