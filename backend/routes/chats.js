@@ -2384,19 +2384,35 @@ router.post('/messages', verifyToken, messageSendLimiter, messageBurstLimiter, v
 
     const topicId = req.body.topicId;
     if (topicId) {
-      const { data: topic } = await supabaseAdmin
+      if (!['direct', 'gig'].includes(room.type)) {
+        return res.status(400).json({ error: 'Invalid topic for this conversation' });
+      }
+      const { data: topic, error: topicError } = await supabaseAdmin
         .from('ConversationTopic')
         .select('id, conversation_user_id_1, conversation_user_id_2')
         .eq('id', topicId)
         .maybeSingle();
 
+      if (topicError) throw chatAccessUnavailable();
       if (!topic) {
         return res.status(400).json({ error: 'Invalid topic for this conversation' });
       }
 
-      // The acting user (not the business identity) must be one of the topic's participants
+      // Topics belong to the displayed conversation pair. A staff member's
+      // personal topic cannot be sent as the business, or into another room.
       const topicUsers = [String(topic.conversation_user_id_1), String(topic.conversation_user_id_2)];
-      if (!topicUsers.includes(String(userId))) {
+      if (!topicUsers.includes(String(senderUserId))) {
+        return res.status(400).json({ error: 'Invalid topic for this conversation' });
+      }
+      const { data: topicMembers, error: topicMembersError } = await supabaseAdmin
+        .from('ChatParticipant')
+        .select('user_id')
+        .eq('room_id', roomId)
+        .in('user_id', topicUsers)
+        .eq('is_active', true)
+        .is('left_at', null);
+      if (topicMembersError) throw chatAccessUnavailable();
+      if (new Set((topicMembers || []).map((member) => String(member.user_id))).size !== 2) {
         return res.status(400).json({ error: 'Invalid topic for this conversation' });
       }
     }
@@ -2457,6 +2473,11 @@ router.post('/messages', verifyToken, messageSendLimiter, messageBurstLimiter, v
     // inserting transaction; a deletion can win after the earlier REST read.
     if (error?.code === 'PT400' && String(error.message || '').trim() === 'CHAT_FILE_UNAVAILABLE') {
       return res.status(400).json({ error: 'One or more attached files are invalid or not owned by you' });
+    }
+    // Membership can change between topic preflight and the inserting
+    // transaction. Never retry a refused binding through the legacy fallbacks.
+    if (error?.code === 'PT400' && String(error.message || '').trim() === 'CHAT_TOPIC_SCOPE_INVALID') {
+      return res.status(400).json({ error: 'Invalid topic for this conversation' });
     }
 
     // The database re-decides direct-room admission inside the inserting
