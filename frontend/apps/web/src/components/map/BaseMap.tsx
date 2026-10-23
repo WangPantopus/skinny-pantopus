@@ -103,6 +103,8 @@ export interface BaseMapProps {
   mapRef?: React.MutableRefObject<L.Map | null>;
   /** Timestamp of the latest successful data fetch (for stale-data display) */
   lastFetchedAt?: Date | null;
+  /** Tile URL template (default TILE_URL) */
+  tileUrl?: string;
   children: ReactNode;
 }
 
@@ -115,6 +117,7 @@ export function BaseMap({
   recenterOnChange = false,
   mapRef,
   lastFetchedAt,
+  tileUrl = TILE_URL,
   children,
 }: BaseMapProps) {
   const [tilesLoaded, setTilesLoaded] = useState(false);
@@ -149,7 +152,7 @@ export function BaseMap({
         zoomControl={false}
       >
         <CachedTileLayer
-          url={TILE_URL}
+          url={tileUrl}
           attribution={TILE_ATTRIBUTION}
           onOfflineTileServed={handleOfflineTileServed}
         />
