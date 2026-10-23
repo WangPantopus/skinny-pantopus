@@ -103,7 +103,7 @@ function subscribeSessionRevocation(io) {
 
 const socketRateLimits = {
   'message:react': { max: 60, windowMs: 60_000 },
-  'typing:start':  { max: 10, windowMs: 60_000 },
+  'typing:start':  { max: 30, windowMs: 60_000 },
   'typing:stop':   { max: 30, windowMs: 60_000 },
 };
 

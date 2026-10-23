@@ -28,7 +28,9 @@ and expires after five seconds; pending work and database publish queues are
 bounded. Each receiving API process checks current membership, blocks and task
 eligibility before emitting to its local subscribers. Business staff keep
 receiving customer typing after a fresh authority check, but never broadcast
-their personal identity as the business. Both start and stop are rate limited.
+their personal identity as the business. Both start and stop are limited to
+30/minute, allowing clients to refresh at three seconds before a five-second
+indicator expires.
 
 Real Socket.IO clients on two local API processes received one start and one
 stop each. Blocked/revoked members received none. A business owner received the
