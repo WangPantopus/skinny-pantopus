@@ -939,7 +939,7 @@ async function respondWithChatChanges(req, res, roomIds, identityUserId) {
     buildReactionSummary(visible.map((message) => message.id), req.user.id),
     loadMessageSenders(visible),
     chatReadReceipts(roomIds),
-    applyDirectReadReceipts(visible, req.user.id),
+    applyDirectReadReceipts(visible, req.user.id, { identityUserId }),
   ]);
   const messageReadReceipts = [];
   const authorizedRooms = new Set(roomIds.map(String));
@@ -949,8 +949,9 @@ async function respondWithChatChanges(req, res, roomIds, identityUserId) {
       .in('id', receiptIds.slice(start, start + 100)).eq('deleted', false);
     if (error) throw error;
     const authorized = (data || []).filter((m) => authorizedRooms.has(String(m.room_id))
-      && [String(m.user_id), String(m.actor_user_id)].includes(String(req.user.id)));
-    await applyDirectReadReceipts(authorized, req.user.id, { required: true });
+      && (String(m.user_id) === String(identityUserId)
+        || [String(m.user_id), String(m.actor_user_id)].includes(String(req.user.id))));
+    await applyDirectReadReceipts(authorized, req.user.id, { required: true, identityUserId });
     messageReadReceipts.push(...authorized.map((m) => ({ messageId: m.id, readAt: m.read_at || null })));
   }
   res.set('Cache-Control', 'private, no-store');
@@ -1028,10 +1029,10 @@ async function chatSearchRoomContexts(messages, identityUserId) {
   }));
 }
 
-async function serializeChatHistory(messages, viewerId) {
+async function serializeChatHistory(messages, viewerId, identityUserId = viewerId) {
   const [reactions, people] = await Promise.all([
     buildReactionSummary(messages.map((message) => message.id), viewerId),
-    loadMessageSenders(messages), applyDirectReadReceipts(messages, viewerId),
+    loadMessageSenders(messages), applyDirectReadReceipts(messages, viewerId, { identityUserId }),
   ]);
   return messages.map((message) => ({ ...serializeChatMessageForViewer(message, { people, viewerId }),
     reactions: reactions.get(message.id) || [] }));
@@ -1807,7 +1808,7 @@ router.get(['/search', '/rooms/:roomId/search', '/conversations/:otherUserId/sea
     if (error) throw error;
     const visible = (data || []).slice(0, limit);
     const [messages, roomContexts] = await Promise.all([
-      serializeChatHistory(visible, req.user.id), chatSearchRoomContexts(visible, identityUserId),
+      serializeChatHistory(visible, req.user.id, identityUserId), chatSearchRoomContexts(visible, identityUserId),
     ]);
     const hasMore = (data || []).length > limit;
     const last = visible.at(-1);
@@ -1837,7 +1838,7 @@ router.get(['/rooms/:roomId/messages/:messageId/context', '/conversations/:other
       if (error) throw error;
       if (!data?.anchor) return res.status(404).json({ error: 'Message not found' });
       const visible = [...data.older.slice(0, eachSide).reverse(), data.anchor, ...data.newer.slice(0, eachSide)];
-      const messages = await serializeChatHistory(visible, req.user.id);
+      const messages = await serializeChatHistory(visible, req.user.id, identityUserId);
       const hasMore = data.older.length > eachSide;
       res.set('Cache-Control', 'private, no-store');
       return res.json({ messages, roomIds, anchorMessageId: data.anchor.id, hasMore,
@@ -1968,7 +1969,7 @@ router.get('/conversations/:otherUserId/messages', verifyToken, async (req, res)
         logger.warn('chat.send_refusal_unavailable', { requestId: req.requestId, userId, error: refusalError.message });
         return null; // sends are still checked when they arrive
       }),
-      applyDirectReadReceipts(visibleMessages, userId),
+      applyDirectReadReceipts(visibleMessages, userId, { identityUserId: asBusinessUserId || userId }),
     ]);
     const messagesWithReactions = visibleMessages.map((m) => ({
       ...serializeChatMessageForViewer(m, { people, viewerId: userId }),
@@ -2116,7 +2117,7 @@ router.get('/rooms/:roomId/messages', verifyToken, async (req, res) => {
         logger.warn('chat.send_refusal_unavailable', { requestId: req.requestId, userId, roomId, error: refusalError.message });
         return null; // sends are still checked when they arrive
       }),
-      applyDirectReadReceipts(visibleMessages, userId),
+      applyDirectReadReceipts(visibleMessages, userId, { identityUserId: participant.user_id }),
     ]);
     const messagesWithReactions = visibleMessages.map((m) => ({
       ...serializeChatMessageForViewer(m, { people, viewerId: userId }),

@@ -63,8 +63,11 @@ function timestampMicros(value) {
 
 // Existing message DTOs already understand read_at. A direct conversation has
 // one recipient; group reads need per-recipient semantics and stay unset.
-async function applyDirectReadReceipts(messages, viewerId, { required = false } = {}) {
-  const own = messages.filter((m) => String(m.user_id) === String(viewerId)
+async function applyDirectReadReceipts(messages, viewerId, { required = false, identityUserId = viewerId } = {}) {
+  // identityUserId comes from the caller's authorized personal/business scope,
+  // never an unvalidated request parameter. Colleagues share the business author.
+  const own = messages.filter((m) => String(m.user_id) === String(identityUserId)
+    || String(m.user_id) === String(viewerId)
     || String(m.actor_user_id) === String(viewerId));
   const roomIds = [...new Set(own.map((m) => m.room_id))];
   if (!roomIds.length) return;
@@ -73,18 +76,25 @@ async function applyDirectReadReceipts(messages, viewerId, { required = false } 
   let legacy = false;
   for (let start = 0; start < own.length; start += 500) {
     const batch = own.slice(start, start + 500);
-    const { data: receipts, error } = await supabaseAdmin.rpc('get_chat_message_receipts', {
-      p_user_id: viewerId, p_message_ids: batch.map((m) => m.id),
-    });
-    if (error) {
-      // A rolling deployment may reach an older schema. Its room boundaries
-      // remain truthful; never infer a topic read from a missing function.
-      if (['42883', 'PGRST202'].includes(error.code)) { legacy = true; break; }
-      logger.warn('chat_read_receipts_unavailable', { code: error.code });
-      if (required) throw error;
-      return;
+    const byMessage = new Map();
+    for (const reader of new Set([identityUserId, viewerId])) {
+      const ids = batch.filter((m) => (String(m.user_id) === String(identityUserId)
+        ? identityUserId : viewerId) === reader).map((m) => m.id);
+      if (!ids.length) continue;
+      const { data: receipts, error } = await supabaseAdmin.rpc('get_chat_message_receipts', {
+        p_user_id: reader, p_message_ids: ids,
+      });
+      if (error) {
+        // A rolling deployment may reach an older schema. Its room boundaries
+        // remain truthful; never infer a topic read from a missing function.
+        if (['42883', 'PGRST202'].includes(error.code)) { legacy = true; break; }
+        logger.warn('chat_read_receipts_unavailable', { code: error.code });
+        if (required) throw error;
+        return;
+      }
+      for (const row of receipts || []) byMessage.set(String(row.message_id), row.read_at);
     }
-    const byMessage = new Map((receipts || []).map((row) => [String(row.message_id), row.read_at]));
+    if (legacy) break;
     for (const message of batch) if (byMessage.get(String(message.id))) message.read_at = byMessage.get(String(message.id));
   }
   if (!legacy) return;
