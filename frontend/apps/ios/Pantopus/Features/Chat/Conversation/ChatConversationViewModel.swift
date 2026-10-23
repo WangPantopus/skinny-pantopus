@@ -566,10 +566,19 @@ public final class ChatConversationViewModel {
         }
     }
 
+    /// The line shown in place of the composer when the conversation takes no
+    /// messages: the room closed, or the server refuses sends here (a direct
+    /// chat with a draft or closed business).
+    public var roomClosedNote: String? {
+        inactiveRoomNote ?? sendRefusalNote
+    }
+
+    private var inactiveRoomNote: String?
+    /// The server's sentence from the latest message read (`sendRefusal`).
+    private var sendRefusalNote: String?
+
     /// Whether the composer's send disc is enabled (text present + not
     /// in flight). Bound by the view.
-    public private(set) var roomClosedNote: String?
-
     public var canSend: Bool {
         roomClosedNote == nil && (!composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !queuedAttachments.isEmpty) &&
             !isSending && !isDeletingAIConversation
@@ -1148,6 +1157,8 @@ public final class ChatConversationViewModel {
             messageType: nil,
             metadata: nil
         )
+        // The sending bubble quotes the original now, and a retry keeps the reply.
+        replyingTo = nil
         rebuild()
         await performSend(clientId: clientId)
     }
@@ -1205,7 +1216,6 @@ public final class ChatConversationViewModel {
             // landed it via a refetch already, so replace-by-id.
             retireConfirmedSend(clientId: clientId)
             upsert(response.message)
-            replyingTo = nil
             sendLimitNotice = nil
             rebuild()
             scheduleMarkRead(for: roomId)
@@ -1619,17 +1629,23 @@ public final class ChatConversationViewModel {
 
     public func beginEdit(messageId: String) {
         guard let message = messages.first(where: { $0.id == messageId }),
-              message.userId == currentUserId,
+              wroteMessage(message),
               let text = message.messageText else { return }
         editingMessageId = messageId
         replyingTo = nil
         setComposerTextSilently(text)
     }
 
-    /// The API permits edits/deletes only for the human sender's own
-    /// messages, not messages sent under a shared business identity.
+    /// Edit and delete are for the person who wrote a message: their own, or
+    /// one they wrote for the business they answer as here. A teammate's
+    /// message for the same business stays theirs (the API refuses it).
     public func canManageMessage(_ messageId: String) -> Bool {
-        messages.contains { $0.id == messageId && $0.userId == currentUserId }
+        messages.contains { $0.id == messageId && wroteMessage($0) }
+    }
+
+    private func wroteMessage(_ message: ChatMessageDTO) -> Bool {
+        message.userId == currentUserId
+            || (message.userId == sendingIdentityId && message.actorUserId == currentUserId)
     }
 
     public func cancelMessageAction() {
@@ -1638,7 +1654,7 @@ public final class ChatConversationViewModel {
     }
 
     public func delete(messageId: String) async {
-        guard messages.contains(where: { $0.id == messageId && $0.userId == currentUserId }) else { return }
+        guard canManageMessage(messageId) else { return }
         do {
             _ = try await api.request(ChatEndpoints.deleteMessage(id: messageId), as: EmptyResponse.self)
             messages.removeAll { $0.id == messageId }
@@ -2086,6 +2102,7 @@ public final class ChatConversationViewModel {
             messageType: messageType,
             metadata: metadata
         )
+        replyingTo = nil
         rebuild()
         let succeeded = await performSend(clientId: clientId)
         if succeeded, topicForPerson != nil {
@@ -2132,7 +2149,7 @@ public final class ChatConversationViewModel {
             messageText: text,
             messageType: messageType,
             metadata: .object(metadata),
-            replyToId: nil,
+            replyToId: sanitizedReplyToId(replyingTo?.messageId, roomId: roomId),
             clientMessageId: clientId,
             createdAt: ISO8601DateFormatter().string(from: Date()),
             editedAt: nil,
@@ -2362,7 +2379,7 @@ public final class ChatConversationViewModel {
             let response: ChatRoomDetailResponse = try await api.request(
                 ChatEndpoints.room(roomId: roomId, asBusinessUserId: asBusinessUserId)
             )
-            roomClosedNote = response.room.isActive == false
+            inactiveRoomNote = response.room.isActive == false
                 ? "This chat has closed. Message them directly to keep talking."
                 : nil
         } catch {
@@ -2398,6 +2415,7 @@ public final class ChatConversationViewModel {
     }
 
     private func apply(response: ChatMessagesResponse, kind: FetchKind) {
+        sendRefusalNote = response.sendRefusal?.error
         if case .merge = kind, !messages.isEmpty, Self.leavesGap(response, after: messages) {
             // More arrived while away than one page holds: what's held and the
             // newest page don't meet, so the thread starts from the newest page
@@ -2958,7 +2976,8 @@ public final class ChatConversationViewModel {
 
     /// Optimistic local row. Its `id` keeps the `client_` prefix — the
     /// projection and views key "still sending" off that — while
-    /// `clientMessageId` stays a bare UUID for the wire.
+    /// `clientMessageId` stays a bare UUID for the wire. A reply quotes its
+    /// original while it sends, when the send will carry that reply.
     private func optimisticMessage(text: String, clientId: String, roomId: String) -> ChatMessageDTO {
         ChatMessageDTO(
             id: "client_\(clientId)",
@@ -2967,7 +2986,7 @@ public final class ChatConversationViewModel {
             messageText: text,
             messageType: "text",
             metadata: nil,
-            replyToId: nil,
+            replyToId: sanitizedReplyToId(replyingTo?.messageId, roomId: roomId),
             clientMessageId: clientId,
             createdAt: ISO8601DateFormatter().string(from: Date()),
             editedAt: nil,

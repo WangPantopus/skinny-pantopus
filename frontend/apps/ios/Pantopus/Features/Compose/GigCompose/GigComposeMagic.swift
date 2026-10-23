@@ -91,13 +91,14 @@ func magicHighlightedText(_ text: String, draft: MagicDraftDTO?) -> AttributedSt
 // MARK: - Category accent helper
 
 extension GigComposeCategory {
-    /// A12.8 manual path renders the eight concrete archetypes. `Other`
+    /// A12.8 manual path renders every concrete category. `Other`
     /// remains valid for restored / backend state, but is not a picker tile.
     static var manualPickerCases: [GigComposeCategory] {
         allCases.filter { $0 != .other }
     }
 
-    /// Accent colour for the manual-picker tile (A12.8 category accents).
+    /// Accent colour for the manual-picker tile (A12.8 category accents;
+    /// the categories past the first eight use the feed's color).
     var accent: Color {
         switch self {
         case .handyman: Theme.Color.handyman
@@ -109,9 +110,11 @@ extension GigComposeCategory {
         case .delivery: Theme.Color.delivery
         case .tech: Theme.Color.tech
         case .other: Theme.Color.appTextSecondary
+        default: gigsCategory.color
         }
     }
 
+    /// The categories past the first eight use the feed's glyph.
     var tileIcon: PantopusIcon {
         switch self {
         case .handyman: .hammer
@@ -123,6 +126,7 @@ extension GigComposeCategory {
         case .delivery: .send
         case .tech: .laptop
         case .other: .moreHorizontal
+        default: taskCategoryGlyph(gigsCategory)
         }
     }
 
@@ -137,6 +141,21 @@ extension GigComposeCategory {
         case .tutoring: "Math · music · test prep"
         case .delivery: "Pickups · drops · errands"
         case .tech: "Wifi · setup · troubleshoot"
+        case .photography: "Portraits · events · listings"
+        case .cooking: "Meal prep · dinners · baking"
+        case .gardening: "Weeding · planting · mowing"
+        case .eventHelp: "Setup · serving · cleanup"
+        case .errands: "Returns · post office · lines"
+        case .groceryPickup: "Store runs · curbside · lists"
+        case .plumbing: "Leaks · drains · fixtures"
+        case .electrical: "Outlets · lights · panels"
+        case .hvac: "Furnace · AC · filters"
+        case .roofing: "Leaks · shingles · gutters"
+        case .generalContractor: "Remodels · additions · permits"
+        case .landscapingPro: "Design · hardscape · trees"
+        case .homeInspector: "Pre-purchase · safety · reports"
+        case .paintingPro: "Interior · exterior · trim"
+        case .flooring: "Hardwood · tile · carpet"
         case .other: "Anything else"
         }
     }

@@ -246,73 +246,83 @@ public struct FeedView: View {
     // MARK: - Header
 
     /// Every item above the posts or the map, in one block that slides away
-    /// as the content scrolls down and comes back as it scrolls up.
+    /// as the content scrolls down and comes back as it scrolls up. Over the
+    /// map a flick up on any of it tucks it away.
     private var headerBlock: some View {
         VStack(spacing: Spacing.s0) {
-            if let header { header }
-            topBar
-            if viewModel.surface == .beacons {
-                HStack(spacing: Spacing.s4) {
-                    if let onEmptyCTA {
-                        Button("Find Beacons", action: onEmptyCTA)
-                            .frame(minHeight: 44)
-                            .accessibilityIdentifier("beacons.find")
-                    }
-                    if let onFollowing {
-                        Button("Following", action: onFollowing)
-                            .frame(minHeight: 44)
-                            .accessibilityIdentifier("beacons.following")
-                    }
-                    Spacer()
-                }
-                .font(.subheadline.weight(.semibold))
-                .padding(.horizontal, Spacing.s4)
-                .padding(.vertical, Spacing.s2)
-            }
-            if viewModel.showsSurfaceToggle {
-                surfaceTabs
-            }
-            if isSearchVisible {
-                searchField
-            }
-            if viewModel.surface == .pulse {
-                FeedContextBar(viewModel: contextBarViewModel)
-            }
-            if viewModel.showsTopics {
-                if LaunchFeatures.pulseRedesign {
-                    PulseTopicChipRow(activeTopic: viewModel.activeTopic) { topic in
-                        Task { await viewModel.selectTopic(topic) }
-                    }
-                } else {
-                    // Launch cut #11 off: October 13's one topic lane, Sports.
-                    PulseSportsLaneChipRow(activeTopic: viewModel.activeTopic) { topic in
-                        Task { await viewModel.selectTopic(topic) }
-                    }
-                }
-            }
-            chipRow
-            if viewModel.isInSportsLane, let event = viewModel.primarySportsEvent {
-                PulseSportsEventModule(
-                    event: event,
-                    onSeeThreads: {
-                        Task { await viewModel.selectSportsEvent(eventKey: event.eventKey) }
-                    },
-                    onStartThread: { onCompose(viewModel.activeIntent) }
-                )
-            }
-            if viewModel.surface == .pulse, let suggestion = viewModel.radiusSuggestion {
-                FeedRadiusSuggestionBanner(
-                    suggestion: suggestion,
-                    onApply: {
-                        Task {
-                            if await contextBarViewModel.applyRadius(suggestion.suggestedRadius) {
-                                viewModel.viewingRadiusMiles = suggestion.suggestedRadius
-                            }
+            VStack(spacing: Spacing.s0) {
+                if let header { header }
+                topBar
+                if viewModel.surface == .beacons {
+                    HStack(spacing: Spacing.s4) {
+                        if let onEmptyCTA {
+                            Button("Find Beacons", action: onEmptyCTA)
+                                .frame(minHeight: 44)
+                                .accessibilityIdentifier("beacons.find")
                         }
-                    },
-                    onDismiss: { viewModel.dismissRadiusSuggestion() }
-                )
+                        if let onFollowing {
+                            Button("Following", action: onFollowing)
+                                .frame(minHeight: 44)
+                                .accessibilityIdentifier("beacons.following")
+                        }
+                        Spacer()
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .padding(.horizontal, Spacing.s4)
+                    .padding(.vertical, Spacing.s2)
+                }
+                if viewModel.showsSurfaceToggle {
+                    surfaceTabs
+                }
+                if isSearchVisible {
+                    searchField
+                }
+                if viewModel.surface == .pulse {
+                    FeedContextBar(viewModel: contextBarViewModel)
+                }
             }
+            .modifier(PulseHeaderFlickRows(gesture: headerFlick, isEnabled: canFlickHeader, scrollsSideways: false))
+            VStack(spacing: Spacing.s0) {
+                if viewModel.showsTopics {
+                    if LaunchFeatures.pulseRedesign {
+                        PulseTopicChipRow(activeTopic: viewModel.activeTopic) { topic in
+                            chipTapped { Task { await viewModel.selectTopic(topic) } }
+                        }
+                    } else {
+                        // Launch cut #11 off: October 13's one topic lane, Sports.
+                        PulseSportsLaneChipRow(activeTopic: viewModel.activeTopic) { topic in
+                            chipTapped { Task { await viewModel.selectTopic(topic) } }
+                        }
+                    }
+                }
+                chipRow
+            }
+            .modifier(PulseHeaderFlickRows(gesture: headerFlick, isEnabled: canFlickHeader, scrollsSideways: true))
+            VStack(spacing: Spacing.s0) {
+                if viewModel.isInSportsLane, let event = viewModel.primarySportsEvent {
+                    PulseSportsEventModule(
+                        event: event,
+                        onSeeThreads: {
+                            Task { await viewModel.selectSportsEvent(eventKey: event.eventKey) }
+                        },
+                        onStartThread: { onCompose(viewModel.activeIntent) }
+                    )
+                }
+                if viewModel.surface == .pulse, let suggestion = viewModel.radiusSuggestion {
+                    FeedRadiusSuggestionBanner(
+                        suggestion: suggestion,
+                        onApply: {
+                            Task {
+                                if await contextBarViewModel.applyRadius(suggestion.suggestedRadius) {
+                                    viewModel.viewingRadiusMiles = suggestion.suggestedRadius
+                                }
+                            }
+                        },
+                        onDismiss: { viewModel.dismissRadiusSuggestion() }
+                    )
+                }
+            }
+            .modifier(PulseHeaderFlickRows(gesture: headerFlick, isEnabled: canFlickHeader, scrollsSideways: false))
         }
         .background(Theme.Color.appBg)
         // Over the map, a soft edge lifts the header off it.
@@ -329,6 +339,38 @@ public struct FeedView: View {
         if viewMode == .map { return true }
         if case .loaded = viewModel.state { return true }
         return false
+    }
+
+    /// Over the map the header can be flicked up out of the way (founder
+    /// request 2026-10-22). Not over the list, where it would leave a blank
+    /// band above the posts, and never where it may not hide.
+    private var canFlickHeader: Bool {
+        viewMode == .map && !voiceOverEnabled && !searchFieldFocused && viewModel.surface != .beacons
+    }
+
+    /// A mostly vertical drag on the header tucks it away once it has gone
+    /// 24 points up, or sooner for a quick flick. The header stays put until
+    /// then rather than following the finger: a button carried along under
+    /// the finger would still take the tap when it lifts.
+    private var headerFlick: some Gesture {
+        DragGesture(minimumDistance: 12, coordinateSpace: .global)
+            .onChanged { value in
+                guard canFlickHeader, quickReturn.headerDragged(
+                    from: value.startLocation,
+                    translation: value.translation,
+                    predicted: value.predictedEndTranslation
+                ) else { return }
+                flickHeaderAway()
+            }
+            .onEnded { _ in quickReturn.headerDragEnded() }
+    }
+
+    /// Flicked up: hidden as a map drag would hide it, so the map's drags
+    /// and the capsule carry on from there.
+    @MainActor
+    private func flickHeaderAway() {
+        quickReturn.hide()
+        if !headerHidden { headerHidden = true }
     }
 
     /// Keeps the clock readable over whatever slides under it: the page's
@@ -365,11 +407,21 @@ public struct FeedView: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+        // Pulled down, it brings the header back too, as a tap does.
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 6).onChanged { value in
+                let pull = value.translation.height
+                if pull >= Self.revealPullDistance, pull > abs(value.translation.width) { showHeader() }
+            }
+        )
         .padding(.top, Self.revealCapsuleHeight - 36)
         .transition(.move(edge: .top).combined(with: .opacity))
         .accessibilityLabel("Show the Pulse header")
         .accessibilityIdentifier("pulseHeaderReveal")
     }
+
+    /// How far the capsule is pulled down before the header comes back.
+    private static let revealPullDistance: CGFloat = 16
 
     /// "Pulse · All", "Pulse · Event", "Pulse · Connections · Sports".
     private var revealCapsuleLabel: String {
@@ -422,7 +474,7 @@ public struct FeedView: View {
                     skeleton: isInitialLoading
                 ) { id in
                     let mode = PulseSportsMode(rawValue: id) ?? .forYou
-                    Task { await viewModel.selectSportsMode(mode) }
+                    chipTapped { Task { await viewModel.selectSportsMode(mode) } }
                 }
             }
         } else {
@@ -432,9 +484,19 @@ public struct FeedView: View {
                 skeleton: isInitialLoading
             ) { id in
                 let intent = PulseIntent(rawValue: id) ?? .all
-                selectIntent(intent)
+                chipTapped { selectIntent(intent) }
             }
         }
+    }
+
+    /// A chip "tap" that lands as a flick which started on that chip tucks
+    /// the header away belongs to the flick: the chip rows only watch the
+    /// flick (so they keep scrolling sideways), and SwiftUI can still hand
+    /// the chip the touch as the finger lifts.
+    @MainActor
+    private func chipTapped(_ select: () -> Void) {
+        guard !quickReturn.justFlicked else { return }
+        select()
     }
 
     /// The row whose overflow menu is open, if any.
@@ -1056,6 +1118,31 @@ public struct FeedView: View {
         let card = onRefresh.map { work in Task { @MainActor in await work() } }
         await viewModel.refresh()
         await card?.value
+    }
+}
+
+/// Rows of the Pulse header that a flick up tucks away. On rows of buttons
+/// the flick takes precedence once the finger has moved, so the button it
+/// started on doesn't also take the tap; a tap still reaches the button. On
+/// the chip rows it only watches, so they keep scrolling sideways (and their
+/// scroll already stops the chip under the finger). Their blank space takes
+/// the flick too.
+private struct PulseHeaderFlickRows<Flick: Gesture>: ViewModifier {
+    let gesture: Flick
+    let isEnabled: Bool
+    let scrollsSideways: Bool
+
+    func body(content: Content) -> some View {
+        let mask: GestureMask = isEnabled ? .all : .subviews
+        if scrollsSideways {
+            content
+                .contentShape(Rectangle())
+                .simultaneousGesture(gesture, including: mask)
+        } else {
+            content
+                .contentShape(Rectangle())
+                .highPriorityGesture(gesture, including: mask)
+        }
     }
 }
 

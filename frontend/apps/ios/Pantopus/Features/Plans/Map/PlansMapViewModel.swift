@@ -17,17 +17,10 @@ import Foundation
 import MapKit
 import Observation
 
-/// Board P3 "The sheet": peek (about a third), half and full (92%).
+/// Board P3 "The sheet": peek (its first lines), half, and full (under the
+/// floating chrome). `PlansSheetLayout` places them on the screen.
 enum PlansSheetStop: CaseIterable, Hashable {
     case peek, half, full
-
-    var fraction: CGFloat {
-        switch self {
-        case .peek: 0.36
-        case .half: 0.56
-        case .full: 0.92
-        }
-    }
 }
 
 /// What the map is centered on.
@@ -67,8 +60,6 @@ final class PlansMapViewModel {
     private(set) var selectedId: String?
     private(set) var selectedCard: PlanCardDTO?
     private(set) var selectedFailed = false
-    /// The tapped pin's card, measured: its sheet takes this height, up to half (board F3).
-    var cardHeight: CGFloat = 0
     /// The viewer's home, for "Use my home instead".
     private(set) var homeCenter: UserCoordinate?
     /// "Use my location" was refused or found no fix.
@@ -313,11 +304,12 @@ final class PlansMapViewModel {
         listLoaded && cards.isEmpty && pins.isEmpty && (mine?.isEmpty ?? true)
     }
 
-    /// The stop the sheet shows: "Nothing planned yet" (F4) and "See plans near
-    /// you" (F5) hold a message and its buttons, so they never sit below half.
+    /// The stop the sheet shows. "See plans near you" (F5) is a question and
+    /// its buttons, so it never sits below half. "Nothing planned yet" (F4)
+    /// opens low like the list, its title and suggestion over the map
+    /// (founder, 2026-10-23: the map leads).
     var shownStop: PlansSheetStop {
-        let isMessage = phase == .needsLocation || (phase == .ready && selectedId == nil && isEmpty)
-        return sheetStop == .peek && isMessage ? .half : sheetStop
+        sheetStop == .peek && phase == .needsLocation ? .half : sheetStop
     }
 
     /// Your plans, hosting first.

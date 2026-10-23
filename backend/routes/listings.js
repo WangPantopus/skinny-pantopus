@@ -310,18 +310,13 @@ const FIELD_MAP = {
   preorderFulfillmentDate: 'preorder_fulfillment_date',
 };
 
+// A seller whose account can't be read is a Pantopus member. The nearby search's own seller columns (username, user_name,
+// user_profile_picture) are their account's and are never shown: a listing names its seller only as
+// hydrateListingCreatorIdentities does.
 function normalizeListing(row) {
   const creator = row.creator
     ? serializeUserIdentityForViewer(row.creator)
-    : serializeListingAuthorForViewer({
-        identity_context_type: 'local',
-        creator: {
-          id: row.user_id,
-          username: row.username,
-          name: row.user_name,
-          profile_picture_url: row.user_profile_picture,
-        },
-      });
+    : serializeListingAuthorForViewer({ identity_context_type: 'local', creator: { id: row.user_id } });
 
   return {
     id: row.id,

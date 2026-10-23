@@ -6,10 +6,14 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
 
 /**
- * Nine category enums for the Gigs feed. `All` is filter-only — gigs in
- * the payload always carry a concrete category. Color hex values come
- * from the design tokens (`gigs-frames.jsx` CATS) so they stay
- * Gigs-local rather than crowding the shared theme palette.
+ * The task categories for the Gigs feed: every category the backend
+ * accepts (`VALID_CATEGORIES` in backend/services/magicTaskService.js,
+ * web's `GIG_CATEGORIES`) plus the `All` filter. `All` is filter-only —
+ * gigs in the payload always carry a concrete category. The first eight
+ * colors come from the design tokens (`gigs-frames.jsx` CATS), the rest
+ * from the same Tailwind 600-level scale, so they stay Gigs-local rather
+ * than crowding the shared theme palette. `Other` comes last so pickers
+ * that list [entries] end with it.
  */
 enum class GigsCategory(
     val key: String,
@@ -25,16 +29,83 @@ enum class GigsCategory(
     Tutoring("tutoring", "Tutoring", Color(0xFFCA8A04)),
     Tech("tech", "Tech", Color(0xFF475569)),
     Delivery("delivery", "Delivery", Color(0xFF0891B2)),
+
+    /** Indigo-600. */
+    Photography("photography", "Photography", Color(0xFF4F46E5)),
+
+    /** Red-600. */
+    Cooking("cooking", "Cooking", Color(0xFFDC2626)),
+
+    /** Lime-600. */
+    Gardening("gardening", "Gardening", Color(0xFF65A30D)),
+
+    /** Rose-600. */
+    EventHelp("eventhelp", "Event help", Color(0xFFE11D48)),
+
+    /** Cyan-700, next to Delivery. */
+    Errands("errands", "Errands", Color(0xFF0E7490)),
+
+    /** Emerald-600. */
+    GroceryPickup("grocerypickup", "Grocery pickup", Color(0xFF059669)),
+
+    /** Blue-600. */
+    Plumbing("plumbing", "Plumbing", Color(0xFF2563EB)),
+
+    /** Amber-600. */
+    Electrical("electrical", "Electrical", Color(0xFFD97706)),
+
+    /** Teal-600. */
+    Hvac("hvac", "HVAC", Color(0xFF0D9488)),
+
+    /** Stone-600. */
+    Roofing("roofing", "Roofing", Color(0xFF57534E)),
+
+    /** Amber-700. */
+    GeneralContractor("generalcontractor", "General contractor", Color(0xFFB45309)),
+
+    /** Green-700. */
+    LandscapingPro("landscapingpro", "Landscaping pro", Color(0xFF15803D)),
+
+    /** Purple-600. */
+    HomeInspector("homeinspector", "Home inspector", Color(0xFF9333EA)),
+
+    /** Fuchsia-600. */
+    PaintingPro("paintingpro", "Painting pro", Color(0xFFC026D3)),
+
+    /** Orange-800. */
+    Flooring("flooring", "Flooring", Color(0xFF9A3412)),
+
+    /** Gray-500. */
+    Other("other", "Other", Color(0xFF6B7280)),
     ;
 
     companion object {
-        /** Backend-key → enum. Unknown keys fall back to Handyman. */
-        fun fromBackendKey(raw: String?): GigsCategory = fromBackendKeyOrNull(raw) ?: Handyman
+        /**
+         * What the chip rows and the filter sheet offer: web's browse list
+         * (`GIG_BROWSE_CATEGORIES`) after [All]. The errand and pro-service
+         * categories show on rows, cards and the detail, as on web.
+         */
+        val filterCases: List<GigsCategory> =
+            listOf(
+                All, Handyman, Cleaning, Moving, PetCare, ChildCare, Tutoring, Tech, Delivery,
+                Photography, Cooking, Gardening, EventHelp, Other,
+            )
 
         /**
-         * Backend-key → enum, or null for a category these chips don't list
-         * (web has more, e.g. "Other"). Web labels ("Pet Care") match too.
+         * [filterCases], plus [active] at the end while it's a category
+         * reached another way (a browse cluster or a saved search).
          */
+        fun filterCases(including: GigsCategory): List<GigsCategory> =
+            if (including in filterCases) filterCases else filterCases + including
+
+        /** Backend-key → enum. Unknown keys fall back to Other. */
+        fun fromBackendKey(raw: String?): GigsCategory = fromBackendKeyOrNull(raw) ?: Other
+
+        /**
+         * Backend-key → enum, or null for a value the backend's list doesn't
+         * have. Web labels ("Pet Care", "Event Help") match too.
+         */
+        @Suppress("CyclomaticComplexMethod")
         fun fromBackendKeyOrNull(raw: String?): GigsCategory? {
             val key =
                 (raw ?: "")
@@ -52,6 +123,22 @@ enum class GigsCategory(
                 "tutoring", "tutor", "lessons", "teaching" -> Tutoring
                 "tech", "technology", "techsupport", "it", "computer" -> Tech
                 "delivery", "deliveries", "courier" -> Delivery
+                "photography", "photo", "photos", "photographer" -> Photography
+                "cooking", "cook", "chef", "meals", "mealprep" -> Cooking
+                "gardening", "garden", "yard", "yardwork", "lawn", "lawncare" -> Gardening
+                "eventhelp", "event", "events" -> EventHelp
+                "errands", "errand" -> Errands
+                "grocerypickup", "grocery", "groceries" -> GroceryPickup
+                "plumbing", "plumber" -> Plumbing
+                "electrical", "electric", "electrician" -> Electrical
+                "hvac", "heating", "cooling" -> Hvac
+                "roofing", "roof", "roofer" -> Roofing
+                "generalcontractor", "contractor" -> GeneralContractor
+                "landscapingpro", "landscaping", "landscaper" -> LandscapingPro
+                "homeinspector", "homeinspection", "inspector", "inspection" -> HomeInspector
+                "paintingpro", "painting", "painter" -> PaintingPro
+                "flooring", "floors" -> Flooring
+                "other", "general" -> Other
                 else -> null
             }
         }

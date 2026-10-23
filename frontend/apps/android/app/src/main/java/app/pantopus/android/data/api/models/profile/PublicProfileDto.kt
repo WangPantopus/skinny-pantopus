@@ -20,6 +20,8 @@ data class PublicProfileReview(
     @Json(name = "reviewer_name") val reviewerName: String?,
     @Json(name = "reviewer_avatar") val reviewerAvatar: String?,
     @Json(name = "reviewer_username") val reviewerUsername: String?,
+    /** The review's text, as the server sends it (the Review row's `comment`); [content] is an older name for it. */
+    val comment: String? = null,
 )
 
 /**

@@ -930,7 +930,7 @@ class PublicProfileViewModel
                     reviewerName = r.reviewerName ?: "Anonymous",
                     reviewerAvatarUrl = r.reviewerAvatar,
                     rating = r.rating.coerceIn(0, MAX_REVIEW_RATING),
-                    body = r.content.orEmpty(),
+                    body = (r.comment ?: r.content).orEmpty(),
                     timestamp = relativeTimestamp(r.createdAt),
                 )
             }

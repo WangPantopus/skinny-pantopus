@@ -7,6 +7,7 @@ import app.pantopus.android.data.api.models.gigs.EventDetailsDto
 import app.pantopus.android.data.api.models.gigs.LogisticsDetailsDto
 import app.pantopus.android.data.api.models.gigs.MagicTaskItemDto
 import app.pantopus.android.data.api.models.gigs.RemoteDetailsDto
+import app.pantopus.android.ui.screens.gigs.GigsCategory
 
 /**
  * A12.8 — the describe-first Post-a-Task wizard: four steps + a success
@@ -46,24 +47,47 @@ enum class GigComposeStep(
 }
 
 /**
- * One-of-nine category the user picks (or Magic detects). Mirrors the
- * chip palette in `gigs-frames.jsx` CATS plus an `Other` bucket that is
- * surfaced in the composer but not in the feed filter.
+ * The category the user picks (or Magic detects): every category the
+ * backend accepts (`VALID_CATEGORIES`, web's `GIG_CATEGORIES`). The first
+ * eight mirror the chip palette in `gigs-frames.jsx` CATS; `Other` is the
+ * catch-all the composer keeps but doesn't offer as a tile. Keys match
+ * [GigsCategory].
  */
 enum class GigComposeCategory(
     val key: String,
-    val label: String,
 ) {
-    Handyman("handyman", "Handyman"),
-    Cleaning("cleaning", "Cleaning"),
-    Moving("moving", "Moving"),
-    PetCare("petcare", "Pet care"),
-    ChildCare("childcare", "Child care"),
-    Tutoring("tutoring", "Tutoring"),
-    Delivery("delivery", "Delivery"),
-    Tech("tech", "Tech"),
-    Other("other", "Other"),
+    Handyman("handyman"),
+    Cleaning("cleaning"),
+    Moving("moving"),
+    PetCare("petcare"),
+    ChildCare("childcare"),
+    Tutoring("tutoring"),
+    Delivery("delivery"),
+    Tech("tech"),
+    Photography("photography"),
+    Cooking("cooking"),
+    Gardening("gardening"),
+    EventHelp("eventhelp"),
+    Errands("errands"),
+    GroceryPickup("grocerypickup"),
+    Plumbing("plumbing"),
+    Electrical("electrical"),
+    Hvac("hvac"),
+    Roofing("roofing"),
+    GeneralContractor("generalcontractor"),
+    LandscapingPro("landscapingpro"),
+    HomeInspector("homeinspector"),
+    PaintingPro("paintingpro"),
+    Flooring("flooring"),
+    Other("other"),
     ;
+
+    /** The feed's category for this one (same key): its label, color and glyph. */
+    val gigsCategory: GigsCategory
+        get() = GigsCategory.entries.firstOrNull { it.key == key } ?: GigsCategory.Other
+
+    val label: String
+        get() = gigsCategory.label
 
     /**
      * The backend's category name (`magicTaskService.js` VALID_CATEGORIES),
@@ -80,6 +104,21 @@ enum class GigComposeCategory(
                 Tutoring -> "Tutoring"
                 Delivery -> "Delivery"
                 Tech -> "Tech Support"
+                Photography -> "Photography"
+                Cooking -> "Cooking"
+                Gardening -> "Gardening"
+                EventHelp -> "Event Help"
+                Errands -> "Errands"
+                GroceryPickup -> "Grocery Pickup"
+                Plumbing -> "Plumbing"
+                Electrical -> "Electrical"
+                Hvac -> "HVAC"
+                Roofing -> "Roofing"
+                GeneralContractor -> "General Contractor"
+                LandscapingPro -> "Landscaping Pro"
+                HomeInspector -> "Home Inspector"
+                PaintingPro -> "Painting Pro"
+                Flooring -> "Flooring"
                 Other -> "Other"
             }
 
@@ -98,8 +137,8 @@ enum class GigComposeCategory(
         /**
          * Maps a magic-draft `category` onto the compose enum. The backend
          * answers with display names ("Pet Care", "Tech Support",
-         * "Gardening"…), so separators are ignored, errand buckets land on
-         * Delivery and any other bucket lands on Other. Mirrors iOS
+         * "Event Help"…), so separators are ignored and any value outside
+         * its list lands on Other. Mirrors iOS
          * `GigComposeCategory.from(backendCategory:)`. Null for blank input.
          */
         fun fromBackendCategory(raw: String?): GigComposeCategory? {
@@ -111,11 +150,8 @@ enum class GigComposeCategory(
                     ?.replace(" ", "")
                     .orEmpty()
             if (key.isBlank()) return null
-            return when (key) {
-                "errands", "grocerypickup" -> Delivery
-                "techsupport" -> Tech
-                else -> entries.firstOrNull { it.key == key } ?: Other
-            }
+            if (key == "techsupport") return Tech
+            return entries.firstOrNull { it.key == key } ?: Other
         }
     }
 }

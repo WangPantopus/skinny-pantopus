@@ -154,6 +154,11 @@ data class ChatMessageDto(
     val sender: ChatMessageSender? = null,
     val reactions: List<ChatReactionSummary> = emptyList(),
     val attachments: List<ChatAttachmentDto> = emptyList(),
+    /**
+     * The person who wrote a message sent as a business. The server names that only to the writer, so it is set on
+     * the business's messages you wrote yourself and null everywhere else.
+     */
+    @Json(name = "actor_user_id") val actorUserId: String? = null,
 )
 
 /** Body text — API may return canonical `message` or alias `message_text`. */
@@ -211,6 +216,18 @@ data class ChatMessagesResponse(
     val hasMore: Boolean? = null,
     @Json(name = "nextCursor") val nextCursor: String? = null,
     val roomIds: List<String>? = null,
+    /**
+     * Set when the conversation takes no messages from you: a direct chat with a draft or closed business (`code`
+     * NOT_PUBLISHED). Null from older servers, which leave the key out.
+     */
+    val sendRefusal: ChatSendRefusal? = null,
+)
+
+/** Why a conversation takes no messages, as the server words it (`backend/routes/chats.js` `unpublishedDirectRoomRefusal`). */
+@JsonClass(generateAdapter = true)
+data class ChatSendRefusal(
+    val error: String,
+    val code: String? = null,
 )
 
 /** `POST /messages` body. */

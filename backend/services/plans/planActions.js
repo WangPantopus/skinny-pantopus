@@ -17,6 +17,7 @@ const { filePostReport } = require('../postReportService');
 const blockService = require('../blockService');
 const rules = require('./planRules');
 const planService = require('./planService');
+const { loadChatPeople } = require('../chatPeople');
 const { loadViewer, verifiedUserIds } = require('./planViewer');
 const planPlace = require('./planPlace');
 const planChat = require('./planChat');
@@ -904,9 +905,10 @@ async function listRequests(user, postId) {
     .filter((r) => r.status === 'pending' || r.status === 'waitlisted')
     .filter((r) => !viewer.blockedUserIds.has(String(r.user_id)));
   const userIds = requests.map((r) => String(r.user_id));
-  const [users, names, verified, stats, mutual] = await Promise.all([
+  const [users, names, people, verified, stats, mutual] = await Promise.all([
     userIds.length ? supabaseAdmin.from('User').select('id, profile_picture_url, created_at').in('id', userIds) : { data: [] },
     userNames(userIds),
+    loadChatPeople(userIds),
     verifiedUserIds(userIds),
     planService.requesterStats(viewer.id, userIds),
     planService.mutualConnectionCounts(viewer.id, userIds),
@@ -922,7 +924,7 @@ async function listRequests(user, postId) {
       user: {
         user_id: id,
         display_name: names.get(id) || 'A neighbor',
-        avatar_url: row?.profile_picture_url || null,
+        avatar_url: planService.avatarUrl(planService.withLocalAvatar(row || { id }, people)),
         verified_address: verified.has(id),
         distance_band: r.distance_band || null,
         plans_joined: stat.plans_joined,

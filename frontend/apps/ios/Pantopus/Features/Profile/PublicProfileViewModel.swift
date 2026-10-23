@@ -976,7 +976,7 @@ public final class PublicProfileViewModel {
                 reviewerName: r.reviewerName ?? "Anonymous",
                 reviewerAvatarURL: r.reviewerAvatar.flatMap(URL.init(string:)),
                 rating: r.rating,
-                body: r.content ?? "",
+                body: r.comment ?? r.content ?? "",
                 timestamp: relativeTimestamp(r.createdAt)
             )
         }

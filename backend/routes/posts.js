@@ -28,7 +28,7 @@ const { checkHomePermission, getActiveOccupancy, mapLegacyRole } = require('../u
 const { computeUtilityScore } = require('../utils/feedRanking');
 const s3 = require('../services/s3Service');
 const feedService = require('../services/feedService');
-const { loadChatPeople } = require('../services/chatPeople');
+const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
 const marketplaceService = require('../services/marketplace/marketplaceService');
 const { generateNeighborhoodFacts } = require('../services/ai/neighborhoodFactService');
 const { encodeGeohash6: _encodeGeohash6 } = require('../utils/geohash');
@@ -643,12 +643,25 @@ async function serializePostForViewer(post, viewerUserId) {
 }
 
 // A reader who isn't signed in (the web's public post page and its link preview,
-// frontend/apps/web/src/app/posts/[id]/page.tsx) gets what that page shows and nothing else. The rest of the row
-// is for signed-in readers who may see the post: a Lost & Found contact (phone|<digits> when the poster asked for
-// calls), replies and who wrote them, account, home and place ids, audience settings, geocoding, the GPS fix time,
-// counts and moderation notes.
+// frontend/apps/web/src/app/posts/[id]/page.tsx) gets what that page shows and nothing else.
 const SIGNED_OUT_POST_FIELDS = ['id', 'title', 'content', 'post_type', 'state', 'media_urls', 'media_live_urls',
   'ref_task_id', 'ref_listing_id', 'location_name', 'created_at'];
+
+// A signed-in reader who isn't the author gets what the web, iOS and Android post pages read: the post, its
+// approximate place, the Lost & Found contact (phone|<digits> when the poster asked for calls), what decides whether
+// it can be shared, its counts and the viewer's own likes and saves, and the replies. Only the author, whose edit
+// form reads it, gets the rest of the row: moderation notes, geocoding, the GPS fix time, account, home and place
+// ids, audience and profile settings, and the view and delivery counts.
+const READER_POST_FIELDS = [
+  'id', 'user_id', 'author_user_id', 'author', 'creator', 'home', 'created_at', 'is_edited',
+  'title', 'content', 'post_type', 'purpose', 'tags', 'media_urls', 'media_types', 'media_thumbnails', 'media_live_urls',
+  'location_name', 'latitude', 'longitude', 'locationUnlocked',
+  'state', 'resolution', 'expires_at', 'archived_at', 'archive_reason',
+  'read_scope', 'visibility', 'audience', 'allow_external_share', 'moderation_state',
+  'event_date', 'event_end_date', 'event_venue', 'safety_alert_kind', 'deal_business_name', 'deal_expires_at',
+  'lost_found_type', 'lost_found_contact_pref', 'service_category', 'ref_task_id', 'ref_listing_id',
+  'like_count', 'comment_count', 'share_count', 'userHasLiked', 'userHasSaved', 'userHasReposted', 'comments',
+];
 
 function signedOutPostView(post) {
   const view = Object.fromEntries(SIGNED_OUT_POST_FIELDS.map((field) => [field, post[field] ?? null]));
@@ -656,6 +669,10 @@ function signedOutPostView(post) {
   const { id: _creatorId, ...creator } = post.creator || {};
   view.creator = post.creator ? creator : null;
   return view;
+}
+
+function readerPostView(post) {
+  return Object.fromEntries(READER_POST_FIELDS.map((field) => [field, post[field] ?? null]));
 }
 
 
@@ -2322,12 +2339,19 @@ router.get('/mute', verifyToken, async (req, res) => {
     const ids = [...new Set((mutes || []).map((m) => m.muted_entity_id))];
     let accounts = new Map();
     if (ids.length > 0) {
-      const { data: users, error: usersError } = await supabaseAdmin
-        .from('User')
-        .select('id, username, name, first_name, last_name, profile_picture_url')
-        .in('id', ids);
+      const [{ data: users, error: usersError }, people] = await Promise.all([
+        supabaseAdmin
+          .from('User')
+          .select('id, username, name, first_name, last_name, profile_picture_url')
+          .in('id', ids),
+        loadChatPeople(ids),
+      ]);
       if (usersError) throw usersError;
-      accounts = new Map((users || []).map((u) => [u.id, u]));
+      // Muted people go by the name their posts and comments show: a person by their Local Profile's name, handle and
+      // photo, a business (or anyone without a Local Profile) by the account. loadChatPeople leaves everyone out when
+      // its read fails; the list fails then rather than show the accounts' names.
+      if ((users || []).some((u) => !people.has(String(u.id)))) throw new Error('Muted people could not be named');
+      accounts = new Map((users || []).map((u) => [u.id, chatPersonRow(u, people)]));
     }
 
     // A mute of a deleted account has no one to show and no effect, so it isn't listed.
@@ -2600,10 +2624,10 @@ router.get('/:id', optionalAuth, async (req, res) => {
     const { id } = req.params;
     const userId = req.user?.id || null;
 
-    // A signed-in reader gets more of the post than anyone else (SIGNED_OUT_POST_FIELDS). A rejected token
-    // (expired, invalid or revoked) or the web's session flag without its access cookie gets a 401, as verifyToken
-    // would, so the client refreshes and asks again instead of showing them the signed-out view; a sign-in that
-    // couldn't be checked gets a retry.
+    // A signed-in reader gets more of the post than anyone else (READER_POST_FIELDS, and its author the whole row;
+    // SIGNED_OUT_POST_FIELDS otherwise). A rejected token (expired, invalid or revoked) or the web's session flag
+    // without its access cookie gets a 401, as verifyToken would, so the client refreshes and asks again instead of
+    // showing them the signed-out view; a sign-in that couldn't be checked gets a retry.
     const staleWebSession = req.cookies?.pantopus_session === '1'
       && !req.cookies?.pantopus_access && !req.headers.authorization;
     if (!userId && (req.authRejected || staleWebSession)) {
@@ -2693,7 +2717,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
     }, userId);
 
     res.json({
-      post: responsePost,
+      post: isOwner ? responsePost : readerPostView(responsePost),
     });
   } catch (err) {
     logger.error('Post fetch error', { error: err.message, postId: req.params.id });

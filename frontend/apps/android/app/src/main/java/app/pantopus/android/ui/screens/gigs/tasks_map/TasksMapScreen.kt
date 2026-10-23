@@ -453,7 +453,7 @@ internal fun TasksMapCategoryChips(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        GigsCategory.entries.forEach { category ->
+        GigsCategory.filterCases(including = active).forEach { category ->
             TasksMapCategoryChip(
                 category = category,
                 active = category == active,

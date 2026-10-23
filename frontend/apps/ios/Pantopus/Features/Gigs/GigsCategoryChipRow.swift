@@ -20,7 +20,7 @@ struct GigsCategoryChipRow: View {
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: Spacing.s2) {
-                ForEach(GigsCategory.allCases, id: \.self) { category in
+                ForEach(GigsCategory.filterCases(including: active), id: \.self) { category in
                     let isActive = category == active
                     Button {
                         onSelect(category)

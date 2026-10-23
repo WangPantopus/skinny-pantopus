@@ -1891,11 +1891,23 @@ private fun ChipRowView(
         horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        if (bidderStack != null && (bidderStack.bidders.isNotEmpty() || bidderStack.overflow > 0)) {
-            InlineBidderStack(bidderStack)
-            Spacer(Modifier.width(Spacing.s1))
+        // One line: chips keep their full labels, and chips wider than the
+        // row scroll instead of squeezing (squeezed labels wrapped a letter
+        // per line). The caption after them still truncates.
+        val hasBidders = bidderStack != null && (bidderStack.bidders.isNotEmpty() || bidderStack.overflow > 0)
+        if (hasBidders || chips.isNotEmpty()) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+            ) {
+                if (hasBidders && bidderStack != null) {
+                    InlineBidderStack(bidderStack)
+                    Spacer(Modifier.width(Spacing.s1))
+                }
+                chips.forEach { chip -> ChipPill(chip) }
+            }
         }
-        chips.forEach { chip -> ChipPill(chip) }
         if (metaTail != null) {
             Text(
                 text = metaTail,
@@ -2070,7 +2082,13 @@ private fun ChipPill(chip: RowChip) {
                 tint = foreground,
             )
         }
-        Text(text = chip.text, style = PantopusTextStyle.caption, color = foreground)
+        Text(
+            text = chip.text,
+            style = PantopusTextStyle.caption,
+            color = foreground,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 

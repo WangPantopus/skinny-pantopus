@@ -12,7 +12,8 @@ import type {
   SearchVisibilityLevel,
   ProfileVisibilityLevel,
 } from '@pantopus/types';
-import { setPrivacySettings, usePrivacySettings } from '@/lib/me';
+import { setPrivacySettings, useMe, usePrivacySettings } from '@/lib/me';
+import NeighborsSeeYouCard from '@/components/settings/NeighborsSeeYouCard';
 
 type PrivacyForm = Pick<UserPrivacySettings, 'search_visibility' | 'show_gig_history' | 'show_neighborhood' | 'show_home_affiliation'>;
 
@@ -31,6 +32,7 @@ export default function PrivacySettingsPage() {
   // Never show the form on defaults: saving it would overwrite the real
   // settings with the most public ones.
   const settingsQuery = usePrivacySettings({ enabled: signedIn });
+  const me = useMe({ enabled: signedIn }).data;
   const saved = settingsQuery.data ?? null;
   const loadError = !saved && settingsQuery.isError
     ? "We couldn't load your privacy settings. Check your connection and try again."
@@ -126,6 +128,9 @@ export default function PrivacySettingsPage() {
         </div>
 
         <div className="space-y-6">
+          {/* How neighbors see you: the name and photo on posts, comments, chats and notices. Saves on its own. */}
+          <NeighborsSeeYouCard enabled={signedIn} username={me?.username} />
+
           {/* Search & Discoverability */}
           <div className="bg-surface rounded-xl border border-app p-6">
             <div className="flex items-center gap-2 mb-4">

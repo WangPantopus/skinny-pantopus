@@ -21,6 +21,7 @@ const {
 } = require('../middleware/supportTrainPermissions');
 const { emitSupportTrainEvent, formatSupportTrainSlotTime } = require('../services/supportTrainNotifications');
 const { deliverNewMessage } = require('./chats');
+const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
 const {
   sendGuestReservationAddressEmail,
   sendGuestReservationConfirmationEmail,
@@ -30,10 +31,28 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const { chosenUsernameOrNull } = require('../utils/personalUsername');
 
-/** A row with a joined `User`, minus a made-up username (`user_…`, or the older kind built from the email). */
-function withChosenUsername(row) {
+/**
+ * A person on a train (an organizer, an update's author, a contributor, an invitee, a helper), named as neighbors see
+ * them on posts, in chats and in the train's notices (services/chatPeople.js): by their Local Profile's name, handle
+ * and photo, or, for a business or anyone without one, by the account. `people` comes from loadChatPeople. Only the
+ * id, username (minus a made-up one: `user_…`, or the older kind built from the email), name and photo are passed on,
+ * and `id` stays the account id.
+ */
+function trainPerson(user, people) {
+  if (!user) return null;
+  const person = chatPersonRow(user, people);
+  return {
+    id: person.id,
+    username: chosenUsernameOrNull(person.username),
+    name: person.name,
+    profile_picture_url: person.profile_picture_url,
+  };
+}
+
+/** A row with a joined `User`, that person named as above. */
+function withTrainPerson(row, people) {
   if (!row?.User) return row;
-  return { ...row, User: { ...row.User, username: chosenUsernameOrNull(row.User.username) } };
+  return { ...row, User: trainPerson(row.User, people) };
 }
 const { isLaunchFeatureEnabled } = require('../utils/featureFlags');
 const { applyLocationPrecision } = require('../utils/locationPrivacy');
@@ -1459,19 +1478,13 @@ router.get(
       return res.status(500).json({ error: 'INTERNAL', message: 'Failed to list organizers.' });
     }
 
+    const people = await loadChatPeople((organizers || []).map((o) => o.User?.id));
     const result = (organizers || []).map((o) => ({
       id: o.id,
       user_id: o.user_id,
       role: o.role,
       created_at: o.created_at,
-      user: o.User
-        ? {
-            id: o.User.id,
-            username: chosenUsernameOrNull(o.User.username),
-            name: o.User.name,
-            profile_picture_url: o.User.profile_picture_url,
-          }
-        : null,
+      user: trainPerson(o.User, people),
     }));
 
     res.json({ organizers: result });
@@ -2057,19 +2070,13 @@ router.get(
       return res.status(500).json({ error: 'INTERNAL', message: 'Failed to list updates.' });
     }
 
+    const people = await loadChatPeople((updates || []).map((u) => u.User?.id));
     const result = (updates || []).map((u) => ({
       id: u.id,
       body: u.body,
       media_urls: u.media_urls,
       created_at: u.created_at,
-      author: u.User
-        ? {
-            id: u.User.id,
-            username: chosenUsernameOrNull(u.User.username),
-            name: u.User.name,
-            profile_picture_url: u.User.profile_picture_url,
-          }
-        : null,
+      author: trainPerson(u.User, people),
     }));
 
     res.json({ updates: result });
@@ -2452,6 +2459,9 @@ router.get(
     }
 
     const isOrganizer = viewerRole === 'primary' || viewerRole === 'co_organizer';
+    const people = await loadChatPeople((contributions || [])
+      .filter((c) => !c.is_anonymous || isOrganizer)
+      .map((c) => c.User?.id));
 
     const shaped = (contributions || []).map((c) => {
       const item = {
@@ -2467,14 +2477,7 @@ router.get(
       if (c.is_anonymous && !isOrganizer) {
         item.contributor = { name: 'Anonymous' };
       } else {
-        item.contributor = c.User
-          ? {
-              id: c.User.id,
-              username: chosenUsernameOrNull(c.User.username),
-              name: c.User.name,
-              profile_picture_url: c.User.profile_picture_url,
-            }
-          : null;
+        item.contributor = trainPerson(c.User, people);
       }
 
       return item;
@@ -2553,7 +2556,8 @@ router.get(
       return res.status(500).json({ error: 'INTERNAL', message: 'Failed to list invites.' });
     }
 
-    res.json({ invites: (data || []).map(withChosenUsername) });
+    const people = await loadChatPeople((data || []).map((invite) => invite.User?.id));
+    res.json({ invites: (data || []).map((invite) => withTrainPerson(invite, people)) });
   })
 );
 
@@ -3071,11 +3075,7 @@ router.post(
         });
       }
 
-      const { data: userRow } = await supabaseAdmin
-        .from('User')
-        .select('name, username')
-        .eq('id', authenticatedUserId)
-        .maybeSingle();
+      const people = await loadChatPeople([authenticatedUserId]);
 
       const { data: reservation, error: resErr } = await supabaseAdmin
         .from('SupportTrainReservation')
@@ -3139,7 +3139,7 @@ router.post(
           slot_id: slotId,
           slot_label: slot.slot_label,
           slot_date: slot.slot_date,
-          helper_name: userRow?.name || chosenUsernameOrNull(userRow?.username) || body.guest_name,
+          helper_name: people.get(String(authenticatedUserId))?.displayName || body.guest_name,
         },
       });
 
@@ -3783,8 +3783,9 @@ router.patch(
         ? Date.parse(value) === Date.parse(reservation[key])
         : value === reservation[key]
     );
+    const people = await loadChatPeople([reservation.User?.id]);
     // A lost reply may be retried with the original version. Never write it twice.
-    if (unchanged) return res.json({ ...withChosenUsername(reservation), slot_date: reservation.Slot?.slot_date || null });
+    if (unchanged) return res.json({ ...withTrainPerson(reservation, people), slot_date: reservation.Slot?.slot_date || null });
     const { data: updated, error: writeError } = await supabaseAdmin
       .from('SupportTrainReservation')
       .update(patch)
@@ -3800,7 +3801,7 @@ router.patch(
     if (!updated) {
       return res.status(409).json({ error: 'CONFLICT', message: 'This signup changed. Pull down to refresh the signup list, then edit again.' });
     }
-    res.json({ ...withChosenUsername(updated), slot_date: updated.Slot?.slot_date || null });
+    res.json({ ...withTrainPerson(updated, people), slot_date: updated.Slot?.slot_date || null });
   })
 );
 
@@ -4097,6 +4098,7 @@ router.get(
     const sharedUserIds = new Set(
       (grants || []).map((grant) => grant.grantee_user_id).filter(Boolean)
     );
+    const people = await loadChatPeople((reservations || []).map((r) => r.User?.id));
 
     // Shape the response based on role
     const result = (reservations || []).map((r) => {
@@ -4121,14 +4123,7 @@ router.get(
         exact_address_shared: r.user_id
           ? sharedUserIds.has(r.user_id)
           : !!r.guest_address_shared_at,
-        user: r.User
-          ? {
-              id: r.User.id,
-              username: chosenUsernameOrNull(r.User.username),
-              name: r.User.name,
-              profile_picture_url: r.User.profile_picture_url,
-            }
-          : null,
+        user: trainPerson(r.User, people),
       };
 
       // Only organizers see private_note_to_organizer
@@ -4386,17 +4381,14 @@ router.get(
     const activity = st.Activity;
     const chips = st.ai_draft_payload?.summary_chips || [];
     const locationHomeId = st.recipient_home_id || activity?.home_id || null;
+    const organizerPeople = await loadChatPeople([
+      st.organizer_user_id,
+      ...(organizersRes.data || []).map((o) => o.User?.id),
+    ]);
     const organizers = (organizersRes.data || []).map((o) => ({
       id: o.id,
       role: o.User?.id === st.organizer_user_id ? 'primary' : o.role,
-      user: o.User
-        ? {
-            id: o.User.id,
-            username: chosenUsernameOrNull(o.User.username),
-            name: o.User.name,
-            profile_picture_url: o.User.profile_picture_url,
-          }
-        : null,
+      user: trainPerson(o.User, organizerPeople),
     }));
     const primaryOrganizerIndex = organizers.findIndex(
       (organizer) => organizer.user?.id === st.organizer_user_id
@@ -4425,12 +4417,7 @@ router.get(
         organizers.unshift({
           id: `primary-${organizerUser.id}`,
           role: 'primary',
-          user: {
-            id: organizerUser.id,
-            username: chosenUsernameOrNull(organizerUser.username),
-            name: organizerUser.name,
-            profile_picture_url: organizerUser.profile_picture_url,
-          },
+          user: trainPerson(organizerUser, organizerPeople),
         });
       }
     }

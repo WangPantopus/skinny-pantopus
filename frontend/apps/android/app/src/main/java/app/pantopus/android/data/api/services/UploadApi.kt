@@ -5,6 +5,7 @@ import app.pantopus.android.data.api.models.audience.PersonaMediaUploadResponse
 import app.pantopus.android.data.api.models.businesses.BusinessMediaUploadResponse
 import app.pantopus.android.data.api.models.chats.AIMediaUploadResponse
 import app.pantopus.android.data.api.models.chats.ChatMediaUploadResponse
+import app.pantopus.android.data.api.models.identity.OwnLocalProfileResponse
 import app.pantopus.android.data.api.models.listings.ListingMediaUploadResponse
 import app.pantopus.android.data.api.models.posts.PostMediaUploadResponse
 import app.pantopus.android.data.api.models.users.ProfilePictureUploadResponse
@@ -68,6 +69,16 @@ interface UploadApi {
     suspend fun uploadProfilePicture(
         @Part file: MultipartBody.Part,
     ): ProfilePictureUploadResponse
+
+    /**
+     * Set the photo neighbors see (How neighbors see you). Single part named `file`; it goes on the Local Profile
+     * only, never the account. Route `backend/routes/upload.js:343`.
+     */
+    @Multipart
+    @POST("api/upload/local-profile-picture")
+    suspend fun uploadLocalProfilePicture(
+        @Part file: MultipartBody.Part,
+    ): OwnLocalProfileResponse
 
     /**
      * Attach photos to an existing listing (Snap & Sell post-create

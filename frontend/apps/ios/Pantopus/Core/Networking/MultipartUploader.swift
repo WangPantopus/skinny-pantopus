@@ -484,6 +484,37 @@ public final class MultipartUploader: @unchecked Sendable {
         }
     }
 
+    /// Set the photo neighbors see (How neighbors see you) via
+    /// `POST /api/upload/local-profile-picture` (`backend/routes/upload.js:343`).
+    /// Single file, field name `file`; it goes on the Local Profile only,
+    /// never the account. Answers like `LocalProfileEndpoints.me`.
+    public func uploadLocalProfilePicture(_ file: MultipartFile) async throws -> OwnLocalProfileResponse {
+        let boundary = "PantopusBoundary-\(UUID().uuidString)"
+        let url = environment.apiBaseURL.appendingPathComponent("/api/upload/local-profile-picture")
+        let body = Self.buildBody(boundary: boundary, file: file)
+        let (data, http) = try await performUpload(to: url, boundary: boundary, body: body)
+        switch http.statusCode {
+        case 200..<300:
+            do {
+                return try JSONDecoder().decode(OwnLocalProfileResponse.self, from: data)
+            } catch {
+                logger.error("Local profile picture upload decode failed: \(error)")
+                throw APIError.decoding(underlying: error)
+            }
+        case 401:
+            throw APIError.unauthorized
+        case 413:
+            throw APIError.clientError(status: 413, message: "That photo is too large.")
+        case 415:
+            throw APIError.clientError(status: 415, message: "Profile picture must be an image.")
+        case 400..<500:
+            let message = String(data: data, encoding: .utf8)
+            throw APIError.clientError(status: http.statusCode, message: message)
+        default:
+            throw APIError.server(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
+        }
+    }
+
     /// Add one portfolio item via `POST /api/files/portfolio`
     /// (`backend/routes/files.js:362`). Single file, field name `file`;
     /// `category` / `title` / `description` ride alongside as form fields

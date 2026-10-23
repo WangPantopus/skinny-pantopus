@@ -10,6 +10,31 @@
   }
 }
 
+/* While a finger or the mouse drags it, the header follows without easing, and the drag
+   selects none of its text. */
+.pulse-header-motion[data-pulse-dragging] {
+  transition: none !important;
+}
+
+.pulse-header-motion[data-pulse-dragging],
+.pulse-header-motion[data-pulse-dragging] * {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Over the map, an up or down drag on the header is the header's own (it flicks away); a
+   sideways one still scrolls its chip rows, and a list that scrolls up and down inside it (the
+   area search's suggestions) keeps its own drags. */
+.pulse-header-flick,
+.pulse-header-flick * {
+  touch-action: pan-x;
+}
+
+.pulse-header-flick :is(.overflow-auto, .overflow-y-auto, .overflow-y-scroll),
+.pulse-header-flick :is(.overflow-auto, .overflow-y-auto, .overflow-y-scroll) * {
+  touch-action: auto;
+}
+
 /* ── Post pins ──────────────────────────────────────────────────── */
 .pulse-pin {
   position: relative;
