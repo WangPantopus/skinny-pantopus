@@ -4513,6 +4513,8 @@ extension ChatConversationViewModel {
         savedHistoryKey = nil
         guard let endpoint = latestThreadMemoryEndpoint, let key = store.key(for: endpoint), key.account == currentUserId else { return }
         store.removeSeeds(for: endpoint)
+        store.remove(ChatEndpoints.unifiedConversations())
+        store.remove(ChatEndpoints.stats())
         guard api === APIClient.shared else { return }
         ChatLocalStore.shared.removeHistory(
             scope: ChatLocalStore.scope(server: key.server, account: key.account), thread: key.description

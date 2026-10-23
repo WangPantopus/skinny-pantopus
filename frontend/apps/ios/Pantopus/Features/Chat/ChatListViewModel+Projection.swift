@@ -1,6 +1,40 @@
 import Foundation
 
 extension ChatListViewModel {
+    var aiRow: ConversationRowContent {
+        Self.assistantRow
+    }
+
+    private static let activityISOStyle = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
+    private static let activityPlainISOFormatter = ISO8601DateFormatter()
+
+    static func parseISO(_ raw: String) -> Date? {
+        (try? activityISOStyle.parse(raw)) ?? activityPlainISOFormatter.date(from: raw)
+    }
+
+    static func decoratingMuteState(_ rows: [ConversationRowContent], mutedKeys: Set<String>) -> [ConversationRowContent] {
+        rows.map { row in
+            ConversationRowContent(
+                id: row.id,
+                variant: row.variant,
+                displayName: row.displayName,
+                initials: row.initials,
+                avatarURL: row.avatarURL,
+                identityChip: row.identityChip,
+                verified: row.verified,
+                preview: row.preview,
+                timeLabel: row.timeLabel,
+                unread: row.unread,
+                pinned: row.pinned,
+                topicKinds: row.topicKinds,
+                topics: row.topics,
+                gigId: row.gigId,
+                storageKey: row.storageKey,
+                isMuted: mutedKeys.contains(row.storageKey)
+            )
+        }
+    }
+
     static func rowsUnreadTotal(from conversations: [UnifiedConversation]) -> Int {
         conversations.reduce(0) { $0 + $1.totalUnread }
     }

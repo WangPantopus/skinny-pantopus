@@ -33,6 +33,7 @@ public final class ChatListViewModel {
     private var refreshTask: Task<Void, Never>?
     private var inboxResponse: UnifiedConversationsResponse?
     private var inboxConfirmedAt: Date?
+    private var cacheGeneration = ChatLocalStore.shared.version
     private var fetchGeneration = 0
     private var activeFetchGeneration: Int?
     private var serverTotalUnread: Int = 0
@@ -41,10 +42,6 @@ public final class ChatListViewModel {
     private var preferencesTask: Task<Void, Never>?
     private var hiddenKeys: Set<String> = []
     private var mutedKeys: Set<String> = []
-    var aiRow: ConversationRowContent {
-        Self.assistantRow
-    }
-
     private var badgeTask: Task<Void, Never>?
     private var messageTask: Task<Void, Never>?
     init(
@@ -56,7 +53,8 @@ public final class ChatListViewModel {
         store = ScreenStore.store(for: api)
         self.socket = socket
         self.preferences = preferences
-        if let copy = store.peek(ChatEndpoints.unifiedConversations(), as: UnifiedConversationsResponse.self) {
+        if api !== APIClient.shared,
+           let copy = store.peek(ChatEndpoints.unifiedConversations(), as: UnifiedConversationsResponse.self) {
             inboxConfirmedAt = copy.fetchedAt
             apply(copy.value, stats: store.peek(ChatEndpoints.stats(), as: ChatStatsResponse.self)?.value.stats)
         }
@@ -64,11 +62,14 @@ public final class ChatListViewModel {
 
     /// Restore offline navigation, then reconcile every return to the inbox.
     public func load() async {
+        _ = ensureCacheVersion(cacheGeneration)
         subscribeToSockets()
         if allRows.isEmpty, let scope = localCacheScope {
             let session = AuthManager.shared.requestSessionGeneration
+            let version = ChatLocalStore.shared.version
             let cached = await ChatLocalStore.shared.inbox(scope: scope)
             guard session == AuthManager.shared.requestSessionGeneration, !Task.isCancelled else { return }
+            guard ensureCacheVersion(version) else { return }
             if allRows.isEmpty, let cached {
                 inboxConfirmedAt = cached.confirmedAt
                 apply(cached.response, stats: cached.stats)
@@ -88,6 +89,7 @@ public final class ChatListViewModel {
 
     /// Older inbox rows are fetched when their existing list reaches the end.
     public func loadMore() async {
+        guard ensureCacheVersion(cacheGeneration) else { return }
         guard activeFetchGeneration == nil, !isLoadingMore, let cursor = nextPageCursor, let current = inboxResponse else { return }
         isLoadingMore = true
         defer { isLoadingMore = false }
@@ -98,6 +100,7 @@ public final class ChatListViewModel {
         let confirmedAt = inboxConfirmedAt
         do {
             let page: UnifiedConversationsResponse = try await api.request(ChatEndpoints.unifiedConversations(before: cursor))
+            guard ensureCacheVersion(checkpoint.version) else { return }
             guard generation == fetchGeneration, session == AuthManager.shared.requestSessionGeneration, !Task.isCancelled else { return }
             guard page.hasMore != true || (page.nextCursor != nil && page.nextCursor != cursor) else { throw APIError.invalidResponse }
             let combined = Self.appending(page, to: current)
@@ -116,6 +119,7 @@ public final class ChatListViewModel {
                 )
             }
         } catch {
+            guard ensureCacheVersion(checkpoint.version) else { return }
             guard generation == fetchGeneration, session == AuthManager.shared.requestSessionGeneration, !Task.isCancelled else { return }
             if ScreenStore.isRefusal(error) {
                 if let scope { ChatLocalStore.shared.removeInbox(scope: scope) }
@@ -208,6 +212,7 @@ public final class ChatListViewModel {
     }
 
     private func fetch(force: Bool) async {
+        _ = ensureCacheVersion(cacheGeneration)
         fetchGeneration += 1
         let generation = fetchGeneration
         activeFetchGeneration = generation
@@ -222,14 +227,11 @@ public final class ChatListViewModel {
                 generation == self.fetchGeneration && session == AuthManager.shared.requestSessionGeneration
             },
             {
-                let snapshot = try await self.store.load(
-                    ChatEndpoints.unifiedConversations(),
-                    as: UnifiedConversationsResponse.self,
-                    kind: .messagesList,
-                    topics: [ScreenTopic.chats],
-                    force: force
-                )
-                return (snapshot.value, snapshot.fetchedAt)
+                // Canonical history must not reuse a generic request that began
+                // before an encrypted-cache retirement. Offline restoration is
+                // already supplied by the generation/epoch-validated chat store.
+                let response: UnifiedConversationsResponse = try await self.api.request(ChatEndpoints.unifiedConversations())
+                return (response, Date())
             }
         )
         async let statsTask: ChatStatsResponse? = optional {
@@ -242,7 +244,8 @@ public final class ChatListViewModel {
             ).value
         }
         let fetched = await conversationsTask
-        guard generation == fetchGeneration, session == AuthManager.shared.requestSessionGeneration, !Task.isCancelled else { return }
+        guard ensureCacheVersion(cacheCheckpoint.version), generation == fetchGeneration,
+              session == AuthManager.shared.requestSessionGeneration, !Task.isCancelled else { return }
         guard var response = fetched else {
             switch state {
             case .loaded, .empty:
@@ -254,13 +257,15 @@ public final class ChatListViewModel {
             return
         }
         let stats = await statsTask?.stats
-        guard generation == fetchGeneration, session == AuthManager.shared.requestSessionGeneration, !Task.isCancelled else { return }
+        guard ensureCacheVersion(cacheCheckpoint.version), generation == fetchGeneration,
+              session == AuthManager.shared.requestSessionGeneration, !Task.isCancelled else { return }
         do {
             response.response = try await Self.revalidatedInbox(response.response, minimumCount: minimumCount, api: api) {
                 generation == self.fetchGeneration && session == AuthManager.shared.requestSessionGeneration && !Task.isCancelled
             }
         } catch {
-            guard generation == fetchGeneration, session == AuthManager.shared.requestSessionGeneration, !Task.isCancelled else { return }
+            guard ensureCacheVersion(cacheCheckpoint.version), generation == fetchGeneration,
+                  session == AuthManager.shared.requestSessionGeneration, !Task.isCancelled else { return }
             if ScreenStore.isRefusal(error) {
                 if let scope { ChatLocalStore.shared.removeInbox(scope: scope) }
                 inboxResponse = nil
@@ -271,7 +276,8 @@ public final class ChatListViewModel {
             }
             return
         }
-        guard generation == fetchGeneration, session == AuthManager.shared.requestSessionGeneration, !Task.isCancelled else { return }
+        guard ensureCacheVersion(cacheCheckpoint.version), generation == fetchGeneration,
+              session == AuthManager.shared.requestSessionGeneration, !Task.isCancelled else { return }
         inboxConfirmedAt = response.confirmedAt
         apply(response.response, stats: stats)
         if let scope {
@@ -387,29 +393,8 @@ public final class ChatListViewModel {
     }
 
     private func decorateRowsWithMuteState() {
-        allRows = allRows.map { row in
-            ConversationRowContent(
-                id: row.id,
-                variant: row.variant,
-                displayName: row.displayName,
-                initials: row.initials,
-                avatarURL: row.avatarURL,
-                identityChip: row.identityChip,
-                verified: row.verified,
-                preview: row.preview,
-                timeLabel: row.timeLabel,
-                unread: row.unread,
-                pinned: row.pinned,
-                topicKinds: row.topicKinds,
-                topics: row.topics,
-                gigId: row.gigId,
-                storageKey: row.storageKey,
-                isMuted: mutedKeys.contains(row.storageKey)
-            )
-        }
+        allRows = Self.decoratingMuteState(allRows, mutedKeys: mutedKeys)
     }
-
-    // MARK: - Realtime
 
     private func subscribeToSockets() {
         if preferencesTask == nil {
@@ -445,6 +430,10 @@ public final class ChatListViewModel {
     }
 
     private func handleMessage(_ event: ChatMessageEvent) {
+        guard ensureCacheVersion(cacheGeneration) else {
+            refreshAfterChange()
+            return
+        }
         if let id = event.id {
             guard seenMessageIds.insert(id).inserted else { return }
             recentMessageIds.append(id)
@@ -490,11 +479,20 @@ public final class ChatListViewModel {
         publishBadgeCount()
     }
 
-    private static let activityISOStyle = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
-
-    private static let activityPlainISOFormatter = ISO8601DateFormatter()
-
-    static func parseISO(_ raw: String) -> Date? {
-        (try? activityISOStyle.parse(raw)) ?? activityPlainISOFormatter.date(from: raw)
+    /// A retired generation cannot revive an in-memory inbox or late response.
+    private func ensureCacheVersion(_ expected: Int) -> Bool {
+        let current = ChatLocalStore.shared.version
+        guard expected != current else { return true }
+        store.remove(ChatEndpoints.unifiedConversations())
+        store.remove(ChatEndpoints.stats())
+        if cacheGeneration != current {
+            cacheGeneration = current
+            inboxResponse = nil
+            inboxConfirmedAt = nil
+            allRows = []
+            activityDates = [:]
+            state = .loading
+        }
+        return false
     }
 }
