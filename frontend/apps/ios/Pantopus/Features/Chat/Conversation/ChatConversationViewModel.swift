@@ -2767,7 +2767,7 @@ public final class ChatConversationViewModel {
         case older(cursor: String)
     }
 
-    private func fetch(_ kind: FetchKind) async {
+    private func fetch(_ kind: FetchKind, recoverReceiptReset: Bool = true) async {
         if case .ai = mode {
             if messages.isEmpty { state = .empty }
             return
@@ -2840,8 +2840,12 @@ public final class ChatConversationViewModel {
             if case let .room(roomId) = mode, before == nil {
                 await refreshRoomAvailability(roomId: roomId)
             }
-            if let cursor = response.syncCursors {
-                await refreshMessageReadReceipts(cursor: cursor, requestId: requestId, generation: generation)
+            if recoverReceiptReset, let cursor = response.syncCursors,
+               await !refreshMessageReadReceipts(cursor: cursor, requestId: requestId, generation: generation) {
+                // A receipt snapshot can discover a history reset after the
+                // history request completed. Retry canonical history once.
+                historyRequestId = nil
+                await fetch(.reload, recoverReceiptReset: false)
             }
         } catch {
             guard generation == historyGeneration, historyRequestId == requestId, !Task.isCancelled else { return }
@@ -2865,6 +2869,7 @@ public final class ChatConversationViewModel {
             repeat {
                 let page: ChatChangesResponse = try await api.request(changesEndpoint(cursor: next, until: until))
                 guard generation == historyGeneration, historyRequestId == requestId, !Task.isCancelled else { return true }
+                reconcileHistoryAccess(roomIds: Set(page.roomIds), reset: page.resetRequired)
                 guard !page.resetRequired else { return false }
                 if let until, until != page.untilCursors { throw APIError.invalidResponse }
                 if page.hasMore, page.syncCursors == next { throw APIError.invalidResponse }
@@ -2919,8 +2924,7 @@ public final class ChatConversationViewModel {
         joinActiveRoomsIfPossible()
         scheduleMarkRead()
         if case let .room(roomId) = mode { await refreshRoomAvailability(roomId: roomId) }
-        await refreshMessageReadReceipts(cursor: next, requestId: requestId, generation: generation)
-        return true
+        return await refreshMessageReadReceipts(cursor: next, requestId: requestId, generation: generation)
     }
 
     private func changesEndpoint(cursor: [String: Int64], until: [String: Int64]?, readMessageIds: [String]? = nil) throws -> Endpoint {
@@ -2948,28 +2952,65 @@ public final class ChatConversationViewModel {
 
     /// Receipt-only snapshots do not alter the message delta cursor. Positive
     /// confirmations can apply independently; nil never clears a known Read.
-    private func refreshMessageReadReceipts(cursor: [String: Int64], requestId: UUID, generation: Int) async {
-        guard cursor.count <= 10000 else { return }
+    private func refreshMessageReadReceipts(cursor: [String: Int64], requestId: UUID, generation: Int) async -> Bool {
+        guard cursor.count <= 10000 else { return true }
         let ids = messages.filter {
             $0.userId == sendingIdentityId && $0.readAt == nil && $0.deletedAt == nil && UUID(uuidString: $0.id) != nil
         }
         .map(\.id)
         for start in stride(from: 0, to: ids.count, by: 500) {
-            guard generation == historyGeneration, historyRequestId == requestId, !Task.isCancelled else { return }
+            guard generation == historyGeneration, historyRequestId == requestId, !Task.isCancelled else { return true }
             let batch = Array(ids[start..<min(start + 500, ids.count)])
             do {
                 let response: ChatChangesResponse = try await api.request(
                     changesEndpoint(cursor: cursor, until: cursor, readMessageIds: batch),
                     expectedSessionGeneration: roomJoinAccountSession
                 )
-                guard generation == historyGeneration, historyRequestId == requestId, !Task.isCancelled,
-                      !response.resetRequired, let receipts = response.messageReadReceipts else { return }
+                guard generation == historyGeneration, historyRequestId == requestId, !Task.isCancelled else { return true }
+                reconcileHistoryAccess(roomIds: Set(response.roomIds), reset: response.resetRequired)
+                guard !response.resetRequired else { return false }
+                guard let receipts = response.messageReadReceipts else { return true }
                 applyMessageReadReceipts(receipts, requested: Set(batch))
             } catch {
+                guard generation == historyGeneration, historyRequestId == requestId, !Task.isCancelled else { return true }
+                if ScreenStore.isRefusal(error) {
+                    // A missing legacy endpoint and a vanished room both need
+                    // canonical authorization before any saved rows reappear.
+                    reconcileHistoryAccess(roomIds: [], reset: true)
+                    return false
+                }
                 logger.warning("chat receipt recovery failed: \(error)")
-                return
+                return true
             }
         }
+        return true
+    }
+
+    /// Authorization and reset metadata apply even to a receipt-only response.
+    /// Retire disk and memory copies before a replacement history can fail offline.
+    private func reconcileHistoryAccess(roomIds: Set<String>, reset: Bool) {
+        var knownRooms = activeRoomIds.union(messages.map(\.roomId))
+        if let syncCursors { knownRooms.formUnion(syncCursors.keys) }
+        let removed = knownRooms.subtracting(roomIds)
+        guard reset || !removed.isEmpty else { return }
+        invalidateSavedThreadCache()
+        messages.removeAll { reset || !roomIds.contains($0.roomId) }
+        activeRoomIds = roomIds
+        if let directRoomId, !roomIds.contains(directRoomId) { self.directRoomId = nil }
+        visibleReadBoundaries = visibleReadBoundaries.filter { roomIds.contains($0.key) }
+        lastReadBoundaries = lastReadBoundaries.filter { roomIds.contains($0.key) }
+        if reset {
+            hasLatestHistoryWindow = false
+            historyConfirmedAt = nil
+            syncCursors = nil
+            oldestCursor = nil
+            hasMore = false
+        } else {
+            syncCursors = syncCursors?.filter { roomIds.contains($0.key) }
+        }
+        activeThreadTracker.setActiveRooms(roomIds, owner: ObjectIdentifier(self), topicId: selectedTopicId)
+        joinActiveRoomsIfPossible()
+        rebuild()
     }
 
     private func applyMessageReadReceipts(_ receipts: [ChatMessageReadReceipt], requested: Set<String>) {
@@ -4198,11 +4239,15 @@ extension ChatConversationViewModel {
     /// starts from the server as before.
     private var threadMemoryEndpoint: Endpoint? {
         guard initialTopic == nil, scrollToMessageId == nil, selectedTopicId == nil else { return nil }
-        return switch mode {
+        return latestThreadMemoryEndpoint
+    }
+
+    private var latestThreadMemoryEndpoint: Endpoint? {
+        switch mode {
         case let .room(roomId):
             ChatEndpoints.roomMessages(roomId: roomId, before: nil, asBusinessUserId: asBusinessUserId)
         case let .person(otherUserId):
-            ChatEndpoints.conversationMessages(otherUserId: otherUserId, before: nil, topicId: selectedTopicId)
+            ChatEndpoints.conversationMessages(otherUserId: otherUserId, before: nil, topicId: nil)
         case .ai: nil
         }
     }
@@ -4291,7 +4336,15 @@ extension ChatConversationViewModel {
         messages = []
         oldestCursor = nil
         hasMore = false
-        guard let endpoint = threadMemoryEndpoint, let key = store.key(for: endpoint), key.account == currentUserId else { return }
+        invalidateSavedThreadCache()
+    }
+
+    private func invalidateSavedThreadCache() {
+        historySaveTask?.cancel()
+        historySaveTask = nil
+        savedHistorySnapshot = nil
+        savedHistoryKey = nil
+        guard let endpoint = latestThreadMemoryEndpoint, let key = store.key(for: endpoint), key.account == currentUserId else { return }
         store.removeSeeds(for: endpoint)
         guard api === APIClient.shared else { return }
         ChatLocalStore.shared.removeHistory(
