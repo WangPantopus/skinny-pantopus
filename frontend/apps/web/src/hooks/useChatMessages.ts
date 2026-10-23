@@ -454,6 +454,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
   // ── Initial load ────────────────────────────────────────
 
   const refreshInFlightRef = useRef<{ scope: number; promise: Promise<void> } | null>(null);
+  const canonicalRefreshRef = useRef<{ scope: number; requested: number; completed: number } | null>(null);
   // Socket edits/deletes/new sends that arrive during a history read win over its
   // older snapshot. Reset per scope; no message content is persisted here.
   const liveChangesRef = useRef(new Map<string, number>());
@@ -482,14 +483,20 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     }
   }), [currentUserId, isCurrentScope, roomId, scopeGeneration]);
 
-  const refresh = useCallback((): Promise<void> => {
+  const refresh = useCallback((options?: { canonical?: boolean }): Promise<void> => {
     if (!isCurrentScope() || !currentUserId) return Promise.resolve();
+    if (options?.canonical === true) {
+      if (canonicalRefreshRef.current?.scope !== scopeGeneration) {
+        canonicalRefreshRef.current = { scope: scopeGeneration, requested: 0, completed: 0 };
+      }
+      canonicalRefreshRef.current.requested += 1;
+    }
     if (refreshInFlightRef.current?.scope === scopeGeneration) return refreshInFlightRef.current.promise;
     const historyView = historyViewRef.current;
     let historyGeneration: number | null = null;
     const current = () => isCurrentScope() && historyViewRef.current === historyView
       && (historyGeneration === null || isChatHistoryGenerationCurrent(currentUserId, historyGeneration));
-    const promise = (async () => {
+    const runRefresh = async (canonical: boolean) => {
       // Disabled device storage must not prevent an otherwise authorized
       // network read. Such results cannot be retained on this device.
       historyGeneration = await activateChatStorage(currentUserId).then(readChatHistoryGeneration).catch(() => null);
@@ -541,7 +548,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
         setSyncGeneration((value) => value + 1);
         applyPage(page);
       };
-      if (!syncCursorsRef.current || (contextWindowRef.current && !contextReadyRef.current)) return fullRefresh();
+      if (canonical || !syncCursorsRef.current || (contextWindowRef.current && !contextReadyRef.current)) return fullRefresh();
       let cursor = syncCursorsRef.current;
       let until: api.chat.ChatSyncCursors | undefined;
       const changes: api.chat.ChatChanges['messages'] = [];
@@ -632,6 +639,29 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
       syncCursorsRef.current = cursor;
       completedRefreshRef.current += 1;
       setSyncGeneration((value) => value + 1);
+    };
+    const promise = (async () => {
+      do {
+        const request = canonicalRefreshRef.current;
+        const requested = request?.scope === scopeGeneration && request.requested > request.completed ? request.requested : 0;
+        try { await runRefresh(requested > 0); }
+        catch (error) {
+          const status = (error as { statusCode?: number })?.statusCode;
+          const queued = canonicalRefreshRef.current;
+          // A transport failure in an older request must not swallow a newer
+          // canonical request. Never bypass an authorization denial, and never
+          // retry the same failed generation without another refresh trigger.
+          if (current() && status !== 403 && status !== 404 && queued?.scope === scopeGeneration
+            && queued.requested > requested && queued.requested > queued.completed) continue;
+          throw error;
+        }
+        if (!current()) return;
+        if (requested && request && canonicalRefreshRef.current === request) request.completed = requested;
+        // An explicit ineligible event may arrive while an older delta or
+        // canonical response is pending. Never let that response consume the
+        // later request; coalesce it into the next authorized history refresh.
+      } while (canonicalRefreshRef.current?.scope === scopeGeneration
+        && canonicalRefreshRef.current.requested > canonicalRefreshRef.current.completed);
     })().catch(async (error: unknown) => {
       const status = (error as { statusCode?: number })?.statusCode;
       if (current() && initialMessageId && status === 404) {
@@ -1030,7 +1060,9 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     // A person view also contains task and group rooms. Only the server's
     // verified two-member direct audience permits an immediate peer receipt.
     // Legacy or ineligible events use the existing scope-coalesced recovery.
-    if (data.directReceiptEligible !== true) { void refresh().catch(() => {}); return; }
+    if (data.directReceiptEligible !== true) {
+      void refresh({ canonical: data.directReceiptEligible === false }).catch(() => {}); return;
+    }
     const through = messagesRef.current.find((message) => message.id === data.throughMessageId);
     if (data.throughMessageId && !through) return;
     setMessages((previous) => previous.map((message) => {
@@ -1047,7 +1079,9 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     readAt?: string; throughMessageId?: string; throughCreatedAt?: string; directReceiptEligible?: boolean }) => {
     if (!receiptPeerId || data.userId !== receiptPeerId || !data.roomId || !data.topicId || !data.readAt
       || !data.throughMessageId || !data.throughCreatedAt || !isCurrentScope()) return;
-    if (data.directReceiptEligible !== true) { void refresh().catch(() => {}); return; }
+    if (data.directReceiptEligible !== true) {
+      void refresh({ canonical: data.directReceiptEligible === false }).catch(() => {}); return;
+    }
     const boundary = { id: data.throughMessageId, created_at: data.throughCreatedAt } as ChatMessage;
     if (!Number.isFinite(messageTime(boundary))) return;
     setMessages((previous) => previous.map((message) => {
