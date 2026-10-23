@@ -202,7 +202,7 @@ export default function InvoicesTab({ businessId, canManage }: Props) {
 
       {/* Invoice list */}
       {loading ? (
-        <div className="flex items-center justify-center py-16"><div className="animate-spin h-8 w-8 border-3 border-violet-600 border-t-transparent rounded-full" /></div>
+        <div className="flex items-center justify-center py-16"><div className="animate-spin h-8 w-8 border-2 border-violet-600 border-t-transparent rounded-full" /></div>
       ) : invoices.length === 0 ? (
         <div className="text-center py-16">
           <FileText className="w-12 h-12 mx-auto text-app-text-muted mb-3" />

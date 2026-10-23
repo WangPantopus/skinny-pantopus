@@ -109,6 +109,14 @@ function serializeTaskPerson(person, { counts = false } = {}) {
   return serializeUserIdentityForViewer({ ...account, handle, display_name, avatar_url });
 }
 
+// The name a task's notices give a person: the name serializeTaskPerson gives them on the task, or `fallback` when
+// their account can't be read.
+async function loadTaskPersonName(userId, fallback) {
+  const person = { user_id: userId };
+  await hydrateListingCreatorIdentities(person);
+  return serializeTaskPerson(person.creator)?.displayName || fallback;
+}
+
 // Gives each row's person under `keys` (e.g. a question's asker, a bid's bidder) the Local Profile they are named by.
 async function hydrateTaskPeople(rows, keys) {
   const holders = (rows || []).flatMap((row) => keys.filter((key) => row?.[key])
@@ -148,6 +156,7 @@ module.exports = {
   LISTING_CREATOR_USER_SELECT,
   hydrateListingCreatorIdentities,
   hydrateTaskPeople,
+  loadTaskPersonName,
   loadTaskPosterFields,
   serializeTaskPerson,
   withoutAccountPoster,
