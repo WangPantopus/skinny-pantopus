@@ -133,6 +133,50 @@ async function isFindableBy(senderId, user, localProfile) {
 }
 
 /**
+ * The accounts a search finds by name outside the sender's household, by the rule GET /api/users/search follows: a
+ * person by the name and handle on their Local Profile (what neighbors see), and by their account's name or username
+ * only when they let people find them by name (UserPrivacySettings.findable_by_name). A business, or someone with no
+ * Local Profile, goes by its account everywhere, so the account's name and username find it. `within` limits the
+ * search to those accounts and `exclude` leaves accounts out. Throws on a read error.
+ *
+ * @returns {Promise<string[]>} account ids, at most `limit` of each kind of match
+ */
+async function idsFoundByName(searchPattern, { within = null, exclude = [], limit }) {
+  const scope = (query, column) => {
+    const scoped = within ? query.in(column, within) : query;
+    return (exclude.length ? scoped.not(column, 'in', `(${exclude.join(',')})`) : scoped).limit(limit);
+  };
+  const [profiles, accounts] = await Promise.all([
+    scope(supabaseAdmin.from('LocalProfile').select('user_id')
+      .or(`display_name.ilike.${searchPattern},handle.ilike.${searchPattern}`), 'user_id'),
+    scope(supabaseAdmin.from('User').select('id, account_type')
+      .or(`name.ilike.${searchPattern},username.ilike.${searchPattern}`), 'id'),
+  ]);
+  if (profiles.error) throw profiles.error;
+  if (accounts.error) throw accounts.error;
+  const found = new Set((profiles.data || []).map((row) => String(row.user_id)));
+  const byAccount = (accounts.data || []).filter((user) => !found.has(String(user.id)));
+  const people = byAccount.filter((user) => user.account_type !== 'business').map((user) => user.id);
+  let withProfile = new Set();
+  let findableByName = new Set();
+  if (people.length) {
+    const [profileRows, privacyRows] = await Promise.all([
+      supabaseAdmin.from('LocalProfile').select('user_id').in('user_id', people),
+      supabaseAdmin.from('UserPrivacySettings').select('user_id').in('user_id', people).eq('findable_by_name', true),
+    ]);
+    if (profileRows.error) throw profileRows.error;
+    if (privacyRows.error) throw privacyRows.error;
+    withProfile = new Set((profileRows.data || []).map((row) => String(row.user_id)));
+    findableByName = new Set((privacyRows.data || []).map((row) => String(row.user_id)));
+  }
+  for (const user of byAccount) {
+    const id = String(user.id);
+    if (user.account_type === 'business' || !withProfile.has(id) || findableByName.has(id)) found.add(id);
+  }
+  return [...found];
+}
+
+/**
  * Build a recipient result object from a user row and home data.
  */
 function buildRecipientResult(user, homeId, homeAddress, homeMediaUrl, rank) {
@@ -212,12 +256,16 @@ router.get('/recipients', verifyToken, async (req, res) => {
       const homeAddress = home ? `${home.address}, ${home.city}, ${home.state}` : null;
 
       if (householdRows) {
+        // A housemate is found by the name and handle they show (their Local Profile) and, since the household's
+        // mail comes addressed to them by name, by their account's name and username too.
+        const housemates = await loadChatPeople(householdRows.map((row) => row.User?.id));
+        const wanted = query.toLowerCase();
         for (const row of householdRows) {
           const user = row.User;
           if (!user || user.id === senderId) continue;
-          const nameMatch = (user.name || '').toLowerCase().includes(query.toLowerCase());
-          const usernameMatch = (user.username || '').toLowerCase().includes(query.toLowerCase());
-          if (!nameMatch && !usernameMatch) continue;
+          const person = housemates.get(String(user.id));
+          const names = [user.name, user.username, person?.displayName, person?.handle];
+          if (!names.some((name) => (name || '').toLowerCase().includes(wanted))) continue;
 
           seenUserIds.add(user.id);
           results.push(buildRecipientResult(user, homeId, homeAddress, homeMediaUrl, 0));
@@ -229,12 +277,13 @@ router.get('/recipients', verifyToken, async (req, res) => {
     const connectionIds = await getConnectionUserIds(senderId);
 
     if (connectionIds.size > 0) {
-      const { data: connectedUsers } = await supabaseAdmin
-        .from('User')
-        .select('id, name, username, verified, profile_picture_url')
-        .in('id', Array.from(connectionIds))
-        .or(`name.ilike.${searchPattern},username.ilike.${searchPattern}`)
-        .limit(10);
+      const connectionMatches = await idsFoundByName(searchPattern, { within: Array.from(connectionIds), limit: 10 });
+      const { data: connectedUsers } = connectionMatches.length
+        ? await supabaseAdmin
+          .from('User')
+          .select('id, name, username, verified, profile_picture_url')
+          .in('id', connectionMatches)
+        : { data: [] };
 
       if (connectedUsers) {
         // Batch-fetch home occupancies for all connected users at once
@@ -280,12 +329,13 @@ router.get('/recipients', verifyToken, async (req, res) => {
       const remaining = 10 - results.length;
       const excludeIds = [senderId, ...seenUserIds];
 
-      const { data: generalUsers } = await supabaseAdmin
-        .from('User')
-        .select('id, name, username, verified, profile_picture_url, profile_visibility')
-        .or(`name.ilike.${searchPattern},username.ilike.${searchPattern}`)
-        .not('id', 'in', `(${excludeIds.join(',')})`)
-        .limit(remaining);
+      const generalMatches = await idsFoundByName(searchPattern, { exclude: excludeIds, limit: remaining });
+      const { data: generalUsers } = generalMatches.length
+        ? await supabaseAdmin
+          .from('User')
+          .select('id, name, username, verified, profile_picture_url, profile_visibility')
+          .in('id', generalMatches)
+        : { data: [] };
 
       if (generalUsers) {
         const generalUserIds = generalUsers.map((user) => user.id);
@@ -298,6 +348,7 @@ router.get('/recipients', verifyToken, async (req, res) => {
         // Someone who is neither a housemate nor a connection is matched by name
         // only: their Home, address and photo stay private.
         for (const user of generalUsers) {
+          if (results.length >= 10) break;
           if (seenUserIds.has(user.id)) continue;
           if (unpublishedBusinesses.has(String(user.id))) continue;
           if (!(await isFindableBy(senderId, user, localProfileByUserId.get(user.id)))) continue;
