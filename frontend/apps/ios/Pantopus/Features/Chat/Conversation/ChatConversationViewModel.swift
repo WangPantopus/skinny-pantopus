@@ -2611,30 +2611,34 @@ public final class ChatConversationViewModel {
         guard cursor.count <= 10000 else { return false }
         var next = cursor
         var until: [String: Int64]?
-        var changes: [ChatMessageChange] = []
+        let heldIds = Set(messages.map(\.id))
+        let oldest = messages.first
+        var staged: [String: ChatMessageDTO] = [:]
+        var deleted: Set<String> = []
+        var confirmations: [String: ChatMessageDTO] = [:]
         var finalPage: ChatChangesResponse?
         do {
             repeat {
-                let endpoint: Endpoint
-                switch mode {
-                case let .room(roomId):
-                    endpoint = ChatEndpoints.changes(
-                        conversationId: roomId,
-                        isRoom: true,
-                        cursor: next,
-                        until: until,
-                        asBusinessUserId: asBusinessUserId
-                    )
-                case let .person(otherUserId):
-                    endpoint = ChatEndpoints.changes(conversationId: otherUserId, isRoom: false, cursor: next, until: until)
-                case .ai: return false
-                }
-                let page: ChatChangesResponse = try await api.request(endpoint)
+                let page: ChatChangesResponse = try await api.request(changesEndpoint(cursor: next, until: until))
                 guard generation == historyGeneration, historyRequestId == requestId, !Task.isCancelled else { return true }
                 guard !page.resetRequired else { return false }
                 if let until, until != page.untilCursors { throw APIError.invalidResponse }
                 if page.hasMore, page.syncCursors == next { throw APIError.invalidResponse }
-                changes.append(contentsOf: page.messages)
+                let pendingIds = Set(ChatOutbox.shared.messages.map(\.id))
+                    .union(pendingByClientId.keys).union(sendContextsByClientId.keys).union(failedClientIds)
+                for change in page.messages {
+                    guard let message = change.message else {
+                        staged.removeValue(forKey: change.id)
+                        if heldIds.contains(change.id) { deleted.insert(change.id) }
+                        continue
+                    }
+                    if let clientId = message.clientMessageId, pendingIds.contains(clientId) {
+                        confirmations[clientId] = message
+                    }
+                    guard heldIds.contains(message.id) || oldest.map({ !Self.messagePrecedes(message, $0) }) != false else { continue }
+                    deleted.remove(message.id)
+                    staged[message.id] = message
+                }
                 next = page.syncCursors
                 until = page.untilCursors
                 finalPage = page
@@ -2642,20 +2646,16 @@ public final class ChatConversationViewModel {
         } catch APIError.notFound {
             // An older server can still reconcile the loaded history window.
             return false
-        } catch APIError.clientError(status: 400, message: _) {
+        } catch let APIError.clientError(status, _) where status == 400 || status == 405 {
             return false
         }
         guard let finalPage else { return false }
         let rooms = Set(finalPage.roomIds)
-        let oldest = messages.first
         var byId = Dictionary(uniqueKeysWithValues: messages.filter { rooms.contains($0.roomId) }.map { ($0.id, $0) })
-        for change in changes where !historyTouchedIds.contains(change.id) {
-            guard let message = change.message else {
-                byId.removeValue(forKey: change.id)
-                continue
-            }
-            guard rooms.contains(message.roomId), byId[message.id] != nil
-                || oldest.map({ !Self.messagePrecedes(message, $0) }) != false else { continue }
+        for id in deleted where !historyTouchedIds.contains(id) {
+            byId.removeValue(forKey: id)
+        }
+        for message in staged.values where !historyTouchedIds.contains(message.id) && rooms.contains(message.roomId) {
             if message.readAt == nil, let readAt = byId[message.id]?.readAt {
                 byId[message.id] = message.replacingReadAt(readAt)
             } else {
@@ -2663,7 +2663,7 @@ public final class ChatConversationViewModel {
             }
         }
         messages = byId.values.sorted(by: Self.messagePrecedes)
-        retireConfirmedClientIds(in: changes.compactMap(\.message))
+        retireConfirmedClientIds(in: Array(confirmations.values))
         activeRoomIds = rooms
         activeThreadTracker.setActiveRooms(rooms, owner: ObjectIdentifier(self))
         syncCursors = next
@@ -2676,6 +2676,22 @@ public final class ChatConversationViewModel {
         scheduleMarkRead()
         if case let .room(roomId) = mode { await refreshRoomAvailability(roomId: roomId) }
         return true
+    }
+
+    private func changesEndpoint(cursor: [String: Int64], until: [String: Int64]?) throws -> Endpoint {
+        switch mode {
+        case let .room(roomId):
+            return ChatEndpoints.changes(
+                conversationId: roomId,
+                isRoom: true,
+                cursor: cursor,
+                until: until,
+                asBusinessUserId: asBusinessUserId
+            )
+        case let .person(otherUserId):
+            return ChatEndpoints.changes(conversationId: otherUserId, isRoom: false, cursor: cursor, until: until)
+        case .ai: throw ChatSendError.noRoom
+        }
     }
 
     private func requestHistory(before: String?, topicId: String?) async throws -> ChatMessagesResponse {
