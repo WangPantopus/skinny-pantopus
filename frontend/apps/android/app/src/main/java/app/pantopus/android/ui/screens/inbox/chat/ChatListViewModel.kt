@@ -106,7 +106,14 @@ class ChatListViewModel
          * just read and the messages that arrived meanwhile show (as on iOS).
          */
         fun load() {
-            if (_state.value !is ChatListUiState.Loaded) repo.conversationsCopy()?.let { show(it, syncMutes = false) }
+            if (_state.value !is ChatListUiState.Loaded) {
+                val known = badgeCoordinator.snapshot.value
+                if (known.initialized) {
+                    serverTotalUnread = known.serverTotalUnread
+                    serverUnmutedUnread = known.serverUnmutedUnread
+                }
+                repo.conversationsCopy()?.let { show(it, syncMutes = false, updateTotals = !known.initialized) }
+            }
             subscribeToSockets()
             fetch(force = false)
         }
@@ -215,7 +222,7 @@ class ChatListViewModel
                                     response,
                                     syncMutes = stored.failure == null && revision == muteRevision,
                                     liveRows = live,
-                                    updateTotals = badgesAtStart == badgeRevision,
+                                    updateTotals = stored.failure == null && badgesAtStart == badgeRevision,
                                 )
                             }
                             _state.value is ChatListUiState.Loaded || _state.value == ChatListUiState.Empty -> Unit

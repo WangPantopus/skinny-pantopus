@@ -105,6 +105,7 @@ class ChatBadgeViewModel
                     )
                 }
             applyAdjustedUnread(rows)
+            badgeCoordinator.publish(serverTotalUnread, rows, serverUnmutedUnread)
         }
 
         private fun subscribeToSocket() {
@@ -115,6 +116,7 @@ class ChatBadgeViewModel
                         serverTotalUnread = total
                         serverUnmutedUnread = json.badgeUnmutedUnreadCount()
                         applyAdjustedUnread(badgeCoordinator.snapshot.value.rows)
+                        badgeCoordinator.publish(total, badgeCoordinator.snapshot.value.rows, serverUnmutedUnread)
                     }
                 }
             }

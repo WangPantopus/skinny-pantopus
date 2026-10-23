@@ -856,8 +856,7 @@ class ChatConversationViewModel
             val roomId = typingRoomIdOrNull() ?: return
             if (socket.connectionState.value != SocketManager.ConnectionState.Connected) return
             val now = System.currentTimeMillis()
-            // ≥6s between emits keeps continuous typing at ≤10 emits/min —
-            // the backend's socket rate limit for `typing:start`.
+            // Refresh before the 5s remote indicator expires; 3s is below the server's 30/min start budget.
             if (now - lastTypingEmitAtMs < TYPING_EMIT_THROTTLE_MS) return
             lastTypingEmitAtMs = now
             didEmitTypingStart = true
@@ -3884,7 +3883,7 @@ private const val PDF_MIME = "application/pdf"
 // Backend Joi cap for report `details` (`backend/routes/users.js:4140`).
 private const val MAX_REPORT_DETAILS = 1000
 
-private const val TYPING_EMIT_THROTTLE_MS = 6_000L
+private const val TYPING_EMIT_THROTTLE_MS = 3_000L
 
 /** Clear a stale counterparty typing indicator after this long. */
 private const val TYPING_AUTO_CLEAR_MS = 5_000L
