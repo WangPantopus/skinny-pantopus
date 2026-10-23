@@ -193,9 +193,9 @@ public struct ChatConversationView: View {
                     Task { await viewModel.selectTopic(topicId) }
                 }
             }
-            if viewModel.isViewingSearchContext {
+            if viewModel.isViewingSearchContext || viewModel.isViewingEarlierHistory {
                 HStack {
-                    Text("Showing a search match")
+                    Text(viewModel.isViewingSearchContext ? "Showing a search match" : "Showing earlier messages")
                         .foregroundStyle(Theme.Color.appTextSecondary)
                     Spacer()
                     Button("Return to latest") {
@@ -1265,7 +1265,7 @@ extension ChatConversationView {
     private func landAtLatestMessage(_ proxy: ScrollViewProxy) async {
         // Opened from Chat Search → the pendingScrollTargetId path
         // positions on the matched message instead.
-        guard !viewModel.hasPendingSearchTarget, !hasLandedAtLatest else { return }
+        guard !viewModel.hasPendingSearchTarget, !viewModel.isViewingEarlierHistory, !hasLandedAtLatest else { return }
         proxy.scrollTo(Self.bottomAnchorId, anchor: .bottom)
         for delayMs: UInt64 in [80, 250, 600] {
             try? await Task.sleep(nanoseconds: delayMs * 1_000_000)
@@ -1283,7 +1283,7 @@ extension ChatConversationView {
         newLast: ChatTimelineRow?,
         proxy: ScrollViewProxy
     ) {
-        guard let newLast else { return }
+        guard let newLast, !isLoadingOlder, !viewModel.isViewingEarlierHistory else { return }
         let isNewRow = oldLast?.id != newLast.id
         let isOwnSend: Bool = {
             guard isNewRow, case let .bubble(bubble) = newLast else { return false }

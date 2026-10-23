@@ -388,6 +388,10 @@ public final class ChatConversationViewModel {
     /// `consumePendingScroll()` after scrolling.
     public private(set) var pendingScrollTargetId: String?
     public private(set) var isViewingSearchContext = false
+    public private(set) var isViewingEarlierHistory = false
+    private static let retainedMessageLimit = 600
+    /// Exclusive upper edge of a window whose newer rows were evicted.
+    private var earlierHistoryBefore: String?
     private var hasLatestHistoryWindow = false
 
     /// True while the screen was opened from Chat Search (or at a nudge) and
@@ -1266,8 +1270,21 @@ public final class ChatConversationViewModel {
         didResolveScrollTarget = false
         awaitingTargetScroll = false
         pendingScrollTargetId = nil
-        await fetch(.reload)
+        await fetch(.reload, recallOnReload: true)
         pendingScrollTargetId = "chat_bottom_anchor"
+    }
+
+    /// Sending never waits for network history. Recover the latest encrypted
+    /// window locally, then let durable enqueue and normal refresh proceed.
+    private func prepareLatestForSend() async {
+        isViewingSearchContext = false
+        scrollToMessageId = nil
+        didResolveScrollTarget = false
+        awaitingTargetScroll = false
+        _ = await prepareHistoryReload(recall: true)
+        rebuild()
+        pendingScrollTargetId = "chat_bottom_anchor"
+        scheduleFallbackRefresh()
     }
 
     /// Dismiss the send notice banner.
@@ -1311,7 +1328,7 @@ public final class ChatConversationViewModel {
         composerText = ""
         if capturedEdit == nil { replyingTo = nil }
         let clearedMutation = draftMutation
-        if isViewingSearchContext, capturedEdit == nil { await returnToLatest() }
+        if isViewingSearchContext || isViewingEarlierHistory, capturedEdit == nil { await prepareLatestForSend() }
         guard api !== APIClient.shared || sendSession == AuthManager.shared.requestSessionGeneration else { return }
 
         if let capturedEdit {
@@ -1451,7 +1468,7 @@ public final class ChatConversationViewModel {
                     activeRoomIds.insert(message.roomId)
                     activeThreadTracker.setActiveRooms(activeRoomIds, owner: ObjectIdentifier(self), topicId: selectedTopicId)
                     joinActiveRoomsIfPossible()
-                    upsert(message)
+                    upsert(message, confirmedSend: true)
                     scheduleMarkRead()
                 }
                 applyOutboxSnapshot()
@@ -1547,7 +1564,7 @@ public final class ChatConversationViewModel {
             // Swap optimistic → server message. The socket echo may have
             // landed it via a refetch already, so replace-by-id.
             retireConfirmedSend(clientId: clientId)
-            upsert(response.message)
+            upsert(response.message, confirmedSend: true)
             sendLimitNotice = nil
             rebuild()
             scheduleMarkRead(for: roomId)
@@ -1607,9 +1624,30 @@ public final class ChatConversationViewModel {
 
     /// Insert a persisted message, replacing any copy that already
     /// arrived through a socket-triggered refetch.
-    private func upsert(_ message: ChatMessageDTO) {
+    private func upsert(_ message: ChatMessageDTO, confirmedSend: Bool = false) {
         guard !historyAccessRefused else { return }
-        guard !isViewingSearchContext || messages.contains(where: { $0.id == message.id }) else { return }
+        if confirmedSend, isViewingSearchContext || isViewingEarlierHistory,
+           !messages.contains(where: { $0.id == message.id }) {
+            // A queued send may finish after the user paged backwards. Keep its
+            // accepted row visible and recover latest history without a gap.
+            isViewingSearchContext = false
+            isViewingEarlierHistory = false
+            earlierHistoryBefore = nil
+            scrollToMessageId = nil
+            didResolveScrollTarget = false
+            awaitingTargetScroll = false
+            hasLatestHistoryWindow = false
+            historyGeneration += 1
+            historyRequestId = nil
+            messages = []
+            oldestCursor = nil
+            hasMore = false
+            syncCursors = nil
+            setVisibleReadBoundaries([])
+            pendingScrollTargetId = "chat_bottom_anchor"
+            scheduleFallbackRefresh()
+        }
+        guard acceptsMessageInWindow(message) else { return }
         historyTouchedIds.insert(message.id)
         guard selectedTopicId == nil || message.topicId == selectedTopicId else { return }
         if let index = messages.firstIndex(where: { $0.id == message.id }) {
@@ -2549,7 +2587,7 @@ public final class ChatConversationViewModel {
             guard let room = await prepareReplySend(roomId: replyRoom, mutation: mutation, session: session) else { return }
             replyDestination = room
         }
-        if isViewingSearchContext { await returnToLatest() }
+        if isViewingSearchContext || isViewingEarlierHistory { await prepareLatestForSend() }
         let topicId = await resolveTopicIdForShare(topicForPerson, fallback: capturedTopic)
         guard api !== APIClient.shared || session == AuthManager.shared.requestSessionGeneration else { return }
         let clientId = Self.newClientMessageId()
@@ -2775,6 +2813,8 @@ public final class ChatConversationViewModel {
         historyGeneration += 1
         state = .loading
         messages = []
+        isViewingEarlierHistory = false
+        earlierHistoryBefore = nil
         oldestCursor = nil
         hasMore = false
         syncCursors = nil
@@ -2805,7 +2845,11 @@ public final class ChatConversationViewModel {
         defer {
             if historyRequestId == requestId { historyRequestId = nil }
         }
-        let before: String? = if case let .older(cursor) = kind { cursor } else { nil }
+        let before: String? = switch kind {
+        case let .older(cursor): cursor
+        case .merge: earlierHistoryBefore
+        case .reload: nil
+        }
         do {
             if case .merge = kind, topicId == nil, let cursor = syncCursors,
                try await fetchChanges(cursor: cursor, requestId: requestId, generation: generation) {
@@ -2815,11 +2859,11 @@ public final class ChatConversationViewModel {
             guard generation == historyGeneration, historyRequestId == requestId, !Task.isCancelled else { return }
             var fetched = response.messages
             var page = response
-            // Refresh every already-loaded range. This fills arbitrarily large reconnect gaps
-            // and reconciles offline edits/deletes without discarding older loaded history.
+            // Reconcile only a bounded retained range. A long offline gap can
+            // replace the oldest retained rows; paging still reaches them.
             if case .merge = kind, response.anchorMessageId == nil, let earliest = held.min(by: Self.messagePrecedes) {
                 var cursors: Set<String> = []
-                while page.hasMore == true,
+                while fetched.count < Self.retainedMessageLimit, page.hasMore == true,
                       let oldest = page.messages.min(by: Self.messagePrecedes),
                       Self.messagePrecedes(earliest, oldest),
                       let cursor = page.nextCursor ?? Self.paginationCursor(for: oldest),
@@ -2843,8 +2887,10 @@ public final class ChatConversationViewModel {
             historyConfirmedAt = Date()
             historyAccessRefused = false
             if response.anchorMessageId != nil { isViewingSearchContext = true }
-            if before == nil {
-                hasLatestHistoryWindow = response.anchorMessageId == nil
+            if case .older = kind {
+                // The loaded page does not redefine the latest/snapshot scope.
+            } else {
+                hasLatestHistoryWindow = response.anchorMessageId == nil && !isViewingEarlierHistory
                 syncCursors = topicId == nil ? response.syncCursors : nil
             }
             apply(response: response, kind: kind, fetchedMessages: fetched)
@@ -2896,10 +2942,14 @@ public final class ChatConversationViewModel {
                     if let clientId = message.clientMessageId, pendingIds.contains(clientId) {
                         confirmations[clientId] = message
                     }
-                    guard heldIds.contains(message.id) || oldest.map({ !Self.messagePrecedes(message, $0) }) != false else { continue }
+                    guard acceptsMessageInWindow(message),
+                          heldIds.contains(message.id) || oldest.map({ !Self.messagePrecedes(message, $0) }) != false else { continue }
                     deleted.remove(message.id)
                     staged[message.id] = message
                 }
+                // Never accumulate an outage's entire change log. Canonical
+                // bounded history can replace this uncommitted snapshot safely.
+                if staged.count > Self.retainedMessageLimit * 2 { return false }
                 next = page.syncCursors
                 until = page.untilCursors
                 finalPage = page
@@ -2929,6 +2979,9 @@ public final class ChatConversationViewModel {
         activeThreadTracker.setActiveRooms(rooms, owner: ObjectIdentifier(self), topicId: selectedTopicId)
         syncCursors = next
         historyConfirmedAt = Date()
+        for message in confirmations.values.sorted(by: Self.messagePrecedes) {
+            upsert(message, confirmedSend: true)
+        }
         for receipt in finalPage.readReceipts ?? [] {
             handleRead(receipt, recoverOtherRooms: false)
         }
@@ -3158,6 +3211,10 @@ public final class ChatConversationViewModel {
         } else {
             hasMore = response.hasMore ?? false
             oldestCursor = response.nextCursor ?? Self.paginationCursor(for: messages.first)
+        }
+        switch kind {
+        case .older: boundRetainedMessages(keepingOlder: true)
+        case .reload, .merge: boundRetainedMessages(keepingOlder: isViewingEarlierHistory || isViewingSearchContext)
         }
         rebuild()
         joinActiveRoomsIfPossible()
@@ -3632,8 +3689,9 @@ public final class ChatConversationViewModel {
         if let topicId = message.topicId, !topics.contains(where: { $0.id == topicId }) {
             scheduleTopicsRefresh()
         }
+        let confirmsPending = message.clientMessageId.map { pendingByClientId[$0] != nil } == true
         if let clientId = message.clientMessageId { retireConfirmedSend(clientId: clientId) }
-        upsert(message)
+        upsert(message, confirmedSend: confirmsPending)
         rebuild()
         scheduleMarkRead()
     }
@@ -3733,7 +3791,40 @@ public final class ChatConversationViewModel {
 
     // MARK: - Projection
 
+    private func acceptsMessageInWindow(_ message: ChatMessageDTO) -> Bool {
+        if messages.contains(where: { $0.id == message.id }) { return true }
+        if isViewingSearchContext { return false }
+        guard isViewingEarlierHistory else { return true }
+        guard let first = messages.first, let last = messages.last else { return false }
+        return !Self.messagePrecedes(message, first) && !Self.messagePrecedes(last, message)
+    }
+
+    /// Pending/failed rows live separately and are never subject to this cap.
+    private func boundRetainedMessages(keepingOlder: Bool) {
+        guard messages.count > Self.retainedMessageLimit else { return }
+        if keepingOlder {
+            // Save the actual recent window before its newest edge is evicted.
+            rememberThread()
+            earlierHistoryBefore = Self.paginationCursor(for: messages[Self.retainedMessageLimit])
+            messages = Array(messages.prefix(Self.retainedMessageLimit))
+            isViewingEarlierHistory = true
+            hasLatestHistoryWindow = false
+        } else {
+            messages = Array(messages.suffix(Self.retainedMessageLimit))
+            oldestCursor = Self.paginationCursor(for: messages.first)
+            hasMore = true
+        }
+        let retained = Set(messages.map(\.id))
+        visibleReadBoundaries = visibleReadBoundaries.filter { retained.contains($0.value) }
+    }
+
     private func rebuild() {
+        if historyRequestId == nil { historyTouchedIds.removeAll() }
+        if case .ai = mode {
+            // Assistant history has a separate contract and cache.
+        } else {
+            boundRetainedMessages(keepingOlder: isViewingEarlierHistory || isViewingSearchContext)
+        }
         rebuildTimeline()
         scheduleHistorySave()
     }
@@ -4309,7 +4400,7 @@ extension ChatConversationViewModel {
         historySaveTask = nil
         // Leaving context or a failed return-to-latest must never relabel an old
         // bounded window as the recent offline thread.
-        guard hasLatestHistoryWindow, !isViewingSearchContext,
+        guard hasLatestHistoryWindow, !isViewingSearchContext, !isViewingEarlierHistory,
               let endpoint = threadMemoryEndpoint, let key = store.key(for: endpoint), key.account == currentUserId else { return }
         let kept = Array(messages.suffix(Self.rememberedMessages))
         let trimmed = kept.count < messages.count
