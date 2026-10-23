@@ -163,6 +163,7 @@ Triggered from new comments on an open question (§3.7). The nudge's body summar
 
 New read tool `find_recommendations({ query })`:
 - Searches recommendation posts and their replies that the person can see, within 10 miles and the last 180 days, by the query's words.
+- Posts that have ended count (an Ask archives after 7 days and a recommendation after 60; their pages still open), never one moderation removed: the feed's query with `getListFeed({ includeEnded })`, as Before you ask (§6.5). Until October 22 it read only live posts, so it saw one week of questions.
 - Groups mentions by business or person name, and returns up to 8 with counts and post ids.
 - Chat only; never in a nudge.
 

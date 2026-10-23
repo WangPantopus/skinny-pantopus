@@ -2953,6 +2953,9 @@ public struct HubTabRoot: View {
                     },
                     onRepost: { _ in
                         push(.composeGig(category: GigsCategory.all.rawValue))
+                    },
+                    onRebook: { gig in
+                        push(.composeGig(category: GigsCategory.from(backendKey: gig.category).rawValue))
                     }
                 )
             )

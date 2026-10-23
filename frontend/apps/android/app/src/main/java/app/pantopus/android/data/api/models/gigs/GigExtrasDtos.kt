@@ -42,26 +42,36 @@ data class GigStartReminderResponse(
     @Json(name = "next_allowed_at") val nextAllowedAt: String? = null,
 )
 
-/** The worker inlined on a rebookable gig (`backend/routes/gigs.js:2960`). */
+/**
+ * The worker inlined on a rebookable gig (`backend/routes/gigs.js` `/rebookable`). The server names them by their
+ * Local Profile (`displayName`, photo in `avatarUrl`), as the task does; older servers sent the account's
+ * `firstName` / `lastName` / `username`, read only as fallbacks.
+ */
 @JsonClass(generateAdapter = true)
 data class RebookableWorkerDto(
     val id: String,
+    /** The worker's Local Profile name, or the business (wire key `displayName`). */
+    @Json(name = "displayName") val localName: String? = null,
     val firstName: String? = null,
     val lastName: String? = null,
     val username: String? = null,
     val avatarUrl: String? = null,
     val rating: Double? = null,
 ) {
-    /** "Ana" — first name, else username, else a neutral fallback. */
+    /** "Ana R." — the Local Profile name, else the first name, else the username, else a neutral fallback. */
     val displayName: String
         get() =
-            firstName?.takeIf { it.isNotBlank() }
+            localName?.takeIf { it.isNotBlank() }
+                ?: firstName?.takeIf { it.isNotBlank() }
                 ?: username?.takeIf { it.isNotBlank() }
                 ?: "Helper"
 
-    /** "AL" — first+last initials, else the username initial. */
+    /** "AR" — the Local Profile name's first two initials, else first+last initials, else the username initial. */
     val initials: String
         get() {
+            localName?.takeIf { it.isNotBlank() }?.let { name ->
+                return name.trim().split(" ").filter { it.isNotEmpty() }.take(2).joinToString("") { it.first().uppercase() }
+            }
             val pair =
                 (
                     (firstName?.firstOrNull()?.toString() ?: "") +
