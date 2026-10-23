@@ -2725,6 +2725,8 @@ private fun AiWelcomeCard(
  */
 private const val NEAR_BOTTOM_ROW_SLACK = 2
 
+private data class ChatPrependAnchor(val rowId: String, val scrollOffset: Int, val oldestMessageId: String)
+
 @Composable
 internal fun PopulatedFrame(
     rows: List<ChatTimelineRow>,
@@ -2762,6 +2764,8 @@ internal fun PopulatedFrame(
     var previousNewestId by rememberSaveable { mutableStateOf<String?>(null) }
     var previousTailKeys by remember { mutableStateOf<Set<String>>(emptySet()) }
     var previousRowCount by remember { mutableIntStateOf(0) }
+    var prependAnchor by remember { mutableStateOf<ChatPrependAnchor?>(null) }
+    val oldestMessageId = rows.firstOrNull { it is ChatTimelineRow.Bubble }?.rowId
     // Leading non-row items (pagination spacer + any pinned welcome card)
     // offset row indices inside the LazyColumn.
     val headerCount =
@@ -2770,7 +2774,7 @@ internal fun PopulatedFrame(
     // the load-older trigger so it can't fire while the list still sits at
     // the top pre-scroll.
     var initialScrollDone by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(rows.size, rows.lastOrNull()?.rowId) {
+    LaunchedEffect(rows.size, rows.lastOrNull()?.rowId, oldestMessageId) {
         if (rows.isEmpty()) return@LaunchedEffect
         val lastIndex = headerCount + rows.lastIndex
         val previousIndex = rows.indexOfLast { it.rowId == previousNewestId }
@@ -2786,6 +2790,16 @@ internal fun PopulatedFrame(
             if (scrollToRowId == null) listState.scrollToItem(lastIndex)
             initialScrollDone = true
             return@LaunchedEffect
+        }
+        // A day divider can keep the same key when older bubbles are inserted below it. Restore the
+        // visible bubble explicitly so that keeping that divider at the top cannot jump a whole page.
+        prependAnchor?.takeIf { it.oldestMessageId != oldestMessageId }?.let { anchor ->
+            prependAnchor = null
+            val anchorIndex = rows.indexOfFirst { it.rowId == anchor.rowId }
+            if (anchorIndex >= 0) {
+                listState.scrollToItem(anchorIndex + headerCount, anchor.scrollOffset)
+                return@LaunchedEffect
+            }
         }
         // Follow appended rows (own sends, incoming messages) only when the
         // user is already reading near the bottom — never yank them out of
@@ -2849,8 +2863,15 @@ internal fun PopulatedFrame(
     val shouldLoadOlder by remember {
         derivedStateOf { initialScrollDone && listState.firstVisibleItemIndex <= 1 }
     }
-    LaunchedEffect(shouldLoadOlder, rows.firstOrNull()?.rowId) {
-        if (shouldLoadOlder) onLoadOlder()
+    LaunchedEffect(shouldLoadOlder) {
+        if (shouldLoadOlder) {
+            val firstBubble = listState.layoutInfo.visibleItemsInfo.firstOrNull { rowsByKey[it.key] is ChatTimelineRow.Bubble }
+            prependAnchor =
+                firstBubble?.let { bubble ->
+                    oldestMessageId?.let { ChatPrependAnchor(bubble.key.toString(), -bubble.offset, it) }
+                }
+            onLoadOlder()
+        }
     }
     // Chat Search deep-link: animate to the matched row once it lands in
     // the list, then clear the target. The [headerCount] offset skips the
