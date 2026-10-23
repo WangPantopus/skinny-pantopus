@@ -259,6 +259,7 @@ class ChatConversationViewModel
         private var gigId: String? = null
         private var scrollToMessageId: String? = null
         private var didResolveScrollTarget = false
+        private var scrollToLatestOnLoad = false
         private var contextMessageId: String? = null
         private var contextHasNewer = false
         private val _showLatestMessages = MutableStateFlow(false)
@@ -456,6 +457,7 @@ class ChatConversationViewModel
                 acknowledgedReadByRoom.clear()
                 visibleTimelineAnchor = null
                 viewingLatest = true
+                scrollToLatestOnLoad = false
                 lastReadMessageId = null
                 _selectedTopicId.value = null
                 _topics.value = emptyList()
@@ -836,6 +838,7 @@ class ChatConversationViewModel
         }
 
         private fun clearContextWindow() {
+            scrollToLatestOnLoad = false
             contextMessageId = null
             contextHasNewer = false
             _showLatestMessages.value = false
@@ -847,6 +850,7 @@ class ChatConversationViewModel
         fun returnToLatestMessages() {
             if (contextMessageId == null) return
             clearContextWindow()
+            scrollToLatestOnLoad = true
             historyGeneration++
             catchUpJob?.cancel()
             historyPage = null
@@ -2480,6 +2484,7 @@ class ChatConversationViewModel
                             response.data.nextCursor
                                 ?: paginationCursor(messages.firstOrNull())
                     }
+                    resolveLatestScroll(firstPage)
                     rebuild()
                     joinActiveRoomsIfPossible()
                     scheduleMarkRead()
@@ -2511,6 +2516,15 @@ class ChatConversationViewModel
         }
 
         /** The newest hundred server messages, restored from the account-scoped encrypted recent-history cache. */
+        private fun resolveLatestScroll(firstPage: Boolean) {
+            if (!firstPage || !scrollToLatestOnLoad) return
+            scrollToLatestOnLoad = false
+            viewingLatest = true
+            visibleTimelineAnchor = null
+            scrollToMessageId = messages.lastOrNull()?.id
+            didResolveScrollTarget = false
+        }
+
         private fun showHistoryCopy(): Boolean {
             val copy =
                 when (val target = mode) {
