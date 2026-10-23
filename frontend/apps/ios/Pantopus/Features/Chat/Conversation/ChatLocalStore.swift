@@ -26,6 +26,8 @@ final class ChatLocalStore: @unchecked Sendable {
     let queue = DispatchQueue(label: "app.pantopus.ios.chat-local", qos: .utility)
     let lock = NSLock()
     var generation = 0
+    var draftReservations: [String: UUID] = [:]
+    var consumedDraftIds: Set<String> = []
     private var sessionGeneration = 0
     // The following preparation state is used only on `queue`.
     private var preparedGeneration: Int?
@@ -186,6 +188,8 @@ final class ChatLocalStore: @unchecked Sendable {
         lock.withLock {
             generation += 1
             sessionGeneration += 1
+            draftReservations.removeAll()
+            consumedDraftIds.removeAll()
             try? secure.delete("encryption-key")
             if FileManager.default.fileExists(atPath: root.path) {
                 try? FileManager.default.moveItem(at: root, to: aside)

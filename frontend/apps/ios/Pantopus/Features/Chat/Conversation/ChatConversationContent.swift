@@ -380,10 +380,11 @@ public struct ChatAIActionDone: Codable, Sendable, Hashable {
     public let note: String?
 }
 
-public struct ChatReplyPreview: Sendable, Hashable {
+public struct ChatReplyPreview: Codable, Sendable, Hashable {
     public let messageId: String
     public let senderName: String
     public let text: String
+    public var roomId: String?
 }
 
 public struct ChatBubbleReaction: Identifiable, Sendable, Hashable {

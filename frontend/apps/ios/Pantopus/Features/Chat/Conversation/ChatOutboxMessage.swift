@@ -31,7 +31,7 @@ struct ChatOutboxMessage: Codable, Identifiable {
     }
 }
 
-struct ChatOutboxAttachment: Codable, Identifiable {
+struct ChatOutboxAttachment: Codable, Identifiable, Equatable {
     let id: String
     let filename: String
     let mimeType: String
@@ -70,5 +70,22 @@ enum ChatLocalStorageError: LocalizedError {
         case .damagedAttachment: "That queued file could not be restored. Attach it again to send it."
         case .unavailable: "Couldn't save this message on your device. Reopen the app and try again."
         }
+    }
+}
+
+/// Never-sent composer state uses the same account key and chunk format as the
+/// outbox, but is not eligible for delivery until its directory is promoted.
+struct ChatComposerDraft: Codable {
+    let id: String
+    let threadKey: String
+    let text: String
+    let reply: ChatReplyPreview?
+    let editingMessageId: String?
+    let topicId: String?
+    let updatedAt: Date
+    let attachments: [ChatOutboxAttachment]
+
+    var isEmpty: Bool {
+        text.isEmpty && attachments.isEmpty && reply == nil && editingMessageId == nil
     }
 }

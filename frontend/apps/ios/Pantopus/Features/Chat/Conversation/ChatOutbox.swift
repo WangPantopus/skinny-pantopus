@@ -102,17 +102,29 @@ final class ChatOutbox {
         }
     }
 
-    func enqueue(_ message: ChatOutboxMessage, attachments: [ChatQueuedAttachment]) async throws {
+    func enqueue(
+        _ message: ChatOutboxMessage, attachments: [ChatQueuedAttachment], expectedAccount: String, draft: ChatComposerDraft? = nil
+    ) async throws {
         let started = lifetime
         await loadTask?.value
-        guard lifetime == started, account != nil else { throw CancellationError() }
+        guard lifetime == started, account == expectedAccount else { throw CancellationError() }
         guard restoreFailure == nil else { throw ChatLocalStorageError.unavailable }
-        try await storage.enqueue(message, attachments: attachments, scope: scope, version: version)
+        try await storage.enqueue(message, attachments: attachments, scope: scope, version: version, draft: draft)
         guard lifetime == started else { throw CancellationError() }
         messages.append(message)
         messages.sort { $0.queuedAt < $1.queuedAt }
         publish(.changed)
         pump()
+    }
+
+    func restoreComposer(thread: String, expectedAccount: String) async throws -> (ChatComposerDraft, [ChatQueuedAttachment])? {
+        let started = lifetime
+        await loadTask?.value
+        guard lifetime == started, account == expectedAccount else { throw CancellationError() }
+        guard restoreFailure == nil else { throw ChatLocalStorageError.unavailable }
+        let restored = try await storage.loadDraft(scope: scope, thread: thread, version: version)
+        guard lifetime == started else { throw CancellationError() }
+        return restored
     }
 
     func retry(_ id: String) async {

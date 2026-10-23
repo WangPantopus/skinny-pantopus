@@ -441,6 +441,7 @@ public final class ChatConversationViewModel {
     public var composerText: String = "" {
         didSet {
             guard oldValue != composerText else { return }
+            scheduleDraftSave()
             guard !isProgrammaticComposerWrite else { return }
             handleComposerTextChange()
         }
@@ -449,10 +450,18 @@ public final class ChatConversationViewModel {
     /// True while a send is in flight.
     public private(set) var isSending: Bool = false
 
-    public private(set) var replyingTo: ChatReplyPreview?
-    public private(set) var editingMessageId: String?
+    public private(set) var replyingTo: ChatReplyPreview? {
+        didSet { if oldValue != replyingTo { scheduleDraftSave() } }
+    }
+
+    public private(set) var editingMessageId: String? {
+        didSet { if oldValue != editingMessageId { scheduleDraftSave() } }
+    }
+
     public private(set) var topics: [ChatConversationTopic] = []
-    public private(set) var selectedTopicId: String?
+    public private(set) var selectedTopicId: String? {
+        didSet { if oldValue != selectedTopicId { scheduleDraftSave() } }
+    }
 
     /// User-facing notice set when the backend rejects a send with the
     /// gig pre-bid message cap (429 `PRE_BID_LIMIT`,
@@ -499,7 +508,9 @@ public final class ChatConversationViewModel {
     /// Local pre-send queue. Backend upload/send wiring is out of scope
     /// for this phase, but the UI can still render and remove queued
     /// attachments deterministically.
-    public private(set) var queuedAttachments: [ChatQueuedAttachment] = []
+    public private(set) var queuedAttachments: [ChatQueuedAttachment] = [] {
+        didSet { if oldValue != queuedAttachments { scheduleDraftSave() } }
+    }
 
     public private(set) var shareableGigs: [ChatShareGigOption] = []
     public private(set) var shareableListings: [ChatShareListingOption] = []
@@ -729,7 +740,15 @@ public final class ChatConversationViewModel {
         /// the only sends that carry the queued composer attachments.
         let messageType: String?
         let metadata: [String: JSONValue]?
+        var draft: ChatComposerDraft?
+        var replyRoomId: String?
     }
+
+    private var draftId = UUID().uuidString.lowercased()
+    private var draftMutation = 0
+    private var hasRestoredDraft = false
+    private var isRestoringDraft = false
+    private var draftSaveTask: Task<Void, Never>?
 
     private enum ChatSendError: Error {
         case noRoom
@@ -845,6 +864,7 @@ public final class ChatConversationViewModel {
 
     public func load() async {
         observeOutbox()
+        await restoreComposerDraft()
         if case .loaded = state {
             // Back on screen after `teardown()` (a pushed screen, a tab
             // switch): listen again and catch up on what arrived meanwhile.
@@ -864,6 +884,79 @@ public final class ChatConversationViewModel {
         subscribeToSockets()
         prefetchDirectRoomIfNeeded()
         loadGigContextIfNeeded()
+    }
+
+    private var draftThreadKey: String? {
+        switch mode {
+        case let .person(id): "person|\(id)|\(asBusinessUserId ?? "")"
+        case let .room(id): "room|\(id)|\(asBusinessUserId ?? "")"
+        case .ai: nil
+        }
+    }
+
+    private func composerDraft() -> ChatComposerDraft? {
+        guard let thread = draftThreadKey else { return nil }
+        return ChatComposerDraft(
+            id: draftId,
+            threadKey: thread,
+            text: composerText,
+            reply: replyingTo,
+            editingMessageId: editingMessageId,
+            topicId: selectedTopicId,
+            updatedAt: Date(),
+            attachments: queuedAttachments.filter { $0.data != nil }.map(ChatOutboxAttachment.init)
+        )
+    }
+
+    private func scheduleDraftSave(immediate: Bool = false) {
+        guard usesDurableOutbox, !isRestoringDraft,
+              case let .signedIn(user) = AuthManager.shared.state, user.id == currentUserId else { return }
+        draftMutation += 1
+        draftSaveTask?.cancel()
+        guard !isSending, let draft = composerDraft() else { return }
+        let attachments = queuedAttachments.filter { $0.data != nil }
+        let storage = ChatLocalStore.shared
+        let reservation = storage.reserveDraft(draft.id)
+        let version = storage.sessionVersion
+        let scope = ChatLocalStore.scope(server: api.apiBaseURL.absoluteString, account: currentUserId)
+        draftSaveTask = Task { [weak self] in
+            do {
+                if !immediate { try await Task.sleep(nanoseconds: 150_000_000) }
+                try Task.checkCancellation()
+                try await storage.saveDraft(draft, attachments: attachments, reservation: reservation, scope: scope, version: version)
+            } catch is CancellationError {
+                return
+            } catch {
+                guard let self, storage.sessionVersion == version else { return }
+                actionFailure = "Couldn't save this draft on your device. \(error.localizedDescription)"
+            }
+        }
+    }
+
+    private func restoreComposerDraft() async {
+        guard usesDurableOutbox, !hasRestoredDraft, let thread = draftThreadKey else { return }
+        hasRestoredDraft = true
+        let mutation = draftMutation
+        let version = ChatLocalStore.shared.sessionVersion
+        do {
+            guard let (draft, attachments) = try await ChatOutbox.shared.restoreComposer(thread: thread, expectedAccount: currentUserId),
+                  draftMutation == mutation, ChatLocalStore.shared.sessionVersion == version, !Task.isCancelled,
+                  composerText.isEmpty, queuedAttachments.isEmpty, replyingTo == nil, editingMessageId == nil else { return }
+            isRestoringDraft = true
+            defer { isRestoringDraft = false }
+            draftId = draft.id
+            setComposerTextSilently(draft.text)
+            queuedAttachments = attachments
+            replyingTo = draft.reply
+            editingMessageId = draft.editingMessageId
+            selectedTopicId = draft.topicId
+        } catch is CancellationError {
+            return
+        } catch {
+            guard ChatLocalStore.shared.sessionVersion == version else { return }
+            actionFailure = "Couldn't restore this draft. Reopen the conversation to try again."
+            hasRestoredDraft = false
+        }
     }
 
     /// Restore the most recent Ask-Pantopus conversation across app
@@ -1160,25 +1253,41 @@ public final class ChatConversationViewModel {
     public func send() async {
         let hasQueuedFiles = queuedAttachments.contains { $0.data != nil }
         guard roomClosedNote == nil, !isDeletingAIConversation, canSend || hasQueuedFiles else { return }
+        let sendSession = AuthManager.shared.requestSessionGeneration
         let trimmed = composerText.trimmingCharacters(in: .whitespacesAndNewlines)
-        composerText = ""
+        let capturedAttachments = queuedAttachments
+        let capturedReply = replyingTo
+        let capturedReplyRoom = capturedReply?.roomId ?? messages.first { $0.id == capturedReply?.messageId }?.roomId
+        let capturedTopic = selectedTopicId
+        let capturedEdit = editingMessageId
+        let consumedDraft = usesDurableOutbox && editingMessageId == nil ? composerDraft() : nil
+        if consumedDraft != nil { draftId = Self.newClientMessageId() }
         isSending = true
-        defer { isSending = false }
+        composerText = ""
+        if capturedEdit == nil { replyingTo = nil }
+        let clearedMutation = draftMutation
+        defer {
+            isSending = false
+            scheduleDraftSave()
+        }
 
-        if isViewingSearchContext, editingMessageId == nil { await returnToLatest() }
+        if isViewingSearchContext, capturedEdit == nil { await returnToLatest() }
+        guard api !== APIClient.shared || sendSession == AuthManager.shared.requestSessionGeneration else { return }
 
-        if let editingMessageId {
+        if let capturedEdit {
             do {
                 let response: SendChatMessageResponse = try await api.request(
                     ChatEndpoints.editMessage(
-                        id: editingMessageId,
+                        id: capturedEdit,
                         body: EditChatMessageBody(messageText: trimmed)
                     )
                 )
                 applyUpdatedMessage(response.message)
-                cancelMessageAction()
+                if draftMutation == clearedMutation, editingMessageId == capturedEdit { cancelMessageAction() }
             } catch {
-                setComposerTextSilently(trimmed)
+                if draftMutation == clearedMutation, editingMessageId == capturedEdit, composerText.isEmpty {
+                    setComposerTextSilently(trimmed)
+                }
                 actionFailure = "Couldn\u{2019}t save your edit. Try again."
                 logger.warning("chat edit failed: \(error)")
             }
@@ -1193,7 +1302,7 @@ public final class ChatConversationViewModel {
             return
         }
 
-        let clientId = Self.newClientMessageId()
+        let clientId = consumedDraft?.id ?? Self.newClientMessageId()
         let pending = optimisticMessage(
             text: trimmed.isEmpty ? "Attachment" : trimmed,
             clientId: clientId,
@@ -1202,15 +1311,16 @@ public final class ChatConversationViewModel {
         pendingByClientId[clientId] = pending
         sendContextsByClientId[clientId] = PendingSendContext(
             text: trimmed,
-            attachments: queuedAttachments,
+            attachments: capturedAttachments,
             fileIds: nil,
-            replyToId: replyingTo?.messageId,
-            topicId: selectedTopicId,
+            replyToId: capturedReply?.messageId,
+            topicId: capturedTopic,
             messageType: nil,
-            metadata: nil
+            metadata: nil,
+            draft: consumedDraft,
+            replyRoomId: capturedReplyRoom
         )
-        // The sending bubble quotes the original now, and a retry keeps the reply.
-        replyingTo = nil
+        // The sending bubble and retry keep the immutable captured reply.
         rebuild()
         if usesDurableOutbox {
             await enqueuePending(clientId: clientId)
@@ -1266,7 +1376,7 @@ public final class ChatConversationViewModel {
             messageType: context.messageType,
             metadata: context.metadata,
             replyToId: context.replyToId,
-            replyRoomId: messages.first { $0.id == context.replyToId }?.roomId,
+            replyRoomId: context.replyRoomId ?? messages.first { $0.id == context.replyToId }?.roomId,
             topicId: context.topicId,
             createdAt: pending.createdAt,
             queuedAt: Date(),
@@ -1274,7 +1384,7 @@ public final class ChatConversationViewModel {
             fileIds: context.fileIds
         )
         do {
-            try await ChatOutbox.shared.enqueue(message, attachments: attachments)
+            try await ChatOutbox.shared.enqueue(message, attachments: attachments, expectedAccount: currentUserId, draft: context.draft)
             let capturedIds = Set(attachments.map(\.id))
             queuedAttachments.removeAll { capturedIds.contains($0.id) }
             sendLimitNotice = nil
@@ -1809,7 +1919,8 @@ public final class ChatConversationViewModel {
         replyingTo = ChatReplyPreview(
             messageId: message.id,
             senderName: Self.replyName(for: message, currentUserId: sendingIdentityId),
-            text: message.messageText ?? ""
+            text: message.messageText ?? "",
+            roomId: message.roomId
         )
         editingMessageId = nil
     }
@@ -1971,6 +2082,7 @@ public final class ChatConversationViewModel {
     }
 
     public func teardown() {
+        scheduleDraftSave(immediate: true)
         outboxTask?.cancel()
         outboxTask = nil
         setVisibleReadBoundaries([])

@@ -3,7 +3,7 @@ import Foundation
 
 extension ChatLocalStore {
     static let outboxLimit = 100 * 1024 * 1024
-    private static let chunkSize = 1024 * 1024
+    static let chunkSize = 1024 * 1024
 
     func pendingBytes() -> Int {
         lock.withLock { outboxBytes() }
@@ -20,6 +20,7 @@ extension ChatLocalStore {
             try self.lock.withLock {
                 try self.requireSession(version)
                 let key = try self.prepare(scope: scope, generation: self.generation)
+                try self.recoverDraftPromotions(scope: scope, key: key)
                 let directory = self.root.appendingPathComponent("outbox")
                 let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
                 // Temporary upload bodies and interrupted staging directories are
@@ -44,9 +45,17 @@ extension ChatLocalStore {
     }
 
     func enqueue(
-        _ message: ChatOutboxMessage, attachments: [ChatQueuedAttachment], scope: String, version: Int
+        _ message: ChatOutboxMessage,
+        attachments: [ChatQueuedAttachment],
+        scope: String,
+        version: Int,
+        draft: ChatComposerDraft? = nil
     ) async throws {
         try Self.validateAttachmentSizes(attachments)
+        if let draft {
+            try await promoteDraft(draft, message: message, attachments: attachments, scope: scope, version: version)
+            return
+        }
         try await onQueue {
             let (key, staging) = try self.lock.withLock {
                 try self.requireSession(version)
@@ -86,7 +95,7 @@ extension ChatLocalStore {
     }
 
     /// Match the server's category limits before encrypting or uploading bytes.
-    private static func validateAttachmentSizes(_ attachments: [ChatQueuedAttachment]) throws {
+    static func validateAttachmentSizes(_ attachments: [ChatQueuedAttachment]) throws {
         for attachment in attachments {
             let megabytes = attachment.mimeType.hasPrefix("image/") ? 10 : attachment.mimeType.hasPrefix("video/") ? 100 : 25
             guard (attachment.data?.count ?? 0) <= megabytes * 1024 * 1024 else {
@@ -215,11 +224,11 @@ extension ChatLocalStore {
         try context.output.write(contentsOf: Data("\r\n".utf8))
     }
 
-    private func outboxURL(_ id: String) -> URL {
+    func outboxURL(_ id: String) -> URL {
         root.appendingPathComponent("outbox", isDirectory: true).appendingPathComponent(ScreenStoreDisk.hashed(id))
     }
 
-    private func writeMessage(_ message: ChatOutboxMessage, folder: URL, key: SymmetricKey, scope: String) throws {
+    func writeMessage(_ message: ChatOutboxMessage, folder: URL, key: SymmetricKey, scope: String) throws {
         let bytes = try JSONEncoder().encode(message)
         let context = "\(scope)|\(ScreenStoreDisk.hashed(message.id))"
         let encrypted = try AES.GCM.seal(bytes, using: key, authenticating: Data(context.utf8))
@@ -227,17 +236,18 @@ extension ChatLocalStore {
         try combined.write(to: folder.appendingPathComponent("message.sealed"), options: [.atomic, .completeFileProtection])
     }
 
-    private func outboxBytes() -> Int {
-        let files = FileManager.default.enumerator(
-            at: root.appendingPathComponent("outbox"),
-            includingPropertiesForKeys: [.fileSizeKey]
-        )
-        return (files?.allObjects as? [URL] ?? []).reduce(0) {
-            $0 + ((try? $1.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
+    func outboxBytes() -> Int {
+        ["outbox", "drafts"].reduce(0) { total, directory in
+            let files = FileManager.default.enumerator(
+                at: root.appendingPathComponent(directory), includingPropertiesForKeys: [.fileSizeKey]
+            )
+            return total + (files?.allObjects as? [URL] ?? []).reduce(0) {
+                $0 + ((try? $1.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
+            }
         }
     }
 
-    private static func createProtectedDirectory(_ url: URL) throws {
+    static func createProtectedDirectory(_ url: URL) throws {
         try FileManager.default.createDirectory(
             at: url,
             withIntermediateDirectories: true,
@@ -245,13 +255,13 @@ extension ChatLocalStore {
         )
     }
 
-    private func onQueue<Value: Sendable>(_ action: @escaping @Sendable () throws -> Value) async throws -> Value {
+    func onQueue<Value: Sendable>(_ action: @escaping @Sendable () throws -> Value) async throws -> Value {
         try await withCheckedThrowingContinuation { continuation in
             queue.async { continuation.resume(with: Result { try action() }) }
         }
     }
 
-    private static func sealChunks(_ bytes: Data, to url: URL, key: SymmetricKey, context: String) throws {
+    static func sealChunks(_ bytes: Data, to url: URL, key: SymmetricKey, context: String) throws {
         try Data().write(to: url, options: .completeFileProtection)
         let output = try FileHandle(forWritingTo: url)
         defer { try? output.close() }
@@ -265,7 +275,11 @@ extension ChatLocalStore {
         }
     }
 
-    private static func openChunks(from url: URL, into output: FileHandle, size: Int, key: SymmetricKey, context: String) throws {
+    static func openChunks(from url: URL, into output: FileHandle, size: Int, key: SymmetricKey, context: String) throws {
+        try openChunks(from: url, size: size, key: key, context: context) { try output.write(contentsOf: $0) }
+    }
+
+    static func openChunks(from url: URL, size: Int, key: SymmetricKey, context: String, receive: (Data) throws -> Void) throws {
         let input = try FileHandle(forReadingFrom: url)
         defer { try? input.close() }
         var total = 0
@@ -284,7 +298,7 @@ extension ChatLocalStore {
             )
             total += bytes.count
             guard total <= size else { throw ChatLocalStorageError.damagedAttachment }
-            try output.write(contentsOf: bytes)
+            try receive(bytes)
             index += 1
         }
         guard total == size else { throw ChatLocalStorageError.damagedAttachment }
