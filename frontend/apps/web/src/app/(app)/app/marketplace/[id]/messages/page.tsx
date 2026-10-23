@@ -174,12 +174,16 @@ function MessageRow({
   message: ListingMessage;
   onReply: (userId: string) => void;
 }) {
+  // The server names the buyer by their Local Profile (displayName, handle, avatarUrl).
   const buyer = message.buyer;
   const buyerName =
+    buyer?.displayName ||
     buyer?.name ||
     buyer?.first_name ||
     buyer?.username ||
     'Anonymous';
+  const buyerHandle = buyer?.handle || buyer?.username || '';
+  const buyerAvatar = buyer?.avatarUrl || buyer?.profile_picture_url || '';
   const buyerInitial = (String(buyerName)[0] || '?').toUpperCase();
   const buyerId: string = buyer?.id || message.buyer_id;
 
@@ -187,15 +191,15 @@ function MessageRow({
     <div className="bg-app-surface rounded-xl border border-app-border p-4">
       <div className="flex gap-3">
         {/* Avatar */}
-        {buyer?.profile_picture_url ? (
+        {buyerAvatar ? (
           <Image
-            src={buyer.profile_picture_url}
+            src={buyerAvatar}
             alt=""
             width={40}
             height={40}
             sizes="40px"
             quality={75}
-            className="rounded-full object-cover flex-shrink-0"
+            className="w-10 h-10 rounded-full object-cover flex-shrink-0"
           />
         ) : (
           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
@@ -208,9 +212,9 @@ function MessageRow({
           <div className="flex items-center gap-2 mb-1">
             <UserIdentityLink
               userId={buyerId}
-              username={buyer?.username || ''}
+              username={buyerHandle}
               displayName={String(buyerName)}
-              avatarUrl={buyer?.profile_picture_url || ''}
+              avatarUrl={buyerAvatar}
               textClassName="text-sm font-semibold text-app-text hover:text-primary-600"
             />
             {message.created_at && (

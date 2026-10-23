@@ -11,6 +11,7 @@ const validate = require('../middleware/validate');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const listingOfferService = require('../services/marketplace/listingOfferService');
+const { hydrateListingCreatorIdentities, serializeTaskPerson } = require('../utils/listingCreatorIdentity');
 
 // ============ VALIDATION ============
 
@@ -110,25 +111,21 @@ router.get('/:listingId/offers', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch offers' });
     }
 
-    // Enrich offers with user profile data (FK points to auth.users, not User table)
+    // Each offer's buyer and seller (FK points to auth.users, not User table), named by their Local Profile as the
+    // listing names its seller
+    const people = (offers || []).map((offer) => ({
+      buyer: { user_id: offer.buyer_id },
+      seller: { user_id: offer.seller_id },
+    }));
+    await hydrateListingCreatorIdentities(people.flatMap(({ buyer, seller }) => [buyer, seller]));
+
     const enriched = await Promise.all(
-      (offers || []).map(async (offer) => {
-        const userIds = [offer.buyer_id, offer.seller_id].filter(Boolean);
-        const { data: users } = await supabaseAdmin
-          .from('User')
-          .select('id, first_name, last_name, username, profile_picture_url')
-          .in('id', userIds);
-
-        const userMap = {};
-        (users || []).forEach((u) => { userMap[u.id] = u; });
-
-        return {
-          ...offer,
-          ...(!isSeller ? { checkout: await listingOfferService.buyerCheckoutSummary({ offer, listing, buyerId: userId }) } : {}),
-          buyer: userMap[offer.buyer_id] || null,
-          seller: userMap[offer.seller_id] || null,
-        };
-      })
+      (offers || []).map(async (offer, i) => ({
+        ...offer,
+        ...(!isSeller ? { checkout: await listingOfferService.buyerCheckoutSummary({ offer, listing, buyerId: userId }) } : {}),
+        buyer: serializeTaskPerson(people[i].buyer.creator),
+        seller: serializeTaskPerson(people[i].seller.creator),
+      }))
     );
 
     return res.json({ offers: enriched });

@@ -1033,11 +1033,10 @@ private fun EventSection(
             fields = fields,
             onUpdate = onUpdateField,
         )
-        DateRow(
+        DateTimeRow(
             field = PulseComposeField.EventDate,
             label = "Date & time",
-            allowFuture = true,
-            allowPast = false,
+            optional = false,
             fields = fields,
             onUpdate = onUpdateField,
         )
@@ -1809,9 +1808,11 @@ private fun DateRow(
 }
 
 /**
- * Optional date+time row backed by [FutureDateTimePickerDialogs]. The
- * field stores the picker-emitted `yyyy-MM-dd HH:mm` shape; a Clear
- * affordance empties it back out.
+ * Date+time row backed by [FutureDateTimePickerDialogs], for an event's
+ * start and its end. The field stores the picker-emitted
+ * `yyyy-MM-dd HH:mm` shape; a Clear affordance empties it back out.
+ * An [optional] row (the end) fades while empty; the start stays solid,
+ * as on iOS.
  */
 @Composable
 private fun DateTimeRow(
@@ -1819,6 +1820,7 @@ private fun DateTimeRow(
     label: String,
     fields: Map<PulseComposeField, FormFieldState>,
     onUpdate: (PulseComposeField, String) -> Unit,
+    optional: Boolean = true,
 ) {
     val snapshot = fields[field] ?: FormFieldState(id = field.key)
     var showPicker by remember { mutableStateOf(false) }
@@ -1856,7 +1858,7 @@ private fun DateTimeRow(
                         shape = RoundedCornerShape(Radii.md),
                     ).clickable { showPicker = true }
                     .padding(horizontal = Spacing.s3)
-                    .alpha(if (snapshot.value.isEmpty()) 0.65f else 1f)
+                    .alpha(if (optional && snapshot.value.isEmpty()) 0.65f else 1f)
                     .testTag("composePulseField_${field.key}")
                     .semantics { contentDescription = "$label, ${snapshot.value.ifEmpty { "not set" }}" },
             verticalAlignment = Alignment.CenterVertically,

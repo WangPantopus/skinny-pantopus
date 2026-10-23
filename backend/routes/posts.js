@@ -28,6 +28,7 @@ const { checkHomePermission, getActiveOccupancy, mapLegacyRole } = require('../u
 const { computeUtilityScore } = require('../utils/feedRanking');
 const s3 = require('../services/s3Service');
 const feedService = require('../services/feedService');
+const { loadChatPeople } = require('../services/chatPeople');
 const marketplaceService = require('../services/marketplace/marketplaceService');
 const { generateNeighborhoodFacts } = require('../services/ai/neighborhoodFactService');
 const { encodeGeohash6: _encodeGeohash6 } = require('../utils/geohash');
@@ -600,13 +601,13 @@ async function loadPersonaCommentAuthors(post, userIds) {
   return authors;
 }
 
-function serializeCommentForViewer(comment, audienceAuthor, viewerUserId) {
+function serializeCommentForViewer(comment, audienceAuthor, viewerUserId, person) {
   if (!comment) return null;
   const { author: rawAuthor, user_id: actorUserId, ...safe } = comment;
   return {
     ...safe,
     user_id: audienceAuthor ? (actorUserId === viewerUserId ? actorUserId : '') : actorUserId,
-    author: audienceAuthor || serializeUserAsLocalIdentity(rawAuthor),
+    author: audienceAuthor || person || serializeUserAsLocalIdentity(rawAuthor),
   };
 }
 
@@ -615,9 +616,13 @@ async function serializeCommentsForViewer(comments, post, viewerUserId, prepared
   const blocked = viewerUserId ? await blockService.blockedUserIds(viewerUserId) : new Set();
   const visible = blocked.size ? comments.filter((comment) => !blocked.has(comment.user_id)) : comments;
   const authors = preparedAuthors ?? await loadPersonaCommentAuthors(post, visible.map((comment) => comment.user_id));
+  // Off a persona post, commenters go by the name the post's author does: a person by their Local Profile's name,
+  // handle and photo, a business (or anyone without a Local Profile) by the account. A chat names people that way, so
+  // its lookup is reused; `id` stays the account id the web's hover card follows and connects by.
+  const people = authors ? null : await loadChatPeople(visible.map((comment) => comment.user_id));
   return visible.map((comment) => serializeCommentForViewer(comment,
     authors ? authors.get(comment.user_id) || { id: '', displayName: 'Fan', href: null } : null,
-    viewerUserId));
+    viewerUserId, people?.get(String(comment.user_id))));
 }
 
 function serializeLikeForViewer(like) {
