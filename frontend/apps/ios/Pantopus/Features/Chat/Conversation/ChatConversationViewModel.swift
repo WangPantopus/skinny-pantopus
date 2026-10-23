@@ -388,6 +388,7 @@ public final class ChatConversationViewModel {
     /// `consumePendingScroll()` after scrolling.
     public private(set) var pendingScrollTargetId: String?
     public private(set) var isViewingSearchContext = false
+    private var hasLatestHistoryWindow = false
 
     /// True while the screen was opened from Chat Search (or at a nudge) and
     /// the matched message hasn't been scrolled to yet — the view skips its
@@ -2616,7 +2617,10 @@ public final class ChatConversationViewModel {
             }
             historyConfirmedAt = Date()
             if response.anchorMessageId != nil { isViewingSearchContext = true }
-            if before == nil { syncCursors = topicId == nil ? response.syncCursors : nil }
+            if before == nil {
+                hasLatestHistoryWindow = response.anchorMessageId == nil && topicId == nil
+                syncCursors = topicId == nil ? response.syncCursors : nil
+            }
             apply(response: response, kind: kind, fetchedMessages: fetched)
             scheduleMarkRead()
             if case let .room(roomId) = mode, before == nil {
@@ -2721,6 +2725,7 @@ public final class ChatConversationViewModel {
         let endpoint: Endpoint
         if before == nil, topicId == nil, let messageId = scrollToMessageId, !didResolveScrollTarget || isViewingSearchContext {
             isViewingSearchContext = true
+            hasLatestHistoryWindow = false
             switch mode {
             case let .room(roomId):
                 return try await api.request(ChatEndpoints.messageContext(
@@ -3750,7 +3755,7 @@ extension ChatConversationViewModel {
     /// for a topic still being created, at a searched message, or the assistant
     /// starts from the server as before.
     private var threadMemoryEndpoint: Endpoint? {
-        guard initialTopic == nil, scrollToMessageId == nil else { return nil }
+        guard initialTopic == nil, scrollToMessageId == nil, selectedTopicId == nil else { return nil }
         return switch mode {
         case let .room(roomId):
             ChatEndpoints.roomMessages(roomId: roomId, before: nil, asBusinessUserId: asBusinessUserId)
@@ -3773,6 +3778,7 @@ extension ChatConversationViewModel {
         guard generation == historyGeneration, store.key(for: endpoint) == key, !Task.isCancelled,
               let memory = recalled, !memory.messages.isEmpty else { return false }
         messages = memory.messages
+        hasLatestHistoryWindow = true
         oldestCursor = memory.oldestCursor
         hasMore = memory.hasMore
         historyConfirmedAt = memory.confirmedAt
@@ -3794,7 +3800,10 @@ extension ChatConversationViewModel {
     private func rememberThread() {
         historySaveTask?.cancel()
         historySaveTask = nil
-        guard let endpoint = threadMemoryEndpoint, let key = store.key(for: endpoint), key.account == currentUserId else { return }
+        // Leaving context or a failed return-to-latest must never relabel an old
+        // bounded window as the recent offline thread.
+        guard hasLatestHistoryWindow, !isViewingSearchContext,
+              let endpoint = threadMemoryEndpoint, let key = store.key(for: endpoint), key.account == currentUserId else { return }
         let kept = Array(messages.suffix(Self.rememberedMessages))
         let trimmed = kept.count < messages.count
         let memory = ChatThreadMemory(
@@ -3832,6 +3841,7 @@ extension ChatConversationViewModel {
         syncCursors = nil
         savedHistorySnapshot = nil
         savedHistoryKey = nil
+        hasLatestHistoryWindow = false
         messages = []
         oldestCursor = nil
         hasMore = false
