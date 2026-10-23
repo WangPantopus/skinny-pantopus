@@ -481,12 +481,11 @@ export default function FeedPage() {
             onUserPan={quick.mapPan}
           />
 
-          {/* Flicked up, it tucks away (usePulseQuickReturn listens on it). */}
+          {/* Flicked up, it tucks away; focus in it keeps it (usePulseQuickReturn listens on it). */}
           <div
             ref={setHeaderElement}
             data-testid="pulseHeader"
             tabIndex={-1}
-            {...quick.headerFocusProps}
             className={`pulse-header-flick absolute inset-x-0 top-0 z-[1100] pointer-events-none ${headerMotionClass}`}
             style={headerMotionStyle}
           >
@@ -518,7 +517,6 @@ export default function FeedPage() {
             ref={setHeaderElement}
             data-testid="pulseHeader"
             tabIndex={-1}
-            {...quick.headerFocusProps}
             className={`sticky top-14 z-30 ${headerMotionClass}`}
             style={headerMotionStyle}
           >
