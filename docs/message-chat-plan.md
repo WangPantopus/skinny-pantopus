@@ -83,6 +83,27 @@ Client integration and app verification of this slice remain in progress.
 
 ## Remaining repair sequence
 
+### Server search and old-message navigation
+
+`GET /api/chat/search?q=...` searches the current identity's authorized rooms;
+room/person `/search` routes narrow that scope. `asBusinessUserId` retains the
+existing business authorization. Literal substring matching (including Unicode
+and escaped `%`/`_`) uses a partial trigram index. Results are newest first,
+with `hasMore`, a composite `nextCursor`, and `roomContexts` mapping room IDs to
+their existing person/room navigation and public identity. There is no
+invented total or scan of only the first message page.
+
+Room/person `/messages/:messageId/context` returns a small ascending window
+around an authorized, undeleted match. `hasMore` and `nextCursor` page older;
+`hasMoreAfter` tells the client that returning to the live bottom must load the
+latest window. A search window must not replace the cached latest window or
+advance its sync cursor. Existing layouts and search result rows stay intact.
+
+Local API/DB checks recovered an old match behind 130 newer messages, paged 130
+matches as 50/50/30 without duplicates, preserved literal wildcard characters
+and Unicode, opened the old match's context, and refused a nonmember. The
+client search integration and its real-app checks are next.
+
 | Area | Work remaining after immediate repairs |
 | --- | --- |
 | Client reconciliation | Finish app verification of live payload merges, optimistic ID reconciliation, stale-response guards, full loaded-range reconnect, edits/deletions/reactions, inbox order and unread deltas. |

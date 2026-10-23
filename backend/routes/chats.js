@@ -828,6 +828,77 @@ function chatChangesFailure(req, res, error) {
   return res.status(503).json({ error: 'Chat updates are temporarily unavailable', code: 'CHAT_UNAVAILABLE' });
 }
 
+async function chatSearchScope(req) {
+  const userId = req.user.id;
+  const asBusinessUserId = req.query.asBusinessUserId ? String(req.query.asBusinessUserId) : null;
+  let identityUserId = asBusinessUserId || userId;
+  const roomId = req.params.roomId || req.query.roomId;
+  const otherUserId = req.params.otherUserId || req.query.otherUserId;
+  if (roomId && otherUserId) throw Object.assign(new Error('Choose a room or a person'), { status: 400 });
+  if (asBusinessUserId && !await canActAsBusiness(asBusinessUserId, userId)) {
+    throw Object.assign(new Error('Access denied'), { status: 403 });
+  }
+  if (otherUserId) return { identityUserId, roomIds: await personChatRoomIds(userId, otherUserId, asBusinessUserId) };
+  if (roomId) {
+    const participant = await roomMembership(roomId, userId, asBusinessUserId);
+    if (!participant || (participant.is_active === false && !participant.left_at)
+      || await gigRoomClosed(roomId, userId, asBusinessUserId)) {
+      throw Object.assign(new Error('Access denied'), { status: 403 });
+    }
+    identityUserId = participant.user_id;
+    return { identityUserId, roomIds: [roomId] };
+  }
+  const rooms = [];
+  // Search every authorized room, not just the first inbox page or PostgREST's
+  // default row cap. No message bodies are downloaded while building scope.
+  for (let offset = 0; ; offset += 500) {
+    const { data, error } = await supabaseAdmin.from('ChatParticipant')
+      .select('room_id, room:room_id!inner(id, type, gig_id)')
+      .eq('user_id', identityUserId).eq('is_active', true)
+      .order('room_id').range(offset, offset + 499);
+    if (error) throw error;
+    rooms.push(...(data || []).map((row) => row.room));
+    if ((data || []).length < 500) break;
+  }
+  const closed = await closedGigRoomIds(rooms, userId, [identityUserId]);
+  return { identityUserId, roomIds: rooms.map((room) => room.id).filter((id) => !closed.has(id)) };
+}
+
+async function chatSearchRoomContexts(messages, identityUserId) {
+  const ids = [...new Set(messages.map((message) => message.room_id))];
+  if (!ids.length) return {};
+  const [rooms, members] = await Promise.all([
+    supabaseAdmin.from('ChatRoom').select('id, type, name, gig_id, support_train:support_train_id(Activity(title))').in('id', ids),
+    supabaseAdmin.from('ChatParticipant').select('room_id, user_id')
+      .in('room_id', ids).neq('user_id', identityUserId).eq('is_active', true),
+  ]);
+  if (rooms.error || members.error) throw rooms.error || members.error;
+  const hidden = await hiddenGigRoomMembers(rooms.data, members.data);
+  const otherByRoom = new Map();
+  for (const member of members.data || []) {
+    if (!hidden.has(`${member.room_id}:${member.user_id}`) && !otherByRoom.has(member.room_id)) {
+      otherByRoom.set(member.room_id, member.user_id);
+    }
+  }
+  const people = await loadChatPeople([...otherByRoom.values()]);
+  return Object.fromEntries((rooms.data || []).map((room) => {
+    const other = ['direct', 'gig'].includes(room.type) ? otherByRoom.get(room.id) : null;
+    const identity = other ? people.get(other) : null;
+    return [room.id, { conversationId: other || room.id, kind: other ? 'conversation' : 'room',
+      name: other ? identity?.displayName || 'Pantopus user'
+        : room.support_train?.Activity?.title || room.name || 'Conversation', identity: identity || null }];
+  }));
+}
+
+async function serializeChatHistory(messages, viewerId) {
+  const [reactions, people] = await Promise.all([
+    buildReactionSummary(messages.map((message) => message.id), viewerId),
+    loadMessageSenders(messages), applyDirectReadReceipts(messages, viewerId),
+  ]);
+  return messages.map((message) => ({ ...serializeChatMessageForViewer(message, { people, viewerId }),
+    reactions: reactions.get(message.id) || [] }));
+}
+
 /**
  * Parse a pagination cursor: either "timestamp|uuid" composite or plain timestamp.
  * Returns { beforeTs, beforeId } where beforeId may be null (legacy format).
@@ -1631,6 +1702,66 @@ router.get('/rooms/:roomId/pre-bid-status', verifyToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to check pre-bid status' });
   }
 });
+
+// Search returns newest matches plus room-to-conversation navigation metadata.
+// A query is literal text: '%' and '_' never become wildcard instructions.
+router.get(['/search', '/rooms/:roomId/search', '/conversations/:otherUserId/search'], verifyToken, async (req, res) => {
+  try {
+    const query = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+    if (!query || query.length > 200) return res.status(400).json({ error: 'Search must contain 1 to 200 characters' });
+    const { beforeTs, beforeId } = parseCursor(req.query.before);
+    if ((beforeTs && !Number.isFinite(Date.parse(beforeTs)))
+      || (beforeId && Joi.string().uuid().validate(beforeId).error)) {
+      return res.status(400).json({ error: 'Invalid search cursor' });
+    }
+    const { identityUserId, roomIds } = await chatSearchScope(req);
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 100);
+    const { data, error } = roomIds.length ? await supabaseAdmin.rpc('search_chat_messages', {
+      p_user_id: identityUserId, p_room_ids: roomIds, p_query: query,
+      p_before_at: beforeTs, p_before_id: beforeId, p_limit: limit + 1,
+    }) : { data: [] };
+    if (error) throw error;
+    const visible = (data || []).slice(0, limit);
+    const [messages, roomContexts] = await Promise.all([
+      serializeChatHistory(visible, req.user.id), chatSearchRoomContexts(visible, identityUserId),
+    ]);
+    const hasMore = (data || []).length > limit;
+    const last = visible.at(-1);
+    res.set('Cache-Control', 'private, no-store');
+    return res.json({ messages, roomContexts, hasMore,
+      nextCursor: hasMore && last ? `${last.created_at}|${last.id}` : null });
+  } catch (error) {
+    return chatChangesFailure(req, res, error);
+  }
+});
+
+// Search can land on an old message without loading every intervening page.
+// This window keeps older-history pagination and explicitly reports newer rows;
+// returning to the live bottom reloads the normal latest-message window.
+router.get(['/rooms/:roomId/messages/:messageId/context', '/conversations/:otherUserId/messages/:messageId/context'],
+  verifyToken, async (req, res) => {
+    try {
+      if (Joi.string().uuid().validate(req.params.messageId).error) {
+        return res.status(400).json({ error: 'Invalid message' });
+      }
+      const { identityUserId, roomIds } = await chatSearchScope(req);
+      const eachSide = Math.min(Math.max(parseInt(req.query.limit, 10) || 25, 1), 100);
+      const { data, error } = await supabaseAdmin.rpc('get_chat_message_context', {
+        p_user_id: identityUserId, p_room_ids: roomIds, p_message_id: req.params.messageId,
+        p_limit_each_side: eachSide,
+      });
+      if (error) throw error;
+      if (!data?.anchor) return res.status(404).json({ error: 'Message not found' });
+      const visible = [...data.older.slice(0, eachSide).reverse(), data.anchor, ...data.newer.slice(0, eachSide)];
+      const messages = await serializeChatHistory(visible, req.user.id);
+      const hasMore = data.older.length > eachSide;
+      res.set('Cache-Control', 'private, no-store');
+      return res.json({ messages, roomIds, anchorMessageId: data.anchor.id, hasMore,
+        nextCursor: hasMore ? buildNextCursor(visible) : null, hasMoreAfter: data.newer.length > eachSide });
+    } catch (error) {
+      return chatChangesFailure(req, res, error);
+    }
+  });
 
 /**
  * GET /api/chat/{rooms/:roomId,conversations/:otherUserId}/changes
