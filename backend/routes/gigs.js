@@ -525,6 +525,18 @@ function serializeGigQuestionForViewer(question, { business = null } = {}) {
   };
 }
 
+// The person who asked for a change, and the one who answered it, are named by their Local Profile, a business as the
+// business (hydrateTaskPeople, before this).
+function serializeGigChangeOrderForViewer(order) {
+  if (!order) return null;
+  const { requester, reviewer, ...safe } = order;
+  return {
+    ...safe,
+    requester: serializeTaskPerson(requester),
+    reviewer: serializeTaskPerson(reviewer),
+  };
+}
+
 // The bidder is named by their Local Profile (hydrateTaskPeople, before this), with the track record the poster
 // weighs bids by.
 function serializeGigBidForViewer(bid) {
@@ -6158,7 +6170,8 @@ router.get('/:gigId/change-orders', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch change orders' });
     }
 
-    res.json({ change_orders: orders || [] });
+    await hydrateTaskPeople(orders, ['requester', 'reviewer']);
+    res.json({ change_orders: (orders || []).map(serializeGigChangeOrderForViewer) });
   } catch (err) {
     logger.error('Change orders fetch error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch change orders' });
@@ -6274,19 +6287,21 @@ router.post('/:gigId/change-orders', verifyToken, async (req, res) => {
         .order('created_at', { ascending: true })
         .limit(1)
         .maybeSingle();
-    const repeatedOrder = (changeOrder) =>
-      res.json({
-        change_order: changeOrder,
+    const repeatedOrder = async (changeOrder) => {
+      await hydrateTaskPeople([changeOrder], ['requester']);
+      return res.json({
+        change_order: serializeGigChangeOrderForViewer(changeOrder),
         already_requested: true,
         message: 'You already sent this change request. It is waiting for a reply.',
       });
+    };
 
     const { data: existingOrder, error: existingErr } = await findPendingRepeat();
     if (existingErr) {
       logger.error('Error checking for a repeated change order', { error: existingErr.message });
       return res.status(500).json({ error: 'Failed to create change order' });
     }
-    if (existingOrder) return repeatedOrder(existingOrder);
+    if (existingOrder) return await repeatedOrder(existingOrder);
 
     // Rate limit: max 5 pending change orders per gig
     const { count, error: countErr } = await supabaseAdmin
@@ -6342,7 +6357,7 @@ router.post('/:gigId/change-orders', verifyToken, async (req, res) => {
 
     if (insertErr?.code === '23505') {
       const { data: racedOrder, error: racedErr } = await findPendingRepeat();
-      if (!racedErr && racedOrder) return repeatedOrder(racedOrder);
+      if (!racedErr && racedOrder) return await repeatedOrder(racedOrder);
     }
     if (insertErr) {
       logger.error('Error creating change order', { error: insertErr.message });
@@ -6383,7 +6398,8 @@ router.post('/:gigId/change-orders', verifyToken, async (req, res) => {
     }
 
     emitGigUpdate(req, gigId, 'status-change');
-    res.status(201).json({ change_order: order });
+    await hydrateTaskPeople([order], ['requester']);
+    res.status(201).json({ change_order: serializeGigChangeOrderForViewer(order) });
   } catch (err) {
     logger.error('Change order create error', { error: err.message });
     res.status(500).json({ error: 'Failed to create change order' });
