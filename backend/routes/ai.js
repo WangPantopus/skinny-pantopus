@@ -312,7 +312,7 @@ router.post('/draft/pickup-schedule', verifyToken, aiDraftLimiter, validate(draf
 
 const receiveRadonReport = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: radonReport.MAX_REPORT_BYTES, files: 1 },
+  limits: { fieldNameSize: 100, fieldNestingDepth: 3, fieldArrayIndexLimit: 32, fileSize: radonReport.MAX_REPORT_BYTES, files: 1, fields: 8, parts: 9, fieldSize: 4096 },
 }).single('file');
 
 function radonReportUpload(req, res, next) {

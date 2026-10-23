@@ -22,7 +22,7 @@ const metadataSchema = Joi.object({
 });
 const multipart = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: storage.MAX_DOCUMENT_BYTES, files: 1, fields: 5, fieldSize: 32768 },
+  limits: { fieldNameSize: 100, fieldNestingDepth: 3, fieldArrayIndexLimit: 32, fileSize: storage.MAX_DOCUMENT_BYTES, files: 1, fields: 5, fieldSize: 32768 },
 }).single('file');
 
 async function row(table, id) {

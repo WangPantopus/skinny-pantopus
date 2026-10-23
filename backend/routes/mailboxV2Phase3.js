@@ -243,7 +243,7 @@ const PHOTO_URL_TTL_SECONDS = 300;
 const PHOTO_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']);
 const photoMultipart = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: taskMediaStorage.MAX_BYTES, files: 1, fields: 1, fieldSize: 100, parts: 3 },
+  limits: { fieldNameSize: 100, fieldNestingDepth: 3, fieldArrayIndexLimit: 32, fileSize: taskMediaStorage.MAX_BYTES, files: 1, fields: 1, fieldSize: 100, parts: 3 },
 }).single('file');
 
 async function photoBucket() {
