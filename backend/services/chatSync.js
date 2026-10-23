@@ -45,6 +45,31 @@ async function readChatRoomBatches(roomIds, query) {
   return rows;
 }
 
+// A bounded room URL can still match thousands of group members. Page the
+// membership rows separately so previews and delivery include the entire scope.
+async function readChatParticipants(roomIds, columns, { activeOnly = true, excludeUserId } = {}) {
+  const rows = [];
+  const ids = [...new Set(roomIds)];
+  for (let offset = 0; offset < ids.length; offset += 100) {
+    let after;
+    for (;;) {
+      let query = supabaseAdmin.from('ChatParticipant')
+        .select(`id, room_id, ${columns}`)
+        .in('room_id', ids.slice(offset, offset + 100))
+        .order('room_id').order('id').limit(500);
+      if (activeOnly) query = query.eq('is_active', true);
+      if (excludeUserId) query = query.neq('user_id', excludeUserId);
+      if (after) query = query.or(`room_id.gt.${after.room_id},and(room_id.eq.${after.room_id},id.gt.${after.id})`);
+      const { data, error } = await query;
+      if (error) throw error;
+      rows.push(...data || []);
+      if (!data || data.length < 500) break;
+      after = data.at(-1);
+    }
+  }
+  return rows;
+}
+
 async function chatSyncSnapshot(roomIds) {
   if (!roomIds.length) return { cursors: {}, resets: {} };
   const data = await readChatRoomBatches(roomIds, (ids) => supabaseAdmin.from('ChatRoom')
@@ -156,4 +181,4 @@ async function buildReactionSummary(messageIds, requestingUserId) {
   return result;
 }
 
-module.exports = { parseSyncCursor, chatSyncSnapshot, chatChanges, chatReadReceipts, readChatRoomBatches, buildReactionSummary };
+module.exports = { parseSyncCursor, chatSyncSnapshot, chatChanges, chatReadReceipts, readChatRoomBatches, readChatParticipants, buildReactionSummary };

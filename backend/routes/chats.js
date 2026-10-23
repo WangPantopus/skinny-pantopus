@@ -43,7 +43,7 @@ const {
 } = require('../services/chatGigRoomAccess');
 const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
 const { markChatRead, applyDirectReadReceipts, timestampMicros } = require('../services/chatReadState');
-const { parseSyncCursor, chatSyncSnapshot, chatChanges, chatReadReceipts, readChatRoomBatches, buildReactionSummary } = require('../services/chatSync');
+const { parseSyncCursor, chatSyncSnapshot, chatChanges, chatReadReceipts, readChatRoomBatches, readChatParticipants, buildReactionSummary } = require('../services/chatSync');
 const chatRealtime = require('../services/chatRealtime');
 const { incCounter, recordHistogram, getSnapshot } = require('../services/chatMetrics');
 const pushService = require('../services/pushService');
@@ -519,12 +519,7 @@ async function readBusinessNotices(userId, businessUserId, roomIds) {
 
 async function emitNewMessage(io, { room, message, actorUserId, identityUserId }) {
   const { connectedUsers } = require('../socket/chatSocketio');
-  const { data: members, error } = await supabaseAdmin
-    .from('ChatParticipant')
-    .select('user_id, unread_count, user:user_id(account_type)')
-    .eq('room_id', room.id)
-    .eq('is_active', true);
-  if (error || !Array.isArray(members)) throw new Error(error?.message || 'members unavailable');
+  const members = await readChatParticipants([room.id], 'user_id, unread_count, user:user_id(account_type)');
   const actor = String(actorUserId);
   const identity = String(identityUserId);
   const others = members.filter((row) => ![actor, identity].includes(String(row.user_id)));
@@ -576,9 +571,7 @@ async function emitNewMessage(io, { room, message, actorUserId, identityUserId }
 // business. A stale Socket.IO room subscription is not access authorization.
 async function emitChatMutation(io, room, event, payload) {
   const { connectedUsers } = require('../socket/chatSocketio');
-  const { data: members, error } = await supabaseAdmin.from('ChatParticipant')
-    .select('user_id, user:user_id(account_type)').eq('room_id', room.id).eq('is_active', true);
-  if (error) throw error;
+  const members = await readChatParticipants([room.id], 'user_id, user:user_id(account_type)');
   const recipients = new Set(await gigRoomRecipients(room, (members || []).map((row) => String(row.user_id))));
   const emitTo = (userId, data) => {
     // A reaction's selected state belongs to the receiving person, not the actor.
@@ -657,11 +650,15 @@ async function deliverNewMessage(io, { room, message, actorUserId, senderUserId 
   }
 
   // Push fresh badge counts (including total message count) immediately.
-  const { data: participantRows } = await supabaseAdmin
-    .from('ChatParticipant')
-    .select('user_id, notifications_enabled, user:user_id(account_type)')
-    .eq('room_id', roomId)
-    .eq('is_active', true);
+  let participantRows;
+  try {
+    participantRows = await readChatParticipants([roomId], 'user_id, notifications_enabled, user:user_id(account_type)');
+  } catch (error) {
+    // The message is already committed. Its durable push and realtime records
+    // recover independently; a badge lookup must not turn acceptance into 500.
+    logger.warn('chat_badge_recipients_unavailable', { requestId, roomId, code: error.code });
+    return;
+  }
   const participantUserIds = Array.from(new Set((participantRows || []).map((row) => String(row.user_id)).filter(Boolean)));
   // Exclude both the acting user and the message identity user.
   const excludedUserIds = new Set([String(actorUserId), String(senderUserId)]);
@@ -1046,24 +1043,9 @@ async function roomInboxPage(query, userId, actorId = userId) {
 }
 
 async function roomPagePeople(roomIds, viewerId, activeOnly = false) {
-  const people = [];
-  // Bound GET URLs as well as result pages; 500 UUIDs can exceed proxy limits.
-  for (let offset = 0; offset < roomIds.length; offset += 100) {
-    let after;
-    for (;;) {
-      let query = supabaseAdmin.from('ChatParticipant')
-        .select('id, room_id, is_active, user:user_id(id, username, name, first_name, middle_name, last_name, profile_picture_url)')
-        .in('room_id', roomIds.slice(offset, offset + 100))
-        .neq('user_id', viewerId).order('room_id').order('id').limit(500);
-      if (activeOnly) query = query.eq('is_active', true);
-      if (after) query = query.or(`room_id.gt.${after.room_id},and(room_id.eq.${after.room_id},id.gt.${after.id})`);
-      const { data, error } = await query;
-      if (error) throw chatAccessUnavailable();
-      people.push(...data || []);
-      if (!data || data.length < 500) break;
-      after = data.at(-1);
-    }
-  }
+  const people = await readChatParticipants(roomIds,
+    'is_active, user:user_id(id, username, name, first_name, middle_name, last_name, profile_picture_url)',
+    { activeOnly, excludeUserId: viewerId }).catch(() => { throw chatAccessUnavailable(); });
   // Prefer current members after reading every page. Sorting by activity in
   // PostgREST alone truncated historical counterparts behind large groups.
   return people.sort((a, b) => Number(b.is_active === true) - Number(a.is_active === true));
