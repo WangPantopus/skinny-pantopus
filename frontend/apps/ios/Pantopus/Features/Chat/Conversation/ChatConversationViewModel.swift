@@ -762,6 +762,7 @@ public final class ChatConversationViewModel {
         let metadata: [String: JSONValue]?
         var draft: ChatComposerDraft?
         var replyRoomId: String?
+        var sendRoomId: String?
     }
 
     private var draftId = UUID().uuidString.lowercased()
@@ -1277,7 +1278,7 @@ public final class ChatConversationViewModel {
     /// failure marks the row as failed for the view's retry CTA.
     public func send() async {
         let hasQueuedFiles = queuedAttachments.contains { $0.data != nil }
-        guard roomClosedNote == nil, !isDeletingAIConversation, canSend || hasQueuedFiles else { return }
+        guard roomClosedNote == nil, !isSending, !isDeletingAIConversation, canSend || hasQueuedFiles else { return }
         let sendSession = AuthManager.shared.requestSessionGeneration
         let trimmed = composerText.trimmingCharacters(in: .whitespacesAndNewlines)
         let capturedAttachments = queuedAttachments
@@ -1285,17 +1286,23 @@ public final class ChatConversationViewModel {
         let capturedReplyRoom = capturedReply?.roomId ?? messages.first { $0.id == capturedReply?.messageId }?.roomId
         let capturedTopic = selectedTopicId
         let capturedEdit = editingMessageId
-        let consumedDraft = usesDurableOutbox && editingMessageId == nil ? composerDraft() : nil
-        if consumedDraft != nil { draftId = Self.newClientMessageId() }
+        let capturedMutation = draftMutation
         isSending = true
-        composerText = ""
-        if capturedEdit == nil { replyingTo = nil }
-        let clearedMutation = draftMutation
         defer {
             isSending = false
             scheduleDraftSave()
         }
-
+        var replyDestination: String?
+        if capturedReply != nil, capturedEdit == nil {
+            guard let room = await prepareReplySend(roomId: capturedReplyRoom, mutation: capturedMutation, session: sendSession)
+            else { return }
+            replyDestination = room
+        }
+        let consumedDraft = usesDurableOutbox && editingMessageId == nil ? composerDraft() : nil
+        if consumedDraft != nil { draftId = Self.newClientMessageId() }
+        composerText = ""
+        if capturedEdit == nil { replyingTo = nil }
+        let clearedMutation = draftMutation
         if isViewingSearchContext, capturedEdit == nil { await returnToLatest() }
         guard api !== APIClient.shared || sendSession == AuthManager.shared.requestSessionGeneration else { return }
 
@@ -1331,7 +1338,7 @@ public final class ChatConversationViewModel {
         let pending = optimisticMessage(
             text: trimmed.isEmpty ? "Attachment" : trimmed,
             clientId: clientId,
-            roomId: knownRoomIdHint()
+            roomId: replyDestination ?? knownRoomIdHint()
         )
         pendingByClientId[clientId] = pending
         sendContextsByClientId[clientId] = PendingSendContext(
@@ -1343,7 +1350,8 @@ public final class ChatConversationViewModel {
             messageType: nil,
             metadata: nil,
             draft: consumedDraft,
-            replyRoomId: capturedReplyRoom
+            replyRoomId: capturedReplyRoom,
+            sendRoomId: replyDestination
         )
         // The sending bubble and retry keep the immutable captured reply.
         rebuild()
@@ -1396,7 +1404,7 @@ public final class ChatConversationViewModel {
             destination: destination,
             targetId: target,
             businessUserId: asBusinessUserId,
-            roomId: knownRoomIdHint().isEmpty ? nil : knownRoomIdHint(),
+            roomId: context.sendRoomId ?? (knownRoomIdHint().isEmpty ? nil : knownRoomIdHint()),
             text: context.text,
             messageType: context.messageType,
             metadata: context.metadata,
@@ -1482,7 +1490,9 @@ public final class ChatConversationViewModel {
                 replyToId: message.replyToId,
                 topicId: message.topicId,
                 messageType: message.messageType,
-                metadata: message.metadata
+                metadata: message.metadata,
+                replyRoomId: message.replyRoomId,
+                sendRoomId: message.roomId
             )
             if message.status == .queued { failedClientIds.remove(message.id) } else { failedClientIds.insert(message.id) }
             if message.status == .refused { refusedClientIds.insert(message.id) } else { refusedClientIds.remove(message.id) }
@@ -1501,7 +1511,7 @@ public final class ChatConversationViewModel {
     private func performSend(clientId: String) async -> Bool {
         guard var context = sendContextsByClientId[clientId] else { return false }
         do {
-            let roomId = try await ensureRoomId()
+            let roomId: String = if let selectedRoom = context.sendRoomId { selectedRoom } else { try await ensureRoomId() }
             if context.messageType == nil, context.fileIds == nil {
                 context.fileIds = try await uploadQueuedAttachmentsIfNeeded(
                     context.attachments,
@@ -1519,7 +1529,7 @@ public final class ChatConversationViewModel {
                         messageType: context.messageType ?? (fileIds.isEmpty ? "text" : "file"),
                         fileIds: fileIds.isEmpty ? nil : fileIds,
                         clientMessageId: clientId,
-                        replyToId: sanitizedReplyToId(context.replyToId, roomId: roomId),
+                        replyToId: context.replyToId,
                         topicId: context.topicId,
                         metadata: context.metadata,
                         asBusinessUserId: asBusinessUserId
@@ -1633,6 +1643,50 @@ public final class ChatConversationViewModel {
     private func sanitizedReplyToId(_ replyToId: String?, roomId: String) -> String? {
         guard let replyToId else { return nil }
         return messages.first { $0.id == replyToId && $0.roomId == roomId }?.id
+    }
+
+    private func validatedReplyRoom(_ roomId: String?, allowOfflineIntent: Bool = false) async throws -> String {
+        guard let roomId else { throw ChatReplyScopeError.differentAudience }
+        switch mode {
+        case let .room(destination):
+            guard destination == roomId else { throw ChatReplyScopeError.differentAudience }
+        case let .person(peerId):
+            do {
+                let detail: ChatRoomDetailResponse = try await api.request(
+                    ChatEndpoints.room(roomId: roomId, asBusinessUserId: asBusinessUserId),
+                    expectedSessionGeneration: roomJoinAccountSession
+                )
+                guard detail.isDirectConversation(senderId: sendingIdentityId, peerId: peerId) else {
+                    throw ChatReplyScopeError.differentAudience
+                }
+            } catch {
+                // Offline Send still records the exact reply intent. The durable
+                // worker must validate it online before uploading any media.
+                var unavailable = (error as? APIError)?.isTransient == true || (error as? URLError).map { $0.code != .cancelled } == true
+                if case APIError.retriesExhausted = error { unavailable = true }
+                guard allowOfflineIntent, unavailable, !Task.isCancelled else { throw error }
+            }
+        case .ai: throw ChatReplyScopeError.differentAudience
+        }
+        return roomId
+    }
+
+    private func prepareReplySend(roomId: String?, mutation: Int, session: Int) async -> String? {
+        do {
+            let room = try await validatedReplyRoom(roomId, allowOfflineIntent: usesDurableOutbox)
+            guard api !== APIClient.shared || session == AuthManager.shared.requestSessionGeneration else { return nil }
+            guard draftMutation == mutation else {
+                actionFailure = "Your draft changed while checking the reply. Tap Send again when you're ready."
+                return nil
+            }
+            return room
+        } catch {
+            guard api !== APIClient.shared || session == AuthManager.shared.requestSessionGeneration else { return nil }
+            actionFailure = error is ChatReplyScopeError
+                ? error.localizedDescription
+                : "Couldn't check this reply's conversation. Your draft is saved. Reconnect and try again."
+            return nil
+        }
     }
 
     /// A message to the assistant with the photos and PDFs it sends, uploaded.
@@ -2472,16 +2526,26 @@ public final class ChatConversationViewModel {
     ) async {
         if case .ai = mode { return }
         guard !isSending else { return }
+        let session = AuthManager.shared.requestSessionGeneration
+        let capturedReply = replyingTo
+        let capturedTopic = selectedTopicId
+        let replyRoom = capturedReply?.roomId ?? messages.first { $0.id == capturedReply?.messageId }?.roomId
+        let mutation = draftMutation
         isSending = true
         defer { isSending = false }
+        var replyDestination: String?
+        if capturedReply != nil {
+            guard let room = await prepareReplySend(roomId: replyRoom, mutation: mutation, session: session) else { return }
+            replyDestination = room
+        }
         if isViewingSearchContext { await returnToLatest() }
-
-        let topicId = await resolveTopicIdForShare(topicForPerson)
+        let topicId = await resolveTopicIdForShare(topicForPerson, fallback: capturedTopic)
+        guard api !== APIClient.shared || session == AuthManager.shared.requestSessionGeneration else { return }
         let clientId = Self.newClientMessageId()
         let pending = optimisticRichMessage(
             text: messageText,
             clientId: clientId,
-            roomId: knownRoomIdHint(),
+            roomId: replyDestination ?? knownRoomIdHint(),
             messageType: messageType,
             metadata: metadata
         )
@@ -2490,12 +2554,14 @@ public final class ChatConversationViewModel {
             text: messageText,
             attachments: [],
             fileIds: nil,
-            replyToId: replyingTo?.messageId,
+            replyToId: capturedReply?.messageId,
             topicId: topicId,
             messageType: messageType,
-            metadata: metadata
+            metadata: metadata,
+            replyRoomId: replyRoom,
+            sendRoomId: replyDestination
         )
-        replyingTo = nil
+        if draftMutation == mutation, replyingTo?.messageId == capturedReply?.messageId { replyingTo = nil }
         rebuild()
         if usesDurableOutbox {
             await enqueuePending(clientId: clientId)
@@ -2509,10 +2575,10 @@ public final class ChatConversationViewModel {
     }
 
     private func resolveTopicIdForShare(
-        _ topic: (type: String, refId: String, title: String)?
+        _ topic: (type: String, refId: String, title: String)?, fallback: String?
     ) async -> String? {
-        guard let topic else { return selectedTopicId }
-        guard case let .person(otherUserId) = mode else { return selectedTopicId }
+        guard let topic else { return fallback }
+        guard case let .person(otherUserId) = mode else { return fallback }
         do {
             let response: FindOrCreateTopicResponse = try await api.request(
                 ChatEndpoints.findOrCreateTopic(
@@ -2529,7 +2595,7 @@ public final class ChatConversationViewModel {
             return response.topic.id
         } catch {
             logger.warning("find/create share topic failed: \(error)")
-            return selectedTopicId
+            return fallback
         }
     }
 

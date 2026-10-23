@@ -208,6 +208,7 @@ final class ChatOutbox {
         guard lifetime == started, messages.contains(where: { $0.id == original.id }), !Task.isCancelled else { return }
         var message = original
         do {
+            message = try await prepareReplyRoom(message, lifetime: started)
             if message.roomId == nil {
                 if message.destination == .room {
                     message.roomId = message.targetId
@@ -245,7 +246,7 @@ final class ChatOutbox {
                 messageType: message.messageType ?? (files.isEmpty ? "text" : "file"),
                 fileIds: files.isEmpty ? nil : files,
                 clientMessageId: message.id,
-                replyToId: message.replyRoomId == roomId ? message.replyToId : nil,
+                replyToId: message.replyToId,
                 topicId: message.topicId,
                 metadata: message.metadata,
                 asBusinessUserId: message.businessUserId
@@ -289,6 +290,7 @@ final class ChatOutbox {
     }
 
     private static func isRefused(_ error: any Error) -> Bool {
+        if error is ChatReplyScopeError { return true }
         if case APIError.forbidden = error { return true }
         if case let APIError.clientError(status, _) = error { return status == 403 }
         return false
@@ -303,5 +305,34 @@ final class ChatOutbox {
             }
         }
         return (error as? URLError).map { $0.code != .cancelled } ?? false
+    }
+}
+
+private extension ChatOutbox {
+    func prepareReplyRoom(_ original: ChatOutboxMessage, lifetime started: Int) async throws -> ChatOutboxMessage {
+        guard original.replyToId != nil else { return original }
+        var message = original
+        guard let replyRoom = message.replyRoomId else { throw ChatReplyScopeError.differentAudience }
+        if message.destination == .person {
+            guard let account else { throw CancellationError() }
+            let detail: ChatRoomDetailResponse = try await api.request(
+                ChatEndpoints.room(roomId: replyRoom, asBusinessUserId: message.businessUserId),
+                expectedSessionGeneration: requestGeneration
+            )
+            guard detail.isDirectConversation(senderId: message.businessUserId ?? account, peerId: message.targetId) else {
+                throw ChatReplyScopeError.differentAudience
+            }
+        } else if replyRoom != message.targetId {
+            throw ChatReplyScopeError.differentAudience
+        }
+        guard lifetime == started, !Task.isCancelled else { throw CancellationError() }
+        if message.roomId != replyRoom {
+            // Uploaded references belong to their original room. Keep a legacy
+            // send recoverable instead of moving those files to another room.
+            guard message.fileIds?.isEmpty != false else { throw ChatReplyScopeError.differentAudience }
+            message.roomId = replyRoom
+            try await saveProgress(message, lifetime: started)
+        }
+        return message
     }
 }

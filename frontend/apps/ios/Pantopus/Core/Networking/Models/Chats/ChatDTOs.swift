@@ -217,6 +217,12 @@ public struct ChatRoomDetailResponse: Decodable, Sendable {
     }
 
     public let room: Room
+
+    func isDirectConversation(senderId: String, peerId: String) -> Bool {
+        guard senderId != peerId, room.type == "direct", room.isActive != false,
+              let participants = room.participants, participants.count == 2 else { return false }
+        return Set(participants.compactMap(\.userId)) == Set([senderId, peerId])
+    }
 }
 
 public struct ConversationTopicDTO: Codable, Sendable, Hashable, Identifiable {

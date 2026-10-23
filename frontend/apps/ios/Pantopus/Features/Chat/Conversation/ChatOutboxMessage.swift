@@ -73,6 +73,14 @@ enum ChatLocalStorageError: LocalizedError {
     }
 }
 
+enum ChatReplyScopeError: LocalizedError {
+    case differentAudience
+
+    var errorDescription: String? {
+        "Open the original conversation to reply to this message, or cancel the reply to send here."
+    }
+}
+
 /// Never-sent composer state uses the same account key and chunk format as the
 /// outbox, but is not eligible for delivery until its directory is promoted.
 struct ChatComposerDraft: Codable {
