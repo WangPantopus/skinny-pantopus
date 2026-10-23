@@ -322,7 +322,7 @@ function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClic
                     <a
                       key={`${msg.id}-att-${i}`}
                       href={url || '#'}
-                      target="_blank"
+                      download={a.original_filename as string || 'attachment'}
                       rel="noopener noreferrer"
                       className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs ${
                         isMine ? 'bg-primary-600 text-blue-100 hover:bg-primary-700' : 'bg-surface-muted text-app-text-strong hover-bg-app'

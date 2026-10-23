@@ -148,6 +148,7 @@ export async function getMessages(roomId: string, params?: {
   limit?: number;
   before?: string; // message ID for pagination
   after?: string;
+  sync?: boolean;
   asBusinessUserId?: string;
 }): Promise<{
   messages: (ChatMessage & {
@@ -160,11 +161,13 @@ export async function getMessages(roomId: string, params?: {
   })[];
   hasMore: boolean;
   nextCursor?: string | null;
+  syncCursors?: ChatSyncCursors;
 }> {
   return get<{
     messages: any[];
     hasMore: boolean;
     nextCursor?: string | null;
+    syncCursors?: ChatSyncCursors;
   }>(`/api/chat/rooms/${roomId}/messages`, params);
 }
 
@@ -175,6 +178,7 @@ export async function getConversationMessages(otherUserId: string, params?: {
   limit?: number;
   before?: string;
   after?: string;
+  sync?: boolean;
   asBusinessUserId?: string;
   topicId?: string;
 }): Promise<{
@@ -189,13 +193,46 @@ export async function getConversationMessages(otherUserId: string, params?: {
   hasMore: boolean;
   nextCursor?: string | null;
   roomIds: string[];
+  syncCursors?: ChatSyncCursors;
 }> {
   return get<{
     messages: any[];
     hasMore: boolean;
     nextCursor?: string | null;
     roomIds: string[];
+    syncCursors?: ChatSyncCursors;
   }>(`/api/chat/conversations/${otherUserId}/messages`, params);
+}
+
+export type ChatSyncCursors = Record<string, number>;
+export type ChatSyncMessage = ChatMessage & { sync_version?: number };
+export type ChatMessageTombstone = { id: string; room_id: string; deleted: true; sync_version: number };
+export type ChatReadReceipt = { roomId: string; userId: string; readAt: string; throughMessageId?: string; throughCreatedAt?: string };
+export interface ChatChanges {
+  messages: Array<ChatSyncMessage | ChatMessageTombstone>;
+  syncCursors: ChatSyncCursors;
+  untilCursors: ChatSyncCursors;
+  hasMore: boolean;
+  roomIds: string[];
+  removedRoomIds: string[];
+  resetRequired: boolean;
+  readReceipts: ChatReadReceipt[];
+}
+
+/** Resume a captured history snapshot; all topics share the same room revision. */
+export function getMessageChanges(target: { roomId?: string; otherUserId?: string }, params: {
+  cursor: ChatSyncCursors;
+  until?: ChatSyncCursors;
+  limit?: number;
+  asBusinessUserId?: string;
+}): Promise<ChatChanges> {
+  const path = target.roomId ? `rooms/${target.roomId}` : `conversations/${target.otherUserId}`;
+  return get<ChatChanges>(`/api/chat/${path}/changes`, {
+    cursor: JSON.stringify(params.cursor),
+    ...(params.until ? { until: JSON.stringify(params.until) } : {}),
+    limit: params.limit ?? 200,
+    ...(params.asBusinessUserId ? { asBusinessUserId: params.asBusinessUserId } : {}),
+  });
 }
 
 /**

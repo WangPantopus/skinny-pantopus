@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
-import type { ChatMessage, User } from '@pantopus/types';
+import type { ChatMessage as BaseChatMessage, User } from '@pantopus/types';
 import { getDateKey, formatDateLabel } from '@pantopus/ui-utils';
 import { useSocket, useSocketConnected } from './useSocket';
 import { useSocketEvent, useSocketEmit } from './useSocket';
@@ -11,6 +11,8 @@ import { chosenUsername } from '@pantopus/utils';
 import { queryKeys } from '@/lib/query-keys';
 import { activateChatStorage, deleteChatRecords, readChatRecord, writeChatRecords } from '@/components/chat/chatStorage';
 import { enqueueChatSend, pendingChatMessage, removeChatSend, resumeChatOutbox, retryChatSend, startChatOutbox, subscribeChatOutbox } from '@/components/chat/chatOutbox';
+
+type ChatMessage = BaseChatMessage & { sync_version?: number; read_at?: string | null };
 
 // Re-export shared helpers so existing consumers don't break
 export { getDateKey, formatDateLabel };
@@ -34,8 +36,16 @@ function clientMessageId(message: ChatMessage): string | undefined {
   return id ? `${message.room_id}:${message.user_id || message.sender_id || message.sender?.id}:${id}` : undefined;
 }
 
+function messageRevision(message: Partial<ChatMessage>): number {
+  return Number((message as api.chat.ChatSyncMessage).sync_version) || 0;
+}
+
 function mergeMessageRecord(existing: ChatMessage | undefined, incoming: ChatMessage): ChatMessage {
+  if (existing && messageRevision(existing) > messageRevision(incoming)) return existing;
   const merged = { ...existing, ...incoming } as ChatMessage;
+  // Receipt state is monotonic even when an equal-version history row races a
+  // newer peer acknowledgement (read state has its own participant cursor).
+  if (existing?.read_at && (!incoming.read_at || Date.parse(existing.read_at) > Date.parse(incoming.read_at))) merged.read_at = existing.read_at;
   // Omitted reactions are a partial socket payload. An explicit [] is authoritative,
   // including when the last reaction was removed while this device was offline.
   if (incoming.reactions === undefined && existing?.reactions !== undefined) merged.reactions = existing.reactions;
@@ -94,6 +104,8 @@ interface ConversationSnapshot {
   roomIds: string[];
   resolvedRoomId: string | null;
   peer: User | null;
+  syncCursors?: api.chat.ChatSyncCursors;
+  tombstones?: Record<string, number>;
 }
 
 function conversationCacheKey(roomId?: string, otherUserId?: string, topicId?: string | null, asBusinessUserId?: string, accountId?: string | null) {
@@ -111,6 +123,7 @@ interface MessagePage {
   nextCursor: string | null;
   roomIds?: string[];
   sendRefusal?: { error?: string } | null;
+  syncCursors?: api.chat.ChatSyncCursors;
 }
 
 type ChatMessageLike = Partial<ChatMessage> & {
@@ -296,6 +309,10 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
   const [directChatError, setDirectChatError] = useState<string | null>(null);
   const [conversationRoomIds, setConversationRoomIds] = useState<string[]>(() => initialSnapshot?.roomIds ?? []);
   const nextCursorRef = useRef<string | null>(initialSnapshot?.nextCursor ?? null);
+  const syncCursorsRef = useRef<api.chat.ChatSyncCursors | undefined>(initialSnapshot?.syncCursors);
+  const tombstonesRef = useRef(new Map<string, number>(Object.entries(initialSnapshot?.tombstones ?? {})));
+  const [syncGeneration, setSyncGeneration] = useState(0);
+  const completedRefreshRef = useRef(0);
   const [replyingTo, setReplyingTo] = useState<ChatReplyTarget | null>(null);
   const [sendRefusal, setSendRefusal] = useState<string | null>(null);
   // A reply, and a reason the conversation takes no messages, belong to the conversation they came from.
@@ -317,7 +334,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
   // ── Fetch functions ─────────────────────────────────────
 
   const fetchMessages = useCallback(async (cursor?: { before?: string }): Promise<MessagePage> => {
-    const params = { limit: 100, ...cursor, ...(asBusinessUserId ? { asBusinessUserId } : {}) };
+    const params = { limit: 100, ...(!cursor?.before ? { sync: true } : {}), ...cursor, ...(asBusinessUserId ? { asBusinessUserId } : {}) };
     const result = isRoomMode && roomId
       ? await api.chat.getMessages(roomId, params)
       : otherUserId
@@ -325,6 +342,13 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
         : { messages: [], hasMore: false };
     return { ...result, nextCursor: result.nextCursor ?? null };
   }, [isRoomMode, roomId, otherUserId, topicId, asBusinessUserId]);
+
+  const belongsToTopic = useCallback((message: ChatMessage) => !topicId || isRoomMode
+    || String((message as Record<string, any>).topic_id || '') === String(topicId), [topicId, isRoomMode]);
+  const survivesDeletion = useCallback((message: ChatMessage) => {
+    const deletedAt = tombstonesRef.current.get(String(message.id));
+    return deletedAt === undefined || messageRevision(message) > deletedAt;
+  }, []);
 
   // Network reads have no side effects: stale responses cannot corrupt another
   // conversation's pagination, room subscriptions, or send permission.
@@ -393,30 +417,91 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     if (!isCurrentScope()) return Promise.resolve();
     if (refreshInFlightRef.current?.scope === scopeGeneration) return refreshInFlightRef.current.promise;
     const promise = (async () => {
-      const startedVersion = changeVersionRef.current;
-      const loaded = messagesRef.current.filter((m) => !isUnsent(m));
-      const oldest = loaded[0];
-      let page = await fetchMessages();
-      if (!isCurrentScope()) return;
-      let refreshed = page.messages;
-      const seenCursors = new Set<string>();
-      // Walk every missing page and the entire loaded range. This repairs missed
-      // changes as well as new messages, even after more than 50/100 arrivals.
-      while (oldest && page.hasMore && page.nextCursor
-        && (!refreshed.length || compareMessages(refreshed[0], oldest) > 0)) {
-        if (seenCursors.has(page.nextCursor)) throw new Error('Message history did not advance. Try again.');
-        seenCursors.add(page.nextCursor);
-        page = await fetchMessages({ before: page.nextCursor });
+      const fullRefresh = async () => {
+        const startedVersion = changeVersionRef.current;
+        const loaded = messagesRef.current.filter((m) => !isUnsent(m));
+        const oldest = loaded[0];
+        let page = await fetchMessages();
         if (!isCurrentScope()) return;
-        refreshed = mergeMessages(page.messages, refreshed);
+        // Only the first page establishes an anchor. Its revision was captured
+        // before the history query; older pages must never advance that anchor.
+        const firstPageCursors = page.syncCursors;
+        let refreshed = page.messages;
+        const seenCursors = new Set<string>();
+        while (oldest && page.hasMore && page.nextCursor
+          && (!refreshed.length || compareMessages(refreshed[0], oldest) > 0)) {
+          if (seenCursors.has(page.nextCursor)) throw new Error('Message history did not advance. Try again.');
+          seenCursors.add(page.nextCursor);
+          page = await fetchMessages({ before: page.nextCursor });
+          if (!isCurrentScope()) return;
+          refreshed = mergeMessages(page.messages, refreshed);
+        }
+        const changedAfterStart = (id: string) => (liveChangesRef.current.get(String(id)) || 0) > startedVersion;
+        setMessages((previous) => mergeMessages(
+          previous.filter((m) => isUnsent(m) || changedAfterStart(String(m.id))
+            || (page.hasMore && refreshed[0] && compareMessages(m, refreshed[0]) < 0)),
+          refreshed.filter((m) => !changedAfterStart(String(m.id)) && survivesDeletion(m)),
+        ));
+        syncCursorsRef.current = firstPageCursors;
+        completedRefreshRef.current += 1;
+        setSyncGeneration((value) => value + 1);
+        applyPage(page);
+      };
+      if (!syncCursorsRef.current) return fullRefresh();
+      let cursor = syncCursorsRef.current;
+      let until: api.chat.ChatSyncCursors | undefined;
+      const changes: api.chat.ChatChanges['messages'] = [];
+      const receipts: api.chat.ChatReadReceipt[] = [];
+      let result: api.chat.ChatChanges;
+      do {
+        try {
+          result = await api.chat.getMessageChanges({ roomId, otherUserId }, { cursor, until, asBusinessUserId });
+        } catch (error) {
+          const status = (error as { statusCode?: number })?.statusCode;
+          if (status === 400 || status === 404) return fullRefresh();
+          throw error;
+        }
+        if (!isCurrentScope()) return;
+        if (result.resetRequired) return fullRefresh();
+        changes.push(...result.messages);
+        receipts.push(...result.readReceipts);
+        if (result.hasMore && JSON.stringify(result.syncCursors) === JSON.stringify(cursor)) {
+          throw new Error('Message recovery did not advance. Try again.');
+        }
+        cursor = result.syncCursors;
+        until = result.untilCursors;
+      } while (result.hasMore);
+      for (const message of changes) {
+        if ('deleted' in message && message.deleted) {
+          tombstonesRef.current.set(String(message.id), Math.max(tombstonesRef.current.get(String(message.id)) ?? 0, Number(message.sync_version) || 0));
+        }
       }
-      const changedAfterStart = (id: string) => (liveChangesRef.current.get(String(id)) || 0) > startedVersion;
-      setMessages((previous) => mergeMessages(
-        previous.filter((m) => isUnsent(m) || changedAfterStart(String(m.id))
-          || (page.hasMore && refreshed[0] && compareMessages(m, refreshed[0]) < 0)),
-        refreshed.filter((m) => !changedAfterStart(String(m.id))),
-      ));
-      applyPage(page);
+      const removedRooms = new Set(result.removedRoomIds);
+      const fullMessages = changes.filter((message): message is api.chat.ChatSyncMessage => !('deleted' in message && message.deleted));
+      setMessages((previous) => {
+        const accepted = previous.filter((message) => !isUnsent(message));
+        const oldest = accepted[0];
+        const known = new Set(previous.map((message) => String(message.id)));
+        const changedTopics = new Set(fullMessages.filter((message) => !belongsToTopic(message)).map((message) => String(message.id)));
+        let merged = mergeMessages(previous.filter((message) => survivesDeletion(message)
+          && !removedRooms.has(message.room_id) && !changedTopics.has(String(message.id))),
+        fullMessages.filter((message) => survivesDeletion(message) && belongsToTopic(message)
+          && (!oldest || known.has(String(message.id)) || !hasMore || compareMessages(message, oldest) >= 0)));
+        if (otherUserId) for (const receipt of receipts) {
+          if (receipt.userId !== otherUserId || !receipt.throughCreatedAt || !receipt.throughMessageId) continue;
+          const boundary = { id: receipt.throughMessageId, created_at: receipt.throughCreatedAt } as ChatMessage;
+          merged = merged.map((message) => !isUnsent(message) && message.room_id === receipt.roomId
+            && (message.user_id || message.sender_id) === (asBusinessUserId || currentUserId)
+            && compareMessages(message, boundary) <= 0
+            ? mergeMessageRecord(message, { ...message, read_at: receipt.readAt }) : message);
+        }
+        return merged;
+      });
+      if (!isRoomMode) setConversationRoomIds(result.roomIds);
+      // A failed intermediate page never commits a cursor or a partial batch.
+      syncCursorsRef.current = cursor;
+      completedRefreshRef.current += 1;
+      setSyncGeneration((value) => value + 1);
     })().catch((error: unknown) => {
       const status = (error as { statusCode?: number })?.statusCode;
       if (isCurrentScope() && (status === 403 || status === 404)) {
@@ -432,7 +517,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     });
     refreshInFlightRef.current = { scope: scopeGeneration, promise };
     return promise;
-  }, [scopeGeneration, fetchMessages, applyPage, isCurrentScope, cacheKey, cacheKeyId, currentUserId, queryClient]);
+  }, [scopeGeneration, fetchMessages, applyPage, isCurrentScope, cacheKey, cacheKeyId, currentUserId, queryClient, roomId, otherUserId, asBusinessUserId, isRoomMode, belongsToTopic, survivesDeletion, hasMore]);
 
   // ── Tab/window foreground resume ──────────────────────────
   // When the tab becomes visible again, refresh messages to catch anything
@@ -493,6 +578,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     if (!roomId && !otherUserId) { setLoading(false); return; }
     let cancelled = false;
     let kept = loadAttempt === 0 ? readSnapshot() : undefined;
+    const beforeRefresh = completedRefreshRef.current;
     const showKept = (snapshot?: ConversationSnapshot) => {
       if (snapshot && deniedScopeRef.current === scopeGeneration) return;
       const initial = mergeMessages(snapshot?.messages ?? [], messagesRef.current.filter(isUnsent));
@@ -500,6 +586,8 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
       messagesRef.current = initial;
       setHasMore(snapshot?.hasMore ?? false);
       nextCursorRef.current = snapshot?.nextCursor ?? null;
+      syncCursorsRef.current = snapshot?.syncCursors;
+      tombstonesRef.current = new Map(Object.entries(snapshot?.tombstones ?? {}));
       setLoading(!snapshot);
       if (snapshot) {
         setConversationRoomIds(snapshot.roomIds);
@@ -526,7 +614,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
           const saved = await activateChatStorage(currentUserId);
           const disk = await readChatRecord<ConversationSnapshot>(saved, 'history', cacheKeyId);
           if (cancelled || !isCurrentScope()) return;
-          if (disk && Array.isArray(disk.messages)) { kept = disk; showKept(disk); }
+          if (disk && Array.isArray(disk.messages) && completedRefreshRef.current === beforeRefresh) { kept = disk; showKept(disk); }
         } catch { /* The network remains usable when device storage is disabled. */ }
       }
       if (!cancelled && isCurrentScope()) await refresh();
@@ -552,7 +640,8 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     if (!cacheKey || loading || loadFailure || shownKeyRef.current !== cacheKeyId) return;
     const accepted = messages.filter((message) => !isUnsent(message));
     const snapshot = { messages: accepted, hasMore, nextCursor: nextCursorRef.current,
-      roomIds: conversationRoomIds, resolvedRoomId, peer: directChatPeer };
+      roomIds: conversationRoomIds, resolvedRoomId, peer: directChatPeer,
+      syncCursors: syncCursorsRef.current, tombstones: Object.fromEntries(tombstonesRef.current) };
     queryClient.setQueryData<ConversationSnapshot>(cacheKey, snapshot);
     if (!currentUserId) return;
     const timer = setTimeout(() => {
@@ -565,7 +654,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
       }).catch(() => {});
     }, 400);
     return () => clearTimeout(timer);
-  }, [queryClient, cacheKey, cacheKeyId, currentUserId, loading, loadFailure, messages, hasMore, conversationRoomIds, resolvedRoomId, directChatPeer, isCurrentScope]);
+  }, [queryClient, cacheKey, cacheKeyId, currentUserId, loading, loadFailure, messages, hasMore, conversationRoomIds, resolvedRoomId, directChatPeer, isCurrentScope, syncGeneration]);
 
   const retryLoad = useCallback(() => setLoadAttempt((n) => n + 1), []);
 
@@ -618,9 +707,6 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     setRoomJoinGeneration((g) => g + 1);
   }, [activeRoomIdsKey]);
 
-  const belongsToTopic = useCallback((message: ChatMessage) => !topicId || isRoomMode
-    || String((message as Record<string, any>).topic_id || '') === String(topicId), [topicId, isRoomMode]);
-
   useEffect(() => {
     if (!currentUserId) return;
     const unsubscribe = subscribeChatOutbox((pending, accepted) => {
@@ -628,13 +714,13 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
       const outgoing = pending.filter((message) => message.asBusinessUserId === asBusinessUserId
         && (isRoomMode ? message.roomId === roomId : message.otherUserId === otherUserId || activeRoomIds.includes(message.roomId)))
         .map((message) => pendingChatMessage(message, currentUserId)).filter(belongsToTopic);
-      const incoming = accepted && activeRoomIds.includes(accepted.room_id) && belongsToTopic(accepted) ? [accepted] : [];
+      const incoming = accepted && activeRoomIds.includes(accepted.room_id) && belongsToTopic(accepted) && survivesDeletion(accepted) ? [accepted] : [];
       if (accepted) noteLiveChange(String(accepted.id));
       setMessages((previous) => mergeMessages(previous.filter((message) => !(message as ChatMessage & { _outbox?: boolean })._outbox), [...outgoing, ...incoming]));
     });
     void startChatOutbox(currentUserId).catch(() => {});
     return unsubscribe;
-  }, [currentUserId, asBusinessUserId, isRoomMode, roomId, otherUserId, activeRoomIds, belongsToTopic, isCurrentScope, noteLiveChange]);
+  }, [currentUserId, asBusinessUserId, isRoomMode, roomId, otherUserId, activeRoomIds, belongsToTopic, isCurrentScope, noteLiveChange, survivesDeletion]);
 
   useEffect(() => {
     if (!socket || !connected || activeRoomIds.length === 0) return;
@@ -657,7 +743,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
         if (cancelled || !isCurrentScope()) return;
         if (response?.success) {
           joinedRoomsRef.current.add(activeRoomId);
-          const backfill = (response.messages || []).filter((message) => belongsToTopic(message)
+          const backfill = (response.messages || []).filter((message) => belongsToTopic(message) && survivesDeletion(message)
             && (liveChangesRef.current.get(String(message.id)) || 0) <= startedVersion);
           const unseen = backfill.filter((message) => !messagesRef.current.some((existing) => String(existing.id) === String(message.id)));
           unseen.forEach((message) => noteLiveChange(String(message.id)));
@@ -667,24 +753,29 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     };
     for (const id of activeRoomIds) if (!joinedRoomsRef.current.has(id)) join(id);
     return () => { cancelled = true; timers.forEach(clearTimeout); };
-  }, [socket, connected, activeRoomIds, emit, roomJoinGeneration, belongsToTopic, isCurrentScope, noteLiveChange]);
+  }, [socket, connected, activeRoomIds, emit, roomJoinGeneration, belongsToTopic, isCurrentScope, noteLiveChange, survivesDeletion]);
 
   const handleIncomingMessage = useCallback((msg: ChatMessage) => {
     if (activeRoomIds.length === 0) return;
     const msgRoomId = msg?.room_id;
     if (!activeRoomIds.includes(String(msgRoomId))) return;
-    if (!belongsToTopic(msg) || !isCurrentScope()) return;
+    if (!belongsToTopic(msg) || !survivesDeletion(msg) || !isCurrentScope()) return;
     noteLiveChange(String(msg.id));
     setMessages((previous) => insertMessageSorted(previous, msg));
-  }, [activeRoomIds, belongsToTopic, isCurrentScope, noteLiveChange]);
+  }, [activeRoomIds, belongsToTopic, isCurrentScope, noteLiveChange, survivesDeletion]);
 
   // Listen for incoming messages via socket (new + legacy event names)
   // ── Socket event handlers (extracted for stable identity + profiling) ──
   const handleMessageDeleted = useCallback((data: Record<string, any>) => {
     if (!data?.messageId || !isCurrentScope()) return;
+    if (data.roomId && !activeRoomIds.includes(String(data.roomId))) return;
+    const revision = Number(data.sync_version) || 0;
+    const existing = messagesRef.current.find((message) => String(message.id) === String(data.messageId));
+    if (existing && messageRevision(existing) > revision) return;
+    tombstonesRef.current.set(String(data.messageId), Math.max(tombstonesRef.current.get(String(data.messageId)) ?? 0, revision));
     noteLiveChange(String(data.messageId));
     setMessages(prev => prev.filter(m => String(m.id) !== String(data.messageId)));
-  }, [isCurrentScope, noteLiveChange]);
+  }, [activeRoomIds, isCurrentScope, noteLiveChange]);
 
   const handleMessageEdited = useCallback((data: Record<string, any>) => {
     if (!data?.messageId || !data?.message || !isCurrentScope()) return;
@@ -692,13 +783,14 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     const updated = data.message as ChatMessage;
     setMessages(prev => prev.map(m =>
       String(m.id) === String(data.messageId)
-        ? { ...m, ...updated }
+        ? mergeMessageRecord(m, updated)
         : m
     ));
   }, [isCurrentScope, noteLiveChange]);
 
   type ReactionUpdatedPayload = {
     messageId: string;
+    sync_version?: number;
     reactions: Array<{
       reaction: string;
       count: number;
@@ -720,7 +812,8 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
       if (String(m.id) !== String(data.messageId)) {
         return m;
       }
-      return { ...m, reactions: adjustedReactions };
+      if (data.sync_version !== undefined && messageRevision(m) > data.sync_version) return m;
+      return { ...m, reactions: adjustedReactions, ...(data.sync_version !== undefined ? { sync_version: data.sync_version } : {}) };
     }));
     if (!hasMessage) {
       void refresh().catch(() => {});
@@ -748,6 +841,20 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     }));
   }, [otherUserId, asBusinessUserId, currentUserId, isCurrentScope, noteLiveChange]);
   useSocketEvent('messages:read', handleMessagesRead);
+
+  useEffect(() => {
+    if (!socket) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const changed = (payload: { topics?: string[] }) => {
+      if (!payload?.topics?.some((topic) => topic === 'chats' || activeRoomIds.some((id) => topic === `chat:${id}`))) return;
+      if (timer) clearTimeout(timer);
+      // The revision endpoint also repairs unknown DB-only changes. A burst of
+      // socket events needs one lightweight delta, never a history reload.
+      timer = setTimeout(() => { if (document.visibilityState === 'visible') void refresh().catch(() => {}); }, 500);
+    };
+    socket.on('sync:changed', changed);
+    return () => { socket.off('sync:changed', changed); if (timer) clearTimeout(timer); };
+  }, [socket, activeRoomIds, refresh]);
 
   // Poll immediately when realtime is unavailable, then back off. Hidden tabs
   // wait for visibilitychange; one coalesced refresh runs at a time.
@@ -780,7 +887,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     try {
       const page = await fetchMessages({ before });
       if (!isCurrentScope()) return;
-      setMessages((previous) => mergeMessages(page.messages, previous));
+      setMessages((previous) => mergeMessages(previous, page.messages.filter(survivesDeletion)));
       applyPage(page);
     } catch {
       if (isCurrentScope()) setError("Couldn't load earlier messages. Try again.");
@@ -788,7 +895,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
       if (olderRequestRef.current === cacheKeyId) olderRequestRef.current = null;
       if (isCurrentScope()) setLoadingOlder(false);
     }
-  }, [cacheKeyId, hasMore, fetchMessages, applyPage, isCurrentScope]);
+  }, [cacheKeyId, hasMore, fetchMessages, applyPage, isCurrentScope, survivesDeletion]);
 
   // Persist the original intent before returning control to the composer. The
   // account worker keeps sending after navigation and resumes after a reload.
