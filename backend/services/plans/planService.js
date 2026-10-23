@@ -17,6 +17,7 @@ const supabaseAdmin = require('../../config/supabaseAdmin');
 const logger = require('../../utils/logger');
 const { verifiedUserIds } = require('./planViewer');
 const { localDisplayNames } = require('../../utils/identityProfiles');
+const { loadChatPeople } = require('../chatPeople');
 const rules = require('./planRules');
 const { canReadPostModeration, postScopeAccess } = require('../pulse/readAccess');
 
@@ -72,8 +73,20 @@ function firstName(user) {
   return displayName(user).split(' ')[0];
 }
 
+/**
+ * The photo someone shows neighbors (services/chatPeople.js): their Local Profile's, or none when they removed it; the
+ * account's for anyone without one. Only someone the lookup missed (`withLocalAvatar` left them as they were) falls back
+ * to the account's photo.
+ */
 function avatarUrl(user) {
+  if (user && user.local_avatar_url !== undefined) return user.local_avatar_url || null;
   return user?.profile_picture_url || null;
+}
+
+/** `user` (an account row with `id`) with the photo loadChatPeople found for them. */
+function withLocalAvatar(user, people) {
+  const person = user?.id ? people.get(String(user.id)) : null;
+  return person ? { ...user, local_avatar_url: person.avatarUrl || null } : user;
 }
 
 /** Every time in a Plans response: ISO 8601 in UTC with milliseconds, e.g. 2026-10-18T20:25:00.000Z. */
@@ -208,9 +221,10 @@ async function loadCardContext(plans, viewer, { withPeople = false } = {}) {
     ? plans.filter((plan) => String(plan.host_user_id) === viewer.id)
       .flatMap((plan) => (ctx.requestsByPlan.get(plan.post_id) || []).filter((r) => r.status === 'accepted').map((r) => String(r.user_id)))
     : [];
-  const [users, names, verified, mutual, answerMinutes, peopleStats] = await Promise.all([
+  const [users, names, people, verified, mutual, answerMinutes, peopleStats] = await Promise.all([
     supabaseAdmin.from('User').select(USER_COLUMNS).in('id', [...userIds]),
     localDisplayNames([...userIds]),
+    loadChatPeople([...userIds]),
     verifiedUserIds([...userIds]),
     mutualConnectionCounts(viewer.id, hostIds),
     typicalAnswerMinutes(hostIds),
@@ -218,7 +232,8 @@ async function loadCardContext(plans, viewer, { withPeople = false } = {}) {
   ]);
   if (users.error) throw new Error(`Failed to load people: ${users.error.message}`);
   for (const user of users.data || []) {
-    ctx.users.set(String(user.id), { ...user, local_display_name: names.get(String(user.id)) || null });
+    const id = String(user.id);
+    ctx.users.set(id, withLocalAvatar({ ...user, local_display_name: names.get(id) || null }, people));
   }
   ctx.verified = verified;
   ctx.mutualByHost = mutual;
@@ -810,6 +825,8 @@ module.exports = {
   OPEN_REQUEST_STATUSES,
   displayName,
   firstName,
+  avatarUrl,
+  withLocalAvatar,
   shareUrl,
   startsAt,
   endsAt,
