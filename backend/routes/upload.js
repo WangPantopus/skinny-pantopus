@@ -18,9 +18,9 @@ const s3 = require('../services/s3Service');
 const imageResizeService = require('../services/marketplace/imageResizeService');
 const { photoReference, pdfFacts, MAX_PDF_BYTES, MAX_PDF_PAGES } = require('../services/ai/photos');
 const { calculateAndStoreCompleteness } = require('../utils/businessCompleteness');
-const { requirePersonaEnabled } = require('../utils/featureFlags');
+const { requireIdentityFirewallEnabled, requirePersonaEnabled } = require('../utils/featureFlags');
 const { writeIdentityAuditLog } = require('../utils/identityAudit');
-const { syncLocalProfileFromAccount } = require('../utils/identityProfiles');
+const { ensureLocalProfile, ownLocalProfileView, syncLocalProfileFromAccount } = require('../utils/identityProfiles');
 const { actingBusinessInRoom, canActAsBusiness } = require('../services/chatBusinessAccess');
 
 // Rate limit: 30 uploads per 15 minutes per IP
@@ -288,8 +288,9 @@ router.post('/profile-picture', uploadLimiter, verifyToken, upload.single('file'
       sharp ? 'image/webp' : file.mimetype
     );
 
-    // Delete old profile picture from S3 if it has an S3 key
-    const { data: currentUser } = await supabaseAdmin
+    // The photo as it was: the Local Profile's copy of it follows the upload, a photo the person chose to show
+    // neighbors stays (syncLocalProfileFromAccount below).
+    const { data: currentUser, error: currentErr } = await supabaseAdmin
       .from('User')
       .select('profile_picture_url')
       .eq('id', userId)
@@ -314,7 +315,7 @@ router.post('/profile-picture', uploadLimiter, verifyToken, upload.single('file'
 
     // Posts, comments and search show the LocalProfile's copy of the photo.
     try {
-      await syncLocalProfileFromAccount(updatedUser, ['profile_picture_url']);
+      await syncLocalProfileFromAccount(updatedUser, ['profile_picture_url'], currentErr ? null : currentUser);
     } catch (syncErr) {
       logger.error('Profile picture local profile sync error', { error: syncErr.message, userId });
       return res.status(500).json({ error: 'Failed to update profile picture' });
@@ -331,6 +332,75 @@ router.post('/profile-picture', uploadLimiter, verifyToken, upload.single('file'
   } catch (err) {
     logger.error('Profile picture upload error', { error: err.message });
     res.status(500).json({ error: err.message || 'Failed to upload profile picture' });
+  }
+});
+
+/**
+ * POST /api/upload/local-profile-picture
+ * The photo neighbors see (How neighbors see you): it goes on the Local Profile only, never the account, and stops
+ * following account photo changes (syncLocalProfileFromAccount). Answers as GET /api/local-profiles/me, plus `url`.
+ */
+router.post('/local-profile-picture', requireIdentityFirewallEnabled, uploadLimiter, verifyToken, upload.single('file'), enforceFileSizeLimits, validateAndStripUploads, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const file = req.file;
+    if (!file) return res.status(400).json({ error: 'No file provided' });
+
+    if (!file.mimetype.startsWith('image/')) {
+      return res.status(400).json({ error: 'Profile picture must be an image' });
+    }
+
+    const profile = await ensureLocalProfile(userId);
+    if (!profile) return res.status(404).json({ error: 'Local profile not found' });
+
+    let processedBuffer = file.buffer;
+    let finalMimeType = file.mimetype;
+    if (sharp) {
+      try {
+        processedBuffer = await sharp(file.buffer)
+          .resize(800, 800, { fit: 'cover' })
+          .webp({ quality: 85 })
+          .toBuffer();
+        finalMimeType = 'image/webp';
+      } catch {
+        processedBuffer = file.buffer;
+      }
+    }
+
+    // Keyed by the Local Profile, not the account, and without the file's own name: neighbors see this link.
+    const ext = finalMimeType === 'image/webp'
+      ? 'webp'
+      : (path.extname(file.originalname || '').replace('.', '') || 'jpg').toLowerCase();
+    const key = `local-profiles/${profile.id}/avatar-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.${ext}`;
+    const { url } = await s3.uploadToS3(processedBuffer, key, finalMimeType);
+
+    const { data: updatedProfile, error } = await supabaseAdmin
+      .from('LocalProfile')
+      .update({ avatar_url: url, updated_at: new Date().toISOString() })
+      .eq('id', profile.id)
+      .select()
+      .single();
+
+    if (error) {
+      await s3.deleteFromS3(key);
+      return res.status(500).json({ error: 'Failed to update profile picture' });
+    }
+
+    await writeIdentityAuditLog({
+      req,
+      actorUserId: userId,
+      targetUserId: userId,
+      action: 'local_profile.avatar_uploaded',
+      targetType: 'LocalProfile',
+      targetId: profile.id,
+    });
+
+    logger.info('Local profile picture uploaded', { userId, key });
+
+    res.json({ ...(await ownLocalProfileView(updatedProfile, userId)), url });
+  } catch (err) {
+    logger.error('Local profile picture upload error', { error: err.message });
+    res.status(500).json({ error: 'Failed to upload profile picture' });
   }
 });
 
