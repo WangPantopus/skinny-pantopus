@@ -247,6 +247,7 @@ public enum TasksMapGeometry {
     }
 }
 
+// swiftlint:disable cyclomatic_complexity
 /// Rail-card tile glyph for a task category. Best-fit from the typed icon
 /// set for the design's per-category Lucide glyphs — `spray-can`,
 /// `truck`, and `book-open` aren't in `PantopusIcon`, so `sparkles`,
@@ -262,5 +263,23 @@ func taskCategoryGlyph(_ category: GigsCategory) -> PantopusIcon {
     case .tutoring: .graduationCap
     case .tech: .laptop
     case .delivery: .send
+    case .photography: .camera
+    case .cooking: .utensils
+    case .gardening: .leaf
+    case .eventHelp: .partyPopper
+    case .errands: .listChecks
+    case .groceryPickup: .shoppingBag
+    case .plumbing: .droplet
+    case .electrical: .zap
+    case .hvac: .fan
+    case .roofing: .home
+    case .generalContractor: .hardHat
+    case .landscapingPro: .trees
+    case .homeInspector: .clipboardList
+    case .paintingPro: .paintRoller
+    case .flooring: .grid3x3
+    case .other: .moreHorizontal
     }
 }
+
+// swiftlint:enable cyclomatic_complexity

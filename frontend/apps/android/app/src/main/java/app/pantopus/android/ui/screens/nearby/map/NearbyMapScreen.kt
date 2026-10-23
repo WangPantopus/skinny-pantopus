@@ -68,6 +68,7 @@ import app.pantopus.android.R
 import app.pantopus.android.data.location.UserCoordinate
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.screens.gigs.GigsCategory
+import app.pantopus.android.ui.screens.gigs.tasks_map.taskCategoryGlyph
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -509,7 +510,7 @@ private fun CategoryDotChips(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        GigsCategory.entries.forEach { category ->
+        GigsCategory.filterCases(including = active).forEach { category ->
             val selected = category == active
             Row(
                 modifier =
@@ -1197,5 +1198,6 @@ private fun iconFor(
         GigsCategory.Tech -> PantopusIcon.Lightbulb
         GigsCategory.Delivery -> PantopusIcon.Send
         GigsCategory.All -> PantopusIcon.Circle
+        else -> taskCategoryGlyph(category)
     }
 }

@@ -1433,7 +1433,9 @@ open class GigComposeViewModel
 
             /**
              * A12.8 — manual-path default `task_archetype` for a category
-             * (the magic draft supplies the real one when available).
+             * (the magic draft supplies the real one when available). The
+             * categories past the first eight follow the backend's
+             * `inferArchetypeFromCategory` (backend/services/magicTaskService.js).
              */
             fun archetypeForCategory(category: GigComposeCategory): String =
                 when (category) {
@@ -1444,6 +1446,15 @@ open class GigComposeViewModel
                     GigComposeCategory.Delivery -> "delivery_errand"
                     GigComposeCategory.Tech -> "quick_help"
                     GigComposeCategory.Other -> "general"
+                    GigComposeCategory.Gardening -> "home_service"
+                    GigComposeCategory.Photography, GigComposeCategory.Cooking -> "quick_help"
+                    GigComposeCategory.EventHelp -> "event_shift"
+                    GigComposeCategory.Errands, GigComposeCategory.GroceryPickup -> ARCHETYPE_DELIVERY
+                    GigComposeCategory.Plumbing, GigComposeCategory.Electrical, GigComposeCategory.Hvac,
+                    GigComposeCategory.Roofing, GigComposeCategory.GeneralContractor,
+                    GigComposeCategory.LandscapingPro, GigComposeCategory.HomeInspector,
+                    GigComposeCategory.PaintingPro, GigComposeCategory.Flooring,
+                    -> ARCHETYPE_PRO_SERVICE
                 }
 
             /** A12.8 — wire `schedule_type` for the magic-post draft. */
@@ -1534,6 +1545,7 @@ open class GigComposeViewModel
                 return when {
                     has(listOf("move", "moving", "haul", "u-haul", "load boxes")) -> GigComposeCategory.Moving
                     has(listOf("clean", "tidy", "scrub", "vacuum", "mop")) -> GigComposeCategory.Cleaning
+                    has(listOf("mow", "lawn", "garden", "weed", "hedge", "landscap", "yard")) -> GigComposeCategory.Gardening
                     has(
                         listOf(
                             "assemble", "ikea", "furniture", "shelf", "shelves", "mount", "drill",
@@ -1543,10 +1555,13 @@ open class GigComposeViewModel
                     has(listOf("dog", "cat", " pet", "puppy", "litter", "groom", "walk")) -> GigComposeCategory.PetCare
                     has(listOf("babysit", "nanny", "kids", "child", "daycare")) -> GigComposeCategory.ChildCare
                     has(listOf("tutor", "lesson", "math", "homework", "test prep", "teach")) -> GigComposeCategory.Tutoring
+                    has(listOf("photo", "portrait", "headshot")) -> GigComposeCategory.Photography
+                    has(listOf("cook", "chef", "meal", "cater")) -> GigComposeCategory.Cooking
                     has(listOf("deliver", "pickup", "pick up", "drop off", "errand", "courier")) -> GigComposeCategory.Delivery
                     has(
                         listOf("wifi", "wi-fi", "computer", "laptop", "printer", "router", "troubleshoot", "setup"),
                     ) -> GigComposeCategory.Tech
+                    has(listOf("event", "party", "birthday", "decorat")) -> GigComposeCategory.EventHelp
                     else -> null
                 }
             }

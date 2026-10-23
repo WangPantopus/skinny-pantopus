@@ -20,8 +20,10 @@ import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.gigs.GigsRepository
 import app.pantopus.android.data.offers.OffersRepository
 import app.pantopus.android.ui.components.StatusChipVariant
+import app.pantopus.android.ui.screens.gigs.GigsCategory
 import app.pantopus.android.ui.screens.gigs.checkout.GigBidCheckoutCoordinator
 import app.pantopus.android.ui.screens.gigs.checkout.GigPaymentIdentitySource
+import app.pantopus.android.ui.screens.gigs.tasks_map.taskCategoryGlyph
 import app.pantopus.android.ui.screens.shared.activity_filter_sheet.ActivityFilter
 import app.pantopus.android.ui.screens.shared.activity_filter_sheet.ActivitySortOrder
 import app.pantopus.android.ui.screens.shared.filter_sheet.FilterOption
@@ -129,23 +131,35 @@ enum class OfferStatus {
 }
 
 /**
- * Eight gig-category buckets the row's leading icon represents. Wraps
+ * The gig-category buckets the row's leading icon represents. Wraps
  * the existing category color tokens in a [PantopusIcon] + theme-token
  * [GradientPair] pair so the shell can render
  * [RowLeading.CategoryGradientIcon] without any raw `Color(0xFF…)` at
  * the call site.
  */
-enum class OffersCategory {
-    Handyman,
-    Cleaning,
-    Moving,
-    PetCare,
-    ChildCare,
-    Tutoring,
-    Tech,
-    Delivery,
-    Other,
-    ;
+sealed interface OffersCategory {
+    data object Handyman : OffersCategory
+
+    data object Cleaning : OffersCategory
+
+    data object Moving : OffersCategory
+
+    data object PetCare : OffersCategory
+
+    data object ChildCare : OffersCategory
+
+    data object Tutoring : OffersCategory
+
+    data object Tech : OffersCategory
+
+    data object Delivery : OffersCategory
+
+    data object Other : OffersCategory
+
+    /** A category past the first eight (Gardening, Event help, …): the feed's glyph on its color. */
+    data class More(
+        val category: GigsCategory,
+    ) : OffersCategory
 
     val icon: PantopusIcon
         get() =
@@ -159,6 +173,7 @@ enum class OffersCategory {
                 Tech -> PantopusIcon.Info
                 Delivery -> PantopusIcon.Send
                 Other -> PantopusIcon.Briefcase
+                is More -> taskCategoryGlyph(category)
             }
 
     fun gradient(): GradientPair =
@@ -172,6 +187,7 @@ enum class OffersCategory {
             Tech -> GradientPair(PantopusColors.tech, PantopusColors.appTextSecondary)
             Delivery -> GradientPair(PantopusColors.delivery, PantopusColors.primary700)
             Other -> GradientPair(PantopusColors.primary600, PantopusColors.primary700)
+            is More -> GradientPair(category.color, category.color)
         }
 
     companion object {
@@ -191,7 +207,11 @@ enum class OffersCategory {
                 "tutoring", "tutor", "lessons", "teaching" -> Tutoring
                 "tech", "technology", "it", "computer", "techsupport" -> Tech
                 "delivery", "deliveries", "courier" -> Delivery
-                else -> Other
+                else ->
+                    GigsCategory
+                        .fromBackendKeyOrNull(raw)
+                        ?.takeIf { it != GigsCategory.All && it != GigsCategory.Other }
+                        ?.let(::More) ?: Other
             }
         }
     }

@@ -117,6 +117,7 @@ sealed interface TasksMapUiState {
  * and `book-open` aren't in [PantopusIcon], so `Sparkles`, `Package`, and
  * `GraduationCap` stand in. Mirrors iOS `taskCategoryGlyph`.
  */
+@Suppress("CyclomaticComplexMethod")
 fun taskCategoryGlyph(category: GigsCategory): PantopusIcon =
     when (category) {
         GigsCategory.All -> PantopusIcon.Circle
@@ -128,4 +129,20 @@ fun taskCategoryGlyph(category: GigsCategory): PantopusIcon =
         GigsCategory.Tutoring -> PantopusIcon.GraduationCap
         GigsCategory.Tech -> PantopusIcon.Laptop
         GigsCategory.Delivery -> PantopusIcon.Send
+        GigsCategory.Photography -> PantopusIcon.Camera
+        GigsCategory.Cooking -> PantopusIcon.Utensils
+        GigsCategory.Gardening -> PantopusIcon.Leaf
+        GigsCategory.EventHelp -> PantopusIcon.PartyPopper
+        GigsCategory.Errands -> PantopusIcon.ListChecks
+        GigsCategory.GroceryPickup -> PantopusIcon.ShoppingBag
+        GigsCategory.Plumbing -> PantopusIcon.Droplet
+        GigsCategory.Electrical -> PantopusIcon.Zap
+        GigsCategory.Hvac -> PantopusIcon.Fan
+        GigsCategory.Roofing -> PantopusIcon.Home
+        GigsCategory.GeneralContractor -> PantopusIcon.HardHat
+        GigsCategory.LandscapingPro -> PantopusIcon.Trees
+        GigsCategory.HomeInspector -> PantopusIcon.ClipboardList
+        GigsCategory.PaintingPro -> PantopusIcon.PaintRoller
+        GigsCategory.Flooring -> PantopusIcon.Grid3x3
+        GigsCategory.Other -> PantopusIcon.MoreHorizontal
     }
