@@ -43,7 +43,7 @@ const {
 } = require('../services/chatGigRoomAccess');
 const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
 const { markChatRead, applyDirectReadReceipts, timestampMicros } = require('../services/chatReadState');
-const { parseSyncCursor, chatSyncSnapshot, chatChanges, chatReadReceipts } = require('../services/chatSync');
+const { parseSyncCursor, chatSyncSnapshot, chatChanges, chatReadReceipts, buildReactionSummary } = require('../services/chatSync');
 const chatRealtime = require('../services/chatRealtime');
 const { incCounter, recordHistogram, getSnapshot } = require('../services/chatMetrics');
 const pushService = require('../services/pushService');
@@ -3167,54 +3167,6 @@ router.get('/conversations/:otherUserId/topics', verifyToken, async (req, res) =
 });
 
 // ============ REACTION HELPERS ============
-
-/**
- * Build a reaction summary array for the given message IDs.
- * Returns a Map<messageId, ReactionSummary[]> where each entry is:
- *   { reaction, count, users: [{ id, name, username, identity }], reacted_by_me }
- */
-async function buildReactionSummary(messageIds, requestingUserId) {
-  if (!messageIds || messageIds.length === 0) return new Map();
-
-  const { data: reactions, error } = await supabaseAdmin
-    .from('MessageReaction')
-    .select('message_id, reaction, user_id')
-    .in('message_id', messageIds);
-
-  if (error) throw error;
-  if (!reactions || reactions.length === 0) return new Map();
-
-  // The people who reacted, as the chat list names them
-  const people = await loadChatPeople(reactions.map((r) => r.user_id));
-
-  // Group: messageId -> reaction -> [user_id, ...]
-  const grouped = {};
-  for (const r of reactions) {
-    if (!grouped[r.message_id]) grouped[r.message_id] = {};
-    if (!grouped[r.message_id][r.reaction]) grouped[r.message_id][r.reaction] = [];
-    grouped[r.message_id][r.reaction].push(r.user_id);
-  }
-
-  const result = new Map();
-  for (const [msgId, reactionMap] of Object.entries(grouped)) {
-    const summary = Object.entries(reactionMap).map(([reaction, uids]) => ({
-      reaction,
-      count: uids.length,
-      users: uids.map((uid) => {
-        const identity = people.get(String(uid)) || null;
-        return {
-          id: identity?.id || uid,
-          name: identity?.displayName || 'Unknown',
-          username: identity?.handle || null,
-          identity,
-        };
-      }),
-      reacted_by_me: uids.includes(requestingUserId),
-    }));
-    result.set(msgId, summary);
-  }
-  return result;
-}
 
 // ============ REACTION ENDPOINTS ============
 

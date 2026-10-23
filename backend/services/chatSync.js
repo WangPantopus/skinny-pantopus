@@ -1,4 +1,5 @@
 const supabaseAdmin = require('../config/supabaseAdmin');
+const { loadChatPeople } = require('./chatPeople');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -90,4 +91,69 @@ async function chatReadReceipts(roomIds) {
     throughCreatedAt: row.last_read_message_at }));
 }
 
-module.exports = { parseSyncCursor, chatSyncSnapshot, chatChanges, chatReadReceipts, readChatRoomBatches };
+/**
+ * Build a reaction summary array for the given message IDs.
+ * Returns a Map<messageId, ReactionSummary[]> where each entry is:
+ *   { reaction, count, users: [{ id, name, username, identity }], reacted_by_me }
+ */
+async function buildReactionSummary(messageIds, requestingUserId) {
+  if (!messageIds || messageIds.length === 0) return new Map();
+
+  const reactions = [];
+  const uniqueIds = [...new Set(messageIds)];
+  for (let offset = 0; offset < uniqueIds.length; offset += 100) {
+    let after;
+    for (;;) {
+      let query = supabaseAdmin.from('MessageReaction')
+        .select('id, message_id, reaction, user_id')
+        .in('message_id', uniqueIds.slice(offset, offset + 100))
+        .order('message_id').order('id').limit(500);
+      if (after) query = query.or(`message_id.gt.${after.message_id},and(message_id.eq.${after.message_id},id.gt.${after.id})`);
+      const { data, error } = await query;
+      if (error) throw error;
+      reactions.push(...data || []);
+      if (!data || data.length < 500) break;
+      after = data[data.length - 1];
+    }
+  }
+  if (!reactions.length) return new Map();
+
+  // The people who reacted, as the chat list names them
+  const people = new Map();
+  const userIds = [...new Set(reactions.map((r) => r.user_id))];
+  for (let offset = 0; offset < userIds.length; offset += 100) {
+    for (const [id, person] of await loadChatPeople(userIds.slice(offset, offset + 100))) people.set(id, person);
+  }
+
+  // Group: messageId -> reaction -> [user_id, ...]
+  // Reaction text is user input: Map also handles keys such as "toString".
+  const grouped = new Map();
+  for (const r of reactions) {
+    if (!grouped.has(r.message_id)) grouped.set(r.message_id, new Map());
+    const byReaction = grouped.get(r.message_id);
+    if (!byReaction.has(r.reaction)) byReaction.set(r.reaction, []);
+    byReaction.get(r.reaction).push(r.user_id);
+  }
+
+  const result = new Map();
+  for (const [msgId, reactionMap] of grouped) {
+    const summary = [...reactionMap].map(([reaction, uids]) => ({
+      reaction,
+      count: uids.length,
+      users: uids.map((uid) => {
+        const identity = people.get(String(uid)) || null;
+        return {
+          id: identity?.id || uid,
+          name: identity?.displayName || 'Unknown',
+          username: identity?.handle || null,
+          identity,
+        };
+      }),
+      reacted_by_me: uids.includes(requestingUserId),
+    }));
+    result.set(msgId, summary);
+  }
+  return result;
+}
+
+module.exports = { parseSyncCursor, chatSyncSnapshot, chatChanges, chatReadReceipts, readChatRoomBatches, buildReactionSummary };

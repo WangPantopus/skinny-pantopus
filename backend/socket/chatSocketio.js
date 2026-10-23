@@ -17,6 +17,7 @@ const { chatAccessUnavailable, actingBusinessInRoom, UNPUBLISHED_BUSINESS_REFUSA
 const { unpublishedBusinessIds } = require('../utils/visibilityPolicy');
 const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
 const { markChatRead } = require('../services/chatReadState');
+const { buildReactionSummary } = require('../services/chatSync');
 const { setGauge } = require('../services/chatMetrics');
 // Persistent login (design §6.4): the same JWT decode helper verifyToken
 // exposes as `decodeSessionClaims` (verifyToken.js delegates to it), the 15-s
@@ -146,70 +147,12 @@ function emitSocketGauges() {
   setGauge('chat.socket.total_connections', total);
 }
 
-/**
- * Build a reaction summary for a single message.
- * Returns the same format as the REST endpoint:
- *   [{ reaction, count, users: [{ id, name }], reacted_by_me }]
- */
+// REST, reconnect backfill and socket acknowledgements use one complete summary.
 async function buildSocketReactionSummary(messageId, requestingUserId) {
-  const { data: reactions, error } = await supabaseAdmin
-    .from('MessageReaction')
-    .select('reaction, user_id')
-    .eq('message_id', messageId);
-  if (error) throw error;
-
-  if (!reactions || reactions.length === 0) return [];
-
-  // The people who reacted, as the chat list names them (services/chatPeople)
-  const people = await loadChatPeople(reactions.map((r) => r.user_id));
-
-  const grouped = {};
-  for (const r of reactions) {
-    if (!grouped[r.reaction]) grouped[r.reaction] = [];
-    grouped[r.reaction].push(r.user_id);
-  }
-
-  return Object.entries(grouped).map(([reaction, uids]) => ({
-    reaction,
-    count: uids.length,
-    users: uids.map((uid) => ({ id: uid, name: people.get(String(uid))?.displayName || 'Unknown' })),
-    reacted_by_me: uids.includes(requestingUserId),
-  }));
+  return (await buildReactionSummary([messageId], requestingUserId)).get(messageId) || [];
 }
 
-async function buildSocketReactionSummaryMap(messageIds, requestingUserId) {
-  const ids = Array.from(new Set((messageIds || []).map((id) => String(id)).filter(Boolean)));
-  if (ids.length === 0) return new Map();
-
-  const { data: reactions, error } = await supabaseAdmin
-    .from('MessageReaction')
-    .select('message_id, reaction, user_id')
-    .in('message_id', ids);
-  if (error) throw error;
-
-  if (!reactions || reactions.length === 0) return new Map();
-
-  const people = await loadChatPeople(reactions.map((reaction) => reaction.user_id));
-
-  const grouped = {};
-  for (const reaction of reactions) {
-    if (!grouped[reaction.message_id]) grouped[reaction.message_id] = {};
-    if (!grouped[reaction.message_id][reaction.reaction]) grouped[reaction.message_id][reaction.reaction] = [];
-    grouped[reaction.message_id][reaction.reaction].push(reaction.user_id);
-  }
-
-  const result = new Map();
-  for (const [messageId, reactionMap] of Object.entries(grouped)) {
-    result.set(messageId, Object.entries(reactionMap).map(([reaction, uids]) => ({
-      reaction,
-      count: uids.length,
-      users: uids.map((uid) => ({ id: uid, name: people.get(String(uid))?.displayName || 'Unknown' })),
-      reacted_by_me: uids.includes(requestingUserId),
-    })));
-  }
-
-  return result;
-}
+const buildSocketReactionSummaryMap = buildReactionSummary;
 
 // Store user rooms: { userId: Set([roomId1, roomId2]) }
 const userRooms = new Map();
