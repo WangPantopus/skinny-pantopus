@@ -5,7 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import type { ChatMessage as BaseChatMessage, User } from '@pantopus/types';
 import { getDateKey, formatDateLabel } from '@pantopus/ui-utils';
-import { useSocket, useSocketConnected } from './useSocket';
+import { retainSocketRoom, useSocket, useSocketConnected, type SocketRoomLease } from './useSocket';
 import { useSocketEvent, useSocketEmit } from './useSocket';
 import { useChatTyping } from './useChatTyping';
 import { chosenUsername } from '@pantopus/utils';
@@ -376,6 +376,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
   // Refs for debounced markRead and room:join stabilization
   const markReadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const joinedRoomsRef = useRef<Set<string>>(new Set());
+  const roomLeasesRef = useRef<Map<string, SocketRoomLease>>(new Map());
   const prevConnectedRef = useRef(connected);
 
   // ── Fetch functions ─────────────────────────────────────
@@ -484,6 +485,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     syncCursorsRef.current = undefined;
     for (const id of denied) {
       visibleThroughRef.current.delete(id); readAcknowledgedRef.current.delete(id); joinedRoomsRef.current.delete(id);
+      roomLeasesRef.current.get(id)?.release(); roomLeasesRef.current.delete(id);
     }
     if (roomId && denied.has(roomId)) {
       deniedScopeRef.current = scopeGeneration; historyDeniedScopeRef.current = scopeGeneration; setLoadFailure('forbidden');
@@ -844,8 +846,16 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
   // It must not cancel and repeat every pending join in a large conversation.
   const activeRoomIdsKey = activeRoomIds.slice().sort().join(',');
   useEffect(() => {
-    joinedRoomsRef.current.clear();
-  }, [cacheKeyId]);
+    const leases = new Map<string, SocketRoomLease>();
+    const joined = joinedRoomsRef.current;
+    roomLeasesRef.current = leases;
+    joined.clear();
+    return () => {
+      leases.forEach((lease) => lease.release());
+      leases.clear();
+      joined.clear();
+    };
+  }, [socket, connected, cacheKeyId]);
 
   useEffect(() => {
     if (!currentUserId) return;
@@ -871,24 +881,23 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     const active = () => !cancelled && socket.connected && isCurrentScope();
     const rooms = activeRoomIdsKey.split(',');
     const roomSet = new Set(rooms);
+    const leases = roomLeasesRef.current;
+    for (const [id, lease] of leases) if (!roomSet.has(id)) { lease.release(); leases.delete(id); }
     for (const id of joinedRoomsRef.current) if (!roomSet.has(id)) joinedRoomsRef.current.delete(id);
+    for (const id of rooms) if (!leases.has(id)) leases.set(id, retainSocketRoom(socket, id));
     const pending = rooms.filter((id) => !joinedRoomsRef.current.has(id));
     const timers = new Map<ReturnType<typeof setTimeout>, () => void>();
     const wait = (ms: number) => new Promise<void>((resolve) => {
       const timer = setTimeout(() => { timers.delete(timer); resolve(); }, ms);
       timers.set(timer, resolve);
     });
-    type JoinResponse = { success?: boolean; messages?: ChatMessage[]; code?: string; retryable?: boolean; retryAfterMs?: number };
     const join = async (activeRoomId: string) => {
-      for (let attempt = 0; attempt < 3 && active(); attempt += 1) {
+      const lease = leases.get(activeRoomId);
+      if (!lease) return;
+      for (let attempt = 0; attempt < 3 && active() && leases.get(activeRoomId) === lease; attempt += 1) {
         const startedVersion = changeVersionRef.current;
         const historyGeneration = historyGenerationRef.current;
-        const response = await new Promise<JoinResponse | undefined>((resolve) => {
-          // Socket.IO's timeout also releases the acknowledgement callback when
-          // a reply is lost; our previous recursive timer retained it forever.
-          socket.timeout(10_000).emit('room:join', { roomId: activeRoomId },
-            (error: Error | null, result: JoinResponse) => resolve(error ? undefined : result));
-        });
+        const response = await lease.join();
         if (!active() || currentUserId && !isChatHistoryGenerationCurrent(currentUserId, historyGeneration)) return;
         if (response?.success) {
           joinedRoomsRef.current.add(activeRoomId);
