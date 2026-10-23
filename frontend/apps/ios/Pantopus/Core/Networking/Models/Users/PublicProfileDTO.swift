@@ -16,6 +16,9 @@ public struct PublicProfileReview: Decodable, Sendable, Hashable, Identifiable {
     public let reviewerId: String?
     public let revieweeId: String?
     public let rating: Int
+    /// The review's text, as the server sends it (the Review row's `comment`).
+    public let comment: String?
+    /// An older name for the text; read when `comment` is missing.
     public let content: String?
     public let createdAt: String?
     public let reviewerName: String?
@@ -26,7 +29,7 @@ public struct PublicProfileReview: Decodable, Sendable, Hashable, Identifiable {
         case id
         case reviewerId = "reviewer_id"
         case revieweeId = "reviewee_id"
-        case rating, content
+        case rating, comment, content
         case createdAt = "created_at"
         case reviewerName = "reviewer_name"
         case reviewerAvatar = "reviewer_avatar"
