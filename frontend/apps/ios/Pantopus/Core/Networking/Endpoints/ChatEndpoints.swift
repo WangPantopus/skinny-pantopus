@@ -51,7 +51,12 @@ public enum ChatEndpoints {
         if let before { query["before"] = before }
         if let after { query["after"] = after }
         if let asBusinessUserId { query["asBusinessUserId"] = asBusinessUserId }
-        return Endpoint(method: .get, path: "/api/chat/rooms/\(roomId)/messages", query: query)
+        return Endpoint(
+            method: .get,
+            path: "/api/chat/rooms/\(roomId)/messages",
+            query: query,
+            cachePolicy: .reloadIgnoringLocalCacheData
+        )
     }
 
     /// `GET /api/chat/conversations/:otherUserId/messages` — paginated
@@ -67,7 +72,12 @@ public enum ChatEndpoints {
         if let before { query["before"] = before }
         if let after { query["after"] = after }
         if let topicId { query["topicId"] = topicId }
-        return Endpoint(method: .get, path: "/api/chat/conversations/\(otherUserId)/messages", query: query)
+        return Endpoint(
+            method: .get,
+            path: "/api/chat/conversations/\(otherUserId)/messages",
+            query: query,
+            cachePolicy: .reloadIgnoringLocalCacheData
+        )
     }
 
     /// `POST /api/chat/direct` — find-or-create the 1:1 direct room
