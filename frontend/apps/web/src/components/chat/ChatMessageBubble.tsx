@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import React, { useState } from 'react';
 import { Copy, MoreHorizontal, Reply, Pencil, Trash2 } from 'lucide-react';
 import type { ChatMessage } from '@pantopus/types';
@@ -80,7 +81,7 @@ function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClic
   const isOptimistic = msg._optimistic;
   const isFailed = msg._failed;
   const isRefused = msg._refused;
-  const pending = msg as ChatMessage & { _queued?: boolean; _outbox?: boolean; _error?: string };
+  const pending = msg as ChatMessage & { _queued?: boolean; _outbox?: boolean; _error?: string; _replyRoomHref?: string };
   const receipt = isMine ? ((msg as ChatMessage & { read_at?: string }).read_at ? 'Read' : 'Sent') : null;
   // Launch cut #3 (Marketplace): a shared listing card is not shown.
   if (msgType === 'listing_offer' && !launchFeatures.marketplace) return null;
@@ -209,7 +210,11 @@ function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClic
       {pending._outbox && (isFailed || pending._queued) && onRemovePending && (
         <button type="button" className="ml-2 underline" onClick={() => onRemovePending(msg.id)}>Remove</button>
       )}
-      {isFailed && pending._error && <div className="text-red-500">{pending._error}</div>}
+      {(isFailed || pending._queued && pending._replyRoomHref) && pending._error && (
+        <div className="text-red-500">{pending._error}
+          {pending._replyRoomHref && <Link href={pending._replyRoomHref} className="ml-1 underline">Open original conversation</Link>}
+        </div>
+      )}
     </>
   );
 

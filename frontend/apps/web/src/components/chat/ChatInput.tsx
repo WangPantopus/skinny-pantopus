@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import ChatAttachmentMenu from './ChatAttachmentMenu';
 import EmojiPickerPopover from './EmojiPickerPopover';
@@ -21,7 +22,7 @@ interface ChatInputProps {
   /** Compact mode for mini chat widget — removes max-width and reduces padding */
   compact?: boolean;
   /** The message the next send replies to, shown above the field ("Replying to …"). */
-  replyingTo?: (ChatReplyQuote & { messageId?: string; roomId?: string }) | null;
+  replyingTo?: (ChatReplyQuote & { messageId?: string; roomId?: string; roomHref?: string }) | null;
   onCancelReply?: () => void;
   editingMessage?: { messageId: string; text: string } | null;
   onCancelEdit?: () => void;
@@ -218,6 +219,7 @@ export default function ChatInput({ onSend, draft, sending, disabled = false, pl
             <div className="min-w-0 flex-1">
               <div className="font-semibold text-primary-600">Replying to {replyingTo.senderName}</div>
               <div className="line-clamp-1 text-app-muted">{replyingTo.text}</div>
+              {replyingTo.roomHref && <Link href={replyingTo.roomHref} className="underline">Open original conversation</Link>}
             </div>
             <button type="button" onClick={onCancelReply} aria-label="Cancel reply" className="text-app-text-secondary hover:text-app">
               ×

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
-import type { ChatMessage as BaseChatMessage, User } from '@pantopus/types';
+import type { ChatMessage as BaseChatMessage, ChatRoomWithDetails, User } from '@pantopus/types';
 import { getDateKey, formatDateLabel } from '@pantopus/ui-utils';
 import { retainSocketRoom, useSocket, useSocketConnected, type SocketRoomLease } from './useSocket';
 import { useSocketEvent, useSocketEmit } from './useSocket';
@@ -14,7 +14,7 @@ import { queryKeys } from '@/lib/query-keys';
 import { activateChatStorage, deleteChatRecords, readChatRecord, writeChatRecords, readChatHistoryGeneration,
   isChatHistoryGenerationCurrent, onChatHistoryRetired, retireChatHistoryRooms, type ChatDraftCommit } from '@/components/chat/chatStorage';
 import type { ChatDraftConfig, ChatDraftContext } from '@/components/chat/chatDrafts';
-import { enqueueChatSend, pendingChatMessage, removeChatSend, resumeChatOutbox, retryChatSend, startChatOutbox, subscribeChatOutbox, type PendingChatSend } from '@/components/chat/chatOutbox';
+import { chatReplyRoomHref, directReplyRoomStatus, REPLY_AUDIENCE_REFUSAL, enqueueChatSend, pendingChatMessage, removeChatSend, resumeChatOutbox, retryChatSend, startChatOutbox, subscribeChatOutbox, type PendingChatSend } from '@/components/chat/chatOutbox';
 
 type ChatMessage = BaseChatMessage & { sync_version?: number; read_at?: string | null };
 
@@ -258,7 +258,7 @@ export interface UseChatMessagesReturn {
   sendMessage: (text: string, files?: File[], draft?: ChatDraftCommit) => Promise<void>;
   sendSharedMessage: (message: Pick<PendingChatSend, 'text' | 'metadata' | 'topicRequest'> & { messageType: 'gig_offer' | 'listing_offer' }) => Promise<void>;
   /** The message the next send replies to (the composer shows "Replying to …"), or null. */
-  replyingTo: ChatReplyTarget | null;
+  replyingTo: (ChatReplyTarget & { roomHref?: string }) | null;
   beginReply: (target: ChatReplyTarget) => void;
   cancelReply: () => void;
   canChangeMessage: (message: BaseChatMessage) => boolean;
@@ -280,17 +280,6 @@ export interface UseChatMessagesReturn {
 function sendFailureReason(err: unknown): string | null {
   const message = (err as { message?: unknown } | null)?.message;
   return typeof message === 'string' && message.trim() ? message.trim() : null;
-}
-
-/**
- * The reply a send can carry: the server refuses a whole send whose reply target isn't a sent message of that room,
- * so a reply to a message still sending, or to another room's message in a person view, goes without its quote.
- */
-function replyTargetIn(messages: ChatMessage[], replyToId: string | null | undefined, roomId: string): string | undefined {
-  if (!replyToId) return undefined;
-  const original = messages.find((m) => String(m.id) === String(replyToId)) as Record<string, any> | undefined;
-  if (!original || original._optimistic || original._failed) return undefined;
-  return String(original.room_id || '') === String(roomId) ? String(original.id) : undefined;
 }
 
 // ── Hook ────────────────────────────────────────────────────
@@ -1135,39 +1124,58 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     }
   }, [cacheKeyId, hasMore, fetchMessages, applyPage, isCurrentScope, survivesDeletion, currentUserId, roomId, scopeGeneration]);
 
+  const resolveSendTarget = useCallback(() => {
+    if (!isCurrentScope() || !currentUserId) throw new Error('This chat session ended.');
+    let targetRoomId = isRoomMode ? roomId : resolvedRoomId;
+    if (replyingTo) {
+      const original = messagesRef.current.find((message) => message.id === replyingTo.messageId);
+      const originalRoomId = replyingTo.roomId || original?.room_id;
+      if (!originalRoomId || original && isUnsent(original)) throw new Error('The original message is not available yet. Keep this reply and try again.');
+      if (isRoomMode && originalRoomId !== roomId) throw new Error(REPLY_AUDIENCE_REFUSAL);
+      if (!isRoomMode) {
+        if (!otherUserId) throw new Error(CONVERSATION_NOT_READY);
+        const knownRoom = queryClient.getQueryData<ChatRoomWithDetails>(queryKeys.chatRoom(originalRoomId, asBusinessUserId));
+        if (knownRoom && directReplyRoomStatus(knownRoom, originalRoomId, asBusinessUserId || currentUserId, otherUserId) === 'unsupported') {
+          throw new Error(REPLY_AUDIENCE_REFUSAL);
+        }
+      }
+      targetRoomId = originalRoomId;
+    }
+    if (!targetRoomId) throw new Error(directChatError || CONVERSATION_NOT_READY);
+    return { roomId: targetRoomId, replyToId: replyingTo?.messageId };
+  }, [isCurrentScope, currentUserId, isRoomMode, roomId, resolvedRoomId, replyingTo, otherUserId, queryClient, asBusinessUserId, directChatError]);
+
   // Persist the original intent before returning control to the composer. The
-  // account worker keeps sending after navigation and resumes after a reload.
+  // account worker validates the captured audience before any upload or retry.
   const sendMessage = useCallback(async (text: string, files?: File[], draft?: ChatDraftCommit) => {
-    const targetRoomId = isRoomMode ? roomId : resolvedRoomId;
     if (!text.trim() && !files?.length) return;
-    if (!targetRoomId || !currentUserId) throw new Error(directChatError || "This conversation isn't ready yet. Try again in a moment.");
+    const target = resolveSendTarget();
+    if (!currentUserId) throw new Error(CONVERSATION_NOT_READY);
     setSending(true);
     try {
-      await enqueueChatSend(currentUserId, { clientMessageId: crypto.randomUUID(), roomId: targetRoomId,
-        otherUserId, text: text.trim(), asBusinessUserId, topicId: topicId || undefined,
-        replyToId: replyTargetIn(messagesRef.current, replyingTo?.messageId, targetRoomId)
-          || (replyingTo?.roomId === targetRoomId ? replyingTo.messageId : undefined) }, files, draft);
+      await enqueueChatSend(currentUserId, { clientMessageId: crypto.randomUUID(), ...target,
+        otherUserId: isRoomMode ? undefined : otherUserId, text: text.trim(), asBusinessUserId, topicId: topicId || undefined }, files, draft);
       if (isCurrentScope()) { setReplyingTo(null); setError(null); }
     } finally { if (isCurrentScope()) setSending(false); }
-  }, [isRoomMode, roomId, resolvedRoomId, currentUserId, directChatError, otherUserId, asBusinessUserId, topicId, replyingTo, isCurrentScope]);
+  }, [resolveSendTarget, currentUserId, isRoomMode, otherUserId, asBusinessUserId, topicId, isCurrentScope]);
 
   const sendSharedMessage = useCallback(async (message: Pick<PendingChatSend, 'text' | 'metadata' | 'topicRequest'> & { messageType: 'gig_offer' | 'listing_offer' }) => {
-    const targetRoomId = isRoomMode ? roomId : resolvedRoomId;
     if (!isCurrentScope()) return;
     try {
-      if (!targetRoomId || !currentUserId) throw new Error(directChatError || CONVERSATION_NOT_READY);
-      await enqueueChatSend(currentUserId, { ...message, clientMessageId: crypto.randomUUID(), roomId: targetRoomId,
-        otherUserId, asBusinessUserId, topicId: message.topicRequest ? undefined : topicId || undefined });
-      if (isCurrentScope()) setError(null);
+      const target = resolveSendTarget();
+      if (!currentUserId) throw new Error(CONVERSATION_NOT_READY);
+      await enqueueChatSend(currentUserId, { ...message, clientMessageId: crypto.randomUUID(), ...target,
+        otherUserId: isRoomMode ? undefined : otherUserId, asBusinessUserId, topicId: message.topicRequest ? undefined : topicId || undefined });
+      if (isCurrentScope()) { setReplyingTo(null); setError(null); }
     } catch (error) {
       if (isCurrentScope()) setError(shareFailureMessage(error));
       throw error;
     }
-  }, [isRoomMode, roomId, resolvedRoomId, currentUserId, directChatError, otherUserId, asBusinessUserId, topicId, isCurrentScope]);
+  }, [resolveSendTarget, currentUserId, isRoomMode, otherUserId, asBusinessUserId, topicId, isCurrentScope]);
 
   const beginReply = useCallback((target: ChatReplyTarget) => {
     setEditingMessage(null);
-    setReplyingTo({ ...target, roomId: messagesRef.current.find((message) => message.id === target.messageId)?.room_id });
+    setReplyingTo({ ...target, roomId: messagesRef.current.find((message) => message.id === target.messageId)?.room_id || target.roomId });
   }, []);
   const restoreDraftContext = useCallback(async (context: ChatDraftContext) => {
     if (!isCurrentScope()) return;
@@ -1320,7 +1328,8 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     sendRefusal,
     sendMessage,
     sendSharedMessage,
-    replyingTo,
+    replyingTo: replyingTo ? { ...replyingTo, roomHref: replyingTo.roomId && replyingTo.roomId !== (isRoomMode ? roomId : resolvedRoomId)
+      ? chatReplyRoomHref(replyingTo.roomId, asBusinessUserId) : undefined } : null,
     beginReply,
     cancelReply,
     editingMessage,
