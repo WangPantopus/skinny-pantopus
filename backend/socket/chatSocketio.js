@@ -27,6 +27,9 @@ const { verifyAccessToken } = require('../services/accessTokenVerifier');
 
 // Store connected users: { userId: Set<socketId> }
 const connectedUsers = new Map();
+// Backfill reads share the API's database pool with sends and uploads. Bound
+// admission instead of retaining an unbounded queue when a client reconnects.
+let activeRoomJoins = 0;
 
 // The gig room also serves public task watchers. Tracking belongs only to the
 // current owner/worker and only while their authenticated socket is subscribed.
@@ -290,6 +293,7 @@ module.exports = (io) => {
     // Rooms this socket joined for a business inbox (room:join), where the user isn't a member.
     const businessRooms = new Set();
     socket.chatBusinessRooms = businessRooms;
+    const pendingRoomJoins = new Set();
 
     logger.info('User connected to chat', {
       sessionId,
@@ -387,6 +391,14 @@ module.exports = (io) => {
      * Join a specific room
      */
     on('room:join', async ({ roomId }, callback) => {
+      if (typeof roomId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(roomId)) {
+        return callback({ error: 'Invalid room' });
+      }
+      if (pendingRoomJoins.has(roomId) || pendingRoomJoins.size >= 4 || activeRoomJoins >= 32) {
+        return callback({ error: 'Chat is busy. Please retry.', code: 'CHAT_BUSY', retryable: true, retryAfterMs: 1000 });
+      }
+      pendingRoomJoins.add(roomId);
+      activeRoomJoins++;
       try {
         // Verify user has access to room
         const { data: participant, error: participantError } = await supabaseAdmin
@@ -425,7 +437,7 @@ module.exports = (io) => {
         logger.info('User joined room', { sessionId, userId, roomId, forBusiness: Boolean(actingFor) });
         
         // Load recent messages
-        const { data: messages } = await supabaseAdmin
+        const { data: messages, error: historyError } = await supabaseAdmin
           .from('ChatMessage')
           .select(`
             *,
@@ -441,6 +453,7 @@ module.exports = (io) => {
           .order('created_at', { ascending: false })
           .order('id', { ascending: false })
           .limit(50);
+        if (historyError) throw chatAccessUnavailable();
         const backfill = (messages || []).reverse();
         const [reactionMap, people] = await Promise.all([
           buildSocketReactionSummaryMap(backfill.map((message) => message.id), userId),
@@ -473,6 +486,9 @@ module.exports = (io) => {
       } catch (err) {
         logger.error('Room join error', { sessionId, userId, roomId, error: err.message });
         callback({ error: 'Failed to join room', retryable: true });
+      } finally {
+        pendingRoomJoins.delete(roomId);
+        activeRoomJoins--;
       }
     });
     
