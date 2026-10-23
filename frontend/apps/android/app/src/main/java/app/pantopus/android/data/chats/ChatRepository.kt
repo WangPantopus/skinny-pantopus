@@ -308,9 +308,16 @@ class ChatRepository
         suspend fun markConversationRead(
             otherUserId: String,
             throughMessageId: String? = null,
+            throughMessageIds: Map<String, String>? = null,
         ): NetworkResult<Unit> =
             safeApiCall {
-                api.markConversationRead(otherUserId, throughMessageId?.let { mapOf("throughMessageId" to it) }.orEmpty())
+                api.markConversationRead(
+                    otherUserId,
+                    buildMap {
+                        throughMessageIds?.let { put("throughMessageIds", it) }
+                            ?: throughMessageId?.let { put("throughMessageId", it) }
+                    },
+                )
             }.chatsChanged()
 
         suspend fun setConversationNotifications(

@@ -2816,7 +2816,9 @@ internal fun PopulatedFrame(
                         (rowsByKey[key] as? ChatTimelineRow.Bubble)?.content?.id?.takeUnless { it.startsWith("client_") }
                     }
                 if (initialScrollDone) onViewport(visibleMessages.firstOrNull(), atBottom)
-                visibleMessages.lastOrNull()?.let(onVisibleMessage)
+                // A person thread can interleave several rooms. Report every visible room's messages so
+                // reading its newest bubble cannot acknowledge a different room's unseen history.
+                visibleMessages.forEach(onVisibleMessage)
             }
     }
     LaunchedEffect(listState) {

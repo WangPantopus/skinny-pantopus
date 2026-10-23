@@ -365,6 +365,8 @@ class ChatConversationViewModel
         private var markReadJob: Job? = null
         private var isForeground = true
         private var visibleReadThroughId: String? = null
+        private val visibleReadThroughByRoom = mutableMapOf<String, ChatMessageDto>()
+        private val acknowledgedReadByRoom = mutableMapOf<String, String>()
         private var visibleTimelineAnchor: String? = null
         private var viewingLatest = true
         private var lastReadMessageId: String? = null
@@ -450,6 +452,8 @@ class ChatConversationViewModel
                 directRoomId = null
                 activeRoomIds = emptySet()
                 visibleReadThroughId = null
+                visibleReadThroughByRoom.clear()
+                acknowledgedReadByRoom.clear()
                 visibleTimelineAnchor = null
                 viewingLatest = true
                 lastReadMessageId = null
@@ -817,6 +821,7 @@ class ChatConversationViewModel
             historyGeneration++
             catchUpJob?.cancel()
             visibleReadThroughId = null
+            visibleReadThroughByRoom.clear()
             _selectedTopicId.value = if (_selectedTopicId.value == topicId) null else topicId
             _composerText.value = ""
             _queuedAttachments.value = emptyList()
@@ -846,6 +851,7 @@ class ChatConversationViewModel
             catchUpJob?.cancel()
             historyPage = null
             visibleReadThroughId = null
+            visibleReadThroughByRoom.clear()
             fetch(initial = true, force = true)
         }
 
@@ -2169,9 +2175,13 @@ class ChatConversationViewModel
 
         fun markVisibleMessageRead(messageId: String) {
             val visible = messages.firstOrNull { it.id == messageId } ?: return
+            if (visible.id.startsWith("client_")) return
+            val previousInRoom = visibleReadThroughByRoom[visible.roomId]
+            if (previousInRoom == null || messageOrder.compare(visible, previousInRoom) > 0) {
+                visibleReadThroughByRoom[visible.roomId] = ChatMessageDto(visible.id, visible.roomId, createdAt = visible.createdAt)
+            }
             val previous = messages.firstOrNull { it.id == visibleReadThroughId }
-            if (previous != null && messageOrder.compare(visible, previous) < 0) return
-            visibleReadThroughId = messageId
+            if (previous == null || messageOrder.compare(visible, previous) >= 0) visibleReadThroughId = messageId
             scheduleMarkRead()
         }
 
@@ -2186,7 +2196,14 @@ class ChatConversationViewModel
         fun scheduleMarkRead() {
             if (!isForeground || _selectedTopicId.value != null) return
             val throughId = visibleReadThroughId ?: return
-            if (throughId == lastReadMessageId || messages.none { it.id == throughId } || throughId.startsWith("client_")) return
+            val throughIds =
+                visibleReadThroughByRoom.mapValues { it.value.id }
+                    .filter { (room, id) -> room in activeRoomIds && acknowledgedReadByRoom[room] != id }
+            if (mode is ChatThreadMode.Person) {
+                if (throughIds.isEmpty()) return
+            } else if (throughId == lastReadMessageId || messages.none { it.id == throughId } || throughId.startsWith("client_")) {
+                return
+            }
             val context = historyContext()
             markReadJob?.cancel()
             markReadJob =
@@ -2196,10 +2213,13 @@ class ChatConversationViewModel
                     val result =
                         when (val target = context.mode) {
                             is ChatThreadMode.Room -> repo.markRoomRead(target.id, target.asBusinessUserId, throughId)
-                            is ChatThreadMode.Person -> repo.markConversationRead(target.otherUserId, throughId)
+                            is ChatThreadMode.Person -> repo.markConversationRead(target.otherUserId, throughMessageIds = throughIds)
                             ChatThreadMode.Ai -> return@launch
                         }
-                    if (result is NetworkResult.Success && context == historyContext()) lastReadMessageId = throughId
+                    if (result is NetworkResult.Success && context == historyContext()) {
+                        lastReadMessageId = throughId
+                        acknowledgedReadByRoom.putAll(throughIds)
+                    }
                 }
         }
 
