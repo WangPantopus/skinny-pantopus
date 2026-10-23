@@ -216,7 +216,6 @@ export default function ChatRoomView({
       }
       try {
         await chat.sendMessage(text, files, draft);
-        if (initialMessageId) router.replace(`/app/chat/${roomId}${asBusinessUserId ? `?asBusinessUserId=${encodeURIComponent(asBusinessUserId)}` : ''}`);
         if (preBidStatus?.is_pre_bid) await loadPreBidStatus();
       } catch (e: unknown) {
         const err = e as { code?: string; message?: string };
@@ -228,7 +227,7 @@ export default function ChatRoomView({
         throw e;
       }
     },
-    [chat, preBidStatus, loadPreBidStatus, initialMessageId, router, roomId, asBusinessUserId],
+    [chat, preBidStatus, loadPreBidStatus],
   );
 
   // ── Attachment action handlers ───────────────────────────

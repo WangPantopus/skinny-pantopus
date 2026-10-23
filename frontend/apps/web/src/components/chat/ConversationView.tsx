@@ -228,10 +228,9 @@ export default function ConversationView({
   const handleSend = useCallback(
     async (text: string, files?: File[], draft?: ChatDraftCommit) => {
       await chat.sendMessage(text, files, draft);
-      if (initialMessageId) router.replace(`/app/chat/conversation/${otherUserId}`);
       fetchTopics();
     },
-    [chat, fetchTopics, initialMessageId, router, otherUserId],
+    [chat, fetchTopics],
   );
 
   // ── Attachment action handlers ───────────────────────────

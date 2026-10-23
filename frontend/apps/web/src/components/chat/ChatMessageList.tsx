@@ -91,8 +91,8 @@ export default function ChatMessageList({
   const prependAnchorRef = useRef<{ id: string; top: number } | null>(null);
   const anchorFrameRef = useRef<number | null>(null);
   const focusedAnchorRef = useRef<string | null>(null);
-  // A reply quotes its original only when that is loaded: one answering a
-  // message older than the loaded pages shows no quote.
+  // Loaded originals provide the quote; older ones retain an explicit link
+  // to the existing authorized context view.
   const messagesById = useMemo(() => new Map(messages.map((m) => [String(m.id), m])), [messages]);
   // The composer's reply bar names the message as its quote will.
   const handleReply = useCallback(
