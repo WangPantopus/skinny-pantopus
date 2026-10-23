@@ -101,9 +101,11 @@ public struct TransactionReviewDTO: Decodable, Sendable, Hashable, Identifiable 
 
 /// Inlined reviewer card on each received review — mirrors the columns the
 /// backend enriches with (`first_name, last_name, username,
-/// profile_picture_url`).
+/// profile_picture_url`). A person with a Local Profile comes with its
+/// `name` and no first or last name (backend/services/chatPeople.js).
 public struct TransactionReviewerDTO: Decodable, Sendable, Hashable, Identifiable {
     public let id: String
+    public let name: String?
     public let firstName: String?
     public let lastName: String?
     public let username: String?
@@ -111,12 +113,14 @@ public struct TransactionReviewerDTO: Decodable, Sendable, Hashable, Identifiabl
 
     public init(
         id: String,
+        name: String? = nil,
         firstName: String? = nil,
         lastName: String? = nil,
         username: String? = nil,
         profilePictureUrl: String? = nil
     ) {
         self.id = id
+        self.name = name
         self.firstName = firstName
         self.lastName = lastName
         self.username = username
@@ -124,7 +128,7 @@ public struct TransactionReviewerDTO: Decodable, Sendable, Hashable, Identifiabl
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, username
+        case id, name, username
         case firstName = "first_name"
         case lastName = "last_name"
         case profilePictureUrl = "profile_picture_url"
