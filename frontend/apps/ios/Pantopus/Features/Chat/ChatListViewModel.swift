@@ -4,11 +4,9 @@ import Observation
 
 // swiftlint:disable type_body_length
 
-/// View-model for the Chat List (Inbox tab) screen.
 @Observable
 @MainActor
 public final class ChatListViewModel {
-    /// Current render state.
     public private(set) var state: ChatListState = .loading
     public var refreshFailureMessage: String?
     public private(set) var isLoadingMore = false
@@ -34,9 +32,9 @@ public final class ChatListViewModel {
     private var recentMessageIds: [String] = []
     private var refreshTask: Task<Void, Never>?
     private var inboxResponse: UnifiedConversationsResponse?
+    private var inboxConfirmedAt: Date?
     private var fetchGeneration = 0
     private var activeFetchGeneration: Int?
-
     private var serverTotalUnread: Int = 0
     private var serverTotalUnmutedUnread: Int?
     private var pendingMuteKeys: Set<String> = []
@@ -49,7 +47,6 @@ public final class ChatListViewModel {
 
     private var badgeTask: Task<Void, Never>?
     private var messageTask: Task<Void, Never>?
-
     init(
         api: APIClient = .shared,
         socket: SocketClient = .shared,
@@ -59,8 +56,9 @@ public final class ChatListViewModel {
         store = ScreenStore.store(for: api)
         self.socket = socket
         self.preferences = preferences
-        if let copy = store.peek(ChatEndpoints.unifiedConversations(), as: UnifiedConversationsResponse.self)?.value {
-            apply(copy, stats: store.peek(ChatEndpoints.stats(), as: ChatStatsResponse.self)?.value.stats)
+        if let copy = store.peek(ChatEndpoints.unifiedConversations(), as: UnifiedConversationsResponse.self) {
+            inboxConfirmedAt = copy.fetchedAt
+            apply(copy.value, stats: store.peek(ChatEndpoints.stats(), as: ChatStatsResponse.self)?.value.stats)
         }
     }
 
@@ -71,7 +69,10 @@ public final class ChatListViewModel {
             let session = AuthManager.shared.requestSessionGeneration
             let cached = await ChatLocalStore.shared.inbox(scope: scope)
             guard session == AuthManager.shared.requestSessionGeneration, !Task.isCancelled else { return }
-            if allRows.isEmpty, let cached { apply(cached.response, stats: cached.stats) }
+            if allRows.isEmpty, let cached {
+                inboxConfirmedAt = cached.confirmedAt
+                apply(cached.response, stats: cached.stats)
+            }
         }
         await fetch(force: false)
     }
@@ -94,6 +95,7 @@ public final class ChatListViewModel {
         let session = AuthManager.shared.requestSessionGeneration
         let scope = localCacheScope
         let checkpoint = ChatLocalStore.shared.inboxCheckpoint
+        let confirmedAt = inboxConfirmedAt
         do {
             let page: UnifiedConversationsResponse = try await api.request(ChatEndpoints.unifiedConversations(before: cursor))
             guard generation == fetchGeneration, session == AuthManager.shared.requestSessionGeneration, !Task.isCancelled else { return }
@@ -108,9 +110,9 @@ public final class ChatListViewModel {
             activityDates.merge(displayedDates) { _, displayed in displayed }
             applyFilter()
             publishBadgeCount()
-            if let scope {
+            if let scope, let confirmedAt {
                 await ChatLocalStore.shared.saveInbox(
-                    ChatInboxMemory(response: combined, stats: nil, confirmedAt: Date()), scope: scope, checkpoint: checkpoint
+                    ChatInboxMemory(response: combined, stats: nil, confirmedAt: confirmedAt), scope: scope, checkpoint: checkpoint
                 )
             }
         } catch {
@@ -270,6 +272,7 @@ public final class ChatListViewModel {
             return
         }
         guard generation == fetchGeneration, session == AuthManager.shared.requestSessionGeneration, !Task.isCancelled else { return }
+        inboxConfirmedAt = response.confirmedAt
         apply(response.response, stats: stats)
         if let scope {
             await ChatLocalStore.shared.saveInbox(

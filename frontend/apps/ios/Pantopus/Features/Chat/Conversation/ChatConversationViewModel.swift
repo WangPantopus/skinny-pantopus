@@ -393,6 +393,7 @@ public final class ChatConversationViewModel {
     /// Exclusive upper edge of a window whose newer rows were evicted.
     private var earlierHistoryBefore: String?
     private var hasLatestHistoryWindow = false
+    private var historyCacheVersion: Int?
 
     /// True while the screen was opened from Chat Search (or at a nudge) and
     /// the matched message hasn't been scrolled to yet — the view skips its
@@ -2836,6 +2837,7 @@ public final class ChatConversationViewModel {
             return
         }
         let requestId = UUID()
+        let cacheVersion = ChatLocalStore.shared.version
         let generation = historyGeneration
         let topicId = selectedTopicId
         let held = messages
@@ -2852,7 +2854,7 @@ public final class ChatConversationViewModel {
         }
         do {
             if case .merge = kind, topicId == nil, let cursor = syncCursors,
-               try await fetchChanges(cursor: cursor, requestId: requestId, generation: generation) {
+               try await fetchChanges(cursor: cursor, requestId: requestId, generation: generation, cacheVersion: cacheVersion) {
                 return
             }
             let response = try await requestHistory(before: before, topicId: topicId)
@@ -2885,6 +2887,7 @@ public final class ChatConversationViewModel {
                 messages.removeAll { !allowedRooms.contains($0.roomId) }
             }
             historyConfirmedAt = Date()
+            historyCacheVersion = cacheVersion == ChatLocalStore.shared.version ? cacheVersion : nil
             historyAccessRefused = false
             if response.anchorMessageId != nil { isViewingSearchContext = true }
             if case .older = kind {
@@ -2913,7 +2916,7 @@ public final class ChatConversationViewModel {
 
     /// Drain one fixed server snapshot before applying rows or committing its
     /// cursor. A failed later page leaves the displayed history and cursor intact.
-    private func fetchChanges(cursor: [String: Int64], requestId: UUID, generation: Int) async throws -> Bool {
+    private func fetchChanges(cursor: [String: Int64], requestId: UUID, generation: Int, cacheVersion: Int) async throws -> Bool {
         guard cursor.count <= 10000 else { return false }
         var next = cursor
         var until: [String: Int64]?
@@ -2979,6 +2982,7 @@ public final class ChatConversationViewModel {
         activeThreadTracker.setActiveRooms(rooms, owner: ObjectIdentifier(self), topicId: selectedTopicId)
         syncCursors = next
         historyConfirmedAt = Date()
+        historyCacheVersion = cacheVersion == ChatLocalStore.shared.version ? cacheVersion : nil
         for message in confirmations.values.sorted(by: Self.messagePrecedes) {
             upsert(message, confirmedSend: true)
         }
@@ -4334,6 +4338,9 @@ struct ChatThreadMemory: Codable, Equatable {
     var confirmedAt: Date?
     var syncCursors: [String: Int64]?
     var topics: [ChatConversationTopic]?
+    /// In-memory seeds carry their originating storage generation. Disk reads
+    /// replace this only after validating their durable history epoch.
+    var cacheGeneration: Int?
 }
 
 extension ChatConversationViewModel {
@@ -4364,7 +4371,9 @@ extension ChatConversationViewModel {
     private func recallThread() async -> Bool {
         guard let endpoint = threadMemoryEndpoint, let key = store.key(for: endpoint), key.account == currentUserId else { return false }
         let generation = historyGeneration
+        let cacheVersion = ChatLocalStore.shared.version
         var recalled = store.seeded(endpoint, as: ChatThreadMemory.self)
+        if api === APIClient.shared, recalled?.cacheGeneration != cacheVersion { recalled = nil }
         if recalled == nil, api === APIClient.shared {
             recalled = await ChatLocalStore.shared.history(
                 scope: ChatLocalStore.scope(server: key.server, account: key.account), thread: key.description
@@ -4372,7 +4381,9 @@ extension ChatConversationViewModel {
         }
         guard generation == historyGeneration, store.key(for: endpoint) == key, !Task.isCancelled,
               let memory = recalled, !memory.messages.isEmpty else { return false }
+        guard api !== APIClient.shared || cacheVersion == ChatLocalStore.shared.version else { return false }
         messages = memory.messages
+        historyCacheVersion = cacheVersion
         hasLatestHistoryWindow = true
         oldestCursor = memory.oldestCursor
         hasMore = memory.hasMore
@@ -4402,6 +4413,7 @@ extension ChatConversationViewModel {
         // bounded window as the recent offline thread.
         guard hasLatestHistoryWindow, !isViewingSearchContext, !isViewingEarlierHistory,
               let endpoint = threadMemoryEndpoint, let key = store.key(for: endpoint), key.account == currentUserId else { return }
+        guard api !== APIClient.shared || historyCacheVersion == ChatLocalStore.shared.version else { return }
         let kept = Array(messages.suffix(Self.rememberedMessages))
         let trimmed = kept.count < messages.count
         let memory = ChatThreadMemory(
@@ -4410,14 +4422,15 @@ extension ChatConversationViewModel {
             hasMore: trimmed || hasMore,
             confirmedAt: historyConfirmedAt,
             syncCursors: syncCursors,
-            topics: Array(topics.prefix(100))
+            topics: Array(topics.prefix(100)),
+            cacheGeneration: historyCacheVersion
         )
         store.seed(memory, for: endpoint)
         guard api === APIClient.shared, historyConfirmedAt != nil else { return }
         guard memory != savedHistorySnapshot || key.description != savedHistoryKey else { return }
         savedHistorySnapshot = memory
         savedHistoryKey = key.description
-        let version = ChatLocalStore.shared.version
+        guard let version = historyCacheVersion else { return }
         Task {
             await ChatLocalStore.shared.saveHistory(
                 memory, scope: ChatLocalStore.scope(server: key.server, account: key.account), thread: key.description, version: version
