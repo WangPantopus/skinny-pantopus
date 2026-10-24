@@ -37,12 +37,19 @@ async function unpublishedDirectRoomRefusal(senderUserId, otherMemberIds) {
   return others.some((id) => unpublished.has(id)) ? UNPUBLISHED_BUSINESS_RECIPIENT_REFUSAL : null;
 }
 
+function chatAccessUnavailable() {
+  return Object.assign(new Error('Chat authorization is temporarily unavailable. Please retry.'), {
+    code: 'CHAT_UNAVAILABLE', status: 503,
+  });
+}
+
 async function isBusinessAccount(userId) {
-  const { data: user } = await supabaseAdmin
+  const { data: user, error } = await supabaseAdmin
     .from('User')
     .select('id, account_type')
     .eq('id', userId)
     .maybeSingle();
+  if (error) throw chatAccessUnavailable();
   return Boolean(user && user.account_type === 'business');
 }
 
@@ -50,9 +57,9 @@ async function canActAsBusiness(businessUserId, actorUserId) {
   if (!businessUserId || !actorUserId) return false;
   if (String(businessUserId) === String(actorUserId)) return true;
   if (!(await isBusinessAccount(businessUserId))) return false;
-  const canManage = await hasPermission(businessUserId, actorUserId, 'gigs.manage');
+  const canManage = await hasPermission(businessUserId, actorUserId, 'gigs.manage', { throwOnError: true });
   if (canManage) return true;
-  return hasPermission(businessUserId, actorUserId, 'gigs.post');
+  return hasPermission(businessUserId, actorUserId, 'gigs.post', { throwOnError: true });
 }
 
 // The owner and staff who may act for each of these businesses (active team members passing canActAsBusiness), as
@@ -60,12 +67,22 @@ async function canActAsBusiness(businessUserId, actorUserId) {
 // can't be read.
 async function businessStaff(businessUserIds, { include = () => true } = {}) {
   if (!Array.isArray(businessUserIds) || businessUserIds.length === 0) return [];
-  const { data: team, error } = await supabaseAdmin
-    .from('BusinessTeam')
-    .select('business_user_id, user_id')
-    .in('business_user_id', businessUserIds)
-    .eq('is_active', true);
-  if (error || !Array.isArray(team)) throw new Error(error?.message || 'business team unavailable');
+  const team = [];
+  const ids = [...new Set(businessUserIds)];
+  for (let offset = 0; offset < ids.length; offset += 100) {
+    let after;
+    for (;;) {
+      let query = supabaseAdmin.from('BusinessTeam')
+        .select('business_user_id, user_id').in('business_user_id', ids.slice(offset, offset + 100))
+        .eq('is_active', true).order('business_user_id').order('user_id').limit(500);
+      if (after) query = query.or(`business_user_id.gt.${after.business_user_id},and(business_user_id.eq.${after.business_user_id},user_id.gt.${after.user_id})`);
+      const { data, error } = await query;
+      if (error || !Array.isArray(data)) throw new Error(error?.message || 'business team unavailable');
+      team.push(...data);
+      if (data.length < 500) break;
+      after = data.at(-1);
+    }
+  }
   const staff = [];
   for (const row of team) {
     const userId = String(row.user_id);
@@ -81,13 +98,14 @@ async function businessStaff(businessUserIds, { include = () => true } = {}) {
 async function businessMembership(roomId, actorUserId, businessUserId) {
   if (!roomId || !actorUserId || !businessUserId) return null;
   if (!(await canActAsBusiness(businessUserId, actorUserId))) return null;
-  const { data: membership } = await supabaseAdmin
+  const { data: membership, error } = await supabaseAdmin
     .from('ChatParticipant')
     .select('*')
     .eq('room_id', roomId)
     .eq('user_id', businessUserId)
     .eq('is_active', true)
     .maybeSingle();
+  if (error) throw chatAccessUnavailable();
   return membership || null;
 }
 
@@ -100,7 +118,7 @@ async function actingBusinessInRoom(roomId, actorUserId) {
     .select('user_id, user:user_id(account_type)')
     .eq('room_id', roomId)
     .eq('is_active', true);
-  if (error || !Array.isArray(members)) return null;
+  if (error || !Array.isArray(members)) throw chatAccessUnavailable();
   for (const member of members) {
     if (member.user?.account_type !== 'business' || String(member.user_id) === String(actorUserId)) continue;
     if (await canActAsBusiness(member.user_id, actorUserId)) return String(member.user_id);
@@ -114,17 +132,19 @@ async function actingBusinessInRoom(roomId, actorUserId) {
 // business itself and for the task's worker.
 async function taskBusinessInRoom(roomId, actorUserId) {
   if (!roomId || !actorUserId) return null;
-  const { data: room } = await supabaseAdmin
+  const { data: room, error: roomError } = await supabaseAdmin
     .from('ChatRoom')
     .select('type, gig_id')
     .eq('id', roomId)
     .maybeSingle();
+  if (roomError) throw chatAccessUnavailable();
   if (room?.type !== 'gig' || !room.gig_id) return null;
-  const { data: gig } = await supabaseAdmin
+  const { data: gig, error: gigError } = await supabaseAdmin
     .from('Gig')
     .select('user_id, accepted_by')
     .eq('id', room.gig_id)
     .maybeSingle();
+  if (gigError) throw chatAccessUnavailable();
   if (!gig?.user_id || String(gig.user_id) === String(actorUserId)) return null;
   if (gig.accepted_by && String(gig.accepted_by) === String(actorUserId)) return null;
   return (await canActAsBusiness(gig.user_id, actorUserId)) ? String(gig.user_id) : null;
@@ -176,6 +196,7 @@ async function dropStaffMembership(roomId, actorUserId, businessUserId) {
 }
 
 module.exports = {
+  chatAccessUnavailable,
   UNPUBLISHED_BUSINESS_REFUSAL,
   UNPUBLISHED_BUSINESS_RECIPIENT_REFUSAL,
   unpublishedDirectRoomRefusal,

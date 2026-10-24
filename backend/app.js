@@ -614,6 +614,8 @@ server.listen(PORT, HOST, async () => {
   // Compile the AI response schemas ahead of the first draft after a quiet day (staging and production only).
   if (process.env.NODE_ENV !== 'test') require('./services/ai/warmup').startSchemaWarmup();
 
+  require('./services/chatPushDelivery').start();
+
   // Start pg-boss queue workers (Tier 2 jobs)
   // Set PGBOSS_ENABLED=false when running a separate worker container.
   let pgBossBackedJobsStarted = false;
@@ -648,6 +650,7 @@ const gracefulShutdown = async (signal) => {
   await stopPgBoss().catch((err) => {
     logger.error('[pg-boss] Error during shutdown:', { error: err.message });
   });
+  require('./services/chatPushDelivery').stop();
   await require('./services/syncChangedService').stop();
 
   server.close(() => {

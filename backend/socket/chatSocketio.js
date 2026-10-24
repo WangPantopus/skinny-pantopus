@@ -9,11 +9,15 @@ const logger = require('../utils/logger');
 const badgeService = require('../services/badgeService');
 const notificationService = require('../services/notificationService');
 const syncChangedService = require('../services/syncChangedService');
-const { isBlocked, blockedUserIds } = require('../services/blockService');
-const { closedGigRoomIds, isGigRoomClosedTo, isRoomClosedForWrites } = require('../services/chatGigRoomAccess');
-const { actingBusinessInRoom, UNPUBLISHED_BUSINESS_REFUSAL } = require('../services/chatBusinessAccess');
+const chatRealtime = require('../services/chatRealtime');
+const chatPresence = require('../services/chatPresence');
+const { isBlocked } = require('../services/blockService');
+const { closedGigRoomIds, gigRoomRecipients, isGigRoomClosedTo, isRoomClosedForWrites } = require('../services/chatGigRoomAccess');
+const { chatAccessUnavailable, actingBusinessInRoom, UNPUBLISHED_BUSINESS_REFUSAL } = require('../services/chatBusinessAccess');
 const { unpublishedBusinessIds } = require('../utils/visibilityPolicy');
 const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
+const { markChatRead } = require('../services/chatReadState');
+const { buildReactionSummary } = require('../services/chatSync');
 const { setGauge } = require('../services/chatMetrics');
 // Persistent login (design §6.4): the same JWT decode helper verifyToken
 // exposes as `decodeSessionClaims` (verifyToken.js delegates to it), the 15-s
@@ -23,17 +27,10 @@ const { verifyAccessToken } = require('../services/accessTokenVerifier');
 
 // Store connected users: { userId: Set<socketId> }
 const connectedUsers = new Map();
-
-// A read mark changes only a row with something unread (NULL counts too), as in the REST read routes: a repeated
-// read is no write, so the database's change signal doesn't reach every member of the room.
-function markRoomRead(roomId, userId) {
-  return supabaseAdmin
-    .from('ChatParticipant')
-    .update({ unread_count: 0, last_read_at: new Date().toISOString() })
-    .eq('room_id', roomId)
-    .eq('user_id', userId)
-    .or('unread_count.neq.0,unread_count.is.null');
-}
+const CHAT_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// Backfill reads share the API's database pool with sends and uploads. Bound
+// admission instead of retaining an unbounded queue when a client reconnects.
+let activeRoomJoins = 0;
 
 // The gig room also serves public task watchers. Tracking belongs only to the
 // current owner/worker and only while their authenticated socket is subscribed.
@@ -219,7 +216,8 @@ function subscribeSecurityChanges(io) {
 
 const socketRateLimits = {
   'message:react': { max: 60, windowMs: 60_000 },
-  'typing:start':  { max: 10, windowMs: 60_000 },
+  'typing:start':  { max: 30, windowMs: 60_000 },
+  'typing:stop':   { max: 30, windowMs: 60_000 },
 };
 
 // Map<socketId, Map<eventName, { count, resetAt }>>
@@ -260,88 +258,66 @@ function emitSocketGauges() {
   setGauge('chat.socket.total_connections', total);
 }
 
-/**
- * Build a reaction summary for a single message.
- * Returns the same format as the REST endpoint:
- *   [{ reaction, count, users: [{ id, name }], reacted_by_me }]
- */
+// REST, reconnect backfill and socket acknowledgements use one complete summary.
 async function buildSocketReactionSummary(messageId, requestingUserId) {
-  const { data: reactions } = await supabaseAdmin
-    .from('MessageReaction')
-    .select('reaction, user_id')
-    .eq('message_id', messageId);
-
-  if (!reactions || reactions.length === 0) return [];
-
-  // The people who reacted, as the chat list names them (services/chatPeople)
-  const people = await loadChatPeople(reactions.map((r) => r.user_id));
-
-  const grouped = {};
-  for (const r of reactions) {
-    if (!grouped[r.reaction]) grouped[r.reaction] = [];
-    grouped[r.reaction].push(r.user_id);
-  }
-
-  return Object.entries(grouped).map(([reaction, uids]) => ({
-    reaction,
-    count: uids.length,
-    users: uids.map((uid) => ({ id: uid, name: people.get(String(uid))?.displayName || 'Unknown' })),
-    reacted_by_me: uids.includes(requestingUserId),
-  }));
+  return (await buildReactionSummary([messageId], requestingUserId)).get(messageId) || [];
 }
 
-async function buildSocketReactionSummaryMap(messageIds, requestingUserId) {
-  const ids = Array.from(new Set((messageIds || []).map((id) => String(id)).filter(Boolean)));
-  if (ids.length === 0) return new Map();
-
-  const { data: reactions } = await supabaseAdmin
-    .from('MessageReaction')
-    .select('message_id, reaction, user_id')
-    .in('message_id', ids);
-
-  if (!reactions || reactions.length === 0) return new Map();
-
-  const people = await loadChatPeople(reactions.map((reaction) => reaction.user_id));
-
-  const grouped = {};
-  for (const reaction of reactions) {
-    if (!grouped[reaction.message_id]) grouped[reaction.message_id] = {};
-    if (!grouped[reaction.message_id][reaction.reaction]) grouped[reaction.message_id][reaction.reaction] = [];
-    grouped[reaction.message_id][reaction.reaction].push(reaction.user_id);
-  }
-
-  const result = new Map();
-  for (const [messageId, reactionMap] of Object.entries(grouped)) {
-    result.set(messageId, Object.entries(reactionMap).map(([reaction, uids]) => ({
-      reaction,
-      count: uids.length,
-      users: uids.map((uid) => ({ id: uid, name: people.get(String(uid))?.displayName || 'Unknown' })),
-      reacted_by_me: uids.includes(requestingUserId),
-    })));
-  }
-
-  return result;
-}
+const buildSocketReactionSummaryMap = buildReactionSummary;
 
 // Store user rooms: { userId: Set([roomId1, roomId2]) }
 const userRooms = new Map();
 
-// ============ PRESENCE ============
-// `user:online` / `user:offline` reach only the people who share a
-// conversation with the user (the chat rooms their sockets joined), and never
-// anyone either of them has blocked. Everyone else never learns when someone
-// comes and goes. A failed block read sends nothing; this never throws.
-async function emitPresence(socket, event, userId, roomIds) {
-  const rooms = Array.from(roomIds || []).filter(Boolean);
-  if (rooms.length === 0) return;
-  try {
-    const blockedSocketIds = [];
-    for (const otherUserId of await blockedUserIds(userId)) {
-      for (const socketId of connectedUsers.get(otherUserId) || []) blockedSocketIds.push(socketId);
+// Membership, blocks and task assignment can change after room:join. Resolve
+// only locally connected subscribers, before emitting even an ephemeral signal.
+async function emitTyping(io, change) {
+  const targets = [...(io.sockets.adapter.rooms.get(change.r) || [])]
+    .map((id) => io.sockets.sockets.get(id)).filter((socket) => socket?.connected
+    && socket.userId !== change.u && socket.rooms.has(change.r)
+    && (!change.socketId || socket.id === change.socketId));
+  if (!targets.length) return;
+  const [roomResult, senderResult] = await Promise.all([
+    supabaseAdmin.from('ChatRoom').select('id, type, gig_id, is_active').eq('id', change.r).maybeSingle(),
+    supabaseAdmin.from('ChatParticipant').select('user_id').eq('room_id', change.r)
+      .eq('user_id', change.u).eq('is_active', true).maybeSingle(),
+  ]);
+  if (roomResult.error || senderResult.error) throw chatAccessUnavailable();
+  const room = roomResult.data;
+  if (!room || !senderResult.data || await isRoomClosedForWrites(change.r, room)
+    || !(await gigRoomRecipients(room, [change.u])).includes(change.u)) return;
+  const ids = [...new Set(targets.map((socket) => socket.userId))];
+  const permitted = new Set();
+  for (let offset = 0; offset < ids.length; offset += 200) {
+    const batch = ids.slice(offset, offset + 200);
+    const [members, outgoing, incoming] = await Promise.all([
+      supabaseAdmin.from('ChatParticipant').select('user_id').eq('room_id', change.r)
+        .eq('is_active', true).in('user_id', batch),
+      supabaseAdmin.from('UserBlock').select('blocked_user_id').eq('blocker_user_id', change.u).in('blocked_user_id', batch),
+      supabaseAdmin.from('UserBlock').select('blocker_user_id').eq('blocked_user_id', change.u).in('blocker_user_id', batch),
+    ]);
+    if (members.error || outgoing.error || incoming.error) throw chatAccessUnavailable();
+    const blocked = new Set([...(outgoing.data || []).map((row) => row.blocked_user_id),
+      ...(incoming.data || []).map((row) => row.blocker_user_id)]);
+    const eligible = await gigRoomRecipients(room, (members.data || []).map((row) => row.user_id));
+    for (const id of eligible) if (!blocked.has(id)) permitted.add(id);
+    const membersSet = new Set((members.data || []).map((row) => row.user_id));
+    for (const id of batch) {
+      if (membersSet.has(id) || blocked.has(id)
+        || !targets.some((socket) => socket.userId === id && socket.chatBusinessRooms?.has(change.r))) continue;
+      const actingFor = await actingBusinessInRoom(change.r, id);
+      if (!actingFor || await isGigRoomClosedTo(change.r, id, [actingFor])) continue;
+      const block = await supabaseAdmin.from('UserBlock').select('id', { count: 'exact', head: true })
+        .or(`and(blocker_user_id.eq.${change.u},blocked_user_id.eq.${actingFor}),and(blocker_user_id.eq.${actingFor},blocked_user_id.eq.${change.u})`);
+      if (block.error || !Number.isInteger(block.count)) throw chatAccessUnavailable();
+      if (block.count === 0) permitted.add(id);
     }
-    socket.to(rooms).except(blockedSocketIds).emit(event, { userId });
-  } catch (err) {
-    logger.warn('Presence not sent', { userId, event, error: err.message });
+  }
+  if (Date.now() - change.at > 5000 || (change.isCurrent && !change.isCurrent())) return;
+  for (const socket of targets) if (socket.connected && socket.rooms.has(change.r) && permitted.has(socket.userId)) {
+    const event = typeof change.online === 'boolean'
+      ? (change.online ? 'user:online' : 'user:offline')
+      : (change.typing ? 'typing:user' : 'typing:stopped');
+    socket.emit(event, { userId: change.u, roomId: change.r });
   }
 }
 
@@ -351,6 +327,9 @@ module.exports = (io) => {
   notificationService.init(io, connectedUsers);
   // Instant Screens: database changes (NOTIFY sync_changed) → 'sync:changed' to the people they concern
   syncChangedService.init(io, connectedUsers);
+  chatRealtime.setTypingHandler(emitTyping);
+  chatRealtime.init(io);
+  chatPresence.init(io, emitTyping);
   syncChangedService.start();
   // Persistent login: disconnect sockets of revoked sessions
   subscribeSessionRevocation(io);
@@ -428,6 +407,12 @@ module.exports = (io) => {
     const wasOnline = Boolean(existingSockets && existingSockets.size > 0);
     // Rooms this socket joined for a business inbox (room:join), where the user isn't a member.
     const businessRooms = new Set();
+    socket.chatBusinessRooms = businessRooms;
+    const pendingRoomJoins = new Map();
+    const roomSubscriptions = new Map();
+    const startupLeaves = new Set();
+    let startupPending = true;
+    let skipStartupJoins = false;
 
     logger.info('User connected to chat', {
       sessionId,
@@ -440,6 +425,7 @@ module.exports = (io) => {
       connectedUsers.set(userId, new Set());
     }
     connectedUsers.get(userId).add(socket.id);
+    if (!wasOnline) chatPresence.updateLocal(userId, true);
     emitSocketGauges();
     const expiryTimer = setTimeout(() => endAuthenticatedSocket(socket, 'expired'),
       Math.min(Math.max(0, socket.authExpiresAt - Date.now()), 2_147_483_647));
@@ -455,46 +441,69 @@ module.exports = (io) => {
     // connect), or socket.io drops those events.
     const initialRoomsLoad = (async () => {
       try {
-        const { data: rooms, error } = await supabaseAdmin.rpc('get_user_chat_rooms', {
+        // Startup remains a bounded head subscription; older rooms are joined
+        // explicitly by clients. The current inbox reader applies task access
+        // before selecting that head and uses the same stable activity order.
+        const { data: page, error } = await supabaseAdmin.rpc('get_user_chat_rooms', {
           p_user_id: userId,
-          p_limit: 100
+          p_actor_id: userId,
+          p_limit: 100,
+          p_before_at: null,
+          p_before_id: null,
+          p_type: null,
+        });
+        if (error || !Array.isArray(page?.entries)) throw chatAccessUnavailable();
+        if (!socket.connected) return;
+        const entries = page.entries;
+        const { data: previews, error: previewError } = entries.length
+          ? await supabaseAdmin.rpc('get_room_previews', { p_room_ids: entries.map((entry) => entry.id) })
+          : { data: [] };
+        if (previewError) throw chatAccessUnavailable();
+        const previewByRoom = new Map((previews || []).map((preview) => [String(preview.room_id), preview]));
+        const rooms = entries.map(({ membership }) => {
+          const room = membership.room;
+          const preview = previewByRoom.get(String(room.id));
+          return {
+            id: room.id, room_type: room.type, room_name: room.name,
+            description: room.description, gig_id: room.gig_id, home_id: room.home_id,
+            is_active: room.is_active, created_at: room.created_at, updated_at: room.updated_at,
+            last_message_at: preview?.created_at || room.updated_at,
+            last_message_preview: preview?.message?.slice(0, 100) || null,
+            unread_count: membership.unread_count, last_read_at: membership.last_read_at, role: membership.role,
+          };
         });
 
-        if (!error && rooms && await checkConnectedSession(socket)) {
-          const roomIds = userRooms.get(userId) || new Set();
-          // A leftover member of an assigned task's gig room doesn't join it or get its preview.
-          let closedRoomIds;
-          try {
-            closedRoomIds = await closedGigRoomIds(rooms, userId);
-          } catch (accessErr) {
-            logger.warn('gig_room_access_unavailable_on_connect', { sessionId, userId, error: accessErr.message });
-            closedRoomIds = new Set(rooms.filter((r) => r.room_type === 'gig').map((r) => String(r.id)));
-          }
-          const openRooms = rooms.filter((r) => !closedRoomIds.has(String(r.id)));
-
-          for (const room of openRooms) {
-            // get_user_chat_rooms returns the room id as `id`.
-            const roomId = room.id;
-            socket.join(roomId);
-            roomIds.add(roomId);
-
-            logger.info('User joined room', { sessionId, userId, roomId, roomType: room.room_type });
-          }
-
-          userRooms.set(userId, roomIds);
-
-          // Send initial room list, without the other person's account name and username that get_user_chat_rooms
-          // also returns: the chat list names people by their Local Profile (routes/chats.js), and no app reads them here.
-          socket.emit('rooms:list', openRooms.map(({ other_participant_name, other_participant_username, ...room }) => room));
-
-          // Notify user is online only when first active socket connects, and
-          // only to the conversations it just joined (see emitPresence).
-          if (!wasOnline && socket.connected) {
-            await emitPresence(socket, 'user:online', userId, openRooms.map((room) => room.id));
-          }
+        const roomIds = userRooms.get(userId) || new Set();
+        // A leftover member of an assigned task's gig room doesn't join it or get its preview.
+        let closedRoomIds;
+        try {
+          closedRoomIds = await closedGigRoomIds(rooms, userId);
+        } catch (accessErr) {
+          logger.warn('gig_room_access_unavailable_on_connect', { sessionId, userId, error: accessErr.message });
+          closedRoomIds = new Set(rooms.filter((r) => r.room_type === 'gig').map((r) => String(r.id)));
         }
+        const openRooms = rooms.filter((r) => !closedRoomIds.has(String(r.id)));
+        if (!await checkConnectedSession(socket)) return;
+
+        for (const room of openRooms) {
+          const roomId = room.id;
+          if (skipStartupJoins || startupLeaves.has(roomId) || pendingRoomJoins.has(roomId)) continue;
+          socket.join(roomId);
+          roomIds.add(roomId);
+
+          logger.info('User joined room', { sessionId, userId, roomId, roomType: room.room_type });
+        }
+
+        userRooms.set(userId, roomIds);
+
+        // The chat list names people through its authenticated REST reader;
+        // this compatibility event contains room metadata, never raw names.
+        socket.emit('rooms:list', openRooms.filter((room) => !startupLeaves.has(room.id)));
       } catch (err) {
         logger.error('Error loading user rooms', { sessionId, userId, error: err.message });
+      } finally {
+        startupPending = false;
+        startupLeaves.clear();
       }
     })();
 
@@ -534,19 +543,66 @@ module.exports = (io) => {
 
     // ============ EVENT HANDLERS ============
 
+    // Leaving is a subscription change for this socket, never a membership write.
+    // A per-attempt token prevents a late cancelled ACK from leaving a newer join.
+    on('room:leave', async ({ roomId: requestedRoomId, subscriptionId }, callback) => {
+      if (typeof requestedRoomId !== 'string' || !CHAT_UUID.test(requestedRoomId)
+        || (subscriptionId !== undefined && (typeof subscriptionId !== 'string' || !CHAT_UUID.test(subscriptionId)))) {
+        return callback({ error: 'Invalid room subscription' });
+      }
+      const roomId = requestedRoomId.toLowerCase();
+      const token = subscriptionId?.toLowerCase();
+      const pending = pendingRoomJoins.get(roomId);
+      const cancelPending = pending && (token === undefined || pending.token === token);
+      const leaveActive = token === undefined || roomSubscriptions.get(roomId) === token;
+      if (cancelPending) pending.cancelled = true;
+      if (!cancelPending && !leaveActive) return callback({ success: true, left: false, roomId });
+      if (startupPending) {
+        // Bound even an untrusted client's early leave burst. Overflow skips only
+        // this socket's automatic startup subscriptions; explicit joins still work.
+        if (startupLeaves.size < 1000) startupLeaves.add(roomId); else skipStartupJoins = true;
+      }
+      if (leaveActive) {
+        roomSubscriptions.delete(roomId);
+        businessRooms.delete(roomId);
+        chatPresence.unwatch(socket, roomId);
+        await socket.leave(roomId);
+        const anotherSocket = [...(connectedUsers.get(userId) || [])].some((id) => id !== socket.id
+          && io.sockets.sockets.get(id)?.rooms.has(roomId));
+        if (!anotherSocket) userRooms.get(userId)?.delete(roomId);
+      }
+      callback({ success: true, left: Boolean(cancelPending || leaveActive), roomId, ...(token ? { subscriptionId: token } : {}) });
+    });
+
     /**
      * Join a specific room
      */
-    on('room:join', async ({ roomId }, callback) => {
+    on('room:join', async ({ roomId: requestedRoomId, subscriptionId, includeBackfill }, callback) => {
+      if (typeof requestedRoomId !== 'string' || !CHAT_UUID.test(requestedRoomId)
+        || (subscriptionId !== undefined && (typeof subscriptionId !== 'string' || !CHAT_UUID.test(subscriptionId)))
+        || (includeBackfill !== undefined && typeof includeBackfill !== 'boolean')) {
+        return callback({ error: 'Invalid room subscription' });
+      }
+      const roomId = requestedRoomId.toLowerCase();
+      if (pendingRoomJoins.has(roomId) || pendingRoomJoins.size >= 4 || activeRoomJoins >= 32) {
+        return callback({ error: 'Chat is busy. Please retry.', code: 'CHAT_BUSY', retryable: true, retryAfterMs: 1000 });
+      }
+      const operation = { token: subscriptionId?.toLowerCase(), cancelled: false };
+      pendingRoomJoins.set(roomId, operation);
+      startupLeaves.delete(roomId);
+      activeRoomJoins++;
+      const cancelled = () => !socket.connected || operation.cancelled;
+      const cancelledAck = () => callback({ error: 'Room join cancelled', code: 'CHAT_JOIN_CANCELLED', retryable: false });
       try {
         // Verify user has access to room
-        const { data: participant } = await supabaseAdmin
+        const { data: participant, error: participantError } = await supabaseAdmin
           .from('ChatParticipant')
           .select('*')
           .eq('room_id', roomId)
           .eq('user_id', userId)
           .eq('is_active', true)
-          .single();
+          .maybeSingle();
+        if (participantError) throw chatAccessUnavailable();
         // A business's owner and staff aren't members of its rooms (services/chatBusinessAccess), but its inbox hears
         // the room's live updates. They join quietly: the room is never told who they are (no joined, presence,
         // typing or read events), and their own read goes through the API for the business.
@@ -558,8 +614,14 @@ module.exports = (io) => {
         if (await isGigRoomClosedTo(roomId, userId, actingFor ? [actingFor] : [])) {
           return callback({ error: 'Access denied' });
         }
+        if (cancelled()) return cancelledAck();
 
-        socket.join(roomId);
+        roomSubscriptions.set(roomId, operation.token);
+        await socket.join(roomId);
+        if (cancelled()) {
+          await socket.leave(roomId);
+          return cancelledAck();
+        }
 
         // Track room
         if (actingFor) {
@@ -573,8 +635,10 @@ module.exports = (io) => {
 
         logger.info('User joined room', { sessionId, userId, roomId, forBusiness: Boolean(actingFor) });
         
-        // Load recent messages
-        const { data: messages } = await supabaseAdmin
+        // Clients recovering through canonical REST can skip unused legacy
+        // backfill. Omission preserves the existing ACK contract for older apps.
+        const { data: messages, error: historyError } = includeBackfill === false
+          ? { data: [], error: null } : await supabaseAdmin
           .from('ChatMessage')
           .select(`
             *,
@@ -588,28 +652,33 @@ module.exports = (io) => {
           .eq('room_id', roomId)
           .eq('deleted', false)
           .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
           .limit(50);
+        if (historyError) throw chatAccessUnavailable();
         const backfill = (messages || []).reverse();
         const [reactionMap, people] = await Promise.all([
           buildSocketReactionSummaryMap(backfill.map((message) => message.id), userId),
           loadChatPeople(backfill.map((message) => message.sender?.id || message.user_id)),
         ]);
 
+        if (cancelled()) return cancelledAck();
+
         callback({
           success: true,
+          ...(operation.token ? { subscriptionId: operation.token } : {}),
           // Without actor_user_id, as the API serves messages: who wrote for a business stays internal.
           // Each sender is named as the chat list names them (services/chatPeople).
-          messages: backfill.map(({ actor_user_id: _actor, ...message }) => ({
+          messages: backfill.map(({ actor_user_id: _actor, push_delivery_requested: _pushDelivery, read_topic_id: _readTopic, ...message }) => ({
             ...message,
             sender: chatPersonRow(message.sender, people),
             reactions: reactionMap.get(String(message.id)) || [],
           })),
           roomId
         });
+        chatPresence.watch(socket, roomId).catch(() => {});
         if (actingFor) return;
 
-        // Mark messages as read
-        await markRoomRead(roomId, userId);
+        // Joining subscribes to updates; the client marks only rendered messages read.
         
         // Notify room that user joined
         // Ids only: the first part of the person's email address is not for the other members to see.
@@ -620,7 +689,10 @@ module.exports = (io) => {
         
       } catch (err) {
         logger.error('Room join error', { sessionId, userId, roomId, error: err.message });
-        callback({ error: 'Failed to join room' });
+        callback({ error: 'Failed to join room', retryable: true });
+      } finally {
+        pendingRoomJoins.delete(roomId);
+        activeRoomJoins--;
       }
     });
     
@@ -641,21 +713,7 @@ module.exports = (io) => {
           return;
         }
 
-        // Insert/update typing indicator
-        await supabaseAdmin
-          .from('ChatTyping')
-          .upsert({
-            room_id: roomId,
-            user_id: userId,
-            started_at: new Date().toISOString(),
-            expires_at: new Date(Date.now() + 10000).toISOString()
-          });
-
-        // Broadcast to room (except sender)
-        socket.to(roomId).emit('typing:user', {
-          userId,
-          roomId
-        });
+        chatRealtime.publishTyping(roomId, userId, true);
 
       } catch (err) {
         logger.error('Typing indicator error', { sessionId, userId, roomId, error: err.message });
@@ -667,18 +725,13 @@ module.exports = (io) => {
      */
     on('typing:stop', async ({ roomId }) => {
       try {
+        if (socketRateLimited(socket.id, 'typing:stop')) return;
         // Verify the socket has joined this room
         if (!socket.rooms.has(roomId) || businessRooms.has(String(roomId))) {
           return;
         }
 
-        await supabaseAdmin
-          .from('ChatTyping')
-          .delete()
-          .eq('room_id', roomId)
-          .eq('user_id', userId);
-
-        socket.to(roomId).emit('typing:stopped', { userId, roomId });
+        chatRealtime.publishTyping(roomId, userId, false);
 
       } catch (err) {
         logger.error('Stop typing error', { sessionId, userId, roomId, error: err.message });
@@ -688,39 +741,32 @@ module.exports = (io) => {
     /**
      * Mark messages as read
      */
-    on('messages:read', async ({ roomId }, callback) => {
+    const readMessages = async ({ roomId, topicId, throughMessageId, throughMessageIds }, callback) => {
+      const requestAt = new Date().toISOString();
       try {
         // Verify the socket has joined this room as a member (a business's read goes through the API)
         if (!socket.rooms.has(roomId) || businessRooms.has(String(roomId))) {
           return callback({ error: 'Not in room' });
         }
 
-        // Room-level mark-as-read: zero unread count and update last_read_at.
-        // Matches the REST endpoint POST /api/chat/rooms/:roomId/read.
-        const { error } = await markRoomRead(roomId, userId);
-
-        if (error) {
-          logger.error('Mark read error', { sessionId, userId, roomId, error: error.message });
-          return callback({ error: 'Failed to mark as read' });
-        }
-
-        // Notify room of read receipt
-        socket.to(roomId).emit('messages:read', {
-          userId,
-          roomId,
-          readAt: new Date().toISOString()
-        });
+        if (await isGigRoomClosedTo(roomId, userId)) return callback({ error: 'Access denied' });
+        const result = await markChatRead({ roomIds: [roomId], userId, topicId, throughMessageId, throughMessageIds, requestAt, io });
+        if (result.error) return callback({ error: 'Failed to mark as read' });
 
         // Update the reader's own badge counts (unread decreased)
         badgeService.emitBadgeUpdate(userId);
 
-        callback({ success: true });
+        callback({ success: true, unreadCount: result.unreadCount });
 
       } catch (err) {
         logger.error('Mark read error', { sessionId, userId, roomId, error: err.message });
         callback({ error: 'Failed to mark as read' });
       }
-    });
+    };
+    on('messages:read', (payload = {}, callback) => payload.topicId !== undefined
+      ? callback({ error: 'Use the topic read event' }) : readMessages(payload, callback));
+    on('messages:topic_read', (payload = {}, callback) => !payload.topicId
+      ? callback({ error: 'Topic required' }) : readMessages(payload, callback));
     
     // Note: message:delete is handled via REST (DELETE /api/chat/messages/:id)
     // which broadcasts message:deleted to the room after soft-delete. Both web
@@ -774,21 +820,23 @@ module.exports = (io) => {
           return callback({ error: 'This chat has closed.', code: 'ROOM_INACTIVE' });
         }
 
-        const { data: existing } = await supabaseAdmin
+        const { data: existing, error: existingError } = await supabaseAdmin
           .from('MessageReaction')
           .select('id')
           .eq('message_id', messageId)
           .eq('user_id', userId)
           .eq('reaction', reaction)
           .maybeSingle();
+        if (existingError) throw existingError;
 
         // A repeat of the same request (a retry after a lost reply) leaves the asked-for state in place.
         const wanted = typeof reacted === 'boolean' ? reacted : !existing;
         if (existing && !wanted) {
-          await supabaseAdmin
+          const { error } = await supabaseAdmin
             .from('MessageReaction')
             .delete()
             .eq('id', existing.id);
+          if (error) throw error;
         } else if (!existing && wanted) {
           const { error: insertErr } = await supabaseAdmin
             .from('MessageReaction')
@@ -803,7 +851,8 @@ module.exports = (io) => {
         // Build reaction summary (same format as REST endpoint)
         const reactions = await buildSocketReactionSummary(messageId, userId);
 
-        io.to(message.room_id).emit('message:reaction_updated', { messageId, reactions });
+        const { data: current } = await supabaseAdmin.from('ChatMessage').select('sync_version').eq('id', messageId).maybeSingle();
+        if (current) chatRealtime.announce({ t: 'ChatMessage', r: message.room_id, m: messageId, op: 'UPDATE', v: current.sync_version });
         callback({ success: true, reactions });
 
       } catch (err) {
@@ -831,10 +880,11 @@ module.exports = (io) => {
           return callback({ error: 'Reaction not found' });
         }
 
-        await supabaseAdmin
+        const { error: deleteError } = await supabaseAdmin
           .from('MessageReaction')
           .delete()
           .eq('id', reactionId);
+        if (deleteError) throw deleteError;
 
         // Get room ID for broadcast
         const { data: message } = await supabaseAdmin
@@ -844,11 +894,8 @@ module.exports = (io) => {
           .maybeSingle();
 
         if (message) {
-          const reactions = await buildSocketReactionSummary(reactionRow.message_id, userId);
-          io.to(message.room_id).emit('message:reaction_updated', {
-            messageId: reactionRow.message_id,
-            reactions,
-          });
+          const { data: current } = await supabaseAdmin.from('ChatMessage').select('sync_version').eq('id', reactionRow.message_id).maybeSingle();
+          if (current) chatRealtime.announce({ t: 'ChatMessage', r: message.room_id, m: reactionRow.message_id, op: 'UPDATE', v: current.sync_version });
         }
 
         callback({ success: true });
@@ -911,6 +958,7 @@ module.exports = (io) => {
     // ============ DISCONNECTION ============
     
     socket.on('disconnect', async () => {
+      chatPresence.unwatch(socket);
       clearTimeout(expiryTimer);
       clearInterval(policyTimer);
       socket.authAccessToken = null;
@@ -931,26 +979,14 @@ module.exports = (io) => {
         socketId: socket.id,
       });
       
-      // The conversations to tell, captured before the user's rooms are forgotten.
-      const presenceRooms = stillOnline ? null : userRooms.get(userId);
       if (!stillOnline) {
         userRooms.delete(userId);
       }
       
-      // Clean up typing indicators
-      try {
-        await supabaseAdmin
-          .from('ChatTyping')
-          .delete()
-          .eq('user_id', userId);
-      } catch (err) {
-        logger.error('Error cleaning typing indicators', { sessionId, userId, error: err.message });
-      }
-      
-      // Notify user is offline only when last socket disconnects (and no new
-      // one connected while the typing rows were cleaned up)
+      // Typing is ephemeral and expires in each client. Disconnect has no
+      // database write on the path to announcing the user's offline state.
       if (!stillOnline && !connectedUsers.has(userId)) {
-        await emitPresence(socket, 'user:offline', userId, presenceRooms);
+        chatPresence.updateLocal(userId, false);
       }
     });
     
@@ -962,23 +998,6 @@ module.exports = (io) => {
 
     await initialRoomsLoad;
   });
-  
-  // ============ PERIODIC CLEANUP ============
-  
-  // Clean up expired typing indicators every 30 seconds
-  const typingCleanupInterval = setInterval(async () => {
-    try {
-      const { data: deletedCount } = await supabaseAdmin.rpc('cleanup_expired_typing');
-      if (deletedCount > 0) {
-        logger.info('Cleaned up expired typing indicators', { count: deletedCount });
-      }
-    } catch (err) {
-      logger.error('Typing cleanup error', { error: err.message });
-    }
-  }, 30000);
-  if (typeof typingCleanupInterval.unref === 'function') {
-    typingCleanupInterval.unref();
-  }
   
   logger.info('Socket.IO chat server initialized');
 };

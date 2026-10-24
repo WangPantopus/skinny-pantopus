@@ -19,6 +19,7 @@ const {
 const { verifiedResidentUserIds } = require('../utils/identityProfiles');
 const { isUnpublishedBusiness } = require('../utils/visibilityPolicy');
 const {
+  chatAccessUnavailable,
   UNPUBLISHED_BUSINESS_REFUSAL,
   unpublishedDirectRoomRefusal,
   isBusinessAccount,
@@ -41,18 +42,17 @@ const {
   isRoomClosedForWrites,
 } = require('../services/chatGigRoomAccess');
 const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
+const { markChatRead, applyDirectReadReceipts, timestampMicros } = require('../services/chatReadState');
+const { parseSyncCursor, chatSyncSnapshot, chatChanges, chatReadReceipts, readChatRoomBatches, readChatParticipants, buildReactionSummary } = require('../services/chatSync');
+const chatRealtime = require('../services/chatRealtime');
 const { incCounter, recordHistogram, getSnapshot } = require('../services/chatMetrics');
 const pushService = require('../services/pushService');
 const notificationService = require('../services/notificationService');
 const rateLimit = require('express-rate-limit');
 const { pipeline } = require('stream/promises');
-const sharp = require('sharp');
 const { chosenUsernameOrNull } = require('../utils/personalUsername');
 const CHAT_DELETED_REDACT_DAYS = Math.max(parseInt(process.env.CHAT_DELETED_REDACT_DAYS || '180', 10) || 180, 1);
 const REDACTED_DELETED_MESSAGE = '[deleted message]';
-// Read marks update only rows with something unread (NULL counts too, so the unread trigger's `+ 1` works again).
-// A repeated read is then no write, and the database's change signal doesn't reach every member of the room.
-const HAS_UNREAD = 'unread_count.neq.0,unread_count.is.null';
 const LOCAL_PROFILE_IDENTITY_SELECT = [
   'id',
   'user_id',
@@ -68,7 +68,7 @@ const LOCAL_PROFILE_IDENTITY_SELECT = [
   'show_gig_history',
 ].join(', ');
 
-async function loadLocalIdentityMapForUsers(users) {
+async function loadLocalIdentityMapForUsers(users, { requireProfiles = false } = {}) {
   const userRows = (users || []).filter(Boolean);
   const usersById = new Map();
   for (const user of userRows) {
@@ -86,6 +86,7 @@ async function loadLocalIdentityMapForUsers(users) {
   ]);
 
   if (error) {
+    if (requireProfiles) throw error;
     logger.warn('chat.local_profile_identity_lookup_error', { error: error.message });
   }
 
@@ -108,6 +109,34 @@ async function loadLocalIdentityMapForUsers(users) {
   return identitiesByUserId;
 }
 
+// Search uses the exact public identity shown in the inbox. Candidate IDs can
+// include a private account-name match, which is discarded when the public
+// alias differs. No candidate names are returned before this check.
+async function matchingInboxPeople(userId, query) {
+  const matching = [];
+  const needle = query.toLowerCase();
+  let after = null;
+  for (;;) {
+    const { data: candidates, error } = await supabaseAdmin.rpc('get_chat_inbox_search_candidates', {
+      p_user_id: userId, p_query: query, p_after: after,
+    });
+    if (error || !Array.isArray(candidates)) throw error || new Error('Inbox search unavailable');
+    if (!candidates.length) break;
+    const { data: users, error: usersError } = await supabaseAdmin.from('User')
+      .select('id, username, name, first_name, middle_name, last_name, profile_picture_url')
+      .in('id', candidates.map((candidate) => candidate.user_id));
+    if (usersError || !Array.isArray(users)) throw usersError || new Error('Inbox identity unavailable');
+    const identities = await loadLocalIdentityMapForUsers(users, { requireProfiles: true });
+    for (const [id, identity] of identities) {
+      if ([identity.displayName, identity.handle, identity.handle && `@${identity.handle}`]
+        .some((value) => value && value.toLowerCase().includes(needle))) matching.push(id);
+    }
+    if (candidates.length < 200) break;
+    after = candidates.at(-1).user_id;
+  }
+  return matching;
+}
+
 // ============ CHAT RATE LIMITERS ============
 // Keyed by authenticated user ID (not IP) since all routes require auth.
 
@@ -116,16 +145,18 @@ function chatRateLimiter(windowMs, max, label) {
     windowMs,
     max,
     keyGenerator: (req) => req.user?.id || req.ip,
-    handler: (_req, res) => {
-      const retryAfter = Math.ceil(windowMs / 1000);
-      res.status(429).json({ error: 'Rate limit exceeded', retryAfter });
+    handler: (req, res) => {
+      const retryAfter = Math.max(1, Math.ceil(((req.rateLimit?.resetTime?.getTime() || Date.now() + windowMs) - Date.now()) / 1000));
+      res.set('Retry-After', String(retryAfter));
+      res.status(429).json({ error: 'Rate limit exceeded', code: 'CHAT_RATE_LIMITED', scope: label, retryAfter });
     },
     standardHeaders: true,
     legacyHeaders: false,
   });
 }
 
-const messageSendLimiter = chatRateLimiter(60_000, 30, 'message-send');
+const messageSendLimiter = chatRateLimiter(60_000, 120, 'message-send');
+const messageBurstLimiter = chatRateLimiter(5_000, 12, 'message-burst');
 // Idempotent get-or-create; UI may resolve the same peer from multiple effects — keep headroom.
 const directChatMax = Math.max(parseInt(process.env.CHAT_DIRECT_RATE_LIMIT_PER_MIN || '40', 10) || 40, 1);
 const directChatLimiter = chatRateLimiter(60_000, directChatMax, 'direct-chat');
@@ -187,6 +218,19 @@ const sendMessageSchema = Joi.object({
   topicId: Joi.string().uuid().optional(),
   clientMessageId: Joi.string().uuid().optional(),
 });
+
+const chatPreferencesSchema = Joi.object({
+  notificationsEnabled: Joi.boolean().strict().required(),
+  asBusinessUserId: Joi.string().uuid().optional(),
+});
+
+async function mutedBySender(recipientIds, senderUserId) {
+  if (!recipientIds.length) return new Set();
+  const { data, error } = await supabaseAdmin.from('UserNotificationPreferences')
+    .select('user_id').in('user_id', recipientIds).contains('chat_muted_user_ids', [senderUserId]);
+  if (error) throw error;
+  return new Set((data || []).map((row) => String(row.user_id)));
+}
 
 // Chat photos and files load through this API's own /api/chat/files/:id proxy, which the
 // upload returns as a relative path. iOS and Android builds before October 9 add the viewer's
@@ -304,12 +348,13 @@ async function getBusinessMessagingMemberIds(businessUserId) {
 // request says so (`asBusinessUserId`), and in the chat room of a task it posted, where they always answer as the
 // business. Otherwise it is the caller's own row; `activeOnly` refuses one they left.
 async function roomMembership(roomId, userId, asBusinessUserId, { activeOnly = false } = {}) {
-  const { data: own } = await supabaseAdmin
+  const { data: own, error } = await supabaseAdmin
     .from('ChatParticipant')
     .select('*')
     .eq('room_id', roomId)
     .eq('user_id', userId)
     .maybeSingle();
+  if (error) throw chatAccessUnavailable();
   const businessUserId = asBusinessUserId && String(asBusinessUserId) !== String(userId)
     ? asBusinessUserId
     : await taskBusinessInRoom(roomId, userId);
@@ -367,32 +412,19 @@ function getVisibleMessagePreview(message) {
 // outside the room's active members hears it.
 
 // The sender's unread count on their row for `otherUserId`: every open direct and
-// task room the two share, as the unified list adds them up, without the room
-// just written to (the sender's own message is never unread to them).
-async function personRowUnread(userId, otherUserId, sentRoomId) {
-  const { data: mine, error } = await supabaseAdmin
-    .from('ChatParticipant')
-    .select('room_id, unread_count, room:room_id!inner(id, type, gig_id)')
-    .eq('user_id', userId)
-    .eq('is_active', true)
-    .in('room.type', ['direct', 'gig']);
-  if (error || !Array.isArray(mine)) throw new Error(error?.message || 'rooms unavailable');
-  const candidates = mine.filter((row) => String(row.room_id) !== String(sentRoomId));
-  if (candidates.length === 0) return 0;
-  const [{ data: shared, error: sharedError }, closed] = await Promise.all([
-    supabaseAdmin
-      .from('ChatParticipant')
-      .select('room_id')
-      .eq('user_id', otherUserId)
-      .eq('is_active', true)
-      .in('room_id', candidates.map((row) => row.room_id)),
-    closedGigRoomIds(candidates.map((row) => row.room), userId),
-  ]);
-  if (sharedError || !Array.isArray(shared)) throw new Error(sharedError?.message || 'rooms unavailable');
-  const sharedIds = new Set(shared.map((row) => String(row.room_id)));
-  return candidates
-    .filter((row) => sharedIds.has(String(row.room_id)) && !closed.has(String(row.room_id)))
-    .reduce((sum, row) => sum + (Number(row.unread_count) || 0), 0);
+// task room the two share, including earlier unseen incoming messages in the
+// room just written to. Sending does not mark that room read.
+async function personRowUnread(userId, otherUserId) {
+  const roomIds = await personChatRoomIds(userId, otherUserId);
+  let unread = 0;
+  for (let offset = 0; offset < roomIds.length; offset += 200) {
+    const { data, error } = await supabaseAdmin.from('ChatParticipant')
+      .select('unread_count').eq('user_id', userId).eq('is_active', true)
+      .in('room_id', roomIds.slice(offset, offset + 200));
+    if (error) throw chatAccessUnavailable();
+    unread += (data || []).reduce((sum, row) => sum + (Number(row.unread_count) || 0), 0);
+  }
+  return unread;
 }
 
 // The owner and staff of a business in the room aren't members themselves, so their open business inbox hears its
@@ -487,23 +519,22 @@ async function readBusinessNotices(userId, businessUserId, roomIds) {
 
 async function emitNewMessage(io, { room, message, actorUserId, identityUserId }) {
   const { connectedUsers } = require('../socket/chatSocketio');
-  const { data: members, error } = await supabaseAdmin
-    .from('ChatParticipant')
-    .select('user_id, unread_count, user:user_id(account_type)')
-    .eq('room_id', room.id)
-    .eq('is_active', true);
-  if (error || !Array.isArray(members)) throw new Error(error?.message || 'members unavailable');
+  const members = await readChatParticipants([room.id], 'user_id, unread_count, user:user_id(account_type)');
   const actor = String(actorUserId);
   const identity = String(identityUserId);
   const others = members.filter((row) => ![actor, identity].includes(String(row.user_id)));
   // Leftover members of an assigned task's room hear nothing, as with its pushes and badges.
-  const recipients = new Set(await gigRoomRecipients(room, others.map((row) => String(row.user_id))));
+  const eligible = new Set(await gigRoomRecipients(room, members.map((row) => String(row.user_id))));
+  const recipients = new Set(others.map((row) => String(row.user_id)).filter((id) => eligible.has(id)));
   const personChat = room.type === 'direct' || room.type === 'gig';
   const base = { ...message };
   const preview = getVisibleMessagePreview(message);
   if (typeof preview === 'string') base.preview = preview;
   const emitTo = (userId, payload) => {
-    for (const socketId of connectedUsers.get(userId) || []) io.to(socketId).emit('message:new', payload);
+    const personalized = { ...payload, reactions: (payload.reactions || []).map((reaction) => ({
+      ...reaction, reacted_by_me: reaction.users.some((user) => String(user.id) === userId),
+    })) };
+    for (const socketId of connectedUsers.get(userId) || []) io.to(socketId).emit('message:new', personalized);
   };
   for (const row of others) {
     const userId = String(row.user_id);
@@ -514,63 +545,139 @@ async function emitNewMessage(io, { room, message, actorUserId, identityUserId }
   }
   let own = base;
   if (!personChat) {
-    own = { ...base, unread_for: 0 };
+    own = { ...base, unread_for: Number(members.find((row) => String(row.user_id) === actor)?.unread_count) || 0 };
   } else if (identity === actor && recipients.size === 1) {
     const [counterpart] = recipients;
-    const unread = await personRowUnread(actor, counterpart, room.id).catch(() => null);
+    const unread = await personRowUnread(actor, counterpart).catch(() => null);
     if (unread !== null) own = { ...base, other_user_id: counterpart, unread_for: unread };
   }
-  emitTo(actor, own);
+  const actorMember = members.some((row) => String(row.user_id) === actor);
+  const actorCanHear = actorMember
+    ? eligible.has(actor)
+    : eligible.has(identity) && await canActAsBusiness(identity, actor);
+  if (actorCanHear) emitTo(actor, own);
   // Staff hear what their business hears, and what a colleague sent as it. Members already heard it above.
   const businessIds = members
     .filter((row) => row.user?.account_type === 'business')
     .map((row) => String(row.user_id))
-    .filter((id) => recipients.has(id) || id === identity);
+    .filter((id) => eligible.has(id));
   const heard = new Set([actor, ...members.map((row) => String(row.user_id))]);
   await emitToBusinessStaff(emitTo, base, businessIds, heard).catch((staffError) => {
     logger.warn('message_new_business_staff_failed', { roomId: room.id, error: staffError.message });
   });
 }
 
+// Mutation broadcasts use current membership, including staff acting for a
+// business. A stale Socket.IO room subscription is not access authorization.
+async function emitChatMutation(io, room, event, payload) {
+  const { connectedUsers } = require('../socket/chatSocketio');
+  const members = await readChatParticipants([room.id], 'user_id, user:user_id(account_type)');
+  // A room-wide read boundary is not a group delivery receipt. Clients may
+  // project the other person's Read state only for this current direct pair.
+  const receiptPayload = ['messages:read', 'messages:topic_read'].includes(event)
+    ? { ...payload, directReceiptEligible: room.type === 'direct' && members.length === 2 }
+    : payload;
+  const recipients = new Set(await gigRoomRecipients(room, (members || []).map((row) => String(row.user_id))));
+  const emitTo = (userId, data) => {
+    // A reaction's selected state belongs to the receiving person, not the actor.
+    const personalize = (reactions) => reactions.map((reaction) => ({
+      ...reaction, reacted_by_me: reaction.users.some((user) => String(user.id) === userId),
+    }));
+    const personalized = { ...data,
+      ...(data.reactions ? { reactions: personalize(data.reactions) } : {}),
+      ...(data.message?.reactions ? { message: { ...data.message, reactions: personalize(data.message.reactions) } } : {}),
+    };
+    for (const socketId of connectedUsers.get(userId) || []) io.to(socketId).emit(event, personalized);
+  };
+  for (const userId of recipients) emitTo(userId, receiptPayload);
+  const businessIds = (members || []).filter((row) => row.user?.account_type === 'business'
+    && recipients.has(String(row.user_id))).map((row) => String(row.user_id));
+  await emitToBusinessStaff(emitTo, receiptPayload, businessIds, recipients);
+}
+
+async function emitCommittedChatChange(io, change, prepared) {
+  const { data: room, error: roomError } = prepared?.room
+    ? { data: prepared.room } : await supabaseAdmin.from('ChatRoom').select('id, type, gig_id').eq('id', change.r).maybeSingle();
+  if (roomError) throw roomError;
+  if (!room) return Number(change.v || 0);
+  if (change.t === 'ChatTopicRead') {
+    // The topic event has a separate name: old clients must never apply a
+    // selected-topic boundary to every message in the room.
+    const { data: receipt, error } = await supabaseAdmin.from('ChatTopicRead')
+      .select('last_read_message_id, last_read_message_at, read_at, participant:ChatParticipant!inner(is_active)')
+      .eq('room_id', room.id).eq('user_id', change.u).eq('topic_id', change.q)
+      .eq('participant.is_active', true).maybeSingle();
+    if (error) throw error;
+    if (receipt && room.type === 'direct') await emitChatMutation(io, room, 'messages:topic_read', {
+      userId: change.u, roomId: room.id, topicId: change.q, readAt: receipt.read_at,
+      throughMessageId: receipt.last_read_message_id, throughCreatedAt: receipt.last_read_message_at,
+    });
+    return 0;
+  }
+  if (change.t === 'ChatRead') {
+    const { data: participant, error } = await supabaseAdmin.from('ChatParticipant')
+      .select('last_read_at, last_read_message_id, last_read_message_at')
+      .eq('room_id', room.id).eq('user_id', change.u).eq('is_active', true).maybeSingle();
+    if (error) throw error;
+    if (participant?.last_read_message_id) await emitChatMutation(io, room, 'messages:read', {
+      userId: change.u, roomId: room.id, readAt: participant.last_read_at,
+      throughMessageId: participant.last_read_message_id, throughCreatedAt: participant.last_read_message_at,
+    });
+    return 0;
+  }
+  const { data: message, error } = prepared?.message
+    ? { data: prepared.message } : await supabaseAdmin.from('ChatMessage').select('*').eq('id', change.m).maybeSingle();
+  if (error) throw error;
+  const version = Math.max(Number(change.v || 0), Number(message?.sync_version || 0));
+  if (!message || message.deleted) {
+    await emitChatMutation(io, room, 'message:deleted', { messageId: change.m, roomId: room.id, sync_version: version });
+    return version;
+  }
+  const [people, summaries] = await Promise.all([
+    prepared?.people || loadMessageSenders([message]), buildReactionSummary([message.id]),
+  ]);
+  const reactions = summaries.get(message.id) || [];
+  const safe = { ...serializeChatMessageForViewer(message, { people }), reactions };
+  if (change.insert) await emitNewMessage(io, {
+    room, message: safe, actorUserId: message.actor_user_id || message.user_id, identityUserId: message.user_id,
+  });
+  else await emitChatMutation(io, room, 'message:edited', { messageId: message.id, message: safe });
+  if (!change.insert || reactions.length) await emitChatMutation(io, room, 'message:reaction_updated', {
+    messageId: message.id, roomId: room.id, sync_version: version, reactions,
+  });
+  return version;
+}
+
+chatRealtime.setHandler(emitCommittedChatChange);
+
 // ── Delivery ─────────────────────────────────────────────────────────
 // A message just written to `room` (with its `sender`) goes out the same way
 // wherever it was written: every member hears it (message:new, without the
 // internal actor_user_id), the room moves up the lists, the sender's own row
-// stays read, and the other members get a badge update and a device push.
+// retains its read boundary, and the other members get a badge update and a device push.
 // POST /messages and an organizer's Support Train reminder
 // (routes/supportTrains.js) both deliver through here. `people` names the
 // sender (loadChatPeople); without it they're looked up here.
 async function deliverNewMessage(io, { room, message, actorUserId, senderUserId = actorUserId, requestId = null, people = null }) {
   const roomId = room.id;
+  // The durable row was captured in the insert transaction, even if this process exits now.
+  if (message.push_delivery_requested) require('../services/chatPushDelivery').wake();
   const broadcast = serializeChatMessageForViewer(message, { people: people || await loadMessageSenders([message]) });
   if (io) {
-    emitNewMessage(io, { room, message: broadcast, actorUserId, identityUserId: senderUserId })
-      .catch((emitError) => {
-        // Without the members, the room still hears it as before (the lists reload).
-        logger.warn('message_new_personal_failed', { requestId, roomId, error: emitError.message });
-        io.to(roomId).emit('message:new', broadcast);
-      });
+    chatRealtime.announce({ t: 'ChatMessage', r: roomId, m: message.id, op: 'INSERT', v: message.sync_version },
+      { room, message, people });
   }
 
-  const stamp = new Date().toISOString();
-  await Promise.all([
-    supabaseAdmin
-      .from('ChatRoom')
-      .update({ updated_at: stamp })
-      .eq('id', roomId),
-    supabaseAdmin
-      .from('ChatParticipant')
-      .update({ unread_count: 0, last_read_at: stamp })
-      .eq('room_id', roomId)
-      .eq('user_id', actorUserId),
-  ]);
-
   // Push fresh badge counts (including total message count) immediately.
-  const { data: participantRows } = await supabaseAdmin
-    .from('ChatParticipant')
-    .select('user_id, notifications_enabled, user:user_id(account_type)')
-    .eq('room_id', roomId)
-    .eq('is_active', true);
+  let participantRows;
+  try {
+    participantRows = await readChatParticipants([roomId], 'user_id, notifications_enabled, user:user_id(account_type)');
+  } catch (error) {
+    // The message is already committed. Its durable push and realtime records
+    // recover independently; a badge lookup must not turn acceptance into 500.
+    logger.warn('chat_badge_recipients_unavailable', { requestId, roomId, code: error.code });
+    return;
+  }
   const participantUserIds = Array.from(new Set((participantRows || []).map((row) => String(row.user_id)).filter(Boolean)));
   // Exclude both the acting user and the message identity user.
   const excludedUserIds = new Set([String(actorUserId), String(senderUserId)]);
@@ -584,6 +691,16 @@ async function deliverNewMessage(io, { room, message, actorUserId, senderUserId 
   }
   if (recipientUserIds.length === 0) return;
   badgeService.emitBadgeUpdateToMany(recipientUserIds);
+  if (message.push_delivery_requested) return;
+  const mutedRecipients = (['direct', 'gig'].includes(room.type)
+    ? mutedBySender(recipientUserIds, senderUserId) : Promise.resolve(new Set()))
+    .then((muted) => {
+      for (const row of participantRows || []) if (row.notifications_enabled === false) muted.add(String(row.user_id));
+      return muted;
+    }).catch((error) => {
+      logger.warn('chat_mute_preferences_unavailable', { requestId, code: error.code });
+      return new Set(recipientUserIds); // no push while the recipient's preference is unreadable
+    });
 
   const text = String(message.message || '');
   const type = message.type || 'text';
@@ -604,7 +721,8 @@ async function deliverNewMessage(io, { room, message, actorUserId, senderUserId 
         .eq('push_notifications', false);
       if (prefsError) return;
       const disabled = new Set((disabledRows || []).map((r) => r.user_id));
-      const pushEnabledIds = recipientUserIds.filter((id) => !disabled.has(id));
+      const muted = await mutedRecipients;
+      const pushEnabledIds = recipientUserIds.filter((id) => !disabled.has(id) && !muted.has(id));
       if (pushEnabledIds.length === 0) return;
 
       const senderName = broadcast.sender?.displayName || 'Someone';
@@ -623,17 +741,16 @@ async function deliverNewMessage(io, { room, message, actorUserId, senderUserId 
     .filter((row) => row.user?.account_type === 'business' && recipientSet.has(String(row.user_id)))
     .map((row) => String(row.user_id));
   if (businessRecipientIds.length > 0) {
-    notifyBusinessStaff({
+    mutedRecipients.then((mutedBusinessIds) => notifyBusinessStaff({
       room,
       messageId: message.id,
       businessIds: businessRecipientIds,
       actorUserId,
       senderUserId,
       memberIds: participantUserIds,
-      mutedBusinessIds: new Set((participantRows || [])
-        .filter((row) => row.notifications_enabled === false).map((row) => String(row.user_id))),
+      mutedBusinessIds,
       preview,
-    }).catch((err) => {
+    })).catch((err) => {
       logger.warn('business_message_notice_failed', { requestId, roomId, error: err.message });
     });
   }
@@ -739,7 +856,8 @@ function roomIsActive(room, planStates) {
 }
 
 function sendChatReadError(res, error, fallback) {
-  if (error.code === 'CHAT_UNAVAILABLE') {
+  if (error.status === 400) return res.status(400).json({ error: error.message });
+  if (error.status === 503 || error.code === 'CHAT_UNAVAILABLE') {
     return res.status(503).json({ error: error.message, code: error.code });
   }
   return res.status(500).json({ error: fallback });
@@ -753,7 +871,7 @@ function serializeChatMessageForViewer(message, options = {}) {
   const viewerWroteIt = Boolean(options.viewerId && message.actor_user_id
     && String(message.actor_user_id) === String(options.viewerId));
   const base = options.includeActorIdentity || viewerWroteIt ? message : stripActorIdentity(message);
-  const { sender, ...safe } = base;
+  const { sender, push_delivery_requested: _pushDelivery, read_topic_id: _readTopic, ...safe } = base;
   const bodyText = safe.message_text ?? safe.message ?? null;
   const bodyType = safe.message_type ?? safe.type ?? 'text';
   const senderId = sender?.id || safe.user_id;
@@ -771,6 +889,158 @@ function serializeChatMessageForViewer(message, options = {}) {
 // The people who wrote these messages (loadChatPeople).
 function loadMessageSenders(messages) {
   return loadChatPeople((messages || []).map((message) => message?.sender?.id || message?.user_id));
+}
+
+async function personChatRoomIds(userId, otherUserId, asBusinessUserId) {
+  if (asBusinessUserId && !await canActAsBusiness(asBusinessUserId, userId)) {
+    const error = new Error('Access denied');
+    error.status = 403;
+    throw error;
+  }
+  const identityUserId = asBusinessUserId || userId;
+  if (String(identityUserId) === String(otherUserId)) {
+    throw Object.assign(new Error('Cannot open a conversation with yourself'), { status: 400 });
+  }
+  const ids = [];
+  let after;
+  // Filter both members in SQL before paging. Intersecting two capped lists of
+  // unrelated rooms silently loses older conversations for long-lived accounts.
+  for (;;) {
+    let query = supabaseAdmin.from('ChatRoom')
+      .select('id, type, gig_id, mine:ChatParticipant!inner(user_id), other:ChatParticipant!inner(user_id)')
+      .in('type', ['direct', 'gig'])
+      .eq('mine.user_id', identityUserId).eq('mine.is_active', true)
+      .eq('other.user_id', otherUserId).eq('other.is_active', true)
+      .order('id').limit(200);
+    if (after) query = query.gt('id', after);
+    const { data, error } = await query;
+    if (error) throw chatAccessUnavailable();
+    const rooms = data || [];
+    const closed = await closedGigRoomIds(rooms, userId, [identityUserId]);
+    ids.push(...rooms.filter((room) => !closed.has(room.id)).map((room) => room.id));
+    if (rooms.length < 200) return ids;
+    after = rooms[rooms.length - 1].id;
+  }
+}
+
+async function respondWithChatChanges(req, res, roomIds, identityUserId) {
+  const params = req.method === 'POST' ? (req.body || {}) : req.query;
+  let receiptIds = params.readMessageIds;
+  if (receiptIds !== undefined) {
+    if (typeof receiptIds === 'string') {
+      try { receiptIds = JSON.parse(receiptIds); } catch { throw Object.assign(new Error('Invalid receipt messages'), { status: 400 }); }
+    }
+    if (Joi.array().items(Joi.string().uuid()).max(500).validate(receiptIds).error) {
+      throw Object.assign(new Error('Invalid receipt messages'), { status: 400 });
+    }
+    receiptIds = [...new Set(receiptIds)];
+  }
+  const cursor = parseSyncCursor(params.cursor);
+  const until = parseSyncCursor(params.until, { optional: true });
+  const limit = Math.min(Math.max(parseInt(params.limit, 10) || 200, 1), 200);
+  const changes = await chatChanges({ roomIds, identityUserId, cursor, until, limit });
+  const visible = changes.messages.filter((message) => !message.deleted);
+  const [reactions, people, readReceipts] = await Promise.all([
+    buildReactionSummary(visible.map((message) => message.id), req.user.id),
+    loadMessageSenders(visible),
+    chatReadReceipts(roomIds),
+    applyDirectReadReceipts(visible, req.user.id, { identityUserId }),
+  ]);
+  const messageReadReceipts = [];
+  const authorizedRooms = new Set(roomIds.map(String));
+  for (let start = 0; start < (receiptIds?.length || 0); start += 100) {
+    const { data, error } = await supabaseAdmin.from('ChatMessage')
+      .select('id, room_id, user_id, actor_user_id, created_at')
+      .in('id', receiptIds.slice(start, start + 100)).eq('deleted', false);
+    if (error) throw error;
+    const authorized = (data || []).filter((m) => authorizedRooms.has(String(m.room_id))
+      && (String(m.user_id) === String(identityUserId)
+        || [String(m.user_id), String(m.actor_user_id)].includes(String(req.user.id))));
+    await applyDirectReadReceipts(authorized, req.user.id, { required: true, identityUserId });
+    messageReadReceipts.push(...authorized.map((m) => ({ messageId: m.id, readAt: m.read_at || null })));
+  }
+  res.set('Cache-Control', 'private, no-store');
+  return res.json({ ...changes, readReceipts, ...(receiptIds ? { messageReadReceipts } : {}), messages: changes.messages.map((message) => message.deleted
+    ? { id: message.id, room_id: message.room_id, deleted: true, sync_version: message.sync_version }
+    : { ...serializeChatMessageForViewer(message, { people, viewerId: req.user.id }),
+      reactions: reactions.get(message.id) || [] }) });
+}
+
+function chatChangesFailure(req, res, error) {
+  if (error.status) return res.status(error.status).json({ error: error.message });
+  logger.warn('chat_changes_unavailable', { requestId: req.requestId, code: error.code });
+  return res.status(503).json({ error: 'Chat updates are temporarily unavailable', code: 'CHAT_UNAVAILABLE' });
+}
+
+async function chatSearchScope(req) {
+  const userId = req.user.id;
+  const asBusinessUserId = req.query.asBusinessUserId ? String(req.query.asBusinessUserId) : null;
+  let identityUserId = asBusinessUserId || userId;
+  const roomId = req.params.roomId || req.query.roomId;
+  const otherUserId = req.params.otherUserId || req.query.otherUserId;
+  if (roomId && otherUserId) throw Object.assign(new Error('Choose a room or a person'), { status: 400 });
+  if (asBusinessUserId && !await canActAsBusiness(asBusinessUserId, userId)) {
+    throw Object.assign(new Error('Access denied'), { status: 403 });
+  }
+  if (otherUserId) return { identityUserId, roomIds: await personChatRoomIds(userId, otherUserId, asBusinessUserId) };
+  if (roomId) {
+    const participant = await roomMembership(roomId, userId, asBusinessUserId);
+    if (!participant || (participant.is_active === false && !participant.left_at)
+      || await gigRoomClosed(roomId, userId, asBusinessUserId)) {
+      throw Object.assign(new Error('Access denied'), { status: 403 });
+    }
+    identityUserId = participant.user_id;
+    return { identityUserId, roomIds: [roomId] };
+  }
+  const rooms = [];
+  // Search every authorized room, not just the first inbox page or PostgREST's
+  // default row cap. No message bodies are downloaded while building scope.
+  for (let offset = 0; ; offset += 500) {
+    const { data, error } = await supabaseAdmin.from('ChatParticipant')
+      .select('room_id, room:room_id!inner(id, type, gig_id)')
+      .eq('user_id', identityUserId).eq('is_active', true)
+      .order('room_id').range(offset, offset + 499);
+    if (error) throw error;
+    rooms.push(...(data || []).map((row) => row.room));
+    if ((data || []).length < 500) break;
+  }
+  const closed = await closedGigRoomIds(rooms, userId, [identityUserId]);
+  return { identityUserId, roomIds: rooms.map((room) => room.id).filter((id) => !closed.has(id)) };
+}
+
+async function chatSearchRoomContexts(messages, identityUserId) {
+  const ids = [...new Set(messages.map((message) => message.room_id))];
+  if (!ids.length) return {};
+  const [rooms, members] = await Promise.all([
+    supabaseAdmin.from('ChatRoom').select('id, type, name, gig_id, support_train:support_train_id(Activity(title))').in('id', ids),
+    supabaseAdmin.from('ChatParticipant').select('room_id, user_id')
+      .in('room_id', ids).neq('user_id', identityUserId).eq('is_active', true),
+  ]);
+  if (rooms.error || members.error) throw rooms.error || members.error;
+  const hidden = await hiddenGigRoomMembers(rooms.data, members.data);
+  const otherByRoom = new Map();
+  for (const member of members.data || []) {
+    if (!hidden.has(`${member.room_id}:${member.user_id}`) && !otherByRoom.has(member.room_id)) {
+      otherByRoom.set(member.room_id, member.user_id);
+    }
+  }
+  const people = await loadChatPeople([...otherByRoom.values()]);
+  return Object.fromEntries((rooms.data || []).map((room) => {
+    const other = ['direct', 'gig'].includes(room.type) ? otherByRoom.get(room.id) : null;
+    const identity = other ? people.get(other) : null;
+    return [room.id, { conversationId: other || room.id, kind: other ? 'conversation' : 'room',
+      name: other ? identity?.displayName || 'Pantopus user'
+        : room.support_train?.Activity?.title || room.name || 'Conversation', identity: identity || null }];
+  }));
+}
+
+async function serializeChatHistory(messages, viewerId, identityUserId = viewerId) {
+  const [reactions, people] = await Promise.all([
+    buildReactionSummary(messages.map((message) => message.id), viewerId),
+    loadMessageSenders(messages), applyDirectReadReceipts(messages, viewerId, { identityUserId }),
+  ]);
+  return messages.map((message) => ({ ...serializeChatMessageForViewer(message, { people, viewerId }),
+    reactions: reactions.get(message.id) || [] }));
 }
 
 /**
@@ -795,6 +1065,34 @@ function parseCursor(before) {
   return { beforeTs: before.slice(0, pipeIdx), beforeId: before.slice(pipeIdx + 1) };
 }
 
+async function roomInboxPage(query, userId, actorId = userId) {
+  const limit = Math.min(Math.max(parseInt(query.limit, 10) || 200, 1), 500);
+  const { beforeTs, beforeId } = parseCursor(query.before);
+  if (query.before && (String(query.before).length > 256 || !Number.isFinite(Date.parse(beforeTs))
+    || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(beforeId || ''))) {
+    throw Object.assign(new Error('Invalid room cursor'), { status: 400 });
+  }
+  if (query.type != null && typeof query.type !== 'string') {
+    throw Object.assign(new Error('Invalid room type'), { status: 400 });
+  }
+  const { data, error } = await supabaseAdmin.rpc('get_user_chat_rooms', {
+    p_user_id: userId, p_actor_id: actorId, p_limit: limit,
+    p_before_at: beforeTs, p_before_id: beforeId, p_type: query.type || null,
+  });
+  if (error || !data || !Array.isArray(data.entries)) throw chatAccessUnavailable();
+  const last = data.entries.at(-1);
+  return { ...data, nextCursor: data.hasMore && last ? `${last.sort_at}|${last.id}` : null };
+}
+
+async function roomPagePeople(roomIds, viewerId, activeOnly = false) {
+  const people = await readChatParticipants(roomIds,
+    'is_active, user:user_id(id, username, name, first_name, middle_name, last_name, profile_picture_url)',
+    { activeOnly, excludeUserId: viewerId }).catch(() => { throw chatAccessUnavailable(); });
+  // Prefer current members after reading every page. Sorting by activity in
+  // PostgREST alone truncated historical counterparts behind large groups.
+  return people.sort((a, b) => Number(b.is_active === true) - Number(a.is_active === true));
+}
+
 /** Build a nextCursor string from the oldest message in a result set. */
 function buildNextCursor(messages) {
   if (!messages || messages.length === 0) return null;
@@ -809,21 +1107,28 @@ function buildNextCursor(messages) {
  * Uses (created_at, id) composite cursor for stable pagination.
  */
 function applyCursorPagination(q, before, after) {
+  const bounds = [];
   const { beforeTs, beforeId } = parseCursor(before);
   if (beforeTs) {
     if (beforeId) {
       // Composite cursor: WHERE (created_at < ts) OR (created_at = ts AND id < id)
-      q = q.or(`created_at.lt.${beforeTs},and(created_at.eq.${beforeTs},id.lt.${beforeId})`);
+      bounds.push(`or(created_at.lt.${beforeTs},and(created_at.eq.${beforeTs},id.lt.${beforeId}))`);
     } else {
       // Legacy: plain timestamp
       q = q.lt('created_at', beforeTs);
     }
   }
   if (after) {
-    // after is always a plain timestamp (used for polling new messages)
-    const afterTs = after.indexOf('|') !== -1 ? after.split('|')[0] : after;
-    q = q.gt('created_at', afterTs);
+    const { beforeTs: afterTs, beforeId: afterId } = parseCursor(after);
+    if (afterId) {
+      bounds.push(`or(created_at.gt.${afterTs},and(created_at.eq.${afterTs},id.gt.${afterId}))`);
+    } else {
+      q = q.gt('created_at', afterTs);
+    }
   }
+  // PostgREST only has one `or` query key. Preserve both bounds when paging a
+  // reconnect gap whose endpoints share a timestamp.
+  if (bounds.length) q = q.or(`and(${bounds.join(',')})`);
   return q;
 }
 
@@ -855,7 +1160,7 @@ async function countMessagesByRoom(roomIds, batchSize = 20) {
             .eq('room_id', roomId));
         }
         if (error) {
-          logger.warn('Failed to count chat messages for room', { requestId: req.requestId, roomId, error: error.message });
+          logger.warn('Failed to count chat messages for room', { roomId, error: error.message });
           return { roomId, count: 0 };
         }
         return { roomId, count: Number(count || 0) };
@@ -882,41 +1187,14 @@ router.get('/rooms', verifyToken, async (req, res) => {
   const roomsStartMs = Date.now();
   try {
     const userId = req.user.id;
-    const { limit = 200, type } = req.query;
-
-    let rooms = [];
-
-    const lim = Math.min(Math.max(parseInt(limit, 10) || 200, 1), 500);
-    const { data: participantRows, error: partErr } = await supabaseAdmin
-      .from('ChatParticipant')
-      .select(`
-        room_id,
-        unread_count,
-        last_read_at,
-        role,
-        is_active,
-        room:room_id(
-          id,
-          type,
-          name,
-          description,
-          gig_id,
-          home_id,
-          is_active,
-          created_at,
-          updated_at
-        )
-      `)
-      .eq('user_id', userId)
-      // A room the person left isn't listed: its preview would show messages from after they left.
-      .eq('is_active', true)
-      .order('joined_at', { ascending: false })
-      .limit(lim);
-
-    if (partErr) {
-      logger.error('Error fetching chat rooms', { requestId: req.requestId, userId, error: partErr.message });
-      return res.status(500).json({ error: 'Failed to fetch chat rooms' });
+    const page = await roomInboxPage(req.query, userId);
+    const rank = new Map(page.entries.map((entry, index) => [entry.id, index]));
+    if (!page.entries.length) {
+      recordHistogram('chat.rooms.load_latency_ms', Date.now() - roomsStartMs);
+      return res.json({ rooms: [], total: page.total, totalUnread: page.totalUnread,
+        hasMore: page.hasMore, nextCursor: page.nextCursor });
     }
+    const participantRows = page.entries.map((entry) => entry.membership);
 
     // Build room list. A leftover member of an assigned task's gig room doesn't see it.
     const joinedRooms = (participantRows || []).filter(p => p.room);
@@ -926,16 +1204,13 @@ router.get('/rooms', verifyToken, async (req, res) => {
     // Batch-fetch other participants and last messages for all rooms (2 queries instead of 2N)
     const allRoomIds = roomList.map(p => p.room.id);
 
-    const [{ data: allOtherParts }, { data: roomPreviews }, planStates] = await Promise.all([
-      supabaseAdmin
-        .from('ChatParticipant')
-        .select('room_id, user:user_id(id, username, name, first_name, middle_name, last_name, profile_picture_url)')
-        .in('room_id', allRoomIds)
-        .neq('user_id', userId)
-        .order('is_active', { ascending: false }),
+    const [allOtherParts, { data: roomPreviews, error: previewError }, planStates] = await Promise.all([
+      roomPagePeople(allRoomIds, userId),
       supabaseAdmin.rpc('get_room_previews', { p_room_ids: allRoomIds }),
       loadPlanChatStates(roomList.map((p) => p.room)),
     ]);
+
+    if (previewError) throw chatAccessUnavailable();
 
     // Pick first (active-preferred) participant per room, never a leftover member of an assigned task's gig room
     const hiddenMembers = await hiddenGigRoomMembers(
@@ -981,6 +1256,7 @@ router.get('/rooms', verifyToken, async (req, res) => {
         last_message_preview: lastMessagePreview,
         unread_count: p.unread_count || 0,
         last_read_at: p.last_read_at,
+        notifications_enabled: p.notifications_enabled !== false,
         role: p.role,
         other_participant_id: u?.id || otherIdentity?.id || null,
         other_participant_name: otherIdentity?.displayName || null,
@@ -990,24 +1266,15 @@ router.get('/rooms', verifyToken, async (req, res) => {
       };
     });
 
-    rooms = enrichedRooms;
+    const rooms = enrichedRooms.sort((a, b) => rank.get(a.id) - rank.get(b.id));
 
-    rooms.sort((a, b) => {
-      const ta = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
-      const tb = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
-      return tb - ta;
-    });
-    
-    // Filter by type if specified
-    if (type) {
-      rooms = rooms.filter(r => (r.room_type || r.type) === type);
-    }
-    
     recordHistogram('chat.rooms.load_latency_ms', Date.now() - roomsStartMs);
     res.json({
       rooms,
-      total: rooms.length,
-      totalUnread: rooms.reduce((sum, r) => sum + (r.unread_count || 0), 0)
+      total: page.total,
+      totalUnread: page.totalUnread,
+      hasMore: page.hasMore,
+      nextCursor: page.nextCursor
     });
 
   } catch (err) {
@@ -1024,44 +1291,21 @@ router.get('/business/:businessUserId/rooms', verifyToken, async (req, res) => {
   try {
     const actorUserId = req.user.id;
     const { businessUserId } = req.params;
-    const { limit = 200, type } = req.query;
 
     const allowed = await canActAsBusiness(businessUserId, actorUserId);
     if (!allowed) {
       return res.status(403).json({ error: 'Not authorized to access this business inbox' });
     }
 
+    const page = await roomInboxPage(req.query, businessUserId, actorUserId);
+    const rank = new Map(page.entries.map((entry, index) => [entry.id, index]));
+    if (!page.entries.length) return res.json({ rooms: [], total: page.total, totalUnread: page.totalUnread,
+      hasMore: page.hasMore, nextCursor: page.nextCursor, businessUserId });
+
     const teamMemberIds = await getBusinessMessagingMemberIds(businessUserId);
     const teamSet = new Set(teamMemberIds.map((id) => String(id)));
 
-    const { data: participantRows, error: partErr } = await supabaseAdmin
-      .from('ChatParticipant')
-      .select(`
-        room_id,
-        unread_count,
-        last_read_at,
-        role,
-        room:room_id(
-          id,
-          type,
-          name,
-          description,
-          gig_id,
-          home_id,
-          is_active,
-          created_at,
-          updated_at
-        )
-      `)
-      .eq('user_id', businessUserId)
-      .eq('is_active', true)
-      .order('joined_at', { ascending: false })
-      .limit(parseInt(limit));
-
-    if (partErr) {
-      logger.error('Error fetching business chat rooms', { requestId: req.requestId, userId: actorUserId, businessUserId, error: partErr.message });
-      return res.status(500).json({ error: 'Failed to fetch business chat rooms' });
-    }
+    const participantRows = page.entries.map((entry) => entry.membership);
 
     const joinedRooms = (participantRows || []).filter((p) => p.room);
     const closedRoomIds = await closedGigRoomIds(joinedRooms.map((p) => p.room), actorUserId, [businessUserId]);
@@ -1073,15 +1317,13 @@ router.get('/business/:businessUserId/rooms', verifyToken, async (req, res) => {
 
     // Batch-fetch participants and last messages for all rooms (2 queries instead of 2N)
     const allBizRoomIds = roomList.map(p => p.room.id);
-    const [{ data: allBizParts }, { data: bizRoomPreviews }, planStates] = await Promise.all([
-      supabaseAdmin
-        .from('ChatParticipant')
-        .select('room_id, user:user_id(id, username, name, first_name, middle_name, last_name)')
-        .in('room_id', allBizRoomIds)
-        .eq('is_active', true),
+    const [allBizParts, { data: bizRoomPreviews, error: previewError }, planStates] = await Promise.all([
+      roomPagePeople(allBizRoomIds, businessUserId, true),
       supabaseAdmin.rpc('get_room_previews', { p_room_ids: allBizRoomIds }),
       loadPlanChatStates(roomList.map((p) => p.room)),
     ]);
+
+    if (previewError) throw chatAccessUnavailable();
 
     // Group participants by room, leaving out leftover members of assigned task gig rooms
     const hiddenBizMembers = await hiddenGigRoomMembers(
@@ -1131,6 +1373,7 @@ router.get('/business/:businessUserId/rooms', verifyToken, async (req, res) => {
         last_message_preview: lastMessagePreview,
         unread_count: p.unread_count || 0,
         last_read_at: p.last_read_at,
+        notifications_enabled: p.notifications_enabled !== false,
         role: p.role,
         other_participant_id: chosen?.id || otherIdentity?.id || null,
         other_participant_name: otherIdentity?.displayName || null,
@@ -1139,18 +1382,14 @@ router.get('/business/:businessUserId/rooms', verifyToken, async (req, res) => {
       };
     });
 
-    let filtered = rooms;
-    if (type) filtered = rooms.filter((r) => (r.room_type || r.type) === type);
-    filtered.sort((a, b) => {
-      const ta = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
-      const tb = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
-      return tb - ta;
-    });
+    rooms.sort((a, b) => rank.get(a.id) - rank.get(b.id));
 
     res.json({
-      rooms: filtered,
-      total: filtered.length,
-      totalUnread: filtered.reduce((sum, r) => sum + (r.unread_count || 0), 0),
+      rooms,
+      total: page.total,
+      totalUnread: page.totalUnread,
+      hasMore: page.hasMore,
+      nextCursor: page.nextCursor,
       businessUserId,
     });
   } catch (err) {
@@ -1180,24 +1419,7 @@ router.get('/rooms/:roomId', verifyToken, async (req, res) => {
     // Get room details
     const { data: room, error } = await supabaseAdmin
       .from('ChatRoom')
-      .select(`
-        *,
-        participants:ChatParticipant!room_id(
-          user_id,
-          role,
-          unread_count,
-          last_read_at,
-          joined_at,
-          user:user_id(
-            id,
-            username,
-            name,
-            first_name,
-            last_name,
-            profile_picture_url
-          )
-        )
-      `)
+      .select('*')
       .eq('id', roomId)
       .single();
     
@@ -1205,6 +1427,13 @@ router.get('/rooms/:roomId', verifyToken, async (req, res) => {
       if (error) logger.error('Error fetching room', { requestId: req.requestId, userId: req.user?.id, roomId, error: error.message });
       return res.status(404).json({ error: 'Room not found' });
     }
+
+    // Embedded membership reads inherit the row cap independently of the room.
+    // Preserve the existing member fields while reading every membership page.
+    const membersPage = await readChatParticipants([roomId],
+      'user_id, role, unread_count, last_read_at, joined_at, is_active, left_at, user:user_id(id, username, name, first_name, last_name, profile_picture_url)',
+      { activeOnly: false }).catch(() => { throw chatAccessUnavailable(); });
+    room.participants = membersPage.map(({ id, room_id, ...member }) => member);
 
     // The owner and the worker don't see leftover members listed in an assigned task's room.
     if (Array.isArray(room.participants) && room.participants.length > 0) {
@@ -1564,6 +1793,105 @@ router.get('/rooms/:roomId/pre-bid-status', verifyToken, async (req, res) => {
   }
 });
 
+// Search returns newest matches plus room-to-conversation navigation metadata.
+// A query is literal text: '%' and '_' never become wildcard instructions.
+router.get(['/search', '/rooms/:roomId/search', '/conversations/:otherUserId/search'], verifyToken, async (req, res) => {
+  try {
+    const query = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+    if (!query || query.length > 200) return res.status(400).json({ error: 'Search must contain 1 to 200 characters' });
+    const { beforeTs, beforeId } = parseCursor(req.query.before);
+    if ((beforeTs && !Number.isFinite(Date.parse(beforeTs)))
+      || (beforeId && Joi.string().uuid().validate(beforeId).error)) {
+      return res.status(400).json({ error: 'Invalid search cursor' });
+    }
+    const { identityUserId, roomIds } = await chatSearchScope(req);
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 100);
+    const { data, error } = roomIds.length ? await supabaseAdmin.rpc('search_chat_messages', {
+      p_user_id: identityUserId, p_room_ids: roomIds, p_query: query,
+      p_before_at: beforeTs, p_before_id: beforeId, p_limit: limit + 1,
+    }) : { data: [] };
+    if (error) throw error;
+    const visible = (data || []).slice(0, limit);
+    const [messages, roomContexts] = await Promise.all([
+      serializeChatHistory(visible, req.user.id, identityUserId), chatSearchRoomContexts(visible, identityUserId),
+    ]);
+    const hasMore = (data || []).length > limit;
+    const last = visible.at(-1);
+    res.set('Cache-Control', 'private, no-store');
+    return res.json({ messages, roomContexts, hasMore,
+      nextCursor: hasMore && last ? `${last.created_at}|${last.id}` : null });
+  } catch (error) {
+    return chatChangesFailure(req, res, error);
+  }
+});
+
+// Search can land on an old message without loading every intervening page.
+// This window keeps older-history pagination and explicitly reports newer rows;
+// returning to the live bottom reloads the normal latest-message window.
+router.get(['/rooms/:roomId/messages/:messageId/context', '/conversations/:otherUserId/messages/:messageId/context'],
+  verifyToken, async (req, res) => {
+    try {
+      if (Joi.string().uuid().validate(req.params.messageId).error) {
+        return res.status(400).json({ error: 'Invalid message' });
+      }
+      const { identityUserId, roomIds } = await chatSearchScope(req);
+      const eachSide = Math.min(Math.max(parseInt(req.query.limit, 10) || 25, 1), 100);
+      const { data, error } = await supabaseAdmin.rpc('get_chat_message_context', {
+        p_user_id: identityUserId, p_room_ids: roomIds, p_message_id: req.params.messageId,
+        p_limit_each_side: eachSide,
+      });
+      if (error) throw error;
+      if (!data?.anchor) return res.status(404).json({ error: 'Message not found' });
+      const visible = [...data.older.slice(0, eachSide).reverse(), data.anchor, ...data.newer.slice(0, eachSide)];
+      const messages = await serializeChatHistory(visible, req.user.id, identityUserId);
+      const hasMore = data.older.length > eachSide;
+      res.set('Cache-Control', 'private, no-store');
+      return res.json({ messages, roomIds, anchorMessageId: data.anchor.id, hasMore,
+        nextCursor: hasMore ? buildNextCursor(visible) : null, hasMoreAfter: data.newer.length > eachSide });
+    } catch (error) {
+      return chatChangesFailure(req, res, error);
+    }
+  });
+
+/**
+ * GET/POST /api/chat/{rooms/:roomId,conversations/:otherUserId}/changes
+ * All-topic changes since the cached room revisions, including tombstones.
+ * POST accepts cursor objects without placing potentially large maps in URLs.
+ */
+async function personChatChanges(req, res) {
+  try {
+    const params = req.method === 'POST' ? (req.body || {}) : req.query;
+    const asBusinessUserId = params.asBusinessUserId ? String(params.asBusinessUserId) : null;
+    const roomIds = await personChatRoomIds(req.user.id, req.params.otherUserId, asBusinessUserId);
+    return await respondWithChatChanges(req, res, roomIds, asBusinessUserId || req.user.id);
+  } catch (error) {
+    return chatChangesFailure(req, res, error);
+  }
+}
+
+async function roomChatChanges(req, res) {
+  try {
+    const { roomId } = req.params;
+    const params = req.method === 'POST' ? (req.body || {}) : req.query;
+    const asBusinessUserId = params.asBusinessUserId ? String(params.asBusinessUserId) : null;
+    if (asBusinessUserId && !await canActAsBusiness(asBusinessUserId, req.user.id)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    const participant = await roomMembership(roomId, req.user.id, asBusinessUserId);
+    if (!participant || (participant.is_active === false && !participant.left_at)
+      || await gigRoomClosed(roomId, req.user.id, asBusinessUserId)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    return await respondWithChatChanges(req, res, [roomId], participant.user_id);
+  } catch (error) {
+    return chatChangesFailure(req, res, error);
+  }
+}
+router.route('/conversations/:otherUserId/changes')
+  .get(verifyToken, personChatChanges).post(verifyToken, personChatChanges);
+router.route('/rooms/:roomId/changes')
+  .get(verifyToken, roomChatChanges).post(verifyToken, roomChatChanges);
+
 /**
  * GET /api/chat/conversations/:otherUserId/messages
  * Person-conversation feed across shared direct and task rooms.
@@ -1576,55 +1904,22 @@ router.get('/conversations/:otherUserId/messages', verifyToken, async (req, res)
     const asBusinessUserId = req.query.asBusinessUserId ? String(req.query.asBusinessUserId) : null;
 
     const lim = Math.min(Math.max(parseInt(limit, 10) || 100, 1), 400);
-    let identityUserIds = new Set([String(userId)]);
-
-    if (asBusinessUserId) {
-      const canAct = await canActAsBusiness(asBusinessUserId, userId);
-      if (!canAct) return res.status(403).json({ error: 'Access denied' });
-      // Acting for a business reads the business's conversations with this person, never the actor's own.
-      identityUserIds = new Set([String(asBusinessUserId)]);
-    }
-
-    // Only rooms the caller is still in: a former member reads their history in the room itself.
-    const { data: mineRows, error: mineErr } = await supabaseAdmin
-      .from('ChatParticipant')
-      .select('room_id, room:room_id!inner(type)')
-      .in('room.type', ['direct', 'gig'])
-      .in('user_id', Array.from(identityUserIds))
-      .eq('is_active', true);
-
-    if (mineErr) {
-      logger.error('Error loading actor conversation rooms', { requestId: req.requestId, userId, otherUserId, error: mineErr.message });
-      return res.status(500).json({ error: 'Failed to fetch conversation rooms' });
-    }
-
-    const { data: otherRows, error: otherErr } = await supabaseAdmin
-      .from('ChatParticipant')
-      .select('room_id')
-      .eq('user_id', otherUserId)
-      .eq('is_active', true);
-
-    if (otherErr) {
-      logger.error('Error loading target conversation rooms', { requestId: req.requestId, userId, otherUserId, error: otherErr.message });
-      return res.status(500).json({ error: 'Failed to fetch conversation rooms' });
-    }
-
-    const myRoomSet = new Set((mineRows || []).map((r) => String(r.room_id)));
-    const candidateRoomIds = (otherRows || [])
-      .map((r) => String(r.room_id))
-      .filter((rid) => myRoomSet.has(rid));
-    // An assigned task's gig room isn't merged in for a leftover member.
-    const closedRoomIds = await closedGigRoomIdsByRoomId(candidateRoomIds, userId, Array.from(identityUserIds));
-    const sharedRoomIds = candidateRoomIds.filter((rid) => !closedRoomIds.has(rid));
-
+    const sharedRoomIds = await personChatRoomIds(userId, otherUserId, asBusinessUserId);
+    // Read the watermark first. A commit during the history query is replayed
+    // harmlessly next time; a watermark captured afterward could skip it.
+    const sync = req.query.sync === 'true' ? await chatSyncSnapshot(sharedRoomIds) : null;
     if (sharedRoomIds.length === 0) {
-      return res.json({ messages: [], hasMore: false, roomIds: [] });
+      return res.json({ messages: [], hasMore: false, roomIds: [], ...(sync ? { syncCursors: sync.cursors } : {}) });
     }
 
     const runQuery = async ({ senderKey }) => {
-      let q = supabaseAdmin
-        .from('ChatMessage')
-        .select(`
+      let newest = [];
+      // Bound each URL and retain only the requested global page while merging
+      // room batches. Sorting keeps PostgreSQL's microsecond timestamp/UUID order.
+      for (let offset = 0; offset < sharedRoomIds.length; offset += 100) {
+        let q = supabaseAdmin
+          .from('ChatMessage')
+          .select(`
           *,
           sender:${senderKey}(
             id,
@@ -1633,15 +1928,24 @@ router.get('/conversations/:otherUserId/messages', verifyToken, async (req, res)
             profile_picture_url
           )
         `)
-        .in('room_id', sharedRoomIds)
-        .eq('deleted', false)
-        .order('created_at', { ascending: false })
-        .order('id', { ascending: false })
-        .limit(lim);
+          .in('room_id', sharedRoomIds.slice(offset, offset + 100))
+          .eq('deleted', false)
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
+          .limit(lim + 1);
 
-      if (topicId) q = q.eq('topic_id', topicId);
-      q = applyCursorPagination(q, before, after);
-      return q;
+        if (topicId) q = q.eq('topic_id', topicId);
+        q = applyCursorPagination(q, before, after);
+        const { data, error } = await q;
+        if (error) return { error };
+        newest = newest.concat(data || []).sort((left, right) => {
+          const a = timestampMicros(left.created_at) ?? 0n;
+          const b = timestampMicros(right.created_at) ?? 0n;
+          if (a !== b) return a > b ? -1 : 1;
+          return left.id === right.id ? 0 : left.id > right.id ? -1 : 1;
+        }).slice(0, lim + 1);
+      }
+      return { data: newest };
     };
 
     let messages = null;
@@ -1659,7 +1963,7 @@ router.get('/conversations/:otherUserId/messages', verifyToken, async (req, res)
     }
 
     // Batch-fetch reactions and senders for all visible messages to avoid N+1 queries
-    const visibleMessages = (messages || []).reverse();
+    const visibleMessages = (messages || []).slice(0, lim).reverse();
     const messageIds = visibleMessages.map((m) => m.id).filter(Boolean);
     const [reactionMap, people, sendRefusal] = await Promise.all([
       buildReactionSummary(messageIds, userId),
@@ -1670,21 +1974,24 @@ router.get('/conversations/:otherUserId/messages', verifyToken, async (req, res)
         logger.warn('chat.send_refusal_unavailable', { requestId: req.requestId, userId, error: refusalError.message });
         return null; // sends are still checked when they arrive
       }),
+      applyDirectReadReceipts(visibleMessages, userId, { identityUserId: asBusinessUserId || userId }),
     ]);
     const messagesWithReactions = visibleMessages.map((m) => ({
       ...serializeChatMessageForViewer(m, { people, viewerId: userId }),
       reactions: reactionMap.get(m.id) || [],
     }));
 
-    const hasMore = Array.isArray(messages) && messages.length === lim;
+    const hasMore = Array.isArray(messages) && messages.length > lim;
     res.json({
       messages: messagesWithReactions,
       hasMore,
       nextCursor: hasMore ? buildNextCursor(visibleMessages) : null,
       roomIds: sharedRoomIds,
+      ...(sync ? { syncCursors: sync.cursors } : {}),
       sendRefusal,
     });
   } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
     logger.error('Canonical conversation fetch error', { requestId: req.requestId, userId: req.user?.id, error: err.message });
     res.status(500).json({ error: 'Failed to fetch conversation messages' });
   }
@@ -1694,87 +2001,41 @@ router.get('/conversations/:otherUserId/messages', verifyToken, async (req, res)
  * POST /api/chat/conversations/:otherUserId/read
  * Mark shared direct/task-room messages with a person as read.
  */
-router.post('/conversations/:otherUserId/read', verifyToken, async (req, res) => {
+router.post(['/conversations/:otherUserId/read', '/conversations/:otherUserId/topics/:topicId/read'], verifyToken, async (req, res) => {
+  const requestAt = new Date().toISOString();
   try {
     const userId = req.user.id;
     const { otherUserId } = req.params;
+    if (req.body?.topicId !== undefined) return res.status(400).json({ error: 'Use the topic read route' });
+    if (req.params.topicId && Joi.string().uuid().validate(req.params.topicId).error) {
+      return res.status(400).json({ error: 'Invalid topic' });
+    }
     const asBusinessUserId = req.body?.asBusinessUserId ? String(req.body.asBusinessUserId) : null;
-    let identityUserIds = new Set([String(userId)]);
-    let readTargetUserId = userId;
-
-    if (asBusinessUserId) {
-      const canAct = await canActAsBusiness(asBusinessUserId, userId);
-      if (!canAct) return res.status(403).json({ error: 'Access denied' });
-      // Reading for a business marks the business's conversations with this person read, never the reader's own.
-      identityUserIds = new Set([String(asBusinessUserId)]);
-      readTargetUserId = asBusinessUserId;
-    }
-
-    // Same rule as starting a chat: a "conversation with yourself" (or with the business you read for) would
-    // match every room the reader is in and mark them all read.
-    if (String(otherUserId) === String(readTargetUserId)) {
-      return res.status(400).json({ error: 'Cannot mark a conversation with yourself as read' });
-    }
-
-    const { data: mineRows, error: mineErr } = await supabaseAdmin
-      .from('ChatParticipant')
-      .select('room_id, room:room_id!inner(type)')
-      .in('room.type', ['direct', 'gig'])
-      .in('user_id', Array.from(identityUserIds))
-      .eq('is_active', true);
-
-    if (mineErr) {
-      logger.error('Error loading actor rooms for conversation read', { requestId: req.requestId, userId, otherUserId, error: mineErr.message });
-      return res.status(500).json({ error: 'Failed to mark conversation as read' });
-    }
-
-    const { data: otherRows, error: otherErr } = await supabaseAdmin
-      .from('ChatParticipant')
-      .select('room_id')
-      .eq('user_id', otherUserId)
-      .eq('is_active', true);
-
-    if (otherErr) {
-      logger.error('Error loading target rooms for conversation read', { requestId: req.requestId, userId, otherUserId, error: otherErr.message });
-      return res.status(500).json({ error: 'Failed to mark conversation as read' });
-    }
-
-    const myRoomSet = new Set((mineRows || []).map((r) => String(r.room_id)));
-    const candidateRoomIds = (otherRows || [])
-      .map((r) => String(r.room_id))
-      .filter((rid) => myRoomSet.has(rid));
-    // An assigned task's gig room isn't merged in for a leftover member.
-    const closedRoomIds = await closedGigRoomIdsByRoomId(candidateRoomIds, userId, Array.from(identityUserIds));
-    const sharedRoomIds = candidateRoomIds.filter((rid) => !closedRoomIds.has(rid));
+    const readTargetUserId = asBusinessUserId || userId;
+    const sharedRoomIds = await personChatRoomIds(userId, otherUserId, asBusinessUserId);
 
     if (sharedRoomIds.length === 0) {
+      if (req.params.topicId) return res.status(403).json({ error: 'Access denied' });
       return res.json({ unreadCount: 0, updatedRooms: 0 });
     }
 
-    const stamp = new Date().toISOString();
     const usersToClear = [String(readTargetUserId)];
-
-    const { error: updateErr } = await supabaseAdmin
-      .from('ChatParticipant')
-      .update({
-        unread_count: 0,
-        last_read_at: stamp
-      })
-      .in('room_id', sharedRoomIds)
-      .in('user_id', usersToClear)
-      .or(HAS_UNREAD);
-
-    if (updateErr) {
-      logger.error('Error updating participants for conversation read', { requestId: req.requestId, userId, otherUserId, error: updateErr.message });
-      return res.status(500).json({ error: 'Failed to mark conversation as read' });
+    const result = await markChatRead({ roomIds: sharedRoomIds, userId: readTargetUserId,
+      topicId: req.params.topicId, otherUserId,
+      throughMessageId: req.body?.throughMessageId, throughMessageIds: req.body?.throughMessageIds,
+      requestAt, io: req.app.get('io') });
+    if (result.error) {
+      const status = result.error.code === '22023' ? 400 : result.error.code === '42501' ? 403 : 500;
+      return res.status(status).json({ error: status === 400 ? 'Invalid read cursor' : 'Failed to mark conversation as read' });
     }
-
     badgeService.emitBadgeUpdateToMany(usersToClear);
-    await readBusinessNotices(userId, asBusinessUserId, sharedRoomIds);
-    return res.json({ unreadCount: 0, updatedRooms: sharedRoomIds.length });
+    // Do not clear a later business notification outside the visible boundary.
+    if (result.unreadCount === 0) await readBusinessNotices(userId, asBusinessUserId, sharedRoomIds);
+    return res.json({ unreadCount: result.unreadCount, updatedRooms: result.data.length,
+      ...(req.params.topicId ? { topicId: req.params.topicId, readScope: 'topic' } : {}) });
   } catch (err) {
     logger.error('Conversation read error', { requestId: req.requestId, userId: req.user?.id, error: err.message });
-    return res.status(500).json({ error: 'Failed to mark conversation as read' });
+    return res.status(err.status || 500).json({ error: err.status ? err.message : 'Failed to mark conversation as read' });
   }
 });
 
@@ -1807,6 +2068,8 @@ router.get('/rooms/:roomId/messages', verifyToken, async (req, res) => {
 
     const lim = Math.min(Math.max(parseInt(limit) || 50, 1), 200);
 
+    const sync = req.query.sync === 'true' ? await chatSyncSnapshot([roomId]) : null;
+
     const runQuery = async ({ senderKey }) => {
       let q = supabaseAdmin
         .from('ChatMessage')
@@ -1823,7 +2086,7 @@ router.get('/rooms/:roomId/messages', verifyToken, async (req, res) => {
         .eq('deleted', false)
         .order('created_at', { ascending: false })
         .order('id', { ascending: false })
-        .limit(lim);
+        .limit(lim + 1);
 
       if (leftAt) q = q.lte('created_at', leftAt);
       q = applyCursorPagination(q, before, after);
@@ -1848,7 +2111,7 @@ router.get('/rooms/:roomId/messages', verifyToken, async (req, res) => {
     }
 
     // Batch-fetch reactions and senders for all visible messages to avoid N+1 queries
-    const visibleMessages = (messages || []).reverse();
+    const visibleMessages = (messages || []).slice(0, lim).reverse();
     const messageIds = visibleMessages.map((m) => m.id).filter(Boolean);
     const [reactionMap, people, sendRefusal] = await Promise.all([
       buildReactionSummary(messageIds, userId),
@@ -1859,24 +2122,26 @@ router.get('/rooms/:roomId/messages', verifyToken, async (req, res) => {
         logger.warn('chat.send_refusal_unavailable', { requestId: req.requestId, userId, roomId, error: refusalError.message });
         return null; // sends are still checked when they arrive
       }),
+      applyDirectReadReceipts(visibleMessages, userId, { identityUserId: participant.user_id }),
     ]);
     const messagesWithReactions = visibleMessages.map((m) => ({
       ...serializeChatMessageForViewer(m, { people, viewerId: userId }),
       reactions: reactionMap.get(m.id) || [],
     }));
 
-    const hasMore = Array.isArray(messages) && messages.length === lim;
+    const hasMore = Array.isArray(messages) && messages.length > lim;
     recordHistogram('chat.messages.load_latency_ms', Date.now() - msgsStartMs);
     res.json({
       messages: messagesWithReactions,
       hasMore,
       nextCursor: hasMore ? buildNextCursor(visibleMessages) : null,
       sendRefusal,
+      ...(sync ? { syncCursors: sync.cursors } : {}),
     });
 
   } catch (err) {
     logger.error('Messages fetch error', { requestId: req.requestId, userId: req.user?.id, roomId: req.params.roomId || req.query.roomId, error: err.message });
-    res.status(500).json({ error: 'Failed to fetch messages' });
+    sendChatReadError(res, err, 'Failed to fetch messages');
   }
 });
 
@@ -1884,7 +2149,7 @@ router.get('/rooms/:roomId/messages', verifyToken, async (req, res) => {
  * POST /api/chat/messages
  * Send a message (alternative to WebSocket)
  */
-router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSchema), async (req, res) => {
+router.post('/messages', verifyToken, messageSendLimiter, messageBurstLimiter, validate(sendMessageSchema), async (req, res) => {
   try {
     const userId = req.user.id;
     const requestId = req.requestId;
@@ -1946,19 +2211,21 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
       directMemberIds = otherParticipants.map((participant) => participant.user_id);
     }
 
-    // ─── Business Identity for Direct Chats ───
+    // ─── Explicit business identity ───
     // Business identity requires an explicit asBusinessUserId from the client.
     // We intentionally do NOT auto-detect business identity by scanning room
     // participants. Auto-detection caused a privacy bug where team members'
     // personal messages were silently sent as the business identity whenever
     // the business happened to be a participant in the room. The client must
     // opt-in to business identity on each message send.
-    if (room && room.type === 'direct' && asBusinessUserId) {
+    // Every supported room can contain a business membership. Never silently
+    // replace an explicitly chosen business sender with its staff member.
+    if (asBusinessUserId) {
       const canAct = await canActAsBusiness(asBusinessUserId, userId);
       if (!canAct) {
         return res.status(403).json({ error: 'You do not have permission to message as this business' });
       }
-      const { data: businessParticipant } = await supabaseAdmin
+      const { data: businessParticipant, error: businessParticipantError } = await supabaseAdmin
         .from('ChatParticipant')
         .select('id')
         .eq('room_id', roomId)
@@ -1966,6 +2233,7 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
         .eq('is_active', true)
         .maybeSingle();
 
+      if (businessParticipantError) throw chatAccessUnavailable();
       if (!businessParticipant) {
         return res.status(400).json({ error: 'This business is not a participant in the chat room' });
       }
@@ -1976,6 +2244,11 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
     // staff) or a person writes to it in a conversation they already have.
     if (room && room.type === 'direct') {
       const refusal = await unpublishedDirectRoomRefusal(senderUserId, directMemberIds);
+      if (refusal) return res.status(403).json(refusal);
+    } else if (asBusinessUserId && room.type !== 'gig') {
+      // A group must not emit an unresolvable private business as its sender.
+      // Existing task-owner messaging retains its separate task access rules.
+      const refusal = await unpublishedDirectRoomRefusal(senderUserId, []);
       if (refusal) return res.status(403).json(refusal);
     }
 
@@ -1991,6 +2264,9 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
         ? await getGigOwnerMessagingContext(gig.user_id, userId)
         : { isOwnerActor: false, messageSenderUserId: userId };
       const isGigOwner = ownerCtx.isOwnerActor;
+      if (asBusinessUserId && String(asBusinessUserId) !== String(ownerCtx.messageSenderUserId || userId)) {
+        return res.status(403).json({ error: 'This business cannot send in this task chat' });
+      }
       senderUserId = ownerCtx.messageSenderUserId || userId;
       const isAcceptedWorker = gig && gig.accepted_by && String(gig.accepted_by) === String(userId);
 
@@ -2108,19 +2384,35 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
 
     const topicId = req.body.topicId;
     if (topicId) {
-      const { data: topic } = await supabaseAdmin
+      if (!['direct', 'gig'].includes(room.type)) {
+        return res.status(400).json({ error: 'Invalid topic for this conversation' });
+      }
+      const { data: topic, error: topicError } = await supabaseAdmin
         .from('ConversationTopic')
         .select('id, conversation_user_id_1, conversation_user_id_2')
         .eq('id', topicId)
         .maybeSingle();
 
+      if (topicError) throw chatAccessUnavailable();
       if (!topic) {
         return res.status(400).json({ error: 'Invalid topic for this conversation' });
       }
 
-      // The acting user (not the business identity) must be one of the topic's participants
+      // Topics belong to the displayed conversation pair. A staff member's
+      // personal topic cannot be sent as the business, or into another room.
       const topicUsers = [String(topic.conversation_user_id_1), String(topic.conversation_user_id_2)];
-      if (!topicUsers.includes(String(userId))) {
+      if (!topicUsers.includes(String(senderUserId))) {
+        return res.status(400).json({ error: 'Invalid topic for this conversation' });
+      }
+      const { data: topicMembers, error: topicMembersError } = await supabaseAdmin
+        .from('ChatParticipant')
+        .select('user_id')
+        .eq('room_id', roomId)
+        .in('user_id', topicUsers)
+        .eq('is_active', true)
+        .is('left_at', null);
+      if (topicMembersError) throw chatAccessUnavailable();
+      if (new Set((topicMembers || []).map((member) => String(member.user_id))).size !== 2) {
         return res.status(400).json({ error: 'Invalid topic for this conversation' });
       }
     }
@@ -2150,6 +2442,7 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
 
     // Insert message
     const messageData = {
+      push_delivery_requested: true,
       room_id: roomId,
       user_id: senderUserId,
       message: resolvedMessage,
@@ -2180,6 +2473,11 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
     // inserting transaction; a deletion can win after the earlier REST read.
     if (error?.code === 'PT400' && String(error.message || '').trim() === 'CHAT_FILE_UNAVAILABLE') {
       return res.status(400).json({ error: 'One or more attached files are invalid or not owned by you' });
+    }
+    // Membership can change between topic preflight and the inserting
+    // transaction. Never retry a refused binding through the legacy fallbacks.
+    if (error?.code === 'PT400' && String(error.message || '').trim() === 'CHAT_TOPIC_SCOPE_INVALID') {
+      return res.status(400).json({ error: 'Invalid topic for this conversation' });
     }
 
     // The database re-decides direct-room admission inside the inserting
@@ -2242,15 +2540,7 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
     }
 
     const people = await senderPeople;
-    await Promise.all([
-      deliverNewMessage(req.app.get('io'), { room, message, actorUserId: userId, senderUserId, requestId, people }),
-      topicId
-        ? supabaseAdmin
-            .from('ConversationTopic')
-            .update({ last_activity_at: new Date().toISOString() })
-            .eq('id', topicId)
-        : Promise.resolve(),
-    ]);
+    await deliverNewMessage(req.app.get('io'), { room, message, actorUserId: userId, senderUserId, requestId, people });
 
     const sendDurationMs = Date.now() - sendStartMs;
     incCounter('chat.message.sent', { room_type: room?.type || 'unknown' });
@@ -2261,6 +2551,7 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
     
   } catch (err) {
     if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
+    if (err.code === 'CHAT_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
     logger.error('Message send error', { requestId: req.requestId, roomId: req.body.roomId, userId: req.user?.id, error: err.message });
     res.status(500).json({ error: 'Failed to send message' });
   }
@@ -2323,12 +2614,11 @@ router.put('/messages/:messageId', verifyToken, messageEditLimiter, async (req, 
     incCounter('chat.message.edited');
     // The edited row names its sender as the room's messages do, so the edit doesn't blank the bubble's name.
     const people = await loadMessageSenders([updated]);
-    const responseMessage = serializeChatMessageForViewer(updated, { people });
-
     // Broadcast via socket
     const io = req.app.get('io');
     if (io && message.room_id) {
-      io.to(message.room_id).emit('message:edited', { messageId, message: responseMessage });
+      chatRealtime.announce({ t: 'ChatMessage', r: message.room_id, m: messageId, op: 'UPDATE', v: updated.sync_version },
+        { message: updated, people });
     }
 
     res.json({ message: serializeChatMessageForViewer(updated, { people, viewerId: userId }) });
@@ -2385,13 +2675,13 @@ router.delete('/messages/:messageId', verifyToken, messageDeleteLimiter, async (
       return res.json({ message: 'Message deleted successfully' });
     }
 
-    const { error: softDeleteErr } = await supabaseAdmin
+    const { data: deletedMessage, error: softDeleteErr } = await supabaseAdmin
       .from('ChatMessage')
       .update({
         deleted: true,
         deleted_at: new Date().toISOString()
       })
-      .eq('id', messageId);
+      .eq('id', messageId).select('sync_version').single();
 
     if (softDeleteErr) {
       logger.error('Chat message soft-delete failed', { requestId: req.requestId, userId: req.user?.id, messageId, error: softDeleteErr.message });
@@ -2404,10 +2694,10 @@ router.delete('/messages/:messageId', verifyToken, messageDeleteLimiter, async (
     // Broadcast via socket
     const io = req.app.get('io');
     if (io && message.room_id) {
-      io.to(message.room_id).emit('message:deleted', { messageId });
+      chatRealtime.announce({ t: 'ChatMessage', r: message.room_id, m: messageId, op: 'DELETE', v: deletedMessage.sync_version });
     }
 
-    res.json({ message: 'Message deleted successfully' });
+    res.json({ message: 'Message deleted successfully', sync_version: deletedMessage.sync_version });
     
   } catch (err) {
     logger.error('Message delete error', { requestId: req.requestId, userId: req.user?.id, messageId: req.params.messageId, error: err.message });
@@ -2419,9 +2709,14 @@ router.delete('/messages/:messageId', verifyToken, messageDeleteLimiter, async (
  * POST /api/chat/rooms/:roomId/read
  * Mark messages as read
  */
-router.post('/rooms/:roomId/read', verifyToken, async (req, res) => {
+router.post(['/rooms/:roomId/read', '/rooms/:roomId/topics/:topicId/read'], verifyToken, async (req, res) => {
+  const requestAt = new Date().toISOString();
   try {
     const { roomId } = req.params;
+    if (req.body?.topicId !== undefined) return res.status(400).json({ error: 'Use the topic read route' });
+    if (req.params.topicId && Joi.string().uuid().validate(req.params.topicId).error) {
+      return res.status(400).json({ error: 'Invalid topic' });
+    }
     const roomIdStr = String(roomId || '');
     const userId = req.user.id;
     const asBusinessUserId = req.body?.asBusinessUserId ? String(req.body.asBusinessUserId) : null;
@@ -2431,6 +2726,7 @@ router.post('/rooms/:roomId/read', verifyToken, async (req, res) => {
     // Treat invalid room IDs as a no-op instead of a server error.
     const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (!UUID_REGEX.test(roomIdStr)) {
+      if (req.params.topicId) return res.status(400).json({ error: 'Invalid room' });
       return res.json({ unreadCount: 0 });
     }
 
@@ -2447,29 +2743,110 @@ router.post('/rooms/:roomId/read', verifyToken, async (req, res) => {
     // Reading for a business marks the business's row read: the reader isn't a member of its conversations.
     const usersToClear = [String(readTargetUserId)];
 
-    // Update participant's read state directly; with nothing unread there is no row to change (count stays 0)
-    const { error } = await supabaseAdmin
-      .from('ChatParticipant')
-      .update({
-        unread_count: 0,
-        last_read_at: new Date().toISOString()
-      })
-      .eq('room_id', roomIdStr)
-      .in('user_id', usersToClear)
-      .or(HAS_UNREAD);
-
-    if (error) {
-      logger.error('Error marking messages read', { requestId: req.requestId, userId: req.user?.id, roomId: roomIdStr, error: error.message });
-      return res.status(500).json({ error: 'Failed to mark messages as read' });
+    const result = await markChatRead({ roomIds: [roomIdStr], userId: readTargetUserId,
+      topicId: req.params.topicId,
+      throughMessageId: req.body?.throughMessageId, throughMessageIds: req.body?.throughMessageIds,
+      requestAt, io: req.app.get('io') });
+    if (result.error) {
+      const status = result.error.code === '22023' ? 400 : result.error.code === '42501' ? 403 : 500;
+      return res.status(status).json({ error: status === 400 ? 'Invalid read cursor' : 'Failed to mark messages as read' });
     }
-
     badgeService.emitBadgeUpdateToMany(usersToClear);
-    await readBusinessNotices(userId, asBusinessUserId, [roomIdStr]);
-    res.json({ unreadCount: 0 });
+    if (result.unreadCount === 0) await readBusinessNotices(userId, asBusinessUserId, [roomIdStr]);
+    res.json({ unreadCount: result.unreadCount,
+      ...(req.params.topicId ? { topicId: req.params.topicId, readScope: 'topic' } : {}) });
     
   } catch (err) {
     logger.error('Mark read error', { requestId: req.requestId, userId: req.user?.id, error: err.message });
     res.status(500).json({ error: 'Failed to mark messages as read' });
+  }
+});
+
+// Mute is a server preference so another device and background push agree with
+// the existing inbox menu. Person preferences cover the pair's future task rooms.
+router.get('/conversations/:otherUserId/preferences', verifyToken, async (req, res) => {
+  try {
+    const { otherUserId } = req.params;
+    const asBusinessUserId = req.query.asBusinessUserId ? String(req.query.asBusinessUserId) : null;
+    if (Joi.string().uuid().validate(otherUserId).error || (asBusinessUserId && Joi.string().uuid().validate(asBusinessUserId).error)) {
+      return res.status(400).json({ error: 'Invalid person' });
+    }
+    const roomIds = await personChatRoomIds(req.user.id, otherUserId, asBusinessUserId);
+    if (!roomIds.length) return res.status(404).json({ error: 'Conversation not found' });
+    const identity = asBusinessUserId || req.user.id;
+    const [preferences, participants] = await Promise.all([
+      supabaseAdmin.from('UserNotificationPreferences').select('chat_muted_user_ids').eq('user_id', identity).maybeSingle(),
+      readChatRoomBatches(roomIds, (ids) => supabaseAdmin.from('ChatParticipant')
+        .select('notifications_enabled').eq('user_id', identity).in('room_id', ids).eq('is_active', true)),
+    ]);
+    if (preferences.error) throw preferences.error;
+    const muted = (preferences.data?.chat_muted_user_ids || []).includes(otherUserId);
+    res.set('Cache-Control', 'private, no-store');
+    return res.json({ notificationsEnabled: !muted && participants.some((p) => p.notifications_enabled !== false), roomIds });
+  } catch (error) {
+    logger.warn('chat_preferences_read_failed', { requestId: req.requestId, code: error.code });
+    return res.status(error.status || 503).json({ error: 'Could not load chat preferences' });
+  }
+});
+
+router.get('/rooms/:roomId/preferences', verifyToken, async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const asBusinessUserId = req.query.asBusinessUserId ? String(req.query.asBusinessUserId) : null;
+    if (Joi.string().uuid().validate(roomId).error || (asBusinessUserId && Joi.string().uuid().validate(asBusinessUserId).error)) {
+      return res.status(400).json({ error: 'Invalid room' });
+    }
+    if (asBusinessUserId && !await canActAsBusiness(asBusinessUserId, req.user.id)) return res.status(403).json({ error: 'Access denied' });
+    const participant = await roomMembership(roomId, req.user.id, asBusinessUserId, { activeOnly: true });
+    if (!participant || (asBusinessUserId && participant.user_id !== asBusinessUserId)
+      || await gigRoomClosed(roomId, req.user.id, asBusinessUserId)) return res.status(403).json({ error: 'Access denied' });
+    res.set('Cache-Control', 'private, no-store');
+    return res.json({ notificationsEnabled: participant.notifications_enabled !== false, roomIds: [roomId] });
+  } catch (error) {
+    logger.warn('chat_preferences_read_failed', { requestId: req.requestId, code: error.code });
+    return res.status(503).json({ error: 'Could not load chat preferences' });
+  }
+});
+
+router.patch('/conversations/:otherUserId/preferences', verifyToken, validate(chatPreferencesSchema), async (req, res) => {
+  try {
+    const { otherUserId } = req.params;
+    if (Joi.string().uuid().validate(otherUserId).error) return res.status(400).json({ error: 'Invalid person' });
+    const { notificationsEnabled, asBusinessUserId } = req.body;
+    const targetUserId = asBusinessUserId || req.user.id;
+    if (asBusinessUserId && !await canActAsBusiness(asBusinessUserId, req.user.id)) return res.status(403).json({ error: 'Access denied' });
+    if (targetUserId === otherUserId) return res.status(400).json({ error: 'Invalid person' });
+    const roomIds = await personChatRoomIds(req.user.id, otherUserId, asBusinessUserId);
+    if (!roomIds.length) return res.status(404).json({ error: 'Conversation not found' });
+    const { error } = await supabaseAdmin.rpc('set_chat_notifications', {
+      p_user_id: targetUserId, p_room_ids: roomIds, p_enabled: notificationsEnabled, p_other_user_id: otherUserId,
+    });
+    if (error) throw error;
+    return res.json({ notificationsEnabled, roomIds });
+  } catch (error) {
+    logger.warn('chat_preferences_failed', { requestId: req.requestId, code: error.code });
+    return res.status(error.status || (error.code === '42501' ? 403 : 500)).json({ error: 'Could not save chat preferences' });
+  }
+});
+
+router.patch('/rooms/:roomId/preferences', verifyToken, validate(chatPreferencesSchema), async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    if (Joi.string().uuid().validate(roomId).error) return res.status(400).json({ error: 'Invalid room' });
+    const { notificationsEnabled, asBusinessUserId } = req.body;
+    // Explicit business authority is checked even if the caller has an old personal membership.
+    if (asBusinessUserId && !await canActAsBusiness(asBusinessUserId, req.user.id)) return res.status(403).json({ error: 'Access denied' });
+    const participant = await roomMembership(roomId, req.user.id, asBusinessUserId, { activeOnly: true });
+    if (asBusinessUserId && participant?.user_id !== asBusinessUserId) return res.status(403).json({ error: 'Access denied' });
+    if (!participant || await gigRoomClosed(roomId, req.user.id, asBusinessUserId)) return res.status(403).json({ error: 'Access denied' });
+    const { error } = await supabaseAdmin.rpc('set_chat_notifications', {
+      p_user_id: participant.user_id, p_room_ids: [roomId], p_enabled: notificationsEnabled,
+    });
+    if (error) throw error;
+    return res.json({ notificationsEnabled, roomIds: [roomId] });
+  } catch (error) {
+    logger.warn('chat_preferences_failed', { requestId: req.requestId, code: error.code });
+    return res.status(error.code === '42501' ? 403 : 500).json({ error: 'Could not save chat preferences' });
   }
 });
 
@@ -2642,69 +3019,11 @@ router.delete('/rooms/:roomId/participants/:participantUserId', verifyToken, par
  */
 router.get('/stats', verifyToken, async (req, res) => {
   try {
-    const userId = req.user.id;
-
-    // Lightweight query: sum unread_count from all rooms the user participates in
-    const { data: participants, error } = await supabaseAdmin
-      .from('ChatParticipant')
-      .select('room_id, unread_count, room:room_id(type, gig_id)')
-      .eq('user_id', userId)
-      .eq('is_active', true);
-
-    if (error) {
-      logger.error('Error fetching chat stats', { requestId: req.requestId, userId, error: error.message });
-      return res.status(500).json({ error: 'Failed to fetch stats' });
-    }
-
-    // A leftover member of an assigned task's gig room doesn't count it.
-    const closedRoomIds = await closedGigRoomIds(
-      (participants || []).map((p) => ({ id: p.room_id, type: p.room?.type, gig_id: p.room?.gig_id })),
-      userId
-    );
-    const rows = (participants || []).filter((p) => !closedRoomIds.has(String(p.room_id)));
-    const roomIds = rows.map((p) => String(p.room_id)).filter(Boolean);
-    let totalUnread = 0;
-    let directChats = 0;
-    let gigChats = 0;
-    let homeChats = 0;
-
-    for (const p of rows) {
-      totalUnread += (p.unread_count || 0);
-      const roomType = p.room?.type;
-      if (roomType === 'direct') directChats++;
-      else if (roomType === 'gig') gigChats++;
-      else if (roomType === 'home') homeChats++;
-    }
-    let totalMessages = 0;
-    if (roomIds.length > 0) {
-      let { count: totalCount, error: countErr } = await supabaseAdmin
-        .from('ChatMessage')
-        .select('id', { count: 'exact', head: true })
-        .in('room_id', roomIds)
-        .eq('deleted', false);
-      if (countErr && /deleted/i.test(String(countErr.message || ''))) {
-        ({ count: totalCount, error: countErr } = await supabaseAdmin
-          .from('ChatMessage')
-          .select('id', { count: 'exact', head: true })
-          .in('room_id', roomIds));
-      }
-      if (!countErr) totalMessages = Number(totalCount || 0);
-    }
-
-    res.json({
-      stats: {
-        total_chats: rows.length,
-        total_messages: totalMessages,
-        total_unread: totalUnread,
-        direct_chats: directChats,
-        gig_chats: gigChats,
-        home_chats: homeChats,
-      }
-    });
-
-  } catch (err) {
-    logger.error('Chat stats error', { requestId: req.requestId, userId: req.user?.id, error: err.message });
-    res.status(500).json({ error: 'Failed to fetch chat stats' });
+    const stats = await badgeService.getChatStatistics(req.user.id);
+    res.json({ stats });
+  } catch (error) {
+    logger.warn('Chat statistics unavailable', { requestId: req.requestId, code: error.code });
+    res.status(503).json({ error: 'Chat statistics are temporarily unavailable', code: 'CHAT_UNAVAILABLE' });
   }
 });
 
@@ -2720,215 +3039,86 @@ router.get('/unified-conversations', verifyToken, async (req, res) => {
   const ucStartMs = Date.now();
   try {
     const userId = req.user.id;
-    const { limit = 100 } = req.query;
-    const lim = Math.min(Math.max(parseInt(limit, 10) || 100, 1), 500);
-    // Only what's new (Instant Screens contract §8): `since` (an ISO time) keeps the rows with a message, a read
-    // mark, a new room or topic activity after it. `total` and `totalUnread` still count every row.
-    const sinceRaw = typeof req.query.since === 'string' ? req.query.since.trim() : '';
-    const sinceMs = sinceRaw ? Date.parse(sinceRaw) : null;
-    if (sinceRaw && (!/^\d{4}-\d{2}-\d{2}T/.test(sinceRaw) || !Number.isFinite(sinceMs))) {
+    const lim = Math.min(Math.max(parseInt(req.query.limit, 10) || 100, 1), 500);
+    const since = typeof req.query.since === 'string' ? req.query.since.trim() : '';
+    if (since && (!/^\d{4}-\d{2}-\d{2}T/.test(since) || !Number.isFinite(Date.parse(since)))) {
       return res.status(400).json({ error: 'invalid since' });
     }
-
-    // Step 1: Get all rooms the user participates in (active only)
-    const { data: myParticipants, error: partErr } = await supabaseAdmin
-      .from('ChatParticipant')
-      .select(`
-        room_id,
-        unread_count,
-        last_read_at,
-        role,
-        is_active,
-        room:room_id(
-          id, type, name, description, gig_id, home_id, support_train_id, is_active, created_at, updated_at,
-          support_train:support_train_id(Activity(title))
-        )
-      `)
-      .eq('user_id', userId)
-      .eq('is_active', true);
-
-    if (partErr) {
-      logger.error('Error fetching unified conversations', { requestId: req.requestId, userId, error: partErr.message });
-      return res.status(500).json({ error: 'Failed to fetch conversations' });
+    const query = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+    if ((req.query.q != null && typeof req.query.q !== 'string') || query.length > 160) {
+      return res.status(400).json({ error: 'Invalid inbox search' });
     }
-
-    // A leftover member of an assigned task's gig room doesn't see it.
-    const joinedRooms = (myParticipants || []).filter(p => p.room);
-    const closedRoomIds = await closedGigRoomIds(joinedRooms.map((p) => p.room), userId);
-    const roomList = joinedRooms.filter((p) => !closedRoomIds.has(String(p.room.id)));
-
-    // Separate group/home/plan/Support Train rooms (not mergeable) from direct/gig rooms (mergeable by person)
-    const mergeableParticipants = roomList.filter(p => p.room.type === 'direct' || p.room.type === 'gig');
-    const groupHomeParticipants = roomList.filter(p => ['group', 'home', 'plan', 'support_train'].includes(p.room.type));
-
-    // Step 2: For mergeable rooms, find other participants. The messages and topics of steps 4-5
-    // don't depend on them, so they're fetched in the same round trip (previews for every listed
-    // room, including any that end up without a counterpart).
-    const mergeableRoomIds = mergeableParticipants.map(p => p.room_id);
-    const previewRoomIds = [...mergeableRoomIds, ...groupHomeParticipants.map(p => p.room_id)];
-    const [{ data: otherParts }, { data: allConvMsgs }, { data: allTopics }, planByRoom] = await Promise.all([
-      mergeableRoomIds.length > 0
-        ? supabaseAdmin
-          .from('ChatParticipant')
-          .select(`
-            room_id,
-            user_id,
-            user:user_id(id, username, name, first_name, middle_name, last_name, profile_picture_url)
-          `)
-          .in('room_id', mergeableRoomIds)
-          .neq('user_id', userId)
-          .eq('is_active', true)
-        : Promise.resolve({ data: [] }),
-      previewRoomIds.length > 0
-        ? supabaseAdmin.rpc('get_room_previews', { p_room_ids: previewRoomIds })
-        : Promise.resolve({ data: [] }),
-      supabaseAdmin
-        .from('ConversationTopic')
-        .select('id, topic_type, topic_ref_id, title, status, last_activity_at, conversation_user_id_1, conversation_user_id_2')
-        .or(`conversation_user_id_1.eq.${userId},conversation_user_id_2.eq.${userId}`)
-        .eq('status', 'active')
-        .order('last_activity_at', { ascending: false }),
-      loadPlanChatStates(groupHomeParticipants.map((p) => p.room)),
+    let before = null;
+    if (req.query.before != null) {
+      try {
+        if (typeof req.query.before !== 'string' || req.query.before.length > 512) throw new Error();
+        before = JSON.parse(Buffer.from(req.query.before, 'base64url').toString('utf8'));
+        if (!before || typeof before.at !== 'string' || !/^\d{4}-\d{2}-\d{2}T/.test(before.at) || !Number.isFinite(Date.parse(before.at))
+          || !/^(conversation|room):[0-9a-f-]{36}$/i.test(before.key || '')) throw new Error();
+      } catch { return res.status(400).json({ error: 'Invalid inbox cursor' }); }
+    }
+    const matchingPeople = query ? await matchingInboxPeople(userId, query) : [];
+    const [result, preferences] = await Promise.all([
+      supabaseAdmin.rpc('get_chat_inbox_page', {
+        p_user_id: userId, p_limit: lim, p_before_at: before?.at || null,
+        p_before_key: before?.key || null, p_since: since || null,
+        ...(query ? { p_query: query, p_matching_people: matchingPeople } : {}),
+      }),
+      supabaseAdmin.from('UserNotificationPreferences').select('chat_muted_user_ids').eq('user_id', userId).maybeSingle(),
     ]);
-    let allOtherParticipants = otherParts || [];
-    // Leftover members of an assigned task's gig room don't stand in for its counterpart.
-    const hiddenMembers = await hiddenGigRoomMembers(mergeableParticipants.map((p) => p.room), allOtherParticipants);
-    allOtherParticipants = allOtherParticipants.filter((op) => !hiddenMembers.has(`${op.room_id}:${op.user_id}`));
-    const identityByUserId = await loadLocalIdentityMapForUsers(
-      allOtherParticipants.map((participant) => participant.user)
-    );
-
-    // Step 3: Group rooms by other_participant_id
-    const conversationMap = new Map();
-
-    for (const p of mergeableParticipants) {
-      const roomId = p.room_id;
-      const otherP = allOtherParticipants.find(op => op.room_id === roomId);
-      if (!otherP || !otherP.user) continue;
-
-      const otherId = otherP.user.id;
-      if (!conversationMap.has(otherId)) {
-        const u = otherP.user;
-        const otherIdentity = identityByUserId.get(String(otherId)) || serializeUserAsLocalIdentity(u);
-        conversationMap.set(otherId, {
-          other_participant_id: otherId,
-          other_participant_name: otherIdentity?.displayName || null,
-          other_participant_username: otherIdentity?.handle || null,
-          other_participant_avatar: otherIdentity?.avatarUrl || null,
-          other_participant_identity: otherIdentity,
-          room_ids: [],
-          total_unread: 0,
-          last_message_at: null,
-          last_message_preview: null,
-          topics: [],
-          _type: 'conversation',
-        });
-      }
-      const conv = conversationMap.get(otherId);
-      conv.room_ids.push(roomId);
-      conv.total_unread += (p.unread_count || 0);
-    }
-
-    // Step 4-5: Messages and topics, batch-fetched in step 2 (3 queries instead of 2N+M sequential)
-    // Index previews by room_id (RPC returns exactly one row per room)
-    const convMsgByRoom = await resolveRoomPreviewMap(allConvMsgs, req.requestId, 'unified_conversations');
-    // Build lookup: other_user_id -> topics
-    const topicsByOther = {};
-    for (const t of allTopics || []) {
-      const otherId = t.conversation_user_id_1 === userId ? t.conversation_user_id_2 : t.conversation_user_id_1;
-      if (!topicsByOther[otherId]) topicsByOther[otherId] = [];
-      topicsByOther[otherId].push(t);
-    }
-
-    const conversations = [];
-    for (const [otherId, conv] of conversationMap) {
-      // Find most recent message across this conversation's rooms
-      let bestMsg = null;
-      for (const rid of conv.room_ids) {
-        const msg = convMsgByRoom[rid];
-        if (msg && (!bestMsg || msg.created_at > bestMsg.created_at)) bestMsg = msg;
-      }
-      if (bestMsg) {
-        conv.last_message_preview = getVisibleMessagePreview(bestMsg);
-        conv.last_message_at = bestMsg.created_at;
-      }
-
-      conv.topics = (topicsByOther[otherId] || []).slice(0, 5);
-      conversations.push(conv);
-    }
-
-    // Step 5: Process group/home rooms using batch-fetched messages
-    for (const p of groupHomeParticipants) {
-      const roomId = p.room_id;
-      const lastMsg = convMsgByRoom[roomId] || null;
-      let lastMessagePreview = null;
-      let lastMessageAt = null;
-      if (lastMsg) {
-        lastMessagePreview = getVisibleMessagePreview(lastMsg);
-        lastMessageAt = lastMsg.created_at;
-      }
-
-      conversations.push({
-        id: roomId,
-        room_type: p.room.type,
-        // A Support Train's room goes by the train's title as it is now (the room was named at publish).
-        room_name: p.room.support_train?.Activity?.title || p.room.name,
-        description: p.room.description,
-        gig_id: p.room.gig_id,
-        home_id: p.room.home_id,
-        support_train_id: p.room.support_train_id || null,
-        total_unread: p.unread_count || 0,
-        last_message_at: lastMessageAt || p.room.updated_at,
-        last_message_preview: lastMessagePreview,
-        topics: [],
-        _type: 'room',
-        ...(p.room.type === 'plan' ? {
-          plan_id: planByRoom.get(String(roomId))?.post_id || null,
-          is_active: roomIsActive(p.room, planByRoom),
-        } : {}),
-      });
-    }
-
-    // Sort by last activity
-    conversations.sort((a, b) => {
-      const ta = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
-      const tb = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
-      return tb - ta;
-    });
-
-    let listed = conversations;
-    if (sinceMs !== null) {
-      const newer = (value) => Boolean(value) && Date.parse(value) > sinceMs;
-      const participantByRoom = new Map(roomList.map((p) => [String(p.room_id), p]));
-      const roomChanged = (roomId) => {
-        const p = participantByRoom.get(String(roomId));
-        return newer(convMsgByRoom[roomId]?.created_at) || newer(p?.last_read_at)
-          || newer(p?.room?.updated_at) || newer(p?.room?.created_at);
+    if (result.error || preferences.error) throw result.error || preferences.error;
+    const page = result.data;
+    if (!page || !Array.isArray(page.entries)) throw new Error('Inbox page unavailable');
+    const peopleIds = page.entries.map((entry) => entry.other_id).filter(Boolean);
+    const visibleRooms = page.entries.map((entry) => entry.room).filter(Boolean);
+    const trainIds = visibleRooms.map((room) => room.support_train_id).filter(Boolean);
+    const [users, planStates, trains] = await Promise.all([
+      peopleIds.length ? supabaseAdmin.from('User')
+        .select('id, username, name, first_name, middle_name, last_name, profile_picture_url').in('id', peopleIds) : { data: [] },
+      loadPlanChatStates(visibleRooms),
+      trainIds.length ? supabaseAdmin.from('SupportTrain').select('id, Activity(title)').in('id', trainIds) : { data: [] },
+    ]);
+    if (users.error || trains.error) throw users.error || trains.error;
+    const identities = await loadLocalIdentityMapForUsers(users.data || []);
+    const trainTitles = new Map((trains.data || []).map((train) => [train.id, train.Activity?.title]));
+    const muted = new Set(preferences.data?.chat_muted_user_ids || []);
+    const conversations = page.entries.map((entry) => {
+      const common = {
+        total_unread: Number(entry.total_unread) || 0,
+        unmuted_unread: Number(entry.unmuted_unread) || 0,
+        notifications_enabled: entry.notifications_enabled && !muted.has(entry.other_id),
+        last_message_at: entry.last_message_at,
+        last_message_preview: getVisibleMessagePreview(entry.last_message),
+        topics: entry.topics || [],
       };
-      listed = conversations.filter((conv) => (conv._type === 'room'
-        ? roomChanged(conv.id)
-        : (conv.room_ids || []).some(roomChanged) || (conv.topics || []).some((t) => newer(t.last_activity_at))));
-    }
-
-    const visibleConversations = listed.slice(0, lim);
-    const visibleRoomIds = [];
-    for (const conv of visibleConversations) {
-      if (conv._type === 'room') {
-        visibleRoomIds.push(String(conv.id));
-      } else {
-        visibleRoomIds.push(...(conv.room_ids || []).map((id) => String(id)));
+      if (entry.other_id) {
+        const identity = identities.get(entry.other_id);
+        return { ...common, other_participant_id: entry.other_id,
+          other_participant_name: identity?.displayName || null,
+          other_participant_username: identity?.handle || null,
+          other_participant_avatar: identity?.avatarUrl || null,
+          other_participant_identity: identity || null,
+          room_ids: entry.room_ids, _type: 'conversation' };
       }
-    }
-    // Per-room message counts removed — the N+1 countMessagesByRoom queries
-    // scaled poorly (one SELECT count(*) per room). The total_message_count
-    // field is omitted; frontends already guard with (conv.total_message_count || 0).
-
-    recordHistogram('chat.unified_conversations.load_latency_ms', Date.now() - ucStartMs);
-    res.json({
-      conversations: visibleConversations,
-      total: conversations.length,
-      totalUnread: conversations.reduce((sum, c) => sum + (c.total_unread || 0), 0),
+      const room = entry.room;
+      return { ...common, id: room.id, room_type: room.type,
+        room_name: trainTitles.get(room.support_train_id) || room.name,
+        description: room.description, gig_id: room.gig_id, home_id: room.home_id,
+        support_train_id: room.support_train_id || null,
+        last_message_at: entry.last_message_at || room.updated_at,
+        _type: 'room',
+        ...(room.type === 'plan' ? { plan_id: planStates.get(room.id)?.post_id || null,
+          is_active: roomIsActive(room, planStates) } : {}),
+      };
     });
+    const last = page.entries.at(-1);
+    const nextCursor = page.hasMore && last
+      ? Buffer.from(JSON.stringify({ at: last.sort_at, key: last.entry_key })).toString('base64url') : null;
+    recordHistogram('chat.unified_conversations.load_latency_ms', Date.now() - ucStartMs);
+    res.set('Cache-Control', 'private, no-store');
+    res.json({ conversations, total: Number(page.total), totalUnread: Number(page.totalUnread),
+      totalUnmutedUnread: Number(page.totalUnmutedUnread),
+      hasMore: page.hasMore, nextCursor });
   } catch (err) {
     logger.error('Unified conversations list error', { requestId: req.requestId, userId: req.user?.id, error: err.message });
     sendChatReadError(res, err, 'Failed to fetch conversations');
@@ -3036,53 +3226,6 @@ router.get('/conversations/:otherUserId/topics', verifyToken, async (req, res) =
 
 // ============ REACTION HELPERS ============
 
-/**
- * Build a reaction summary array for the given message IDs.
- * Returns a Map<messageId, ReactionSummary[]> where each entry is:
- *   { reaction, count, users: [{ id, name, username, identity }], reacted_by_me }
- */
-async function buildReactionSummary(messageIds, requestingUserId) {
-  if (!messageIds || messageIds.length === 0) return new Map();
-
-  const { data: reactions, error } = await supabaseAdmin
-    .from('MessageReaction')
-    .select('message_id, reaction, user_id')
-    .in('message_id', messageIds);
-
-  if (error || !reactions || reactions.length === 0) return new Map();
-
-  // The people who reacted, as the chat list names them
-  const people = await loadChatPeople(reactions.map((r) => r.user_id));
-
-  // Group: messageId -> reaction -> [user_id, ...]
-  const grouped = {};
-  for (const r of reactions) {
-    if (!grouped[r.message_id]) grouped[r.message_id] = {};
-    if (!grouped[r.message_id][r.reaction]) grouped[r.message_id][r.reaction] = [];
-    grouped[r.message_id][r.reaction].push(r.user_id);
-  }
-
-  const result = new Map();
-  for (const [msgId, reactionMap] of Object.entries(grouped)) {
-    const summary = Object.entries(reactionMap).map(([reaction, uids]) => ({
-      reaction,
-      count: uids.length,
-      users: uids.map((uid) => {
-        const identity = people.get(String(uid)) || null;
-        return {
-          id: identity?.id || uid,
-          name: identity?.displayName || 'Unknown',
-          username: identity?.handle || null,
-          identity,
-        };
-      }),
-      reacted_by_me: uids.includes(requestingUserId),
-    }));
-    result.set(msgId, summary);
-  }
-  return result;
-}
-
 // ============ REACTION ENDPOINTS ============
 
 /**
@@ -3127,25 +3270,29 @@ router.post('/messages/:messageId/react', verifyToken, reactionLimiter, validate
       return res.status(403).json({ error: 'This chat has closed.', code: 'ROOM_INACTIVE' });
     }
 
-    const { data: existing } = await supabaseAdmin
+    const { data: existing, error: existingError } = await supabaseAdmin
       .from('MessageReaction')
       .select('id')
       .eq('message_id', messageId)
       .eq('user_id', userId)
       .eq('reaction', reaction)
       .maybeSingle();
+    if (existingError) throw existingError;
 
     // A repeat of the same request (a retry after a lost reply) leaves the asked-for state in place.
     const wanted = typeof reacted === 'boolean' ? reacted : !existing;
     if (existing && !wanted) {
-      await supabaseAdmin
+      const { error } = await supabaseAdmin
         .from('MessageReaction')
         .delete()
         .eq('id', existing.id);
+      if (error) throw error;
     } else if (!existing && wanted) {
-      await supabaseAdmin
+      const { error } = await supabaseAdmin
         .from('MessageReaction')
         .insert({ message_id: messageId, user_id: userId, reaction });
+      // A concurrent repeat may have inserted the requested reaction already.
+      if (error && error.code !== '23505') throw error;
     }
 
     incCounter('chat.reaction.toggled');
@@ -3157,7 +3304,8 @@ router.post('/messages/:messageId/react', verifyToken, reactionLimiter, validate
     // Broadcast via socket
     const io = req.app.get('io');
     if (io) {
-      io.to(message.room_id).emit('message:reaction_updated', { messageId, reactions });
+      const { data: current } = await supabaseAdmin.from('ChatMessage').select('sync_version').eq('id', messageId).maybeSingle();
+      if (current) chatRealtime.announce({ t: 'ChatMessage', r: message.room_id, m: messageId, op: 'UPDATE', v: current.sync_version });
     }
 
     res.json({ reactions });
@@ -3247,6 +3395,7 @@ function chatFileByteRange(header, size) {
 }
 
 router.get('/files/:fileId', tokenFromQuery, verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
   try {
     const userId = req.user.id;
     const { fileId } = req.params;
@@ -3262,9 +3411,8 @@ router.get('/files/:fileId', tokenFromQuery, verifyToken, async (req, res) => {
       .eq('id', fileId)
       .maybeSingle();
 
-    if (fileErr || !file) {
-      return res.status(404).json({ error: 'File not found' });
-    }
+    if (fileErr) return res.status(503).json({ error: 'File access is temporarily unavailable. Please retry.' });
+    if (!file) return res.status(404).json({ error: 'File not found' });
 
     if (file.is_deleted) {
       return res.status(410).json({ error: 'File has been deleted' });
@@ -3278,13 +3426,14 @@ router.get('/files/:fileId', tokenFromQuery, verifyToken, async (req, res) => {
 
     // Verify the requesting user is an active participant in the room, or acts for a business that is (its inbox
     // shows the room's photos; owners and staff aren't members of their business's rooms)
-    const { data: participant } = await supabaseAdmin
+    const { data: participant, error: membershipError } = await supabaseAdmin
       .from('ChatParticipant')
       .select('id')
       .eq('room_id', roomId)
       .eq('user_id', userId)
       .eq('is_active', true)
       .maybeSingle();
+    if (membershipError) return res.status(503).json({ error: 'File access is temporarily unavailable. Please retry.' });
     const actingFor = participant ? null : await actingBusinessInRoom(roomId, userId);
 
     if (!participant && !actingFor) {
@@ -3313,23 +3462,25 @@ router.get('/files/:fileId', tokenFromQuery, verifyToken, async (req, res) => {
       if (req.fresh) return res.status(304).end();
       let object;
       try {
+        if (thumbnail) {
+          const buffer = await require('../services/chatThumbnails').getThumbnail(file);
+          if (res.destroyed) return;
+          trackAccess();
+          return res.type('image/webp').send(buffer);
+        }
         object = await s3Service.getObjectStream(file.file_path);
       } catch (storageErr) {
         if (storageErr?.name === 'NoSuchKey' || storageErr?.$metadata?.httpStatusCode === 404) {
+          res.set('Cache-Control', 'private, no-store');
+          res.removeHeader('ETag');
           return res.status(404).json({ error: 'File not found' });
         }
         throw storageErr;
       }
-      res.type(thumbnail ? 'image/webp' : file.mime_type);
-      if (!thumbnail && Number.isSafeInteger(object.contentLength)) res.set('Content-Length', String(object.contentLength));
+      res.type(file.mime_type);
+      if (Number.isSafeInteger(object.contentLength)) res.set('Content-Length', String(object.contentLength));
       trackAccess();
-      // Inline photos cache this bounded first frame, never the original bytes. Failed decoding must not
-      // fall back to the original; full-screen viewers keep the existing URL without a variant.
-      const streams = thumbnail
-        ? [object.body, sharp({ limitInputPixels: 64 * 1024 * 1024 }).rotate()
-          .resize(512, 512, { fit: 'inside', withoutEnlargement: true }).webp({ quality: 80 }), res]
-        : [object.body, res];
-      return pipeline(...streams).catch((streamErr) => {
+      return pipeline(object.body, res).catch((streamErr) => {
         logger.warn('Chat file stream ended early', { requestId: req.requestId, fileId, error: streamErr.message });
       });
     }
@@ -3368,7 +3519,12 @@ router.get('/files/:fileId', tokenFromQuery, verifyToken, async (req, res) => {
     });
   } catch (err) {
     logger.error('Chat file download error', { requestId: req.requestId, userId: req.user?.id, fileId: req.params.fileId, error: err.message });
-    res.status(500).json({ error: 'Failed to load the file' });
+    if (res.destroyed || res.headersSent) return;
+    res.set('Cache-Control', 'private, no-store');
+    res.removeHeader('ETag');
+    const status = err.status || (err.name === 'AbortError' ? 503 : 500);
+    if (status === 503) res.set('Retry-After', '2');
+    res.status(status).json({ error: status === 503 ? 'File access is temporarily unavailable. Please retry.' : 'Failed to load the file' });
   }
 });
 
