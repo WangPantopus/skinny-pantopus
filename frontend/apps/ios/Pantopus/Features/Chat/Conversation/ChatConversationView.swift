@@ -32,11 +32,8 @@ private final class ChatScrollMetrics {
     /// Rows about to join above the viewport (held-back rows, or an older page
     /// once it is applied): the layout that adds them restores the place.
     var pendingPrepend: ChatPendingPrepend?
-    /// How fast the content's bottom edge moves (points per second, from
-    /// frames that only scrolled), so a fling's own travel is told apart
-    /// from a place restore that did not take.
-    var velocity: CGFloat = 0
-    var sampledAt: CFTimeInterval = 0
+    /// Counts place restores: only the latest one's check may re-apply it.
+    var placeSerial = 0
     var viewportHeight: CGFloat = 0
     /// The reader sent a message while rows were joining above: the joining
     /// stops and the timeline goes to the latest message after it.
@@ -1277,7 +1274,6 @@ extension ChatConversationView {
         proxy: ScrollViewProxy
     ) {
         let previous = (maxY: scrollMetrics.contentMaxY, height: scrollMetrics.contentHeight)
-        noteScrollMotion(frame, previous: previous)
         scrollMetrics.viewportHeight = viewportHeight
         scrollMetrics.distanceFromTop = -frame.minY
         scrollMetrics.contentMaxY = frame.maxY
@@ -1306,17 +1302,6 @@ extension ChatConversationView {
         extendUpward(shown, proxy: proxy)
     }
 
-    /// Frames that only scrolled set the velocity; a pause clears it.
-    private func noteScrollMotion(_ frame: CGRect, previous: (maxY: CGFloat, height: CGFloat)) {
-        let now = CACurrentMediaTime()
-        let elapsed = now - scrollMetrics.sampledAt
-        scrollMetrics.sampledAt = now
-        if elapsed >= 0.25 { scrollMetrics.velocity = 0 }
-        guard abs(frame.height - previous.height) <= 1, elapsed > 0.002, elapsed < 0.25 else { return }
-        let sample = (frame.maxY - previous.maxY) / CGFloat(elapsed)
-        scrollMetrics.velocity = (scrollMetrics.velocity + sample) / 2
-    }
-
     // MARK: - Newest rows first
 
     /// About two screens of rows: the first frame and a first scroll up.
@@ -1327,8 +1312,9 @@ extension ChatConversationView {
     private static let revealChunk = 60
     private static let revealStepRows = 4...24
     private static let revealStepTargetMs: Double = 40
-    /// A join smaller than this is never re-applied by the place check.
-    private static let smallestReappliedJoin: CGFloat = 64
+    /// A join smaller than this is never re-applied by the place check: a
+    /// drag or fling can move that far on its own before the check runs.
+    private static let smallestReappliedJoin: CGFloat = 600
 
     /// The rows this frame renders: every loaded row from the window's floor
     /// on, with the dividers just above its first message.
@@ -1413,7 +1399,7 @@ extension ChatConversationView {
     /// the last one took. Returns the rows that joined.
     private func joinHeldRows(upTo limit: Int) async -> Int {
         var joined = 0
-        var step = Self.revealStepRows.lowerBound * 2
+        var step = Self.revealStepRows.lowerBound
         while joined < limit, !scrollMetrics.pinsBottomAfterJoin,
               scrollMetrics.distanceFromTop < scrollMetrics.viewportHeight * 2,
               let floor = renderFloorId, case let .loaded(rows) = viewModel.state,
@@ -1475,25 +1461,24 @@ extension ChatConversationView {
             if let anchorId = pending.anchorId { proxy.scrollTo(anchorId, anchor: .top) }
             return
         }
-        proxy.scrollTo(Self.bottomAnchorId, anchor: Self.place(change.previousMaxY, viewportHeight: viewportHeight))
-        // Motion from here on is the reader's own: a drag, a fling.
-        scrollMetrics.contentMaxY = change.previousMaxY
-        let velocity = scrollMetrics.velocity
-        let restoredAt = CACurrentMediaTime()
+        let place = Self.place(change.previousMaxY, viewportHeight: viewportHeight)
+        proxy.scrollTo(Self.bottomAnchorId, anchor: place)
+        scrollMetrics.placeSerial += 1
+        let serial = scrollMetrics.placeSerial
         Task {
             try? await Task.sleep(nanoseconds: 60_000_000)
-            let travel = velocity * CGFloat(CACurrentMediaTime() - restoredAt)
             let shift = scrollMetrics.contentMaxY - change.previousMaxY
-            // A fling still decelerating can swallow a restore: the rows then
-            // sit about the added height past the fling's own travel. Only
-            // that is re-applied, never a small join or the reader's motion.
-            let retried = change.grew >= Self.smallestReappliedJoin
-                && abs(shift - travel - change.grew) <= max(24, change.grew / 4)
+            // A fling still decelerating can swallow a restore, leaving the rows
+            // about the added height away. Only that is re-applied, only for the
+            // latest restore (a later pass's frames are not this one's), and
+            // never for a join small enough for the reader's own motion.
+            let latest = serial == scrollMetrics.placeSerial
+            let retried = latest && change.grew >= Self.smallestReappliedJoin && abs(shift - change.grew) <= change.grew / 4
             if retried {
-                proxy.scrollTo(Self.bottomAnchorId, anchor: Self.place(change.previousMaxY + travel, viewportHeight: viewportHeight))
+                proxy.scrollTo(Self.bottomAnchorId, anchor: place)
             }
             ChatPerformance.signposter.emitEvent(
-                "PrependPlace", "grew=\(Int(change.grew)) shift=\(Int(shift)) travel=\(Int(travel)) retried=\(retried)"
+                "PrependPlace", "grew=\(Int(change.grew)) shift=\(Int(shift)) retried=\(retried) latest=\(latest)"
             )
         }
     }
