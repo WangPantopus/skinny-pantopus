@@ -5,7 +5,8 @@
 //  Live updates for the screen store (Instant Screens contract section 8).
 //  `sync:changed` marks the copies its topics name out of date,
 //  `notification:new` marks the notification list, and a socket that comes
-//  back after a drop marks every Household, Messages and Notifications copy
+//  back after a drop, or connects only after failed attempts (an app opened
+//  offline), marks every Household, Messages and Notifications copy
 //  (signals may have been missed meanwhile). A connection request or
 //  acceptance, from the socket or a push, also marks Connections: the server
 //  sends no topic for relationships. A screen on screen then re-reads
@@ -80,8 +81,9 @@ enum ScreenStoreLive {
             for await state in socket.connectionStates() {
                 switch state {
                 case .connected:
-                    if dropped {
-                        // Back after a drop: what may have changed meanwhile re-checks.
+                    if dropped || socket.connectedAfterRetry {
+                        // Back after a drop, or connected only after failed attempts
+                        // (opened offline): what may have changed meanwhile re-checks.
                         let kinds: Set<ScreenDataKind> = [.homes, .place, .messagesList, .notifications, .mailbox]
                         store.markStale(kinds: kinds)
                         NotificationCenter.default.post(

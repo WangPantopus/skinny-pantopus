@@ -1501,7 +1501,7 @@ public final class ChatConversationViewModel {
     }
 
     private func applyOutboxSnapshot() {
-        let before = (pendingByClientId, failedClientIds, refusedClientIds, outboxIds)
+        let before = (pendingByClientId, failedClientIds, refusedClientIds)
         let held = ChatOutbox.shared.messages.filter { message in
             guard message.businessUserId == asBusinessUserId else { return false }
             switch mode {
@@ -1544,17 +1544,25 @@ public final class ChatConversationViewModel {
                 replyRoomId: message.replyRoomId,
                 sendRoomId: message.roomId
             )
-            if message.status == .queued { failedClientIds.remove(message.id) } else { failedClientIds.insert(message.id) }
+            // A transient failure (offline, timeout) is retried on its own, at
+            // once when the socket reconnects: it reads as sending, so nobody
+            // types it again. Only a final failure offers Retry.
+            if message.status == .queued || message.status == .retrying {
+                failedClientIds.remove(message.id)
+            } else {
+                failedClientIds.insert(message.id)
+            }
             if message.status == .refused { refusedClientIds.insert(message.id) } else { refusedClientIds.remove(message.id) }
         }
         let failure = ChatOutbox.shared.restoreFailure ?? held.last { $0.status != .queued }?.failure
         if let failure { sendLimitNotice = failure } else if sendLimitNotice == outboxNotice { sendLimitNotice = nil }
         outboxNotice = failure
         // Most outbox events (saved progress, another thread's send, the
-        // first snapshot of an empty queue) change no row here. Re-rendering
-        // the timeline for them delayed the send itself and, before history
-        // arrived, flashed the empty "start of your conversation" state.
-        guard (pendingByClientId, failedClientIds, refusedClientIds, outboxIds) != before else { return }
+        // first snapshot of an empty queue, a send entering the queue as it
+        // is shown) change no row here. Re-rendering the timeline for them
+        // delayed the send itself and, before history arrived, flashed the
+        // empty "start of your conversation" state.
+        guard (pendingByClientId, failedClientIds, refusedClientIds) != before else { return }
         rebuild()
     }
 

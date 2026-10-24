@@ -60,8 +60,15 @@ final class SocketClient {
     /// replacement token must not start an unbounded refresh/reconnect loop.
     private var attemptedAuthRecovery = false
     private var connectionGeneration = 0
-    /// True while Socket.IO retries after an unexpected drop (its backoff).
-    private var isRetryingAfterDrop = false
+    /// True while Socket.IO retries (its backoff): after an unexpected drop,
+    /// or after a first connection attempt failed (the app opened offline).
+    private var isRetrying = false
+    /// Set by any retry and cleared by the connection that ends it (or sign-out).
+    private var retriedSinceConnected = false
+    /// The current connection came only after failed attempts, so realtime
+    /// signals may have been missed before it: `ScreenStoreLive` re-checks
+    /// the screens, as it does after a drop.
+    private(set) var connectedAfterRetry = false
     /// Set once the server said the device / session is revoked: reconnecting
     /// with any token from this session is pointless, so we stop until the
     /// HTTP path confirms (401 `SESSION_REVOKED`) and a fresh sign-in
@@ -147,9 +154,17 @@ final class SocketClient {
         socket.on(clientEvent: .reconnect) { [weak self] _, _ in
             Task { @MainActor in
                 guard let self, self.connectionGeneration == generation else { return }
-                self.isRetryingAfterDrop = true
+                self.noteRetry()
                 self.setConnectionState(.connecting)
                 self.logger.info("Socket reconnecting")
+            }
+        }
+        // A first connection that fails is retried without `reconnect`, which
+        // Socket.IO reports only for a socket that was connected.
+        socket.on(clientEvent: .reconnectAttempt) { [weak self] _, _ in
+            Task { @MainActor in
+                guard let self, self.connectionGeneration == generation else { return }
+                self.noteRetry()
             }
         }
         socket.on(clientEvent: .error) { [weak self] data, _ in
@@ -179,6 +194,7 @@ final class SocketClient {
         authRecoveryTask?.cancel()
         authRecoveryTask = nil
         attemptedAuthRecovery = false
+        retriedSinceConnected = false
         disconnectTransport()
     }
 
@@ -186,14 +202,19 @@ final class SocketClient {
     /// comes back, instead of waiting out the rest of Socket.IO's backoff
     /// (up to `reconnectWaitMax` between attempts).
     func reconnectNowIfWaiting() {
-        guard isRetryingAfterDrop, !stoppedForRevocation, let token = authToken else { return }
+        guard isRetrying, !stoppedForRevocation, let token = authToken else { return }
         disconnectTransport()
         connect(token: token)
     }
 
+    private func noteRetry() {
+        isRetrying = true
+        retriedSinceConnected = true
+    }
+
     private func disconnectTransport() {
         connectionGeneration += 1
-        isRetryingAfterDrop = false
+        isRetrying = false
         socket?.removeAllHandlers()
         attachedHandlers.removeAll()
         socket?.disconnect()
@@ -206,7 +227,9 @@ final class SocketClient {
     // MARK: - Auth-error recovery
 
     func handleSocketConnected() {
-        isRetryingAfterDrop = false
+        connectedAfterRetry = retriedSinceConnected
+        retriedSinceConnected = false
+        isRetrying = false
         attemptedAuthRecovery = false
         setConnectionState(.connected)
         logger.info("Socket connected")
