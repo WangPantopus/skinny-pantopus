@@ -4,6 +4,9 @@
 //
 //  Public places near the host, with search and a map (board H6).
 //  Pickup games also offer the public place the host is at (board H4).
+//  The list comes ordered for the plan (its kind, a pickup game's sport),
+//  each place saying whether it's open for the plan's time; "Suggest
+//  places" (PlanPlaceSuggestions) has Pantopus pick from it.
 //
 
 import MapKit
@@ -14,6 +17,11 @@ struct PlanPlacePicker: View {
     /// "You're here now" above the places (pickup games in the host flow, as on Android).
     var offersHereNow = false
     let onClose: () -> Void
+
+    /// How long the picker keeps asking while the server gathers a new area's places.
+    static let gatherLimit: TimeInterval = 150
+    static let slowLine = "Places near you are taking longer than usual to load. Try again in a minute."
+    static let unavailableLine = "Places near you aren't loading right now. Try again in a minute."
 
     /// What "You're here now" says while it looks, or after it found nothing.
     private enum HereNow {
@@ -29,8 +37,11 @@ struct PlanPlacePicker: View {
     @State private var hereNow = HereNow.idle
     @State private var center: UserCoordinate?
     @State private var loading = true
+    /// The server is still gathering this area's places (a first look can take up to a minute).
+    @State private var gathering = false
     @State private var loadError: String?
     @State private var searchLoading = false
+    @State private var searchGathering = false
     @State private var searchError: String?
     @State private var nearbyRetry = 0
     @State private var searchRetry = 0
@@ -57,6 +68,7 @@ struct PlanPlacePicker: View {
                 VStack(alignment: .leading, spacing: Spacing.s4) {
                     searchField
                     if chosen != nil || center != nil { miniMap }
+                    suggestions
                     list
                     if let attribution {
                         Text("Places \(attribution)")
@@ -83,10 +95,18 @@ struct PlanPlacePicker: View {
         .accessibilityIdentifier("planPlacePicker")
     }
 
+    private var searchText: String {
+        query.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var isSearching: Bool {
+        searchText.count >= 2
+    }
+
     private var searchField: some View {
         HStack(spacing: 10) {
             Icon(.search, size: 18, color: Theme.Color.appTextMuted)
-            TextField("Search parks, courts, cafés", text: $query)
+            TextField(model.kind == .studyGroup ? "Search libraries, cafés" : "Search parks, courts, cafés", text: $query)
                 .planFont(.body)
                 .submitLabel(.search)
                 .accessibilityLabel("Search places")
@@ -121,8 +141,21 @@ struct PlanPlacePicker: View {
         .accessibilityLabel(chosen.map { "Map showing \($0.name)" } ?? "Map near you")
     }
 
+    /// "Suggest places" once the list is in; from the search box, "Ask Pantopus" once the search is
+    /// in and the words name no place ("big screens and food", as on Android).
+    @ViewBuilder private var suggestions: some View {
+        if isSearching {
+            let namesAPlace = results.contains { $0.name.localizedCaseInsensitiveContains(searchText) }
+            if !searchLoading, searchError == nil, !namesAPlace {
+                PlanPlaceSuggestions(model: model, center: center, ask: String(searchText.prefix(120)), chosenId: chosen?.id) { choose($0) }
+                    .id(searchText)
+            }
+        } else if !loading, loadError == nil, !nearby.isEmpty {
+            PlanPlaceSuggestions(model: model, center: center, ask: nil, chosenId: chosen?.id) { choose($0) }
+        }
+    }
+
     @ViewBuilder private var list: some View {
-        let isSearching = query.trimmingCharacters(in: .whitespacesAndNewlines).count >= 2
         let shown = PlanPlaceFit.ordered(isSearching ? results : nearby, for: model.kind)
         let isLoading = isSearching ? searchLoading : loading
         let error = isSearching ? searchError : loadError
@@ -131,6 +164,14 @@ struct PlanPlacePicker: View {
             if offersHereNow { hereNowRow }
             if isLoading, shown.isEmpty {
                 ForEach(0..<3, id: \.self) { _ in Shimmer(width: nil, height: 52, cornerRadius: Radii.lg).padding(.vertical, 6) }
+                if isSearching ? searchGathering : gathering {
+                    Text("Gathering the public places near you. The first look at an area can take up to a minute.")
+                        .planFont(.footnote)
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, Spacing.s1)
+                        .accessibilityIdentifier("planPlaceGathering")
+                }
             } else if let error {
                 VStack(alignment: .leading, spacing: Spacing.s2) {
                     Text(error)
@@ -145,91 +186,44 @@ struct PlanPlacePicker: View {
                 }
                 .padding(.vertical, Spacing.s3)
             } else if shown.isEmpty {
-                Text(isSearching ? "No places match \u{201C}\(query)\u{201D}." : "No public places found nearby. Search for one.")
+                Text(isSearching
+                    ? "No public places match \u{201C}\(query)\u{201D} within 3 miles."
+                    : "No public places are on the map within 3 miles of you yet.")
                     .planFont(.small)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .padding(.vertical, Spacing.s3)
             }
             ForEach(Array(shown.enumerated()), id: \.element.id) { index, place in
-                row(place, divider: index > 0 || offersHereNow)
+                PlanPlaceRow(
+                    place: place,
+                    kind: model.kind,
+                    isOn: chosen?.id == place.id,
+                    divider: index > 0 || offersHereNow,
+                    center: center
+                ) { choose(place) }
             }
-            if model.kind == .playdate {
-                VStack(spacing: 0) {
-                    Divider().overlay(Theme.Color.appBorder)
-                    HStack(spacing: Spacing.s3) {
-                        RoundedRectangle(cornerRadius: 13, style: .continuous)
-                            .fill(Theme.Color.appSurfaceSunken)
-                            .frame(width: 44, height: 44)
-                            .overlay(Icon(.home, size: 22, color: Theme.Color.appTextStrong))
-                        VStack(alignment: .leading, spacing: 0) {
-                            Text("My place").planFont(.rowTitle).foregroundStyle(Theme.Color.appText)
-                            Text("Not for playdates: they meet in public places").planFont(.footnote)
-                                .foregroundStyle(Theme.Color.appTextSecondary)
-                        }
-                    }
-                    .padding(.vertical, 11)
-                    .opacity(0.5)
-                    .accessibilityElement(children: .combine)
+            if model.kind == .playdate { playdateHomeRow }
+        }
+    }
+
+    private var playdateHomeRow: some View {
+        VStack(spacing: 0) {
+            Divider().overlay(Theme.Color.appBorder)
+            HStack(spacing: Spacing.s3) {
+                RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    .fill(Theme.Color.appSurfaceSunken)
+                    .frame(width: 44, height: 44)
+                    .overlay(Icon(.home, size: 22, color: Theme.Color.appTextStrong))
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("My place").planFont(.rowTitle).foregroundStyle(Theme.Color.appText)
+                    Text("Not for playdates: they meet in public places").planFont(.footnote)
+                        .foregroundStyle(Theme.Color.appTextSecondary)
                 }
             }
+            .padding(.vertical, 11)
+            .opacity(0.5)
+            .accessibilityElement(children: .combine)
         }
-    }
-
-    private func row(_ place: PlanPlaceOptionDTO, divider: Bool) -> some View {
-        let isOn = chosen?.id == place.id
-        return Button { choose(place) } label: {
-            VStack(spacing: 0) {
-                if divider { Divider().overlay(Theme.Color.appBorder) }
-                HStack(spacing: Spacing.s3) {
-                    RoundedRectangle(cornerRadius: 13, style: .continuous)
-                        .fill(isOn ? model.kind.tint : Theme.Color.appSurfaceSunken)
-                        .frame(width: 44, height: 44)
-                        .overlay(Icon(icon(for: place), size: 22, color: isOn ? model.kind.color : Theme.Color.appTextStrong))
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text(place.name).planFont(.rowTitle).foregroundStyle(Theme.Color.appText).lineLimit(1)
-                        Text(subtitle(place)).planFont(.footnote).foregroundStyle(Theme.Color.appTextSecondary).lineLimit(1)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    if isOn { Icon(.check, size: 22, strokeWidth: 2.6, color: Theme.Color.primary600) }
-                }
-                .padding(.vertical, 11)
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
-    }
-
-    private func icon(for place: PlanPlaceOptionDTO) -> PantopusIcon {
-        let category = (place.category ?? "").lowercased()
-        if category.contains("park") || category.contains("playground") { return .trees }
-        if category.contains("library") { return .landmark }
-        if category.contains("café") || category.contains("cafe") || category.contains("coffee") { return .coffee }
-        if category.contains("restaurant") || category.contains("bar") { return .utensils }
-        return .mapPin
-    }
-
-    /// "Park · playground · 0.4 mi" (the host's own distance to a public place).
-    private func subtitle(_ place: PlanPlaceOptionDTO) -> String {
-        var parts: [String] = []
-        if let category = place.category, !category.isEmpty {
-            // "Park · playground": only the first word capitalized (board H6).
-            let words = category.split(separator: ",").prefix(2).map { $0.trimmingCharacters(in: .whitespaces) }.joined(separator: " · ")
-            parts.append(words.prefix(1).uppercased() + words.dropFirst())
-        }
-        if let meters = distance(to: place) {
-            parts.append(PlanFormat.placeDistance(meters))
-        }
-        if parts.isEmpty, let address = place.address { parts.append(address) }
-        return parts.joined(separator: " · ")
-    }
-
-    private func distance(to place: PlanPlaceOptionDTO) -> Double? {
-        if let meters = place.distanceMeters { return meters }
-        guard let center else { return nil }
-        return CLLocation(latitude: center.latitude, longitude: center.longitude)
-            .distance(from: CLLocation(latitude: place.latitude, longitude: place.longitude))
     }
 
     private var footer: some View {
@@ -261,8 +255,19 @@ private extension PlanPlacePicker {
         ))
     }
 
+    /// The plan the list is for: places that suit it first, each saying whether it's open then.
+    private var planQuery: PlanPlaceQuery {
+        PlanPlaceQuery(
+            kind: model.kind,
+            sport: model.kind == .pickupGame ? model.sport : nil,
+            startsAt: model.effectiveStart,
+            endsAt: model.end
+        )
+    }
+
     private func loadNearby() async {
         loading = true
+        gathering = false
         loadError = nil
         if nearbyRetry == 0 {
             chosen = model.place
@@ -283,16 +288,15 @@ private extension PlanPlacePicker {
                 longitudinalMeters: 1600
             ))
         }
-        // The first ask for an area can answer 202 "loading" while the server
-        // gathers its places: ask again a few times, 3 seconds apart.
-        for attempt in 0..<6 {
-            if attempt > 0 {
-                try? await Task.sleep(for: .seconds(3))
-                if Task.isCancelled { return }
-            }
+        let endpoint = PlansEndpoints.nearbyPlaces(latitude: center.latitude, longitude: center.longitude, for: planQuery)
+        // An area the server hasn't looked at yet answers 202 "loading" while it gathers the places
+        // (up to a minute when the map servers are busy): keep asking, 3 seconds apart.
+        let started = Date()
+        var attempt = 0
+        while true {
             do {
                 let reply = try await ScreenStore.shared.load(
-                    PlansEndpoints.nearbyPlaces(latitude: center.latitude, longitude: center.longitude),
+                    endpoint,
                     as: PlanPlacesResponse.self,
                     kind: .publicPlace,
                     force: nearbyRetry > 0 || attempt > 0
@@ -302,17 +306,25 @@ private extension PlanPlacePicker {
                 attribution = reply.value.attribution ?? attribution
                 if !reply.value.loading {
                     loading = false
+                    gathering = false
                     return
                 }
+                gathering = true
             } catch {
                 guard !Task.isCancelled else { return }
-                loadError = "Couldn't load nearby places. Check your connection and try again."
+                loadError = Self.failure(error)
                 loading = false
+                gathering = false
                 return
             }
+            attempt += 1
+            if Date().timeIntervalSince(started) > Self.gatherLimit { break }
+            try? await Task.sleep(for: .seconds(3))
+            if Task.isCancelled { return }
         }
-        loadError = "Nearby places are still loading. Try again in a moment."
+        loadError = Self.slowLine
         loading = false
+        gathering = false
     }
 
     private func locationCenter() async -> UserCoordinate? {
@@ -327,10 +339,11 @@ private extension PlanPlacePicker {
     }
 
     private func search() async {
-        let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = searchText
         results = []
         searchError = nil
         searchLoading = false
+        searchGathering = false
         guard text.count >= 2 else {
             return
         }
@@ -343,19 +356,37 @@ private extension PlanPlacePicker {
             return
         }
         // Public places only, by name: never a street address someone lives at.
-        do {
-            let reply: PlanPlacesResponse = try await APIClient.shared.request(
-                PlansEndpoints.nearbyPlaces(latitude: center.latitude, longitude: center.longitude, query: text)
-            )
+        let endpoint = PlansEndpoints.nearbyPlaces(latitude: center.latitude, longitude: center.longitude, query: text, for: planQuery)
+        let started = Date()
+        while true {
+            do {
+                let reply: PlanPlacesResponse = try await APIClient.shared.request(endpoint)
+                guard !Task.isCancelled else { return }
+                results = reply.places
+                attribution = reply.attribution ?? attribution
+                if !reply.loading { break }
+                searchGathering = true
+            } catch {
+                guard !Task.isCancelled else { return }
+                searchError = Self.failure(error)
+                break
+            }
+            if Date().timeIntervalSince(started) > Self.gatherLimit {
+                searchError = Self.slowLine
+                break
+            }
+            try? await Task.sleep(for: .seconds(3))
             guard !Task.isCancelled else { return }
-            results = reply.places
-            attribution = reply.attribution ?? attribution
-            if reply.loading { searchError = "Places are still loading. Try again in a moment." }
-        } catch {
-            guard !Task.isCancelled else { return }
-            searchError = "Couldn't search places. Check your connection and try again."
         }
         searchLoading = false
+        searchGathering = false
+    }
+
+    /// Offline, or the server's "unavailable" (its map servers failed just now), or anything else.
+    static func failure(_ error: any Error) -> String {
+        if !NetworkMonitor.shared.isOnline { return "You're offline. Places load when you're back online." }
+        if case .server = error as? APIError { return unavailableLine }
+        return "Couldn't load places. Check your connection and try again."
     }
 }
 
@@ -411,7 +442,7 @@ private extension PlanPlacePicker {
         var around: [PlanPlaceOptionDTO] = []
         var finished = false
         // A first ask for an area can answer "loading" while the server gathers its places (as in loadNearby).
-        for attempt in 0..<4 {
+        for attempt in 0..<8 {
             if attempt > 0 {
                 try? await Task.sleep(for: .seconds(3))
                 if Task.isCancelled { return }
@@ -443,58 +474,5 @@ private extension PlanPlacePicker {
         }
         hereNow = .idle
         choose(spot, hereNow: true)
-    }
-}
-
-/// Suitable categories first, preserving distance order within each; never a bar for a playdate.
-enum PlanPlaceFit {
-    static func ordered(_ places: [PlanPlaceOptionDTO], for kind: PlanKind) -> [PlanPlaceOptionDTO] {
-        let preferred = preferredCategories(kind)
-        let allowed = places.filter { kind != .playdate || ($0.category ?? "").lowercased() != "bar" }
-        return allowed.enumerated()
-            .sorted { first, second in
-                let one = rank(first.element, preferred)
-                let two = rank(second.element, preferred)
-                return one == two ? first.offset < second.offset : one < two
-            }
-            .map(\.element)
-    }
-
-    private static func rank(_ place: PlanPlaceOptionDTO, _ preferred: [String]) -> Int {
-        preferred.firstIndex(of: (place.category ?? "").lowercased()) ?? preferred.count
-    }
-
-    private static func preferredCategories(_ kind: PlanKind) -> [String] {
-        switch kind {
-        case .watchParty: ["bar", "restaurant", "cafe", "community_center"]
-        case .playdate: ["playground", "park", "library", "community_center"]
-        case .pickupGame: ["court", "park", "playground", "community_center"]
-        case .walkCoffee: ["trail", "park", "cafe"]
-        case .studyGroup: ["library", "cafe", "community_center"]
-        }
-    }
-}
-
-/// The nearest named public place within a block, excluding the host's homes.
-/// Matches `HOME_GUARD_METERS` in backend/services/plans/planRules.js.
-enum PlanHereNow {
-    static let reachMeters: CLLocationDistance = 150
-    static let homeGuardMeters: CLLocationDistance = 50
-
-    static func spot(
-        in places: [PlanPlaceOptionDTO],
-        around fix: UserCoordinate,
-        homes: [(latitude: Double, longitude: Double)]
-    ) -> PlanPlaceOptionDTO? {
-        let here = CLLocation(latitude: fix.latitude, longitude: fix.longitude)
-        let homeSpots = homes.map { CLLocation(latitude: $0.latitude, longitude: $0.longitude) }
-        func meters(_ place: PlanPlaceOptionDTO) -> CLLocationDistance {
-            place.distanceMeters ?? here.distance(from: CLLocation(latitude: place.latitude, longitude: place.longitude))
-        }
-        func atHome(_ place: PlanPlaceOptionDTO) -> Bool {
-            let spot = CLLocation(latitude: place.latitude, longitude: place.longitude)
-            return homeSpots.contains { $0.distance(from: spot) <= homeGuardMeters }
-        }
-        return places.filter { meters($0) <= reachMeters && !atHome($0) }.min { meters($0) < meters($1) }
     }
 }

@@ -83,7 +83,11 @@ struct PlanComposerRoot: View {
                 }
             }
         }
-        .task { await model.load() }
+        .task {
+            await model.load()
+            // The places around the host start loading now, so H6 usually opens on a full list.
+            await PlanPlacesWarmup.start(home: model.home)
+        }
     }
 
     /// H7 opens without the last attempt's refusal (as on Android): the host may have fixed it.

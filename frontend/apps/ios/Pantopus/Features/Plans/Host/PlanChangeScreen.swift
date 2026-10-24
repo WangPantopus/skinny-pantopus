@@ -66,6 +66,12 @@ struct PlanChangeScreen: View {
             Button {
                 let draft = PlanComposerModel(start: PlansHostStart(kind: card.kind))
                 draft.place = newPlace
+                // H6 reads each place's hours for the plan's time and orders by fit, as when hosting.
+                draft.title = card.title
+                draft.startsNow = false
+                draft.start = start
+                draft.end = end
+                if let sport = card.details?.sport { draft.sport = sport }
                 placeDraft = draft
             } label: {
                 PlanFormCard {
