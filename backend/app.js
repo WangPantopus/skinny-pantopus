@@ -172,6 +172,11 @@ const io = socketIo(server, {
   // redirects /socket.io/ to /socket.io, which used to 404 here, so the web's
   // realtime never connected off localhost. The apps keep the default path.
   addTrailingSlash: false,
+  // A connection that dies silently (a phone changing networks, a NAT dropping it) is noticed by
+  // both ends after pingInterval + pingTimeout. The defaults (25 s + 20 s) left a client up to about
+  // 45 s without live messages; a ping is a few bytes and runs only while a socket is open.
+  pingInterval: 10_000,
+  pingTimeout: 10_000,
   cors: {
     origin: (origin, callback) => {
       if (isAllowedOrigin(origin)) return callback(null, true);
