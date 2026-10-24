@@ -13,6 +13,7 @@
 
 import Foundation
 import Observation
+import os
 
 /// One link's preview text. A card is only rendered when a title or a
 /// description resolved.
@@ -138,17 +139,38 @@ final class LinkPreviewStore {
 /// the projection layer on purpose (A15.2).
 enum ChatLinkDetection {
     private static let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
+    /// A bubble asks up to three times per render and renders often, and
+    /// running the detector is its costliest step. Recent texts keep their
+    /// matches as UTF-16 ranges, rebuilt for the string that asks.
+    private static let recentMatches = OSAllocatedUnfairLock(initialState: [String: [LinkMatch]]())
+    private static let recentLimit = 512
+
+    private struct LinkMatch {
+        let range: NSRange
+        let url: URL
+    }
 
     /// All http(s) link matches in `text`, in order.
     static func linkMatches(in text: String) -> [(range: Range<String.Index>, url: URL)] {
         guard let detector, !text.isEmpty else { return [] }
-        let nsRange = NSRange(text.startIndex..., in: text)
-        return detector.matches(in: text, range: nsRange).compactMap { match in
-            guard let url = match.url,
-                  let scheme = url.scheme?.lowercased(),
-                  scheme == "http" || scheme == "https",
-                  let range = Range(match.range, in: text) else { return nil }
-            return (range, url)
+        let found: [LinkMatch]
+        if let cached = recentMatches.withLock({ $0[text] }) {
+            found = cached
+        } else {
+            let nsRange = NSRange(text.startIndex..., in: text)
+            found = detector.matches(in: text, range: nsRange).compactMap { match in
+                guard let url = match.url,
+                      let scheme = url.scheme?.lowercased(),
+                      scheme == "http" || scheme == "https" else { return nil }
+                return LinkMatch(range: match.range, url: url)
+            }
+            recentMatches.withLock { recent in
+                if recent.count >= recentLimit { recent.removeAll(keepingCapacity: true) }
+                recent[text] = found
+            }
+        }
+        return found.compactMap { match in
+            Range(match.range, in: text).map { ($0, match.url) }
         }
     }
 

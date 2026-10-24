@@ -25,6 +25,31 @@ private final class ChatScrollMetrics {
     /// How far the user has scrolled below the top of the loaded
     /// history, in points. Drives the near-top pagination trigger.
     var distanceFromTop: CGFloat = .greatestFiniteMagnitude
+    /// Where the content's bottom edge sits below the viewport's top, and how
+    /// tall the content is, as of the last layout.
+    var contentMaxY: CGFloat = 0
+    var contentHeight: CGFloat = 0
+    /// Rows about to join above the viewport (held-back rows, or an older page
+    /// once it is applied): the layout that adds them restores the place.
+    var pendingPrepend: ChatPendingPrepend?
+    /// Counts place restores: only the latest one's check may re-apply it.
+    var placeSerial = 0
+    var viewportHeight: CGFloat = 0
+    /// The reader sent a message while rows were joining above: the joining
+    /// stops and the timeline goes to the latest message after it.
+    var pinsBottomAfterJoin = false
+}
+
+/// What the timeline needs to keep the reader's place when rows join above.
+private struct ChatPendingPrepend {
+    /// The last rendered row: unchanged means the content below the viewport
+    /// is too, so its bottom edge marks the place exactly.
+    let lastRowId: String?
+    /// The old top bubble, re-pinned to the top edge when the rows below
+    /// changed as well.
+    let anchorId: String?
+    /// An older page counts once the view model has applied it.
+    let olderPagesApplied: Int?
 }
 
 /// A photo message's photos for the full-screen viewer, opened at the
@@ -78,10 +103,22 @@ public struct ChatConversationView: View {
     /// message. Gates stay-pinned-on-new-rows scrolling. Only flips on
     /// actual boundary crossings, so it stays a cheap @State.
     @State private var isAtBottom = false
+    @State private var visibleReadMessageIds: Set<String> = []
     /// The thread opened at its latest message once; coming back (a pushed
     /// profile, a tab switch) keeps the reading position (Instant Screens).
     @State private var hasLandedAtLatest = false
+    /// Newest rows first: a thread opens (and returns to its latest message)
+    /// rendering only its newest rows; the older loaded rows join when the
+    /// reader scrolls up to them or a scroll target needs them. Rendering
+    /// every loaded row made each open, send and incoming message pay a
+    /// SwiftUI pass over the whole non-lazy stack. `nil` renders all rows.
+    @State private var renderFloorId: String?
+    /// The opening window is chosen once, from the first rows shown.
+    @State private var openingWindowDecided = false
+    /// Debug builds note missed frames while the thread is on screen.
+    @State private var frameGapMonitor = ChatFrameGapMonitor()
     @Environment(\.openURL) private var openURL
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// A Nearby Plan's chat (board A4): the plan above the messages.
     @Environment(\.chatPlanContext) private var planContext
@@ -191,6 +228,21 @@ public struct ChatConversationView: View {
                     Task { await viewModel.selectTopic(topicId) }
                 }
             }
+            if viewModel.isViewingSearchContext || viewModel.isViewingEarlierHistory {
+                HStack {
+                    Text(viewModel.isViewingSearchContext ? "Showing a search match" : "Showing earlier messages")
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                    Spacer()
+                    Button("Return to latest") {
+                        hasLandedAtLatest = false
+                        Task { await viewModel.returnToLatest() }
+                    }
+                }
+                .font(.footnote)
+                .padding(.horizontal, Spacing.s4)
+                .frame(minHeight: 44)
+                .accessibilityIdentifier("chatReturnToLatest")
+            }
             content
             if viewModel.isCounterpartyTyping {
                 ChatTypingIndicator(initials: incomingInitials ?? initials(of: viewModel.counterparty.displayName))
@@ -220,23 +272,22 @@ public struct ChatConversationView: View {
                         .foregroundStyle(Theme.Color.appTextSecondary)
                         .accessibilityIdentifier("chatBusinessReplyIdentity")
                 }
-                ChatComposer(
-                    text: Binding(
-                        get: { viewModel.composerText },
-                        set: { viewModel.composerText = $0 }
-                    ),
-                    placeholder: composerPlaceholder,
-                    canSend: viewModel.canSend && !isCreatorQuotaLocked,
-                    // The "−1" send-cost badge is a claim about the fan's
-                    // quota — only shown once the allowance is known.
-                    showsSendCost: mode == .fanThread && viewModel.fanEntitlement != nil && !isFanReplyLocked,
-                    isLockedAction: isFanReplyLocked || isCreatorQuotaLocked,
-                    isStreaming: viewModel.isAIStreaming,
-                    onAttach: { attachmentsPresented = true },
-                    onEmoji: { emojiPickerPresented = true },
-                    onSend: { sendOrPromptForUpgrade() },
-                    onStop: { viewModel.cancelAIStream() }
-                )
+                ChatComposerReader(viewModel: viewModel) { text, canSend in
+                    ChatComposer(
+                        text: text,
+                        placeholder: composerPlaceholder,
+                        canSend: canSend && !isCreatorQuotaLocked,
+                        // The "−1" send-cost badge is a claim about the fan's
+                        // quota — only shown once the allowance is known.
+                        showsSendCost: mode == .fanThread && viewModel.fanEntitlement != nil && !isFanReplyLocked,
+                        isLockedAction: isFanReplyLocked || isCreatorQuotaLocked,
+                        isStreaming: viewModel.isAIStreaming,
+                        onAttach: { attachmentsPresented = true },
+                        onEmoji: { emojiPickerPresented = true },
+                        onSend: { sendOrPromptForUpgrade() },
+                        onStop: { viewModel.cancelAIStream() }
+                    )
+                }
                 if isCreatorQuotaLocked {
                     CreatorQuotaLockRow(
                         tierName: resolvedCreatorContext.fanTierName,
@@ -262,7 +313,18 @@ public struct ChatConversationView: View {
         .onChange(of: hasLoadedContent, initial: true) { _, loaded in
             if loaded { onContentLoaded() }
         }
-        .onDisappear { viewModel.teardown() }
+        .onAppear { frameGapMonitor.start() }
+        .onDisappear {
+            frameGapMonitor.stop()
+            viewModel.teardown()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            viewModel.setVisibleReadBoundaries(phase == .active ? visibleReadMessageIds : [])
+            if phase == .active {
+                ChatPerformance.signposter.emitEvent("Foreground")
+                Task { await viewModel.refresh() }
+            }
+        }
         // RN attach-grid parity: Camera / Photos / Document / Location /
         // Task / Marketplace. Camera hides itself where no capture device
         // exists (simulator).
@@ -374,7 +436,7 @@ public struct ChatConversationView: View {
             Text("Deleted messages are removed for everyone in this conversation.")
         }
         .alert(
-            "Delete message?",
+            pendingDeleteId?.hasPrefix("client_") == true ? "Discard unsent message?" : "Delete message?",
             isPresented: Binding(
                 get: { pendingDeleteId != nil },
                 set: { if !$0 { pendingDeleteId = nil } }
@@ -382,11 +444,13 @@ public struct ChatConversationView: View {
             presenting: pendingDeleteId
         ) { messageId in
             Button("Cancel", role: .cancel) {}
-            Button("Delete", role: .destructive) {
+            Button(messageId.hasPrefix("client_") ? "Discard" : "Delete", role: .destructive) {
                 Task { await viewModel.delete(messageId: messageId) }
             }
-        } message: { _ in
-            Text("Deleted messages are removed for everyone in this conversation.")
+        } message: { messageId in
+            Text(messageId.hasPrefix("client_")
+                ? "This stops retries. If it has already been sent, it will remain in the conversation."
+                : "Deleted messages are removed for everyone in this conversation.")
         }
         .alert("Delete this conversation?", isPresented: $aiDeleteConfirmPresented) {
             Button("Cancel", role: .cancel) {}
@@ -405,6 +469,10 @@ public struct ChatConversationView: View {
             )
         }
         .quickLookPreview($viewModel.previewFileURL)
+        .onReceive(NotificationCenter.default.publisher(for: ChatLocalStore.historyRetired)) { _ in
+            viewerPhotos = nil
+            viewModel.previewFileURL = nil
+        }
         .refreshFailureToast($viewModel.actionFailure)
         .accessibilityIdentifier("chatConversation")
     }
@@ -597,27 +665,29 @@ public struct ChatConversationView: View {
 
     private func handlePickedDocuments(_ result: Result<[URL], any Error>) {
         guard case let .success(urls) = result else { return }
+        let generation = AuthManager.shared.requestSessionGeneration
+        let isAssistant = mode == .aiAssistant
         Task {
             for url in urls.prefix(5) {
-                let didStart = url.startAccessingSecurityScopedResource()
-                defer {
-                    if didStart { url.stopAccessingSecurityScopedResource() }
-                }
-                guard let data = try? Data(contentsOf: url) else { continue }
-                let values = try? url.resourceValues(forKeys: [.contentTypeKey, .localizedNameKey])
-                let mimeType = values?.contentType?.preferredMIMEType ?? "application/octet-stream"
-                let filename = values?.localizedName ?? url.lastPathComponent
-                if mode == .aiAssistant {
-                    await MainActor.run { viewModel.queueAIDocument(filename: filename, data: data) }
-                    continue
-                }
-                await MainActor.run {
-                    viewModel.queueAttachment(
-                        kind: mimeType.hasPrefix("image/") ? .image : .document,
-                        filename: filename,
-                        mimeType: mimeType,
-                        data: data
-                    )
+                do {
+                    let document = try await Task.detached(priority: .userInitiated) {
+                        try ChatMediaURL.readDocument(url, isAssistant: isAssistant)
+                    }.value
+                    guard !Task.isCancelled, AuthManager.shared.requestSessionGeneration == generation else { return }
+                    if isAssistant {
+                        viewModel.queueAIDocument(filename: document.filename, data: document.data)
+                    } else {
+                        viewModel.queueAttachment(
+                            kind: document.mimeType.hasPrefix("image/") ? .image : .document,
+                            filename: document.filename,
+                            mimeType: document.mimeType,
+                            data: document.data
+                        )
+                    }
+                } catch {
+                    guard AuthManager.shared.requestSessionGeneration == generation else { return }
+                    viewModel.actionFailure = (error as? ChatLocalStorageError)?.localizedDescription
+                        ?? "Couldn't open this file. Try choosing it again."
                 }
             }
         }
@@ -1090,8 +1160,11 @@ extension ChatConversationView {
     private static let scrollSpaceName = "chatConversationScroll"
 
     private func populatedFrame(_ rows: [ChatTimelineRow]) -> some View {
+        // Resolve the accepted room tails once per rendered snapshot, not per row.
+        let readBoundaryIds = viewModel.latestAcceptedMessageIds
+        let shown = renderedRows(rows)
         // Gig context strip is loaded by `ChatConversationViewModel.loadGigContextIfNeeded`.
-        GeometryReader { geo in
+        return GeometryReader { geo in
             ScrollViewReader { proxy in
                 ScrollView {
                     // A plain (non-lazy) VStack on purpose: pages are
@@ -1111,13 +1184,14 @@ extension ChatConversationView {
                             aiWelcomeCard
                                 .padding(.bottom, 10)
                         }
-                        ForEach(rows) { row in
+                        ForEach(shown) { row in
                             // Row width is measured once at the list level
                             // (viewport minus the 12pt side paddings) — a
                             // per-row GeometryReader made every bubble lay
                             // out twice and snap from the fallback width
                             // while scrolling.
                             timelineRowView(row, rowWidth: max(0, geo.size.width - 24))
+                                .background { readBoundaryTracker(row: row, acceptedIds: readBoundaryIds, viewportHeight: geo.size.height) }
                         }
                         Color.clear
                             .frame(height: 4)
@@ -1134,20 +1208,28 @@ extension ChatConversationView {
                             let frame = contentGeo.frame(in: .named(Self.scrollSpaceName))
                             Color.clear
                                 .onAppear {
-                                    handleScrollGeometry(frame: frame, viewportHeight: geo.size.height, rows: rows, proxy: proxy)
+                                    handleScrollGeometry(
+                                        frame: frame, viewportHeight: geo.size.height, shown: shown, proxy: proxy
+                                    )
                                 }
                                 .onChange(of: frame) { _, newFrame in
-                                    handleScrollGeometry(frame: newFrame, viewportHeight: geo.size.height, rows: rows, proxy: proxy)
+                                    handleScrollGeometry(
+                                        frame: newFrame, viewportHeight: geo.size.height, shown: shown, proxy: proxy
+                                    )
                                 }
                         }
                     )
                 }
                 .coordinateSpace(name: Self.scrollSpaceName)
+                .onAppear {
+                    ChatPerformance.mark("ThreadRows", rows: shown.count)
+                    decideOpeningWindow(rows)
+                }
                 // Threads open at the latest message (rows project
                 // oldest-first), and the bottom stays anchored when new
                 // rows land while the user is already at the bottom.
                 .defaultScrollAnchor(.bottom)
-                .refreshable { await viewModel.refresh() }
+                .refreshable { await viewModel.refresh(retryRoomSubscriptions: true) }
                 .accessibilityIdentifier("chatConversationContent")
                 .task {
                     guard !isLoadOlderArmed else { return }
@@ -1157,29 +1239,27 @@ extension ChatConversationView {
                     // scroll geometry, so the near-top check never
                     // re-fires — kick one fetch so backward pagination
                     // still works there.
-                    if scrollMetrics.distanceFromTop < 200, viewModel.canLoadOlder {
-                        loadOlderPreservingPosition(rows: rows, proxy: proxy)
+                    if scrollMetrics.distanceFromTop < 200 {
+                        extendUpward(shown, proxy: proxy)
                     }
                 }
                 .task { await landAtLatestMessage(proxy) }
                 .onChange(of: rows.last) { oldLast, newLast in
+                    // Back to the newest rows at the bottom goes there by itself.
+                    guard !showLatestIfLongAtBottom(rows, proxy: proxy) else { return }
                     pinToBottomIfNeeded(oldLast: oldLast, newLast: newLast, proxy: proxy)
+                }
+                // A notice, the typing line or the keyboard takes room from
+                // below: the latest message stays in view when it was.
+                .onChange(of: geo.size.height) { oldHeight, newHeight in
+                    guard newHeight < oldHeight, isAtBottom, !isLoadingOlder else { return }
+                    proxy.scrollTo(Self.bottomAnchorId, anchor: .bottom)
                 }
                 // `initial`: a target published before this frame appeared
                 // (a slow first layout) still scrolls.
                 .onChange(of: viewModel.pendingScrollTargetId, initial: true) { _, target in
                     guard let target else { return }
-                    // A brief or nudge opens at its start, its cards below it;
-                    // a searched message sits in the middle.
-                    let anchor: UnitPoint = mode == .aiAssistant ? .top : .center
-                    if reduceMotion {
-                        proxy.scrollTo(target, anchor: anchor)
-                    } else {
-                        withAnimation(.easeOut(duration: 0.2)) {
-                            proxy.scrollTo(target, anchor: anchor)
-                        }
-                    }
-                    viewModel.consumePendingScroll()
+                    scrollToPendingTarget(target, rows: rows, shown: shown, proxy: proxy)
                 }
             }
         }
@@ -1191,19 +1271,335 @@ extension ChatConversationView {
     private func handleScrollGeometry(
         frame: CGRect,
         viewportHeight: CGFloat,
-        rows: [ChatTimelineRow],
+        shown: ArraySlice<ChatTimelineRow>,
         proxy: ScrollViewProxy
     ) {
+        let previous = (maxY: scrollMetrics.contentMaxY, height: scrollMetrics.contentHeight)
+        scrollMetrics.viewportHeight = viewportHeight
         scrollMetrics.distanceFromTop = -frame.minY
+        scrollMetrics.contentMaxY = frame.maxY
+        scrollMetrics.contentHeight = frame.height
+        // Rows joined above (the content grew), or an older page landed and
+        // took the divider above the first message with it (it shrank).
+        if let pending = scrollMetrics.pendingPrepend, abs(frame.height - previous.height) > 1,
+           pending.olderPagesApplied.map({ viewModel.olderPagesApplied > $0 }) ?? true {
+            scrollMetrics.pendingPrepend = nil
+            keepPlace(
+                pending,
+                change: (previousMaxY: previous.maxY, grew: frame.height - previous.height),
+                viewportHeight: viewportHeight,
+                shown: shown,
+                proxy: proxy
+            )
+            return
+        }
         let nearBottom = (frame.maxY - viewportHeight) < 120
         if isAtBottom != nearBottom {
             isAtBottom = nearBottom
         }
         guard isLoadOlderArmed,
               !isLoadingOlder,
-              viewModel.canLoadOlder,
               scrollMetrics.distanceFromTop < 200 else { return }
-        loadOlderPreservingPosition(rows: rows, proxy: proxy)
+        extendUpward(shown, proxy: proxy)
+    }
+
+    // MARK: - Newest rows first
+
+    /// About two screens of rows: the first frame and a first scroll up.
+    private static let openingRowWindow = 40
+    /// Held rows join up to a page (60 messages) per trip to the top, a few
+    /// rows per layout pass so that no frame lays out a page of rows. A pass
+    /// aims at about 40 ms on this device; every pass also pays for all the
+    /// rows rendered, so with many of them passes take more rows at once
+    /// (one per 20 rendered) rather than repeat that cost.
+    private static let revealChunk = 60
+    private static let revealStepRows = 4...24
+    private static let revealStepTargetMs: Double = 40
+    private static let renderedRowsPerStepRow = 20
+    /// A join smaller than this is never re-applied by the place check: a
+    /// drag or fling can move that far on its own before the check runs.
+    private static let smallestReappliedJoin: CGFloat = 600
+
+    /// The rows this frame renders: every loaded row from the window's floor
+    /// on, with the dividers just above its first message.
+    private func renderedRows(_ rows: [ChatTimelineRow]) -> ArraySlice<ChatTimelineRow> {
+        let floor = openingWindowDecided ? renderFloorId : openingFloorId(in: rows)
+        return rows[Self.renderedStart(floor: floor, in: rows)...]
+    }
+
+    /// Where rendering starts for a floor: its row, with the dividers just above it.
+    private static func renderedStart(floor: String?, in rows: [ChatTimelineRow]) -> Int {
+        guard let floor, var start = rows.firstIndex(where: { $0.id == floor }) else { return rows.startIndex }
+        while start > rows.startIndex, !isBubble(rows[start - 1]) {
+            start -= 1
+        }
+        return start
+    }
+
+    /// The first bubble among the newest rows, for a thread shown at its
+    /// latest message with well over a window of rows loaded.
+    private func openingFloorId(in rows: [ChatTimelineRow]) -> String? {
+        guard mode != .aiAssistant, rows.count > Self.openingRowWindow + 20,
+              !viewModel.hasPendingSearchTarget, !viewModel.isViewingEarlierHistory,
+              !viewModel.isViewingSearchContext else { return nil }
+        return rows[(rows.count - Self.openingRowWindow)...].first(where: Self.isBubble)?.id
+    }
+
+    private static func isBubble(_ row: ChatTimelineRow) -> Bool {
+        if case .bubble = row { return true }
+        return false
+    }
+
+    private func decideOpeningWindow(_ rows: [ChatTimelineRow]) {
+        guard !openingWindowDecided else { return }
+        setWindowFloor(openingFloorId(in: rows), rows: rows)
+    }
+
+    private func setWindowFloor(_ floor: String?, rows: [ChatTimelineRow]) {
+        renderFloorId = floor
+        openingWindowDecided = true
+        ChatPerformance.mark("RenderWindow", rows: renderedRows(rows).count)
+    }
+
+    /// New rows at the bottom while the reader is there (a long gap filled on
+    /// open, or arrivals and sends after reading back): render only the newest
+    /// rows again, then go to the bottom. The rows leaving are far above the
+    /// viewport. Returns whether it did.
+    private func showLatestIfLongAtBottom(_ rows: [ChatTimelineRow], proxy: ScrollViewProxy) -> Bool {
+        guard openingWindowDecided, isAtBottom, !isLoadingOlder else { return false }
+        let start = renderFloorId.flatMap { floor in rows.firstIndex { $0.id == floor } } ?? rows.startIndex
+        guard rows.count - start > Self.openingRowWindow * 2, let floor = openingFloorId(in: rows) else { return false }
+        setWindowFloor(floor, rows: rows)
+        Task { await scrollToBottomAfterLayout(proxy) }
+        return true
+    }
+
+    /// The rendered rows just changed: go to the bottom once they have laid
+    /// out. Scrolling in the same pass resolves the bottom in the old (longer)
+    /// layout and leaves the viewport past the end of the new content, blank.
+    private func scrollToBottomAfterLayout(_ proxy: ScrollViewProxy) async {
+        for delayMs: UInt64 in [16, 120] {
+            try? await Task.sleep(nanoseconds: delayMs * 1_000_000)
+            proxy.scrollTo(Self.bottomAnchorId, anchor: .bottom)
+        }
+    }
+
+    /// Up past the top of what is rendered: the loaded rows the window holds
+    /// back join first, then the next older page.
+    private func extendUpward(_ shown: ArraySlice<ChatTimelineRow>, proxy: ScrollViewProxy) {
+        if renderFloorId != nil {
+            revealHeldRowsPreservingPosition(proxy: proxy)
+        } else if viewModel.canLoadOlder {
+            loadOlderPreservingPosition(rows: shown, proxy: proxy)
+        }
+    }
+
+    /// Held-back rows join above the viewport, up to a page per trip to the
+    /// top, keeping the rows on screen where they are.
+    private func revealHeldRowsPreservingPosition(proxy: ScrollViewProxy) {
+        guard !isLoadingOlder else { return }
+        isLoadingOlder = true
+        Task {
+            let interval = ChatPerformance.signposter.beginInterval("RevealRows")
+            let joined = await joinHeldRows(upTo: Self.revealChunk)
+            ChatPerformance.end("RevealRows", interval, rows: joined)
+            finishJoining(proxy)
+        }
+    }
+
+    /// Joining is over: a message sent meanwhile is shown now, with only the
+    /// newest rows rendered again.
+    private func finishJoining(_ proxy: ScrollViewProxy) {
+        isLoadingOlder = false
+        guard scrollMetrics.pinsBottomAfterJoin else { return }
+        scrollMetrics.pinsBottomAfterJoin = false
+        if case let .loaded(rows) = viewModel.state, let floor = openingFloorId(in: rows) {
+            setWindowFloor(floor, rows: rows)
+        }
+        Task { await scrollToBottomAfterLayout(proxy) }
+    }
+
+    /// Lowers the window's floor a few rows per layout pass until `limit`
+    /// rows joined, none are held, or two screens of rows sit above the
+    /// viewport; each pass keeps the place. A pass's size follows how long
+    /// the last one took. Returns the rows that joined.
+    private func joinHeldRows(upTo limit: Int) async -> Int {
+        var joined = 0
+        var step = 0
+        while joined < limit, !scrollMetrics.pinsBottomAfterJoin,
+              scrollMetrics.distanceFromTop < scrollMetrics.viewportHeight * 2,
+              let floor = renderFloorId, case let .loaded(rows) = viewModel.state,
+              let floorIndex = rows.firstIndex(where: { $0.id == floor }) {
+            let byRendered = renderedRows(rows).count / Self.renderedRowsPerStepRow
+            step = min(max(step, byRendered, Self.revealStepRows.lowerBound), Self.revealStepRows.upperBound)
+            let next = Self.passFloor(target: floorIndex - min(step, limit - joined), below: floorIndex, in: rows)
+            let started = CACurrentMediaTime()
+            await joinRows(to: next, rows: rows)
+            let tookMs = (CACurrentMediaTime() - started) * 1000
+            let count = floorIndex - (next.flatMap { id in rows.firstIndex { $0.id == id } } ?? rows.startIndex)
+            joined += count
+            ChatPerformance.signposter.emitEvent("RevealStep", "rows=\(count) ms=\(Int(tookMs))")
+            // Done once every held row joined, or when the window moved for something else.
+            guard let next, renderFloorId == next else { break }
+            step = Int(Double(step) * Self.revealStepTargetMs / max(tookMs, 1))
+            // Two frames' time between passes, so that at least one frame (with
+            // its scrolling and touches) is drawn before the next pass starts.
+            try? await Task.sleep(nanoseconds: 34_000_000)
+        }
+        return joined
+    }
+
+    /// A pass's new floor: the first message at or after `target`, else the
+    /// nearest one before it; nil when no message is left above.
+    private static func passFloor(target: Int, below floorIndex: Int, in rows: [ChatTimelineRow]) -> String? {
+        guard target > rows.startIndex else { return nil }
+        return (rows[target..<floorIndex].first(where: isBubble) ?? rows[..<target].last(where: isBubble))?.id
+    }
+
+    /// One pass: the floor moves to `floor`, and the layout that adds the rows
+    /// above the old floor restores the place.
+    private func joinRows(to floor: String?, rows: [ChatTimelineRow]) async {
+        let shown = renderedRows(rows)
+        scrollMetrics.pendingPrepend = ChatPendingPrepend(
+            lastRowId: shown.last?.id, anchorId: shown.first(where: Self.isBubble)?.id, olderPagesApplied: nil
+        )
+        setWindowFloor(floor, rows: rows)
+        // Only dividers already shown with the old floor were left: nothing lays out.
+        guard Self.renderedStart(floor: floor, in: rows) < shown.startIndex else {
+            scrollMetrics.pendingPrepend = nil
+            return
+        }
+        var waits = 0
+        while scrollMetrics.pendingPrepend != nil, waits < 25 {
+            try? await Task.sleep(nanoseconds: 16_000_000)
+            waits += 1
+        }
+        scrollMetrics.pendingPrepend = nil
+    }
+
+    /// Rows joined above the viewport on this layout. The scroll view keeps
+    /// its offset from the top, which would bring the new rows into view;
+    /// put the content's bottom edge back where it was instead, so the rows
+    /// on screen stay exactly in place. When the rows below changed too (an
+    /// older page that moved past the retained limit), re-pin the old top
+    /// bubble to the top edge.
+    private func keepPlace(
+        _ pending: ChatPendingPrepend,
+        change: (previousMaxY: CGFloat, grew: CGFloat),
+        viewportHeight: CGFloat,
+        shown: ArraySlice<ChatTimelineRow>,
+        proxy: ScrollViewProxy
+    ) {
+        guard shown.last?.id == pending.lastRowId, viewportHeight > 8 else {
+            if let anchorId = pending.anchorId { proxy.scrollTo(anchorId, anchor: .top) }
+            return
+        }
+        let place = Self.place(change.previousMaxY, viewportHeight: viewportHeight)
+        proxy.scrollTo(Self.bottomAnchorId, anchor: place)
+        scrollMetrics.placeSerial += 1
+        let serial = scrollMetrics.placeSerial
+        Task {
+            try? await Task.sleep(nanoseconds: 60_000_000)
+            let shift = scrollMetrics.contentMaxY - change.previousMaxY
+            // A fling still decelerating can swallow a restore, leaving the rows
+            // about the added height away. Only that is re-applied, only for the
+            // latest restore (a later pass's frames are not this one's), and
+            // never for a join small enough for the reader's own motion.
+            let latest = serial == scrollMetrics.placeSerial
+            let retried = latest && change.grew >= Self.smallestReappliedJoin && abs(shift - change.grew) <= change.grew / 4
+            if retried {
+                proxy.scrollTo(Self.bottomAnchorId, anchor: place)
+            }
+            ChatPerformance.signposter.emitEvent(
+                "PrependPlace", "grew=\(Int(change.grew)) shift=\(Int(shift)) retried=\(retried) latest=\(latest)"
+            )
+        }
+    }
+
+    /// Where the bottom sentinel goes for the content's bottom edge to sit
+    /// `maxY` below the viewport's top (the sentinel's top is 4 pt above it).
+    private static func place(_ maxY: CGFloat, viewportHeight: CGFloat) -> UnitPoint {
+        UnitPoint(x: 0.5, y: (maxY - 4) / (viewportHeight - 4))
+    }
+
+    /// A search match, a brief, or the latest message after a jump back.
+    private func scrollToPendingTarget(
+        _ target: String,
+        rows: [ChatTimelineRow],
+        shown: ArraySlice<ChatTimelineRow>,
+        proxy: ScrollViewProxy
+    ) {
+        // A brief or nudge opens at its start, its cards below it;
+        // a searched message sits in the middle.
+        let anchor: UnitPoint = mode == .aiAssistant ? .top : .center
+        let scroll: @MainActor () -> Void = {
+            if reduceMotion {
+                proxy.scrollTo(target, anchor: anchor)
+            } else {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    proxy.scrollTo(target, anchor: anchor)
+                }
+            }
+            viewModel.consumePendingScroll()
+        }
+        if target == Self.bottomAnchorId {
+            // Back at the latest message: its newest rows again, then the bottom.
+            setWindowFloor(openingFloorId(in: rows), rows: rows)
+            Task {
+                await scrollToBottomAfterLayout(proxy)
+                viewModel.consumePendingScroll()
+            }
+            return
+        } else if renderFloorId != nil, !shown.contains(where: { $0.id == target }) {
+            // The target is among the held-back rows: show them, then scroll
+            // once they have laid out.
+            renderFloorId = nil
+            Task {
+                try? await Task.sleep(nanoseconds: 32_000_000)
+                scroll()
+            }
+            return
+        }
+        scroll()
+    }
+
+    @ViewBuilder
+    private func readBoundaryTracker(row: ChatTimelineRow, acceptedIds: Set<String>, viewportHeight: CGFloat) -> some View {
+        let messageId: String? = switch row {
+        case let .bubble(bubble): bubble.id
+        case let .broadcastReference(reference): reference.id
+        case let .systemLine(line): line.id
+        case .dayDivider, .topicDivider: nil
+        }
+        if let messageId, acceptedIds.contains(messageId) {
+            GeometryReader { geometry in
+                let frame = geometry.frame(in: .named(Self.scrollSpaceName))
+                Color.clear
+                    .onAppear { updateReadBoundary(messageId, frame: frame, viewportHeight: viewportHeight) }
+                    .onChange(of: frame) { _, frame in
+                        updateReadBoundary(messageId, frame: frame, viewportHeight: viewportHeight)
+                    }
+                    .onChange(of: viewportHeight) { _, height in
+                        updateReadBoundary(messageId, frame: frame, viewportHeight: height)
+                    }
+                    .onDisappear {
+                        visibleReadMessageIds.remove(messageId)
+                        viewModel.setVisibleReadBoundaries(scenePhase == .active ? visibleReadMessageIds : [])
+                    }
+            }
+        }
+    }
+
+    private func updateReadBoundary(_ messageId: String, frame: CGRect, viewportHeight: CGFloat) {
+        guard viewModel.latestAcceptedMessageIds.contains(messageId) else { return }
+        // The message's trailing edge must be on-screen. A tall message can
+        // still be read at its end; typing and padding below it do not count.
+        let visible = frame.maxY > 0 && frame.maxY <= viewportHeight + 4 && frame.minY < viewportHeight
+        // Every scrolled frame lands here; only a change in what is visible
+        // is news for this view's state and the view model.
+        guard visible != visibleReadMessageIds.contains(messageId) else { return }
+        if visible { visibleReadMessageIds.insert(messageId) } else { visibleReadMessageIds.remove(messageId) }
+        viewModel.setVisibleReadBoundaries(scenePhase == .active ? visibleReadMessageIds : [])
     }
 
     /// Force the thread to open at the latest message. The bottom anchor
@@ -1213,7 +1609,7 @@ extension ChatConversationView {
     private func landAtLatestMessage(_ proxy: ScrollViewProxy) async {
         // Opened from Chat Search → the pendingScrollTargetId path
         // positions on the matched message instead.
-        guard !viewModel.hasPendingSearchTarget, !hasLandedAtLatest else { return }
+        guard !viewModel.hasPendingSearchTarget, !viewModel.isViewingEarlierHistory, !hasLandedAtLatest else { return }
         proxy.scrollTo(Self.bottomAnchorId, anchor: .bottom)
         for delayMs: UInt64 in [80, 250, 600] {
             try? await Task.sleep(nanoseconds: delayMs * 1_000_000)
@@ -1231,12 +1627,18 @@ extension ChatConversationView {
         newLast: ChatTimelineRow?,
         proxy: ScrollViewProxy
     ) {
-        guard let newLast else { return }
+        guard let newLast, !viewModel.isViewingEarlierHistory else { return }
         let isNewRow = oldLast?.id != newLast.id
         let isOwnSend: Bool = {
             guard isNewRow, case let .bubble(bubble) = newLast else { return false }
             return bubble.side == .outgoing
         }()
+        // Rows are joining above (an older page, held rows): a scroll now would
+        // fight their place restores, so an own send waits for them to stop.
+        guard !isLoadingOlder else {
+            if isOwnSend { scrollMetrics.pinsBottomAfterJoin = true }
+            return
+        }
         guard isAtBottom || isOwnSend else { return }
         if isNewRow, !reduceMotion {
             withAnimation(.easeOut(duration: 0.2)) {
@@ -1249,28 +1651,39 @@ extension ChatConversationView {
         }
     }
 
-    /// Fetch the next older page, then put the row that was at the top of
-    /// the viewport back there — prepending shifts the existing content
-    /// down, which otherwise lands the user on a random older message.
-    /// The anchor is the first BUBBLE row: divider ids (day keys) move to
-    /// the top of the merged day when older same-day messages prepend,
-    /// while a bubble id stays glued to its message.
-    private func loadOlderPreservingPosition(rows: [ChatTimelineRow], proxy: ScrollViewProxy) {
+    /// Fetch the next older page and keep the reader's place. The page is
+    /// held above the rows on screen (the window's floor stays on their first
+    /// bubble, a bubble id staying glued to its message while divider ids
+    /// move up a merged day) and then joins a few rows per pass, like rows
+    /// the window held back, so no frame lays out a whole page.
+    private func loadOlderPreservingPosition(rows: ArraySlice<ChatTimelineRow>, proxy: ScrollViewProxy) {
         guard !isLoadingOlder else { return }
         isLoadingOlder = true
-        let anchorId = rows.first { row in
-            if case .bubble = row { return true }
-            return false
-        }?.id
+        let pagesApplied = viewModel.olderPagesApplied
+        let holdsPage = mode != .aiAssistant
+        if holdsPage, let top = rows.first(where: Self.isBubble)?.id {
+            renderFloorId = top
+            openingWindowDecided = true
+        }
+        scrollMetrics.pendingPrepend = ChatPendingPrepend(
+            lastRowId: rows.last?.id, anchorId: rows.first(where: Self.isBubble)?.id,
+            olderPagesApplied: pagesApplied
+        )
         Task {
             await viewModel.loadOlder()
-            if let anchorId {
-                proxy.scrollTo(anchorId, anchor: .top)
-                // Second pass once the prepended rows have laid out.
-                try? await Task.sleep(nanoseconds: 50_000_000)
-                proxy.scrollTo(anchorId, anchor: .top)
+            // The page's own pass restores the place (a held page only moves the
+            // divider above the first message up with it); then it is dropped.
+            try? await Task.sleep(nanoseconds: holdsPage ? 64_000_000 : 300_000_000)
+            scrollMetrics.pendingPrepend = nil
+            if holdsPage, viewModel.olderPagesApplied > pagesApplied {
+                let interval = ChatPerformance.signposter.beginInterval("RevealRows")
+                let joined = await joinHeldRows(upTo: .max)
+                ChatPerformance.end("RevealRows", interval, rows: joined)
+            } else if holdsPage {
+                // Nothing arrived: the rows on screen are all there is.
+                renderFloorId = nil
             }
-            isLoadingOlder = false
+            finishJoining(proxy)
         }
     }
 
@@ -1285,6 +1698,7 @@ extension ChatConversationView {
             ChatBroadcastReferenceCard(reference: reference)
         case let .bubble(bubble):
             bubbleRowView(bubble, rowWidth: rowWidth)
+                .onAppear { viewModel.noteRowAppeared(bubble.id) }
         case let .systemLine(line):
             ChatSystemLineRow(text: line.label)
         }
@@ -1338,6 +1752,7 @@ extension ChatConversationView {
             incomingInitials: incomingInitials,
             aiStatus: viewModel.aiStatus,
             canManage: viewModel.canManageMessage(bubble.id),
+            canDiscard: viewModel.canDiscardMessage(bubble.id),
             onLockedAction: { upgradePromptPresented = true },
             onReply: { viewModel.beginReply(to: bubble.id) },
             onEdit: { viewModel.beginEdit(messageId: bubble.id) },
@@ -1376,6 +1791,7 @@ extension ChatConversationView {
                 Task { await viewModel.retry(clientId: bubble.id) }
             }
         }
+        .equatable()
     }
 
     private func errorFrame(_ message: String) -> some View {
@@ -1389,7 +1805,7 @@ extension ChatConversationView {
                 .font(.system(size: 13.5))
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .multilineTextAlignment(.center)
-            Button { Task { await viewModel.refresh() } } label: {
+            Button { Task { await viewModel.refresh(retryRoomSubscriptions: true) } } label: {
                 Text("Try again")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(Theme.Color.appTextInverse)
@@ -2629,6 +3045,7 @@ private struct ChatBubbleRow: View {
     /// What the assistant is doing while a reply is pending ("Drafting your post…").
     var aiStatus: String?
     let canManage: Bool
+    let canDiscard: Bool
     let onLockedAction: @MainActor () -> Void
     let onReply: @MainActor () -> Void
     let onEdit: @MainActor () -> Void
@@ -2695,6 +3112,9 @@ private struct ChatBubbleRow: View {
                 Button(role: .destructive) { onDelete() } label: {
                     Text("Delete")
                 }
+            }
+            if canDiscard {
+                Button(role: .destructive) { onDelete() } label: { Text("Discard") }
             }
         }
         // A reply with action cards or link buttons keeps each button its own element.
@@ -3039,7 +3459,8 @@ private struct ChatBubbleRow: View {
     /// opens them all full screen) and its caption in a bubble below.
     private func photoMessage(url: URL?, caption: String?, moreURLs: [URL]) -> some View {
         VStack(alignment: alignment, spacing: 2) {
-            if let url, !isLockedIncoming {
+            // A photo still sending opens once it is sent.
+            if let url, !isLockedIncoming, url.scheme != ChatPhotoPreviews.scheme {
                 Button { onOpenPhotos([url] + moreURLs, 0) } label: {
                     photoBubble(url, moreCount: moreURLs.count)
                 }
@@ -3097,15 +3518,26 @@ private struct ChatBubbleRow: View {
 
     @ViewBuilder
     private func imageBody(_ url: URL?) -> some View {
-        if let url {
-            CachedAsyncImage(url: url) { phase in
+        if let url, url.scheme == ChatPhotoPreviews.scheme {
+            // Sending: the picture just picked, from memory.
+            previewOrPlaceholder(url)
+        } else if let url {
+            CachedAsyncImage(url: ChatMediaURL.thumbnail(url)) { phase in
                 switch phase {
                 case let .success(image): image.resizable().scaledToFill()
-                case .failure: PhotoBubblePlaceholder()
-                case .empty: PhotoBubblePlaceholder()
-                @unknown default: PhotoBubblePlaceholder()
+                // A photo just sent keeps its picked preview until its copy loads.
+                default: previewOrPlaceholder(url)
                 }
             }
+        } else {
+            PhotoBubblePlaceholder()
+        }
+    }
+
+    @ViewBuilder
+    private func previewOrPlaceholder(_ url: URL) -> some View {
+        if let preview = ChatPhotoPreviews.shared.image(for: url) {
+            Image(uiImage: preview).resizable().scaledToFill()
         } else {
             PhotoBubblePlaceholder()
         }
@@ -3473,8 +3905,9 @@ private struct ChatBubbleRow: View {
                     switch content.deliveryState {
                     case .read:
                         EmptyView()
-                    case .delivered:
+                    case .sent, .delivered:
                         Icon(.check, size: 10, strokeWidth: 2.0, color: Theme.Color.appTextMuted)
+                            .accessibilityLabel(content.deliveryState == .delivered ? "Delivered" : "Sent")
                     case .sending:
                         ProgressView().scaleEffect(0.6).tint(Theme.Color.appTextMuted)
                     case .failed:
@@ -3505,8 +3938,8 @@ private struct ChatBubbleRow: View {
     private func stampString(_ raw: String) -> String {
         switch content.deliveryState {
         case .read: "Read \(raw)"
-        // Delivered is conveyed by the small check icon, not a loud word (RN).
-        case .delivered: raw
+        // A single check confirms the server accepted the message.
+        case .sent, .delivered: raw
         case .sending: "Sending..."
         case .failed: "Failed to send"
         case .refused: "Not sent"
@@ -3561,6 +3994,17 @@ private struct ChatBubbleRow: View {
         case .warning: Theme.Color.warningBg
         case .error: Theme.Color.errorBg
         }
+    }
+}
+
+extension ChatBubbleRow: Equatable {
+    /// A bubble re-renders only when what it shows changes. Its action
+    /// closures are rebuilt on every pass and act on this message, which
+    /// `content` already identifies, so they are left out of the comparison.
+    /// Without this, every update to the thread re-rendered every bubble.
+    nonisolated static func == (lhs: ChatBubbleRow, rhs: ChatBubbleRow) -> Bool {
+        lhs.content == rhs.content && lhs.rowWidth == rhs.rowWidth && lhs.incomingInitials == rhs.incomingInitials
+            && lhs.aiStatus == rhs.aiStatus && lhs.canManage == rhs.canManage && lhs.canDiscard == rhs.canDiscard
     }
 }
 
@@ -3795,6 +4239,20 @@ private struct AttachmentTile: View {
 }
 
 // MARK: - Composer
+
+/// Reads the composer's text where it is typed, so a keystroke re-renders the
+/// composer instead of the whole conversation, timeline included.
+private struct ChatComposerReader<Content: View>: View {
+    let viewModel: ChatConversationViewModel
+    @ViewBuilder let content: (Binding<String>, Bool) -> Content
+
+    var body: some View {
+        content(
+            Binding(get: { viewModel.composerText }, set: { viewModel.updateComposerFromField($0) }),
+            viewModel.canSend
+        )
+    }
+}
 
 private struct ChatComposer: View {
     @Binding var text: String

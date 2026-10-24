@@ -40,6 +40,9 @@ public struct MediaViewerView: View {
         }
         .statusBarHidden()
         .accessibilityIdentifier("mediaViewer")
+        .onReceive(NotificationCenter.default.publisher(for: ChatLocalStore.historyRetired)) { _ in
+            if items.contains(where: { ChatMediaURL.isChatFile($0.url) }) { dismiss() }
+        }
     }
 
     private var topBar: some View {
@@ -120,18 +123,40 @@ private struct VideoSlideView: View {
     let isActive: Bool
 
     @State private var player: AVPlayer?
+    @State private var localFile: URL?
+    @State private var failed = false
 
     var body: some View {
         ZStack {
             if let player {
                 VideoPlayer(player: player)
+            } else if failed {
+                Text("Couldn't open this video.").foregroundStyle(.white)
             } else {
                 ProgressView().tint(Color.white)
             }
         }
-        .onAppear {
+        .task(id: url) {
             if player == nil {
-                player = AVPlayer(url: url)
+                do {
+                    let source: URL
+                    if ChatMediaURL.isChatFile(url) {
+                        let file = try await ChatMediaURL.download(raw: url.absoluteString, filename: "video.mp4", mimeType: "video/mp4")
+                        if Task.isCancelled {
+                            try? FileManager.default.removeItem(at: file.deletingLastPathComponent())
+                            return
+                        }
+                        localFile = file
+                        source = file
+                    } else {
+                        source = url
+                    }
+                    player = AVPlayer(url: source)
+                } catch is CancellationError {
+                    return
+                } catch {
+                    failed = true
+                }
             }
             if isActive { player?.play() }
         }
@@ -144,6 +169,9 @@ private struct VideoSlideView: View {
         }
         .onDisappear {
             player?.pause()
+            player = nil
+            if let localFile { try? FileManager.default.removeItem(at: localFile.deletingLastPathComponent()) }
+            localFile = nil
         }
         .accessibilityLabel("Video player")
     }
@@ -192,16 +220,7 @@ private struct PostPDFSlide: View {
         .task(id: "\(url)-\(attempt)") {
             failed = false
             do {
-                var request = URLRequest(url: url)
-                request.timeoutInterval = 30
-                let (bytes, response) = try await URLSession.shared.bytes(for: request)
-                guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode),
-                      response.expectedContentLength <= 25 * 1024 * 1024 else { throw URLError(.badServerResponse) }
-                var data = Data()
-                for try await byte in bytes {
-                    guard data.count < 25 * 1024 * 1024 else { throw URLError(.dataLengthExceedsMaximum) }
-                    data.append(byte)
-                }
+                let data = try await loadPDF()
                 try Task.checkCancellation()
                 guard let pdf = PDFDocument(data: data), !pdf.isLocked, pdf.pageCount > 0 else { throw URLError(.cannotDecodeContentData) }
                 document = pdf
@@ -211,6 +230,21 @@ private struct PostPDFSlide: View {
                 failed = true
             }
         }
+    }
+
+    private func loadPDF() async throws -> Data {
+        if ChatMediaURL.isChatFile(url) { return try await ChatMediaURL.openedData(url, limit: 25 * 1024 * 1024) }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 30
+        let (bytes, response) = try await URLSession.shared.bytes(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode),
+              response.expectedContentLength <= 25 * 1024 * 1024 else { throw URLError(.badServerResponse) }
+        var data = Data()
+        for try await byte in bytes {
+            guard data.count < 25 * 1024 * 1024 else { throw URLError(.dataLengthExceedsMaximum) }
+            data.append(byte)
+        }
+        return data
     }
 }
 

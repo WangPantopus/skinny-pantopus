@@ -13,11 +13,25 @@ import Foundation
 public enum ChatEndpoints {
     /// `GET /api/chat/unified-conversations` — person-grouped chat list.
     /// Route `backend/routes/chats.js:2211`.
-    public static func unifiedConversations(limit: Int = 100) -> Endpoint {
-        Endpoint(
+    public static func unifiedConversations(limit: Int = 100, before: String? = nil, query text: String? = nil) -> Endpoint {
+        var query = ["limit": String(limit)]
+        if let before { query["before"] = before }
+        if let text { query["q"] = text }
+        return Endpoint(
             method: .get,
             path: "/api/chat/unified-conversations",
-            query: ["limit": String(limit)]
+            query: query
+        )
+    }
+
+    public static func setPreferences(
+        conversationId: String, isRoom: Bool, notificationsEnabled: Bool
+    ) -> Endpoint {
+        let collection = isRoom ? "rooms" : "conversations"
+        return Endpoint(
+            method: .patch,
+            path: "/api/chat/\(collection)/\(conversationId)/preferences",
+            body: ["notificationsEnabled": notificationsEnabled]
         )
     }
 
@@ -47,11 +61,16 @@ public enum ChatEndpoints {
         after: String? = nil,
         asBusinessUserId: String? = nil
     ) -> Endpoint {
-        var query: [String: String] = ["limit": String(limit)]
+        var query: [String: String] = ["limit": String(limit), "sync": "true"]
         if let before { query["before"] = before }
         if let after { query["after"] = after }
         if let asBusinessUserId { query["asBusinessUserId"] = asBusinessUserId }
-        return Endpoint(method: .get, path: "/api/chat/rooms/\(roomId)/messages", query: query)
+        return Endpoint(
+            method: .get,
+            path: "/api/chat/rooms/\(roomId)/messages",
+            query: query,
+            cachePolicy: .reloadIgnoringLocalCacheData
+        )
     }
 
     /// `GET /api/chat/conversations/:otherUserId/messages` — paginated
@@ -63,11 +82,57 @@ public enum ChatEndpoints {
         after: String? = nil,
         topicId: String? = nil
     ) -> Endpoint {
-        var query: [String: String] = ["limit": String(limit)]
+        var query: [String: String] = ["limit": String(limit), "sync": "true"]
         if let before { query["before"] = before }
         if let after { query["after"] = after }
         if let topicId { query["topicId"] = topicId }
-        return Endpoint(method: .get, path: "/api/chat/conversations/\(otherUserId)/messages", query: query)
+        return Endpoint(
+            method: .get,
+            path: "/api/chat/conversations/\(otherUserId)/messages",
+            query: query,
+            cachePolicy: .reloadIgnoringLocalCacheData
+        )
+    }
+
+    /// Keep per-room cursors in the POST body, including large person threads.
+    public static func changes(
+        conversationId: String,
+        isRoom: Bool,
+        cursor: [String: Int64],
+        until: [String: Int64]?,
+        asBusinessUserId: String? = nil,
+        readMessageIds: [String]? = nil
+    ) -> Endpoint {
+        let collection = isRoom ? "rooms" : "conversations"
+        return Endpoint(
+            method: .post,
+            path: "/api/chat/\(collection)/\(conversationId)/changes",
+            body: ChatChangesBody(cursor: cursor, until: until, asBusinessUserId: asBusinessUserId, readMessageIds: readMessageIds),
+            cachePolicy: .reloadIgnoringLocalCacheData
+        )
+    }
+
+    public static func search(query text: String, before: String? = nil) -> Endpoint {
+        var query = ["q": text, "limit": "50"]
+        if let before { query["before"] = before }
+        return Endpoint(method: .get, path: "/api/chat/search", query: query, cachePolicy: .reloadIgnoringLocalCacheData)
+    }
+
+    public static func messageContext(
+        conversationId: String,
+        isRoom: Bool,
+        messageId: String,
+        asBusinessUserId: String? = nil
+    ) -> Endpoint {
+        let collection = isRoom ? "rooms" : "conversations"
+        var query = ["limit": "25"]
+        if let asBusinessUserId { query["asBusinessUserId"] = asBusinessUserId }
+        return Endpoint(
+            method: .get,
+            path: "/api/chat/\(collection)/\(conversationId)/messages/\(messageId)/context",
+            query: query,
+            cachePolicy: .reloadIgnoringLocalCacheData
+        )
     }
 
     /// `POST /api/chat/direct` — find-or-create the 1:1 direct room
@@ -117,19 +182,49 @@ public enum ChatEndpoints {
     /// `POST /api/chat/rooms/:roomId/read` — mark every message in the
     /// room as read for the current user. Route
     /// `backend/routes/chats.js:1953`.
-    public static func markRoomRead(roomId: String, asBusinessUserId: String? = nil) -> Endpoint {
-        Endpoint(
+    public static func markRoomRead(roomId: String, asBusinessUserId: String? = nil, throughMessageId: String? = nil) -> Endpoint {
+        var body: [String: String] = [:]
+        if let asBusinessUserId { body["asBusinessUserId"] = asBusinessUserId }
+        if let throughMessageId { body["throughMessageId"] = throughMessageId }
+        return Endpoint(
             method: .post,
             path: "/api/chat/rooms/\(roomId)/read",
-            body: asBusinessUserId.map { ["asBusinessUserId": $0] }
+            body: body
         )
     }
 
-    /// `POST /api/chat/conversations/:otherUserId/read` — mark every
-    /// shared-room message read for a person-grouped thread. Route
-    /// `backend/routes/chats.js:1265`.
-    public static func markConversationRead(otherUserId: String) -> Endpoint {
-        Endpoint(method: .post, path: "/api/chat/conversations/\(otherUserId)/read")
+    /// Mark only the explicitly viewed room boundaries in a person thread.
+    /// Omitted rooms keep their unread state. The single cursor remains for
+    /// callers speaking the older protocol.
+    public static func markConversationRead(
+        otherUserId: String,
+        throughMessageId: String? = nil,
+        throughMessageIds: [String: String]? = nil
+    ) -> Endpoint {
+        Endpoint(
+            method: .post,
+            path: "/api/chat/conversations/\(otherUserId)/read",
+            body: ChatReadBoundariesBody(throughMessageId: throughMessageId, throughMessageIds: throughMessageIds)
+        )
+    }
+
+    /// A distinct route prevents an older server from treating a filtered
+    /// boundary as a whole-conversation acknowledgement.
+    public static func markTopicRead(
+        conversationId: String,
+        isRoom: Bool,
+        topicId: String,
+        throughMessageIds: [String: String],
+        asBusinessUserId: String? = nil
+    ) -> Endpoint {
+        let collection = isRoom ? "rooms" : "conversations"
+        return Endpoint(
+            method: .post,
+            path: "/api/chat/\(collection)/\(conversationId)/topics/\(topicId)/read",
+            body: ChatReadBoundariesBody(
+                throughMessageId: nil, throughMessageIds: throughMessageIds, asBusinessUserId: asBusinessUserId
+            )
+        )
     }
 
     /// `GET /api/chat/conversations/:otherUserId/topics` — list topic chips.
@@ -144,6 +239,14 @@ public enum ChatEndpoints {
     public static func findOrCreateTopic(otherUserId: String, body: FindOrCreateTopicBody) -> Endpoint {
         Endpoint(method: .post, path: "/api/chat/conversations/\(otherUserId)/topics", body: body)
     }
+}
+
+private struct ChatChangesBody: Encodable {
+    let cursor: [String: Int64]
+    let until: [String: Int64]?
+    let asBusinessUserId: String?
+    let readMessageIds: [String]?
+    let limit = 200
 }
 
 /// `POST /api/chat/direct` body. Matches the Joi validator at
@@ -222,4 +325,10 @@ public struct EditChatMessageBody: Encodable, Sendable {
     public init(messageText: String) {
         self.messageText = messageText
     }
+}
+
+private struct ChatReadBoundariesBody: Encodable {
+    let throughMessageId: String?
+    let throughMessageIds: [String: String]?
+    var asBusinessUserId: String?
 }

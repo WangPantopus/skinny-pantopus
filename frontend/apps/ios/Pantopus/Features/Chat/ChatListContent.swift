@@ -131,11 +131,10 @@ public struct ConversationRowContent: Identifiable, Sendable, Hashable {
     }
 }
 
-// MARK: - Local mute / hide preferences
+// MARK: - Cached mute / local hide preferences
 
-/// Device-local mute/hide state for the chat list. Keys match Expo mobile
-/// (`@chat_hidden_conversations`, `@chat_muted_conversations`) so prefs
-/// survive cross-app parity and use `person:` / `room:` ids.
+/// Local hiding and the last confirmed server mute state. Account teardown
+/// clears these caches; current inbox responses reconcile the mute keys.
 @MainActor
 public final class ChatConversationPreferences {
     public static let shared = ChatConversationPreferences()
@@ -153,6 +152,10 @@ public final class ChatConversationPreferences {
     }
 
     private let defaults: UserDefaults
+    private var migrationRunning = false
+    private var nextMigrationAttempt = Date.distantPast
+    private var migrationRequests: [String: Task<ChatPreferencesResponse, any Error>] = [:]
+    private var userChanges: Set<String> = []
 
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -208,6 +211,95 @@ public final class ChatConversationPreferences {
         }
         persist(next, key: Self.mutedStorageKey)
         return nowMuted
+    }
+
+    public func setMuted(_ key: String, muted: Bool) {
+        var next = mutedKeys()
+        if muted { next.insert(key) } else { next.remove(key) }
+        persist(next, key: Self.mutedStorageKey)
+    }
+
+    /// Capture legacy local choices once. The server wins after a key has
+    /// been confirmed, so a later remote unmute is never migrated back.
+    public func pendingServerMuteKeys() -> Set<String> {
+        guard let prefix = migrationPrefix else { return [] }
+        if !defaults.bool(forKey: prefix + ".initialized") {
+            persist(mutedKeys(), key: prefix + ".pending")
+            defaults.set(true, forKey: prefix + ".initialized")
+        }
+        return decodeSet(defaults.string(forKey: prefix + ".pending"))
+    }
+
+    public func applyServer(_ conversations: [UnifiedConversation]) {
+        let pending = pendingServerMuteKeys()
+        for conversation in conversations {
+            guard let enabled = conversation.notificationsEnabled else { continue }
+            let key = conversation.kind == .room ? Self.roomKey(conversation.id) : Self.personKey(conversation.id)
+            guard !pending.contains(key) || !enabled else { continue }
+            setMuted(key, muted: !enabled)
+            if pending.contains(key) { confirmServerMute(key) }
+        }
+    }
+
+    func migrateLegacyMutes(api: APIClient) async {
+        guard api === APIClient.shared, !migrationRunning, Date() >= nextMigrationAttempt,
+              let prefix = migrationPrefix else { return }
+        let keys = pendingServerMuteKeys().sorted().prefix(8)
+        guard !keys.isEmpty else { return }
+        migrationRunning = true
+        nextMigrationAttempt = Date().addingTimeInterval(30)
+        defer { migrationRunning = false }
+        let session = AuthManager.shared.requestSessionGeneration
+        for key in keys {
+            guard session == AuthManager.shared.requestSessionGeneration, migrationPrefix == prefix, !Task.isCancelled else { return }
+            guard !userChanges.contains(key) else { continue }
+            let parts = key.split(separator: ":", maxSplits: 1).map(String.init)
+            guard parts.count == 2, ["room", "person"].contains(parts[0]), UUID(uuidString: parts[1]) != nil else { continue }
+            let request = Task {
+                try await api.request(
+                    ChatEndpoints.setPreferences(conversationId: parts[1], isRoom: parts[0] == "room", notificationsEnabled: false),
+                    as: ChatPreferencesResponse.self
+                )
+            }
+            migrationRequests[key] = request
+            defer { migrationRequests[key] = nil }
+            do {
+                _ = try await request.value
+                guard session == AuthManager.shared.requestSessionGeneration, migrationPrefix == prefix else { return }
+                confirmServerMute(key)
+            } catch {
+                // Leave this key pending for a later foreground/reconnect.
+                continue
+            }
+        }
+    }
+
+    private var migrationPrefix: String? {
+        guard case let .signedIn(user) = AuthManager.shared.state else { return nil }
+        let scope = ChatLocalStore.scope(server: APIClient.shared.apiBaseURL.absoluteString, account: user.id)
+        return "@chat_server_mute_migration." + scope
+    }
+
+    func beginUserChange(_ key: String) {
+        userChanges.insert(key)
+    }
+
+    func waitForMigration(_ key: String) async {
+        if let request = migrationRequests[key] { _ = try? await request.value }
+    }
+
+    func endUserChange(_ key: String) {
+        userChanges.remove(key)
+    }
+
+    func confirmServerMute(_ key: String) {
+        guard let prefix = migrationPrefix else { return }
+        var pending = decodeSet(defaults.string(forKey: prefix + ".pending"))
+        pending.remove(key)
+        persist(pending, key: prefix + ".pending")
+        var completed = decodeSet(defaults.string(forKey: prefix + ".completed"))
+        completed.insert(key)
+        persist(completed, key: prefix + ".completed")
     }
 
     /// Sign-out: one account's hidden and muted conversations must never
