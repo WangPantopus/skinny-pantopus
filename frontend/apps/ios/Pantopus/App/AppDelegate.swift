@@ -34,6 +34,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         _: UIApplication,
         didFinishLaunchingWithOptions _: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        ChatPerformance.signposter.emitEvent("AppLaunch")
         Self.bootstrapLogging()
         // Photos load through PantopusImagePipeline, which keeps them on the phone inside
         // the storage limit and clears them with the cache (Instant Screens). The shared URL

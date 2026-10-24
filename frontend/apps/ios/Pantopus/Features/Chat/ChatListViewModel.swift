@@ -73,6 +73,7 @@ public final class ChatListViewModel {
             if allRows.isEmpty, let cached {
                 inboxConfirmedAt = cached.confirmedAt
                 apply(cached.response, stats: cached.stats)
+                ChatPerformance.mark("InboxCached", rows: allRows.count)
             }
         }
         await fetch(force: false)
@@ -280,6 +281,7 @@ public final class ChatListViewModel {
               session == AuthManager.shared.requestSessionGeneration, !Task.isCancelled else { return }
         inboxConfirmedAt = response.confirmedAt
         apply(response.response, stats: stats)
+        ChatPerformance.mark("InboxNetwork", rows: allRows.count)
         if let scope {
             await ChatLocalStore.shared.saveInbox(
                 ChatInboxMemory(response: response.response, stats: stats, confirmedAt: response.confirmedAt),

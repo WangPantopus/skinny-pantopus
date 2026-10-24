@@ -249,6 +249,7 @@ final class ChatOutbox {
                 try await saveProgress(message, lifetime: started)
             }
             let files = message.fileIds ?? []
+            ChatPerformance.signposter.emitEvent("SendPost")
             let response: SendChatMessageResponse = try await api.request(ChatEndpoints.sendMessage(body: SendChatMessageBody(
                 roomId: roomId,
                 messageText: message.text.isEmpty ? nil : message.text,
@@ -260,6 +261,7 @@ final class ChatOutbox {
                 metadata: message.metadata,
                 asBusinessUserId: message.businessUserId
             )), expectedSessionGeneration: requestGeneration)
+            ChatPerformance.signposter.emitEvent("SendResponse")
             guard lifetime == started else { return }
             confirm(response.message)
         } catch {

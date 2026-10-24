@@ -46,7 +46,10 @@ public struct ChatListView: View {
         .background(Theme.Color.appSurface)
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .refreshFailureToast($viewModel.refreshFailureMessage)
-        .task { await viewModel.load() }
+        .task {
+            ChatPerformance.signposter.emitEvent("InboxLoad")
+            await viewModel.load()
+        }
         .refreshesOnStoreChange(
             affects: { $0.names(topic: ScreenTopic.chats, kind: .messagesList) },
             perform: { viewModel.refreshAfterChange() }
@@ -171,6 +174,7 @@ public struct ChatListView: View {
             }
         }
         .refreshable { await viewModel.refresh() }
+        .onAppear { ChatPerformance.mark("InboxRows", rows: rows.count) }
         .accessibilityIdentifier("chatListContent")
     }
 

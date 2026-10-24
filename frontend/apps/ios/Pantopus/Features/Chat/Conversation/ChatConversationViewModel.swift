@@ -657,6 +657,9 @@ public final class ChatConversationViewModel {
 
     private var messages: [ChatMessageDTO] = []
     private var pendingByClientId: [String: ChatMessageDTO] = [:]
+    /// Rows whose first appearance is timed (`ChatPerformance`): a send's
+    /// sending bubble (true) or a live incoming message (false).
+    @ObservationIgnored private var awaitingFirstRender: [String: Bool] = [:]
     private var failedClientIds: Set<String> = []
     /// Failed sends the server refused with a 403 (blocked, not a
     /// participant, the account can't message). They show "Not sent"
@@ -897,6 +900,7 @@ public final class ChatConversationViewModel {
     // MARK: - Public API
 
     public func load() async {
+        ChatPerformance.signposter.emitEvent("ThreadLoad")
         observeOutbox()
         await restoreComposerDraft()
         if case .loaded = state {
@@ -913,6 +917,7 @@ public final class ChatConversationViewModel {
         // then the newest page merged in quietly.
         let recalled = await recallThread()
         guard !Task.isCancelled else { return }
+        if recalled { ChatPerformance.mark("ThreadCached", rows: messages.count) }
         await loadTopicsIfNeeded()
         await fetch(recalled ? .merge : .reload)
         subscribeToSockets()
@@ -1230,7 +1235,11 @@ public final class ChatConversationViewModel {
         }
         guard !refreshInProgress else { return }
         refreshInProgress = true
-        defer { refreshInProgress = false }
+        ChatPerformance.signposter.emitEvent("RefreshStart")
+        defer {
+            refreshInProgress = false
+            ChatPerformance.mark("RefreshDone", rows: messages.count)
+        }
         let generation = historyGeneration
         await loadTopicsIfNeeded()
         guard generation == historyGeneration, !Task.isCancelled else { return }
@@ -1297,7 +1306,9 @@ public final class ChatConversationViewModel {
     /// Scroll-to-top trigger — fetch the next older page.
     public func loadOlder() async {
         guard hasMore, let cursor = oldestCursor else { return }
+        let interval = ChatPerformance.signposter.beginInterval("OlderPage")
         await fetch(.older(cursor: cursor))
+        ChatPerformance.end("OlderPage", interval, rows: messages.count)
     }
 
     /// Send the current composer text. Optimistic — prepends a row
@@ -1306,6 +1317,7 @@ public final class ChatConversationViewModel {
     public func send() async {
         let hasQueuedFiles = queuedAttachments.contains { $0.data != nil }
         guard roomClosedNote == nil, !isSending, !isDeletingAIConversation, canSend || hasQueuedFiles else { return }
+        ChatPerformance.signposter.emitEvent("SendTap")
         let sendSession = AuthManager.shared.requestSessionGeneration
         let trimmed = composerText.trimmingCharacters(in: .whitespacesAndNewlines)
         let capturedAttachments = queuedAttachments
@@ -1368,6 +1380,7 @@ public final class ChatConversationViewModel {
             roomId: replyDestination ?? knownRoomIdHint()
         )
         pendingByClientId[clientId] = pending
+        awaitFirstRender(pending.id, isSend: true)
         sendContextsByClientId[clientId] = PendingSendContext(
             text: trimmed,
             attachments: capturedAttachments,
@@ -1465,6 +1478,7 @@ public final class ChatConversationViewModel {
                 guard let self, !Task.isCancelled else { return }
                 if case let .accepted(message) = event, let clientId = message.clientMessageId,
                    pendingByClientId[clientId] != nil {
+                    ChatPerformance.signposter.emitEvent("SendAccepted")
                     retireConfirmedSend(clientId: clientId)
                     if case .person = mode { directRoomId = message.roomId }
                     activeRoomIds.insert(message.roomId)
@@ -1565,6 +1579,7 @@ public final class ChatConversationViewModel {
             )
             // Swap optimistic → server message. The socket echo may have
             // landed it via a refetch already, so replace-by-id.
+            ChatPerformance.signposter.emitEvent("SendAccepted")
             retireConfirmedSend(clientId: clientId)
             upsert(response.message, confirmedSend: true)
             sendLimitNotice = nil
@@ -3018,6 +3033,7 @@ public final class ChatConversationViewModel {
             handleRead(receipt, recoverOtherRooms: false)
         }
         rebuild()
+        ChatPerformance.mark("HistoryChanges", rows: messages.count)
         joinActiveRoomsIfPossible()
         scheduleMarkRead()
         if case let .room(roomId) = mode { await refreshRoomAvailability(roomId: roomId) }
@@ -3256,6 +3272,11 @@ public final class ChatConversationViewModel {
         }
         rebuild()
         joinActiveRoomsIfPossible()
+        switch kind {
+        case .reload: ChatPerformance.mark("HistoryReload", rows: messages.count)
+        case .merge: ChatPerformance.mark("HistoryMerge", rows: messages.count)
+        case .older: ChatPerformance.mark("HistoryOlder", rows: messages.count)
+        }
     }
 
     /// A fetched row carrying one of our client ids means that send
@@ -3514,6 +3535,7 @@ public final class ChatConversationViewModel {
     private func handleConnectionState(_ state: SocketClient.ConnectionState) {
         resetRoomJoins()
         if state == .connected {
+            ChatPerformance.signposter.emitEvent("SocketConnected")
             joinActiveRoomsIfPossible()
             scheduleFallbackRefresh()
         } else {
@@ -3730,9 +3752,31 @@ public final class ChatConversationViewModel {
         }
         let confirmsPending = message.clientMessageId.map { pendingByClientId[$0] != nil } == true
         if let clientId = message.clientMessageId { retireConfirmedSend(clientId: clientId) }
+        let isNewIncoming = message.userId != sendingIdentityId && !messages.contains { $0.id == message.id }
         upsert(message, confirmedSend: confirmsPending)
+        if isNewIncoming, messages.contains(where: { $0.id == message.id }) {
+            ChatPerformance.signposter.emitEvent("IncomingMessage")
+            awaitFirstRender(message.id, isSend: false)
+        }
         rebuild()
         scheduleMarkRead()
+    }
+
+    private func awaitFirstRender(_ rowId: String, isSend: Bool) {
+        // Rows that never reach the screen (a closed thread) must not pile up.
+        if awaitingFirstRender.count > 100 { awaitingFirstRender.removeAll() }
+        awaitingFirstRender[rowId] = isSend
+    }
+
+    /// A timeline row reached the screen. Times a send's sending bubble and a
+    /// live incoming message (`ChatPerformance`); every other row is ignored.
+    public func noteRowAppeared(_ rowId: String) {
+        guard let isSend = awaitingFirstRender.removeValue(forKey: rowId) else { return }
+        if isSend {
+            ChatPerformance.signposter.emitEvent("SendBubble")
+        } else {
+            ChatPerformance.signposter.emitEvent("IncomingBubble")
+        }
     }
 
     /// A peer can introduce a topic while this screen stays open. Refresh only
@@ -3902,7 +3946,9 @@ public final class ChatConversationViewModel {
         } else {
             boundRetainedMessages(keepingOlder: isViewingEarlierHistory || isViewingSearchContext)
         }
+        let interval = ChatPerformance.signposter.beginInterval("Rebuild")
         rebuildTimeline()
+        ChatPerformance.end("Rebuild", interval, rows: messages.count)
         scheduleHistorySave()
     }
 
