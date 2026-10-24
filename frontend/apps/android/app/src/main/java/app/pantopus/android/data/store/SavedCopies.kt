@@ -1,6 +1,8 @@
 package app.pantopus.android.data.store
 
 import android.content.Context
+import android.system.Os
+import android.system.OsConstants
 import app.pantopus.android.BuildConfig
 import app.pantopus.android.data.storage.ChatFileCipher
 import com.squareup.moshi.JsonClass
@@ -13,6 +15,7 @@ import java.lang.reflect.Type
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -50,6 +53,7 @@ class SavedCopies
         private val moshi: Moshi,
         private val build: String,
         private val chatCipher: ChatFileCipher? = null,
+        private val epochsRoot: File = File(root.parentFile, "${root.name}-chat-epochs"),
     ) {
         @Inject
         constructor(
@@ -63,6 +67,7 @@ class SavedCopies
             // fields this build reads, and revalidating it (a 304) would keep it.
             "${BuildConfig.VERSION_NAME}+${BuildConfig.VERSION_CODE}+${BuildConfig.GIT_COMMIT}",
             chatCipher,
+            File(context.noBackupFilesDir, "chat-history-epochs"),
         )
 
         private val envelopes = moshi.adapter(Envelope::class.java)
@@ -198,7 +203,8 @@ class SavedCopies
         }
 
         /**
-         * Invalidation also reaches entries whose memory slot has gone, and survives a process restart. Runs off the
+         * Ordinary invalidation also reaches entries whose memory slot has gone. Access retirement uses [retireChat]
+         * before cleanup, so interruption cannot expose an unopened old copy. Runs off the
          * caller's thread; [guard] wraps each file's work (the store's lock and wipe check), one file at a time.
          */
         fun invalidate(
@@ -277,8 +283,44 @@ class SavedCopies
             file(account, keyId, encrypted = true).delete()
         }
 
+        /**
+         * Retire the entire account's encrypted history/inbox namespace before deleting any old file. The marker is
+         * outside the evictable cache, is never trimmed, and does not change the key used by drafts or outgoing files.
+         * Legacy `.enc` paths and their AAD remain readable until the first retirement; they are never a fallback after it.
+         */
+        fun retireChat(account: String) {
+            val accountHash = accountHash(account)
+            rotateEpoch(accountHash)
+            // Cleanup is optional for correctness: all these paths became unreadable at the atomic marker change.
+            File(root, accountHash).listFiles()?.filter { it.extension == "enc" }?.forEach { it.delete() }
+        }
+
+        private fun rotateEpoch(name: String) {
+            check(epochsRoot.isDirectory || epochsRoot.mkdirs()) { "Chat history retirement is unavailable." }
+            val marker = File(epochsRoot, name)
+            val temporary = File.createTempFile("epoch-", ".tmp", epochsRoot)
+            try {
+                FileOutputStream(temporary).use { output ->
+                    output.write(UUID.randomUUID().toString().toByteArray(Charsets.UTF_8))
+                    output.fd.sync()
+                }
+                Files.move(temporary.toPath(), marker.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+                // Persist the renamed directory entry as well as its contents before reporting access retirement.
+                val directory = Os.open(epochsRoot.path, OsConstants.O_RDONLY or OsConstants.O_DIRECTORY, 0)
+                try {
+                    Os.fsync(directory)
+                } finally {
+                    Os.close(directory)
+                }
+            } finally {
+                temporary.delete()
+            }
+        }
+
         /** Sign-out, a revoked session, an account switch and Clear cache: every account's saved pages go. */
         fun deleteAll() {
+            // One durable marker retires even unopened accounts before interruptible recursive cleanup starts.
+            rotateEpoch("all")
             root.deleteRecursively()
         }
 
@@ -315,8 +357,24 @@ class SavedCopies
             encrypted: Boolean = false,
         ): File {
             val extension = if (encrypted) "enc" else "json"
-            return File(File(root, hash("${BuildConfig.PANTOPUS_API_BASE_URL}|$account")), "${hash(keyId)}.$extension")
+            val accountHash = accountHash(account)
+            val epoch =
+                if (encrypted) {
+                    listOfNotNull(readEpoch("all"), readEpoch(accountHash)).joinToString(".").takeIf { it.isNotEmpty() }
+                } else {
+                    null
+                }
+            return File(File(root, accountHash), "${hash(keyId)}${epoch?.let { ".$it" }.orEmpty()}.$extension")
         }
+
+        private fun readEpoch(name: String): String? {
+            val marker = File(epochsRoot, name)
+            if (!marker.exists()) return null
+            // Corrupt/unreadable metadata fails closed into a separate namespace, never back to legacy files.
+            return runCatching { UUID.fromString(marker.readText()).toString() }.getOrDefault("unavailable")
+        }
+
+        private fun accountHash(account: String): String = hash("${BuildConfig.PANTOPUS_API_BASE_URL}|$account")
 
         private fun scope(file: File): String = file.relativeTo(root).path
 

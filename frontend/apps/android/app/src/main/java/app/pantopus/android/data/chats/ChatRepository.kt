@@ -22,6 +22,7 @@ import app.pantopus.android.data.api.models.chats.SendChatMessageBody
 import app.pantopus.android.data.api.models.chats.SendChatMessageResponse
 import app.pantopus.android.data.api.models.chats.UnifiedConversationDto
 import app.pantopus.android.data.api.models.chats.UnifiedConversationsResponse
+import app.pantopus.android.data.api.net.Conditional
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.conditionalApiCall
@@ -78,6 +79,9 @@ class ChatRepository
 
         /** The stored Messages list as it is now, without a request. */
         fun conversationsCopy(): UnifiedConversationsResponse? = store.peek(StoreKeys.conversations).data
+
+        /** Capture while binding the socket, before an event can be delayed across an account or access change. */
+        fun badgeUpdater(): () -> (suspend (Int, Int?) -> Boolean) = store.chatBadgeUpdater()
 
         /** Marks the Messages list out of date (a new conversation arrived, the live connection came back). */
         fun conversationsChanged() = store.markStale(StoreTopics.CHATS)
@@ -539,8 +543,16 @@ class ChatRepository
         ): NetworkResult<ChatNotificationPreferencesResponse> =
             safeApiCall { api.roomPreferences(roomId, ChatNotificationPreferencesBody(enabled, asBusinessUserId)) }.chatsChanged()
 
-        suspend fun conversationTopics(otherUserId: String): NetworkResult<ConversationTopicsResponse> =
-            safeApiCall { api.conversationTopics(otherUserId) }
+        fun conversationTopicsCopy(otherUserId: String): ConversationTopicsResponse? =
+            store.peek(StoreKeys.conversationTopics(otherUserId)).data
+
+        suspend fun conversationTopics(otherUserId: String): NetworkResult<ConversationTopicsResponse> {
+            val stored =
+                store.read(StoreKeys.conversationTopics(otherUserId), persist = true) {
+                    safeApiCall { Conditional.Fresh(api.conversationTopics(otherUserId), null) }
+                }
+            return stored.data?.let { NetworkResult.Success(it) } ?: stored.asResult()
+        }
 
         suspend fun findOrCreateTopic(
             otherUserId: String,

@@ -128,11 +128,13 @@ class ChatBadgeViewModel
                 }
             }
             viewModelScope.launch {
-                socket.eventsOf("badge:update").collect { json ->
+                socket.scopedEventsOf("badge:update", repo::badgeUpdater).collect { (json, persist) ->
                     json.badgeUnreadCount()?.let { total ->
+                        val unmuted = json.badgeUnmutedUnreadCount()
+                        if (!persist(total, unmuted)) return@collect
                         badgeRevision++
                         serverTotalUnread = total
-                        serverUnmutedUnread = json.badgeUnmutedUnreadCount()
+                        serverUnmutedUnread = unmuted
                         applyAdjustedUnread(badgeCoordinator.snapshot.value.rows)
                         badgeCoordinator.publish(total, badgeCoordinator.snapshot.value.rows, serverUnmutedUnread)
                     }

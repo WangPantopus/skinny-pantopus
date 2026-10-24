@@ -3195,6 +3195,20 @@ private fun BubbleRow(
                     Text(text = name, fontSize = 12.sp, color = PantopusColors.appTextSecondary)
                 }
             }
+            val canViewAttachments = content.lockedTier == null || isOut
+            if (content.body !is ChatBubbleBody.Text && content.replyPreview != null && canViewAttachments) {
+                BubbleContainer(
+                    isOut = isOut,
+                    hasTail = false,
+                    isContinuation = content.isContinuation,
+                    bubbleColor = bubbleColor,
+                    contentId = content.id,
+                ) {
+                    Column(modifier = Modifier.widthIn(max = bubbleMaxWidth)) {
+                        ReplyPreview(preview = content.replyPreview, isOut = isOut)
+                    }
+                }
+            }
             // Reactions float as pills overlapping the bubble's bottom
             // corner (design `.reaction { bottom: -10; left/right: 8 }`).
             Box {
@@ -3202,7 +3216,6 @@ private fun BubbleRow(
                     content.attachments.any {
                         !it.mimeType.orEmpty().startsWith("image/") || it.liveVideoFileId != null
                     }
-                val canViewAttachments = content.lockedTier == null || isOut
                 if (hasInlineAttachments && canViewAttachments) {
                     BubbleContainer(
                         isOut = isOut,
@@ -3218,7 +3231,7 @@ private fun BubbleRow(
                 } else {
                     when (val body = content.body) {
                         is ChatBubbleBody.Text ->
-                            if (isEmojiOnly(body.text)) {
+                            if (isEmojiOnly(body.text) && content.replyPreview == null) {
                                 // Emoji-only messages render large with no bubble (RN).
                                 Text(
                                     text = body.text,

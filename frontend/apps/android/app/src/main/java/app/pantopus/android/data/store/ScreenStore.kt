@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.res.Configuration
 import android.os.SystemClock
 import app.pantopus.android.BuildConfig
+import app.pantopus.android.data.api.models.chats.UnifiedConversationsResponse
 import app.pantopus.android.data.api.net.Conditional
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
@@ -108,6 +109,7 @@ class ScreenStore
             /** Live memory updates must not hide an access refusal from a read already in flight. */
             @Volatile
             var memoryEdits = 0L
+            var badgeEdits = 0L
             var refusals = 0L
 
             /** The entry may be written to the phone (its kind allows it, and the last reader said the viewer may). */
@@ -138,6 +140,7 @@ class ScreenStore
             val edits: Long,
             val marks: Long,
             val memoryEdits: Long = 0L,
+            val badgeEdits: Long = 0L,
         )
 
         /** A mark whose saved-copy work is still queued: a load before it lands applies the mark itself. */
@@ -223,7 +226,7 @@ class ScreenStore
                     val running = slot.inFlight?.takeIf { it.isActive }
                     if (running != null) return@synchronized slot to running
                     if (!force && !slot.stale && current.isFresh(key.kind)) return current.cast()
-                    val ticket = Ticket(generation, identity(account), slot.edits, slot.marks, slot.memoryEdits)
+                    val ticket = Ticket(generation, identity(account), slot.edits, slot.marks, slot.memoryEdits, slot.badgeEdits)
                     val etag = slot.etag.takeIf { current.data != null }
                     slot.state.value = current.copy(refreshing = true)
                     val job = scope.async { settle(slot, fetchSafely(fetch, etag), ticket) }
@@ -384,6 +387,63 @@ class ScreenStore
             }
         }
 
+        /** Capture the account per socket and access per event, before a callback can queue across either change. */
+        fun chatBadgeUpdater(): () -> (suspend (Int, Int?) -> Boolean) {
+            val account = accountId()
+            val gen = generation
+            val session = identity(account)
+            return {
+                synchronized(slots) {
+                    if (account == null || gen != generation || session != identity()) {
+                        { _, _ -> false }
+                    } else {
+                        captureBadgeEvent(account)
+                    }
+                }
+            }
+        }
+
+        /** Persist only authoritative global totals, preserving rows. An old event cannot repopulate a retired slot. */
+        private fun captureBadgeEvent(account: String): suspend (Int, Int?) -> Boolean {
+            return synchronized(slots) {
+                val slot = slotLocked(StoreKeys.conversations, account)
+                val gen = generation
+                val session = identity(account)
+                val refusals = slot.refusals
+                val update: suspend (Int, Int?) -> Boolean = { total, unmuted ->
+                    val persisted =
+                        withContext(Dispatchers.IO) {
+                            synchronized(slots) live@{
+                                val active = gen == generation && session == identity() && slots["$account|${slot.key.id}"] === slot
+                                if (!active || refusals != slot.refusals) return@live false
+                                val previous = slot.state.value.data as? UnifiedConversationsResponse
+                                val data =
+                                    (previous ?: UnifiedConversationsResponse(emptyList())).copy(
+                                        totalUnread = total,
+                                        totalUnmutedUnread = unmuted,
+                                    )
+                                slot.memoryEdits++
+                                slot.badgeEdits++
+                                slot.etag = null
+                                slot.stale = true
+                                slot.persist = true
+                                val now = System.currentTimeMillis()
+                                slot.state.value = slot.state.value.copy(data = data, fetchedAt = now)
+                                synchronized(diskLock) { saved.save(account, StoreKeys.conversations, data, now, null, stale = true) }
+                                true
+                            }
+                        }
+                    // Resume in the collector's context and recheck after disk work, before it updates visible totals.
+                    persisted &&
+                        synchronized(slots) {
+                            gen == generation && session == identity() &&
+                                slots["$account|${slot.key.id}"] === slot && refusals == slot.refusals
+                        }
+                }
+                update
+            }
+        }
+
         /** Retain unaffected inbox rows after an edit/delete, guarded by the account and access captured before it. */
         fun <T : Any> chatContentUpdater(
             key: StoreKey<T>,
@@ -493,6 +553,10 @@ class ScreenStore
         fun remove(key: StoreKey<*>) {
             val account = accountId() ?: return
             synchronized(slots) {
+                if (key.kind == StoreKind.CONVERSATION || key.kind == StoreKind.MESSAGES_LIST) {
+                    retireChatLocked(account)
+                    return
+                }
                 slots.remove("$account|${key.id}")?.let { slot ->
                     slot.retire()
                     slot.state.value = Stored()
@@ -511,26 +575,26 @@ class ScreenStore
                     withContext(Dispatchers.IO + NonCancellable) {
                         synchronized(slots) retire@{
                             if (gen != generation || session != identity()) return@retire
-                            val topics = roomIds.map { "chat:$it" } + StoreTopics.CHAT_LIST
-                            // Aggregate windows use chat:* and may contain this room under an unopened topic.
-                            // Retire those copies and previews conservatively; unsent intent is a separate store.
-                            val iterator = slots.values.iterator()
-                            while (iterator.hasNext()) {
-                                val slot = iterator.next()
-                                if (topics.any(slot.key::matches)) {
-                                    slot.retire()
-                                    slot.state.value = Stored()
-                                    iterator.remove()
-                                }
-                            }
-                            synchronized(diskLock) {
-                                saved.invalidate(account, SavedCopies.Mark(topics = topics.toSet(), edited = true))
-                            }
+                            retireChatLocked(account)
                         }
                     }
                     _changes.update { it + 1 }
                 }
             }
+        }
+
+        /** All encrypted topic variants retire atomically; drafts and queued uploads use a separate store. */
+        private fun retireChatLocked(account: String) {
+            val iterator = slots.values.iterator()
+            while (iterator.hasNext()) {
+                val slot = iterator.next()
+                if (slot.key.kind == StoreKind.CONVERSATION || slot.key.kind == StoreKind.MESSAGES_LIST) {
+                    slot.retire()
+                    slot.state.value = Stored()
+                    iterator.remove()
+                }
+            }
+            synchronized(diskLock) { saved.retireChat(account) }
         }
 
         /**
@@ -722,7 +786,11 @@ class ScreenStore
                                 slot.etag = null
                                 slot.edits++
                                 slot.refusals++
-                                deleteSaved(slot.key.id)
+                                if (slot.key.kind == StoreKind.CONVERSATION || slot.key.kind == StoreKind.MESSAGES_LIST) {
+                                    accountId()?.let(::retireChatLocked)
+                                } else {
+                                    deleteSaved(slot.key.id)
+                                }
                                 Stored(failure = result.error)
                             } else {
                                 previous.copy(refreshing = false, failure = result.error)
@@ -746,6 +814,12 @@ class ScreenStore
             val updatedMeanwhile = ticket.memoryEdits != slot.memoryEdits
             slot.etag = reply.etag.takeUnless { updatedMeanwhile }
             slot.stale = ticket.marks != slot.marks || updatedMeanwhile
+            val onlyBadgeChanged = updatedMeanwhile && ticket.memoryEdits + slot.badgeEdits - ticket.badgeEdits == slot.memoryEdits
+            val totals = slot.state.value.data as? UnifiedConversationsResponse
+            if (onlyBadgeChanged && reply.data is UnifiedConversationsResponse && totals != null) {
+                val combined = reply.data.copy(totalUnread = totals.totalUnread, totalUnmutedUnread = totals.totalUnmutedUnread)
+                return Stored(combined, fetchedAt = now).also { writeSaved(combined, slot, now, etag = null) }
+            }
             // A successful older read cannot overwrite live changes that landed while it was in flight.
             return if (updatedMeanwhile) {
                 slot.state.value.copy(refreshing = false, failure = null)

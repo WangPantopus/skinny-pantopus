@@ -140,7 +140,37 @@ class SocketManager
                     callbackFlow {
                         val listener =
                             io.socket.emitter.Emitter.Listener { args ->
-                                (args.firstOrNull() as? JSONObject)?.let { trySend(UtcTimestamps.normalizeInPlace(it)) }
+                                if (s === socket) {
+                                    (args.firstOrNull() as? JSONObject)?.let { trySend(UtcTimestamps.normalizeInPlace(it)) }
+                                }
+                            }
+                        s.on(event, listener)
+                        awaitClose { s.off(event, listener) }
+                    }
+                }
+            }
+
+        /** Attach an account guard before listening and capture access before buffering each event. */
+        @OptIn(ExperimentalCoroutinesApi::class)
+        fun <T> scopedEventsOf(
+            event: String,
+            capture: () -> (() -> T),
+        ): Flow<Pair<JSONObject, T>> =
+            currentSocket.flatMapLatest { s ->
+                if (s == null) {
+                    emptyFlow()
+                } else {
+                    val captureEvent = capture()
+                    callbackFlow {
+                        val listener =
+                            io.socket.emitter.Emitter.Listener { args ->
+                                if (s === socket) {
+                                    (args.firstOrNull() as? JSONObject)?.let {
+                                        trySend(
+                                            UtcTimestamps.normalizeInPlace(it) to captureEvent(),
+                                        )
+                                    }
+                                }
                             }
                         s.on(event, listener)
                         awaitClose { s.off(event, listener) }

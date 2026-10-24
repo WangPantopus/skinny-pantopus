@@ -293,6 +293,8 @@ class ChatConversationViewModel
 
         // A confirmed removal blocks delayed pages and socket backfill for this open conversation.
         private val retiredRoomIds = mutableSetOf<String>()
+        private val ineligibleReceiptRooms = mutableSetOf<String>()
+        private var receiptRevision = 0L
         private val joinedRoomIds = mutableSetOf<String>()
         private val roomJoinJobs = mutableMapOf<String, Job>()
         private val roomSubscriptionIds = mutableMapOf<String, String>()
@@ -474,6 +476,8 @@ class ChatConversationViewModel
                 replyRoomDetails.clear()
                 activeRoomIds = emptySet()
                 retiredRoomIds.clear()
+                ineligibleReceiptRooms.clear()
+                receiptRevision++
                 visibleReadThroughId = null
                 visibleReadThroughByRoom.clear()
                 acknowledgedReadByRoom.clear()
@@ -2762,6 +2766,7 @@ class ChatConversationViewModel
 
         private fun loadTopicsIfNeeded() {
             val target = mode as? ChatThreadMode.Person ?: return
+            restoreTopicsCopy(target.otherUserId)
             if (topicsJob?.isActive == true) {
                 topicsRefreshRequested = true
                 return
@@ -2811,12 +2816,21 @@ class ChatConversationViewModel
                                 // shared into a new topic (it read "General" until then).
                                 if (messages.isNotEmpty()) rebuild()
                             }
-                            is NetworkResult.Failure -> Timber.w("load topics failed: ${result.error.message}")
+                            is NetworkResult.Failure -> {
+                                if (topicsContext == historyContext() && historyAccessEnded(result.error)) _topics.value = emptyList()
+                                Timber.w("load topics failed: ${result.error.message}")
+                            }
                         }
                     } finally {
                         finishTopicsRefresh(context, coroutineContext[Job])
                     }
                 }
+        }
+
+        private fun restoreTopicsCopy(otherUserId: String) {
+            if (_topics.value.isEmpty()) {
+                repo.conversationTopicsCopy(otherUserId)?.let { _topics.value = topicRows(it.topics) }
+            }
         }
 
         private fun finishTopicsRefresh(
@@ -3097,6 +3111,7 @@ class ChatConversationViewModel
         /** Apply a complete, fixed server revision window before advancing the durable recovery anchor. */
         @Suppress("ReturnCount") // Scope changes, access refusal and server reset each end this recovery attempt.
         private suspend fun recoverChanges(context: HistoryReadContext): Boolean {
+            val receiptVersion = receiptRevision
             var cursor = historyPage?.syncCursors.orEmpty()
             if (cursor.isEmpty()) return false
             var until: Map<String, Long>? = null
@@ -3125,7 +3140,7 @@ class ChatConversationViewModel
                 if (page.resetRequired) return false
                 collectChanges(page, changes, receipts)
                 page.messageReadReceipts.orEmpty().forEach { receipt ->
-                    if (receipt.readAt != null) messageReceipts[receipt.messageId] = receipt
+                    messageReceipts[receipt.messageId] = receipt
                 }
                 changes.entries.removeAll { it.value.roomId in retiredRoomIds }
                 receipts.entries.removeAll { it.value.roomId in retiredRoomIds }
@@ -3136,7 +3151,7 @@ class ChatConversationViewModel
                             syncCursors = page.syncCursors.filterKeys { it !in retiredRoomIds },
                             removedRoomIds = (page.removedRoomIds + removedRooms).distinct(),
                         )
-                    applyChanges(admitted, changes.values, receipts.values, messageReceipts.values)
+                    applyChanges(admitted, changes.values, receipts.values, messageReceipts.values, receiptVersion == receiptRevision)
                     return true
                 }
                 if (page.syncCursors == cursor) return false
@@ -3198,6 +3213,7 @@ class ChatConversationViewModel
             changes: Collection<ChatMessageDto>,
             receipts: Collection<ChatReadReceipt>,
             messageReceipts: Collection<ChatMessageReadReceipt>,
+            clearCanonicalNull: Boolean,
         ) {
             val oldest = messages.minWithOrNull(messageOrder)
             val merged = messages.associateBy { it.id }.toMutableMap()
@@ -3217,7 +3233,7 @@ class ChatConversationViewModel
             retireConfirmedSends(changes.filterNot { it.deleted })
             refreshUnknownTopics(changes.filterNot { it.deleted })
             receipts.forEach(::applyReadReceipt)
-            applyMessageReadReceipts(messageReceipts)
+            applyMessageReadReceipts(messageReceipts, clearCanonicalNull)
             rebuild()
             publishViewedRooms()
             joinActiveRoomsIfPossible()
@@ -3499,7 +3515,9 @@ class ChatConversationViewModel
             existing: ChatMessageDto,
         ): ChatMessageDto {
             if ((incoming.syncVersion ?: 0) < (existing.syncVersion ?: 0)) return existing
-            return incoming.copy(actorUserId = incoming.actorUserId ?: existing.actorUserId, readAt = incoming.readAt ?: existing.readAt)
+            val readAt = if (incoming.roomId in ineligibleReceiptRooms) null else incoming.readAt ?: existing.readAt
+            if (readAt != existing.readAt) receiptRevision++
+            return incoming.copy(actorUserId = incoming.actorUserId ?: existing.actorUserId, readAt = readAt)
         }
 
         private fun applyReactions(
@@ -3660,18 +3678,20 @@ class ChatConversationViewModel
             val person = mode as? ChatThreadMode.Person ?: return
             val roomId = json.optStringValue("roomId")
             val reader = json.optStringValue("userId")
+            if (roomId == null || roomId !in activeRoomIds || reader != person.otherUserId) return
+            if (!acceptReceiptEligibility(json, roomId)) return
             val throughId = json.optStringValue("throughMessageId")
             val readAt = json.optStringValue("readAt")
-            if (roomId == null || throughId == null || readAt == null) return
-            if (reader != person.otherUserId) return
+            if (throughId == null || readAt == null) return
             if (roomId != directRoomId) {
                 // Aggregate history can include groups. Let authorized per-message receipts establish
                 // the reader for historical direct rooms without trusting a group boundary as 1:1 Read.
-                if (roomId in activeRoomIds && messages.any { it.roomId == roomId && it.userId == messageIdentityId }) catchUpMessages()
+                if (messages.any { it.roomId == roomId && it.userId == messageIdentityId }) catchUpMessages()
                 return
             }
             // The last-read cursor is needed: a server clock timestamp alone could mark a newer send as read.
             val through = messages.firstOrNull { it.id == throughId && it.roomId == roomId } ?: return
+            receiptRevision++
             messages.replaceAll { message ->
                 if (message.roomId == roomId && message.userId == messageIdentityId && messageOrder.compare(message, through) <= 0) {
                     changedDuringCatchUp.add(message.id)
@@ -3685,7 +3705,7 @@ class ChatConversationViewModel
 
         private fun applyReadReceipt(receipt: ChatReadReceipt) {
             val person = mode as? ChatThreadMode.Person ?: return
-            if (receipt.roomId != directRoomId || receipt.userId != person.otherUserId) return
+            if (receipt.roomId != directRoomId || receipt.userId != person.otherUserId || receipt.roomId in ineligibleReceiptRooms) return
             val through =
                 ChatMessageDto(id = receipt.throughMessageId, roomId = receipt.roomId, createdAt = receipt.throughCreatedAt)
             messages.replaceAll { message ->
@@ -3711,7 +3731,9 @@ class ChatConversationViewModel
             if (roomId !in activeRoomIds || reader == messageIdentityId) return
             val person = mode as? ChatThreadMode.Person
             if (person != null && reader != person.otherUserId) return
+            if (!acceptReceiptEligibility(json, roomId)) return
             val through = ChatMessageDto(throughId, roomId, createdAt = throughAt)
+            receiptRevision++
             messages.replaceAll { message ->
                 val matchesScope = message.roomId == roomId && message.topicId == topicId && message.userId == messageIdentityId
                 if (matchesScope && messageOrder.compare(message, through) <= 0) {
@@ -3725,15 +3747,67 @@ class ChatConversationViewModel
         }
 
         /** Bounded, authorized per-message receipts also repair historical direct rooms and missed topic events. */
-        private fun applyMessageReadReceipts(receipts: Collection<ChatMessageReadReceipt>) {
-            val known = receipts.mapNotNull { receipt -> receipt.readAt?.let { receipt.messageId to it } }.toMap()
+        private fun applyMessageReadReceipts(
+            receipts: Collection<ChatMessageReadReceipt>,
+            clearCanonicalNull: Boolean,
+        ) {
+            val known = receipts.associateBy { it.messageId }
+            val correctedRooms = mutableSetOf<String>()
             messages.replaceAll { message ->
-                val readAt = known[message.id]
-                if (readAt != null && message.userId == messageIdentityId && canMerge(message)) {
-                    message.copy(readAt = message.readAt ?: readAt)
+                val receipt = known[message.id]
+                if (receipt != null && message.userId == messageIdentityId && canMerge(message)) {
+                    val readAt =
+                        when {
+                            message.roomId in ineligibleReceiptRooms -> null
+                            receipt.readAt != null -> message.readAt ?: receipt.readAt
+                            clearCanonicalNull -> null
+                            else -> message.readAt
+                        }
+                    if (message.readAt != null && readAt == null) correctedRooms.add(message.roomId)
+                    message.copy(readAt = readAt)
                 } else {
                     message
                 }
+            }
+            if (correctedRooms.isNotEmpty()) retireReceiptCopies(correctedRooms)
+        }
+
+        /** Missing eligibility never invents a receipt; explicit false also repairs legacy cached Read stamps. */
+        private fun acceptReceiptEligibility(
+            json: JSONObject,
+            roomId: String,
+        ): Boolean {
+            if (!json.has("directReceiptEligible") || json.isNull("directReceiptEligible")) {
+                catchUpMessages()
+                return false
+            }
+            if (json.optBoolean("directReceiptEligible")) {
+                ineligibleReceiptRooms.remove(roomId)
+                return true
+            }
+            val first = ineligibleReceiptRooms.add(roomId)
+            val changed = messages.any { it.roomId == roomId && it.userId == messageIdentityId && it.readAt != null }
+            messages.replaceAll { if (it.roomId == roomId && it.userId == messageIdentityId) it.copy(readAt = null) else it }
+            if (first || changed) retireReceiptCopies(setOf(roomId))
+            return false
+        }
+
+        /** Fence older requests immediately, then retire every encrypted variant before a canonical recheck. */
+        private fun retireReceiptCopies(roomIds: Set<String>) {
+            receiptRevision++
+            historyGeneration++
+            catchUpJob?.cancel()
+            catchUpJob = null
+            historyCopyContext = null
+            updateHistoryCopy = null
+            val context = historyContext()
+            val retire = repo.historyAccessRetirer()
+            rebuild()
+            viewModelScope.launch {
+                retire(roomIds)
+                if (context != historyContext()) return@launch
+                // The retired slot has no ETag/data; this authorized store read can seed a new encrypted copy.
+                fetch(initial = false, quiet = true)
             }
         }
 
