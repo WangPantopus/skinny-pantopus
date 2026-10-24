@@ -113,13 +113,14 @@ export default function ChatInput({ onSend, draft, sending, disabled = false, pl
   }, [editingMessage]);
   // The emoji picker is not in the page bundle: fetch it once the conversation
   // has opened and the page is idle, so the first tap on the emoji button opens
-  // it at once. Its ~550 KB parse must not land in the conversation's first paint.
+  // it at once. Its ~550 KB parse must not land in the conversation's first
+  // paint, and a picker loaded on demand applies its first pick a moment late.
   useEffect(() => {
     let idle: number | undefined;
     const timer = window.setTimeout(() => {
       if (typeof window.requestIdleCallback === 'function') idle = window.requestIdleCallback(preloadEmojiPicker, { timeout: 4000 });
       else preloadEmojiPicker();
-    }, 2500);
+    }, 800);
     return () => { window.clearTimeout(timer); if (idle !== undefined) window.cancelIdleCallback(idle); };
   }, []);
   const visibleText = editingMessage ? editText : text;
