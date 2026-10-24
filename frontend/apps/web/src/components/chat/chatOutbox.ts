@@ -170,7 +170,9 @@ export async function enqueueChatSend(actorId: string, input: Omit<PendingChatSe
   const write = storageWrites.catch(() => {}).then(async () => {
     const mutation = consumeChatDraft(draft);
     // File.size is available without allocating or encrypting the attachment.
-    await assertChatOutboxCapacity(saved, [
+    // A text-only send has nothing large to read first: the write below
+    // enforces the same limits in its own transaction, one storage read sooner.
+    if (files.length) await assertChatOutboxCapacity(saved, [
       { kind: 'outbox', key: message.clientMessageId, bytes: new TextEncoder().encode(JSON.stringify(message)).byteLength },
       ...files.map((file, index) => ({ kind: 'media' as const, key: message.files[index].key, bytes: file.size })),
     ], mutation);
