@@ -116,6 +116,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -151,8 +152,10 @@ import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
 import coil.compose.AsyncImage
+import coil.imageLoader
 import coil.request.CachePolicy
 import coil.request.ImageRequest
+import coil.size.Scale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -566,6 +569,7 @@ fun ChatConversationScreen(
                 TypingIndicator(initials = typingInitials)
             }
             if (queuedAttachments.isNotEmpty()) {
+                PrefetchLocalPhotos(queuedAttachments)
                 AttachmentStripView(
                     attachments = queuedAttachments,
                     onRemove = viewModel::removeQueuedAttachment,
@@ -2738,6 +2742,9 @@ private fun AiWelcomeCard(
  */
 private const val NEAR_BOTTOM_ROW_SLACK = 2
 
+private val PHOTO_BUBBLE_WIDTH = 200.dp
+private val PHOTO_BUBBLE_HEIGHT = 130.dp
+
 /** A send that is accepted sooner shows "Sending..." and then its check, without a spinner flashing in between. */
 private const val SENDING_INDICATOR_DELAY_MS = 600L
 
@@ -4654,7 +4661,7 @@ private fun PhotoBubble(
     Box(
         modifier =
             Modifier
-                .size(200.dp, 130.dp)
+                .size(PHOTO_BUBBLE_WIDTH, PHOTO_BUBBLE_HEIGHT)
                 .clip(shape)
                 .background(PantopusColors.appSurfaceSunken)
                 .border(1.dp, if (isOut) Color.Transparent else PantopusColors.appBorder, shape)
@@ -4724,18 +4731,47 @@ private fun inlinePhotoRequest(url: String): ImageRequest {
 
 /**
  * A picked photo decodes from its bytes in this process; nothing is written to disk. Its decoded thumbnail is kept in
- * memory under the attachment id, so the sent bubble that replaces the sending one shows it without decoding again.
+ * memory under the attachment id at the bubble's size, so the sending bubble (decoded ahead while the message is being
+ * written) and the sent bubble that replaces it show it without decoding again.
  */
 @Composable
 private fun localPhotoRequest(photo: ChatLocalPhoto): ImageRequest {
     val context = LocalContext.current
-    return remember(context, photo.id) {
-        ImageRequest.Builder(context)
-            .data(photo.bytes)
-            .memoryCacheKey("chat-local-photo:${photo.id}")
-            .diskCachePolicy(CachePolicy.DISABLED)
-            .crossfade(false)
-            .build()
+    val size = photoBubbleSize()
+    return remember(context, photo.id, size) { localPhotoRequest(context, photo, size) }
+}
+
+private fun localPhotoRequest(
+    context: Context,
+    photo: ChatLocalPhoto,
+    size: IntSize,
+): ImageRequest =
+    ImageRequest.Builder(context)
+        .data(photo.bytes)
+        .memoryCacheKey("chat-local-photo:${photo.id}")
+        .diskCachePolicy(CachePolicy.DISABLED)
+        .size(size.width, size.height)
+        .scale(Scale.FILL)
+        .crossfade(false)
+        .build()
+
+@Composable
+private fun photoBubbleSize(): IntSize {
+    val density = LocalDensity.current
+    return with(density) { IntSize(PHOTO_BUBBLE_WIDTH.roundToPx(), PHOTO_BUBBLE_HEIGHT.roundToPx()) }
+}
+
+/** Photos queued in the composer are decoded for their bubble while the message is still being written. */
+@Composable
+private fun PrefetchLocalPhotos(attachments: List<ChatQueuedAttachment>) {
+    val context = LocalContext.current
+    val size = photoBubbleSize()
+    val photos =
+        attachments.mapNotNull { queued ->
+            queued.bytes?.takeIf { queued.mimeType.startsWith("image/") }?.let { ChatLocalPhoto(queued.id, it) }
+        }
+    LaunchedEffect(photos, size) {
+        photos.forEach { photo -> context.imageLoader.enqueue(localPhotoRequest(context, photo, size)) }
     }
 }
 
