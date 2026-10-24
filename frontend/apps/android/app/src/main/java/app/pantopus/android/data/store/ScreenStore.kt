@@ -21,6 +21,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -38,6 +39,12 @@ private const val MAX_ENTRIES = 200
 
 /** …and an entry nobody has used for 30 minutes goes. */
 private const val IDLE_MS = 30 * 60 * 1000L
+
+/**
+ * A chat copy changed in memory (a send's acceptance, its echo, receipts, a read) is written once the burst settles,
+ * not once per change and not in the way of the next send's encrypted save.
+ */
+private const val CHAT_COPY_SETTLE_MS = 500L
 
 /**
  * The app's one cache of server replies for screens (Instant Screens contract §6): a [StateFlow] per [StoreKey],
@@ -58,7 +65,7 @@ private const val IDLE_MS = 30 * 60 * 1000L
  * Sensitive replies (contract §5) never enter the store: their screens keep calling the repository directly.
  */
 @Singleton
-@Suppress("TooManyFunctions") // Read, write, invalidation and eviction share the same account/generation lock.
+@Suppress("TooManyFunctions", "LargeClass") // Read, write, invalidation and eviction share the same account/generation lock.
 class ScreenStore
     @Inject
     constructor(
@@ -375,7 +382,7 @@ class ScreenStore
                             slot.stale = true
                             val now = System.currentTimeMillis()
                             slot.state.value = current.copy(data = data, fetchedAt = now)
-                            writeSaved(data, slot, now, etag = null)
+                            writeSaved(data, slot, now, etag = null, coalesce = true)
                         }
                     }
                 }
@@ -407,7 +414,7 @@ class ScreenStore
                             slot.memoryEdits++
                             val now = System.currentTimeMillis()
                             slot.state.value = slot.state.value.copy(data = data, fetchedAt = now)
-                            writeSaved(data, slot, now, etag = null)
+                            writeSaved(data, slot, now, etag = null, coalesce = true)
                         }
                         markStale(StoreTopics.CHATS)
                     }
@@ -731,12 +738,17 @@ class ScreenStore
             }
         }
 
-        /** Writes a confirmed reply to the phone off the caller's thread, when the entry may be saved. */
+        /**
+         * Writes a confirmed reply to the phone off the caller's thread, when the entry may be saved. With [coalesce], the
+         * write waits for a burst of in-memory chat changes to end and is skipped when a newer change, another read or
+         * any retirement has replaced [data] meanwhile.
+         */
         private fun writeSaved(
             data: Any?,
             slot: Slot,
             fetchedAt: Long,
             etag: String? = slot.etag,
+            coalesce: Boolean = false,
         ) {
             val account = accountId() ?: return
             if (data == null || !slot.persist) return
@@ -751,11 +763,12 @@ class ScreenStore
             val liveEdits = slot.memoryEdits
             val gen = generation
             scope.launch {
+                if (coalesce) delay(CHAT_COPY_SETTLE_MS)
                 synchronized(diskLock) {
                     // A wipe, a newer own edit, ended access or a reader that stopped vouching for the viewer since
                     // this reply was settled: it is not written.
-                    val current = gen == generation && edits == slot.edits && liveEdits == slot.memoryEdits
-                    if (current && slot.persist) {
+                    val current = gen == generation && edits == slot.edits && liveEdits == slot.memoryEdits && slot.persist
+                    if (current && (!coalesce || slot.state.value.data === data)) {
                         saved.save(account, slot.key, data, fetchedAt, etag, slot.stale)
                     }
                 }

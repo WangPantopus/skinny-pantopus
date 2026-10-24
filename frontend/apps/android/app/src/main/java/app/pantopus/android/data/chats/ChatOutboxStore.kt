@@ -82,8 +82,8 @@ data class ChatOutboxEntry(
 /**
  * Unsent messages are durable data, separate from the evictable recent-history cache. Metadata and original
  * attachments are encrypted before they touch disk, under noBackupFilesDir. Atomic replacement and fsync happen
- * before Send clears the composer. This store never evicts an unsent message to make room for a newer one.
- * The coordinator serializes access and performs all disk work off the UI thread.
+ * before a message counts as queued (and before it is delivered). This store never evicts an unsent message to make
+ * room for a newer one. The coordinator serializes access and performs all disk work off the UI thread.
  */
 @Singleton
 class ChatOutboxStore
@@ -119,6 +119,12 @@ class ChatOutboxStore
             return entries
         }
 
+        /**
+         * Queues [entry] with one encrypted metadata write (one Keystore operation and one fsync) before one atomic move.
+         * The composer's draft folder, when there is one, becomes the message's folder: an attachment already encrypted
+         * there for the same picked file is kept instead of being encrypted again, and the move both queues the message
+         * and retires that draft. The draft itself is neither rewritten nor decrypted on the way.
+         */
         fun insert(
             entry: ChatOutboxEntry,
             files: List<UploadFile>,
@@ -128,45 +134,83 @@ class ChatOutboxStore
             check(folder.listFiles().orEmpty().count { it.isDirectory && !it.name.startsWith("draft-") } < MAX_MESSAGES) {
                 "There are too many unsent messages. Send or remove some before trying again."
             }
-            val sourceDraft = draft?.takeIf { it.target == entry.target && readDraftMetadata(draftFolder(it.target, it.topicId)) == it }
-            val needed = if (sourceDraft == null) files.sumOf { it.bytes.size.toLong() } else 0L
+            val destination = entryFolder(entry)
+            check(!destination.exists()) { "This message is already queued." }
+            val draftFolder =
+                draft?.takeIf { it.target == entry.target }?.let { draftFolder(it.target, it.topicId) }?.takeIf { it.isDirectory }
+            val staging = draftFolder ?: File(folder, "${entry.clientId}.tmp")
+            check(staging.isDirectory || staging.mkdirs()) { "Couldn't save the message on this device." }
+            val described = draft?.attachments?.takeIf { it.size == files.size }
+            val sources =
+                files.mapIndexed { index, input ->
+                    val known =
+                        described?.get(index)?.takeIf {
+                            it.size == input.bytes.size && it.mimeType == input.mimeType && it.filename == input.filename
+                        }
+                    val id = UUID.fromString(known?.id ?: UUID.randomUUID().toString()).toString()
+                    val file = File(staging, "$id.enc")
+                    // A draft file is only reused when the draft describes this same picked file; it was encrypted under
+                    // the draft folder's scope, which the queued metadata records.
+                    Triple(input, id, file.takeIf { known != null && draftFolder != null && it.isFile })
+                }
+            val needed = sources.filter { it.third == null }.sumOf { it.first.bytes.size.toLong() }
             val held = root.walkTopDown().filter { it.isFile }.sumOf { it.length() }
             check(needed <= MAX_BYTES && held + needed <= MAX_BYTES) {
                 "Unsent attachments have filled the device queue. Send or remove some before adding more."
             }
-            val destination = entryFolder(entry)
-            check(!destination.exists()) { "This message is already queued." }
-            val temporary = sourceDraft?.let { draftFolder(it.target, it.topicId) } ?: File(folder, "${entry.clientId}.tmp")
-            check(temporary.isDirectory || temporary.mkdirs()) { "Couldn't save the message on this device." }
+            val written = mutableListOf<File>()
+            var committed = false
             try {
-                val attachments =
-                    sourceDraft?.attachments?.map { attachment ->
-                        val source = File(draftFolder(sourceDraft.target, sourceDraft.topicId), "${attachment.id}.enc")
-                        attachment.copy(encryptionScope = scope(source))
-                    } ?: files.map { ChatOutboxAttachment(UUID.randomUUID().toString(), it.filename, it.mimeType, it.bytes.size) }
+                val attachments = sources.map { (input, id, reused) -> stage(input, id, reused, staging, destination, written) }
                 val saved = entry.copy(attachments = attachments)
-                files.zip(attachments).forEach { (input, attachment) ->
-                    val temporaryFile = File(temporary, "${attachment.id}.enc")
-                    if (sourceDraft == null) {
-                        writeAttachment(temporaryFile, input.bytes, scope(File(destination, temporaryFile.name)))
-                    }
-                }
                 val metadata = File(destination, "message.enc")
-                atomicWrite(File(temporary, metadata.name), cipher.encrypt(adapter.toJson(saved).toByteArray(), scope(metadata)))
-                val storedBytes =
-                    temporary.walkTopDown()
-                        .filter { it.isFile && (sourceDraft == null || it.name == "message.enc") }.sumOf { it.length() }
-                check(held + storedBytes <= MAX_BYTES) {
+                val encrypted = cipher.encrypt(adapter.toJson(saved).toByteArray(), scope(metadata))
+                check(held + needed + encrypted.size <= MAX_BYTES) {
                     "Unsent attachments have filled the device queue. Send or remove some before adding more."
                 }
-                // Android denies hard links in app data. Moving the draft folder commits its encrypted files
-                // together with the outgoing metadata; their authenticated original scopes remain in metadata.
-                Files.move(temporary.toPath(), destination.toPath(), StandardCopyOption.ATOMIC_MOVE)
-                File(destination, "draft.enc").delete()
+                atomicWrite(File(staging, metadata.name), encrypted)
+                // Android denies hard links in app data. Moving the folder commits its encrypted files together with the
+                // outgoing metadata; the authenticated original scope of a reused draft file remains in the metadata.
+                Files.move(staging.toPath(), destination.toPath(), StandardCopyOption.ATOMIC_MOVE)
+                committed = true
+                val kept = attachments.mapTo(mutableSetOf("message.enc")) { "${it.id}.enc" }
+                destination.listFiles().orEmpty().filter { it.name !in kept }.forEach { it.deleteRecursively() }
                 return saved
             } finally {
-                if (sourceDraft == null) temporary.deleteRecursively() else File(temporary, "message.enc").delete()
+                if (!committed) discard(staging, draftFolder != null, written)
             }
+        }
+
+        /** A reused draft file keeps its recorded scope; a new one is encrypted for its queued location. */
+        private fun stage(
+            input: UploadFile,
+            id: String,
+            reused: File?,
+            staging: File,
+            destination: File,
+            written: MutableList<File>,
+        ): ChatOutboxAttachment {
+            if (reused != null) {
+                return ChatOutboxAttachment(id, input.filename, input.mimeType, input.bytes.size, encryptionScope = scope(reused))
+            }
+            val file = File(staging, "$id.enc")
+            written += file
+            writeAttachment(file, input.bytes, scope(File(destination, file.name)))
+            return ChatOutboxAttachment(id, input.filename, input.mimeType, input.bytes.size)
+        }
+
+        /** A commit that did not happen leaves a draft folder exactly as it was saved; a staging folder goes entirely. */
+        private fun discard(
+            staging: File,
+            isDraft: Boolean,
+            written: List<File>,
+        ) {
+            if (!isDraft) {
+                staging.deleteRecursively()
+                return
+            }
+            File(staging, "message.enc").delete()
+            written.forEach { it.delete() }
         }
 
         fun update(entry: ChatOutboxEntry) {

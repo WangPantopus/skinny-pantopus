@@ -21,10 +21,12 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -70,6 +72,9 @@ class ChatOutbox
         @Volatile private var blockedSession: String? = null
 
         @Volatile private var generation = 0L
+
+        /** False only after this process cancelled the job and arranged nothing since; null when unknown. */
+        @Volatile private var jobArranged: Boolean? = null
         private var request: Job? = null
         private val draftRevisions = mutableMapOf<Pair<ChatSendTarget, String?>, Long>()
 
@@ -104,12 +109,23 @@ class ChatOutbox
                 }
             }
             scope.launch { drain() }
-            scope.launch { _entries.collect { scheduleDelivery() } }
+            scope.launch {
+                _entries.collectLatest {
+                    // In the foreground the queue delivers at once, and the persisted job is the fallback for a process
+                    // that ends first: arrange it after the send has started rather than alongside it. Going to the
+                    // background arranges it immediately (backgrounded).
+                    if (foreground) delay(FOREGROUND_JOB_DELAY_MS)
+                    scheduleDelivery()
+                }
+            }
         }
 
         fun foregrounded() {
             foreground = true
-            scope.launch { synchronizeAccount() }
+            scope.launch {
+                synchronizeAccount()
+                scheduleDelivery()
+            }
             wake.trySend(Unit)
         }
 
@@ -152,9 +168,12 @@ class ChatOutbox
             val scheduler = context.getSystemService(JobScheduler::class.java) ?: return
             val next = _entries.value.filterNot { it.terminal }.minOfOrNull { it.retryAt }
             if (next == null) {
-                scheduler.cancel(DELIVERY_JOB_ID)
+                // Nothing was arranged since the last cancel: a message delivered in the foreground costs no job call.
+                if (jobArranged != false) scheduler.cancel(DELIVERY_JOB_ID)
+                jobArranged = false
                 return
             }
+            jobArranged = null
             if (scheduler.getPendingJob(DELIVERY_JOB_ID) != null) return
             val job =
                 JobInfo.Builder(DELIVERY_JOB_ID, ComponentName(context, ChatOutboxJobService::class.java))
@@ -199,21 +218,28 @@ class ChatOutbox
         private suspend fun synchronizeAccount() {
             val user = tokens.userId()
             val session = tokens.sessionMarker()
-            lock.withLock {
-                if (session != null && session == blockedSession) return@withLock
-                if (user != account) {
-                    generation++
-                    request?.cancel()
-                    account = user
-                    _entries.value = if (user == null) emptyList() else store.load(user)
+            val restored =
+                lock.withLock {
+                    if (session != null && session == blockedSession) return@withLock false
+                    val changed = !accountRestored || user != account
+                    if (user != account) {
+                        generation++
+                        request?.cancel()
+                        account = user
+                        _entries.value = if (user == null) emptyList() else store.load(user)
+                    }
+                    accountRestored = true
+                    changed
                 }
-                accountRestored = true
-            }
-            scheduleDelivery()
+            // Entry changes arrange the background job themselves; an unchanged account needs no JobScheduler call here.
+            if (restored) scheduleDelivery()
             wake.trySend(Unit)
         }
 
-        /** A null result means persisted; failure leaves the caller's original composer text and files intact. */
+        /**
+         * A null result means persisted; failure leaves the caller's original composer text and files intact. The send
+         * path does one encrypted metadata write: [draft] (the composer as sent) is not saved again first.
+         */
         @Suppress("TooGenericExceptionCaught") // Storage and Keystore providers expose several platform exception types.
         suspend fun enqueue(
             entry: ChatOutboxEntry,
@@ -222,27 +248,27 @@ class ChatOutbox
         ): String? =
             withContext(Dispatchers.IO) {
                 synchronizeAccount()
-                lock.withLock {
-                    if (account != entry.target.accountId) return@withLock "Your account changed. Open the conversation and try again."
-                    try {
-                        val submittedDraft = draft?.copy(queuedClientId = entry.clientId)
-                        if (submittedDraft != null) {
-                            reviseDraft(submittedDraft)
-                            store.saveDraft(submittedDraft, files)
+                val error =
+                    lock.withLock {
+                        if (account != entry.target.accountId) return@withLock "Your account changed. Open the conversation and try again."
+                        try {
+                            // A draft save still waiting for this writer must not bring the sent text back.
+                            draft?.let(::reviseDraft)
+                            val saved = store.insert(entry, files, draft)
+                            _entries.value = _entries.value + saved
+                            null
+                        } catch (error: CancellationException) {
+                            throw error
+                        } catch (error: IllegalStateException) {
+                            error.message ?: "Couldn't save the message on this device. Try again."
+                        } catch (_: Exception) {
+                            Timber.w("An outgoing chat could not be saved")
+                            "Couldn't save the message on this device. Try again."
                         }
-                        val saved = store.insert(entry, files, submittedDraft)
-                        _entries.value = _entries.value + saved
-                        wake.trySend(Unit)
-                        null
-                    } catch (error: CancellationException) {
-                        throw error
-                    } catch (error: IllegalStateException) {
-                        error.message ?: "Couldn't save the message on this device. Try again."
-                    } catch (_: Exception) {
-                        Timber.w("An outgoing chat could not be saved")
-                        "Couldn't save the message on this device. Try again."
                     }
-                }
+                // Woken after the writer is free, so delivery starts without waiting on it.
+                if (error == null) wake.trySend(Unit)
+                error
             }
 
         fun retry(clientId: String) {
@@ -299,7 +325,10 @@ class ChatOutbox
                     _entries.value = emptyList()
                     synchronized(this@ChatOutbox) { draftRevisions.clear() }
                     store.clear()
-                    synchronized(this@ChatOutbox) { context.getSystemService(JobScheduler::class.java)?.cancel(DELIVERY_JOB_ID) }
+                    synchronized(this@ChatOutbox) {
+                        context.getSystemService(JobScheduler::class.java)?.cancel(DELIVERY_JOB_ID)
+                        jobArranged = false
+                    }
                 }
             }
 
@@ -509,5 +538,6 @@ class ChatOutbox
             const val DELIVERY_JOB_ID = 63_109
             const val BACKGROUND_DELAY_MS = 5_000L
             const val BACKGROUND_BUDGET_MS = 30_000L
+            const val FOREGROUND_JOB_DELAY_MS = 1_000L
         }
     }

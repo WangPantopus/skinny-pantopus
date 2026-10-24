@@ -20,6 +20,7 @@ import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -79,6 +80,13 @@ class SavedCopies
         )
 
         private val envelopes = moshi.adapter(Envelope::class.java)
+
+        /**
+         * Each copy's envelope as this process last wrote or checked it (under the store's disk lock). An invalidation
+         * that cannot change a copy (another topic, already out of date, fetched after the mark) skips it without
+         * decrypting it; a copy it must rewrite is still read and checked from the file itself.
+         */
+        private val envelopeIndex = ConcurrentHashMap<String, Envelope>()
 
         /** Small received files share history's account/retirement boundary, never the generic image cache. */
         class MediaCopy(val bytes: ByteArray, val contentType: String)
@@ -290,31 +298,53 @@ class SavedCopies
             target: File,
             mark: Mark,
         ) {
-            if (!target.isFile) return
-            val edited = mark.edited
+            if (!target.isFile) {
+                envelopeIndex.remove(target.path)
+                return
+            }
+            if (envelopeIndex[target.path]?.let { invalidation(it, mark) } == Invalidation.NONE) return
             try {
                 read(target).reader().buffered().use { reader ->
                     val envelope = reader.readLine()?.let { envelopes.fromJson(it) } ?: return@use
-                    // A copy saved after the mark came from a later read and keeps its own state.
-                    if (envelope.fetchedAt > mark.upTo) return@use
-                    val matches = envelope.matches(mark.topic, mark.kinds) || mark.topics.any { envelope.matches(it, emptySet()) }
-                    if (!envelope.legacy && !matches) return@use
-                    val retainChatList = mark.retainChatList && envelope.kind == StoreKind.MESSAGES_LIST
-                    if (edited && !envelope.legacy && !retainChatList) {
-                        target.delete()
-                    } else if (!envelope.stale || (edited && envelope.etag != null)) {
-                        // Older schema-2 copies lack topics. Keep their offline content, but require a check.
-                        val lastUsed = target.lastModified()
-                        write(target, envelope.copy(stale = true, etag = envelope.etag.takeUnless { edited }), reader.readText())
-                        target.setLastModified(lastUsed)
+                    when (invalidation(envelope, mark)) {
+                        Invalidation.NONE -> envelopeIndex[target.path] = envelope
+                        Invalidation.DELETE -> {
+                            envelopeIndex.remove(target.path)
+                            target.delete()
+                        }
+                        Invalidation.MARK_STALE -> {
+                            // Older schema-2 copies lack topics. Keep their offline content, but require a check.
+                            val lastUsed = target.lastModified()
+                            write(target, envelope.copy(stale = true, etag = envelope.etag.takeUnless { mark.edited }), reader.readText())
+                            target.setLastModified(lastUsed)
+                        }
                     }
                 }
             } catch (
                 @Suppress("TooGenericExceptionCaught") error: Exception,
             ) {
                 // A copy whose invalidation cannot be recorded must not later look current.
+                envelopeIndex.remove(target.path)
                 target.delete()
                 Timber.w(error, "saved copy invalidation failed")
+            }
+        }
+
+        private enum class Invalidation { NONE, DELETE, MARK_STALE }
+
+        private fun invalidation(
+            envelope: Envelope,
+            mark: Mark,
+        ): Invalidation {
+            // A copy saved after the mark came from a later read and keeps its own state.
+            if (envelope.fetchedAt > mark.upTo) return Invalidation.NONE
+            val matches = envelope.matches(mark.topic, mark.kinds) || mark.topics.any { envelope.matches(it, emptySet()) }
+            if (!envelope.legacy && !matches) return Invalidation.NONE
+            val retainChatList = mark.retainChatList && envelope.kind == StoreKind.MESSAGES_LIST
+            return when {
+                mark.edited && !envelope.legacy && !retainChatList -> Invalidation.DELETE
+                !envelope.stale || (mark.edited && envelope.etag != null) -> Invalidation.MARK_STALE
+                else -> Invalidation.NONE
             }
         }
 
@@ -323,9 +353,11 @@ class SavedCopies
             envelope: Envelope,
             data: String,
         ) {
+            envelopeIndex.remove(target.path)
             val body = (envelopes.toJson(envelope) + "\n" + data).toByteArray(Charsets.UTF_8)
             val bytes = if (target.extension == "enc") requireNotNull(chatCipher).encrypt(body, scope(target)) else body
             writeBytes(target, bytes)
+            if (target.isFile) envelopeIndex[target.path] = envelope
         }
 
         private fun writeBytes(
@@ -351,8 +383,10 @@ class SavedCopies
             account: String,
             keyId: String,
         ) {
-            file(account, keyId).delete()
-            file(account, keyId, encrypted = true).delete()
+            listOf(file(account, keyId), file(account, keyId, encrypted = true)).forEach {
+                envelopeIndex.remove(it.path)
+                it.delete()
+            }
         }
 
         /**
@@ -363,6 +397,7 @@ class SavedCopies
         fun retireChat(account: String) {
             val accountHash = accountHash(account)
             rotateEpoch(accountHash)
+            envelopeIndex.clear()
             // Cleanup is optional for correctness: all these paths became unreadable at the atomic marker change.
             File(root, accountHash).listFiles()?.filter { it.extension in setOf("enc", "media") }?.forEach { it.delete() }
         }
@@ -393,6 +428,7 @@ class SavedCopies
         fun deleteAll() {
             // One durable marker retires even unopened accounts before interruptible recursive cleanup starts.
             rotateEpoch("all")
+            envelopeIndex.clear()
             root.deleteRecursively()
         }
 
@@ -420,6 +456,7 @@ class SavedCopies
                 if (chatBytes > CHAT_MAX_BYTES || chatCount > CHAT_MAX_THREADS) {
                     chatBytes -= file.length()
                     chatCount--
+                    envelopeIndex.remove(file.path)
                     file.delete()
                     files.remove(file)
                 }
@@ -430,6 +467,7 @@ class SavedCopies
             for (file in files) {
                 if (total <= SAVED_PAGES_MAX_BYTES) break
                 total -= file.length()
+                envelopeIndex.remove(file.path)
                 file.delete()
             }
         }

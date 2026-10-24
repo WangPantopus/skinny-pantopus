@@ -76,6 +76,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -153,6 +154,7 @@ import coil.compose.AsyncImage
 import coil.request.CachePolicy
 import coil.request.ImageRequest
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.UUID
@@ -2736,6 +2738,9 @@ private fun AiWelcomeCard(
  */
 private const val NEAR_BOTTOM_ROW_SLACK = 2
 
+/** A send that is accepted sooner shows "Sending..." and then its check, without a spinner flashing in between. */
+private const val SENDING_INDICATOR_DELAY_MS = 600L
+
 private data class ChatPrependAnchor(val rowId: String, val scrollOffset: Int, val oldestMessageId: String)
 
 @Composable
@@ -5048,6 +5053,27 @@ private fun SystemLinkPill(body: ChatBubbleBody.SystemLink) {
     }
 }
 
+/**
+ * The sending spinner, in its place from the start, turns only once a send takes noticeably long: a spinning frame on
+ * every display refresh would also compete with the save and the request it is waiting for.
+ */
+@Composable
+private fun SendingIndicator(id: String) {
+    val spinning by produceState(initialValue = false, id) {
+        delay(SENDING_INDICATOR_DELAY_MS)
+        value = true
+    }
+    Box(modifier = Modifier.padding(start = Spacing.s1).size(10.dp)) {
+        if (spinning) {
+            CircularProgressIndicator(
+                modifier = Modifier.fillMaxSize(),
+                strokeWidth = 1.5.dp,
+                color = PantopusColors.appTextSecondary,
+            )
+        }
+    }
+}
+
 @Composable
 private fun StampRow(
     content: ChatBubbleContent,
@@ -5092,12 +5118,7 @@ private fun StampRow(
                         tint = PantopusColors.appTextMuted,
                         modifier = Modifier.padding(start = Spacing.s1),
                     )
-                ChatDeliveryState.Sending ->
-                    CircularProgressIndicator(
-                        modifier = Modifier.padding(start = Spacing.s1).size(10.dp),
-                        strokeWidth = 1.5.dp,
-                        color = PantopusColors.appTextSecondary,
-                    )
+                ChatDeliveryState.Sending -> SendingIndicator(content.id)
                 ChatDeliveryState.Failed ->
                     Row(
                         modifier =
