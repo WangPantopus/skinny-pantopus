@@ -13,6 +13,7 @@
  */
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const logger = require('../../utils/logger');
+const { readCappedJson, readCappedText } = require('../../utils/cappedBody');
 const { houseFromAttomProperty } = require('../place/houseShape');
 
 const ATTOM_BASE = 'https://api.gateway.attomdata.com/propertyapi/v1.0.0';
@@ -28,6 +29,8 @@ const CACHE_TTL_DAYS = 30;
 // cache remembers it for a week instead of asking again on each Place view.
 const NO_RESULT_TTL_DAYS = 7;
 const FETCH_TIMEOUT_MS = 10000;
+// One property's detail, AVM or ZIP trend is tens of KB.
+const MAX_BODY_BYTES = 4 * 1024 * 1024;
 
 // ── ATTOM API helpers ──────────────────────────────────────────────────────
 
@@ -67,18 +70,19 @@ async function attomRequest(endpoint, params) {
   const qs = new URLSearchParams(params);
   const url = `${ATTOM_BASE}${endpoint}?${qs}`;
 
+  // The timeout covers the whole body, not just the headers.
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
   try {
     const res = await fetch(url, {
       signal: controller.signal,
+      redirect: 'error',
       headers: { apikey: apiKey, Accept: 'application/json' },
     });
-    clearTimeout(timeout);
 
     if (!res.ok) {
-      const text = await res.text();
+      const text = await readCappedText(res, MAX_BODY_BYTES, controller.signal);
       let noResult = false;
       try {
         noResult = res.status === 400 && JSON.parse(text)?.status?.msg === 'SuccessWithoutResult';
@@ -93,7 +97,7 @@ async function attomRequest(endpoint, params) {
       return { json: null, noResult };
     }
 
-    const json = await res.json();
+    const json = await readCappedJson(res, MAX_BODY_BYTES, controller.signal);
 
     if (process.env.ATTOM_LOG_RESPONSES === '1' && endpoint === ATTOM_ENDPOINTS.property_detail) {
       try {
@@ -111,13 +115,14 @@ async function attomRequest(endpoint, params) {
 
     return { json, noResult: false };
   } catch (err) {
-    clearTimeout(timeout);
     if (err.name === 'AbortError') {
       logger.warn('ATTOM fetch timeout', { endpoint });
     } else {
       logger.error('ATTOM fetch error', { endpoint, error: err.message });
     }
     return { json: null, noResult: false };
+  } finally {
+    clearTimeout(timeout);
   }
 }
 

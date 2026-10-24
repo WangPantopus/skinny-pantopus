@@ -161,18 +161,9 @@ describe('PropertyIntelligenceService', () => {
 
       // Mock ATTOM API responses (detail, AVM, salesTrend)
       global.fetch
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve(MOCK_ATTOM_DETAIL),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve(MOCK_ATTOM_AVM),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve(MOCK_ATTOM_TREND),
-        });
+        .mockResolvedValueOnce(new Response(JSON.stringify(MOCK_ATTOM_DETAIL)))
+        .mockResolvedValueOnce(new Response(JSON.stringify(MOCK_ATTOM_AVM)))
+        .mockResolvedValueOnce(new Response(JSON.stringify(MOCK_ATTOM_TREND)));
 
       const result = await getProfile(MOCK_HOME_ID);
 
@@ -268,7 +259,7 @@ describe('PropertyIntelligenceService', () => {
       );
 
       // All ATTOM calls return errors
-      global.fetch.mockResolvedValue({ ok: false, status: 500, text: () => Promise.resolve('Server error') });
+      global.fetch.mockImplementation(() => Promise.resolve(new Response('Server error', { status: 500 })));
 
       const result = await getProfile(MOCK_HOME_ID);
 
@@ -332,10 +323,7 @@ describe('PropertyIntelligenceService', () => {
         };
       });
 
-      global.fetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve(MOCK_ATTOM_DETAIL),
-      });
+      global.fetch.mockImplementation(() => Promise.resolve(new Response(JSON.stringify(MOCK_ATTOM_DETAIL))));
 
       const home = { ...MOCK_HOME, niche_data: {} };
       const result = await getHomeAttomPropertyDetail(home);
