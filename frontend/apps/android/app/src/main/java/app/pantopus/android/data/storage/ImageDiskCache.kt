@@ -1,14 +1,17 @@
 package app.pantopus.android.data.storage
 
 import android.content.Context
+import app.pantopus.android.data.api.net.ApiOrigin
 import app.pantopus.android.data.store.SAVED_PAGES_MAX_BYTES
 import coil.annotation.ExperimentalCoilApi
 import coil.disk.DiskCache
 import coil.intercept.Interceptor
 import coil.memory.MemoryCache
+import coil.request.CachePolicy
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.asContextElement
 import kotlinx.coroutines.withContext
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.io.File
 
 /** Contract §6: remove images not opened in 30 days. */
@@ -36,8 +39,19 @@ class ImageDiskCache private constructor(
     fun requestInterceptor(): Interceptor =
         Interceptor { chain ->
             val started = synchronized(lock) { generation }
+            val url = chain.request.data.toString().toHttpUrlOrNull()
+            val chatFile = url != null && ApiOrigin().matches(url) && CHAT_FILE_PATH.matches(url.encodedPath)
+            val request =
+                if (chatFile) {
+                    chain.request.newBuilder()
+                        .diskCachePolicy(CachePolicy.DISABLED)
+                        .memoryCachePolicy(CachePolicy.DISABLED)
+                        .build()
+                } else {
+                    chain.request
+                }
             withContext(requestGeneration.asContextElement(started)) {
-                val result = chain.proceed(chain.request)
+                val result = chain.proceed(request)
                 if (synchronized(lock) { started != generation }) throw CancellationException("Image cache was cleared")
                 result
             }
@@ -159,7 +173,8 @@ class ImageDiskCache private constructor(
     }
 
     companion object {
-        const val DIRECTORY = "image_cache_v2"
+        const val DIRECTORY = "image_cache_v3"
+        private val CHAT_FILE_PATH = Regex("/api/chat/files/[^/]+")
 
         fun build(
             context: Context,
@@ -168,6 +183,8 @@ class ImageDiskCache private constructor(
         ): ImageDiskCache {
             // Older loaders cached original uploads. Never reopen that cache under the thumbnail-only policy.
             File(context.cacheDir, "image_cache").deleteRecursively()
+            // Previous bounded chat thumbnails were plaintext and did not carry a chat access epoch.
+            File(context.cacheDir, "image_cache_v2").deleteRecursively()
             val directory = File(context.cacheDir, DIRECTORY)
             sweep(directory, now)
             return ImageDiskCache(DiskCache.Builder().directory(directory).maxSizeBytes(photoBudget(limitBytes)).build())

@@ -2,6 +2,7 @@ package app.pantopus.android.data.store
 
 import app.pantopus.android.data.api.models.businesses.MyBusinessesResponse
 import app.pantopus.android.data.api.models.chats.ChatMessagesResponse
+import app.pantopus.android.data.api.models.chats.ConversationTopicsResponse
 import app.pantopus.android.data.api.models.chats.UnifiedConversationsResponse
 import app.pantopus.android.data.api.models.connections.BlockedRelationshipsResponse
 import app.pantopus.android.data.api.models.connections.SentRequestsResponse
@@ -300,7 +301,7 @@ object StoreKeys {
     fun post(postId: String) =
         StoreKey<PostDetailResponse>("api/posts/$postId", kind = StoreKind.POST, topics = setOf("post:$postId", StoreTopics.POSTS))
 
-    /** Message history is memory only: no Moshi type means these keys can never be saved. */
+    /** The recent message window is saved only through the encrypted, account-scoped chat cache. */
     fun roomMessages(
         roomId: String,
         limit: Int,
@@ -310,6 +311,7 @@ object StoreKeys {
         mapOf("limit" to limit.toString(), "asBusinessUserId" to asBusinessUserId),
         kind = StoreKind.CONVERSATION,
         topics = setOf("chat:$roomId", StoreTopics.CHATS),
+        type = ChatMessagesResponse::class.java,
     )
 
     fun conversationMessages(
@@ -321,11 +323,21 @@ object StoreKeys {
         mapOf("limit" to limit.toString(), "topicId" to topicId),
         kind = StoreKind.CONVERSATION,
         topics = setOf("chat:*", StoreTopics.CHATS),
+        type = ChatMessagesResponse::class.java,
     )
+
+    /** Topic navigation shares the encrypted history budget and the same account/access lifetime. */
+    fun conversationTopics(otherId: String) =
+        StoreKey<ConversationTopicsResponse>(
+            "api/chat/conversations/$otherId/topics",
+            kind = StoreKind.CONVERSATION,
+            topics = setOf("chat:*", StoreTopics.CHATS),
+            type = ConversationTopicsResponse::class.java,
+        )
 
     /**
      * The Messages list (contract §4 "Messages list"): names, last-message previews and unread counts, fresh for 30
-     * seconds, shared by the Messages tab and its badge. Message history never enters the store (founder decision 7).
+     * seconds, shared by the Messages tab and its badge. Recent message history has a separate encrypted budget.
      */
     val conversations =
         StoreKey<UnifiedConversationsResponse>(

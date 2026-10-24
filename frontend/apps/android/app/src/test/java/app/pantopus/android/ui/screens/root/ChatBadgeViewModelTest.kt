@@ -8,6 +8,7 @@ import app.pantopus.android.data.store.Stored
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,6 +33,8 @@ class ChatBadgeViewModelTest {
     @Before fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         every { socket.eventsOf(any()) } returns emptyFlow()
+        // badge:update is read through the session-scoped stream, so an old socket's event can't update this account.
+        every { socket.scopedEventsOf<suspend (Int, Int?) -> Boolean>("badge:update", any()) } returns emptyFlow()
         every { socket.connectionState } returns MutableStateFlow(SocketManager.ConnectionState.Disconnected)
         every { preferences.mutedKeys() } returns emptySet()
         // No saved list on the phone in these tests.
@@ -52,6 +55,9 @@ class ChatBadgeViewModelTest {
                 )
             val vm = ChatBadgeViewModel(repo, socket, preferences, badgeCoordinator)
             assertEquals(7, vm.unreadMessages.value)
+            // Live totals come only through the session-scoped badge stream.
+            verify(exactly = 1) { socket.scopedEventsOf<suspend (Int, Int?) -> Boolean>("badge:update", any()) }
+            verify(exactly = 0) { socket.eventsOf("badge:update") }
         }
 
     @Test fun badge_unread_count_accepts_backend_and_expo_shapes() {

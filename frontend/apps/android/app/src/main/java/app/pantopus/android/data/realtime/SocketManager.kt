@@ -114,6 +114,19 @@ class SocketManager
             s.connect()
         }
 
+        /**
+         * Reconnect at once when the network returns or the app comes back, instead of waiting out socket.io's
+         * reconnection backoff (up to several seconds). socket.io ignores connect() while it backs off; closing first
+         * resets that backoff and keeps automatic reconnection for later drops. Never replaces the socket or its token.
+         */
+        fun reconnectNow() {
+            val s = socket ?: return
+            if (s.connected()) return
+            if (s.io().isReconnecting) s.disconnect()
+            _connectionState.value = ConnectionState.Connecting
+            s.connect()
+        }
+
         fun disconnect() {
             socket?.disconnect()
             socket?.off()
@@ -140,7 +153,37 @@ class SocketManager
                     callbackFlow {
                         val listener =
                             io.socket.emitter.Emitter.Listener { args ->
-                                (args.firstOrNull() as? JSONObject)?.let { trySend(UtcTimestamps.normalizeInPlace(it)) }
+                                if (s === socket) {
+                                    (args.firstOrNull() as? JSONObject)?.let { trySend(UtcTimestamps.normalizeInPlace(it)) }
+                                }
+                            }
+                        s.on(event, listener)
+                        awaitClose { s.off(event, listener) }
+                    }
+                }
+            }
+
+        /** Attach an account guard before listening and capture access before buffering each event. */
+        @OptIn(ExperimentalCoroutinesApi::class)
+        fun <T> scopedEventsOf(
+            event: String,
+            capture: () -> (() -> T),
+        ): Flow<Pair<JSONObject, T>> =
+            currentSocket.flatMapLatest { s ->
+                if (s == null) {
+                    emptyFlow()
+                } else {
+                    val captureEvent = capture()
+                    callbackFlow {
+                        val listener =
+                            io.socket.emitter.Emitter.Listener { args ->
+                                if (s === socket) {
+                                    (args.firstOrNull() as? JSONObject)?.let {
+                                        trySend(
+                                            UtcTimestamps.normalizeInPlace(it) to captureEvent(),
+                                        )
+                                    }
+                                }
                             }
                         s.on(event, listener)
                         awaitClose { s.off(event, listener) }
@@ -159,6 +202,7 @@ class SocketManager
             event: String,
             payload: JSONObject,
             timeoutMs: Long = 5_000,
+            cancelEvent: String? = null,
         ): JSONObject? {
             val s = socket ?: return null
             return withTimeoutOrNull(timeoutMs) {
@@ -171,6 +215,8 @@ class SocketManager
                             if (continuation.isActive) continuation.resume(response)
                         },
                     )
+                    // Register after emit so cancellation cannot send leave before the matching join.
+                    continuation.invokeOnCancellation { cancelEvent?.let { s.emit(it, payload) } }
                 }
             }
         }

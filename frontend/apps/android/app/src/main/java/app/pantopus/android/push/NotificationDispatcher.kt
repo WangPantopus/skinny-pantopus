@@ -105,6 +105,7 @@ class NotificationDispatcher
             val pushType: String? = null,
             val planId: String? = null,
             val requestId: String? = null,
+            val chatNotificationKey: String? = null,
         )
 
         /**
@@ -168,6 +169,7 @@ class NotificationDispatcher
                 taskId = HomeTaskNotificationRoute.canonicalId(data["taskId"] ?: data["task_id"]),
                 date = data["pickupDate"] ?: data["date"], recipientUserId = data["recipient_user_id"], pushType = data["type"],
                 planId = data["plan_id"], requestId = data["request_id"],
+                chatNotificationKey = if (channel == Channel.CHAT) data["notificationId"] ?: data["message_id"] else null,
             )
         }
 
@@ -239,14 +241,19 @@ class NotificationDispatcher
          * Drops everything this app has in the shade. Called on sign-out, so the
          * next person on the device never reads the last account's notifications.
          */
+        @Synchronized
         fun clearDelivered() {
             runCatching { NotificationManagerCompat.from(appContext).cancelAll() }
                 .onFailure { Timber.w(it, "Failed to clear delivered notifications") }
         }
 
+        @Synchronized
         private fun postNotification(routing: Routing) {
+            // Logout clears tokens before clearing notifications under this same lock.
+            if (routing.channel == Channel.CHAT && !chatRecipientMatches(routing)) return
             ensureChannel(routing.channel)
-            val notificationId = Random.nextInt()
+            val stableTag = routing.chatNotificationKey?.takeIf { it.isNotBlank() }?.let { "chat:$it" }
+            val notificationId = if (stableTag == null) Random.nextInt() else 0
             val contentIntent = buildContentIntent(routing)
             // Replace `ic_launcher` with a dedicated monochrome notification
             // icon (`ic_notification`) before public launch.
@@ -259,6 +266,7 @@ class NotificationDispatcher
                     .setContentTitle(routing.title ?: appContext.getString(R.string.app_name))
                     .apply { routing.body?.let(::setContentText) }
                     .setAutoCancel(true)
+                    .setOnlyAlertOnce(stableTag != null)
                     .setContentIntent(contentIntent)
                     .setPriority(routing.channel.toCompatPriority())
                     .apply { addReminderActions(this, routing, notificationId) }
@@ -282,8 +290,13 @@ class NotificationDispatcher
                 return
             }
             runCatching {
-                nm.notify(notificationId, notification)
+                if (stableTag == null) nm.notify(notificationId, notification) else nm.notify(stableTag, notificationId, notification)
             }.onFailure { Timber.w(it, "Failed to post FCM notification") }
+        }
+
+        private fun chatRecipientMatches(routing: Routing): Boolean {
+            val recipient = routing.recipientUserId?.takeIf { it.isNotBlank() } ?: return false
+            return runCatching { runBlocking { tokens.userId() } == recipient }.getOrDefault(false)
         }
 
         private fun ensureChannel(channel: Channel) {
@@ -422,14 +435,17 @@ class NotificationDispatcher
                         action = Intent.ACTION_VIEW
                         data = normalizeForIntent(deepLink)
                     }
-                    // A brief or nudge opens only for the account it was sent to (signed out, it waits for that one).
-                    if (DeepLinkRouter.assistantNotificationPath(routing.pushType, null, null) != null) {
+                    // Account-scoped pushes never navigate another signed-in person into this conversation.
+                    if (routing.channel == Channel.CHAT ||
+                        DeepLinkRouter.assistantNotificationPath(routing.pushType, null, null) != null
+                    ) {
                         routing.recipientUserId?.let { putExtra(ASSISTANT_RECIPIENT, it) }
                     }
                 }
             val update = if (reminderSession == null) PendingIntent.FLAG_UPDATE_CURRENT else PendingIntent.FLAG_ONE_SHOT
             val flags = update or PendingIntent.FLAG_IMMUTABLE
-            return PendingIntent.getActivity(appContext, Random.nextInt(), intent, flags)
+            val requestCode = routing.chatNotificationKey?.hashCode() ?: Random.nextInt()
+            return PendingIntent.getActivity(appContext, requestCode, intent, flags)
         }
 
         /**
@@ -460,5 +476,5 @@ class NotificationDispatcher
 /** Request codes per notification: room for every Plans button on one notification. */
 private const val PLAN_ACTION_SLOTS = 4
 
-/** The account a brief's or nudge's push was sent to (its `recipient_user_id`): MainActivity opens it only for them. */
+/** The recipient of an account-scoped push; retain the original extra key for pending intents created by older builds. */
 const val ASSISTANT_RECIPIENT = "pantopus.assistant.recipient"

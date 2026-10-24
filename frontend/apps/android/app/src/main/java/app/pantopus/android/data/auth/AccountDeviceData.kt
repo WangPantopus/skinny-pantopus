@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.edit
 import app.pantopus.android.core.network.HomeDocumentTemporaryFiles
 import app.pantopus.android.data.chats.ChatBadgeCoordinator
 import app.pantopus.android.data.chats.ChatConversationPreferences
+import app.pantopus.android.data.chats.ChatOutbox
 import app.pantopus.android.data.gigs.GigCameraPhotos
 import app.pantopus.android.data.gigs.GigDraftQueue
 import app.pantopus.android.data.store.ScreenStore
@@ -30,6 +31,7 @@ import javax.inject.Singleton
  * offline task drafts and the Today cards' per-home dismissals. Sign-out clears all of it so the next
  * person on the device finds nothing of the last account, as iOS `clearLocalSession` does.
  */
+@Suppress("LongParameterList") // This existing account cleanup owner keeps all account-scoped stores together.
 @Singleton
 class AccountDeviceData
     @Inject
@@ -43,11 +45,13 @@ class AccountDeviceData
         private val broadcastSeeds: BroadcastDetailSeedCache,
         private val gigDrafts: GigDraftQueue,
         private val screenStore: ScreenStore,
+        private val chatOutbox: ChatOutbox,
     ) {
         /** Never throws: a part that fails is logged and the rest is still cleared. */
         @OptIn(ExperimentalCoilApi::class)
         suspend fun clear() {
             // First, so a reply still in flight can't write the last account's data back (generation number).
+            chatOutbox.clear()
             screenStore.wipe()
             chatBadges.reset()
             reservations.reset()

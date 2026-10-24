@@ -59,7 +59,13 @@ data class BusinessInboxMention(
 sealed interface BusinessInboxUiState {
     data object Loading : BusinessInboxUiState
 
-    data class LoadedRooms(val rooms: List<BusinessInboxRoom>) : BusinessInboxUiState
+    data class LoadedRooms(
+        val rooms: List<BusinessInboxRoom>,
+        val hasMore: Boolean = false,
+        val loadingMore: Boolean = false,
+        val loadError: String? = null,
+        val retryFromStart: Boolean = false,
+    ) : BusinessInboxUiState
 
     data class LoadedMentions(val mentions: List<BusinessInboxMention>) : BusinessInboxUiState
 
