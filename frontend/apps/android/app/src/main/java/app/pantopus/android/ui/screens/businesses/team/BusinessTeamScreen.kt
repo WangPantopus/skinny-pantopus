@@ -94,6 +94,7 @@ fun BusinessTeamScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val presets by viewModel.rolePresets.collectAsStateWithLifecycle()
     val online by viewModel.isOnline.collectAsStateWithLifecycle()
+    val mutationError by viewModel.mutationError.collectAsStateWithLifecycle()
 
     var sheet by remember { mutableStateOf<TeamSheet?>(null) }
     var removeTarget by remember { mutableStateOf<BusinessTeamMemberRow?>(null) }
@@ -226,6 +227,15 @@ fun BusinessTeamScreen(
                 ) { Text("Cancel invite") }
             },
             dismissButton = { TextButton(onClick = { cancelTarget = null }) { Text("Keep invite") } },
+        )
+    }
+
+    mutationError?.let { message ->
+        AlertDialog(
+            onDismissRequest = viewModel::mutationErrorShown,
+            title = { Text("Couldn't update team") },
+            text = { Text(message) },
+            confirmButton = { TextButton(onClick = viewModel::mutationErrorShown) { Text("OK") } },
         )
     }
 }
