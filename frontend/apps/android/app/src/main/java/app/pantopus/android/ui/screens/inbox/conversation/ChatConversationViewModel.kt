@@ -106,6 +106,9 @@ class ChatConversationViewModel
         private val _state = MutableStateFlow<ChatConversationUiState>(ChatConversationUiState.Loading)
         val state: StateFlow<ChatConversationUiState> = _state.asStateFlow()
 
+        /** Survives rotation with this view model; a screen restored after the process was stopped gets a new one. */
+        val timelineSession: String = UUID.randomUUID().toString()
+
         private val _counterparty =
             MutableStateFlow<ChatCounterparty>(ChatCounterparty.Person(displayName = "", initials = ""))
         val counterparty: StateFlow<ChatCounterparty> = _counterparty.asStateFlow()

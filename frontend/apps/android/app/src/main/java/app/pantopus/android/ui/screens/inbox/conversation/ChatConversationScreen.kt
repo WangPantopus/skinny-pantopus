@@ -546,6 +546,7 @@ fun ChatConversationScreen(
                             onOpenAttachment = { attachment ->
                                 viewModel.openAttachment(attachment, ChatMediaUrl.openedFilesFolder(context.cacheDir).apply { mkdirs() })
                             },
+                            timelineSession = viewModel.timelineSession,
                         )
                     is ChatConversationUiState.Error -> ErrorFrame(message = s.message, onRetry = viewModel::refresh)
                 }
@@ -2762,6 +2763,7 @@ internal fun PopulatedFrame(
     onOpenUrl: (String) -> Unit = {},
     onOpenPhotos: ((List<String>, Int) -> Unit)? = null,
     onOpenAttachment: ((ChatBubbleBody.Attachment) -> Unit)? = null,
+    timelineSession: String? = null,
 ) {
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -2778,7 +2780,11 @@ internal fun PopulatedFrame(
     // Set once the first non-empty projection has been positioned — gates
     // the load-older trigger so it can't fire while the list still sits at
     // the top pre-scroll.
-    var initialScrollDone by rememberSaveable { mutableStateOf(false) }
+    // A saved position belongs to the view model whose rows it indexed. After the process was stopped, the new one's
+    // rows open at their newest message instead of at that unrelated saved row index.
+    var initialScrollDone by rememberSaveable(key = timelineSession?.let { "chatTimelinePositioned-$it" }) {
+        mutableStateOf(false)
+    }
     // The first non-empty timeline is measured at its newest message in this same frame, so opening a thread never
     // flashes its oldest loaded rows or lays them out twice. The effect below then marks the initial scroll done.
     if (!initialScrollDone && rows.isNotEmpty() && scrollToRowId == null) {
@@ -2798,6 +2804,7 @@ internal fun PopulatedFrame(
             // Open at the latest message. A Chat Search deep-link owns the
             // first scroll instead (the effect below lands on the match).
             if (scrollToRowId == null) listState.scrollToItem(lastIndex)
+            newMessageCount = 0
             initialScrollDone = true
             return@LaunchedEffect
         }
