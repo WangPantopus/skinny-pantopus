@@ -1,14 +1,12 @@
 'use client';
 
-import { useCallback } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { UnifiedConversationItem, ConversationTopic } from '@pantopus/types';
+import { useCallback, useRef } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
+import type { ConversationTopic } from '@pantopus/types';
 import { getInitials } from '@pantopus/ui-utils';
-import { useSocketEvent } from '../../hooks/useSocket';
 import { launchFeatures } from '@/lib/featureFlags';
 import { chosenUsername } from '@pantopus/utils';
-import { conversationsQuery, type ConversationsReply } from '@/lib/conversations';
-import { useMe } from '@/lib/me';
+import { conversationKey, useConversationPages } from '@/lib/conversations';
 
 interface MiniConversationListProps {
   onSelectConversation: (chat: {
@@ -37,56 +35,15 @@ function timeAgo(dateStr: string | null | undefined): string {
 export default function MiniConversationList({ onSelectConversation }: MiniConversationListProps) {
   // The same Messages list the Messages page shows (lib/conversations.ts):
   // opening the widget again shows it at once and refreshes quietly.
-  const queryClient = useQueryClient();
-  const listQuery = useQuery(conversationsQuery());
-  const conversations = (listQuery.data?.conversations ?? []) as UnifiedConversationItem[];
+  const pages = useConversationPages();
+  const listQuery = pages.query;
+  const conversations = pages.conversations;
   const loading = listQuery.isPending;
   const error = listQuery.isError && !listQuery.data ? 'Failed to load conversations' : null;
   const fetchConversations = useCallback(() => { void listQuery.refetch(); }, [listQuery]);
-  const myId = useMe().data?.id;
-
-  // Real-time: when a new message arrives, update preview and bump to top.
-  // (The widget is never open on /app/chat, whose page applies the same update.)
-  useSocketEvent('message:new', useCallback((msg: Record<string, any>) => {
-    if (!msg?.room_id) return;
-    const roomId = String(msg.room_id);
-    const msgText = (msg.message_text as string) || (msg.message as string) || '';
-    const createdAt = (msg.created_at as string) || new Date().toISOString();
-    // Your own messages (sent from another tab or device) are never unread.
-    const senderId = String(msg.user_id || msg.sender_id || msg?.sender?.id || '');
-    const isOwn = !!myId && senderId === String(myId);
-
-    let shouldReload = false;
-    queryClient.setQueryData<ConversationsReply>(conversationsQuery().queryKey, (old) => {
-      if (!old) return old;
-      const prev = (old.conversations || []) as UnifiedConversationItem[];
-      const idx = prev.findIndex(conv =>
-        conv._type === 'room'
-          ? String(conv.id) === roomId
-          : (conv.room_ids || []).map(String).includes(roomId)
-      );
-
-      if (idx === -1) {
-        shouldReload = true;
-        return old;
-      }
-
-      const updated = { ...prev[idx] };
-      updated.last_message_preview = msgText.substring(0, 100) || '[Attachment]';
-      updated.last_message_at = createdAt;
-      if (!isOwn) updated.total_unread = (updated.total_unread || 0) + 1;
-
-      return {
-        ...old,
-        conversations: [updated as UnifiedConversationItem, ...prev.filter((_, i) => i !== idx)],
-        totalUnread: Number(old.totalUnread || 0) + (isOwn ? 0 : 1),
-      };
-    });
-
-    if (shouldReload) {
-      void queryClient.invalidateQueries({ queryKey: conversationsQuery().queryKey });
-    }
-  }, [queryClient, myId]));
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const virtualizer = useVirtualizer({ count: conversations.length, getScrollElement: () => scrollRef.current,
+    getItemKey: (index) => conversationKey(conversations[index]), estimateSize: () => 80, overscan: 5 });
 
   if (loading) {
     return (
@@ -123,8 +80,10 @@ export default function MiniConversationList({ onSelectConversation }: MiniConve
   }
 
   return (
-    <div className="flex-1 overflow-y-auto overscroll-contain">
-      {conversations.map((conv) => {
+    <div ref={scrollRef} className="flex-1 overflow-y-auto overscroll-contain" aria-label="Conversations panel" tabIndex={0}>
+      <div style={{ position: 'relative', height: virtualizer.getTotalSize() }}>
+      {virtualizer.getVirtualItems().map((row) => {
+        const conv = conversations[row.index];
         const isRoom = conv._type === 'room';
         const isHome = isRoom && conv.room_type === 'home';
 
@@ -143,6 +102,9 @@ export default function MiniConversationList({ onSelectConversation }: MiniConve
         return (
           <button
             key={key}
+            data-index={row.index}
+            ref={virtualizer.measureElement}
+            style={{ position: 'absolute', top: 0, left: 0, transform: `translateY(${row.start}px)` }}
             type="button"
             onClick={() => {
               if (isRoom) {
@@ -222,6 +184,10 @@ export default function MiniConversationList({ onSelectConversation }: MiniConve
           </button>
         );
       })}
+      </div>
+      {pages.moreError && <p role="alert" className="px-4 py-2 text-xs text-red-600">{pages.moreError}</p>}
+      {pages.hasMore && <button className="w-full px-4 py-3 text-xs text-primary-700 disabled:opacity-50" disabled={pages.loadingMore}
+        onClick={() => void pages.loadMore()}>{pages.loadingMore ? 'Loading conversations…' : 'Load more conversations'}</button>}
     </div>
   );
 }

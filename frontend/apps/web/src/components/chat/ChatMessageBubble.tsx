@@ -1,7 +1,8 @@
 'use client';
 
+import Link from 'next/link';
 import React, { useState } from 'react';
-import { Copy, MoreHorizontal, Reply } from 'lucide-react';
+import { Copy, MoreHorizontal, Reply, Pencil, Trash2 } from 'lucide-react';
 import type { ChatMessage } from '@pantopus/types';
 import { chatPersonAvatar, chatPersonHandle, chatPersonName, extractAttachments, resolveMessageType } from '../../hooks/useChatMessages';
 import ChatRichCard from './ChatRichCard';
@@ -29,6 +30,7 @@ export type { ChatMessage };
 export interface ChatReplyQuote {
   senderName: string;
   text: string;
+  href?: string;
 }
 
 interface ChatMessageBubbleProps {
@@ -40,15 +42,28 @@ interface ChatMessageBubbleProps {
   onImageClick?: (url: string, title?: string) => void;
   onReact?: (messageId: string, emoji: string) => void;
   onRetry?: (messageId: string) => void;
+  onRemovePending?: (messageId: string) => void;
   /** Picked from the message's actions menu: the composer replies to this message. */
   onReply?: (msg: ChatMessage) => void;
+  onEdit?: (msg: ChatMessage) => void;
+  onDelete?: (msg: ChatMessage) => void;
 }
 
 // The actions menu's size (its row of quick reactions sets the width), to keep it on screen next to its button.
 const MENU_WIDTH = 304;
-const MENU_HEIGHT = 150;
 
-function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClick, onReact, onRetry, onReply }: ChatMessageBubbleProps) {
+/** Only private chat files support this bounded, authorization-checked preview. */
+function chatImagePreview(url: string): string {
+  try {
+    const parsed = new URL(url, 'https://pantopus.invalid');
+    if (!/^\/api\/chat\/files\/[a-f0-9-]+$/i.test(parsed.pathname)) return url;
+    parsed.searchParams.set('variant', 'thumbnail');
+    return url.startsWith('/') ? `${parsed.pathname}${parsed.search}${parsed.hash}` : parsed.href;
+  } catch { return url; }
+}
+
+
+function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClick, onReact, onRetry, onRemovePending, onReply, onEdit, onDelete }: ChatMessageBubbleProps) {
   const [preview, setPreview] = useState<{ url: string; title?: string; mimeType?: string; liveUrl?: string } | null>(null);
   const [hovered, setHovered] = useState(false);
   const [showQuickPicker, setShowQuickPicker] = useState(false);
@@ -67,6 +82,8 @@ function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClic
   const isOptimistic = msg._optimistic;
   const isFailed = msg._failed;
   const isRefused = msg._refused;
+  const pending = msg as ChatMessage & { _queued?: boolean; _outbox?: boolean; _error?: string; _replyRoomHref?: string; _canRetryReply?: boolean };
+  const receipt = isMine ? ((msg as ChatMessage & { read_at?: string }).read_at ? 'Read' : 'Sent') : null;
   // Launch cut #3 (Marketplace): a shared listing card is not shown.
   if (msgType === 'listing_offer' && !launchFeatures.marketplace) return null;
 
@@ -109,15 +126,20 @@ function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClic
   const menuActions: MessageAction[] = [
     ...(onReply ? [{ key: 'reply', label: 'Reply', icon: Reply }] : []),
     ...(showText ? [{ key: 'copy', label: 'Copy text', icon: Copy }] : []),
+    ...(isMine && showText && onEdit && !['location', 'gig_offer', 'listing_offer'].includes(msgType) ? [{ key: 'edit', label: 'Edit', icon: Pencil }] : []),
+    ...(isMine && onDelete ? [{ key: 'delete', label: 'Delete', icon: Trash2, destructive: true }] : []),
   ];
   const openMenu = (e: React.MouseEvent<HTMLButtonElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const left = Math.max(8, Math.min(isMine ? rect.right - MENU_WIDTH : rect.left, window.innerWidth - MENU_WIDTH - 8));
+    const MENU_HEIGHT = 68 + menuActions.length * 40;
     const top = rect.bottom + 4 + MENU_HEIGHT > window.innerHeight ? Math.max(8, rect.top - 4 - MENU_HEIGHT) : rect.bottom + 4;
     setMenuAt({ top, left });
   };
   const handleMenuAction = (key: string) => {
     if (key === 'reply') onReply?.(msg);
+    else if (key === 'edit') onEdit?.(msg);
+    else if (key === 'delete') onDelete?.(msg);
     else if (key === 'copy') void navigator.clipboard?.writeText(msgText).catch(() => {});
     else if (key === 'emoji_picker') setShowFullPicker(true);
   };
@@ -168,10 +190,54 @@ function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClic
     </div>
   );
 
+  const renderReply = (insideBubble = false) => {
+    if (!reply) return null;
+    const onPrimary = insideBubble && isMine;
+    return <div className={`border-l-[3px] rounded px-2 py-1 mb-1.5 text-xs ${
+      onPrimary ? 'border-white/50 bg-white/15' : 'border-primary-500 bg-primary-500/[0.08]'
+    }`}>
+      <div className={`font-semibold ${onPrimary ? 'text-white/90' : 'text-primary-600'}`}>{reply.senderName}</div>
+      <div className={`line-clamp-2 ${onPrimary ? 'text-white/70' : 'text-app-muted'}`}>{reply.text}</div>
+      {reply.href && <Link href={reply.href} prefetch={false} className="underline">Open original message</Link>}
+    </div>;
+  };
+
+  const deliveryStatus = (
+    <>
+      {isFailed && isRefused ? (
+        <span className="text-red-500">Not sent{' '}
+          {pending._canRetryReply && onRetry && <button type="button" className="underline hover:text-red-600 cursor-pointer"
+            onClick={() => onRetry(msg.id)}>Retry</button>}
+        </span>
+      ) : isFailed ? (
+        <span className="text-red-500">
+          Failed to send{' '}
+          {onRetry && (
+            <button
+              type="button"
+              className="underline hover:text-red-600 cursor-pointer"
+              onClick={() => onRetry(msg.id)}
+            >
+              Retry
+            </button>
+          )}
+        </span>
+      ) : isOptimistic ? (pending._queued ? 'Queued' : 'Sending…') : <>{isEdited && <span>edited · </span>}{ts}{receipt && ` · ${receipt}`}</>}
+      {pending._outbox && (isFailed || pending._queued) && onRemovePending && (
+        <button type="button" className="ml-2 underline" onClick={() => onRemovePending(msg.id)}>Remove</button>
+      )}
+      {(isFailed || pending._queued && pending._replyRoomHref) && pending._error && (
+        <div className="text-red-500">{pending._error}
+          {pending._replyRoomHref && <Link href={pending._replyRoomHref} className="ml-1 underline">Open original conversation</Link>}
+        </div>
+      )}
+    </>
+  );
+
   // Rich card types get a special rendering
   if (msgType === 'location' || msgType === 'gig_offer' || msgType === 'listing_offer') {
     return (
-      <div className={`flex mb-1 ${isMine ? 'justify-end' : 'justify-start'}`}>
+      <div data-chat-message-id={msg.id} className={`flex mb-1 ${isMine ? 'justify-end' : 'justify-start'}`}>
         <div
           className={`max-w-[75%] ${isMine ? 'order-1' : ''} relative`}
           onMouseEnter={() => setHovered(true)}
@@ -192,10 +258,11 @@ function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClic
             {reactionTrigger}
             {actionsTrigger}
             {reactionOverlays}
+            {renderReply()}
             <ChatRichCard msgType={msgType} metadata={metadata} msgText={msgText} isMine={isMine} />
           </div>
           <div className={`text-[10px] text-app-muted mt-0.5 ${isMine ? 'text-right mr-1' : 'ml-1'}`}>
-            {isEdited && <span>edited · </span>}{ts}
+            {deliveryStatus}
           </div>
           {reactionBar}
           {actionsMenu}
@@ -209,7 +276,7 @@ function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClic
 
   // Standard text + attachment message
   return (
-    <div className={`flex mb-1 ${isMine ? 'justify-end' : 'justify-start'}`}>
+    <div data-chat-message-id={msg.id} className={`flex mb-1 ${isMine ? 'justify-end' : 'justify-start'}`}>
       <div
         className={`max-w-[75%] ${isMine ? 'order-1' : ''} relative`}
         onMouseEnter={() => setHovered(true)}
@@ -231,9 +298,9 @@ function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClic
           {actionsTrigger}
           {reactionOverlays}
           {emojiOnly ? (
-            <div className={`text-4xl leading-snug ${isOptimistic ? 'opacity-60' : ''} ${isFailed ? 'opacity-70 ring-1 ring-red-400' : ''}`}>
+            <>{renderReply()}<div className={`text-4xl leading-snug ${isOptimistic ? 'opacity-60' : ''} ${isFailed ? 'opacity-70 ring-1 ring-red-400' : ''}`}>
               {msgText}
-            </div>
+            </div></>
           ) : (
           <div
             className={`px-3.5 py-2 rounded-2xl text-sm whitespace-pre-wrap ${
@@ -242,20 +309,7 @@ function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClic
                 : 'bg-surface text-app border border-app rounded-bl-md'
             } ${isOptimistic ? 'opacity-60' : ''} ${isFailed ? 'opacity-70 ring-1 ring-red-400' : ''}`}
           >
-            {reply && (
-              <div className={`border-l-[3px] rounded px-2 py-1 mb-1.5 text-xs ${
-                isMine
-                  ? 'border-white/50 bg-white/15'
-                  : 'border-primary-500 bg-primary-500/[0.08]'
-              }`}>
-                <div className={`font-semibold ${isMine ? 'text-white/90' : 'text-primary-600'}`}>
-                  {reply.senderName}
-                </div>
-                <div className={`line-clamp-2 ${isMine ? 'text-white/70' : 'text-app-muted'}`}>
-                  {reply.text}
-                </div>
-              </div>
-            )}
+            {renderReply(true)}
             {showText && <span className="[&_a]:text-inherit"><PostLinkContent content={msgText} /></span>}
             {attachments.length > 0 && (
               <div className={`${showText ? 'mt-2' : ''} space-y-2`}>
@@ -285,7 +339,13 @@ function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClic
                         {live && <span className="block px-2 py-1 text-xs">● LIVE</span>}
                         {/* Native img: user URLs + cookies on /api/chat/files/; avoids next/image dev sizing warnings. */}
                         <img
-                          src={url}
+                          src={chatImagePreview(url)}
+                          onError={(event) => {
+                            // Older servers or an unavailable preview still allow
+                            // the same authorized original, without a retry loop.
+                            const original = new URL(url, window.location.href).href;
+                            if (event.currentTarget.src !== original) event.currentTarget.src = original;
+                          }}
                           alt={showText ? `Photo: ${msgText}` : 'Photo'}
                           className="rounded-lg transition-opacity hover:opacity-90"
                           loading="lazy"
@@ -319,7 +379,7 @@ function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClic
                     <a
                       key={`${msg.id}-att-${i}`}
                       href={url || '#'}
-                      target="_blank"
+                      download={a.original_filename as string || 'attachment'}
                       rel="noopener noreferrer"
                       className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs ${
                         isMine ? 'bg-primary-600 text-blue-100 hover:bg-primary-700' : 'bg-surface-muted text-app-text-strong hover-bg-app'
@@ -337,22 +397,7 @@ function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClic
           )}
         </div>
         <div className={`text-[10px] text-app-muted mt-0.5 ${isMine ? 'text-right mr-1' : 'ml-1'}`}>
-          {isFailed && isRefused ? (
-            <span className="text-red-500">Not sent</span>
-          ) : isFailed ? (
-            <span className="text-red-500">
-              Failed to send{' '}
-              {onRetry && (
-                <button
-                  type="button"
-                  className="underline hover:text-red-600 cursor-pointer"
-                  onClick={() => onRetry(msg.id)}
-                >
-                  Retry
-                </button>
-              )}
-            </span>
-          ) : isOptimistic ? 'Sending…' : <>{isEdited && <span>edited · </span>}{ts}</>}
+          {deliveryStatus}
         </div>
         {reactionBar}
         {actionsMenu}
@@ -364,18 +409,17 @@ function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClic
 }
 
 export default React.memo(ChatMessageBubble, (prev, next) => {
-  return prev.msg.id === next.msg.id
-    && prev.msg.is_edited === next.msg.is_edited
-    && prev.msg._optimistic === next.msg._optimistic
-    && prev.msg._failed === next.msg._failed
-    && prev.msg._refused === next.msg._refused
+  return prev.msg === next.msg
     && prev.isMine === next.isMine
     && prev.showSender === next.showSender
     && prev.reply?.senderName === next.reply?.senderName
     && prev.reply?.text === next.reply?.text
-    && prev.msg.reactions === next.msg.reactions
+    && prev.reply?.href === next.reply?.href
     && prev.onReact === next.onReact
     && prev.onImageClick === next.onImageClick
     && prev.onRetry === next.onRetry
-    && prev.onReply === next.onReply;
+    && prev.onRemovePending === next.onRemovePending
+    && prev.onReply === next.onReply
+    && prev.onEdit === next.onEdit
+    && prev.onDelete === next.onDelete;
 });

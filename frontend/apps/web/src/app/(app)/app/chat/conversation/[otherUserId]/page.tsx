@@ -11,6 +11,7 @@ export default function ConversationPage() {
   const otherUserId = String(params.otherUserId || '');
   const topicId = searchParams.get('topic') || undefined;
   const returnTo = searchParams.get('returnTo') || '/app/chat';
+  const messageId = searchParams.get('message') || undefined;
 
   useEffect(() => {
     if (!otherUserId) router.replace('/app/chat');
@@ -23,6 +24,8 @@ export default function ConversationPage() {
       otherUserId={otherUserId}
       initialTopicId={topicId}
       returnTo={returnTo}
+      initialMessageId={messageId}
+      key={messageId || 'latest'}
     />
   );
 }

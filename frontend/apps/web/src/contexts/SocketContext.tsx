@@ -35,7 +35,14 @@ function getSocketBaseUrl(): string {
   // Local Next dev: rewrites do not reliably proxy WebSocket upgrades to an external
   // backend — connect straight to NEXT_PUBLIC_API_URL (same as before).
   // Production: same origin as the page so httpOnly `pantopus_access` is sent on the handshake.
-  if (isLocalDevHost) return API_BASE_URL;
+  if (isLocalDevHost) {
+    const backend = new URL(API_BASE_URL, window.location.origin);
+    // Cookie sessions belong to a host, not a port. Keep a localhost browser's
+    // cookie on localhost even when the configured loopback API uses 127.0.0.1
+    // (and vice versa); REST already preserves that host through Next's proxy.
+    if (['localhost', '127.0.0.1', '[::1]'].includes(backend.hostname)) backend.hostname = host;
+    return backend.origin;
+  }
   return window.location.origin;
 }
 

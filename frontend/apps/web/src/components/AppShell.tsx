@@ -24,7 +24,7 @@ import { myHomesQuery } from '@/lib/myHomes';
 import { showsMyHomesCopy, useAfterRecheck } from '@/lib/householdCopy';
 import { HomePermissionsProvider, useHomePermissions } from '@/components/home/useHomePermissions';
 import { businessAccessQuery } from '@/components/business/useBusinessData';
-import { conversationsQuery } from '@/lib/conversations';
+import { conversationsQuery, useConversationEvents } from '@/lib/conversations';
 import type { PostComposerSubmitData } from '@/components/feed/PostComposer';
 import { identityCopy } from '@/lib/identityLabels';
 
@@ -60,6 +60,7 @@ import type { CSSProperties } from 'react';
 import { Search, MessageCircle, Menu, X, ChevronsLeft, ChevronsRight, WifiOff, UserRound, type LucideIcon } from 'lucide-react';
 import { useOnlineStatus } from '@/components/map/OfflineIndicator';
 import { chosenUsername } from '@pantopus/utils';
+import { startChatOutbox } from '@/components/chat/chatOutbox';
 
 // ── Constants ──────────────────────────────────────────────────
 const SIDEBAR_EXPANDED = 240;
@@ -243,6 +244,8 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   // ── You: the shared profile entry (lib/me.ts) ─────────────
   const { data: me } = useMe({ enabled: mounted && !!getAuthToken() });
   const user: User | null = me ?? null;
+  useConversationEvents(user?.id);
+  useEffect(() => { if (user?.id) void startChatOutbox(user.id).catch(() => {}); }, [user?.id]);
 
   // ── Tile prefetch for home area ──────────────────────────────
   const { viewerHome } = useViewerHome();

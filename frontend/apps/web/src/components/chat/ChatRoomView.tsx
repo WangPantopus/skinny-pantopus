@@ -7,9 +7,11 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import type { ChatRoomWithDetails, ChatMessage } from '@pantopus/types';
 import { getInitials } from '@pantopus/ui-utils';
-import { useChatMessages, getDateKey, formatDateLabel, extractAttachments, shareFailureMessage, chatPersonAvatar, chatPersonHandle, chatPersonHref, chatPersonName } from '../../hooks/useChatMessages';
+import { useChatMessages, getDateKey, formatDateLabel, extractAttachments, chatPersonAvatar, chatPersonHandle, chatPersonHref, chatPersonName } from '../../hooks/useChatMessages';
 import { useSocketEvent } from '../../hooks/useSocket';
 import ChatMessageList from './ChatMessageList';
+import ChatSearch from './ChatSearch';
+import ChatNotificationPreference from './ChatNotificationPreference';
 import ErrorState from '@/components/ui/ErrorState';
 import ChatInput from './ChatInput';
 import GigPickerModal from './GigPickerModal';
@@ -19,6 +21,7 @@ import MessageReactionBar from './MessageReactionBar';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import { launchFeatures } from '@/lib/featureFlags';
 import { fetchMe } from '@/lib/me';
+import { readCachedChatAccountId, type ChatDraftCommit } from './chatStorage';
 import { queryKeys } from '@/lib/query-keys';
 
 // Launch cut #4 (Open Gigs): bidding is hidden, so the pre-bid chat limit does not point to it.
@@ -30,10 +33,12 @@ export default function ChatRoomView({
   roomId,
   asBusinessUserId,
   returnTo = '/app/chat',
+  initialMessageId,
 }: {
   roomId: string;
   asBusinessUserId?: string;
   returnTo?: string;
+  initialMessageId?: string;
 }) {
   const router = useRouter();
 
@@ -49,17 +54,18 @@ export default function ChatRoomView({
   const [showListingPicker, setShowListingPicker] = useState(false);
   const [lightboxImage, setLightboxImage] = useState<{ url: string; title?: string } | null>(null);
 
-  // ── Shared chat hook ──────────────────────────────────
-  const chat = useChatMessages({ roomId, asBusinessUserId, currentUserId });
-
   // ── Load current user ─────────────────────────────────
   useEffect(() => {
-    (async () => {
-      try {
-        const userData = await fetchMe() as { id?: string };
-        setCurrentUserId(userData?.id || null);
-      } catch {}
-    })();
+    let cancelled = false;
+    let confirmed = false;
+    void readCachedChatAccountId().then((id) => {
+      if (!cancelled && !confirmed && id) setCurrentUserId(id);
+    }).catch(() => {});
+    void fetchMe().then((user) => {
+      confirmed = true;
+      if (!cancelled) setCurrentUserId(user?.id || null);
+    }).catch(() => {});
+    return () => { cancelled = true; };
   }, []);
 
   // ── Room info: kept with the conversation (the header shows at once on return) ──
@@ -75,6 +81,16 @@ export default function ChatRoomView({
     retry: false,
   });
   const roomInfo: ChatRoomWithDetails | null = roomQuery.data ?? null;
+  const receiptPeerId = useMemo(() => {
+    if (roomInfo?.type !== 'direct' || !currentUserId) return null;
+    const identity = asBusinessUserId || currentUserId;
+    const participants = (roomInfo.participants || []).filter((participant) => participant.is_active !== false);
+    const peers = participants.filter((participant) => (participant.user_id || participant.user?.id) !== identity);
+    return participants.length === 2 && peers.length === 1 ? peers[0].user_id || peers[0].user?.id : null;
+  }, [roomInfo, currentUserId, asBusinessUserId]);
+
+  const chat = useChatMessages({ roomId, asBusinessUserId, currentUserId, initialMessageId, receiptPeerId });
+
 
   // ── Business identity resolution ──────────────────────
   const isRepresented = useCallback(
@@ -97,19 +113,32 @@ export default function ChatRoomView({
   useEffect(() => {
     if (!currentUserId) { setRepresentedUserIds((prev) => (prev.length ? [] : prev)); return; }
     const represented = new Set<string>([String(currentUserId)]);
-    const participantIds = participantIdsKey ? participantIdsKey.split(',') : [];
+    const participantIds = new Set(participantIdsKey ? participantIdsKey.split(',') : []);
     let cancelled = false;
-    Promise.all(
-      participantIds.map(async (candidateId) => {
-        if (!candidateId || candidateId === String(currentUserId)) return;
-        try {
-          const access = await ((api.businessIam as Record<string, any>).getMyBusinessAccess as ((id: string) => Promise<{ hasAccess?: boolean; isOwner?: boolean; permissions?: string[] }>) | undefined)?.(candidateId);
-          if (access?.hasAccess && (access?.isOwner || (Array.isArray(access?.permissions) && (access.permissions.includes('gigs.manage') || access.permissions.includes('gigs.post'))))) {
-            represented.add(candidateId);
-          }
-        } catch {}
-      }),
-    ).then(() => {
+    const resolveBusinesses = async () => {
+      if (!participantIds.size) return;
+      // Only businesses this account belongs to can represent it. Probing every
+      // participant turned a large personal group into hundreds of IAM requests.
+      const memberships = await api.businesses.getMyBusinesses();
+      if (cancelled) return;
+      const candidates = Array.from(new Set((memberships.businesses || [])
+        .map((membership) => String(membership.business_user_id))
+        .filter((id) => id !== String(currentUserId) && participantIds.has(id))));
+      const worker = async () => {
+        while (!cancelled) {
+          const candidateId = candidates.shift();
+          if (!candidateId) return;
+          try {
+            const access = await api.businessIam.getMyBusinessAccess(candidateId);
+            if (!cancelled && access?.hasAccess && (access.isOwner || access.permissions?.some((permission) => permission === 'gigs.manage' || permission === 'gigs.post'))) {
+              represented.add(candidateId);
+            }
+          } catch {}
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(4, candidates.length) }, worker));
+    };
+    void resolveBusinesses().catch(() => {}).then(() => {
       if (cancelled) return;
       const next = Array.from(represented).sort();
       setRepresentedUserIds((prev) => (prev.length === next.length && prev.every((id, i) => id === next[i]) ? prev : next));
@@ -155,9 +184,10 @@ export default function ChatRoomView({
     let cancelled = false;
     (async () => {
       try {
-        try { await ((api.chat as Record<string, any>).markConversationAsRead as ((id: string, opts?: Record<string, any>) => Promise<void>) | undefined)?.(historyPeerId, { ...(asBusinessUserId ? { asBusinessUserId } : {}) }); } catch {}
         const convResp = await ((api.chat as Record<string, any>).getConversationMessages as ((id: string, opts?: Record<string, any>) => Promise<{ messages?: ChatMessage[]; roomIds?: string[] }>) | undefined)?.(historyPeerId, {
-          limit: 1000,
+          // This is a preview outside the paginated timeline. The existing
+          // person conversation below owns complete history and search.
+          limit: 50,
           ...(asBusinessUserId ? { asBusinessUserId } : {}),
         });
         if (cancelled) return;
@@ -179,13 +209,13 @@ export default function ChatRoomView({
 
   // ── Send with pre-bid check ───────────────────────────
   const handleSend = useCallback(
-    async (text: string, files?: File[]) => {
+    async (text: string, files?: File[], draft?: ChatDraftCommit) => {
       if (preBidStatus?.is_pre_bid && (preBidStatus.messages_remaining || 0) <= 0) {
         chat.setError(PRE_BID_LIMIT_MESSAGE);
-        return;
+        throw new Error(PRE_BID_LIMIT_MESSAGE);
       }
       try {
-        await chat.sendMessage(text, files);
+        await chat.sendMessage(text, files, draft);
         if (preBidStatus?.is_pre_bid) await loadPreBidStatus();
       } catch (e: unknown) {
         const err = e as { code?: string; message?: string };
@@ -208,19 +238,12 @@ export default function ChatRoomView({
 
   const gigSendMutation = useMutation({
     mutationFn: async (gig: { id: string; title: string; category: string | null; price: number | null; status: string }) => {
-      return api.chat.sendMessage({
-        roomId,
-        messageText: gig.title,
+      return chat.sendSharedMessage({
+        text: gig.title,
         messageType: 'gig_offer',
         metadata: { gigId: gig.id, title: gig.title, category: gig.category, price: gig.price, status: gig.status },
-        ...(asBusinessUserId ? { asBusinessUserId } : {}),
       });
     },
-    onSuccess: async () => {
-      if (!chat.connected) await chat.refresh();
-    },
-    // Say why instead of closing the picker with nothing sent.
-    onError: (err: unknown) => chat.setError(shareFailureMessage(err)),
   });
 
   const handleGigSelected = useCallback((gig: { id: string; title: string; category: string | null; price: number | null; status: string }) => {
@@ -230,18 +253,12 @@ export default function ChatRoomView({
 
   const listingSendMutation = useMutation({
     mutationFn: async (listing: { id: string; title: string; category: string | null; price: number | null; condition: string | null; status: string; imageUrl: string | null; isFree: boolean }) => {
-      return api.chat.sendMessage({
-        roomId,
-        messageText: listing.title,
+      return chat.sendSharedMessage({
+        text: listing.title,
         messageType: 'listing_offer',
         metadata: { listingId: listing.id, title: listing.title, category: listing.category, price: listing.price, condition: listing.condition, status: listing.status, imageUrl: listing.imageUrl, isFree: listing.isFree },
-        ...(asBusinessUserId ? { asBusinessUserId } : {}),
       });
     },
-    onSuccess: async () => {
-      if (!chat.connected) await chat.refresh();
-    },
-    onError: (err: unknown) => chat.setError(shareFailureMessage(err)),
   });
 
   const handleListingSelected = useCallback((listing: { id: string; title: string; category: string | null; price: number | null; condition: string | null; status: string; imageUrl: string | null; isFree: boolean }) => {
@@ -285,14 +302,15 @@ export default function ChatRoomView({
   const otherUser = (otherParticipant as Record<string, any>)?.user as Record<string, any> | undefined;
   // A Support Train's chat goes by the train's title, and its title opens the train.
   const supportTrainId = roomInfo?.type === 'support_train' ? roomInfo.support_train_id || null : null;
-  const chatTitle = (supportTrainId ? roomInfo?.name : null)
-    || chatPersonName(otherUser)
+  const isPersonRoom = roomInfo?.type === 'direct' || roomInfo?.type === 'gig';
+  const chatTitle = (!isPersonRoom ? roomInfo?.name || roomInfo?.room_name : null)
+    || (isPersonRoom ? chatPersonName(otherUser) : null)
     || roomInfo?.name
     || 'Conversation';
-  const otherProfileHref = supportTrainId ? `/app/support-trains/${supportTrainId}` : chatPersonHref(otherUser);
+  const otherProfileHref = supportTrainId ? `/app/support-trains/${supportTrainId}` : isPersonRoom ? chatPersonHref(otherUser) : null;
 
   // ── Historical messages header ────────────────────────
-  const historicalHeader = historicalMessages.length > 0 ? (
+  const historicalHeader = historicalRoomId && historyPeerId ? (
     <div className="mb-5">
       <div className="flex items-center justify-center my-4">
         <div className="bg-violet-100 text-violet-700 text-xs font-medium px-3 py-1 rounded-full">
@@ -370,8 +388,8 @@ export default function ChatRoomView({
       })()}
       {historicalRoomId && (
         <div className="text-center mt-2">
-          <button onClick={() => router.push(`/app/chat/${historicalRoomId}${asBusinessUserId ? `?asBusinessUserId=${encodeURIComponent(asBusinessUserId)}` : ''}`)} className="text-xs text-violet-600 hover:text-violet-800">
-            Open original conversation
+          <button onClick={() => router.push(`/app/chat/conversation/${historyPeerId}${asBusinessUserId ? `?asBusinessUserId=${encodeURIComponent(asBusinessUserId)}` : ''}`)} className="text-xs text-violet-600 hover:text-violet-800">
+            Open full conversation
           </button>
         </div>
       )}
@@ -427,6 +445,8 @@ export default function ChatRoomView({
                 )}
               </div>
             </div>
+            <ChatSearch target={{ roomId, asBusinessUserId, currentUserId }} />
+            <ChatNotificationPreference target={{ roomId, asBusinessUserId, currentUserId }} />
             <button onClick={() => chat.refresh()} className="text-sm font-semibold text-primary-700 hover:text-primary-800 p-1" aria-label="Refresh messages">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -448,6 +468,7 @@ export default function ChatRoomView({
       {/* Messages — flex-1 min-h-0 so this area gets a bounded height and can scroll */}
       <div className="flex-1 min-h-0 flex flex-col">
         <ChatMessageList
+          asBusinessUserId={asBusinessUserId}
           messages={chat.messages}
           loading={chat.loading}
           // A conversation that takes no messages says why in place of the composer instead.
@@ -455,11 +476,18 @@ export default function ChatRoomView({
           hasMore={chat.hasMore}
           loadingOlder={chat.loadingOlder}
           onLoadOlder={chat.loadOlder}
+          onVisibleMessage={chat.onVisibleMessage}
+          anchorMessageId={chat.contextAnchorId}
+          onReturnToLatest={initialMessageId ? () => router.replace(`/app/chat/${roomId}${asBusinessUserId ? `?asBusinessUserId=${encodeURIComponent(asBusinessUserId)}` : ''}`) : undefined}
           isOwnMessage={isOwnMessage}
           headerContent={historicalHeader}
           onImageClick={handleImageClick}
           onReact={handleReact}
           onRetry={chat.retryMessage}
+          onRemovePending={chat.removePendingMessage}
+          onEdit={chat.sendRefusal ? undefined : chat.beginEdit}
+          onDelete={chat.deleteMessage}
+          canChangeMessage={chat.canChangeMessage}
           onReply={inputDisabled || chat.sendRefusal ? undefined : chat.beginReply}
         />
       </div>
@@ -497,13 +525,20 @@ export default function ChatRoomView({
 
       {/* Input */}
       <ChatInput
+        key={chat.composerDraft.key}
+        draft={chat.composerDraft}
         onSend={handleSend}
         sending={chat.sending}
+        typingPeerCount={chat.typingPeerCount}
+        onTypingChange={chat.onTypingChange}
         disabled={inputDisabled}
         placeholder={inputDisabled ? (launchFeatures.openGigs ? 'Place a bid to continue chatting…' : 'Message limit reached') : 'Type a message…'}
         onAttachAction={handleAttachAction}
         replyingTo={chat.replyingTo}
         onCancelReply={chat.cancelReply}
+        editingMessage={chat.editingMessage}
+        onCancelEdit={chat.cancelEdit}
+        onSaveEdit={chat.saveEdit}
         lockedNote={chat.sendRefusal}
       />
       </>
