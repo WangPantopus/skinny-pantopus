@@ -50,10 +50,12 @@ bindings, file references or other product content. No schema or production
 configuration was changed by this import. Backups, the executed script,
 payloads, checksums and receipts are retained privately on the encrypted volume.
 
-**Remaining release acceptance:** owners must verify their imported
-email/password, Google and Apple sign-ins as applicable in the real apps,
-including profile loading and fresh content. Synthetic Auth-service checks and
-the production Admin API inventory do not establish those user journeys.
+**Founder acceptance, October 24:** after the import, the founder reported
+that sign-in and profile loading passed for a migrated account they control.
+The sign-in method was not specified. This establishes that reported journey;
+separate password, Google and Apple coverage and the fresh-content review are
+not all recorded. Synthetic Auth-service checks and the production Admin API
+inventory do not establish those additional user journeys.
 
 **Decision, October 8, 2026:** create a new production Supabase project from the
 canonical migrations. Preserve April users' ability to sign in, including
