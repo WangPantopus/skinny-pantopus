@@ -3,7 +3,7 @@ import { buildFeedMediaCandidates, canUseNextImage } from '@/components/feed/Fee
 describe('FeedMediaImage URL handling', () => {
   it('uses Next/Image only for configured image hosts', () => {
     expect(canUseNextImage('https://pantopus.com/media/post.jpg')).toBe(true);
-    expect(canUseNextImage('https://assets.cloudfront.net/media/post.jpg')).toBe(true);
+    expect(canUseNextImage('https://d17q91nbcz20e.cloudfront.net/media/post.jpg')).toBe(true);
     expect(canUseNextImage('https://pantopus-uploads.s3.us-west-2.amazonaws.com/post.jpg')).toBe(true);
     expect(canUseNextImage('/api/media/post.jpg')).toBe(true);
 

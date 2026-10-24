@@ -57,6 +57,10 @@ function formatBytes(bytes: number): string {
 
 // ── HTML sanitization config (AUTH-3.2) ──────────────────────
 
+// No `style` or `class`: a sender could lay a full-page fake form or button over
+// the app with inline CSS (position: fixed) or with our own utility classes
+// (`fixed inset-0 z-50`), and CSS can also fetch remote addresses. The prose
+// styles of the block below format the mail instead.
 const SANITIZE_CONFIG: DOMPurifyConfig = {
   ALLOWED_TAGS: [
     'p', 'div', 'span', 'a', 'br', 'ul', 'ol', 'li',
@@ -65,7 +69,7 @@ const SANITIZE_CONFIG: DOMPurifyConfig = {
     'strong', 'em', 'b', 'i', 'u', 'blockquote', 'pre', 'code', 'hr',
   ],
   ALLOWED_ATTR: [
-    'href', 'src', 'alt', 'class', 'style',
+    'href', 'src', 'alt',
     'width', 'height', 'colspan', 'rowspan',
   ],
   ALLOW_DATA_ATTR: false,

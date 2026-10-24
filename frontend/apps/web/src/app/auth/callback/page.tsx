@@ -5,12 +5,15 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import * as api from '@pantopus/api';
 import { bindPlaceArrival } from '@/components/place/pendingPlace';
-import { authPageHref, readAuthRedirectQuery, safeRedirectPath } from '@/lib/auth-utils';
+import { OAUTH_NONCE_PARAM, authPageHref, readAuthRedirectQuery, safeRedirectPath } from '@/lib/auth-utils';
+import { takeOAuthAttempt } from '@/lib/oauth-attempt';
 
 const NO_CODE_ERROR_DELAY_MS = 700;
 // The Auth server passes the provider's error through: Google sends
 // access_denied when the person cancels, Apple user_cancelled_authorize.
 const PROVIDER_CANCEL_ERRORS = new Set(['access_denied', 'user_cancelled_authorize']);
+// Same sentence as the apps' rejected callback.
+const ATTEMPT_REJECTED_ERROR = "Sign-in couldn't be verified. Please try again.";
 
 function AuthCallbackPageContent() {
   const router = useRouter();
@@ -19,6 +22,9 @@ function AuthCallbackPageContent() {
   const [error, setError] = useState('');
   const exchangeRef = useRef<{ key: string; promise: ReturnType<typeof api.auth.oauthCallback> } | null>(null);
   const hashCredentials = useRef<{ access: string; refresh: string | null } | null>(null);
+  // Whether this callback is the sign-in this tab started. Decided once, because
+  // deciding uses the attempt up and the effect below can run more than once.
+  const attemptOwned = useRef<boolean | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -43,6 +49,15 @@ function AuthCallbackPageContent() {
         if (!cancelled) setError('No authorization code received. Please try signing in again.');
       }, NO_CODE_ERROR_DELAY_MS);
       return () => { cancelled = true; clearTimeout(timeout); };
+    }
+    // A link carrying someone else's session or code (login CSRF) never signs
+    // this browser in: only the attempt this tab started, with its check.
+    if (attemptOwned.current === null) {
+      attemptOwned.current = takeOAuthAttempt(searchParams?.get(OAUTH_NONCE_PARAM) || params.get(OAUTH_NONCE_PARAM));
+    }
+    if (!attemptOwned.current) {
+      setError(ATTEMPT_REJECTED_ERROR);
+      return () => { cancelled = true; };
     }
 
     const key = credentials ? `token:${credentials.access}` : `code:${code}`;
