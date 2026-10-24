@@ -1226,6 +1226,12 @@ extension ChatConversationView {
                     keepWindowAtBottom(rows)
                     pinToBottomIfNeeded(oldLast: oldLast, newLast: newLast, proxy: proxy)
                 }
+                // A notice, the typing line or the keyboard takes room from
+                // below: the latest message stays in view when it was.
+                .onChange(of: geo.size.height) { oldHeight, newHeight in
+                    guard newHeight < oldHeight, isAtBottom, !isLoadingOlder else { return }
+                    proxy.scrollTo(Self.bottomAnchorId, anchor: .bottom)
+                }
                 // `initial`: a target published before this frame appeared
                 // (a slow first layout) still scrolls.
                 .onChange(of: viewModel.pendingScrollTargetId, initial: true) { _, target in
