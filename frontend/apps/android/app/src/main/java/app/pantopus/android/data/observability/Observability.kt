@@ -9,6 +9,7 @@ import io.sentry.SentryEvent
 import io.sentry.SentryLevel
 import io.sentry.SentryOptions
 import io.sentry.android.core.SentryAndroid
+import io.sentry.android.okhttp.SentryOkHttpInterceptor
 import io.sentry.android.timber.SentryTimberIntegration
 import io.sentry.protocol.User
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -137,8 +138,14 @@ class Observability
         private fun scrubPII(event: SentryEvent) {
             // A failed-request event keeps the method, path and status.
             event.request?.apply {
+                url = url?.let(::redactBearerPaths)
                 queryString = null
                 fragment = null
+            }
+            // The app's own reports and error logs can name a request too.
+            event.message?.apply {
+                formatted = formatted?.let(::redactBearerPaths)
+                message = message?.let(::redactBearerPaths)
             }
             val extras = event.extras
             if (extras != null) {
@@ -154,11 +161,12 @@ class Observability
 
         private fun scrubPII(breadcrumb: Breadcrumb) {
             URL_QUERY_KEYS.forEach { breadcrumb.removeData(it) }
+            (breadcrumb.data["url"] as? String)?.let { breadcrumb.setData("url", redactBearerPaths(it)) }
             breadcrumb.data
                 .toMutableMap()
                 .also { scrubInPlace(it) }
                 .forEach { (k, v) -> breadcrumb.setData(k, v) }
-            breadcrumb.message?.let { breadcrumb.message = redact(it) }
+            breadcrumb.message?.let { breadcrumb.message = redact(redactBearerPaths(it)) }
         }
 
         @Suppress("UNCHECKED_CAST")
@@ -252,4 +260,31 @@ private fun SentryLevel.toTimberPriority(): Int =
         SentryLevel.INFO -> android.util.Log.INFO
         SentryLevel.WARNING -> android.util.Log.WARN
         SentryLevel.ERROR, SentryLevel.FATAL -> android.util.Log.ERROR
+    }
+
+/**
+ * Routes whose last segment is the credential itself: a home invite, a guest pass, a booking's one-off or manage
+ * link (which can cancel or reschedule it), and the public residency, fridge-card and opt-out codes. Their URLs
+ * leave the device with that segment redacted, as the backend's request log does (`BEARER_CODE_PATH`,
+ * backend/app.js).
+ */
+private val BEARER_PATH =
+    Regex(
+        "(/api/(?:homes/invitations/token|homes/guest|homes/shared|public/book/o|public/booking|" +
+            "public/residency-letters|public/residency-claims|public/fridge-cards|public/block-invites/opt-out))" +
+            "/[^/?#\\s]+",
+        RegexOption.IGNORE_CASE,
+    )
+
+/** [value] (a URL, or a span's "GET <url>") with every bearer credential in its path replaced by `[redacted]`. */
+private fun redactBearerPaths(value: String): String = value.replace(BEARER_PATH, "$1/[redacted]")
+
+/**
+ * Hands [SentryOkHttpInterceptor] spans their request with the bearer credential redacted. A span names its request
+ * in its description, which a finished span (and so `beforeSendTransaction`) can no longer change.
+ */
+internal val scrubbedHttpSpan =
+    SentryOkHttpInterceptor.BeforeSpanCallback { span, _, _ ->
+        span.description = span.description?.let(::redactBearerPaths)
+        span
     }

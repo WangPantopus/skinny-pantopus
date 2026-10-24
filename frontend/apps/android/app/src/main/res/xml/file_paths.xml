@@ -1,8 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- P6.6 — exposes the app cache dir so generated PDFs (emergency card)
-     can be shared via FileProvider content:// URIs. -->
+<!-- The cache folders the app hands to other apps through FileProvider content:// URIs. Only these:
+     the rest of the cache (the image cache, queued crash reports, documents being read) stays private. -->
 <paths>
+    <!-- Photos the camera app takes for a chat, a task post or a reading (ChatMediaUrl, GigCameraPhotos,
+         ReadingSources). -->
     <cache-path
-        name="shared_cache"
-        path="." />
+        name="chat_camera"
+        path="chat-camera/" />
+    <cache-path
+        name="gig_camera"
+        path="gig-camera/" />
+    <cache-path
+        name="reading_camera"
+        path="reading-camera/" />
+    <!-- Files opened from a chat in another app. -->
+    <cache-path
+        name="chat_files"
+        path="chat-files/" />
+    <!-- Home documents, the emergency card and residency letters (HomeDocumentTemporaryFiles). -->
+    <cache-path
+        name="home_documents"
+        path="home-document-files/" />
+    <!-- Today's sky card and calendar invites, for the share sheet. -->
+    <cache-path
+        name="share"
+        path="share/" />
 </paths>

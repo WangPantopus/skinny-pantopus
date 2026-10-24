@@ -181,7 +181,7 @@ private struct RepRow: View {
                     if let email = rep.email, let url = URL(string: "mailto:\(email)") {
                         contactButton(.mail, url: url, label: "Email \(rep.name)")
                     }
-                    if let website = rep.website, let url = URL(string: website) {
+                    if let url = ExternalLink.webURL(rep.website) {
                         contactButton(.mapPin, url: url, label: "Visit \(rep.name)'s website")
                     }
                 }

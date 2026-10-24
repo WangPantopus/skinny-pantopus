@@ -25,7 +25,7 @@ public enum SchedulingPublicEndpoints {
 
     /// `GET /api/public/book/:slug` — page + status + event types.
     public static func bookPage(slug: String) -> Endpoint {
-        Endpoint(method: .get, path: "/api/public/book/\(slug)", authenticated: false)
+        Endpoint(method: .get, path: "/api/public/book/\(Endpoint.pathSegment(slug))", authenticated: false)
     }
 
     /// `GET /api/public/book/:slug/:eventTypeSlug/slots?from&to&tz` — slots.
@@ -38,7 +38,7 @@ public enum SchedulingPublicEndpoints {
     ) -> Endpoint {
         Endpoint(
             method: .get,
-            path: "/api/public/book/\(slug)/\(eventTypeSlug)/slots",
+            path: "/api/public/book/\(Endpoint.pathSegment(slug))/\(Endpoint.pathSegment(eventTypeSlug))/slots",
             query: filtered(["from": from, "to": to, "tz": tz]),
             authenticated: false
         )
@@ -53,7 +53,7 @@ public enum SchedulingPublicEndpoints {
     ) -> Endpoint {
         Endpoint(
             method: .post,
-            path: "/api/public/book/\(slug)/\(eventTypeSlug)",
+            path: "/api/public/book/\(Endpoint.pathSegment(slug))/\(Endpoint.pathSegment(eventTypeSlug))",
             body: request,
             authenticated: false
         )
@@ -67,7 +67,7 @@ public enum SchedulingPublicEndpoints {
     ) -> Endpoint {
         Endpoint(
             method: .post,
-            path: "/api/public/book/\(slug)/\(eventTypeSlug)/waitlist",
+            path: "/api/public/book/\(Endpoint.pathSegment(slug))/\(Endpoint.pathSegment(eventTypeSlug))/waitlist",
             body: request,
             authenticated: false
         )
@@ -84,7 +84,7 @@ public enum SchedulingPublicEndpoints {
     ) -> Endpoint {
         Endpoint(
             method: .get,
-            path: "/api/public/book/o/\(token)",
+            path: "/api/public/book/o/\(Endpoint.pathSegment(token))",
             query: filtered(["tz": tz, "from": from, "to": to]),
             authenticated: false
         )
@@ -98,7 +98,7 @@ public enum SchedulingPublicEndpoints {
     ) -> Endpoint {
         Endpoint(
             method: .post,
-            path: "/api/public/book/o/\(token)",
+            path: "/api/public/book/o/\(Endpoint.pathSegment(token))",
             body: request,
             authenticated: false
         )
@@ -108,7 +108,7 @@ public enum SchedulingPublicEndpoints {
 
     /// `GET /api/public/booking/:token` — booking + actions + payment + page.
     public static func manage(token: String) -> Endpoint {
-        Endpoint(method: .get, path: "/api/public/booking/\(token)", authenticated: false)
+        Endpoint(method: .get, path: "/api/public/booking/\(Endpoint.pathSegment(token))", authenticated: false)
     }
 
     /// `GET /api/public/booking/:token/available-slots?from&to&tz` — reschedule
@@ -121,7 +121,7 @@ public enum SchedulingPublicEndpoints {
     ) -> Endpoint {
         Endpoint(
             method: .get,
-            path: "/api/public/booking/\(token)/available-slots",
+            path: "/api/public/booking/\(Endpoint.pathSegment(token))/available-slots",
             query: filtered(["from": from, "to": to, "tz": tz]),
             authenticated: false
         )
@@ -129,14 +129,14 @@ public enum SchedulingPublicEndpoints {
 
     /// `GET /api/public/booking/:token/ics` — raw `.ics` (use `requestData`).
     public static func ics(token: String) -> Endpoint {
-        Endpoint(method: .get, path: "/api/public/booking/\(token)/ics", authenticated: false)
+        Endpoint(method: .get, path: "/api/public/booking/\(Endpoint.pathSegment(token))/ics", authenticated: false)
     }
 
     /// `POST /api/public/booking/:token/reschedule` — invitee reschedule.
     public static func reschedule(token: String, _ request: PublicRescheduleRequest) -> Endpoint {
         Endpoint(
             method: .post,
-            path: "/api/public/booking/\(token)/reschedule",
+            path: "/api/public/booking/\(Endpoint.pathSegment(token))/reschedule",
             body: request,
             authenticated: false
         )
@@ -149,7 +149,7 @@ public enum SchedulingPublicEndpoints {
     ) -> Endpoint {
         Endpoint(
             method: .post,
-            path: "/api/public/booking/\(token)/cancel",
+            path: "/api/public/booking/\(Endpoint.pathSegment(token))/cancel",
             body: request,
             authenticated: false
         )
@@ -159,7 +159,7 @@ public enum SchedulingPublicEndpoints {
     public static func unsubscribe(token: String) -> Endpoint {
         Endpoint(
             method: .post,
-            path: "/api/public/booking/\(token)/unsubscribe",
+            path: "/api/public/booking/\(Endpoint.pathSegment(token))/unsubscribe",
             authenticated: false
         )
     }
@@ -169,7 +169,7 @@ public enum SchedulingPublicEndpoints {
     public static func acceptReschedule(token: String) -> Endpoint {
         Endpoint(
             method: .post,
-            path: "/api/public/booking/\(token)/accept-reschedule",
+            path: "/api/public/booking/\(Endpoint.pathSegment(token))/accept-reschedule",
             authenticated: false
         )
     }
@@ -179,7 +179,7 @@ public enum SchedulingPublicEndpoints {
     public static func declineReschedule(token: String) -> Endpoint {
         Endpoint(
             method: .post,
-            path: "/api/public/booking/\(token)/decline-reschedule",
+            path: "/api/public/booking/\(Endpoint.pathSegment(token))/decline-reschedule",
             authenticated: false
         )
     }
