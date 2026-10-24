@@ -1245,7 +1245,8 @@ extension ChatConversationView {
                 }
                 .task { await landAtLatestMessage(proxy) }
                 .onChange(of: rows.last) { oldLast, newLast in
-                    keepWindowAtBottom(rows)
+                    // Back to the newest rows at the bottom goes there by itself.
+                    guard !showLatestIfLongAtBottom(rows, proxy: proxy) else { return }
                     pinToBottomIfNeeded(oldLast: oldLast, newLast: newLast, proxy: proxy)
                 }
                 // A notice, the typing line or the keyboard takes room from
@@ -1358,13 +1359,26 @@ extension ChatConversationView {
     }
 
     /// New rows at the bottom while the reader is there (a long gap filled on
-    /// open, or arrivals after reading back): render only the newest rows
-    /// again. The rows leaving are far above the viewport.
-    private func keepWindowAtBottom(_ rows: [ChatTimelineRow]) {
-        guard openingWindowDecided, isAtBottom, !isLoadingOlder else { return }
+    /// open, or arrivals and sends after reading back): render only the newest
+    /// rows again, then go to the bottom. The rows leaving are far above the
+    /// viewport. Returns whether it did.
+    private func showLatestIfLongAtBottom(_ rows: [ChatTimelineRow], proxy: ScrollViewProxy) -> Bool {
+        guard openingWindowDecided, isAtBottom, !isLoadingOlder else { return false }
         let start = renderFloorId.flatMap { floor in rows.firstIndex { $0.id == floor } } ?? rows.startIndex
-        guard rows.count - start > Self.openingRowWindow * 2, let floor = openingFloorId(in: rows) else { return }
+        guard rows.count - start > Self.openingRowWindow * 2, let floor = openingFloorId(in: rows) else { return false }
         setWindowFloor(floor, rows: rows)
+        Task { await scrollToBottomAfterLayout(proxy) }
+        return true
+    }
+
+    /// The rendered rows just changed: go to the bottom once they have laid
+    /// out. Scrolling in the same pass resolves the bottom in the old (longer)
+    /// layout and leaves the viewport past the end of the new content, blank.
+    private func scrollToBottomAfterLayout(_ proxy: ScrollViewProxy) async {
+        for delayMs: UInt64 in [16, 120] {
+            try? await Task.sleep(nanoseconds: delayMs * 1_000_000)
+            proxy.scrollTo(Self.bottomAnchorId, anchor: .bottom)
+        }
     }
 
     /// Up past the top of what is rendered: the loaded rows the window holds
@@ -1390,12 +1404,16 @@ extension ChatConversationView {
         }
     }
 
-    /// Joining is over: a message sent meanwhile is shown now.
+    /// Joining is over: a message sent meanwhile is shown now, with only the
+    /// newest rows rendered again.
     private func finishJoining(_ proxy: ScrollViewProxy) {
         isLoadingOlder = false
         guard scrollMetrics.pinsBottomAfterJoin else { return }
         scrollMetrics.pinsBottomAfterJoin = false
-        proxy.scrollTo(Self.bottomAnchorId, anchor: .bottom)
+        if case let .loaded(rows) = viewModel.state, let floor = openingFloorId(in: rows) {
+            setWindowFloor(floor, rows: rows)
+        }
+        Task { await scrollToBottomAfterLayout(proxy) }
     }
 
     /// Lowers the window's floor a few rows per layout pass until `limit`
@@ -1520,16 +1538,10 @@ extension ChatConversationView {
             viewModel.consumePendingScroll()
         }
         if target == Self.bottomAnchorId {
-            // Back at the latest message: render its newest rows again and go
-            // to the bottom once they have laid out. Scrolling in this pass
-            // resolved the bottom in the old (longer) layout and left the
-            // viewport past the end of the new content, blank.
+            // Back at the latest message: its newest rows again, then the bottom.
             setWindowFloor(openingFloorId(in: rows), rows: rows)
             Task {
-                for delayMs: UInt64 in [16, 120] {
-                    try? await Task.sleep(nanoseconds: delayMs * 1_000_000)
-                    proxy.scrollTo(Self.bottomAnchorId, anchor: .bottom)
-                }
+                await scrollToBottomAfterLayout(proxy)
                 viewModel.consumePendingScroll()
             }
             return
