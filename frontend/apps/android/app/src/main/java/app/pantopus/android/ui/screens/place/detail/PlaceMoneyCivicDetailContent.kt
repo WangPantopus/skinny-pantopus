@@ -35,6 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.routing.ExternalLinks
 import app.pantopus.android.data.api.models.place.AssessmentStance
 import app.pantopus.android.data.api.models.place.BallotGovernments
 import app.pantopus.android.data.api.models.place.BallotPhase
@@ -796,7 +797,7 @@ private fun RepRow(rep: PlaceCivicRepresentative) {
                         PantopusIcon.Mail,
                     ) { context.startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:$it"))) }
                 }
-                rep.website?.let { contactButton(PantopusIcon.MapPin) { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(it))) } }
+                rep.website?.takeIf(ExternalLinks::isWeb)?.let { contactButton(PantopusIcon.MapPin) { ExternalLinks.open(context, it) } }
             }
         }
     }

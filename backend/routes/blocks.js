@@ -4,7 +4,7 @@ const router = express.Router();
 const supabaseAdmin = require('../config/supabaseAdmin');
 const verifyToken = require('../middleware/verifyToken');
 const logger = require('../utils/logger');
-const { invalidateBlockCache } = require('../services/blockService');
+const { invalidateBlockCache, removeFollowsBetween } = require('../services/blockService');
 const { invalidateFilterCache } = require('../services/feedService');
 const marketplaceService = require('../services/marketplace/marketplaceService');
 const { writeIdentityAuditLog } = require('../utils/identityAudit');
@@ -25,16 +25,22 @@ router.post('/:userId/block', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'Cannot block yourself' });
     }
 
-    // Verify target user exists
-    const { data: targetUser } = await supabaseAdmin
+    // Verify target user exists (22P02: the id isn't one at all)
+    const { data: targetUser, error: targetError } = await supabaseAdmin
       .from('User')
       .select('id')
       .eq('id', blockedId)
-      .single();
+      .maybeSingle();
 
+    if (targetError && targetError.code !== '22P02') throw targetError;
     if (!targetUser) {
       return res.status(404).json({ error: 'User not found' });
     }
+
+    // The block ends their follows, both ways (blockService.removeFollowsBetween):
+    // first, so a failure (503) records nothing and Block is still offered for a
+    // retry, and again once the block is recorded, for a follow added in between.
+    await removeFollowsBetween(blockerId, blockedId);
 
     const { error } = await supabaseAdmin
       .from('UserBlock')
@@ -57,6 +63,8 @@ router.post('/:userId/block', verifyToken, async (req, res) => {
     invalidateFilterCache(blockedId);
     marketplaceService.invalidateFilterCache(blockerId);
     marketplaceService.invalidateFilterCache(blockedId);
+
+    await removeFollowsBetween(blockerId, blockedId);
 
     // P1.14: audience-profile §9 + unified-IA §5.1 — personal-side
     // block cascades to every persona the blocker owns. The cascade
@@ -90,6 +98,7 @@ router.post('/:userId/block', verifyToken, async (req, res) => {
     });
     res.json({ success: true });
   } catch (err) {
+    if (err.code === 'BLOCK_INCOMPLETE') return res.status(503).json({ error: err.message, code: err.code });
     logger.error('Block user error', { error: err.message });
     res.status(500).json({ error: 'Failed to block user' });
   }

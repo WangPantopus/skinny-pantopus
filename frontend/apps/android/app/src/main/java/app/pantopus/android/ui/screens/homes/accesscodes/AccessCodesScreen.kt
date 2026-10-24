@@ -2,9 +2,6 @@
 
 package app.pantopus.android.ui.screens.homes.accesscodes
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -19,7 +16,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -31,6 +27,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.security.SecureScreenEffect
+import app.pantopus.android.core.security.SensitiveClipboard
 import app.pantopus.android.ui.screens.shared.list_of_rows.FabAction
 import app.pantopus.android.ui.screens.shared.list_of_rows.FabTint
 import app.pantopus.android.ui.screens.shared.list_of_rows.FabVariant
@@ -64,17 +61,11 @@ fun AccessCodesScreen(
     val toast by viewModel.toast.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
-    val clipboard =
-        remember {
-            context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-        }
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refreshIfLoaded() }
 
     LaunchedEffect(Unit) {
-        viewModel.bindClipboard { value ->
-            clipboard?.setPrimaryClip(ClipData.newPlainText("Access code", value))
-        }
+        viewModel.bindClipboard { value -> SensitiveClipboard.copy(context, "Access code", value) }
         viewModel.onSelect = { target ->
             when (target) {
                 is AccessCodesTarget.AddCode -> onAddCode(target.category)

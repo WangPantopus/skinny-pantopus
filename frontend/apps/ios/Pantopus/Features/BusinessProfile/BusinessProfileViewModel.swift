@@ -779,11 +779,13 @@ extension BusinessProfileViewModel {
         return business.city ?? business.state
     }
 
+    /// A bare domain gets https; any other scheme (`tel:`, `javascript:`,
+    /// `pantopus://`) isn't a website.
     private func normalizedWebsite(_ raw: String?) -> URL? {
         guard let raw, !raw.isEmpty else { return nil }
-        if let url = URL(string: raw), url.scheme != nil {
-            return url
+        if URL(string: raw)?.scheme != nil {
+            return ExternalLink.webURL(raw)
         }
-        return URL(string: "https://\(raw)")
+        return ExternalLink.webURL("https://\(raw)")
     }
 }
