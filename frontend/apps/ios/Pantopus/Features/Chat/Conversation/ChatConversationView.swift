@@ -1411,8 +1411,19 @@ extension ChatConversationView {
             viewModel.consumePendingScroll()
         }
         if target == Self.bottomAnchorId {
-            // Back at the latest message: render its newest rows again.
+            // Back at the latest message: render its newest rows again and go
+            // to the bottom once they have laid out. Scrolling in this pass
+            // resolved the bottom in the old (longer) layout and left the
+            // viewport past the end of the new content, blank.
             setWindowFloor(openingFloorId(in: rows), rows: rows)
+            Task {
+                for delayMs: UInt64 in [16, 120] {
+                    try? await Task.sleep(nanoseconds: delayMs * 1_000_000)
+                    proxy.scrollTo(Self.bottomAnchorId, anchor: .bottom)
+                }
+                viewModel.consumePendingScroll()
+            }
+            return
         } else if renderFloorId != nil, !shown.contains(where: { $0.id == target }) {
             // The target is among the held-back rows: show them, then scroll
             // once they have laid out.
