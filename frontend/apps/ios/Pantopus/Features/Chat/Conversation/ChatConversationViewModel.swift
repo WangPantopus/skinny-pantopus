@@ -2407,7 +2407,10 @@ public final class ChatConversationViewModel {
     /// typed after the send instead of reviving the sent text.
     public func updateComposerFromField(_ text: String) {
         if let sent = sentComposerText {
-            if Date().timeIntervalSince(sent.at) < 2, text.hasPrefix(sent.text) {
+            // A stale report is the sent text with new keystrokes after it. A
+            // report no longer than that text (a fresh first keystroke, even
+            // one matching a one-character message) is kept as typed.
+            if Date().timeIntervalSince(sent.at) < 2, text.count > sent.text.count, text.hasPrefix(sent.text) {
                 composerText = String(text.dropFirst(sent.text.count))
                 return
             }

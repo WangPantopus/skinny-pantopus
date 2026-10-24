@@ -60,6 +60,8 @@ final class SocketClient {
     /// replacement token must not start an unbounded refresh/reconnect loop.
     private var attemptedAuthRecovery = false
     private var connectionGeneration = 0
+    /// True while Socket.IO retries after an unexpected drop (its backoff).
+    private var isRetryingAfterDrop = false
     /// Set once the server said the device / session is revoked: reconnecting
     /// with any token from this session is pointless, so we stop until the
     /// HTTP path confirms (401 `SESSION_REVOKED`) and a fresh sign-in
@@ -141,6 +143,7 @@ final class SocketClient {
         socket.on(clientEvent: .reconnect) { [weak self] _, _ in
             Task { @MainActor in
                 guard let self, self.connectionGeneration == generation else { return }
+                self.isRetryingAfterDrop = true
                 self.setConnectionState(.connecting)
                 self.logger.info("Socket reconnecting")
             }
@@ -175,8 +178,19 @@ final class SocketClient {
         disconnectTransport()
     }
 
+    /// Try at once when the app returns to the foreground or the network
+    /// comes back. Socket.IO's own backoff grows to 30 s during a long
+    /// outage, and live messages waited that long after the connection was
+    /// usable again.
+    func reconnectNowIfWaiting() {
+        guard isRetryingAfterDrop, !stoppedForRevocation, let token = authToken else { return }
+        disconnectTransport()
+        connect(token: token)
+    }
+
     private func disconnectTransport() {
         connectionGeneration += 1
+        isRetryingAfterDrop = false
         socket?.removeAllHandlers()
         attachedHandlers.removeAll()
         socket?.disconnect()
@@ -189,6 +203,7 @@ final class SocketClient {
     // MARK: - Auth-error recovery
 
     func handleSocketConnected() {
+        isRetryingAfterDrop = false
         attemptedAuthRecovery = false
         setConnectionState(.connected)
         logger.info("Socket connected")

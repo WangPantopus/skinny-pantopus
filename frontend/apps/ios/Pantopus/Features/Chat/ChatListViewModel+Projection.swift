@@ -7,6 +7,15 @@ extension ChatListViewModel {
 
     private static let activityISOStyle = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
     private static let activityPlainISOFormatter = ISO8601DateFormatter()
+    /// One formatter for every row: making one per row cost each inbox
+    /// projection (cached, network and every live message) a formatter per
+    /// conversation.
+    private static let relativeFormatter: RelativeDateTimeFormatter = {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.locale = .autoupdatingCurrent
+        formatter.unitsStyle = .short
+        return formatter
+    }()
 
     static func parseISO(_ raw: String) -> Date? {
         (try? activityISOStyle.parse(raw)) ?? activityPlainISOFormatter.date(from: raw)
@@ -172,9 +181,7 @@ extension ChatListViewModel {
         }
         // A message can be a hair ahead of the phone's clock; "in 0 sec." reads as a bug.
         if Date().timeIntervalSince(date) < 60 { return "Just now" }
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .short
-        return formatter.localizedString(for: date, relativeTo: Date())
+        return relativeFormatter.localizedString(for: date, relativeTo: Date())
     }
 }
 

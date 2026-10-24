@@ -62,10 +62,16 @@ struct PantopusApp: App {
                         DeepLinkRouter.shared.handle(url: url)
                     }
                 }
+                // The network is back: reconnect now rather than at the end of
+                // a long backoff, so open threads catch up at once.
+                .onChange(of: NetworkMonitor.shared.isOnline) { _, online in
+                    if online { SocketClient.shared.reconnectNowIfWaiting() }
+                }
                 .onChange(of: scenePhase) { _, phase in
                     switch phase {
                     case .active:
                         PilotEvents.shared.enterForeground()
+                        SocketClient.shared.reconnectNowIfWaiting()
                         ChatOutbox.shared.enteredForeground()
                         capturePrivacy.coversAppSwitcher = false
                         appLock.appDidBecomeActive()
