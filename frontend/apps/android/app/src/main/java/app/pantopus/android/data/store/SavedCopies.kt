@@ -306,7 +306,7 @@ class SavedCopies
                 }
                 Files.move(temporary.toPath(), marker.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
                 // Persist the renamed directory entry as well as its contents before reporting access retirement.
-                val directory = Os.open(epochsRoot.path, OsConstants.O_RDONLY or OsConstants.O_DIRECTORY, 0)
+                val directory = Os.open(epochsRoot.path, OsConstants.O_RDONLY, 0)
                 try {
                     Os.fsync(directory)
                 } finally {

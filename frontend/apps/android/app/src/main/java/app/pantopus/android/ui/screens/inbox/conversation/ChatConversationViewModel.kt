@@ -3756,6 +3756,8 @@ class ChatConversationViewModel
             messages.replaceAll { message ->
                 val receipt = known[message.id]
                 if (receipt != null && message.userId == messageIdentityId && canMerge(message)) {
+                    // A fresh authorized per-message result can restore eligibility; a delayed socket flag cannot.
+                    if (receipt.readAt != null && clearCanonicalNull) ineligibleReceiptRooms.remove(message.roomId)
                     val readAt =
                         when {
                             message.roomId in ineligibleReceiptRooms -> null
@@ -3782,8 +3784,8 @@ class ChatConversationViewModel
                 return false
             }
             if (json.optBoolean("directReceiptEligible")) {
-                ineligibleReceiptRooms.remove(roomId)
-                return true
+                if (roomId in ineligibleReceiptRooms) catchUpMessages()
+                return roomId !in ineligibleReceiptRooms
             }
             val first = ineligibleReceiptRooms.add(roomId)
             val changed = messages.any { it.roomId == roomId && it.userId == messageIdentityId && it.readAt != null }
