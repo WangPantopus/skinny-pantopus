@@ -2,11 +2,13 @@
 
 package app.pantopus.android.ui.screens.inbox.chat
 
+import app.pantopus.android.data.api.models.chats.ChatNotificationPreferencesResponse
 import app.pantopus.android.data.api.models.chats.ChatOtherIdentity
 import app.pantopus.android.data.api.models.chats.ChatTopic
 import app.pantopus.android.data.api.models.chats.UnifiedConversationDto
 import app.pantopus.android.data.api.models.chats.UnifiedConversationsResponse
 import app.pantopus.android.data.api.net.NetworkError
+import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.chats.ChatBadgeCoordinator
 import app.pantopus.android.data.chats.ChatConversationPreferences
 import app.pantopus.android.data.chats.ChatRepository
@@ -14,8 +16,10 @@ import app.pantopus.android.data.chats.ChatUnreadBadgeMath
 import app.pantopus.android.data.realtime.SocketManager
 import app.pantopus.android.data.store.Stored
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.emptyFlow
@@ -57,6 +61,10 @@ class ChatListViewModelTest {
             val key = firstArg<String>()
             val unread = secondArg<Int>()
             key in hiddenKeys && unread > 2
+        }
+        // The phone mirrors the server's answer for each mute (ChatConversationPreferences.syncMuted).
+        every { preferences.syncMuted(any()) } answers {
+            firstArg<Map<String, Boolean>>().forEach { (key, muted) -> if (muted) mutedKeys.add(key) else mutedKeys.remove(key) }
         }
         every { preferences.toggleMute(any()) } answers {
             val key = firstArg<String>()
@@ -205,9 +213,15 @@ class ChatListViewModelTest {
                     UnifiedConversationsResponse(listOf(direct(), business(), group()), 3, 3),
                     fetchedAt = System.currentTimeMillis(),
                 )
+            // A mute is the server's: the request turns this person's notifications off and its answer is mirrored.
+            coEvery { repo.setConversationNotifications("u1", false) } returns
+                NetworkResult.Success(ChatNotificationPreferencesResponse(notificationsEnabled = false))
             val vm = ChatListViewModel(repo, socket, preferences, badgeCoordinator)
             vm.load()
             vm.toggleMute("person:u1")
+            coVerify(exactly = 1) { repo.setConversationNotifications("u1", false) }
+            verify(exactly = 0) { preferences.toggleMute(any()) }
+            assertTrue((vm.state.value as ChatListUiState.Loaded).rows.first { it.id == "u1" }.isMuted)
             assertEquals(
                 ChatUnreadBadgeMath.adjustedTotal(3, (vm.state.value as ChatListUiState.Loaded).rows, setOf("person:u1")),
                 vm.unreadByFilter.value[ChatFilter.Unread],

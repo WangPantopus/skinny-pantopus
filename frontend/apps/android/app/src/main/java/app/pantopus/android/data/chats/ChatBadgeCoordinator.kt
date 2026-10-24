@@ -10,6 +10,8 @@ import javax.inject.Singleton
 data class ChatBadgeSnapshot(
     val serverTotalUnread: Int = 0,
     val rows: List<ConversationRowContent> = emptyList(),
+    val serverUnmutedUnread: Int? = null,
+    val initialized: Boolean = false,
 )
 
 /** Shared badge snapshot so the chat list can drive muted-unread exclusion. */
@@ -23,8 +25,9 @@ class ChatBadgeCoordinator
         fun publish(
             serverTotalUnread: Int,
             rows: List<ConversationRowContent>,
+            serverUnmutedUnread: Int? = null,
         ) {
-            _snapshot.value = ChatBadgeSnapshot(serverTotalUnread, rows)
+            _snapshot.value = ChatBadgeSnapshot(serverTotalUnread, rows, serverUnmutedUnread, initialized = true)
         }
 
         /** Sign-out: the last account's unread total and conversation rows go. */
