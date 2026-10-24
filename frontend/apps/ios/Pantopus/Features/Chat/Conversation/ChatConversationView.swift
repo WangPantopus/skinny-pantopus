@@ -1320,11 +1320,16 @@ extension ChatConversationView {
     /// on, with the dividers just above its first message.
     private func renderedRows(_ rows: [ChatTimelineRow]) -> ArraySlice<ChatTimelineRow> {
         let floor = openingWindowDecided ? renderFloorId : openingFloorId(in: rows)
-        guard let floor, var start = rows.firstIndex(where: { $0.id == floor }) else { return rows[...] }
-        while start > rows.startIndex, !Self.isBubble(rows[start - 1]) {
+        return rows[Self.renderedStart(floor: floor, in: rows)...]
+    }
+
+    /// Where rendering starts for a floor: its row, with the dividers just above it.
+    private static func renderedStart(floor: String?, in rows: [ChatTimelineRow]) -> Int {
+        guard let floor, var start = rows.firstIndex(where: { $0.id == floor }) else { return rows.startIndex }
+        while start > rows.startIndex, !isBubble(rows[start - 1]) {
             start -= 1
         }
-        return rows[start...]
+        return start
     }
 
     /// The first bubble among the newest rows, for a thread shown at its
@@ -1436,6 +1441,11 @@ extension ChatConversationView {
             lastRowId: shown.last?.id, anchorId: shown.first(where: Self.isBubble)?.id, olderPagesApplied: nil
         )
         setWindowFloor(floor, rows: rows)
+        // Only dividers already shown with the old floor were left: nothing lays out.
+        guard Self.renderedStart(floor: floor, in: rows) < shown.startIndex else {
+            scrollMetrics.pendingPrepend = nil
+            return
+        }
         var waits = 0
         while scrollMetrics.pendingPrepend != nil, waits < 25 {
             try? await Task.sleep(nanoseconds: 16_000_000)
