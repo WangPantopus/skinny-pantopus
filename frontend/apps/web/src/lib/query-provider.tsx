@@ -102,7 +102,8 @@ export default function QueryProvider({ children }: { children: React.ReactNode 
   // Set while rendering, so children's first effects already read this session's cache.
   setActiveQueryClient(queryClient);
 
-  useEffect(() => onChatHistoryRetired(({ rooms }) => {
+  useEffect(() => onChatHistoryRetired(({ rooms, mediaOnly }) => {
+    if (mediaOnly) return;
     const denied = new Set(rooms);
     queryClient.removeQueries({ predicate: (query) => query.queryKey[0] === 'chat'
       && (query.queryKey[1] === 'messages' && chatHistoryRooms(query.state.data).some((room) => denied.has(room))

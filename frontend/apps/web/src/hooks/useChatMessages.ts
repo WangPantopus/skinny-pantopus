@@ -8,6 +8,7 @@ import { getDateKey, formatDateLabel } from '@pantopus/ui-utils';
 import { retainSocketRoom, useSocket, useSocketConnected, type SocketRoomLease } from './useSocket';
 import { useSocketEvent, useSocketEmit } from './useSocket';
 import { useChatTyping } from './useChatTyping';
+import { useChatOfflineShell } from './useChatOfflineShell';
 import { chosenUsername } from '@pantopus/utils';
 import { confirmStore } from '@/components/ui/confirm-store';
 import { queryKeys } from '@/lib/query-keys';
@@ -300,6 +301,7 @@ function sendFailureReason(err: unknown): string | null {
 // ── Hook ────────────────────────────────────────────────────
 
 export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesReturn {
+  useChatOfflineShell();
   const { roomId, otherUserId, topicId, asBusinessUserId, currentUserId, initialMessageId } = opts;
   const isRoomMode = Boolean(roomId);
   const receiptPeerId = otherUserId || opts.receiptPeerId;

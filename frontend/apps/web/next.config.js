@@ -59,6 +59,17 @@ const createNextConfig = (phase) => ({
   // apex serves these URLs with 200 + same JSON — redirects on /.well-known can break verification).
   async headers() {
     return [
+      {
+        source: '/chat-offline',
+        headers: [
+          { key: 'X-Pantopus-Chat-Shell', value: '1' },
+          { key: 'X-Robots-Tag', value: 'noindex, nofollow' },
+        ],
+      },
+      {
+        source: '/chat-service-worker.js',
+        headers: [{ key: 'Cache-Control', value: 'no-cache' }],
+      },
       // Clickjacking protection for every page except booking embeds, which
       // other sites frame on purpose. Rules below override these per path.
       {
