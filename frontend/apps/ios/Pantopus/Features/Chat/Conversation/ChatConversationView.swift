@@ -1442,8 +1442,9 @@ extension ChatConversationView {
             // Done once every held row joined, or when the window moved for something else.
             guard let next, renderFloorId == next else { break }
             step = Int(Double(step) * Self.revealStepTargetMs / max(tookMs, 1))
-            // A frame between passes, for scrolling and touches.
-            try? await Task.sleep(nanoseconds: 16_000_000)
+            // Two frames' time between passes, so that at least one frame (with
+            // its scrolling and touches) is drawn before the next pass starts.
+            try? await Task.sleep(nanoseconds: 34_000_000)
         }
         return joined
     }
