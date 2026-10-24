@@ -1,6 +1,6 @@
 # Messages / Chat performance and reliability handoff — October 23, 2026
 
-**Founder amendment — October 23: consolidate first.** The next session must first preserve and consolidate this stack into **four draft implementation PRs: backend/database, web, iOS and Android**, then finish the remaining repairs and verification on those branches. This supersedes earlier instructions to keep adding small stacked PRs. Preserve all changes, original refs, artifacts and evidence. **Do not merge any PR or deploy, even after green CI.** This amendment updates the plan only; consolidation has not been performed in this documentation update.
+**Founder amendment — October 23: consolidate first.** The next session must first preserve and consolidate this stack into **four draft implementation PRs: backend/database, web, iOS and Android**, then finish the remaining repairs and verification on those branches. This supersedes earlier instructions to keep adding small stacked PRs. Preserve all changes, original refs, artifacts and evidence. **Do not merge any PR or deploy, even after green CI.** This amendment originally updated the plan only; the continuation checkpoint below records the subsequent consolidation.
 
 **Final handoff checkpoint: October 23, 2026, approximately 23:45 UTC.** The founder requested this handoff after the resumed repair/verification session. This is a continuation checkpoint, not a release approval.
 
@@ -9,6 +9,12 @@ The original **63 stacked draft PRs (#2665–#2727)** were preserved. This effor
 Read AGENTS.md, NEXT_STEPS.md and the current mobile pilot brief. Then read this latest checkpoint and the private operations companion at `~/.config/pantopus/chat-reliability-20261023/HANDOFF-OPERATIONS.md`. The appendix preserves the original broad audit verbatim. Earlier dated observations are retained at the end as history; **this checkpoint supersedes their backlog, artifact and runtime status**. Inspect live Git/PR/CI/process state before acting.
 
 There is no measured basis for WeChat/WhatsApp parity. We have substantial local correctness evidence, implemented performance bounds and working recovery paths; incomplete integrated-artifact checks, CI failures, physical-device/provider verification and controlled performance measurements remain.
+
+## Consolidation continuation — October 23, 2026
+
+The four replacement drafts are now [backend/database #2804](https://github.com/WangPantopus/skinny-pantopus/pull/2804), [web #2805](https://github.com/WangPantopus/skinny-pantopus/pull/2805), [iOS #2803](https://github.com/WangPantopus/skinny-pantopus/pull/2803) and [Android #2806](https://github.com/WangPantopus/skinny-pantopus/pull/2806), all on common master `4e7582831`. The [complete old-to-new mapping](chat-consolidation-map-2026-10-23.md) accounts for all 131 originals, shared contracts, unique latest documentation, migration immutability and preserved evidence. Original refs/commits stay intact. These four heads are the active implementation/CI targets. No PR has been merged or deployed.
+
+The final iOS383 build has since completed successfully and its signed artifact is preserved with hashes; installation and new-path verification remain separate. The original checkpoint below remains the historical source/artifact baseline. All four historical candidate CI runs finished red; consolidated CI is being checked independently. Local APIs and the unapplied topic-binding migration have not yet changed.
 
 ## 1. Scope, decisions and non-negotiable constraints
 
