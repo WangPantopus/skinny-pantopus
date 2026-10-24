@@ -1,5 +1,7 @@
 # Messages / Chat performance and reliability handoff — October 23, 2026
 
+**Founder amendment — October 23: consolidate first.** The next session must first preserve and consolidate this stack into **four draft implementation PRs: backend/database, web, iOS and Android**, then finish the remaining repairs and verification on those branches. This supersedes earlier instructions to keep adding small stacked PRs. Preserve all changes, original refs, artifacts and evidence. **Do not merge any PR or deploy, even after green CI.** This amendment updates the plan only; consolidation has not been performed in this documentation update.
+
 **Final handoff checkpoint: October 23, 2026, approximately 23:45 UTC.** The founder requested this handoff after the resumed repair/verification session. This is a continuation checkpoint, not a release approval.
 
 The original **63 stacked draft PRs (#2665–#2727)** were preserved. This effort now has **131 open draft PRs: the original 63 plus 68 resumed slices, including documentation and integration PRs, through #2801**. The complete current register below excludes six intervening PRs belonging to other sessions. All implementation source is committed and pushed; generated artifacts and private operator evidence stay local. No chat-stack PR was merged or deployed by this session.
@@ -10,6 +12,7 @@ There is no measured basis for WeChat/WhatsApp parity. We have substantial local
 
 ## 1. Scope, decisions and non-negotiable constraints
 
+- Consolidate into four draft implementation PRs before further repair cycles, following section 4. Keep coherent commits within those PRs instead of creating another PR for each follow-up. No PR merge or deployment is authorized by this handoff, including client-only or documentation PRs.
 - Preserve the existing screens, layouts, navigation and launch flags. No redesign or launch-cut activation.
 - Do not write test code, unit tests or coverage work. Run relevant existing checks. Do not silently alter tests to make the stack green. Unchanged upstream tests were imported by master integration; no test code was authored by this effort.
 - Verify through the real web app, iOS simulator and Android emulator against the owned local API/database. Include sender and recipient, reload/relaunch, offline/reconnect, accepted-but-lost responses, account changes, access loss and attachments. API probes and CI are supporting evidence, not substitutes.
@@ -100,7 +103,25 @@ The approved topic protocol was verified with interleaved selected/unselected me
 
 ## 4. Prioritized remaining work
 
-### P0 — Resume safely and finish the preserved exact-artifact checks
+### P0 — Preserve and consolidate into four draft PRs first
+
+1. Read the private operations/per-client handoffs and inspect current Git, remote PR heads/bases, CI, processes and schema. Preserve original branch refs and exact SHAs before constructing replacement branches. Keep source, generated artifacts, private notes and synthetic fixtures separate. Do not overwrite a checkout serving a running API or build, clear the preserved browser cache, or reset the database. Recover/preserve an already-running build result if needed, without starting the remaining repair cycles yet.
+2. Reconcile all 131 registered drafts, including documentation and follow-up branches, into a mapping from each old PR/commit to its consolidated destination. The latest platform tips normally contain earlier slices; verify ancestry and effective diffs instead of blindly replaying every commit. Preserve intentional later fixes without resurrecting the defects they superseded. Account explicitly for unique changes outside the four candidate tips, shared API/contracts, master integrations and this handoff.
+
+| Consolidated draft | Candidate implementation tip from the frozen checkpoint | Preserve explicitly |
+| --- | --- | --- |
+| Backend/database | #2801, `codex/chat-topic-room-binding` @ `7239311c2` | Earlier backend slices, approved topic protocol, represented identity/security integration, and the unapplied topic-binding draft. Include the current handoff/docs from #2747 here or retain their existing documentation PR as a reference; do not drop them. |
+| Web | #2800, `codex/chat-web-master-integration` @ `90d453f1d` | Shared TypeScript API changes, final context/receipt repairs and existing production/cache checkpoints. |
+| iOS | #2799, `codex/chat-ios-retired-inbox-fence` @ `3837b1f96` | Final topic/timeline/epoch/receipt/inbox fences, earlier source changes and separate installed/built artifacts. |
+| Android | #2789, `codex/android-chat-master-integration` @ `7c2dcb7d9` | Reply/topic/access fixes and installed artifact; later planned repairs remain gaps, not implemented changes. |
+
+3. Create four replacement branches/PRs, reusing suitable existing worktrees and preserving the original branches. Use a verified common master baseline where possible, record any dependency between the four drafts, and assign shared files to one owner. Resolve integration conflicts without dropping changes or importing unrelated work as chat changes. Do not force-push, delete or rewrite the original stack. Keep its PRs available for traceability; do not close an original before its replacement is pushed, cross-linked and checked for preservation.
+4. Audit the consolidated content against the source tips and the old-to-new mapping. Verify applied migration filenames, bytes and order are unchanged; preserve 20261024002500 as unapplied until its planned local verification. Record conflict resolutions and intentional supersessions. Preserve CI failure history and the distinction between source implemented, artifact verified and released. Keep credentials, generated builds and private evidence out of Git.
+5. Push/open the four consolidated drafts and link them from this handoff and the old PRs. Batch coherent commits before pushing. Run relevant existing checks on the consolidated heads and a consistent combined local candidate; **do not rerun or wait for CI on all 131 historical slices as a prerequisite**. Do not restack/push every old branch or weaken required checks to reduce CI cost. Record remaining failures, then repair and verify on the four consolidated branches.
+
+Consolidation is complete when the four drafts are pushed and reviewable, the mapping/content audit accounts for all work, dependencies and immutable migrations are preserved, and current CI/verification gaps are recorded. Green CI alone is neither proof of app behavior nor permission to merge. Then continue the work below. **No merge or deployment yet.**
+
+### P0 continued — Finish the preserved exact-artifact checks after consolidation
 
 1. Read private operations and per-client handoffs. Inspect Git/worktrees, PR heads/checks, owned ports/processes and local schema. Restore only owned APIs if needed. Current APIs are ba1, not #2801; do not run the docs checkout.
 2. Recover the iOS 383 build outcome; preserve its signed artifact with hash if successful, then install without wiping account state. Run topic offline reopen, 600+ timeline/Latest, durable retirement/late inbox response, receipt eligibility, and 67-row business checks. Preserve 299 comparison.
@@ -129,7 +150,7 @@ The approved topic protocol was verified with interleaved selected/unselected me
 
 CI failures remain explicit blockers. Fix actual regressions, distinguish old-contract assertions from product faults, and ask only if necessary work conflicts with the no-test-code instruction. Do not waive a failure merely because an older slice also had it.
 
-Review stacked bases in order, avoid duplicating already-integrated master changes, and preserve older artifact evidence. No stack is authorized to auto-deploy. Hosted migration, provider configuration, physical-phone checks, store release and release authorization remain founder/external gates.
+Use the four consolidated drafts as the active implementation and CI targets. Avoid duplicating already-integrated master changes and preserve older artifact evidence. Carry remaining fixes as coherent commits in those four PRs rather than growing another long stack. Do not merge any PR or deploy yet, even if all checks pass. Hosted migration, provider configuration, physical-phone checks, store release and release authorization remain founder/external gates.
 
 ### P4 — Evidence required before a WeChat/WhatsApp-level claim
 
@@ -189,7 +210,7 @@ Also applied and immutable: **20261024001000** approved topic-read state; unchan
 
 ## 7. Complete current PR register
 
-The following is a live GitHub metadata snapshot, replacing the old 63-row register. All 131 rows were open drafts at handoff; none was merged/deployed by this session. Exact base/head relationships matter. “Red + running” means failures already exist while other jobs continue. Check results can change after this snapshot.
+The following is the GitHub metadata snapshot from the final verification handoff, replacing the old 63-row register. All 131 rows were open drafts then; none was merged/deployed by this session. Preserve this register as the source inventory for the founder-approved four-PR consolidation and add the old-to-new mapping when it is performed. Exact base/head relationships matter. “Red + running” means failures already exist while other jobs continue. Check results can change after this snapshot.
 
 CI headline:
 - Backend ba1 (#2790), run40036282110: **31 failed / 6,602 passed / 16 skipped**, same 31 named failures as cdf; privacy, Docker, schema/SQL contracts and safeguards passed. Integration locally showed four additional nonchat transport failures that all passed a focused 104-case rerun; do not erase the full-run failure.
@@ -361,7 +382,7 @@ Important preserved checkpoints:
 ## 9. Copy-paste prompt for the next session
 
 ~~~text
-Resume the Pantopus Messages/Chat performance and reliability work. Do not start over.
+Resume the Pantopus Messages/Chat performance and reliability work. First consolidate the existing stack into four draft PRs: backend/database, web, iOS and Android. Then finish the remaining work. Do not start over, merge any PR, or deploy yet.
 
 Read AGENTS.md, NEXT_STEPS.md, the current mobile pilot brief, and the latest handoff at:
  /Users/yingpengwang/.codex/worktrees/d378/skinny-pantopus/docs/chat-performance-handoff-2026-10-23.md
@@ -369,15 +390,19 @@ Read the local-only recovery notes:
  ~/.config/pantopus/chat-reliability-20261023/HANDOFF-OPERATIONS.md
 Follow their final per-client handoffs and private artifact/fixture manifests.
 
-Reuse the existing worktrees, artifacts and 131 stacked draft PRs (original63 plus68 resumed, through#2801; the register excludes other sessions' PRs). Inspect current Git, PR, CI, process and database state first. d378 is the docs checkout; APIs63100/63102 currently run ba1a00e3d from3d6c.
+Reuse the existing worktrees, artifacts and 131 registered draft PRs (original 63 plus 68 resumed, through #2801; other sessions' PRs are excluded). Inspect current Git, PR, CI, process and database state first. The recorded runtime uses ba1a00e3d from 3d6c; d378 is the docs checkout. Recheck actual state before changing any running checkout.
+
+Follow section 4's consolidation procedure. Preserve original refs/commits and all effective changes, including unique follow-ups, shared contracts, documentation, artifacts and private recovery evidence. Reconcile all old PRs into an old-to-new mapping; do not blindly replay every stacked commit. Candidate tips are backend #2801/7239311c2, web #2800/90d453f1d, iOS #2799/3837b1f96 and Android #2789/7c2dcb7d9; inspect for newer work. Preserve the current handoff from #2747. Do not force-push or delete original branches, and do not close originals before their replacements are pushed, cross-linked and checked for preservation.
+
+Push/open the four consolidated drafts, verify no work or migration was lost, and use their heads as the active CI targets. Do not rerun or wait for CI on all 131 historical PRs as a prerequisite. Preserve existing check requirements and failure history. Keep subsequent repairs as coherent commits in these four PRs instead of creating a new stack of tiny PRs.
 
 Preserve current design, navigation and launch flags. Do not write test code, unit tests or coverage work. Verify actual browser, iOS simulator and Android emulator flows against the real local backend/database, including the other person's view, reload/relaunch, offline recovery, lost responses, account/access changes and attachments. Keep secrets, raw logs, tokens and personal data out of Git/PRs/chat.
 
-Start at the final checkpoint, not the original startup list: recover the iOS3837b1f96 build and verify its new cache/topic/timeline/receipt behavior; preserve the old63107 false-Read cache and finish the90d453f1d production upgrade/canonical-receipt and no-latest-cache checks; continue installed Android7c2dcb7d9 reply/media/access-interruption checks. Finish and verify #2801 topic/room binding, whose migration20261024002500 is committed but UNAPPLIED. Then follow the prioritized remaining repairs, media/background/delivery work, CI resolution and controlled measurements.
+After consolidation, continue from the final checkpoint: recover the iOS 3837b1f96 build and verify its cache/topic/timeline/receipt behavior; preserve the old 63107 false-Read cache and finish the web 90d453f1d upgrade/canonical-receipt and no-latest-cache checks; continue installed Android 7c2dcb7d9 reply/media/access-interruption checks. Finish the topic/room binding carried from #2801, whose migration 20261024002500 is committed but UNAPPLIED locally. Then finish the prioritized repairs, media/background/delivery work, CI resolution and controlled measurements. Preserve any already-running build result during consolidation; do not discard its artifact or claim it was verified.
 
-Encrypted account-scoped history, ChatPushDelivery and ChatTopicRead are approved. Applied migrations through20261023235000,20261024001000, and upstream20261023072000/20261023072100 are immutable. Do not change hosted services or merge an auto-deploying backend stack without founder release authorization. New tables still require approval.
+Encrypted account-scoped history, ChatPushDelivery and ChatTopicRead are approved. Applied migrations through 20261023235000, 20261024001000, and upstream 20261023072000/20261023072100 are immutable. Do not change hosted services. Do not merge any PR or deploy yet, even after green CI. New tables still require approval.
 
-Commit/push coherent changes and open/update small stacked drafts. Keep CI failures and verification gaps explicit; distinguish source implemented, exact artifact verified, CI green and released. You may use three parallel client agents in separate existing worktrees. Continue the remaining authorized repairs and real-app verification; do not claim WeChat/WhatsApp parity, durable Delivered, or end-to-end encryption without measured/implemented evidence. Keep this handoff current and identify concrete founder-owned/external blockers rather than silently treating them as complete.
+Commit/push coherent changes into the four consolidated drafts. Keep CI failures and verification gaps explicit; distinguish source implemented, exact artifact verified, CI green and released. You may use three parallel client agents in separate existing worktrees, with backend/integration centrally owned. Continue the remaining authorized repairs and real-app verification; do not claim WeChat/WhatsApp parity, durable Delivered, or end-to-end encryption without measured/implemented evidence. Keep this handoff and its PR mapping current and identify concrete founder-owned/external blockers rather than silently treating them as complete.
 ~~~
 
 ## Historical resumed checkpoints — superseded by the final checkpoint above
