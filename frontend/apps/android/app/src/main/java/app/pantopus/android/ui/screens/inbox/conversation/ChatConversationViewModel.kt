@@ -539,9 +539,11 @@ class ChatConversationViewModel
         }
 
         fun load() {
+            // Sends restored from the outbox below can show rows at once; they are not a thread that was already open.
+            val reopened = _state.value is ChatConversationUiState.Loaded
             observeOutbox()
             restoreComposerDraft()
-            if (_state.value is ChatConversationUiState.Loaded) {
+            if (reopened) {
                 // Back on screen after teardown() (a pushed screen, a tab
                 // switch): listen again. Re-joining the rooms backfills what
                 // arrived meanwhile.
