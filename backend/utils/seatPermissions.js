@@ -13,6 +13,7 @@
 
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('./logger');
+const { authorizationUnavailable } = require('./businessPermissions');
 
 // ============================================================
 // ROLE HIERARCHY (same as businessPermissions.js)
@@ -55,7 +56,8 @@ const ALL_PERMS = [
  *
  * @param {string} businessUserId - The business account's user ID
  * @param {string} userId - The acting user's personal ID
- * @returns {Promise<object|null>} The seat row or null
+ * @returns {Promise<object|null>} The seat row or null. Throws a 503 error when the read fails: "no seat" would
+ *   let a caller skip a check meant for seat holders.
  */
 async function getSeatForUser(businessUserId, userId) {
   const { data, error } = await supabaseAdmin
@@ -84,7 +86,7 @@ async function getSeatForUser(businessUserId, userId) {
 
   if (error) {
     logger.warn('getSeatForUser query error', { error: error.message, businessUserId, userId });
-    return null;
+    throw authorizationUnavailable();
   }
 
   // A user holds one binding per seat, across every business they belong to.
@@ -104,7 +106,7 @@ async function getSeatForUser(businessUserId, userId) {
  * @param {string} businessUserId
  * @param {string} userId
  * @param {string} permission - e.g. 'profile.edit', 'team.manage'
- * @returns {Promise<boolean>}
+ * @returns {Promise<boolean>} Throws a 503 error when a read fails (it can't tell whether a deny applies).
  */
 async function hasSeatPermission(businessUserId, userId, permission) {
   const seat = await getSeatForUser(businessUserId, userId);
@@ -113,7 +115,7 @@ async function hasSeatPermission(businessUserId, userId, permission) {
   if (seat.role_base === 'owner') return true;
 
   // Check per-seat override first, then fall back to per-user override
-  const { data: seatOverride } = await supabaseAdmin
+  const { data: seatOverride, error: seatOverrideError } = await supabaseAdmin
     .from('BusinessPermissionOverride')
     .select('allowed')
     .eq('business_user_id', businessUserId)
@@ -121,12 +123,13 @@ async function hasSeatPermission(businessUserId, userId, permission) {
     .eq('permission', permission)
     .maybeSingle();
 
+  if (seatOverrideError) throw authorizationUnavailable();
   if (seatOverride && seatOverride.allowed !== null && seatOverride.allowed !== undefined) {
     return seatOverride.allowed;
   }
 
   // Fallback: per-user override (legacy, during transition)
-  const { data: userOverride } = await supabaseAdmin
+  const { data: userOverride, error: userOverrideError } = await supabaseAdmin
     .from('BusinessPermissionOverride')
     .select('allowed')
     .eq('business_user_id', businessUserId)
@@ -135,24 +138,27 @@ async function hasSeatPermission(businessUserId, userId, permission) {
     .is('seat_id', null)
     .maybeSingle();
 
+  if (userOverrideError) throw authorizationUnavailable();
   if (userOverride && userOverride.allowed !== null && userOverride.allowed !== undefined) {
     return userOverride.allowed;
   }
 
   // Fall back to role default
-  const { data: rolePerm } = await supabaseAdmin
+  const { data: rolePerm, error: roleError } = await supabaseAdmin
     .from('BusinessRolePermission')
     .select('allowed')
     .eq('role_base', seat.role_base)
     .eq('permission', permission)
     .maybeSingle();
 
+  if (roleError) throw authorizationUnavailable();
   return rolePerm?.allowed === true;
 }
 
 /**
  * Get full access object for a user at a business (seat-based).
- * Returns { hasAccess, seat, permissions, isOwner }
+ * Returns { hasAccess, seat, permissions, isOwner }. Throws a 503 error when a read fails: a list missing an
+ * explicit deny would grant what the deny refuses.
  *
  * @param {string} businessUserId
  * @param {string} userId
@@ -175,17 +181,17 @@ async function getSeatAccess(businessUserId, userId) {
     };
   }
 
-  // Get base role permissions
-  const { data: rolePerms } = await supabaseAdmin
-    .from('BusinessRolePermission')
-    .select('permission')
-    .eq('role_base', seat.role_base)
-    .eq('allowed', true);
-
-  const basePerms = new Set((rolePerms || []).map(r => r.permission));
-
-  // Overlay per-seat overrides (preferred), then per-user overrides (legacy fallback)
-  const [{ data: seatOverrides }, { data: userOverrides }] = await Promise.all([
+  // Base role permissions, then per-seat overrides (preferred) and per-user overrides (legacy fallback) on top
+  const [
+    { data: rolePerms, error: roleError },
+    { data: seatOverrides, error: seatOverrideError },
+    { data: userOverrides, error: userOverrideError },
+  ] = await Promise.all([
+    supabaseAdmin
+      .from('BusinessRolePermission')
+      .select('permission')
+      .eq('role_base', seat.role_base)
+      .eq('allowed', true),
     supabaseAdmin
       .from('BusinessPermissionOverride')
       .select('permission, allowed')
@@ -198,6 +204,9 @@ async function getSeatAccess(businessUserId, userId) {
       .eq('user_id', userId)
       .is('seat_id', null),
   ]);
+  if (roleError || seatOverrideError || userOverrideError) throw authorizationUnavailable();
+
+  const basePerms = new Set((rolePerms || []).map(r => r.permission));
 
   // Apply user-level overrides first (lower precedence)
   for (const ov of (userOverrides || [])) {
@@ -359,7 +368,7 @@ async function getBusinessSeats(businessUserId, options = {}) {
  *
  * @param {string} userId
  * @param {string[]} permissions
- * @returns {Promise<string[]>}
+ * @returns {Promise<string[]>} Throws a 503 error when an override read fails (a denied business would be listed).
  */
 async function getBusinessIdsWithSeatPermissions(userId, permissions) {
   // 1) Get all active seats for this user
@@ -372,7 +381,11 @@ async function getBusinessIdsWithSeatPermissions(userId, permissions) {
   const seatIds = seats.map(s => s.seat_id || s.id);
 
   // 2) Batch-fetch overrides (seat-based + user-based) + role defaults
-  const [{ data: seatOverrides }, { data: userOverrides }, { data: rolePerms }] = await Promise.all([
+  const [
+    { data: seatOverrides, error: seatOverrideError },
+    { data: userOverrides, error: userOverrideError },
+    { data: rolePerms, error: roleError },
+  ] = await Promise.all([
     supabaseAdmin
       .from('BusinessPermissionOverride')
       .select('business_user_id, seat_id, permission, allowed')
@@ -392,6 +405,7 @@ async function getBusinessIdsWithSeatPermissions(userId, permissions) {
       .in('role_base', roles)
       .in('permission', permissions),
   ]);
+  if (seatOverrideError || userOverrideError || roleError) throw authorizationUnavailable();
 
   // 3) Build maps — seat overrides take precedence over user overrides
   const userOvrMap = {};
@@ -429,7 +443,8 @@ async function getBusinessIdsWithSeatPermissions(userId, permissions) {
  * @param {string} businessUserId
  * @param {string[]} permissions
  * @param {string|null} excludeUserId
- * @returns {Promise<string[]>}
+ * @returns {Promise<string[]>} When the overrides can't be read, only the owner seats' holders: a seat someone
+ *   denied must not be notified.
  */
 async function getSeatHoldersWithPermissions(businessUserId, permissions, excludeUserId = null) {
   // 1) Get all active seats
@@ -440,11 +455,15 @@ async function getSeatHoldersWithPermissions(businessUserId, permissions, exclud
   const roles = [...new Set(seats.map(s => s.role_base))];
 
   // 2) Get bindings to resolve seat → user
-  const { data: bindings } = await supabaseAdmin
+  const { data: bindings, error: bindingError } = await supabaseAdmin
     .from('SeatBinding')
     .select('seat_id, user_id')
     .in('seat_id', seatIds);
 
+  if (bindingError) {
+    logger.warn('getSeatHoldersWithPermissions: binding read failed', { businessUserId, error: bindingError.message });
+    return [];
+  }
   if (!bindings || bindings.length === 0) return [];
 
   const seatToUser = {};
@@ -452,7 +471,11 @@ async function getSeatHoldersWithPermissions(businessUserId, permissions, exclud
 
   // 3) Batch-fetch overrides (seat-based + user-based) + role defaults
   const userIds = bindings.map(b => b.user_id);
-  const [{ data: seatOverrides }, { data: userOverrides }, { data: rolePerms }] = await Promise.all([
+  const [
+    { data: seatOverrides, error: seatOverrideError },
+    { data: userOverrides, error: userOverrideError },
+    { data: rolePerms, error: roleError },
+  ] = await Promise.all([
     supabaseAdmin
       .from('BusinessPermissionOverride')
       .select('seat_id, permission, allowed')
@@ -472,6 +495,15 @@ async function getSeatHoldersWithPermissions(businessUserId, permissions, exclud
       .in('role_base', roles)
       .in('permission', permissions),
   ]);
+  if (seatOverrideError || userOverrideError || roleError) {
+    logger.warn('getSeatHoldersWithPermissions: permission read failed; owners only', {
+      businessUserId, error: (seatOverrideError || userOverrideError || roleError).message,
+    });
+    return seats
+      .filter((seat) => seat.role_base === 'owner' && seatToUser[seat.id]
+        && !(excludeUserId && String(seatToUser[seat.id]) === String(excludeUserId)))
+      .map((seat) => seatToUser[seat.id]);
+  }
 
   const seatOvrMap = {};
   for (const o of (seatOverrides || [])) seatOvrMap[`${o.seat_id}:${o.permission}`] = o.allowed;
@@ -537,7 +569,7 @@ async function writeSeatAuditLog(businessUserId, actorSeatId, action, targetType
       actorUserId = binding?.user_id || null;
     }
 
-    await supabaseAdmin
+    const { error } = await supabaseAdmin
       .from('BusinessAuditLog')
       .insert({
         business_user_id: businessUserId,
@@ -551,6 +583,7 @@ async function writeSeatAuditLog(businessUserId, actorSeatId, action, targetType
           actor_seat_id: actorSeatId, // also in metadata for backward compat
         },
       });
+    if (error) throw error;
   } catch (err) {
     logger.warn('Failed to write business audit log (non-fatal)', {
       error: err.message,

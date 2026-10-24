@@ -10,11 +10,14 @@
  * Normalises raw NWS GeoJSON features into WeatherAlert objects.
  */
 const logger = require('../../utils/logger');
+const { readCappedJson } = require('../../utils/cappedBody');
 const { getCache, setCache } = require('./cacheHelper');
 
 const PROVIDER = 'NOAA_ALERTS';
 const TTL_MINUTES = 10;
 const FETCH_TIMEOUT_MS = 5000;
+// A point's alerts are a few KB; even a busy storm day is far below this.
+const MAX_BODY_BYTES = 2 * 1024 * 1024;
 // After a timeout NWS is left alone for a while: while it's down, every
 // Today and Place load would otherwise wait the full timeout for the same
 // empty `error` answer, and a burst of retries only adds to its load.
@@ -92,27 +95,26 @@ async function fetchAlerts(lat, lng) {
     return { alerts: [], source: 'error', fetchedAt: new Date().toISOString() };
   }
 
-  // 2. Fetch live from NWS
+  // 2. Fetch live from NWS. The timeout covers the whole body, not just the headers.
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-
     const url = `https://api.weather.gov/alerts/active?point=${lat.toFixed(4)},${lng.toFixed(4)}`;
     const res = await fetch(url, {
       signal: controller.signal,
+      redirect: 'error',
       headers: {
         Accept: 'application/geo+json',
         'User-Agent': '(Pantopus, admin@pantopus.app)',   // NWS requires a contact User-Agent
       },
     });
-    clearTimeout(timeout);
 
     if (!res.ok) {
       logger.warn('NOAA API error', { status: res.status, url });
       return { alerts: [], source: 'error', fetchedAt: new Date().toISOString() };
     }
 
-    const raw = await res.json();
+    const raw = await readCappedJson(res, MAX_BODY_BYTES, controller.signal);
     const features = raw.features || [];
     const normalized = features.map(normaliseFeature);
 
@@ -132,6 +134,8 @@ async function fetchAlerts(lat, lng) {
       logger.error('NOAA fetch error', { lat, lng, error: err.message });
     }
     return { alerts: [], source: 'error', fetchedAt: new Date().toISOString() };
+  } finally {
+    clearTimeout(timeout);
   }
 }
 

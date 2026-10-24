@@ -15,11 +15,14 @@
 const jwt = require('jsonwebtoken');
 const ngeohash = require('ngeohash');
 const logger = require('../../../utils/logger');
+const { readCappedJson } = require('../../../utils/cappedBody');
 const { getContextCache, setContextCache } = require('../contextCacheService');
 
 const PROVIDER = 'WEATHERKIT';
 const BASE_URL = 'https://weatherkit.apple.com/api/v1';
 const FETCH_TIMEOUT_MS = 5000;
+// Current weather with ten days of hourly and daily forecasts is a few hundred KB.
+const MAX_BODY_BYTES = 4 * 1024 * 1024;
 const GEOHASH_PRECISION = 5;
 
 // Cache TTLs (minutes)
@@ -283,20 +286,19 @@ async function fetchWeather(latitude, longitude, options = {}) {
     };
   }
 
-  // ── Fetch live from WeatherKit ──
+  // ── Fetch live from WeatherKit (the timeout covers the whole body, not just the headers) ──
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-
     const url = `${BASE_URL}/weather/en/${latitude}/${longitude}?dataSets=currentWeather,forecastHourly,forecastDaily`;
     const res = await fetch(url, {
       signal: controller.signal,
+      redirect: 'error',
       headers: {
         Authorization: `Bearer ${token}`,
         Accept: 'application/json',
       },
     });
-    clearTimeout(timeout);
 
     if (!res.ok) {
       logger.warn('WeatherKit API error', { status: res.status, geohash });
@@ -310,7 +312,7 @@ async function fetchWeather(latitude, longitude, options = {}) {
       };
     }
 
-    const raw = await res.json();
+    const raw = await readCappedJson(res, MAX_BODY_BYTES, controller.signal);
     const fetchedAt = new Date().toISOString();
 
     const current = normalizeCurrent(raw.currentWeather);
@@ -346,6 +348,8 @@ async function fetchWeather(latitude, longitude, options = {}) {
       fetchedAt: new Date().toISOString(),
       source: 'error',
     };
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -415,27 +419,26 @@ async function fetchAlerts(latitude, longitude) {
     };
   }
 
-  // Fetch live
+  // Fetch live (the timeout covers the whole body, not just the headers)
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-
     const url = `${BASE_URL}/weather/en/${latitude}/${longitude}?dataSets=weatherAlerts&country=US`;
     const res = await fetch(url, {
       signal: controller.signal,
+      redirect: 'error',
       headers: {
         Authorization: `Bearer ${token}`,
         Accept: 'application/json',
       },
     });
-    clearTimeout(timeout);
 
     if (!res.ok) {
       logger.warn('WeatherKit alerts API error', { status: res.status, geohash });
       return null;
     }
 
-    const raw = await res.json();
+    const raw = await readCappedJson(res, MAX_BODY_BYTES, controller.signal);
     const fetchedAt = new Date().toISOString();
     const wkAlerts = (raw.weatherAlerts && raw.weatherAlerts.alerts) || [];
     const normalized = wkAlerts.map(normaliseWkAlert);
@@ -454,6 +457,8 @@ async function fetchAlerts(latitude, longitude) {
       logger.error('WeatherKit alerts error', { geohash, lat: latitude, lng: longitude, error: err.message });
     }
     return null;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
