@@ -9,8 +9,6 @@
 
 package app.pantopus.android.ui.screens.mailbox.mail_detail.variants
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -45,6 +43,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.pantopus.android.core.routing.ExternalLinks
 import app.pantopus.android.ui.screens.mailbox.item_detail.MailItemCategory
 import app.pantopus.android.ui.screens.mailbox.item_detail.PackageBodyContent
 import app.pantopus.android.ui.screens.mailbox.item_detail.PackageDeliveryStatus
@@ -603,15 +602,8 @@ private fun PackageDetailActions(
     Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
         TrackOnCarrierButton(
             label = "Track on ${carrierShort(carrier)}",
-            isEnabled = trackingUrl != null,
-            onClick = {
-                trackingUrl?.let { url ->
-                    val intent =
-                        Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    context.startActivity(intent)
-                }
-            },
+            isEnabled = ExternalLinks.isWeb(trackingUrl),
+            onClick = { ExternalLinks.open(context, trackingUrl) },
             modifier = Modifier.weight(1f),
         )
         ConfirmPickupButton(

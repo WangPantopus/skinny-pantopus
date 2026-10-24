@@ -19,8 +19,11 @@ internal object ChatMediaUrl {
     /** Where a file opened from a chat is saved: the viewer app needs a file on the phone. */
     fun openedFilesFolder(cacheDir: File) = File(cacheDir, "chat-files")
 
+    /** Where photos taken with the camera for a chat go: one of the FileProvider's folders. */
+    private fun cameraFolder(cacheDir: File) = File(cacheDir, "chat-camera")
+
     /** A photo taken with the camera for a chat (shared with the camera app through the FileProvider). */
-    fun cameraFile(cacheDir: File) = File(cacheDir, "$CAMERA_PREFIX${UUID.randomUUID()}.jpg")
+    fun cameraFile(cacheDir: File) = File(cameraFolder(cacheDir).apply { mkdirs() }, "$CAMERA_PREFIX${UUID.randomUUID()}.jpg")
 
     /**
      * Files opened from chats and photos taken for them go at sign-out (all of them, so nothing of one person's chats
@@ -34,7 +37,10 @@ internal object ChatMediaUrl {
         val cutoff = System.currentTimeMillis() - olderThanMs
         val old = { file: File -> olderThanMs == 0L || file.lastModified() < cutoff }
         openedFilesFolder(cacheDir).listFiles()?.filter(old)?.forEach { it.deleteRecursively() }
-        cacheDir.listFiles { file -> file.isFile && file.name.startsWith(CAMERA_PREFIX) && old(file) }?.forEach { it.delete() }
+        // Earlier builds took them at the top of the cache.
+        for (dir in listOf(cameraFolder(cacheDir), cacheDir)) {
+            dir.listFiles { file -> file.isFile && file.name.startsWith(CAMERA_PREFIX) && old(file) }?.forEach { it.delete() }
+        }
     }
 
     /** Only the authenticated chat proxy provides a bounded thumbnail; external URLs stay originals. */

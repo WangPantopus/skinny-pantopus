@@ -97,6 +97,15 @@
             </intent-filter>
         </activity>
 
+        <!-- Notification taps open MainActivity through this alias. Any app can start MainActivity
+             with the "notification opened" extra, but only the app's own PendingIntents can start
+             an alias that isn't exported, so MainActivity counts a notification open only for an
+             intent that came this way (MainActivity.NOTIFICATION_OPEN). -->
+        <activity-alias
+            android:name=".NotificationOpen"
+            android:exported="false"
+            android:targetActivity=".MainActivity" />
+
         <!-- Settings → Apps → Pantopus → Storage → "Manage space" opens Storage & data
              (Instant Screens contract §7, android:manageSpaceActivity above). Exported because
              system Settings only offers "Manage space" for an activity it can resolve; it has

@@ -2,6 +2,7 @@
 
 package app.pantopus.android.ui.screens.businesses.team
 
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -37,18 +38,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.platform.ClipboardManager
-import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.security.SensitiveClipboard
 import app.pantopus.android.data.api.models.businesses.BusinessRolePresetDto
 import app.pantopus.android.data.api.models.businesses.BusinessSeatDto
 import app.pantopus.android.ui.components.EmptyState
@@ -98,8 +98,8 @@ fun BusinessTeamScreen(
     var sheet by remember { mutableStateOf<TeamSheet?>(null) }
     var removeTarget by remember { mutableStateOf<BusinessTeamMemberRow?>(null) }
     var cancelTarget by remember { mutableStateOf<BusinessTeamPendingRow?>(null) }
-    val clipboard = LocalClipboardManager.current
-    val inviteLink = remember(clipboard) { InviteLinkHandoff(clipboard) }
+    val context = LocalContext.current
+    val inviteLink = remember(context) { InviteLinkHandoff(context) }
 
     LaunchedEffect(Unit) { viewModel.load() }
 
@@ -236,7 +236,7 @@ fun BusinessTeamScreen(
  */
 @Stable
 private class InviteLinkHandoff(
-    private val clipboard: ClipboardManager,
+    private val context: Context,
 ) {
     var toast by mutableStateOf<String?>(null)
     var linkToShare by mutableStateOf<String?>(null)
@@ -246,7 +246,7 @@ private class InviteLinkHandoff(
         link: String?,
     ) {
         if (seat == null || link == null) return
-        if (runCatching { clipboard.setText(AnnotatedString(link)) }.isSuccess) {
+        if (SensitiveClipboard.copy(context, "Invite link", link)) {
             val name = listOfNotNull(seat.displayName, seat.inviteEmail).map { it.trim() }.firstOrNull { it.isNotEmpty() } ?: "them"
             toast = "Invite link copied — share it with $name"
         } else {

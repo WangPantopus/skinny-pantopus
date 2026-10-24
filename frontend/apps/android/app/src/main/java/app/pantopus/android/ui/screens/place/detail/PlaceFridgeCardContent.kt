@@ -23,16 +23,16 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.security.SensitiveClipboard
 import app.pantopus.android.data.api.models.place.FridgeCard
 import app.pantopus.android.data.api.models.place.FridgeCardItem
 import app.pantopus.android.data.api.models.place.FridgeCardStatus
@@ -68,11 +68,11 @@ private fun sectionMeta(key: String): Pair<String, FridgeCardItem> =
 fun PlaceFridgeCardSection(viewModel: PlaceDetailViewModel) {
     val state by viewModel.fridgeCards.collectAsStateWithLifecycle()
     val linkToCopy by viewModel.cardLinkToCopy.collectAsStateWithLifecycle()
-    val clipboard = LocalClipboardManager.current
+    val context = LocalContext.current
 
     LaunchedEffect(linkToCopy) {
         linkToCopy?.let {
-            clipboard.setText(AnnotatedString(it))
+            SensitiveClipboard.copy(context, "Card link", it)
             viewModel.consumeCardLink()
         }
     }
@@ -249,7 +249,7 @@ private fun FridgeCardRow(
     card: FridgeCard,
     viewModel: PlaceDetailViewModel,
 ) {
-    val clipboard = LocalClipboardManager.current
+    val context = LocalContext.current
     var confirmingRevoke by remember { mutableStateOf(false) }
     val opens =
         when {
@@ -287,7 +287,7 @@ private fun FridgeCardRow(
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = PantopusColors.primary600,
-                        modifier = Modifier.clickable { clipboard.setText(AnnotatedString(card.cardUrl)) },
+                        modifier = Modifier.clickable { SensitiveClipboard.copy(context, "Card link", card.cardUrl) },
                     )
                     Text(
                         "Revoke",

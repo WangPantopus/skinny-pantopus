@@ -407,8 +407,9 @@ class NotificationDispatcher
             reminderSession: String? = null,
         ): PendingIntent {
             val deepLink = routing.deepLink
+            // The not-exported alias marks the open as this notification's (MainActivity.NOTIFICATION_OPEN).
             val intent =
-                Intent(appContext, MainActivity::class.java).apply {
+                Intent().setClassName(appContext, MainActivity.NOTIFICATION_OPEN).apply {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
                     putExtra(ReminderActionReceiver.PUSH_OPEN, true)
                     putExtra(ReminderActionReceiver.PUSH_TYPE, routing.pushType)
