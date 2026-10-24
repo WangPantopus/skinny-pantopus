@@ -3,6 +3,7 @@
 package app.pantopus.android.ui.screens.plans.host
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,14 +16,21 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -96,6 +104,7 @@ internal fun PlacePickerStep(
                 gathering = ui.placesGathering,
                 placesError = ui.placesError,
                 suggestions = ui.suggestions,
+                homePoints = ui.homePoints,
             ),
         onClose = vm::closePlaces,
         onUse = vm::usePlace,
@@ -134,6 +143,8 @@ internal data class PlacePickerState(
     /** Why the places couldn't load, shown with "Try again". */
     val placesError: String? = null,
     val suggestions: PlaceSuggestions = PlaceSuggestions.Idle,
+    /** The host's homes: "Pick it on the map" never takes a place at one. */
+    val homePoints: List<Pair<Double, Double>> = emptyList(),
 )
 
 /**
@@ -254,6 +265,22 @@ internal fun PublicPlacePicker(
                 kind,
             )
         }
+    var pickingOnMap by rememberSaveable { mutableStateOf(false) }
+    val origin = state.origin
+    if (pickingOnMap && origin != null) {
+        PlaceMapPick(
+            kind = kind,
+            origin = origin,
+            homePoints = state.homePoints,
+            onUse = { picked ->
+                pickingOnMap = false
+                onPick(picked)
+                onUse()
+            },
+            onClose = { pickingOnMap = false },
+        )
+        return
+    }
     HostStepScaffold(
         title = "Where?",
         step = null,
@@ -278,7 +305,7 @@ internal fun PublicPlacePicker(
                 label = "Search places",
                 singleLine = true,
             )
-            PickerMap(origin = state.origin, picked = candidate, kind = kind)
+            PickerMap(origin = state.origin, picked = candidate, kind = kind, onPickOnMap = { pickingOnMap = true })
             if (onSuggest != null) {
                 // "Suggest places" once the list is in; from the search box, "Ask Pantopus" once the search is in and
                 // the words name no place ("big screens and food", as on iOS).
@@ -358,6 +385,7 @@ internal fun PublicPlacePicker(
                             first = false
                         }
                 }
+                if (origin != null) PlaceMapPickRow { pickingOnMap = true }
                 state.attribution?.takeIf { places.isNotEmpty() }?.let { credit ->
                     Text(
                         text = "Places $credit",
@@ -630,12 +658,13 @@ private fun iconFor(category: String?): PantopusIcon {
     }
 }
 
-/** H6's small map: the place you picked, as a pin, near where you are. */
+/** H6's small map: the place you picked, as a pin, near where you are. Tapping it opens "Pick it on the map" (as on iOS). */
 @Composable
 private fun PickerMap(
     origin: Pair<Double, Double>?,
     picked: PickedPlace?,
     kind: PlanKind,
+    onPickOnMap: () -> Unit,
 ) {
     origin ?: return
     val center = picked?.let { LatLng(it.latitude, it.longitude) } ?: LatLng(origin.first, origin.second)
@@ -662,10 +691,14 @@ private fun PickerMap(
             Modifier
                 .fillMaxWidth()
                 .height(150.dp)
-                .clip(RoundedCornerShape(Radii.xl))
-                .clearAndSetSemantics {},
+                .clip(RoundedCornerShape(Radii.xl)),
     ) {
-        GoogleMap(modifier = Modifier.fillMaxSize(), cameraPositionState = camera, properties = properties, uiSettings = settings) {
+        GoogleMap(
+            modifier = Modifier.fillMaxSize().clearAndSetSemantics {},
+            cameraPositionState = camera,
+            properties = properties,
+            uiSettings = settings,
+        ) {
             if (picked != null) {
                 val state =
                     rememberMarkerState(
@@ -681,6 +714,17 @@ private fun PickerMap(
                 radiusPx = 120f,
                 modifier = Modifier.align(Alignment.Center).fillMaxSize(),
             )
+        }
+        // Over the map, so the tap reaches it rather than the map view.
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .clickable(onClickLabel = "Pick a place on the map", role = Role.Button, onClick = onPickOnMap)
+                    .semantics { contentDescription = "Map near you" }
+                    .testTag("planPlaceMapPickOpen"),
+        ) {
+            PlaceMapPickChip(modifier = Modifier.align(Alignment.BottomEnd))
         }
     }
 }

@@ -83,14 +83,16 @@ function cacheControl(key) {
   return key.startsWith('chat/') ? PRIVATE_IMMUTABLE : PUBLIC_IMMUTABLE;
 }
 
-async function uploadToS3(buffer, key, contentType, objectMetadata) {
+async function uploadToS3(buffer, key, contentType, objectMetadata, { contentLength, abortSignal } = {}) {
   const cmd = new PutObjectCommand(
     buildPutObjectParams({ Bucket: S3_BUCKET, Key: key, Body: buffer, ContentType: contentType,
       CacheControl: cacheControl(key),
+      ...(contentLength === undefined ? {} : { ContentLength: contentLength }),
       ...(objectMetadata ? { Metadata: objectMetadata } : {}) })
   );
-  await s3Client.send(cmd);
-  logger.info('S3 upload success', { key, size: buffer.length });
+  try { await s3Client.send(cmd, { abortSignal }); }
+  finally { if (typeof buffer.destroy === 'function') buffer.destroy(); }
+  logger.info('S3 upload success', { key, size: contentLength ?? buffer.length });
   return { key, url: getPublicUrl(key) };
 }
 
@@ -419,8 +421,8 @@ async function getPresignedDownloadUrl(key, expiresIn = 3600) {
 
 // An object's bytes as a stream, for the API to serve under its own address. With `range` (one HTTP byte range, as a
 // Range header), storage may answer with just those bytes: contentRange then says which.
-async function getObjectStream(key, bucket = S3_BUCKET, range) {
-  const response = await s3Client.send(new GetObjectCommand({ Bucket: bucket, Key: key, ...(range ? { Range: range } : {}) }));
+async function getObjectStream(key, bucket = S3_BUCKET, range, { abortSignal } = {}) {
+  const response = await s3Client.send(new GetObjectCommand({ Bucket: bucket, Key: key, ...(range ? { Range: range } : {}) }), { abortSignal });
   const partial = Boolean(range) && response.$metadata?.httpStatusCode === 206 && response.ContentRange;
   return { body: response.Body, contentLength: response.ContentLength, contentRange: partial ? response.ContentRange : undefined };
 }

@@ -58,11 +58,13 @@ const RULES = {
   HomeScopedGrant: { scope: 'home', topics: ({ h }) => [`home:${h}`] },
   SavedPlace: { scope: 'user', topics: ({ p }) => ['homes', 'today', ...(p ? [`place:${p}`] : [])] },
   ChatParticipant: { scope: 'room', topics: ({ r }) => ['chats', `chat:${r}`] },
+  ChatTopicRead: { scope: 'room', topics: ({ r }) => ['chats', `chat:${r}`] },
   ChatMessage: { scope: 'room', topics: ({ r }) => [`chat:${r}`, 'chats'] },
+  ChatPreferences: { scope: 'user', topics: () => ['chats'], preferences: true },
   Notification: { scope: 'user', topics: () => ['notifications'] },
   User: { scope: 'user', topics: () => ['profile:me'] },
   // default_home_id lives here too: another device reads its home list again.
-  UserNotificationPreferences: { scope: 'user', topics: () => ['profile:me', 'today', 'homes'] },
+  UserNotificationPreferences: { scope: 'user', topics: () => ['profile:me', 'today', 'homes', 'chats'] },
   UserPrivacySettings: { scope: 'user', topics: () => ['profile:me'] },
   MailPreferences: { scope: 'user', topics: () => ['profile:me'] },
   UserViewingLocation: { scope: 'user', topics: () => ['profile:me', 'today'] },
@@ -117,6 +119,7 @@ function handleNotification(raw) {
   const key = String(id).toLowerCase();
   const entry = map.get(key) || { topics: new Set(), users: new Set() };
   for (const topic of rule.topics({ ...change, [SCOPE_KEY[rule.scope]]: key })) entry.topics.add(topic);
+  if (rule.preferences) entry.preferences = true;
   if (UUID_RE.test(String(change.u || ''))) entry.users.add(String(change.u).toLowerCase());
   map.set(key, entry);
   // A chat joined, re-joined or left (whatever wrote it: a REST route, an SQL function, a socket event):
@@ -141,19 +144,24 @@ function chunks(ids) {
 }
 
 // Map<scopeId, Set<userId>> for the given ids; a failed read leaves those ids with no extra people.
-async function membersOf(table, keyColumn, ids, filter = (q) => q) {
+async function membersOf(table, keyColumn, ids, filter = (q) => q, paginate = false) {
   const members = new Map();
   for (const part of chunks(ids)) {
-    const { data, error } = await filter(supabaseAdmin.from(table).select(`${keyColumn}, user_id`).in(keyColumn, part));
-    if (error) {
-      logger.warn('sync:changed recipients unavailable', { table, error: error.message });
-      continue;
-    }
-    for (const row of data || []) {
-      if (!row.user_id) continue;
-      const key = String(row[keyColumn]).toLowerCase();
-      if (!members.has(key)) members.set(key, new Set());
-      members.get(key).add(String(row.user_id).toLowerCase());
+    for (let offset = 0; ; offset += 500) {
+      let query = filter(supabaseAdmin.from(table).select(`${keyColumn}, user_id`).in(keyColumn, part));
+      if (paginate) query = query.order(keyColumn).order('user_id').range(offset, offset + 499);
+      const { data, error } = await query;
+      if (error) {
+        logger.warn('sync:changed recipients unavailable', { table, error: error.message });
+        break;
+      }
+      for (const row of data || []) {
+        if (!row.user_id) continue;
+        const key = String(row[keyColumn]).toLowerCase();
+        if (!members.has(key)) members.set(key, new Set());
+        members.get(key).add(String(row.user_id).toLowerCase());
+      }
+      if (!paginate || (data || []).length < 500) break;
     }
   }
   return members;
@@ -227,7 +235,7 @@ async function flush() {
 
   const resolvers = {
     home: (ids) => membersOf('HomeOccupancy', 'home_id', ids, (q) => q.eq('is_active', true)),
-    room: (ids) => membersOf('ChatParticipant', 'room_id', ids, (q) => q.eq('is_active', true)),
+    room: (ids) => membersOf('ChatParticipant', 'room_id', ids, (q) => q.eq('is_active', true), true),
     train: trainPeople,
   };
   const byUser = new Map();
@@ -238,19 +246,64 @@ async function flush() {
   };
 
   for (const [userId, entry] of batch.user) add(userId, entry.topics);
+  const roomIdentities = new Set();
   for (const scope of ['home', 'room', 'train']) {
     const entries = batch[scope];
     if (entries.size === 0) continue;
     const members = await resolvers[scope]([...entries.keys()]);
     for (const [id, entry] of entries) {
-      for (const userId of new Set([...(members.get(id) || []), ...entry.users])) add(userId, entry.topics);
+      for (const userId of new Set([...(members.get(id) || []), ...entry.users])) {
+        add(userId, entry.topics);
+        if (scope === 'room') roomIdentities.add(userId);
+      }
     }
   }
 
+  // Business owners/staff act through the business membership, so they are not
+  // in the room's personal-recipient set. Invalidate only their inbox: no room
+  // id or content is disclosed, including when the business just left a room.
+  if (roomIdentities.size) {
+    try {
+      const { businessStaff } = require('./chatBusinessAccess');
+      for (const staff of await businessStaff([...roomIdentities], { include: (id) => _connectedUsers.has(id) })) {
+        add(staff.userId, ['chats']);
+      }
+    } catch (error) {
+      logger.warn('chat_business_inbox_recipients_unavailable', { code: error.code });
+    }
+  }
+
+  // Preference changes are private to the changed identity and its currently
+  // authorized business staff. Never tell the other conversation participant.
+  const preferenceRecipients = new Set();
+  const changedPreferences = [...batch.user].filter(([, entry]) => entry.preferences).map(([id]) => id);
+  for (const id of changedPreferences) if (_connectedUsers.has(id)) preferenceRecipients.add(id);
+  if (changedPreferences.length) {
+    try {
+      const { businessStaff } = require('./chatBusinessAccess');
+      for (const part of chunks(changedPreferences)) {
+        const { data, error } = await supabaseAdmin.from('User').select('id, account_type').in('id', part);
+        if (error) throw error;
+        const businesses = (data || []).filter((user) => user.account_type === 'business').map((user) => user.id);
+        for (const staff of await businessStaff(businesses, { include: (id) => _connectedUsers.has(id) })) {
+          preferenceRecipients.add(staff.userId);
+          add(staff.userId, ['chats']);
+        }
+      }
+    } catch (error) {
+      logger.warn('chat_preference_recipients_unavailable', { code: error.code });
+    }
+  }
   const at = new Date().toISOString();
+  for (const userId of preferenceRecipients) {
+    for (const socketId of _connectedUsers.get(userId) || []) _io.to(socketId).emit('chat:preferences_changed', { at });
+  }
   for (const [userId, topics] of byUser) {
     const payload = { topics: [...topics].sort(), at };
     for (const socketId of _connectedUsers.get(userId) || []) _io.to(socketId).emit(EVENT, payload);
+    // Reuse the already-resolved recipients to refresh badges on every API
+    // instance. The badge service coalesces bursts and serializes each user.
+    if (topics.has('chats') || topics.has('notifications')) require('./badgeService').emitBadgeUpdate(userId);
   }
   if (byUser.size) logger.debug('sync:changed sent', { users: byUser.size });
 }
@@ -310,6 +363,15 @@ async function connect() {
   epoch += 1;
   live = true;
   retryMs = 1000;
+  // A listener gap can miss NOTIFY while sockets stay connected. Tell those
+  // clients to reconcile from their durable cursors once listening resumes.
+  if (_io && _connectedUsers) for (const ids of _connectedUsers.values()) for (const id of ids) {
+    const socket = _io.sockets.sockets.get(id);
+    if (!socket) continue;
+    const rooms = [...socket.rooms].filter((room) => UUID_RE.test(room));
+    socket.emit(EVENT, { topics: ['chats', ...rooms.map((room) => `chat:${room}`)], at: new Date().toISOString() });
+  }
+  if (_connectedUsers) for (const userId of _connectedUsers.keys()) require('./badgeService').emitBadgeUpdate(userId);
   // A pooled or NATed connection can die quietly; a small query proves it is alive.
   clearInterval(heartbeatTimer);
   heartbeatTimer = setInterval(() => {
@@ -344,6 +406,22 @@ async function stop() {
   }
 }
 
+// Best-effort, content-free typing signals reuse the live LISTEN connection.
+// Bound pg's pending query queue; stale typing is dropped rather than replayed.
+let ephemeralPublishes = 0;
+function publishChatSignal(change) {
+  if (!live || !client || ephemeralPublishes >= 32
+    || !['ChatTyping', 'ChatPresence', 'ChatPresenceQuery'].includes(change?.t)) return Promise.resolve();
+  const payload = JSON.stringify(change);
+  if (Buffer.byteLength(payload) > 7500) return Promise.resolve();
+  ephemeralPublishes += 1;
+  return client.query({ text: 'SELECT pg_notify($1, $2)', values: [CHANNEL, payload], query_timeout: 2000 })
+    .catch(() => { /* Typing expires; durable message delivery is independent. */ })
+    .finally(() => { ephemeralPublishes -= 1; });
+}
+
+function publishChatTyping(change) { return publishChatSignal(change); }
+
 /** True while the LISTEN connection is up, so every committed change is being heard. */
 function isLive() {
   return live;
@@ -354,4 +432,4 @@ function currentEpoch() {
   return epoch;
 }
 
-module.exports = { init, start, stop, onChange, isLive, currentEpoch, handleNotification, flush, RULES };
+module.exports = { init, start, stop, onChange, isLive, currentEpoch, handleNotification, flush, RULES, publishChatTyping, publishChatSignal };

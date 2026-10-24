@@ -35,20 +35,28 @@ async function loadChatPeople(userIds) {
   const ids = [...new Set((userIds || []).filter(Boolean).map(String))];
   if (ids.length === 0) return new Map();
   try {
-    const [users, profiles] = await Promise.all([
-      supabaseAdmin
-        .from('User')
-        .select('id, username, name, first_name, middle_name, last_name, profile_picture_url, account_type')
-        .in('id', ids),
-      supabaseAdmin
-        .from('LocalProfile')
-        .select('user_id, handle, display_name, avatar_url')
-        .in('user_id', ids),
-    ]);
-    if (users.error || profiles.error) throw users.error || profiles.error;
-    const profilesByUserId = new Map((profiles.data || []).map((profile) => [String(profile.user_id), profile]));
+    const users = [];
+    const profilesByUserId = new Map();
+    // Room membership can exceed both the HTTP URL limit and PostgREST's row
+    // cap. Keep identity reads bounded without dropping any member's profile.
+    for (let offset = 0; offset < ids.length; offset += 100) {
+      const batch = ids.slice(offset, offset + 100);
+      const [userPage, profilePage] = await Promise.all([
+        supabaseAdmin
+          .from('User')
+          .select('id, username, name, first_name, middle_name, last_name, profile_picture_url, account_type')
+          .in('id', batch),
+        supabaseAdmin
+          .from('LocalProfile')
+          .select('user_id, handle, display_name, avatar_url')
+          .in('user_id', batch),
+      ]);
+      if (userPage.error || profilePage.error) throw userPage.error || profilePage.error;
+      users.push(...userPage.data || []);
+      for (const profile of profilePage.data || []) profilesByUserId.set(String(profile.user_id), profile);
+    }
     const people = new Map();
-    for (const user of users.data || []) {
+    for (const user of users) {
       const profile = user.account_type === 'business' ? null : profilesByUserId.get(String(user.id));
       const person = profile
         ? serializeLocalProfileForViewer({
