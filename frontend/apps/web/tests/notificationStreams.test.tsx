@@ -3,7 +3,9 @@
  *
  * Asserts:
  *   1. NotificationBell mode='personal' shows the bell icon + sums
- *      personal+platform from byContext.
+ *      personal+platform from byContext. The shell's badge counts load
+ *      once, then fall back to polling 15 s plus jitter after each poll
+ *      only while the socket is disconnected; never while connected.
  *   2. NotificationBell mode='audience' shows the megaphone icon + uses
  *      byContext.audience only.
  *   3. NotificationBell mode='all' (legacy) keeps the combined count.
@@ -50,9 +52,11 @@ jest.mock('@/contexts/BadgeContext', () => ({
   BadgeProvider: ({ children }: any) => children,
 }));
 
+// Disconnected unless a test connects it (read at render time).
+let mockSocketConnected = false;
 jest.mock('@/contexts/SocketContext', () => ({
   useSocket: () => null,
-  useSocketConnected: () => false,
+  useSocketConnected: () => mockSocketConnected,
   SocketProvider: ({ children }: any) => children,
 }));
 
@@ -96,6 +100,10 @@ describe('NotificationBell — split by firewall mode (P2.3)', () => {
       total: 12, byContext: { personal: 9, audience: 3, platform: 0 },
     });
     flags.openGigs = false;
+    // The fallback poll waits 15 s plus Math.random() * 500 ms after each
+    // completed poll. Pin the jitter so the window ends at exactly 15,250 ms.
+    const random = jest.spyOn(Math, 'random').mockReturnValue(0.5);
+    const pollWindowMs = 15_000 + 0.5 * 500;
     jest.useFakeTimers();
     try {
       const actualBadges = jest.requireActual('../src/contexts/BadgeContext');
@@ -110,13 +118,38 @@ describe('NotificationBell — split by firewall mode (P2.3)', () => {
       expect(screen.getByTestId('retained-shell-counts')).toHaveTextContent('7/11/12/0');
       const initialPolls = apiMock.chat.getChatStats.mock.calls.length;
       expect(initialPolls).toBeGreaterThan(0);
-      await act(async () => { jest.advanceTimersByTime(5_000); });
-      expect(apiMock.chat.getChatStats).toHaveBeenCalledTimes(initialPolls + 1);
-      expect(apiMock.notifications.getUnreadCount).toHaveBeenCalledTimes(initialPolls + 1);
+      expect(apiMock.notifications.getUnreadCount).toHaveBeenCalledTimes(initialPolls);
+      // Disconnected: no poll before the window ends (none at 5 s either),
+      // exactly one when it ends, and the next window starts after that poll.
+      for (let poll = 1; poll <= 2; poll += 1) {
+        await act(async () => { jest.advanceTimersByTime(pollWindowMs - 1); });
+        expect(apiMock.chat.getChatStats).toHaveBeenCalledTimes(initialPolls + poll - 1);
+        expect(apiMock.notifications.getUnreadCount).toHaveBeenCalledTimes(initialPolls + poll - 1);
+        await act(async () => { jest.advanceTimersByTime(1); });
+        expect(apiMock.chat.getChatStats).toHaveBeenCalledTimes(initialPolls + poll);
+        expect(apiMock.notifications.getUnreadCount).toHaveBeenCalledTimes(initialPolls + poll);
+      }
+      expect(apiMock.gigs.getReceivedOffers).not.toHaveBeenCalled();
+      cleanup();
+
+      // Connected: the same one-time load, then no polling at all.
+      mockSocketConnected = true;
+      apiMock.chat.getChatStats.mockClear();
+      apiMock.notifications.getUnreadCount.mockClear();
+      render(<actualBadges.BadgeProvider><BadgeProbe /></actualBadges.BadgeProvider>);
+      await act(async () => { await Promise.resolve(); });
+      expect(screen.getByTestId('retained-shell-counts')).toHaveTextContent('7/11/12/0');
+      expect(apiMock.chat.getChatStats).toHaveBeenCalledTimes(initialPolls);
+      expect(apiMock.notifications.getUnreadCount).toHaveBeenCalledTimes(initialPolls);
+      await act(async () => { jest.advanceTimersByTime(4 * pollWindowMs); });
+      expect(apiMock.chat.getChatStats).toHaveBeenCalledTimes(initialPolls);
+      expect(apiMock.notifications.getUnreadCount).toHaveBeenCalledTimes(initialPolls);
       expect(apiMock.gigs.getReceivedOffers).not.toHaveBeenCalled();
     } finally {
       cleanup();
       jest.useRealTimers();
+      random.mockRestore();
+      mockSocketConnected = false;
       flags.openGigs = previousOpenGigs;
       apiMock.getAuthToken.mockImplementation(previousAuth);
       apiMock.chat.getChatStats = previousChatStats;

@@ -22,6 +22,11 @@ function mark(client: QueryClient, queryKey: readonly unknown[]): void {
   void client.invalidateQueries({ queryKey });
 }
 
+function refreshChatPreferences(client: QueryClient): void {
+  void client.invalidateQueries({ queryKey: ['chat', 'preferences'],
+    refetchType: navigator.onLine && document.visibilityState === 'visible' ? 'active' : 'none' });
+}
+
 /** Marks what one topic covers. Unknown topics (and `mail`, dormant while Mailbox is off) are ignored. */
 export function markTopic(client: QueryClient, topic: string): void {
   const split = topic.indexOf(':');
@@ -47,7 +52,8 @@ export function markTopic(client: QueryClient, topic: string): void {
       mark(client, ['place', 'intelligence']);
       break;
     case 'chats':
-      mark(client, queryKeys.conversations());
+      void client.invalidateQueries({ queryKey: queryKeys.conversations(),
+        refetchType: navigator.onLine && document.visibilityState === 'visible' ? 'active' : 'none' });
       break;
     case 'chat':
       if (id) { mark(client, queryKeys.chatMessages(id)); mark(client, ['chat', 'room', id]); }
@@ -72,9 +78,14 @@ export function useSyncChanged(): void {
 
   useEffect(() => {
     if (!socket) return;
+    let inboxRefresh: ReturnType<typeof setTimeout> | undefined;
     const changed = (payload: { topics?: unknown } | null) => {
       const topics = Array.isArray(payload?.topics) ? payload.topics.filter((t): t is string => typeof t === 'string') : [];
-      topics.forEach((topic) => markTopic(client, topic));
+      topics.filter((topic) => topic !== 'chats').forEach((topic) => markTopic(client, topic));
+      if (topics.includes('chats') && !inboxRefresh) inboxRefresh = setTimeout(() => {
+        inboxRefresh = undefined;
+        markTopic(client, 'chats');
+      }, 500);
       emitSyncTopics(topics);
     };
     // A reconnect may have missed signals: Household, Messages and Notifications are marked.
@@ -84,22 +95,29 @@ export function useSyncChanged(): void {
         mark(client, ['homes']);
         mark(client, queryKeys.placePrimaryHome());
         mark(client, queryKeys.placeMyHomes());
-        mark(client, queryKeys.conversations());
-        mark(client, ['chat']);
+        markTopic(client, 'chats');
+        void client.invalidateQueries({ queryKey: ['chat'],
+          refetchType: navigator.onLine && document.visibilityState === 'visible' ? 'active' : 'none' });
         mark(client, queryKeys.notifications());
         emitSyncTopics([RECONNECTED]);
       }
       connectedBefore = true;
     };
     socket.on('sync:changed', changed);
+    // Account-scoped and emitted only when notification preferences change.
+    // Ordinary message/read events must not refetch every open mute control.
+    const preferencesChanged = () => refreshChatPreferences(client);
+    socket.on('chat:preferences_changed', preferencesChanged);
     socket.on('connect', connected);
-    return () => { socket.off('sync:changed', changed); socket.off('connect', connected); };
+    return () => { if (inboxRefresh) clearTimeout(inboxRefresh); socket.off('sync:changed', changed);
+      socket.off('chat:preferences_changed', preferencesChanged); socket.off('connect', connected); };
   }, [socket, client]);
 
   useEffect(() => {
     let hiddenAt: number | null = null;
     const visibility = () => {
       if (document.visibilityState === 'hidden') { hiddenAt = Date.now(); return; }
+      refreshChatPreferences(client);
       if (hiddenAt !== null && Date.now() - hiddenAt >= AWAY_MS) {
         void client.invalidateQueries();
         emitSyncTopics([EVERYTHING]);
@@ -107,6 +125,8 @@ export function useSyncChanged(): void {
       hiddenAt = null;
     };
     document.addEventListener('visibilitychange', visibility);
-    return () => document.removeEventListener('visibilitychange', visibility);
+    const online = () => refreshChatPreferences(client);
+    window.addEventListener('online', online);
+    return () => { document.removeEventListener('visibilitychange', visibility); window.removeEventListener('online', online); };
   }, [client]);
 }

@@ -4,8 +4,12 @@ import { useEffect, useRef, useState } from 'react';
 import type { PDFDocumentProxy, PDFDocumentLoadingTask, RenderTask } from 'pdfjs-dist';
 import { createPortal } from 'react-dom';
 import LivePhotoTile from '../feed/LivePhotoTile';
+import { useChatMedia } from '@/hooks/useChatMedia';
 
 interface ImageLightboxProps {
+  currentUserId?: string | null;
+  roomId?: string;
+  messageId?: string;
   imageUrl: string | null;
   title?: string;
   mimeType?: string;
@@ -13,7 +17,8 @@ interface ImageLightboxProps {
   onClose: () => void;
 }
 
-export default function ImageLightbox({ imageUrl, title, mimeType, liveUrl, onClose }: ImageLightboxProps) {
+export default function ImageLightbox({ imageUrl, currentUserId, roomId, messageId, title, mimeType, liveUrl, onClose }: ImageLightboxProps) {
+  const media = useChatMedia(imageUrl, currentUserId, roomId, messageId);
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
 
@@ -54,16 +59,19 @@ export default function ImageLightbox({ imageUrl, title, mimeType, liveUrl, onCl
         </div>
       )}
 
-      {mimeType === 'application/pdf' ? (
-        <ChatPdfPreview key={imageUrl} url={imageUrl} title={title} />
+      {!media.url ? <div role="status" className="rounded-lg bg-white p-4 text-gray-900" onClick={event => event.stopPropagation()}>
+        {media.loading ? 'Loading attachment…' : <>This attachment is unavailable. <button type="button" className="underline" onClick={media.retry}>Retry</button></>}
+      </div> : mimeType === 'application/pdf' ? (
+        <ChatPdfPreview key={media.url} url={imageUrl} savedUrl={media.url} title={title} />
       ) : liveUrl ? (
         <div onClick={e => e.stopPropagation()}>
-          <LivePhotoTile stillUrl={imageUrl} videoUrl={liveUrl} privateMedia fit="contain" showsReplayPill showsDot={false} className="h-[85vh] w-[90vw]" />
+          <LivePhotoTile stillUrl={media.url} videoUrl={liveUrl} privateMedia fit="contain" showsReplayPill showsDot={false} className="h-[85vh] w-[90vw]" />
         </div>
       ) : (
       /* Native img: arbitrary chat URLs; avoids next/image dev sizing warnings in lightbox. */
       <img
-        src={imageUrl}
+        src={media.url}
+        onError={media.rejectMedia}
         alt={title || 'Image preview'}
         className="rounded-lg shadow-2xl"
         style={{
@@ -83,7 +91,7 @@ export default function ImageLightbox({ imageUrl, title, mimeType, liveUrl, onCl
 
 
 /** Render pixels, never uploaded HTML, scripts, links, forms or embedded files. */
-function ChatPdfPreview({ url, title }: { url: string; title?: string }) {
+function ChatPdfPreview({ url, savedUrl, title }: { url: string; savedUrl: string; title?: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [document, setDocument] = useState<PDFDocumentProxy | null>(null);
   const [page, setPage] = useState(1);
@@ -102,7 +110,7 @@ function ChatPdfPreview({ url, title }: { url: string; title?: string }) {
         if (source.origin !== window.location.origin || !/^\/api\/chat\/files\/[0-9a-f-]+$/i.test(source.pathname)) {
           throw new Error('Unsupported document address');
         }
-        const response = await fetch(source, {
+        const response = await fetch(savedUrl.startsWith('blob:') ? savedUrl : source, {
           credentials: 'same-origin', cache: 'no-store', redirect: 'error', signal: controller.signal,
         });
         if (!response.ok || response.headers.get('content-type')?.split(';')[0].trim() !== 'application/pdf') {
@@ -136,7 +144,7 @@ function ChatPdfPreview({ url, title }: { url: string; title?: string }) {
       controller.abort();
       void loadingTask?.destroy();
     };
-  }, [url]);
+  }, [url, savedUrl]);
 
   useEffect(() => {
     if (!document || !canvasRef.current) return;
@@ -171,7 +179,7 @@ function ChatPdfPreview({ url, title }: { url: string; title?: string }) {
         <button type="button" disabled={!document || page <= 1} onClick={() => { setRendering(true); setPage(value => value - 1); }} className="disabled:opacity-40">Previous page</button>
         <span aria-live="polite">{document ? `Page ${page} of ${document.numPages}` : 'PDF document'}</span>
         <button type="button" disabled={!document || page >= document.numPages} onClick={() => { setRendering(true); setPage(value => value + 1); }} className="disabled:opacity-40">Next page</button>
-        <a href={url} download={title || 'document.pdf'} className="underline">Download PDF</a>
+        <a href={savedUrl} download={title || 'document.pdf'} className="underline">Download PDF</a>
       </div>
       <div className="relative flex-1 overflow-auto bg-gray-100 p-3">
         {error ? <p role="alert">{error}</p> : <>

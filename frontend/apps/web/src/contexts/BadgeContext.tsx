@@ -60,94 +60,100 @@ const BadgeContext = createContext<BadgeContextValue>({
 });
 
 // ── Provider ─────────────────────────────────────────────────
-const FALLBACK_POLL_MS = 5_000; // 5 seconds
+const FALLBACK_POLL_MS = 15_000;
 
 export function BadgeProvider({ children }: { children: ReactNode }) {
   const socket = useSocket();
   const connected = useSocketConnected();
   const [counts, setCounts] = useState<BadgeCounts>(defaultCounts);
   const socketNotifications = useRef<number | null>(null);
-  const fallbackRef = useRef<ReturnType<typeof setInterval>>(undefined);
+  const fallbackRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const active = useRef(true);
+  const revision = useRef(0);
+  const pollInFlight = useRef<{ marker: string; promise: Promise<boolean> } | null>(null);
+  const notificationInFlight = useRef<Promise<void> | null>(null);
+  const notificationAgain = useRef(false);
 
-  // Fallback polling when socket is disconnected
-  const pollBadges = useCallback(async () => {
-    const token = getAuthToken();
-    if (!token) return;
-    try {
+  // One request batch per account. Socket updates that arrive during the read
+  // win over that older HTTP snapshot, and a failure preserves known counts.
+  const pollBadges = useCallback((): Promise<boolean> => {
+    if (!getAuthToken() || !navigator.onLine || document.visibilityState !== 'visible') return Promise.resolve(false);
+    const marker = api.authSessionMarker();
+    if (pollInFlight.current?.marker === marker) return pollInFlight.current.promise;
+    const startedRevision = revision.current;
+    const promise = (async () => {
       const [notifRes, chatRes, offersRes] = await Promise.allSettled([
         api.notifications.getUnreadCount({ suppressDevErrorOverlay: true }),
         api.chat.getChatStats({ suppressDevErrorOverlay: true }),
-        launchFeatures.openGigs
-          ? api.gigs.getReceivedOffers(undefined, { suppressDevErrorOverlay: true })
-          : Promise.resolve({ offers: [] }),
+        launchFeatures.openGigs ? api.gigs.getReceivedOffers(undefined, { suppressDevErrorOverlay: true }) : Promise.resolve({ offers: [] }),
       ]);
-
-      const notifPayload =
-        notifRes.status === 'fulfilled'
-          ? (notifRes.value as {
-              count?: number;
-              total?: number;
-              byContext?: { personal?: number; audience?: number; platform?: number };
-            })
-          : null;
-      const notifications = notifPayload?.total ?? notifPayload?.count ?? 0;
-      const notificationsByContext = {
-        personal: Number(notifPayload?.byContext?.personal ?? 0) || 0,
-        audience: Number(notifPayload?.byContext?.audience ?? 0) || 0,
-        platform: Number(notifPayload?.byContext?.platform ?? 0) || 0,
-      };
-      const unreadMessages =
-        chatRes.status === 'fulfilled'
-          ? (chatRes.value as { stats?: { total_unread?: number } })?.stats?.total_unread ?? 0
-          : 0;
-      const totalMessages =
-        chatRes.status === 'fulfilled'
-          ? (chatRes.value as { stats?: { total_messages?: number } })?.stats?.total_messages ?? 0
-          : 0;
-      const pendingOffers =
-        offersRes.status === 'fulfilled'
-          ? ((offersRes.value as { offers?: { status?: string }[] })?.offers || []).filter(
-              (o: { status?: string }) => o.status === 'pending',
-            ).length
-          : 0;
-
-      setCounts({
-        unreadMessages,
-        totalMessages,
-        pendingOffers,
-        notifications,
-        notificationsByContext,
+      if (!active.current || marker !== api.authSessionMarker() || startedRevision !== revision.current) return true;
+      setCounts((previous) => {
+        const next = { ...previous };
+        if (notifRes.status === 'fulfilled' && notifRes.value) {
+          const value = notifRes.value as { count?: number; total?: number; byContext?: { personal?: number; audience?: number; platform?: number } };
+          next.notifications = Number(value.total ?? value.count ?? previous.notifications) || 0;
+          if (value.byContext) next.notificationsByContext = {
+            personal: Number(value.byContext.personal ?? 0) || 0,
+            audience: Number(value.byContext.audience ?? 0) || 0,
+            platform: Number(value.byContext.platform ?? 0) || 0,
+          };
+        }
+        if (chatRes.status === 'fulfilled' && chatRes.value?.stats) {
+          next.unreadMessages = Number(chatRes.value.stats.total_unmuted_unread ?? chatRes.value.stats.total_unread ?? previous.unreadMessages) || 0;
+          next.totalMessages = Number(chatRes.value.stats.total_messages ?? previous.totalMessages) || 0;
+        }
+        if (offersRes.status === 'fulfilled' && Array.isArray(offersRes.value?.offers)) next.pendingOffers = offersRes.value.offers.filter((offer: { status?: string }) => offer.status === 'pending').length;
+        return next;
       });
-    } catch {
-      // silent
-    }
+      return notifRes.status === 'fulfilled' && Boolean(notifRes.value)
+        && chatRes.status === 'fulfilled' && Boolean(chatRes.value?.stats);
+    })().finally(() => { if (pollInFlight.current?.promise === promise) pollInFlight.current = null; });
+    pollInFlight.current = { marker, promise };
+    return promise;
   }, []);
 
-  // badge:update goes to every device a person is signed in on, so its unread total counts the
-  // assistant's brief and nudges, which the web leaves out. When it changes (a new notice, or one
-  // read here or on another device) the web's own total and per-context split are fetched again.
-  const refreshNotificationContexts = useCallback(async () => {
-    try {
-      const res = (await api.notifications.getUnreadCount({ suppressDevErrorOverlay: true })) as {
-        count?: number;
-        total?: number;
-        byContext?: { personal?: number; audience?: number; platform?: number };
-      };
-      setCounts((prev) => ({
-        ...prev,
-        notifications: Number(res?.total ?? res?.count ?? prev.notifications) || 0,
-        notificationsByContext: {
-          personal: Number(res?.byContext?.personal ?? 0) || 0,
-          audience: Number(res?.byContext?.audience ?? 0) || 0,
-          platform: Number(res?.byContext?.platform ?? 0) || 0,
-        },
-      }));
-    } catch {
-      // The next update or poll corrects it.
-    }
+  // Notification totals use the web's existing context filter. Coalesce bursts
+  // and defer hidden/offline work until the next foreground refresh.
+  const refreshNotificationContexts = useCallback(() => {
+    if (!getAuthToken() || !navigator.onLine || document.visibilityState !== 'visible') return;
+    if (notificationInFlight.current) { notificationAgain.current = true; return; }
+    const marker = api.authSessionMarker();
+    const promise = (async () => {
+      do {
+        notificationAgain.current = false;
+        try {
+          const value = await api.notifications.getUnreadCount({ suppressDevErrorOverlay: true }) as {
+            count?: number; total?: number; byContext?: { personal?: number; audience?: number; platform?: number };
+          };
+          if (!active.current || marker !== api.authSessionMarker() || !value) return;
+          if (!notificationAgain.current) setCounts((previous) => ({ ...previous,
+            notifications: Number(value.total ?? value.count ?? previous.notifications) || 0,
+            notificationsByContext: value.byContext ? {
+              personal: Number(value.byContext.personal ?? 0) || 0,
+              audience: Number(value.byContext.audience ?? 0) || 0,
+              platform: Number(value.byContext.platform ?? 0) || 0,
+            } : previous.notificationsByContext }));
+        } catch { /* The next foreground or badge signal retries. */ }
+      } while (notificationAgain.current && navigator.onLine && document.visibilityState === 'visible' && marker === api.authSessionMarker());
+    })().finally(() => { if (notificationInFlight.current === promise) notificationInFlight.current = null; });
+    notificationInFlight.current = promise;
   }, []);
+
+  useEffect(() => {
+    active.current = true;
+    const changed = () => {
+      revision.current += 1;
+      socketNotifications.current = null;
+      setCounts(defaultCounts);
+      void pollBadges();
+    };
+    const stop = api.onTokenChange(changed);
+    return () => { active.current = false; stop(); };
+  }, [pollBadges]);
 
   const setUnreadMessages = useCallback((value: number | ((prev: number) => number)) => {
+    revision.current += 1;
     setCounts((prev) => {
       const nextValue = typeof value === 'function' ? value(prev.unreadMessages) : value;
       return { ...prev, unreadMessages: Math.max(0, Number(nextValue) || 0) };
@@ -155,30 +161,20 @@ export function BadgeProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setTotalMessages = useCallback((value: number | ((prev: number) => number)) => {
+    revision.current += 1;
     setCounts((prev) => {
       const nextValue = typeof value === 'function' ? value(prev.totalMessages) : value;
       return { ...prev, totalMessages: Math.max(0, Number(nextValue) || 0) };
     });
   }, []);
 
-  const startFallbackPolling = useCallback(() => {
-    if (fallbackRef.current) clearInterval(fallbackRef.current);
-    // No poll here: the initial poll below already fetched the counts once on load.
-    fallbackRef.current = setInterval(pollBadges, FALLBACK_POLL_MS);
-  }, [pollBadges]);
-
-  const stopFallbackPolling = useCallback(() => {
-    if (fallbackRef.current) {
-      clearInterval(fallbackRef.current);
-      fallbackRef.current = undefined;
-    }
-  }, []);
-
   // Listen for badge:update from the shared socket
   useEffect(() => {
     if (!socket) return;
 
-    const handleBadgeUpdate = (data: Partial<BadgeCounts>) => {
+    const handleBadgeUpdate = (data: Partial<BadgeCounts> & { unmutedUnreadMessages?: number }) => {
+      if (!getAuthToken()) return;
+      revision.current += 1;
       if (data?.notifications != null) {
         const total = Number(data.notifications) || 0;
         if (total !== socketNotifications.current) {
@@ -188,7 +184,7 @@ export function BadgeProvider({ children }: { children: ReactNode }) {
       }
       setCounts((prev) => ({
         ...prev,
-        unreadMessages: Number(data?.unreadMessages ?? prev.unreadMessages) || 0,
+        unreadMessages: Number(data?.unmutedUnreadMessages ?? data?.unreadMessages ?? prev.unreadMessages) || 0,
         totalMessages: Number(data?.totalMessages ?? prev.totalMessages) || 0,
         pendingOffers: Number(data?.pendingOffers ?? prev.pendingOffers) || 0,
       }));
@@ -200,20 +196,28 @@ export function BadgeProvider({ children }: { children: ReactNode }) {
     };
   }, [socket, refreshNotificationContexts]);
 
-  // Manage fallback polling based on connection state
   useEffect(() => {
-    if (connected) {
-      stopFallbackPolling();
-    } else {
-      startFallbackPolling();
-    }
-    return () => stopFallbackPolling();
-  }, [connected, startFallbackPolling, stopFallbackPolling]);
-
-  // Initial poll so we have counts immediately
-  useEffect(() => {
-    pollBadges();
-  }, [pollBadges]);
+    let cancelled = false;
+    let delay = FALLBACK_POLL_MS;
+    const stop = () => { if (fallbackRef.current) clearTimeout(fallbackRef.current); fallbackRef.current = undefined; };
+    const poll = async () => {
+      stop();
+      if (cancelled || !getAuthToken() || !navigator.onLine || document.visibilityState !== 'visible') return;
+      const succeeded = await pollBadges();
+      if (cancelled || connected) return;
+      delay = succeeded ? FALLBACK_POLL_MS : Math.min(60_000, delay * 2);
+      fallbackRef.current = setTimeout(() => void poll(), delay + Math.random() * 500);
+    };
+    const foreground = () => {
+      if (navigator.onLine && document.visibilityState === 'visible') { delay = FALLBACK_POLL_MS; void poll(); }
+      else stop();
+    };
+    foreground();
+    document.addEventListener('visibilitychange', foreground);
+    window.addEventListener('online', foreground);
+    window.addEventListener('offline', foreground);
+    return () => { cancelled = true; stop(); document.removeEventListener('visibilitychange', foreground); window.removeEventListener('online', foreground); window.removeEventListener('offline', foreground); };
+  }, [connected, pollBadges]);
 
   const contextValue = useMemo(
     () => ({ ...counts, connected, socket, setUnreadMessages, setTotalMessages }),
