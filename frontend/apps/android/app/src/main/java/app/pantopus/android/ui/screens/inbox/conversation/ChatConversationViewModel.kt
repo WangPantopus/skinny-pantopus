@@ -285,7 +285,6 @@ class ChatConversationViewModel
 
         /** Photos sent from this phone, by client message id: their bubbles show the picked bytes, sending and sent. */
         private val localPhotos = LinkedHashMap<String, LocalPhotos>()
-        private val localPhotoLoads = mutableSetOf<String>()
 
         private class LocalPhotos(
             val caption: String?,
@@ -477,7 +476,6 @@ class ChatConversationViewModel
                 deletedMessageVersions.clear()
                 pendingByClientId.clear()
                 localPhotos.clear()
-                localPhotoLoads.clear()
                 sendContextsByClientId.clear()
                 outboxClientIds.clear()
                 _isSending.value = false
@@ -1561,20 +1559,21 @@ class ChatConversationViewModel
             }
         }
 
-        /** After a relaunch, a queued photo's bubble shows it from the encrypted queue. */
+        /**
+         * After a relaunch, a queued photo's bubble shows it from the encrypted queue. The bubble has the photo's size
+         * (its placeholder) while the copy is read, so nothing moves when the photo appears.
+         */
         private fun restoreLocalPhotos(
             queue: ChatOutbox,
             entry: ChatOutboxEntry,
         ) {
-            if (entry.clientId in localPhotos || entry.attachments.none { it.mimeType.startsWith("image/") }) return
-            if (!localPhotoLoads.add(entry.clientId)) return
+            val images = entry.attachments.filter { it.mimeType.startsWith("image/") }
+            if (entry.clientId in localPhotos || images.isEmpty()) return
+            localPhotos[entry.clientId] = LocalPhotos(entry.body.messageText, emptyList())
             val target = sendTarget()
             viewModelScope.launch {
-                val photos =
-                    entry.attachments.filter { it.mimeType.startsWith("image/") }.mapNotNull { attachment ->
-                        queue.queuedPhoto(entry, attachment.id)?.let { ChatLocalPhoto(attachment.id, it) }
-                    }
-                if (photos.isEmpty() || target != sendTarget() || !pendingByClientId.containsKey(entry.clientId)) return@launch
+                val photos = images.mapNotNull { image -> queue.queuedPhoto(entry, image.id)?.let { ChatLocalPhoto(image.id, it) } }
+                if (photos.isEmpty() || target != sendTarget() || localPhotos[entry.clientId]?.photos?.isEmpty() != true) return@launch
                 rememberLocalPhotos(entry.clientId, entry.body.messageText, photos)
                 rebuild()
             }
