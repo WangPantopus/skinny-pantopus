@@ -164,7 +164,7 @@ test.each(['charge.refunded', 'refund.updated', 'charge.refund.updated', 'refund
     ? { id: 'ch_one', payment_intent: 'pi_one', amount: 1000, amount_refunded: 999 } : refund({ status: 'pending' }) } });
   const a = express(); a.use('/webhook', express.raw({ type: 'application/json' }), require('../stripe/stripeWebhooks'));
   saveFailure = true;
-  expect((await http(a).post('/webhook').set('Content-Type', 'application/json').send('{}')).status).toBe(500);
+  expect((await http(a).post('/webhook').set('Content-Type', 'application/json').send('{}')).status).toBe(503);
   expect(getTable('Payment')[0].refunded_amount).toBe(0);
   saveFailure = false;
   expect((await http(a).post('/webhook').set('Content-Type', 'application/json').send('{}')).status).toBe(200);
