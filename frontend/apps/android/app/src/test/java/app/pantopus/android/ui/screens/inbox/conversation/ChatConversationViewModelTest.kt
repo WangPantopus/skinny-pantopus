@@ -13,6 +13,9 @@ import app.pantopus.android.data.api.models.chats.ChatMediaUploadResponse
 import app.pantopus.android.data.api.models.chats.ChatMessageDto
 import app.pantopus.android.data.api.models.chats.ChatMessageSender
 import app.pantopus.android.data.api.models.chats.ChatMessagesResponse
+import app.pantopus.android.data.api.models.chats.ChatRoomDetail
+import app.pantopus.android.data.api.models.chats.ChatRoomDetailResponse
+import app.pantopus.android.data.api.models.chats.ChatRoomParticipant
 import app.pantopus.android.data.api.models.chats.ChatTopic
 import app.pantopus.android.data.api.models.chats.ConversationTopicsResponse
 import app.pantopus.android.data.api.models.chats.CreateDirectChatResponse
@@ -28,6 +31,7 @@ import app.pantopus.android.data.api.services.GeoApi
 import app.pantopus.android.data.blocks.BlocksRepository
 import app.pantopus.android.data.chats.ActiveChatThread
 import app.pantopus.android.data.chats.ChatRepository
+import app.pantopus.android.data.chats.ChatSendTarget
 import app.pantopus.android.data.gigs.GigsRepository
 import app.pantopus.android.data.links.LinkPreviewRepository
 import app.pantopus.android.data.listings.ListingsRepository
@@ -38,7 +42,9 @@ import app.pantopus.android.data.upload.UploadRepository
 import app.pantopus.android.ui.theme.PantopusIcon
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.Runs
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
@@ -123,12 +129,17 @@ class ChatConversationViewModelTest {
 
     private val counterpartyAi = ChatCounterparty.Ai(displayName = "Pantopus AI")
 
+    /** The account and person thread every edit and delete names, so only that conversation's inbox preview changes. */
+    private val personTarget = ChatSendTarget(accountId = "u_me", kind = "person", id = "u_other")
+
     @Before fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         every { repo.roomMessagesCopy(any()) } returns null
         every { repo.conversationMessagesCopy(any(), any()) } returns null
         every { repo.roomHistoryUpdater(any()) } returns {}
         every { repo.conversationHistoryUpdater(any(), any()) } returns {}
+        // No saved topic list on the phone in these tests (a person thread restores its topics from it first).
+        every { repo.conversationTopicsCopy(any()) } returns null
         every { socket.connectionState } returns MutableStateFlow(SocketManager.ConnectionState.Disconnected)
         every { socket.eventsOf(any()) } returns emptyFlow()
         coEvery { socket.emitWithAck(any(), any(), any()) } returns null
@@ -308,8 +319,12 @@ class ChatConversationViewModelTest {
     @Test fun load_joins_active_rooms_when_socket_connected() =
         runTest {
             every { socket.connectionState } returns MutableStateFlow(SocketManager.ConnectionState.Connected)
-            coEvery { socket.emitWithAck(eq("room:join"), any(), any()) } returns
+            // A join is a bounded subscription: it carries its own id, and a rejoin leaves the subscription it replaces.
+            val joins = mutableListOf<org.json.JSONObject>()
+            coEvery { socket.emitWithAck(eq("room:join"), capture(joins), any(), eq("room:leave")) } returns
                 org.json.JSONObject("""{"success":true,"messages":[]}""")
+            val leaves = mutableListOf<org.json.JSONObject>()
+            every { socket.emit(eq("room:leave"), capture(leaves)) } just Runs
             coEvery { repo.conversationMessages(any(), any(), any(), any(), any(), any()) } returns
                 NetworkResult.Success(
                     ChatMessagesResponse(
@@ -325,7 +340,14 @@ class ChatConversationViewModelTest {
                 currentUserId = "u_me",
             )
             vm.load()
-            coVerify { socket.emitWithAck(eq("room:join"), match { it.optString("roomId") == "r1" }, any()) }
+            assertTrue("expected a join of the thread's room", joins.isNotEmpty())
+            assertTrue(joins.all { it.optString("roomId") == "r1" && it.optString("subscriptionId").isNotBlank() })
+            // Every superseded subscription is left by its own id; the latest one stays open.
+            assertEquals(
+                joins.dropLast(1).map { it.optString("subscriptionId") },
+                leaves.map { it.optString("subscriptionId") },
+            )
+            assertTrue(leaves.all { it.optString("roomId") == "r1" })
         }
 
     @Test fun ai_thread_starts_in_empty_for_welcome_frame() =
@@ -634,7 +656,12 @@ class ChatConversationViewModelTest {
      * otherwise the backend 400s "Reply target not found in this room"
      * and the row fails forever.
      */
-    @Test fun reply_to_cross_room_message_drops_reply_to_id() =
+    /**
+     * A reply to a message from another of this person's rooms (a task's room) is never re-routed into the direct chat
+     * without its quote: that room's audience is not this person thread's, so the send is refused and the draft and its
+     * quote stay for the original conversation.
+     */
+    @Test fun reply_to_cross_room_message_keeps_draft_for_its_original_room() =
         runTest {
             coEvery { repo.conversationMessages(any(), any(), any(), any(), any(), any()) } returns
                 NetworkResult.Success(
@@ -656,6 +683,22 @@ class ChatConversationViewModelTest {
                 )
             coEvery { repo.createDirectChat("u_other") } returns
                 NetworkResult.Success(CreateDirectChatResponse(roomId = "r1"))
+            // The quoted message's own room, read for its current audience: a task's room, not this person thread.
+            coEvery { repo.room("rGig", null) } returns
+                NetworkResult.Success(
+                    ChatRoomDetailResponse(
+                        ChatRoomDetail(
+                            type = "gig",
+                            isActive = true,
+                            participants =
+                                listOf(
+                                    ChatRoomParticipant(userId = "u_me", isActive = true, leftAt = null),
+                                    ChatRoomParticipant(userId = "u_other", isActive = true, leftAt = null),
+                                ),
+                        ),
+                    ),
+                )
+            every { repo.replyRoomAllowed(any(), any(), any()) } answers { callOriginal() }
             val bodySlot = slot<SendChatMessageBody>()
             coEvery { repo.sendMessage(capture(bodySlot)) } returns
                 NetworkResult.Success(
@@ -673,16 +716,22 @@ class ChatConversationViewModelTest {
             vm.beginReply("m_gig")
             vm.setComposerText("reply")
             vm.send()
-            assertEquals("r1", bodySlot.captured.roomId)
-            assertEquals("a cross-room reply target must be dropped", null, bodySlot.captured.replyToId)
+            coVerify(exactly = 0) { repo.sendMessage(any()) }
+            assertEquals(
+                "Open the original conversation to reply to this message. Your draft is still here.",
+                vm.actionFailure.value,
+            )
+            assertEquals("reply", vm.composerText.value)
+            assertEquals("m_gig", vm.replyingTo.value?.messageId)
+            assertEquals("rGig", vm.replyingTo.value?.roomId)
         }
 
     /**
-     * Replying to one's own still-sending / failed optimistic row must
-     * drop replyToId — its `client_<uuid>` id is not a UUID and isn't
-     * persisted, so it would 400 the whole send.
+     * Replying to one's own still-sending / failed optimistic row can't
+     * quote it — its `client_<uuid>` id isn't persisted — so the send is
+     * refused with the draft and quote kept, never sent without its quote.
      */
-    @Test fun reply_to_optimistic_row_drops_reply_to_id() =
+    @Test fun reply_to_optimistic_row_keeps_draft_instead_of_sending_unquoted() =
         runTest {
             coEvery { repo.conversationMessages(any(), any(), any(), any(), any(), any()) } returns
                 NetworkResult.Success(ChatMessagesResponse(messages = emptyList(), hasMore = false))
@@ -715,8 +764,14 @@ class ChatConversationViewModelTest {
             vm.beginReply(optimisticId)
             vm.setComposerText("reply to my own unsent")
             vm.send()
-            assertEquals(2, bodies.size)
-            assertEquals("a reply to an unsent optimistic row must be dropped", null, bodies[1].replyToId)
+            assertEquals("only the first, unquoted send went out", 1, bodies.size)
+            assertEquals(null, bodies[0].replyToId)
+            assertEquals(
+                "Open the original conversation to reply to this message. Your draft is still here.",
+                vm.actionFailure.value,
+            )
+            assertEquals("reply to my own unsent", vm.composerText.value)
+            assertEquals(optimisticId, vm.replyingTo.value?.messageId)
         }
 
     @Test fun load_failure_transitions_error() =
@@ -811,6 +866,23 @@ class ChatConversationViewModelTest {
                 NetworkResult.Success(
                     ChatMessagesResponse(messages = listOf(message(id = "m1", userId = "u_other", text = "hi")), hasMore = false),
                 )
+            // The quoted message's own room, read for its current audience: this person and you, both still in it.
+            coEvery { repo.room("r1", null) } returns
+                NetworkResult.Success(
+                    ChatRoomDetailResponse(
+                        ChatRoomDetail(
+                            type = "direct",
+                            isActive = true,
+                            participants =
+                                listOf(
+                                    ChatRoomParticipant(userId = "u_me", isActive = true, leftAt = null),
+                                    ChatRoomParticipant(userId = "u_other", isActive = true, leftAt = null),
+                                ),
+                        ),
+                    ),
+                )
+            every { repo.replyRoomAllowed(any(), any(), any()) } answers { callOriginal() }
+            coEvery { repo.validateReplyRoom(any(), any()) } coAnswers { callOriginal() }
             val bodySlot = slot<SendChatMessageBody>()
             coEvery { repo.sendMessage(capture(bodySlot)) } returns
                 NetworkResult.Success(
@@ -829,6 +901,9 @@ class ChatConversationViewModelTest {
             vm.setComposerText("reply")
             vm.send()
             assertEquals("m1", bodySlot.captured.replyToId)
+            // The quote goes to the quoted message's own room, after that room's audience is confirmed at send.
+            assertEquals("r1", bodySlot.captured.roomId)
+            coVerify(exactly = 1) { repo.validateReplyRoom(personTarget, "r1") }
         }
 
     @Test fun edit_updates_message_and_clears_edit_state() =
@@ -837,7 +912,7 @@ class ChatConversationViewModelTest {
                 NetworkResult.Success(
                     ChatMessagesResponse(messages = listOf(message(id = "m1", userId = "u_me", text = "old")), hasMore = false),
                 )
-            coEvery { repo.editMessage("m1", "new") } returns
+            coEvery { repo.editMessage("m1", "new", personTarget) } returns
                 NetworkResult.Success(
                     app.pantopus.android.data.api.models.chats.SendChatMessageResponse(
                         message(id = "m1", userId = "u_me", text = "new"),
@@ -854,6 +929,7 @@ class ChatConversationViewModelTest {
             assertEquals("old", vm.composerText.value)
             vm.setComposerText("new")
             vm.send()
+            coVerify(exactly = 1) { repo.editMessage("m1", "new", personTarget) }
             assertEquals(null, vm.editingMessageId.value)
             val loaded = vm.state.value as ChatConversationUiState.Loaded
             val bubble = loaded.rows.filterIsInstance<ChatTimelineRow.Bubble>().first { it.content.id == "m1" }
@@ -866,7 +942,7 @@ class ChatConversationViewModelTest {
                 NetworkResult.Success(
                     ChatMessagesResponse(messages = listOf(message(id = "m1", userId = "u_me", text = "bye")), hasMore = false),
                 )
-            coEvery { repo.deleteMessage("m1") } returns NetworkResult.Success(Unit)
+            coEvery { repo.deleteMessage("m1", personTarget) } returns NetworkResult.Success(Unit)
             val vm = makeViewModel()
             vm.configure(
                 mode = ChatThreadMode.Person(otherUserId = "u_other"),
@@ -875,7 +951,7 @@ class ChatConversationViewModelTest {
             )
             vm.load()
             vm.delete("m1")
-            coVerify { repo.deleteMessage("m1") }
+            coVerify(exactly = 1) { repo.deleteMessage("m1", personTarget) }
             assertTrue(vm.state.value is ChatConversationUiState.Empty)
         }
 
@@ -1182,7 +1258,7 @@ class ChatConversationViewModelTest {
                         hasMore = false,
                     ),
                 )
-            coEvery { repo.deleteMessage(any()) } returns NetworkResult.Success(Unit)
+            coEvery { repo.deleteMessage(any(), personTarget) } returns NetworkResult.Success(Unit)
             val vm = makeViewModel()
             vm.configure(
                 mode = ChatThreadMode.Person(otherUserId = "u_other"),
@@ -1197,8 +1273,8 @@ class ChatConversationViewModelTest {
             vm.toggleSelection("m0")
             assertEquals(setOf("m1", "m2"), vm.selectedMessageIds.value)
             vm.deleteSelected()
-            coVerify(exactly = 1) { repo.deleteMessage("m1") }
-            coVerify(exactly = 1) { repo.deleteMessage("m2") }
+            coVerify(exactly = 1) { repo.deleteMessage("m1", personTarget) }
+            coVerify(exactly = 1) { repo.deleteMessage("m2", personTarget) }
             assertEquals(false, vm.isSelectionMode.value)
             assertTrue(vm.selectedMessageIds.value.isEmpty())
             val loaded = vm.state.value as ChatConversationUiState.Loaded
