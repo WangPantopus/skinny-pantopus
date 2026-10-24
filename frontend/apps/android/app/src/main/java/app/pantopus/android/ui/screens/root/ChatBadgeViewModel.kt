@@ -31,6 +31,10 @@ class ChatBadgeViewModel
         val unreadMessages: StateFlow<Int> = _unreadMessages.asStateFlow()
 
         private var serverTotalUnread: Int = 0
+        private var serverUnmutedUnread: Int? = null
+        private var badgeRevision = 0L
+        private var refreshJob: kotlinx.coroutines.Job? = null
+        private var refreshAgain = false
 
         init {
             // A cold start shows the saved list's count at once (Instant Screens); the read below confirms it.
@@ -45,19 +49,34 @@ class ChatBadgeViewModel
          * shows: one request at launch instead of the list and the stats, and none when the copy is fresh.
          */
         fun refresh() {
-            viewModelScope.launch {
-                val response =
-                    repo.conversationsStored().data ?: run {
-                        Timber.w("Chat badge refresh failed: the Messages list is unavailable")
-                        return@launch
-                    }
-                show(response)
+            if (refreshJob?.isActive == true) {
+                refreshAgain = true
+                return
             }
+            val revision = badgeRevision
+            refreshJob =
+                viewModelScope.launch {
+                    try {
+                        val response = repo.conversationsStored().data
+                        if (response == null) {
+                            Timber.w("Chat badge refresh failed: the Messages list is unavailable")
+                        } else if (revision == badgeRevision) {
+                            show(response)
+                        }
+                    } finally {
+                        refreshJob = null
+                        if (refreshAgain) {
+                            refreshAgain = false
+                            refresh()
+                        }
+                    }
+                }
         }
 
         /** Projects a list reply onto the badge: the list's own unread total, adjusted for muted rows. */
         private fun show(response: UnifiedConversationsResponse) {
             serverTotalUnread = response.totalUnread ?: response.conversations.sumOf { it.totalUnread }
+            serverUnmutedUnread = response.totalUnmutedUnread
             val conversations = response.conversations
             val mutedKeys = preferences.mutedKeys()
             val rows =
@@ -94,18 +113,28 @@ class ChatBadgeViewModel
                         pinned = false,
                         topicKinds = emptySet(),
                         storageKey = storageKey,
-                        isMuted = storageKey in mutedKeys,
+                        isMuted = dto.notificationsEnabled == false || storageKey in mutedKeys,
                     )
                 }
             applyAdjustedUnread(rows)
+            badgeCoordinator.publish(serverTotalUnread, rows, serverUnmutedUnread)
         }
 
         private fun subscribeToSocket() {
             viewModelScope.launch {
+                socket.eventsOf("chat:preferences_changed").collect {
+                    repo.inboxChanged()
+                    refresh()
+                }
+            }
+            viewModelScope.launch {
                 socket.eventsOf("badge:update").collect { json ->
                     json.badgeUnreadCount()?.let { total ->
+                        badgeRevision++
                         serverTotalUnread = total
+                        serverUnmutedUnread = json.badgeUnmutedUnreadCount()
                         applyAdjustedUnread(badgeCoordinator.snapshot.value.rows)
+                        badgeCoordinator.publish(total, badgeCoordinator.snapshot.value.rows, serverUnmutedUnread)
                     }
                 }
             }
@@ -126,9 +155,16 @@ class ChatBadgeViewModel
         private fun subscribeToListSnapshots() {
             viewModelScope.launch {
                 badgeCoordinator.snapshot.collect { snapshot ->
-                    if (snapshot.rows.isNotEmpty()) {
+                    if (snapshot.initialized) {
+                        badgeRevision++
                         serverTotalUnread = snapshot.serverTotalUnread
+                        serverUnmutedUnread = snapshot.serverUnmutedUnread
                         applyAdjustedUnread(snapshot.rows)
+                    } else {
+                        badgeRevision++
+                        serverTotalUnread = 0
+                        serverUnmutedUnread = null
+                        _unreadMessages.value = 0
                     }
                 }
             }
@@ -136,7 +172,7 @@ class ChatBadgeViewModel
 
         private fun applyAdjustedUnread(rows: List<app.pantopus.android.ui.screens.inbox.chat.ConversationRowContent>) {
             _unreadMessages.value =
-                ChatUnreadBadgeMath.adjustedTotal(
+                serverUnmutedUnread?.coerceAtLeast(0) ?: ChatUnreadBadgeMath.adjustedTotal(
                     serverTotal = serverTotalUnread,
                     rows = rows,
                     mutedKeys = preferences.mutedKeys(),
@@ -150,5 +186,13 @@ fun JSONObject.badgeUnreadCount(): Int? =
         has("unreadMessages") -> optInt("unreadMessages")
         has("total_unread") -> optInt("total_unread")
         has("totalUnread") -> optInt("totalUnread")
+        else -> null
+    }
+
+fun JSONObject.badgeUnmutedUnreadCount(): Int? =
+    when {
+        has("unmutedUnreadMessages") && !isNull("unmutedUnreadMessages") -> optInt("unmutedUnreadMessages").coerceAtLeast(0)
+        has("totalUnmutedUnread") && !isNull("totalUnmutedUnread") -> optInt("totalUnmutedUnread").coerceAtLeast(0)
+        has("total_unmuted_unread") && !isNull("total_unmuted_unread") -> optInt("total_unmuted_unread").coerceAtLeast(0)
         else -> null
     }

@@ -2,6 +2,7 @@ package app.pantopus.android.data.store
 
 import android.content.Context
 import app.pantopus.android.BuildConfig
+import app.pantopus.android.data.storage.ChatFileCipher
 import com.squareup.moshi.JsonClass
 import com.squareup.moshi.Moshi
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -19,6 +20,9 @@ import javax.inject.Singleton
 const val SAVED_PAGES_MAX_BYTES = 20L * 1024 * 1024
 
 /** …and nothing older than 7 days is read (a saved household copy is shown for at most 7 days, contract §5). */
+private const val CHAT_MAX_BYTES = 5L * 1024 * 1024
+private const val CHAT_MAX_THREADS = 20
+
 private const val MAX_AGE_MS = 7L * 24 * 60 * 60 * 1000
 
 /**
@@ -30,12 +34,14 @@ private const val SCHEMA = 3
 /**
  * The screens' store on the phone (Instant Screens contract §6 "Saved copy", §5 "At rest on Android"): one file per
  * entry under `cacheDir/screen-store/<account>/`, never in backups. Each file holds an envelope line (schema, app build,
- * when the copy was read, its ETag, topics, kind and staleness) and the reply's JSON on the next line, written atomically (temporary file, sync,
- * rename) as [app.pantopus.android.data.payments.PersistentPendingRefundStore] does. File and folder names are hashes:
+ * when the copy was read, its ETag, topics, kind and staleness) and the reply's JSON on the next line, written atomically
+ * (temporary file, sync, rename) as [app.pantopus.android.data.payments.PersistentPendingRefundStore] does. Names are hashes:
  * no account id, home id or token appears in them.
  *
  * At most 20 MB, the least recently used first; nothing older than 7 days, from another app build or in another format
- * is read, and a file that doesn't decode is deleted. Sign-out, an account switch and Clear cache delete everything.
+ * is read, and a file that doesn't decode is deleted. Recent conversations and inbox previews use Keystore-encrypted `.enc` files within
+ * a shared 5 MB / 20-copy budget; schema-compatible chat copies survive app updates. Their authenticated scope
+ * includes the account and key hashes. Sign-out, an account switch and Clear cache delete everything.
  */
 @Singleton
 class SavedCopies
@@ -43,17 +49,20 @@ class SavedCopies
         private val root: File,
         private val moshi: Moshi,
         private val build: String,
+        private val chatCipher: ChatFileCipher? = null,
     ) {
         @Inject
         constructor(
             @ApplicationContext context: Context,
             moshi: Moshi,
+            chatCipher: ChatFileCipher,
         ) : this(
             File(context.cacheDir, "screen-store"),
             moshi,
             // Version name and code stay the same between builds; the commit doesn't. An older build's copy may lack
             // fields this build reads, and revalidating it (a 304) would keep it.
             "${BuildConfig.VERSION_NAME}+${BuildConfig.VERSION_CODE}+${BuildConfig.GIT_COMMIT}",
+            chatCipher,
         )
 
         private val envelopes = moshi.adapter(Envelope::class.java)
@@ -69,17 +78,20 @@ class SavedCopies
                         runCatching {
                             file.bufferedReader().use { reader -> reader.readLine()?.let { envelopes.fromJson(it) } }
                         }.getOrNull()
-                    if (!usable(envelope, now)) file.delete()
+                    if (isChat(envelope?.kind) || !usable(envelope, now)) file.delete()
                 }
             }
         }
+
+        private fun isChat(kind: StoreKind?): Boolean = kind == StoreKind.CONVERSATION || kind == StoreKind.MESSAGES_LIST
 
         private fun usable(
             envelope: Envelope?,
             now: Long,
         ): Boolean {
             if (envelope == null) return false
-            return envelope.schema == SCHEMA && envelope.build == build && now - envelope.fetchedAt in 0 until MAX_AGE_MS
+            val compatible = isChat(envelope.kind) || envelope.build == build
+            return envelope.schema == SCHEMA && compatible && now - envelope.fetchedAt in 0 until MAX_AGE_MS
         }
 
         /** One saved entry as read back: the reply, when it was read (wall clock) and its ETag. */
@@ -98,6 +110,8 @@ class SavedCopies
             val kinds: Set<StoreKind> = emptySet(),
             val edited: Boolean = false,
             val upTo: Long = Long.MAX_VALUE,
+            val retainChatList: Boolean = false,
+            val topics: Set<String> = emptySet(),
         )
 
         @JsonClass(generateAdapter = true)
@@ -131,11 +145,13 @@ class SavedCopies
             keyId: String,
             type: Type,
             now: Long = System.currentTimeMillis(),
+            kind: StoreKind? = null,
         ): Copy<T>? {
-            val file = file(account, keyId)
+            if (isChat(kind)) file(account, keyId).delete()
+            val file = file(account, keyId, isChat(kind))
             if (!file.isFile) return null
             return try {
-                val text = file.readText(Charsets.UTF_8)
+                val text = read(file)
                 val split = text.indexOf('\n')
                 val envelope = if (split > 0) envelopes.fromJson(text.substring(0, split)) else null
                 val data = if (usable(envelope, now)) moshi.adapter<T>(type).fromJson(text.substring(split + 1)) else null
@@ -167,7 +183,8 @@ class SavedCopies
             stale: Boolean,
         ) {
             val type = key.type ?: return
-            val target = file(account, key.id)
+            if (isChat(key.kind)) file(account, key.id).delete()
+            val target = file(account, key.id, isChat(key.kind))
             try {
                 val envelope = Envelope(SCHEMA, build, fetchedAt, etag, key.topics, key.kind, stale)
                 write(target, envelope, moshi.adapter<T>(type).toJson(data))
@@ -189,9 +206,12 @@ class SavedCopies
             mark: Mark,
             guard: (() -> Unit) -> Unit = { it() },
         ) {
-            if (mark.topic == null && mark.kinds.isEmpty()) return
+            if (mark.topic == null && mark.topics.isEmpty() && mark.kinds.isEmpty()) return
             val folder = file(account, "").parentFile ?: return
-            folder.listFiles()?.filter { it.extension == "json" }?.forEach { target -> guard { invalidateFile(target, mark) } }
+            folder.listFiles()?.filter { it.extension in setOf("json", "enc") }?.forEach {
+                    target ->
+                guard { invalidateFile(target, mark) }
+            }
             guard { trim() }
         }
 
@@ -202,12 +222,14 @@ class SavedCopies
             if (!target.isFile) return
             val edited = mark.edited
             try {
-                target.bufferedReader().use { reader ->
+                read(target).reader().buffered().use { reader ->
                     val envelope = reader.readLine()?.let { envelopes.fromJson(it) } ?: return@use
                     // A copy saved after the mark came from a later read and keeps its own state.
                     if (envelope.fetchedAt > mark.upTo) return@use
-                    if (!envelope.legacy && !envelope.matches(mark.topic, mark.kinds)) return@use
-                    if (edited && !envelope.legacy) {
+                    val matches = envelope.matches(mark.topic, mark.kinds) || mark.topics.any { envelope.matches(it, emptySet()) }
+                    if (!envelope.legacy && !matches) return@use
+                    val retainChatList = mark.retainChatList && envelope.kind == StoreKind.MESSAGES_LIST
+                    if (edited && !envelope.legacy && !retainChatList) {
                         target.delete()
                     } else if (!envelope.stale || (edited && envelope.etag != null)) {
                         // Older schema-2 copies lack topics. Keep their offline content, but require a check.
@@ -232,11 +254,12 @@ class SavedCopies
         ) {
             val folder = target.parentFile ?: return
             if (!folder.isDirectory && !folder.mkdirs()) return
-            val body = envelopes.toJson(envelope) + "\n" + data
+            val body = (envelopes.toJson(envelope) + "\n" + data).toByteArray(Charsets.UTF_8)
+            val bytes = if (target.extension == "enc") requireNotNull(chatCipher).encrypt(body, scope(target)) else body
             val temporary = File.createTempFile("entry-", ".tmp", folder)
             try {
                 FileOutputStream(temporary).use { output ->
-                    output.write(body.toByteArray(Charsets.UTF_8))
+                    output.write(bytes)
                     output.fd.sync()
                 }
                 Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
@@ -251,6 +274,7 @@ class SavedCopies
             keyId: String,
         ) {
             file(account, keyId).delete()
+            file(account, keyId, encrypted = true).delete()
         }
 
         /** Sign-out, a revoked session, an account switch and Clear cache: every account's saved pages go. */
@@ -263,7 +287,18 @@ class SavedCopies
 
         /** Least recently used first, until the folder fits [SAVED_PAGES_MAX_BYTES]. */
         private fun trim() {
-            val files = root.walkBottomUp().filter { it.isFile && it.name.endsWith(".json") }.toMutableList()
+            val files = root.walkBottomUp().filter { it.isFile && it.extension in setOf("json", "enc") }.toMutableList()
+            val chats = files.filter { it.extension == "enc" }.sortedBy { it.lastModified() }
+            var chatBytes = chats.sumOf { it.length() }
+            var chatCount = chats.size
+            chats.forEach { file ->
+                if (chatBytes > CHAT_MAX_BYTES || chatCount > CHAT_MAX_THREADS) {
+                    chatBytes -= file.length()
+                    chatCount--
+                    file.delete()
+                    files.remove(file)
+                }
+            }
             var total = files.sumOf { it.length() }
             if (total <= SAVED_PAGES_MAX_BYTES) return
             files.sortBy { it.lastModified() }
@@ -277,7 +312,19 @@ class SavedCopies
         private fun file(
             account: String,
             keyId: String,
-        ): File = File(File(root, hash("${BuildConfig.PANTOPUS_API_BASE_URL}|$account")), "${hash(keyId)}.json")
+            encrypted: Boolean = false,
+        ): File {
+            val extension = if (encrypted) "enc" else "json"
+            return File(File(root, hash("${BuildConfig.PANTOPUS_API_BASE_URL}|$account")), "${hash(keyId)}.$extension")
+        }
+
+        private fun scope(file: File): String = file.relativeTo(root).path
+
+        private fun read(file: File): String {
+            val bytes = file.readBytes()
+            val plain = if (file.extension == "enc") requireNotNull(chatCipher).decrypt(bytes, scope(file)) else bytes
+            return plain.toString(Charsets.UTF_8)
+        }
 
         private fun hash(value: String): String =
             MessageDigest.getInstance("SHA-256").digest(value.toByteArray()).joinToString("") { "%02x".format(it) }.take(HASH_CHARS)

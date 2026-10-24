@@ -159,6 +159,7 @@ class SocketManager
             event: String,
             payload: JSONObject,
             timeoutMs: Long = 5_000,
+            cancelEvent: String? = null,
         ): JSONObject? {
             val s = socket ?: return null
             return withTimeoutOrNull(timeoutMs) {
@@ -171,6 +172,8 @@ class SocketManager
                             if (continuation.isActive) continuation.resume(response)
                         },
                     )
+                    // Register after emit so cancellation cannot send leave before the matching join.
+                    continuation.invokeOnCancellation { cancelEvent?.let { s.emit(it, payload) } }
                 }
             }
         }
