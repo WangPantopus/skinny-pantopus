@@ -3802,7 +3802,10 @@ class ChatConversationViewModel
             if (correctedRooms.isNotEmpty()) retireReceiptCopies(correctedRooms)
         }
 
-        /** Missing eligibility never invents a receipt; explicit false also repairs legacy cached Read stamps. */
+        /**
+         * Missing eligibility never invents a receipt; explicit false also repairs Read stamps this screen showed. A
+         * peer's read in a shared task room (never projected as Read) leaves the encrypted copies alone.
+         */
         private fun acceptReceiptEligibility(
             json: JSONObject,
             roomId: String,
@@ -3815,10 +3818,12 @@ class ChatConversationViewModel
                 if (roomId in ineligibleReceiptRooms) catchUpMessages()
                 return roomId !in ineligibleReceiptRooms
             }
-            val first = ineligibleReceiptRooms.add(roomId)
+            ineligibleReceiptRooms.add(roomId)
             val changed = messages.any { it.roomId == roomId && it.userId == messageIdentityId && it.readAt != null }
-            messages.replaceAll { if (it.roomId == roomId && it.userId == messageIdentityId) it.copy(readAt = null) else it }
-            if (first || changed) retireReceiptCopies(setOf(roomId))
+            if (changed) {
+                messages.replaceAll { if (it.roomId == roomId && it.userId == messageIdentityId) it.copy(readAt = null) else it }
+                retireReceiptCopies(setOf(roomId))
+            }
             return false
         }
 
