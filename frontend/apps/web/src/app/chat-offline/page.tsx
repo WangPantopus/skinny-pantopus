@@ -6,6 +6,7 @@ import AppShell from '@/components/AppShell';
 import ChatRoomView from '@/components/chat/ChatRoomView';
 import ConversationView from '@/components/chat/ConversationView';
 import ChatListPage from '@/app/(app)/app/chat/page';
+import { safeRedirectPath } from '@/lib/auth-utils';
 import { getAuthToken, onTokenChange } from '@pantopus/api';
 
 const uuid = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
@@ -32,10 +33,11 @@ function OfflineChatContent() {
         const value = url.searchParams.get(name);
         return value && new RegExp(`^${uuid}$`, 'i').test(value) ? value : undefined;
       };
-      const returnTo = url.searchParams.get('returnTo');
+      // Same rule as the online chat pages: Back only goes to our own pages.
+      const returnTo = safeRedirectPath(url.searchParams.get('returnTo'), '/app/chat');
       setRoute(/^\/app\/chat\/?$/.test(url.pathname) ? { inbox: true, returnTo: '/app/chat' } : person || room ? {
         otherUserId: person?.[1], roomId: room?.[1], topicId: identifier('topic'), messageId: identifier('message'),
-        asBusinessUserId: identifier('asBusinessUserId'), returnTo: returnTo?.startsWith('/app/') ? returnTo : '/app/chat',
+        asBusinessUserId: identifier('asBusinessUserId'), returnTo,
       } : null);
     };
     update();
