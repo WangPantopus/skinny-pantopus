@@ -18,14 +18,11 @@ import type { UnifiedConversationItem, ConversationTopic, Relationship, Relation
 import { launchFeatures } from '@/lib/featureFlags';
 import { chosenUsername, usernameHandle } from '@pantopus/utils';
 import { fetchMe } from '@/lib/me';
-import { useConversationPages, conversationKey, preloadSavedInbox } from '@/lib/conversations';
+import { useConversationPages, conversationKey } from '@/lib/conversations';
 import { useOnlineStatus } from '@/components/map/OfflineIndicator';
 import { navigateChatPath, useChatOfflineShell } from '@/hooks/useChatOfflineShell';
 
 type NewChatPerson = { id: string; name: string; handle: string; avatar?: string | null };
-
-// Start reading the saved inbox while this page's code loads.
-preloadSavedInbox();
 
 // A made-up username (user_…) is never shown as a name or a handle.
 function searchedPerson(user: User): NewChatPerson {
