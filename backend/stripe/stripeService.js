@@ -215,11 +215,15 @@ class StripeService {
    */
   async createConnectAccount(userId, userData = {}) {
     try {
-      const { data: existing } = await supabaseAdmin
+      const { data: existing, error: existingError } = await supabaseAdmin
         .from('StripeAccount')
         .select('stripe_account_id')
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
+
+      // A failed read is not "no account yet": creating one then would leave a
+      // second Stripe account that nothing links to.
+      if (existingError) throw new Error('Stripe account lookup failed');
 
       if (existing) {
         return {
@@ -266,6 +270,17 @@ class StripeService {
 
       if (dbError) {
         logger.error('Error saving Stripe account', { error: dbError.message });
+        // A concurrent request linked its account first: answer as the check above would.
+        if (dbError.code === '23505') {
+          const { data: linked } = await supabaseAdmin
+            .from('StripeAccount')
+            .select('stripe_account_id')
+            .eq('user_id', userId)
+            .maybeSingle();
+          if (linked) return { success: false, error: 'Stripe account already exists', accountId: linked.stripe_account_id };
+        }
+        // Reporting success here left a payout account that nothing links to.
+        throw new Error('Failed to save Stripe account');
       }
 
       return {
@@ -383,11 +398,15 @@ class StripeService {
    */
   async getConnectAccount(userId) {
     try {
-      const { data: account } = await supabaseAdmin
+      const { data: account, error: accountError } = await supabaseAdmin
         .from('StripeAccount')
         .select('*')
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
+
+      // A failed read must not answer "no account": the payout screens would offer
+      // to set up a payout account that already exists.
+      if (accountError) throw new Error('Stripe account lookup failed');
 
       if (!account) {
         return { success: false, error: 'No Stripe account found' };

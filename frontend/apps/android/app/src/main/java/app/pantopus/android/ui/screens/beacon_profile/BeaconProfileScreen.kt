@@ -20,13 +20,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.routing.ExternalLinks
 import app.pantopus.android.ui.components.BeaconIdentity
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.Shimmer
@@ -69,7 +70,7 @@ fun BeaconProfileScreen(
     val toast by viewModel.toastMessage.collectAsStateWithLifecycle()
     val showHandshake by viewModel.showFollowHandshake.collectAsStateWithLifecycle()
     val handshakeTier by viewModel.handshakePreselectedTierRank.collectAsStateWithLifecycle()
-    val uriHandler = LocalUriHandler.current
+    val context = LocalContext.current
     // Refresh follow status when returning from the handshake route, mirroring
     // iOS's refresh-on-sheet-dismiss so a successful follow reflects on the CTA.
     var awaitingHandshakeReturn by rememberSaveable { mutableStateOf(false) }
@@ -121,9 +122,8 @@ fun BeaconProfileScreen(
                     onFollow = { viewModel.follow() },
                     onUnfollow = { viewModel.unfollow() },
                     onUnlock = { tierRank -> viewModel.unlockBroadcast(tierRank) },
-                    // runCatching: openUri throws if no activity can handle the
-                    // URI (mirrors iOS UIApplication.open's silent no-op).
-                    onOpenLink = { runCatching { uriHandler.openUri(it) } },
+                    // Links the Beacon's owner set open only as web pages.
+                    onOpenLink = { ExternalLinks.open(context, it) },
                 )
         }
         toast?.let { message ->

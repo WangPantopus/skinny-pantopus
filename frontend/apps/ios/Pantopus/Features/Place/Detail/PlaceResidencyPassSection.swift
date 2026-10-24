@@ -73,7 +73,7 @@ final class PlaceResidencyPassViewModel {
                 )
             )
             pendingIssue = nil
-            UIPasteboard.general.string = response.claim.verifyUrl
+            SensitivePasteboard.copy(response.claim.verifyUrl)
             toast = ("Claim issued — verification link copied.", false)
             await load()
         } catch let error as APIError {
@@ -86,7 +86,7 @@ final class PlaceResidencyPassViewModel {
     func copyLink(_ claim: ResidencyClaim) {
         guard claim.status == .active else { return }
         if let expiry = PlacePresentation.parseISO(claim.expiresAt), expiry <= Date() { return }
-        UIPasteboard.general.string = claim.verifyUrl
+        SensitivePasteboard.copy(claim.verifyUrl)
         toast = ("Verification link copied.", false)
     }
 

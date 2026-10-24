@@ -959,19 +959,19 @@ class DeepLinkRouterTest {
 
     @Test
     fun revoked_session_replays_exact_post_for_same_account_despite_late_completion() {
-        DeepLinkRouter.handle("https://pantopus.app/post/a%2Fb")
+        DeepLinkRouter.handle("https://pantopus.app/post/a%20b")
         DeepLinkRouter.consume()
         PendingDeepLinkStore.retainForReauthentication(userId)
         // The old screen can finish loading or dispose while auth teardown suspends.
-        DeepLinkRouter.completeArrival(DeepLinkRouter.Destination.Post("a%2Fb"))
+        DeepLinkRouter.completeArrival(DeepLinkRouter.Destination.Post("a%20b"))
         signedIn = false
         DeepLinkRouter.clearPending()
-        DeepLinkRouter.completeArrival(DeepLinkRouter.Destination.Post("a%2Fb"))
+        DeepLinkRouter.completeArrival(DeepLinkRouter.Destination.Post("a%20b"))
 
         signedIn = true
         DeepLinkRouter.handle(requireNotNull(PendingDeepLinkStore.take(userId)))
-        assertEquals(DeepLinkRouter.Destination.Post("a%2Fb"), DeepLinkRouter.consume())
-        DeepLinkRouter.completeArrival(DeepLinkRouter.Destination.Post("a%2Fb"))
+        assertEquals(DeepLinkRouter.Destination.Post("a%20b"), DeepLinkRouter.consume())
+        DeepLinkRouter.completeArrival(DeepLinkRouter.Destination.Post("a%20b"))
         assertNull(PendingDeepLinkStore.take(userId))
     }
 
@@ -1087,16 +1087,16 @@ class DeepLinkRouterTest {
 
     /**
      * The stashed form stays percent-encoded — decoding it would turn an
-     * encoded `/` inside an identifier into a real separator and replay a
-     * different link. Mirrors iOS `testSignedOutHTTPSContentKeepsPercentEncoding`.
+     * encoded space inside an identifier into a raw one, which no longer
+     * parses as a link. Mirrors iOS `testSignedOutHTTPSContentKeepsPercentEncoding`.
      */
     @Test
     fun signed_out_https_content_link_keeps_percent_encoding() {
         signedIn = false
 
-        DeepLinkRouter.handle("https://pantopus.app/post/a%2Fb")
+        DeepLinkRouter.handle("https://pantopus.app/post/a%20b")
 
-        assertEquals("pantopus://post/a%2Fb", PendingDeepLinkStore.peek())
+        assertEquals("pantopus://post/a%20b", PendingDeepLinkStore.peek())
     }
 
     /**

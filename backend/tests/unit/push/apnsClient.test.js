@@ -57,19 +57,22 @@ describe('push/apnsClient.sendMany (mocked HTTP/2)', () => {
     jest.spyOn(http2, 'connect').mockReturnValue(session);
   }
 
+  // Device tokens are hex (APNs puts them in the request path).
+  const [ok, dead, auth, throttle, device] = ['a', 'b', 'c', 'd', 'e'].map((digit) => digit.repeat(64));
+
   it('distinguishes acceptance, invalid tokens, auth failure, and throttling', async () => {
     mockResponses([
       { status: 200 }, { status: 410, reason: 'Unregistered' },
       { status: 403, reason: 'ExpiredProviderToken' }, { status: 429, reason: 'TooManyRequests' },
     ]);
-    expect(await apnsClient.sendMany(['ok', 'dead', 'auth', 'throttle'], { title: 'Test' })).toEqual({
-      acceptedTokens: ['ok'], invalidTokens: ['dead'],
+    expect(await apnsClient.sendMany([ok, dead, auth, throttle], { title: 'Test' })).toEqual({
+      acceptedTokens: [ok], invalidTokens: [dead],
     });
   });
 
   it.each(['timeout', 'error'])('does not report acceptance after a transport %s', async (failure) => {
     mockResponses([failure]);
-    expect(await apnsClient.sendMany(['test-device'], {})).toEqual({
+    expect(await apnsClient.sendMany([device], {})).toEqual({
       acceptedTokens: [], invalidTokens: [],
     });
   });
@@ -77,7 +80,7 @@ describe('push/apnsClient.sendMany (mocked HTTP/2)', () => {
   it('does not connect when configuration is missing', async () => {
     delete process.env.APNS_KEY_ID;
     const connect = jest.spyOn(http2, 'connect');
-    expect(await apnsClient.sendMany(['test-device'], {})).toEqual({
+    expect(await apnsClient.sendMany([device], {})).toEqual({
       acceptedTokens: [], invalidTokens: [],
     });
     expect(connect).not.toHaveBeenCalled();

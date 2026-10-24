@@ -303,9 +303,10 @@ describe('POST /api/auth/devices/register', () => {
 
   test('bound key: metadata + push token linked; iOS gets no grant', async () => {
     seedBoundSession();
+    const apnsToken = 'ab'.repeat(32); // an APNs device token is hex
     const res = await authed('post', '/api/auth/devices/register')
       .set('DPoP', await proof(KEY, '/api/auth/devices/register'))
-      .send({ device: descriptor({ appVersion: '1.5.0 (400)', name: 'Ying iPhone 16' }), pushToken: 'apns-token-1', pushProvider: 'apns' });
+      .send({ device: descriptor({ appVersion: '1.5.0 (400)', name: 'Ying iPhone 16' }), pushToken: apnsToken, pushProvider: 'apns' });
     expect(res.status).toBe(200);
     expect(res.body.device).toMatchObject({ id: DEV_ROW, deviceId: DEVICE_ID, trustLevel: 'trusted' });
     expect(res.body.device.trustedAt).toBeTruthy();
@@ -313,7 +314,7 @@ describe('POST /api/auth/devices/register', () => {
     const row = findRow('AuthDevice', DEV_ROW);
     expect(row.app_version).toBe('1.5.0 (400)');
     expect(row.name).toBe('Ying iPhone 16');
-    expect(pushService.saveToken).toHaveBeenCalledWith(UID, 'apns-token-1', expect.objectContaining({ platform: 'ios', provider: 'apns', deviceId: DEVICE_ID }));
+    expect(pushService.saveToken).toHaveBeenCalledWith(UID, apnsToken, expect.objectContaining({ platform: 'ios', provider: 'apns', deviceId: DEVICE_ID }));
   });
 
   test('android trusted strongbox device → resumeGrant returned (43-char b64url), hash stored', async () => {

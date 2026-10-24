@@ -1652,6 +1652,8 @@ router.get('/my-gigs', verifyToken, async (req, res) => {
     });
   } catch (err) {
     logger.error('My gigs fetch error', { error: err.message, userId: req.user.id });
+    // The businesses' permissions couldn't be read: listing their tasks could show one a deny hides.
+    if (err.code === 'AUTHORIZATION_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
     res.status(500).json({ error: 'Failed to fetch your gigs' });
   }
 });
@@ -2024,6 +2026,7 @@ router.get('/received-offers', verifyToken, async (req, res) => {
     return res.json({ offers: merged, total: merged.length });
   } catch (err) {
     logger.error('Received offers error', { error: err?.message });
+    if (err?.code === 'AUTHORIZATION_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
     return res.status(500).json({ error: 'Failed to fetch received offers' });
   }
 });

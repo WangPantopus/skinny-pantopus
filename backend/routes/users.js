@@ -120,6 +120,12 @@ function normalizeLocalProfileHandle(value) {
   return String(value || '').trim().replace(/^@+/, '').toLowerCase();
 }
 
+// PostgreSQL refused the text as a uuid: it isn't an id, so there is no such profile.
+function isNotAnIdError(error) {
+  return error?.code === '22P02';
+}
+
+// Both throw on a failed read.
 async function getLocalProfileByLegacyRouteHandle(value) {
   const raw = String(value || '').trim().replace(/^@+/, '');
   const normalized = normalizeLocalProfileHandle(raw);
@@ -131,9 +137,7 @@ async function getLocalProfileByLegacyRouteHandle(value) {
     .eq('handle_normalized', normalized)
     .maybeSingle();
 
-  if (normalizedResult.error) {
-    logger.warn('Legacy profile local handle lookup error', { error: normalizedResult.error.message });
-  }
+  if (normalizedResult.error) throw normalizedResult.error;
   if (normalizedResult.data) return normalizedResult.data;
 
   const exactResult = await supabaseAdmin
@@ -142,9 +146,7 @@ async function getLocalProfileByLegacyRouteHandle(value) {
     .eq('handle', raw)
     .maybeSingle();
 
-  if (exactResult.error) {
-    logger.warn('Legacy profile local handle exact lookup error', { error: exactResult.error.message });
-  }
+  if (exactResult.error) throw exactResult.error;
   return exactResult.data || null;
 }
 
@@ -158,9 +160,7 @@ async function getLocalProfileByLegacyRouteId(value) {
     .eq('id', id)
     .maybeSingle();
 
-  if (error) {
-    logger.warn('Legacy profile local id lookup error', { error: error.message });
-  }
+  if (error && !isNotAnIdError(error)) throw error;
   return data || null;
 }
 
@@ -325,6 +325,13 @@ function serializeCompatibilitySearchUser(profile, user = {}) {
     href: profile.handle ? `/${profile.handle}` : null,
   };
 }
+
+// The profile routes (GET /id/:id, /username/:username and /:username) refuse when a profile, block or privacy read
+// fails: 503, so the person can try again, never a profile with a check skipped and never "not found".
+const PROFILE_UNAVAILABLE_REPLY = {
+  error: 'This profile can\'t be loaded right now. Please try again.',
+  code: 'PROFILE_UNAVAILABLE',
+};
 
 async function canAccessPublicUserProfile(viewerId, targetUserId, visibility = 'public') {
   if (viewerId && viewerId === targetUserId) return true;
@@ -1861,7 +1868,15 @@ router.post(
         // generateLink hands back the existing auth user when the address already has an unconfirmed one: an
         // identical sign-up created it moments ago, and that sign-up's User row owns it, so never delete it. This
         // request's generateLink replaced that sign-up's verification link, so this request sends the email.
-        const { data: owner } = await supabaseAdmin.from('User').select('id').eq('id', userId).maybeSingle();
+        const { data: owner, error: ownerError } = await supabaseAdmin.from('User').select('id').eq('id', userId).maybeSingle();
+        if (ownerError) {
+          // Unknown owner: keep the auth user. If no User row has it, signing up again uses it.
+          logger.warn('Registration rollback skipped: owner check failed', { userId, errorCode: ownerError.code || null });
+          return res.status(503).json({
+            code: 'REGISTRATION_UNAVAILABLE',
+            error: 'Sign-up is temporarily unavailable. Please try again.',
+          });
+        }
         if (owner) {
           const repeat = await findRepeatSignup(email, password);
           if (!repeat) return res.status(400).json({ error: 'Email already registered' });
@@ -3352,9 +3367,8 @@ router.get('/search', verifyToken, async (req, res) => {
         .select('id, account_type, profile_visibility')
         .in('id', [...new Set((data || []).map((profile) => profile.user_id).filter(Boolean))])
       : { data: [], error: null };
-    if (accountRows.error) {
-      logger.warn('User search account lookup error', { error: accountRows.error.message });
-    }
+    // The account type decides who is left out (curators, and businesses or people by `type`).
+    if (accountRows.error) throw accountRows.error;
     const accountById = new Map((accountRows.data || []).map((user) => [user.id, user]));
 
     const candidateByProfileId = new Map();
@@ -3429,8 +3443,10 @@ router.get('/search', verifyToken, async (req, res) => {
 
     res.json({ users });
   } catch (err) {
-    logger.error('User search error', { error: err.message });
-    res.status(500).json({ error: 'Search failed' });
+    logger.error('User search error', { error: err.message, errorCode: err.code || null });
+    // Every step here is a read. One that fails, a block or privacy check included, refuses the search rather than
+    // skip the check.
+    res.status(503).json({ error: 'Search isn\'t available right now. Please try again.', code: 'SEARCH_UNAVAILABLE' });
   }
 });
 
@@ -3604,6 +3620,7 @@ router.get('/id/:id', optionalAuth, async (req, res) => {
       .select(PUBLIC_USER_PROFILE_SELECT)
       .eq('id', id)
       .maybeSingle();
+    if (userResult.error && !isNotAnIdError(userResult.error)) throw userResult.error;
 
     let userData = userResult.data || null;
     let localProfileRouteMatch = null;
@@ -3616,6 +3633,7 @@ router.get('/id/:id', optionalAuth, async (req, res) => {
           .select(PUBLIC_USER_PROFILE_SELECT)
           .eq('id', localProfileRouteMatch.user_id)
           .maybeSingle();
+        if (localUserResult.error) throw localUserResult.error;
         userData = localUserResult.data || null;
       }
     }
@@ -3736,8 +3754,8 @@ router.get('/id/:id', optionalAuth, async (req, res) => {
       skills: (profileSkills || []).map(s => s.skill_name),
     });
   } catch (err) {
-    logger.error('Public profile fetch by ID error', { error: err.message, id: req.params.id });
-    res.status(500).json({ error: 'Failed to fetch user profile' });
+    logger.error('Public profile fetch by ID error', { error: err.message, errorCode: err.code || null, id: req.params.id });
+    res.status(503).json(PROFILE_UNAVAILABLE_REPLY);
   }
 });
 
@@ -3995,9 +4013,10 @@ router.get('/:username', optionalAuth, async (req, res) => {
       .from('User')
       .select('id, username, name, first_name, middle_name, last_name, bio, city, state, profile_picture_url, created_at, profile_visibility, account_type')
       .eq('username', username)
-      .single();
+      .maybeSingle();
+    if (error) throw error;
 
-    if (error || !userData || await isUnpublishedBusiness(userData.id)) {
+    if (!userData || await isUnpublishedBusiness(userData.id)) {
       return res.status(404).json({ error: 'User not found' });
     }
 
@@ -4026,8 +4045,8 @@ router.get('/:username', optionalAuth, async (req, res) => {
       },
     });
   } catch (err) {
-    logger.error('Public profile fetch error', { error: err.message, username: req.params.username });
-    res.status(500).json({ error: 'Failed to fetch user profile' });
+    logger.error('Public profile fetch error', { error: err.message, errorCode: err.code || null, username: req.params.username });
+    res.status(503).json(PROFILE_UNAVAILABLE_REPLY);
   }
 });
 
@@ -4516,6 +4535,7 @@ router.get('/username/:username', optionalAuth, async (req, res) => {
       .select(PUBLIC_USER_PROFILE_SELECT)
       .eq('username', username)
       .maybeSingle();
+    if (userResult.error) throw userResult.error;
 
     let userData = userResult.data || null;
     let localProfileRouteMatch = null;
@@ -4528,6 +4548,7 @@ router.get('/username/:username', optionalAuth, async (req, res) => {
           .select(PUBLIC_USER_PROFILE_SELECT)
           .eq('id', localProfileRouteMatch.user_id)
           .maybeSingle();
+        if (localUserResult.error) throw localUserResult.error;
         userData = localUserResult.data || null;
       }
     }
@@ -4650,8 +4671,8 @@ router.get('/username/:username', optionalAuth, async (req, res) => {
       skills: (profileSkills2 || []).map(s => s.skill_name),
     });
   } catch (err) {
-    logger.error('Public profile fetch error', { error: err.message });
-    res.status(500).json({ error: 'Failed to fetch profile' });
+    logger.error('Public profile fetch error', { error: err.message, errorCode: err.code || null });
+    res.status(503).json(PROFILE_UNAVAILABLE_REPLY);
   }
 });
 
@@ -4892,7 +4913,9 @@ const OAUTH_PROVIDER_LABELS = { google: 'Google', apple: 'Apple' };
 const OAUTH_PROBE_OK_TTL_MS = 5 * 60 * 1000;
 const OAUTH_PROBE_FAIL_TTL_MS = 30 * 1000;
 const OAUTH_PROBE_TIMEOUT_MS = 5000;
+const OAUTH_REDIRECT_MAX_LENGTH = 2048;
 const oauthProviderProbes = new Map();
+const oauthProbesInFlight = new Map();
 
 /**
  * A provider the Auth server doesn't have set up (disabled, or enabled
@@ -4901,16 +4924,32 @@ const oauthProviderProbes = new Map();
  * the provider. Ask the Auth server first — without following the redirect,
  * so no provider page loads — and only hand out a URL that leads to the
  * provider. Results are cached briefly; nothing is written by the probe.
+ *
+ * The answer is shared by everyone, so it asks about the provider only: the
+ * probe returns to the server's own web callback, never the caller's
+ * redirectTo, which could otherwise make the Auth server refuse and switch
+ * the provider off for all sign-ins. Starts that arrive together share one
+ * probe.
  */
 async function isOAuthProviderAvailable(provider, authorizeUrl) {
   const cached = oauthProviderProbes.get(provider);
-  const now = Date.now();
-  if (cached && now - cached.at < (cached.ok ? OAUTH_PROBE_OK_TTL_MS : OAUTH_PROBE_FAIL_TTL_MS)) {
+  if (cached && Date.now() - cached.at < (cached.ok ? OAUTH_PROBE_OK_TTL_MS : OAUTH_PROBE_FAIL_TTL_MS)) {
     return cached.ok;
   }
+  let probe = oauthProbesInFlight.get(provider);
+  if (!probe) {
+    probe = probeOAuthProvider(provider, authorizeUrl).finally(() => oauthProbesInFlight.delete(provider));
+    oauthProbesInFlight.set(provider, probe);
+  }
+  return probe;
+}
+
+async function probeOAuthProvider(provider, authorizeUrl) {
+  const probeUrl = new URL(authorizeUrl);
+  probeUrl.searchParams.set('redirect_to', `${getAuthRedirectBaseUrl()}/auth/callback`);
   let response;
   try {
-    response = await fetch(authorizeUrl, {
+    response = await fetch(probeUrl, {
       method: 'GET',
       redirect: 'manual',
       signal: AbortSignal.timeout(OAUTH_PROBE_TIMEOUT_MS),
@@ -4921,14 +4960,56 @@ async function isOAuthProviderAvailable(provider, authorizeUrl) {
     logger.warn('OAuth provider probe failed', { provider, error: err.message });
     return false;
   }
+  if (response.status >= 500) {
+    // A struggling Auth server isn't a provider setting: not cached either.
+    logger.warn('OAuth provider probe failed', { provider, status: response.status });
+    return false;
+  }
   const location = response.headers.get('location') || '';
   const ok = response.status >= 300 && response.status < 400
     && /^https:\/\//i.test(location) && !/[?#&]error=/.test(location);
   if (!ok) {
     logger.warn('OAuth provider unavailable on the Auth server', { provider, status: response.status });
   }
-  oauthProviderProbes.set(provider, { ok, at: now });
+  oauthProviderProbes.set(provider, { ok, at: Date.now() });
   return ok;
+}
+
+// Expo Go builds sign in through exp:// and exps:// links, which any app or host can answer. Only a local server
+// started with OAUTH_ALLOW_EXPO_REDIRECTS=true accepts them.
+function expoOAuthRedirectsAllowed() {
+  return process.env.OAUTH_ALLOW_EXPO_REDIRECTS === 'true'
+    && ['development', 'test'].includes(process.env.NODE_ENV)
+    && !['staging', 'production'].includes(process.env.APP_ENV);
+}
+
+/**
+ * Where a sign-in may return. auth-js starts the implicit flow, so the Auth
+ * server puts the new session's tokens in this address: only Pantopus's own
+ * callbacks qualify. Returns `{ redirectTo }` for the apps'
+ * pantopus://auth/callback (their per-attempt app_nonce rides in its query)
+ * or the web's /auth/callback on this site; `{ fallback: true }` for any other
+ * web address, which gets the site's callback as before; or null to refuse:
+ * other schemes and hosts, credentials, fragments and over-long values.
+ */
+function allowedOAuthRedirect(value, oauthRedirectBase) {
+  if (typeof value !== 'string' || value.length > OAUTH_REDIRECT_MAX_LENGTH) return null;
+  let requested;
+  try {
+    requested = new URL(value);
+  } catch {
+    return null;
+  }
+  if (requested.username || requested.password || requested.hash) return null;
+  if (['http:', 'https:'].includes(requested.protocol)) {
+    const isSiteCallback = requested.origin === new URL(oauthRedirectBase).origin
+      && requested.pathname === '/auth/callback';
+    return isSiteCallback ? { redirectTo: requested.href } : { fallback: true };
+  }
+  const isAppCallback = requested.protocol === 'pantopus:'
+    && requested.host === 'auth' && requested.pathname === '/callback';
+  const isExpo = ['exp:', 'exps:'].includes(requested.protocol) && expoOAuthRedirectsAllowed();
+  return isAppCallback || isExpo ? { redirectTo: requested.href } : null;
 }
 
 /**
@@ -4949,25 +5030,21 @@ router.get('/oauth/:provider', oauthLimiter, async (req, res) => {
   }
 
   try {
-    // Allow mobile clients to pass their own deep-link redirect URI.
-    // Validate against allowed origins to prevent open-redirect attacks.
+    // The apps pass their own callback; the web passes its /auth/callback.
+    // Only those are allowed (allowedOAuthRedirect).
     const oauthRedirectBase = getOAuthRedirectBaseUrl(req);
     const defaultRedirect = `${oauthRedirectBase}/auth/callback`;
     let redirectTo = defaultRedirect;
     if (req.query.redirectTo) {
-      try {
-        const requested = new URL(req.query.redirectTo);
-        const appBase = new URL(oauthRedirectBase);
-        // Allow same-origin redirects and common mobile deep-link schemes
-        const isSameOrigin = requested.origin === appBase.origin;
-        const isMobileScheme = ['pantopus:', 'exp:', 'exps:'].includes(requested.protocol);
-        if (isSameOrigin || isMobileScheme) {
-          redirectTo = req.query.redirectTo;
-        } else {
-          logger.warn('OAuth redirectTo rejected - not allowed origin', { requested: req.query.redirectTo });
-        }
-      } catch {
-        logger.warn('OAuth redirectTo rejected - invalid URL', { requested: req.query.redirectTo });
+      const allowed = allowedOAuthRedirect(req.query.redirectTo, oauthRedirectBase);
+      if (!allowed) {
+        logger.warn('OAuth redirectTo refused', { provider });
+        return res.status(400).json({ error: 'This sign-in link isn\'t allowed.', code: 'OAUTH_REDIRECT_INVALID' });
+      }
+      if (allowed.fallback) {
+        logger.warn('OAuth redirectTo rejected - not allowed origin; using the site callback', { provider });
+      } else {
+        redirectTo = allowed.redirectTo;
       }
     }
 
@@ -5463,6 +5540,38 @@ const ACCOUNT_DELETE_OTHER_ROWS = [
   { table: 'seeder_config', column: 'curator_user_id' },
 ];
 const pairNames = (list) => list.map(({ table, column }) => `${table}.${column}`);
+const ACCOUNT_DELETE_UNAVAILABLE_REPLY = {
+  error: 'Account deletion is temporarily unavailable. Please try again.',
+  code: 'ACCOUNT_DELETE_UNAVAILABLE',
+};
+const AUTH_USER_DELETE_RETRY_WINDOW_MS = 5 * 60 * 1000;
+const AUTH_USER_DELETE_RETRY_MAX_DELAY_MS = 30 * 1000;
+
+async function deleteAuthUser(userId) {
+  const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
+  if (error && error.status !== 404) throw error;
+}
+
+// After the User row is gone the person can't send the deletion again, so the server finishes deleting the auth user:
+// otherwise Google or Apple could still sign in and get a new, empty account. Retried for a few minutes, as
+// /logout does (retryLocalSignOut).
+function retryAuthUserDeletion(userId, until = Date.now() + AUTH_USER_DELETE_RETRY_WINDOW_MS, delayMs = 1000) {
+  const timer = setTimeout(async () => {
+    try {
+      await deleteAuthUser(userId);
+      logger.info('Supabase auth user deleted on retry', { userId });
+    } catch (err) {
+      const nextMs = Math.min(delayMs * 2, AUTH_USER_DELETE_RETRY_MAX_DELAY_MS);
+      if (Date.now() + nextMs > until) {
+        logger.error('Auth user deletion gave up (DB user already removed)', { userId, error: err.message });
+        return;
+      }
+      retryAuthUserDeletion(userId, until, nextMs);
+    }
+  }, delayMs * (0.8 + Math.random() * 0.4));
+  timer.unref();
+}
+
 const businessOwnershipRequired = {
   error: 'Before deleting your account, close your businesses or transfer ownership and leave each business.',
   code: 'BUSINESS_OWNERSHIP_REQUIRED',
@@ -5499,7 +5608,7 @@ router.delete('/account', verifyToken, requireStepUp('delete_account'), requireS
       }
     } catch (err) {
       logger.warn('Account deletion ownership check unavailable', { userId, code: err.code });
-      return res.status(503).json({ error: 'Account deletion is temporarily unavailable. Please try again.', code: 'ACCOUNT_DELETE_UNAVAILABLE' });
+      return res.status(503).json(ACCOUNT_DELETE_UNAVAILABLE_REPLY);
     }
 
     // Block deletion if user has gigs currently in progress
@@ -5651,7 +5760,7 @@ router.delete('/account', verifyToken, requireStepUp('delete_account'), requireS
       // Constraint, check and guard failures mean records that must stay;
       // anything else (a lock timeout, say) is worth a retry.
       if (!/^(23|P0)/.test(String(dryRun.sqlstate || ''))) {
-        return res.status(503).json({ error: 'Account deletion is temporarily unavailable. Please try again.', code: 'ACCOUNT_DELETE_UNAVAILABLE' });
+        return res.status(503).json(ACCOUNT_DELETE_UNAVAILABLE_REPLY);
       }
       return res.status(409).json({
         error: "Your account has records we need to keep, so it can't be deleted in the app yet. Contact support to close it.",
@@ -5696,7 +5805,7 @@ router.delete('/account', verifyToken, requireStepUp('delete_account'), requireS
           });
         }
         if (status === 503) {
-          return res.status(503).json({ error: 'Account deletion is temporarily unavailable. Please try again.', code: 'ACCOUNT_DELETE_UNAVAILABLE' });
+          return res.status(503).json(ACCOUNT_DELETE_UNAVAILABLE_REPLY);
         }
         throw err;
       }
@@ -5712,86 +5821,89 @@ router.delete('/account', verifyToken, requireStepUp('delete_account'), requireS
       if (cancelled > 0) logger.info('Account deletion: Support Train signups cancelled', { userId, cancelled });
     } catch (err) {
       logger.warn('Account deletion refused: Support Train signups could not be cancelled', { userId, error: err.message });
-      return res.status(503).json({ error: 'Account deletion is temporarily unavailable. Please try again.', code: 'ACCOUNT_DELETE_UNAVAILABLE' });
+      return res.status(503).json(ACCOUNT_DELETE_UNAVAILABLE_REPLY);
     }
+
+    // From here on every write is checked, and the first that fails stops the
+    // deletion with a retryable 503 before anything more is erased: going on
+    // would erase data and then fail at the User delete (step 4) on what the
+    // failed write left. Each write only clears what is still there, so a
+    // retry picks up where this one stopped and finishes the job.
+    const stopDeletion = (step, table, error) => {
+      logger.warn('Account deletion stopped: a write failed', { userId, step, table, errorCode: error?.code || null });
+      return res.status(503).json(ACCOUNT_DELETE_UNAVAILABLE_REPLY);
+    };
 
     // ── 2. Nullify bare FK columns (NO ON DELETE clause) ─────────
     // These columns reference User(id) without an ON DELETE rule,
     // meaning PostgreSQL defaults to NO ACTION which blocks deletion.
-    // We SET NULL so the User row can be deleted afterwards.
-    const nullifyOps = ACCOUNT_DELETE_NULLIFY;
-
-    // Run all nullify operations in parallel
+    // We SET NULL so the User row can be deleted afterwards. They are
+    // attributions, not the person's data, so they run in parallel, and all
+    // must succeed before anything is deleted.
     const nullifyResults = await Promise.allSettled(
-      nullifyOps.map(({ table, column }) =>
+      ACCOUNT_DELETE_NULLIFY.map(({ table, column }) =>
         supabaseAdmin.from(table).update({ [column]: null }).eq(column, userId)
       )
     );
-
-    // Log any failures but continue — these are non-critical audit columns
-    nullifyResults.forEach((result, i) => {
-      if (result.status === 'rejected') {
-        logger.warn('Nullify failed (continuing)', {
-          table: nullifyOps[i].table,
-          column: nullifyOps[i].column,
-          error: result.reason?.message,
-        });
-      }
-    });
+    const nullifyFailed = nullifyResults.findIndex((result) => result.status === 'rejected' || result.value?.error);
+    if (nullifyFailed >= 0) {
+      const failed = nullifyResults[nullifyFailed];
+      return stopDeletion('nullify', ACCOUNT_DELETE_NULLIFY[nullifyFailed].table, failed.reason || failed.value.error);
+    }
 
     // ── 2b. Delete rows from tables with bare FK where column is NOT nullable ──
-    await Promise.allSettled(
-      ACCOUNT_DELETE_OWN_ROWS.map(({ table, column }) => supabaseAdmin.from(table).delete().eq(column, userId))
-    );
-
     // ── 2c. ChatMessage: user_id is NOT NULL; legacy FK used ON DELETE SET NULL ──
-    await supabaseAdmin.from('ChatMessage').delete().eq('user_id', userId);
+    // One at a time, so a failure erases nothing after it.
+    for (const { table, column } of [...ACCOUNT_DELETE_OWN_ROWS, { table: 'ChatMessage', column: 'user_id' }]) {
+      const { error } = await supabaseAdmin.from(table).delete().eq(column, userId);
+      if (error) return stopDeletion('own_rows', table, error);
+    }
 
     // ── 3. Delete rows from RESTRICT-constrained tables ──────────
     // These have ON DELETE RESTRICT and would block User deletion.
     // Order matters: Refund → Payment → Payout, WalletTransaction, Subscription
 
     // Delete refunds linked to user's payments first
-    const { data: userPayments } = await supabaseAdmin
+    const { data: userPayments, error: userPaymentsError } = await supabaseAdmin
       .from('Payment')
       .select('id')
       .or(`payer_id.eq.${userId},payee_id.eq.${userId}`);
+    if (userPaymentsError) return stopDeletion('restrict', 'Payment', userPaymentsError);
     const paymentIds = (userPayments || []).map(p => p.id);
 
-    if (paymentIds.length > 0) {
-      // Delete refunds that reference these payments
-      await supabaseAdmin.from('Refund').delete().in('payment_id', paymentIds);
+    const restrictDeletes = [
+      // Refunds that reference these payments, then the payments themselves
+      ...(paymentIds.length > 0 ? [{ table: 'Refund', run: () => supabaseAdmin.from('Refund').delete().in('payment_id', paymentIds) }] : []),
+      { table: 'Payment', run: () => supabaseAdmin.from('Payment').delete().or(`payer_id.eq.${userId},payee_id.eq.${userId}`) },
+      // Wallet transactions (RESTRICT on user_id AND wallet_id)
+      { table: 'WalletTransaction', run: () => supabaseAdmin.from('WalletTransaction').delete().eq('user_id', userId) },
+      // Payouts (RESTRICT on user_id)
+      { table: 'Payout', run: () => supabaseAdmin.from('Payout').delete().eq('user_id', userId) },
+      // Subscriptions (RESTRICT on user_id)
+      { table: 'Subscription', run: () => supabaseAdmin.from('Subscription').delete().eq('user_id', userId) },
+      // Regional seeder config where this user is the curator (RESTRICT on curator_user_id)
+      { table: 'seeder_config', run: () => supabaseAdmin.from('seeder_config').delete().eq('curator_user_id', userId) },
+    ];
+    for (const { table, run } of restrictDeletes) {
+      const { error } = await run();
+      if (error) return stopDeletion('restrict', table, error);
     }
-
-    // Now delete payments themselves
-    await supabaseAdmin.from('Payment').delete().or(`payer_id.eq.${userId},payee_id.eq.${userId}`);
-
-    // Delete wallet transactions (RESTRICT on user_id AND wallet_id)
-    await supabaseAdmin.from('WalletTransaction').delete().eq('user_id', userId);
-
-    // Delete payouts (RESTRICT on user_id)
-    await supabaseAdmin.from('Payout').delete().eq('user_id', userId);
-
-    // Delete subscriptions (RESTRICT on user_id)
-    await supabaseAdmin.from('Subscription').delete().eq('user_id', userId);
-
-    // Delete regional seeder config where this user is the curator (RESTRICT on curator_user_id)
-    await supabaseAdmin.from('seeder_config').delete().eq('curator_user_id', userId);
 
     // ── 4. Delete User row ───────────────────────────────────────
     // This triggers ON DELETE CASCADE for ~70+ tables (Posts, Gigs,
     // Wallet, Listings, Notifications, Chat participants, etc.)
     // Pulse's BEFORE DELETE trigger scrubs the author's replies atomically;
     // their nullable user_id then SET NULLs, preserving other people's branches.
-    // If the delete fails, neither the scrub nor its count changes commit.
+    // If the delete fails, neither the scrub nor its count changes commit, and
+    // a retry runs the dry run again: a record that must stay is refused there.
     const { error: deleteError } = await supabaseAdmin
       .from('User')
       .delete()
       .eq('id', userId);
 
     if (deleteError) {
-      logger.error('User row deletion failed', { userId, error: deleteError.message });
-      return res.status(500).json({ error: 'Failed to delete account. Please contact support.' });
+      logger.error('User row deletion failed', { userId, error: deleteError.message, errorCode: deleteError.code || null });
+      return res.status(503).json(ACCOUNT_DELETE_UNAVAILABLE_REPLY);
     }
 
     // ── 4b. Persistent login: sign out everywhere ────────────────
@@ -5811,22 +5923,24 @@ router.delete('/account', verifyToken, requireStepUp('delete_account'), requireS
 
     // ── 5. Delete Supabase Auth user ─────────────────────────────
     try {
-      const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
-      if (authDeleteError) throw authDeleteError;
+      await deleteAuthUser(userId);
       logger.info('Supabase auth user deleted', { userId });
     } catch (authErr) {
-      // User row is already gone — log but don't fail the request
-      logger.warn('Auth user deletion failed (DB user already removed)', {
+      // User row is already gone — the account is deleted; finish the auth user in the background.
+      logger.warn('Auth user deletion failed (DB user already removed); retrying', {
         userId,
         error: authErr.message,
       });
+      retryAuthUserDeletion(userId);
     }
 
     logger.info('Account deleted successfully', { userId });
     res.json({ message: 'Account deleted successfully' });
   } catch (err) {
+    // A check, the dry run or a home's retirement failed before the User row
+    // was deleted: the account is still there, and a retry starts over.
     logger.error('Account deletion error', { userId, error: err.message, stack: err.stack });
-    res.status(500).json({ error: 'Failed to delete account. Please contact support.' });
+    res.status(503).json(ACCOUNT_DELETE_UNAVAILABLE_REPLY);
   }
 });
 

@@ -60,6 +60,11 @@ final class Observability {
             }
             options.beforeSendSpan = { span in
                 Self.urlQueryKeys.forEach { span.removeData(key: $0) }
+                // An HTTP span names its request in the description and `url`.
+                span.spanDescription = span.spanDescription.map(Self.redactBearerPaths)
+                if let url = span.data["url"] as? String {
+                    span.setData(value: Self.redactBearerPaths(url), key: "url")
+                }
                 return span
             }
         }
@@ -113,13 +118,41 @@ final class Observability {
         url?.split(separator: "?").first?.hasSuffix("/api/link-preview") == true
     }
 
+    /// Routes whose last segment is the credential itself: a home invite, a
+    /// guest pass, a booking's one-off or manage link (which can cancel or
+    /// reschedule it), and the public residency, fridge-card and opt-out
+    /// codes. Their URLs leave the device with that segment redacted, as the
+    /// backend's request log does (`BEARER_CODE_PATH`, backend/app.js).
+    private nonisolated static let bearerPathPattern =
+        #"(/api/(?:homes/invitations/token|homes/guest|homes/shared|public/book/o|public/booking|"#
+            + #"public/residency-letters|public/residency-claims|public/fridge-cards|public/block-invites/opt-out))"#
+            + #"/[^/?#\s]+"#
+
+    /// `value` (a URL, or a span's "GET <url>") with every bearer credential
+    /// in its path replaced by `[redacted]`.
+    private nonisolated static func redactBearerPaths(_ value: String) -> String {
+        guard let regex = try? NSRegularExpression(pattern: bearerPathPattern, options: [.caseInsensitive]) else {
+            return value
+        }
+        let range = NSRange(value.startIndex..., in: value)
+        return regex.stringByReplacingMatches(in: value, range: range, withTemplate: "$1/\(redacted)")
+    }
+
     private nonisolated static func scrubPII(from event: Event) {
         // A failed-request event keeps the method, path and status: no query,
         // fragment or request headers. The SDK drops only a short list of
         // headers, so the device id, DPoP proof and step-up token would leave.
+        event.request?.url = event.request?.url.map(redactBearerPaths)
         event.request?.queryString = nil
         event.request?.fragment = nil
         event.request?.headers = nil
+        // The app's own reports name the request too ("API GET <path> -> 503").
+        if let message = event.message {
+            let scrubbed = SentryMessage(formatted: redactBearerPaths(message.formatted))
+            scrubbed.message = message.message.map(redactBearerPaths)
+            scrubbed.params = message.params
+            event.message = scrubbed
+        }
         if var extra = event.extra {
             scrubInPlace(&extra)
             event.extra = extra
@@ -134,11 +167,14 @@ final class Observability {
             for key in urlQueryKeys {
                 data[key] = nil
             }
+            if let url = data["url"] as? String {
+                data["url"] = redactBearerPaths(url)
+            }
             scrubInPlace(&data)
             breadcrumb.data = data
         }
         if let message = breadcrumb.message {
-            breadcrumb.message = redact(emailLikePattern: message)
+            breadcrumb.message = redact(emailLikePattern: redactBearerPaths(message))
         }
     }
 
