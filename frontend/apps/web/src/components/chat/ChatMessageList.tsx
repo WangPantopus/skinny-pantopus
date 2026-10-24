@@ -112,6 +112,9 @@ export default function ChatMessageList({
     },
     overscan: 8,
     scrollMargin,
+    // A conversation opens at its newest message: lay out the last rows first
+    // instead of mounting the oldest page and then replacing it after the scroll.
+    initialOffset: () => (anchorMessageId ? 0 : Number.MAX_SAFE_INTEGER),
   });
   const virtualRows = virtualizer.getVirtualItems();
   const renderedIds = virtualRows.map((row) => row.key).join(',');
