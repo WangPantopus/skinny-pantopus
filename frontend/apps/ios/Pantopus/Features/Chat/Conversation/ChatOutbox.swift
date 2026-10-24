@@ -356,7 +356,7 @@ extension ChatOutbox {
         backgroundGeneration += 1
         let generation = backgroundGeneration
         backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "Chat send") { [weak self] in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 guard let self, backgroundGeneration == generation else { return }
                 backgroundExpired = true
                 wakeTask?.cancel()
