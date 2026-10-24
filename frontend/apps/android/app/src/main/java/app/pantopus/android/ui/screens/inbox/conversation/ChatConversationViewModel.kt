@@ -1430,7 +1430,10 @@ class ChatConversationViewModel
                 }
         }
 
-        /** Persist the complete send snapshot before clearing the composer; network delivery continues independently. */
+        /**
+         * The bubble shows and the composer clears on the tap; the complete send snapshot is then saved encrypted off the
+         * main thread before network delivery. A failed save removes the bubble and gives the text, files and reply back.
+         */
         @Suppress("ReturnCount") // Every validation failure leaves the original composer and attachments intact.
         private fun enqueueComposer() {
             val queue = outbox ?: return
@@ -1441,8 +1444,9 @@ class ChatConversationViewModel
             if (text.isEmpty() && attachments.isEmpty()) return
             if (_isSending.value || _composerClosedNote.value != null) return
             val clientId = newClientMessageId()
-            val roomId = replyRoomForSend(target, _replyingTo.value) ?: return
-            val replyId = _replyingTo.value?.messageId
+            val reply = _replyingTo.value
+            val roomId = replyRoomForSend(target, reply) ?: return
+            val replyId = reply?.messageId
             val pending = optimistic(text.ifEmpty { "Attachment" }, clientId, roomId, replyId)
             val entry =
                 ChatOutboxEntry(
@@ -1466,26 +1470,47 @@ class ChatConversationViewModel
             val savedDraft = composerDraft(target, _selectedTopicId.value, attachments)
             submittingDraft = savedDraft
             _isSending.value = true
+            // The encrypted save below keeps the composer's previous draft on disk until it commits the entry.
+            pendingByClientId[clientId] = pending
+            returnToLatestMessages()
+            _composerText.value = ""
+            _queuedAttachments.value = _queuedAttachments.value.filterNot { it.id in attachmentIds }
+            _replyingTo.value = null
+            rebuild()
+            emitTypingStop()
             viewModelScope.launch {
                 try {
                     val error = queue.enqueue(entry, files, savedDraft)
                     if (target != sendTarget() || savedDraft.topicId != _selectedTopicId.value) return@launch
                     if (error != null) {
+                        restoreUnsavedSend(clientId, draft, attachments, reply)
                         _actionFailure.value = error
                         return@launch
                     }
-                    returnToLatestMessages()
-                    if (_composerText.value == draft) _composerText.value = ""
-                    _queuedAttachments.value = _queuedAttachments.value.filterNot { it.id in attachmentIds }
-                    if (_replyingTo.value?.messageId == replyId) _replyingTo.value = null
                     composerChanged()
                     persistComposerDraft()
-                    emitTypingStop()
                 } finally {
                     if (submittingDraft == savedDraft) submittingDraft = null
                     if (target == sendTarget()) _isSending.value = false
                 }
             }
+        }
+
+        /** A send that could not be saved on the device leaves the timeline; its content returns to the composer. */
+        private fun restoreUnsavedSend(
+            clientId: String,
+            draft: String,
+            attachments: List<ChatQueuedAttachment>,
+            reply: ChatReplyPreview?,
+        ) {
+            if (clientId !in outboxClientIds) pendingByClientId.remove(clientId)
+            val typed = _composerText.value
+            _composerText.value = if (typed.isBlank()) draft else "$draft\n$typed"
+            val queued = _queuedAttachments.value
+            _queuedAttachments.value = attachments.filterNot { saved -> queued.any { it.id == saved.id } } + queued
+            if (_replyingTo.value == null) _replyingTo.value = reply
+            composerChanged()
+            rebuild()
         }
 
         /**

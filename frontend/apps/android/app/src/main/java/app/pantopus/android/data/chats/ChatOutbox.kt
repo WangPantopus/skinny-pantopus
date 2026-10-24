@@ -354,7 +354,8 @@ class ChatOutbox
             revision: Long,
         ) {
             var entry = original.copy(error = null)
-            if (!current(entry, revision) || !saveProgress(entry, revision)) return
+            // A first attempt is already saved exactly as queued; only a retry rewrites its cleared error first.
+            if (!current(entry, revision) || (original.error != null && !saveProgress(entry, revision))) return
             entry = resolveTopic(entry, revision) ?: return
             entry = resolveRoom(entry, revision) ?: return
             if (entry.body.replyToId != null) {

@@ -114,6 +114,19 @@ class SocketManager
             s.connect()
         }
 
+        /**
+         * Reconnect at once when the network returns or the app comes back, instead of waiting out socket.io's
+         * reconnection backoff (up to several seconds). socket.io ignores connect() while it backs off; closing first
+         * resets that backoff and keeps automatic reconnection for later drops. Never replaces the socket or its token.
+         */
+        fun reconnectNow() {
+            val s = socket ?: return
+            if (s.connected()) return
+            if (s.io().isReconnecting) s.disconnect()
+            _connectionState.value = ConnectionState.Connecting
+            s.connect()
+        }
+
         fun disconnect() {
             socket?.disconnect()
             socket?.off()

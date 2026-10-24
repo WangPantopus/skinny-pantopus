@@ -70,6 +70,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -2778,6 +2779,11 @@ internal fun PopulatedFrame(
     // the load-older trigger so it can't fire while the list still sits at
     // the top pre-scroll.
     var initialScrollDone by rememberSaveable { mutableStateOf(false) }
+    // The first non-empty timeline is measured at its newest message in this same frame, so opening a thread never
+    // flashes its oldest loaded rows or lays them out twice. The effect below then marks the initial scroll done.
+    if (!initialScrollDone && rows.isNotEmpty() && scrollToRowId == null) {
+        SideEffect { listState.requestScrollToItem(headerCount + rows.lastIndex) }
+    }
     LaunchedEffect(rows.size, rows.lastOrNull()?.rowId, oldestMessageId) {
         if (rows.isEmpty()) return@LaunchedEffect
         val lastIndex = headerCount + rows.lastIndex
@@ -2928,7 +2934,7 @@ internal fun PopulatedFrame(
                     )
                 }
             }
-            items(items = rows, key = { it.rowId }) { row ->
+            items(items = rows, key = { it.rowId }, contentType = { it.javaClass }) { row ->
                 when (row) {
                     is ChatTimelineRow.DayDivider -> DayDividerRow(label = row.divider.label)
                     is ChatTimelineRow.TopicDivider -> TopicDividerRow(label = row.label)

@@ -19,7 +19,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.core.routing.WebLinkFallback
 import app.pantopus.android.core.security.AppLockManager
@@ -30,7 +32,9 @@ import app.pantopus.android.data.auth.OAuthSessionStore
 import app.pantopus.android.data.auth.TokenStorage
 import app.pantopus.android.data.chats.ActiveChatThread
 import app.pantopus.android.data.chats.ChatOutbox
+import app.pantopus.android.data.network.NetworkMonitor
 import app.pantopus.android.data.plans.PlansFeature
+import app.pantopus.android.data.realtime.SocketManager
 import app.pantopus.android.data.store.StoreSync
 import app.pantopus.android.push.ASSISTANT_RECIPIENT
 import app.pantopus.android.push.PushTokenSyncer
@@ -41,6 +45,8 @@ import app.pantopus.android.ui.navigation.PantopusNavHost
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusTheme
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -68,6 +74,11 @@ class MainActivity : FragmentActivity() {
     @Inject lateinit var activeChatThread: ActiveChatThread
 
     @Inject lateinit var chatOutbox: ChatOutbox
+
+    /** Live chat reconnects as soon as the network returns or the app comes back, not after socket.io's backoff. */
+    @Inject lateinit var socketManager: SocketManager
+
+    @Inject lateinit var networkMonitor: NetworkMonitor
 
     @Inject lateinit var appLockManager: AppLockManager
 
@@ -122,6 +133,12 @@ class MainActivity : FragmentActivity() {
         lifecycleScope.launch {
             authRepository.state.collect { pilotEvents.authChanged() }
         }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                // The value present on start is skipped: onStart already asked for a reconnect.
+                networkMonitor.isOnline.drop(1).filter { it }.collect { socketManager.reconnectNow() }
+            }
+        }
         // A recreated Activity retains its navigation/ViewModel state. Replaying the
         // launch link would replace that screen and discard its in-progress input.
         // That holds after a configuration change and after the process was stopped in
@@ -163,6 +180,7 @@ class MainActivity : FragmentActivity() {
         // for the on-screen conversation is skipped only while visible.
         activeChatThread.isForeground = true
         chatOutbox.foregrounded()
+        socketManager.reconnectNow()
         pilotEvents.enterForeground()
         appLockManager.appDidBecomeActive()
         storeSync.foregrounded()
