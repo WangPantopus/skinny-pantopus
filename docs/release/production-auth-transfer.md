@@ -1,5 +1,7 @@
 # Production Auth transfer: April logins into the new project
 
+**Founder confirmation, October 23:** the native apps will update the original `com.pantopus.app` store listings. Transfer existing sign-ins and their matching profiles only; all product content starts fresh. Complete the rehearsal, founder-run production transfer and old-account sign-in checks before releasing 2.0.4. This instruction does not authorize a production database write.
+
 **Decision, October 8, 2026:** create a new production Supabase project from the
 canonical migrations. Preserve April users' ability to sign in, including
 email/password, Google and Apple identities. Leave April's Homes, Trains,

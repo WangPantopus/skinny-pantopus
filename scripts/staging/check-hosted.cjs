@@ -88,14 +88,14 @@ async function json(url) {
   await check('iOS app links (apple-app-site-association)', async () => {
     const body = await json(`${web}/.well-known/apple-app-site-association`);
     const ids = (body.applinks?.details || []).flatMap((detail) => detail.appIDs || [detail.appID]).filter(Boolean);
-    must(ids.some((id) => id.endsWith('.app.pantopus.ios')), `no app.pantopus.ios entry (found ${ids.join(', ') || 'none'})`);
+    must(ids.some((id) => id.endsWith('.com.pantopus.app')), `no com.pantopus.app entry (found ${ids.join(', ') || 'none'})`);
   });
 
   await check('Android app links (assetlinks.json)', async () => {
     const body = await json(`${web}/.well-known/assetlinks.json`);
-    const entry = (Array.isArray(body) ? body : []).find((s) => s?.target?.package_name === 'app.pantopus.android');
-    must(entry, 'no app.pantopus.android entry yet (checklist P10 regenerates the file)');
-    must((entry.target.sha256_cert_fingerprints || []).length > 0, 'app.pantopus.android has no certificate fingerprint');
+    const entry = (Array.isArray(body) ? body : []).find((s) => s?.target?.package_name === 'com.pantopus.app');
+    must(entry, 'no com.pantopus.app entry yet (checklist P10 regenerates the file)');
+    must((entry.target.sha256_cert_fingerprints || []).length > 0, 'com.pantopus.app has no certificate fingerprint');
   });
 
   await check(production ? 'robots.txt lets search engines in' : 'robots.txt keeps search engines out', async () => {

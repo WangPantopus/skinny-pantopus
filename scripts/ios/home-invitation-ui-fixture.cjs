@@ -81,7 +81,7 @@ function memberScenario(index, mode) {
   events.push({event:'owned_member_scenario',index,mode});
 }
 function inspectOwnedNativePreferences() {
-  const simulator = 'F9BBAB33-BAA0-4A00-9ECE-E3B1343627A8', bundle = 'app.pantopus.ios';
+  const simulator = 'F9BBAB33-BAA0-4A00-9ECE-E3B1343627A8', bundle = 'com.pantopus.app';
   const data = execFileSync('/usr/bin/xcrun', ['simctl','get_app_container',simulator,bundle,'data'], {encoding:'utf8'}).trim();
   assert(data.includes('/Devices/' + simulator + '/data/Containers/Data/Application/'));
   const plist = path.join(data, 'Library/Preferences/' + bundle + '.plist');

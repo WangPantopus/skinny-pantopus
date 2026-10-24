@@ -49,13 +49,13 @@ function checkConfig({ platform, env, firebase, projectId }) {
       errors.push('Android Firebase project must match the backend FCM project ID.');
     }
     const client = firebase?.client?.find(c =>
-      c.client_info?.android_client_info?.package_name === 'app.pantopus.android.debug');
+      c.client_info?.android_client_info?.package_name === 'com.pantopus.app.debug');
     const number = firebase?.project_info?.project_number;
     const appId = client?.client_info?.mobilesdk_app_id;
     if (!/^\d+$/.test(number || '') || /^0+$/.test(number) ||
         placeholder(appId) || !appId?.startsWith(`1:${number}:android:`) ||
         !client?.api_key?.some(key => !placeholder(key.current_key))) {
-      errors.push('Use a real google-services.json for app.pantopus.android.debug; the CI placeholder cannot receive push.');
+      errors.push('Use a real google-services.json for com.pantopus.app.debug; the CI placeholder cannot receive push.');
     }
   }
   return errors;

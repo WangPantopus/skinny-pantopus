@@ -1,1 +1,1 @@
-home,homeowner,reminders,trash day,recycling,pickup,radon,household,chores,tasks,weather,air quality
+home,household,neighbors,community,plans,tasks,reminders,recycling,radon,weather,chat

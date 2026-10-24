@@ -48,7 +48,7 @@ val sentryDsn = envOr("SENTRY_DSN", "")
 val pantopusEnvDebug = envOr("PANTOPUS_ENV", "local")
 val pantopusEnvRelease = envOr("PANTOPUS_ENV", "production")
 
-// The commit being built, empty outside a git checkout. Local builds all keep versionCode 1 and 1.0.0 (only Play uploads
+// The commit being built, empty outside a git checkout. Local builds keep versionCode 1 (only Play uploads
 // get new ones), so the screens' saved copies use it to tell builds apart (data/store/SavedCopies.kt).
 val gitCommit =
     runCatching {
@@ -71,13 +71,15 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "app.pantopus.android"
+        // Keep the published app's identity so 2.x updates existing installs.
+        // The Kotlin namespace stays app.pantopus.android.
+        applicationId = "com.pantopus.app"
         minSdk = 26
         targetSdk = 36
         // Play refuses a versionCode it already has, so fastlane's `beta` lane passes the next free one and the
-        // android-vX.Y.Z tag's version name (fastlane/Fastfile). Every other build keeps 1 and 1.0.0.
+        // android-vX.Y.Z tag's version name (fastlane/Fastfile). Every other build keeps the development version code below.
         versionCode = providers.gradleProperty("pantopus.versionCode").orNull?.toInt() ?: 1
-        versionName = providers.gradleProperty("pantopus.versionName").orNull ?: "1.0.0"
+        versionName = providers.gradleProperty("pantopus.versionName").orNull ?: "2.0.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true

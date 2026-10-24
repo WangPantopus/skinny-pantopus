@@ -3,7 +3,7 @@
 
 default_platform(:android)
 
-PACKAGE_NAME = "app.pantopus.android"
+PACKAGE_NAME = "com.pantopus.app"
 JSON_KEY_PATH = File.expand_path("play-service-account.json", __dir__)
 
 platform :android do
@@ -27,7 +27,7 @@ platform :android do
         # Fail the build if prod config (https URL + pk_live_ key) is missing,
         # so a release artifact can never ship localhost/test values.
         "pantopus.requireProdConfig" => "true",
-        # `beta` passes these; without them the AAB keeps app/build.gradle.kts's 1 and 1.0.0.
+        # `beta` passes these; otherwise use app/build.gradle.kts's development defaults.
         "pantopus.versionCode" => options[:version_code]&.to_s,
         "pantopus.versionName" => options[:version_name],
         "android.injected.signing.store.file" => ENV["PANTOPUS_KEYSTORE_FILE"],
@@ -72,6 +72,7 @@ platform :android do
       json_key: JSON_KEY_PATH,
       skip_upload_aab: true,
       skip_upload_apk: true,
+      changes_not_sent_for_review: true,
       skip_upload_changelogs: true
     )
   end

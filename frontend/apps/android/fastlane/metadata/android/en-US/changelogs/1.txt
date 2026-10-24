@@ -1,1 +1,3 @@
-The first release of the new Pantopus: Today for your address, trash-night reminders, a radon check, shared home tasks and Support Trains.
+Pantopus 2.0 brings a new home dashboard, Today for your address, shared household tasks, pickup reminders, nearby plans, and improved messaging.
+
+This update starts fresh with new homes, tasks, messages, and posts. Your existing account sign-in is retained.
