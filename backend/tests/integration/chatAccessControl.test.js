@@ -65,6 +65,8 @@ function createApp() {
   };
   app.set('io', mockIo);
   app.use('/api/chat', require('../../routes/chats'));
+  // Committed messages fan out through the realtime service, which the socket server starts with the app's io.
+  require('../../services/chatRealtime').init(mockIo);
   return { app, mockIo };
 }
 
@@ -119,9 +121,16 @@ function seedBaseData() {
   seedTable('BusinessProfile', [{ business_user_id: U_BIZ, is_published: true }]);
 }
 
+// The chat write limiters (12 sends per 5 s and 120 per minute per person) keep counting across this file's
+// tests. Each test runs a minute after the previous one, so one test's sends never count against the next.
+const realNow = Date.now.bind(Date);
+let limiterClock = 0;
+
 beforeEach(() => {
   resetTables();
   jest.clearAllMocks();
+  limiterClock += 61_000;
+  jest.spyOn(Date, 'now').mockImplementation(() => realNow() + limiterClock);
   seedBaseData();
 });
 
@@ -784,7 +793,7 @@ describe('Direct send denied at the persistence boundary', () => {
     connectedUsers.set(U2, new Set(['socket-u2']));
     try {
       const response = await send(app);
-      for (let i = 0; i < 50 && !mockIo.emit.mock.calls.length; i += 1) await new Promise((r) => setTimeout(r, 5));
+      for (let i = 0; i < 400 && !mockIo.emit.mock.calls.length; i += 1) await new Promise((r) => setTimeout(r, 5));
 
       expect(response.status).toBe(201);
       expect(insertSpy).toHaveBeenCalledTimes(2);

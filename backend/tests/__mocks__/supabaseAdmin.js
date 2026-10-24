@@ -5,6 +5,7 @@
 // ============================================================
 
 const tables = {};
+const UUID_KEYED_TABLES = new Set(['ChatRoom', 'ChatMessage']);
 let _rpcMock = null;
 let _authMocks = {
   signUp: async () => ({
@@ -254,6 +255,21 @@ function getTable(name) {
   }
   if (!tables[name]) tables[name] = [];
   return tables[name];
+}
+
+// The message revision triggers (migrations 20261023140000 and 20261023234000): every ChatMessage write, and every
+// MessageReaction write on its message, gives the message the room's next message_revision as its sync_version, and a
+// new message without a timestamp gets the server's. Realtime delivery and incremental sync order changes by these.
+function advanceChatRevision(message) {
+  if (!message) return;
+  const room = getTable('ChatRoom').find((r) => r.id === message.room_id);
+  const revision = Math.max(Number(room?.message_revision) || 0, Number(message.sync_version) || 0) + 1;
+  if (room) room.message_revision = revision;
+  message.sync_version = revision;
+}
+
+function advanceReactedMessage(reaction) {
+  advanceChatRevision(getTable('ChatMessage').find((m) => m.id === reaction?.message_id));
 }
 
 function seedTable(name, rows) {
@@ -606,7 +622,9 @@ function createQueryBuilder(tableName) {
         for (const rawRow of insertPayload) {
           const row = viewAlias ? reverseProjectFollowAsMembership({ ...rawRow }) : { ...rawRow };
           if (!row.id) {
-            row.id = `mock-${storageTable.toLowerCase()}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+            // Chat rooms and messages get uuid keys as in Postgres: realtime delivery announces only uuid ids.
+            row.id = UUID_KEYED_TABLES.has(storageTable) ? require('crypto').randomUUID()
+              : `mock-${storageTable.toLowerCase()}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
           }
           if (viewAlias) {
             if (!rawRow.fan_handle) row.fan_handle = fanHandleFromId(row.id);
@@ -674,8 +692,13 @@ function createQueryBuilder(tableName) {
             } };
           }
 
+          if (storageTable === 'ChatMessage') {
+            if (!row.created_at) row.created_at = new Date().toISOString();
+            advanceChatRevision(row);
+          }
           table.push({ ...row });
           inserted.push(row);
+          if (storageTable === 'MessageReaction') advanceReactedMessage(row);
         }
 
         const projected = inserted.map(projectOut);
@@ -700,6 +723,8 @@ function createQueryBuilder(tableName) {
         matched.forEach((row) => {
           const idx = table.indexOf(row);
           table[idx] = { ...row, ...payload };
+          if (storageTable === 'ChatMessage') advanceChatRevision(table[idx]);
+          if (storageTable === 'MessageReaction') advanceReactedMessage(table[idx]);
         });
         const updated = matched.map((row) => {
           const idx = table.findIndex((r) => r.id === row.id);
@@ -714,6 +739,7 @@ function createQueryBuilder(tableName) {
         matched.forEach((row) => {
           const idx = table.indexOf(row);
           if (idx >= 0) table.splice(idx, 1);
+          if (storageTable === 'MessageReaction') advanceReactedMessage(row);
         });
         return { data: matched.map(projectOut), error: null };
       }
@@ -740,10 +766,85 @@ function createQueryBuilder(tableName) {
   return builder;
 }
 
+// Chat readers and the read boundary, answered from the tables the way their SQL does: get_user_chat_rooms
+// (20261023233000), get_room_previews (20261023180000) and mark_chat_read_boundaries (20261023235000). A task room's
+// business-owner permission branch isn't modelled: a leftover member of an assigned business task sees the room only
+// as its owner or worker, as when that permission is absent.
+const byNewest = (a, b) => (Date.parse(b.created_at) - Date.parse(a.created_at)) || String(b.id).localeCompare(String(a.id));
+function latestVisibleMessage(roomId) {
+  return getTable('ChatMessage').filter((m) => m.room_id === roomId && !m.deleted).sort(byNewest)[0] || null;
+}
+
+function chatRoomsPage({ p_user_id: userId, p_actor_id: actorId, p_limit: limit, p_before_at: beforeAt, p_before_id: beforeId, p_type: type }) {
+  const eligible = [];
+  for (const cp of getTable('ChatParticipant')) {
+    if (cp.user_id !== userId || !cp.is_active) continue;
+    const r = getTable('ChatRoom').find((room) => room.id === cp.room_id);
+    if (!r || (type != null && r.type !== type)) continue;
+    const gig = r.type === 'gig' ? getTable('Gig').find((g) => g.id === r.gig_id) : null;
+    if (gig?.accepted_by && ![gig.user_id, gig.accepted_by].some((id) => id === userId || id === actorId)) continue;
+    const sortAt = latestVisibleMessage(r.id)?.created_at || r.updated_at || r.created_at || '1970-01-01T00:00:00Z';
+    eligible.push({ id: r.id, sort_at: sortAt, unread: Number(cp.unread_count) || 0, membership: {
+      room_id: r.id, unread_count: cp.unread_count, last_read_at: cp.last_read_at, notifications_enabled: cp.notifications_enabled,
+      preferences_updated_at: cp.preferences_updated_at, role: cp.role, is_active: cp.is_active,
+      room: { id: r.id, type: r.type, name: r.name, description: r.description, gig_id: r.gig_id, home_id: r.home_id,
+        is_active: r.is_active, created_at: r.created_at, updated_at: r.updated_at } } });
+  }
+  eligible.sort((a, b) => (Date.parse(b.sort_at) - Date.parse(a.sort_at)) || String(b.id).localeCompare(String(a.id)));
+  const cap = Math.min(Math.max(Number(limit) || 1, 1), 500);
+  const matching = eligible.filter((e) => !beforeAt || Date.parse(e.sort_at) < Date.parse(beforeAt)
+    || (Date.parse(e.sort_at) === Date.parse(beforeAt) && String(e.id) < String(beforeId)));
+  return { data: { entries: matching.slice(0, cap).map(({ id, sort_at: sortAt, membership }) => ({ id, sort_at: sortAt, membership })),
+    total: eligible.length, totalUnread: eligible.reduce((sum, e) => sum + e.unread, 0), hasMore: matching.length > cap }, error: null };
+}
+
+function roomPreviews({ p_room_ids: roomIds }) {
+  return { data: [...new Set(roomIds || [])].map(latestVisibleMessage).filter(Boolean)
+    .map(({ room_id: roomId, message, created_at: createdAt, deleted, type, attachments }) =>
+      ({ room_id: roomId, message, created_at: createdAt, deleted, type, attachments }))
+    .sort((a, b) => String(a.room_id).localeCompare(String(b.room_id))), error: null };
+}
+
+function markReadBoundaries({ p_user_id: userId, p_room_ids: roomIds, p_boundaries: boundaries, p_through_message_id: through, p_request_at: requestAt }) {
+  const members = getTable('ChatParticipant');
+  if ((roomIds || []).some((roomId) => !members.some((p) => p.room_id === roomId && p.user_id === userId && p.is_active))) {
+    return { data: null, error: { code: '42501', message: 'Access denied' } };
+  }
+  const messages = getTable('ChatMessage');
+  let cursors = boundaries;
+  if (!cursors && through) {
+    const target = messages.find((m) => m.id === through && roomIds.includes(m.room_id));
+    if (!target) return { data: null, error: { code: '22023', message: 'Invalid read cursor' } };
+    cursors = { [target.room_id]: through };
+  }
+  cursors = cursors || Object.fromEntries(roomIds.map((id) => [id, null]));
+  const rows = [];
+  for (const [roomId, messageId] of Object.entries(cursors).sort(([a], [b]) => a.localeCompare(b))) {
+    const participant = members.find((p) => p.room_id === roomId && p.user_id === userId && p.is_active);
+    // Without a cursor, read up to the request time; never move a boundary backwards.
+    const boundary = messageId ? messages.find((m) => m.id === messageId && m.room_id === roomId)
+      : messages.filter((m) => m.room_id === roomId && !m.deleted && Date.parse(m.created_at) <= Date.parse(requestAt)).sort(byNewest)[0];
+    const current = messages.find((m) => m.id === participant.last_read_message_id);
+    const advance = boundary && (!current || byNewest(boundary, current) < 0);
+    if (advance) Object.assign(participant, { last_read_message_id: boundary.id, last_read_message_at: boundary.created_at, last_read_at: requestAt });
+    const readThrough = messages.find((m) => m.id === participant.last_read_message_id);
+    participant.unread_count = messages.filter((m) => m.room_id === roomId && !m.deleted && m.user_id !== userId
+      && (!readThrough || byNewest(m, readThrough) < 0)).length;
+    rows.push({ room_id: roomId, user_id: userId, unread_count: participant.unread_count,
+      through_message_id: advance ? boundary.id : null, last_read_at: participant.last_read_at });
+  }
+  const unreadCount = members.filter((p) => p.user_id === userId && p.is_active && roomIds.includes(p.room_id))
+    .reduce((sum, p) => sum + (Number(p.unread_count) || 0), 0);
+  return { data: { data: rows, unreadCount }, error: null };
+}
+
+const CHAT_RPCS = { get_user_chat_rooms: chatRoomsPage, get_room_previews: roomPreviews, mark_chat_read_boundaries: markReadBoundaries };
+
 const supabaseAdmin = {
   from: (tableName) => createQueryBuilder(tableName),
   rpc: async (...args) => {
     if (_rpcMock) return _rpcMock(...args);
+    if (CHAT_RPCS[args[0]]) return CHAT_RPCS[args[0]](args[1] || {});
     if (args[0] === 'reconcile_payment_wallet_release') return require('./walletRelease')(args[1], getTable);
     // Read-only capability defaults closed in unrelated Home route fixtures.
     // Deletion/authority behavior itself is covered by real SQL contracts.
@@ -789,5 +890,6 @@ module.exports.resetTables = resetTables;
 module.exports.seedTable = seedTable;
 module.exports.getTable = getTable;
 module.exports.setRpcMock = setRpcMock;
+module.exports.chatRpc = (name, params) => CHAT_RPCS[name](params || {});
 module.exports.resetRpc = resetRpc;
 module.exports.setAuthMocks = setAuthMocks;

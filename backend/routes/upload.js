@@ -8,6 +8,7 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const crypto = require('crypto');
+const fs = require('node:fs');
 const rateLimit = require('express-rate-limit');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const registerHomeTaskMediaRoutes = require('./homeTaskMediaRoutes');
@@ -22,6 +23,7 @@ const { requireIdentityFirewallEnabled, requirePersonaEnabled } = require('../ut
 const { writeIdentityAuditLog } = require('../utils/identityAudit');
 const { ensureLocalProfile, ownLocalProfileView, syncLocalProfileFromAccount } = require('../utils/identityProfiles');
 const { actingBusinessInRoom, canActAsBusiness } = require('../services/chatBusinessAccess');
+const { isGigRoomClosedTo, isRoomClosedForWrites } = require('../services/chatGigRoomAccess');
 
 // Rate limit: 30 uploads per 15 minutes per IP
 const uploadLimiter = rateLimit({
@@ -42,6 +44,7 @@ try {
 
 // Lazy-load ESM-only file-type module
 let _fileTypeFromBuffer;
+let _fileTypeFromFile;
 async function getFileTypeFromBuffer() {
   if (!_fileTypeFromBuffer) {
     const mod = await import('file-type');
@@ -65,16 +68,24 @@ const ZIP_BASED_MIMES = new Set([
  * text, CSV) may stay unidentified.
  */
 async function validateFileMime(file) {
-  if (!file || !Buffer.isBuffer(file.buffer)) {
+  if (!file || (!Buffer.isBuffer(file.buffer) && !file.path)) {
     return { valid: false, detected: null, declared: file?.mimetype, reason: 'missing_buffer' };
   }
 
   const declaredMedia = /^(image|video|audio)\//.test(file.mimetype || '');
   let detected;
   try {
-    const fileTypeFromBuffer = await getFileTypeFromBuffer();
-    detected = await fileTypeFromBuffer(file.buffer);
+    if (file.path) {
+      if (!_fileTypeFromFile) _fileTypeFromFile = (await import('file-type')).fileTypeFromFile;
+      detected = await _fileTypeFromFile(file.path);
+    } else {
+      const fileTypeFromBuffer = await getFileTypeFromBuffer();
+      detected = await fileTypeFromBuffer(file.buffer);
+    }
   } catch (err) {
+    // The streamed chat path refuses unreadable/malformed content. Other upload
+    // callers retain their existing behavior until their own validation pass.
+    if (file.path) return { valid: false, detected: null, declared: file.mimetype };
     // file-type can throw on edge cases (e.g. tiny buffers, certain formats)
     logger.warn('MIME detection threw — allowing upload', {
       originalname: file.originalname,
@@ -708,7 +719,33 @@ router.delete('/gig-media/:gigId/:mediaId', verifyToken, async (req, res) => {
  * POST /api/upload/chat-media/:roomId
  * Upload chat attachments (documents/images) and return File records.
  */
-router.post('/chat-media/:roomId', uploadLimiter, verifyToken, upload.array('files', 10), enforceFileSizeLimits, validateAndStripUploads, async (req, res) => {
+const streamedChatUpload = require('../services/chatMediaUpload')({ validateFileMime, sharp });
+const chatUploadLimiter = rateLimit({ windowMs: 60 * 1000, max: 60,
+  keyGenerator: req => req.user.id, standardHeaders: true, legacyHeaders: false,
+  handler: (_req, res) => res.status(429).set('Retry-After', '60').json({
+    error: 'Too many attachment uploads. Please retry in a minute.', code: 'CHAT_UPLOAD_RATE_LIMITED', retryAfter: 60,
+  }),
+});
+async function authorizeChatUpload(req, res, next) {
+  try {
+    const { roomId } = req.params;
+    if (require('joi').string().uuid().validate(roomId).error) return res.status(400).json({ error: 'Invalid room' });
+    const { data: participant, error } = await supabaseAdmin.from('ChatParticipant')
+      .select('id').eq('room_id', roomId).eq('user_id', req.user.id).eq('is_active', true).maybeSingle();
+    if (error) throw error;
+    const actingFor = participant ? null : await actingBusinessInRoom(roomId, req.user.id);
+    if ((!participant && !actingFor) || await isGigRoomClosedTo(roomId, req.user.id, actingFor ? [actingFor] : [])
+      || await isRoomClosedForWrites(roomId)) {
+      return res.status(403).json({ error: 'Not authorized to upload files to this room' });
+    }
+    next();
+  } catch (error) {
+    logger.warn('Chat upload access unavailable', { code: error.code });
+    res.status(503).json({ error: 'Attachment access is temporarily unavailable. Please retry.' });
+  }
+}
+router.post('/chat-media/:roomId', verifyToken, chatUploadLimiter, authorizeChatUpload,
+  streamedChatUpload.receive, streamedChatUpload.prepare, async (req, res) => {
   try {
     const userId = req.user.id;
     const { roomId } = req.params;
@@ -763,7 +800,7 @@ router.post('/chat-media/:roomId', uploadLimiter, verifyToken, upload.array('fil
     // Bind every part to the same send intent. Include the ordered batch in the
     // fingerprint so a changed retry cannot combine attachments from two drafts.
     const batch = files.map(file => [
-      file.originalname, file.mimetype, crypto.createHash('sha256').update(file.buffer).digest('hex'),
+      file.originalname, file.mimetype, file.sha256,
     ]);
     const fingerprint = requestId ? crypto.createHash('sha256').update(JSON.stringify(req.body.media == null ? batch : [batch, slots])).digest('hex') : null;
     const recordIds = files.map((_, index) => {
@@ -806,10 +843,11 @@ router.post('/chat-media/:roomId', uploadLimiter, verifyToken, upload.array('fil
       const recordId = recordIds[index];
       const objectKey = id ? `chat/${roomId}/${userId}/${id}/${fingerprint}${path.extname(file.originalname).toLowerCase()}`
         : s3.generateS3Key(`chat/${roomId}`, file.originalname, userId);
-      const sha256 = crypto.createHash('sha256').update(file.buffer).digest('hex');
+      const sha256 = file.sha256;
       const storageReference = s3.chatFileStorageReference(recordId, userId, roomId, objectKey, sha256);
-      const { key } = await s3.uploadToS3(file.buffer, objectKey, file.mimetype,
-        s3.chatFileObjectMetadata(recordId, userId, sha256));
+      const { key } = await s3.uploadToS3(fs.createReadStream(file.path), objectKey, file.mimetype,
+        s3.chatFileObjectMetadata(recordId, userId, sha256),
+        { contentLength: file.size, abortSignal: req.chatUpload.controller.signal });
 
       const ext = (path.extname(file.originalname || '').replace('.', '') || '').toLowerCase();
       const category = s3.categorizeFile(file.mimetype) || 'document';
