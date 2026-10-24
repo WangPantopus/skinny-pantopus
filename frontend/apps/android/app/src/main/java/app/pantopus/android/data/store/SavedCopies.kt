@@ -137,6 +137,16 @@ class SavedCopies
             }.onFailure { Timber.w("Received chat file was not saved") }
         }
 
+        /** A file the server reports gone (its message was deleted) leaves the offline store at once, with its thumbnail. */
+        fun forgetMedia(
+            account: String,
+            key: String,
+        ) {
+            val file = key.removeSuffix(THUMBNAIL_KEY_SUFFIX)
+            mediaFile(account, file).delete()
+            mediaFile(account, file + THUMBNAIL_KEY_SUFFIX).delete()
+        }
+
         private fun mediaFile(
             account: String,
             key: String,
@@ -509,6 +519,7 @@ class SavedCopies
             MessageDigest.getInstance("SHA-256").digest(value.toByteArray()).joinToString("") { "%02x".format(it) }.take(HASH_CHARS)
 
         private companion object {
+            const val THUMBNAIL_KEY_SUFFIX = "?thumbnail"
             const val HASH_CHARS = 32
             const val MEDIA_ENVELOPE_BYTES = 512
             const val MEDIA_CONTENT_TYPE_LENGTH = 128

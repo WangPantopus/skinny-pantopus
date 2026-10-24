@@ -46,6 +46,11 @@ class ChatMediaInterceptor
                 access.refuse()
                 return response
             }
+            if (response.code == HTTP_GONE) {
+                // A deleted message's file: its saved copy can never answer a later offline read.
+                access.forget()
+                return response
+            }
             if (response.code in SERVER_FAILURES) {
                 cached(request, access)?.let {
                     response.close()
@@ -135,6 +140,7 @@ class ChatMediaInterceptor
         private companion object {
             val FILE_PATH = Regex("/api/chat/files/[^/]+")
             val REFUSALS = setOf(401, 403, 404)
+            const val HTTP_GONE = 410
             val SERVER_FAILURES = 500..599
         }
     }

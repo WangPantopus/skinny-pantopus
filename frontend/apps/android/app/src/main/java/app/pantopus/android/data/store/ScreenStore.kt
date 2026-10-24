@@ -196,6 +196,8 @@ class ScreenStore
             val write: (SavedCopies.MediaCopy) -> Unit,
             val isCurrent: () -> Boolean,
             val refuse: () -> Unit,
+            /** The file is gone on the server: its saved copies (the file and its thumbnail) go too. */
+            val forget: () -> Unit = {},
         )
 
         /** Bind a binary fetch to the same durable access epoch as the history that made it visible. */
@@ -217,6 +219,7 @@ class ScreenStore
                     },
                     isCurrent = { synchronized(slots) { synchronized(diskLock) { current() } } },
                     refuse = { synchronized(slots) { if (synchronized(diskLock) { current() }) retireChatLocked(account) } },
+                    forget = { synchronized(slots) { synchronized(diskLock) { saved.forgetMedia(account, key) } } },
                 )
             }
 
