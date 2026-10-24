@@ -670,6 +670,9 @@ public final class ChatConversationViewModel {
     /// The picked photos of photo messages still sending, by client id: their
     /// bubbles show the in-memory previews (`ChatPhotoPreviews`).
     @ObservationIgnored private var pendingPhotoIds: [String: [String]] = [:]
+    /// Older pages applied to the timeline so far; the view keeps the reader's
+    /// place on the layout that adds one above the viewport.
+    @ObservationIgnored public private(set) var olderPagesApplied = 0
     private var failedClientIds: Set<String> = []
     /// Failed sends the server refused with a 403 (blocked, not a
     /// participant, the account can't message). They show "Not sent"
@@ -3326,7 +3329,9 @@ public final class ChatConversationViewModel {
         switch kind {
         case .reload: ChatPerformance.mark("HistoryReload", rows: messages.count)
         case .merge: ChatPerformance.mark("HistoryMerge", rows: messages.count)
-        case .older: ChatPerformance.mark("HistoryOlder", rows: messages.count)
+        case .older:
+            olderPagesApplied += 1
+            ChatPerformance.mark("HistoryOlder", rows: messages.count)
         }
     }
 
