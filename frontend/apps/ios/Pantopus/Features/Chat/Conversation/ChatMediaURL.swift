@@ -134,9 +134,13 @@ enum ChatMediaURL {
     /// follows the redirect to storage.
     @MainActor
     static func download(raw: String, filename: String, mimeType: String?) async throws -> URL {
+        let session = AuthManager.shared.requestSessionGeneration
         guard let url = resolve(raw: raw) else { throw URLError(.badURL) }
         let (temporary, response) = try await URLSession.shared.download(from: url)
         defer { try? FileManager.default.removeItem(at: temporary) }
+        // Sign-out clears opened files while a download may still be in flight.
+        // Its late response must not recreate the previous account's bytes.
+        try AuthManager.shared.requireRequestSession(session)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw URLError(.badServerResponse)
         }

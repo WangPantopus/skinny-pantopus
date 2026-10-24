@@ -1263,7 +1263,7 @@ public final class ChatConversationViewModel {
         scrollToMessageId = nil
         selectedTopicId = selectedTopicId == topicId ? nil : topicId
         sendLimitNotice = nil
-        await fetch(.reload, recallOnReload: true)
+        await returnToLatest()
     }
 
     public func returnToLatest() async {
@@ -2842,7 +2842,6 @@ public final class ChatConversationViewModel {
         let generation = historyGeneration
         let topicId = selectedTopicId
         let held = messages
-        let heldIds = Set(held.map(\.id))
         historyRequestId = requestId
         historyTouchedIds = []
         defer {
@@ -2860,33 +2859,9 @@ public final class ChatConversationViewModel {
             }
             let response = try await requestHistory(before: before, topicId: topicId)
             guard generation == historyGeneration, historyRequestId == requestId, !Task.isCancelled else { return }
-            var fetched = response.messages
-            var page = response
-            // Reconcile only a bounded retained range. A long offline gap can
-            // replace the oldest retained rows; paging still reaches them.
-            if case .merge = kind, response.anchorMessageId == nil, let earliest = held.min(by: Self.messagePrecedes) {
-                var cursors: Set<String> = []
-                while fetched.count < Self.retainedMessageLimit, page.hasMore == true,
-                      let oldest = page.messages.min(by: Self.messagePrecedes),
-                      Self.messagePrecedes(earliest, oldest),
-                      let cursor = page.nextCursor ?? Self.paginationCursor(for: oldest),
-                      cursors.insert(cursor).inserted {
-                    page = try await requestHistory(before: cursor, topicId: topicId)
-                    guard generation == historyGeneration, historyRequestId == requestId, !Task.isCancelled else { return }
-                    fetched.append(contentsOf: page.messages)
-                }
-                let fetchedIds = Set(fetched.map(\.id))
-                let lowerBound = fetched.min(by: Self.messagePrecedes)
-                messages.removeAll { message in
-                    guard heldIds.contains(message.id), !historyTouchedIds.contains(message.id),
-                          !fetchedIds.contains(message.id) else { return false }
-                    return page.hasMore != true || lowerBound.map { !Self.messagePrecedes(message, $0) } == true
-                }
-            }
-            if case .person = mode, let roomIds = response.roomIds {
-                let allowedRooms = Set(roomIds)
-                messages.removeAll { !allowedRooms.contains($0.roomId) }
-            }
+            let (fetched, authorizedRooms) = try await reconcileCanonicalHistory(
+                response, kind: kind, held: held, requestId: requestId, generation: generation
+            )
             historyConfirmedAt = Date()
             historyCacheVersion = cacheVersion == ChatLocalStore.shared.version ? cacheVersion : nil
             historyAccessRefused = false
@@ -2895,9 +2870,9 @@ public final class ChatConversationViewModel {
                 // The loaded page does not redefine the latest/snapshot scope.
             } else {
                 hasLatestHistoryWindow = response.anchorMessageId == nil && !isViewingEarlierHistory
-                syncCursors = topicId == nil ? response.syncCursors : nil
+                syncCursors = topicId == nil ? response.syncCursors?.filter { authorizedRooms?.contains($0.key) != false } : nil
             }
-            apply(response: response, kind: kind, fetchedMessages: fetched)
+            apply(response: response, kind: kind, fetchedMessages: fetched, authorizedRooms: authorizedRooms)
             scheduleMarkRead()
             if case let .room(roomId) = mode, before == nil {
                 await refreshRoomAvailability(roomId: roomId)
@@ -2913,6 +2888,58 @@ public final class ChatConversationViewModel {
             guard generation == historyGeneration, historyRequestId == requestId, !Task.isCancelled else { return }
             handleFetchFailure(error, kind: kind)
         }
+    }
+
+    /// Access removals apply before any later page can fail, and a later
+    /// snapshot cannot reintroduce rows from rooms already removed in this fetch.
+    private func reconcileCanonicalHistory(
+        _ response: ChatMessagesResponse,
+        kind: FetchKind,
+        held: [ChatMessageDTO],
+        requestId: UUID,
+        generation: Int
+    ) async throws -> ([ChatMessageDTO], Set<String>?) {
+        let topicId = selectedTopicId
+        let heldIds = Set(held.map(\.id))
+        var authorizedRooms = response.roomIds.map(Set.init)
+        if let authorizedRooms {
+            // Retire alternate topic/inbox copies before this response can
+            // replace the known room set, or a later page can fail.
+            reconcileHistoryAccess(roomIds: authorizedRooms, reset: false)
+        }
+        var fetched = response.messages
+        var page = response
+        // Reconcile only a bounded retained range. A long offline gap can
+        // replace the oldest retained rows; paging still reaches them.
+        if case .merge = kind, response.anchorMessageId == nil, let earliest = held.min(by: Self.messagePrecedes) {
+            var cursors: Set<String> = []
+            while fetched.count < Self.retainedMessageLimit, page.hasMore == true,
+                  let oldest = page.messages.min(by: Self.messagePrecedes),
+                  Self.messagePrecedes(earliest, oldest),
+                  let cursor = page.nextCursor ?? Self.paginationCursor(for: oldest),
+                  cursors.insert(cursor).inserted {
+                page = try await requestHistory(before: cursor, topicId: topicId)
+                guard generation == historyGeneration, historyRequestId == requestId, !Task.isCancelled else { throw CancellationError() }
+                if let roomIds = page.roomIds {
+                    let allowed = authorizedRooms?.intersection(roomIds) ?? Set(roomIds)
+                    authorizedRooms = allowed
+                    reconcileHistoryAccess(roomIds: allowed, reset: false)
+                }
+                fetched.append(contentsOf: page.messages)
+            }
+            let fetchedIds = Set(fetched.map(\.id))
+            let lowerBound = fetched.min(by: Self.messagePrecedes)
+            messages.removeAll { message in
+                guard heldIds.contains(message.id), !historyTouchedIds.contains(message.id),
+                      !fetchedIds.contains(message.id) else { return false }
+                return page.hasMore != true || lowerBound.map { !Self.messagePrecedes(message, $0) } == true
+            }
+        }
+        if let authorizedRooms {
+            messages.removeAll { !authorizedRooms.contains($0.roomId) }
+            fetched.removeAll { !authorizedRooms.contains($0.roomId) }
+        }
+        return (fetched, authorizedRooms)
     }
 
     /// Drain one fixed server snapshot before applying rows or committing its
@@ -3195,7 +3222,12 @@ public final class ChatConversationViewModel {
         }
     }
 
-    private func apply(response: ChatMessagesResponse, kind: FetchKind, fetchedMessages: [ChatMessageDTO]) {
+    private func apply(
+        response: ChatMessagesResponse,
+        kind: FetchKind,
+        fetchedMessages: [ChatMessageDTO],
+        authorizedRooms: Set<String>?
+    ) {
         switch kind {
         case .reload, .merge: sendRefusalNote = response.sendRefusal?.error
         case .older: break
@@ -3211,7 +3243,7 @@ public final class ChatConversationViewModel {
         }
         messages = byId.values.sorted(by: Self.messagePrecedes)
         retireConfirmedClientIds(in: fetchedMessages)
-        updateActiveRooms(response: response)
+        updateActiveRooms(response: response, authorizedRooms: authorizedRooms)
         if case .merge = kind, oldestCursor != nil {
             // Keep the pagination position belonging to the oldest loaded page.
         } else {
@@ -3269,8 +3301,8 @@ public final class ChatConversationViewModel {
             .replacingOccurrences(of: "+0000", with: "Z")
     }
 
-    private func updateActiveRooms(response: ChatMessagesResponse) {
-        var ids = Set(response.roomIds ?? [])
+    private func updateActiveRooms(response: ChatMessagesResponse, authorizedRooms: Set<String>?) {
+        var ids = authorizedRooms ?? Set(response.roomIds ?? [])
         ids.formUnion(response.messages.map(\.roomId))
         if case let .room(roomId) = mode {
             ids.insert(roomId)
@@ -3278,6 +3310,7 @@ public final class ChatConversationViewModel {
         if let directRoomId {
             ids.insert(directRoomId)
         }
+        if let authorizedRooms { ids.formIntersection(authorizedRooms) }
         activeRoomIds = ids
         // Keep the push layer's "currently viewing" registry in sync so
         // foreground chat pushes for this thread don't show a banner.
