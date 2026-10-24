@@ -277,6 +277,8 @@ class ChatConversationViewModel
         val showLatestMessages: StateFlow<Boolean> = _showLatestMessages.asStateFlow()
         private var messages: MutableList<ChatMessageDto> = mutableListOf()
         private val messageTimes = LinkedHashMap<String, Instant>()
+        private val dayKeys = LinkedHashMap<String, String>()
+        private var dayKeysZone: ZoneId? = null
         private val messageOrder = compareBy<ChatMessageDto> { messageInstant(it.createdAt) }.thenBy { it.id }
         private val pendingByClientId = LinkedHashMap<String, ChatMessageDto>()
         private val failedClientIds = mutableSetOf<String>()
@@ -1473,14 +1475,9 @@ class ChatConversationViewModel
             val savedDraft = composerDraft(target, _selectedTopicId.value, attachments)
             submittingDraft = savedDraft
             _isSending.value = true
-            // The encrypted save below keeps the composer's previous draft on disk until it commits the entry.
             pendingByClientId[clientId] = pending
-            returnToLatestMessages()
-            _composerText.value = ""
-            _queuedAttachments.value = _queuedAttachments.value.filterNot { it.id in attachmentIds }
-            _replyingTo.value = null
-            rebuild()
-            emitTypingStop()
+            // The encrypted save starts first (off the main thread) and keeps the composer's previous draft on disk until
+            // it commits the entry; the bubble and the cleared composer follow in this same frame.
             viewModelScope.launch {
                 try {
                     val error = queue.enqueue(entry, files, savedDraft)
@@ -1497,6 +1494,12 @@ class ChatConversationViewModel
                     if (target == sendTarget()) _isSending.value = false
                 }
             }
+            returnToLatestMessages()
+            _composerText.value = ""
+            _queuedAttachments.value = _queuedAttachments.value.filterNot { it.id in attachmentIds }
+            _replyingTo.value = null
+            rebuild()
+            emitTypingStop()
         }
 
         /** A send that could not be saved on the device leaves the timeline; its content returns to the composer. */
@@ -4372,9 +4375,19 @@ class ChatConversationViewModel
                     messageTimes[iso] = it
                 }
 
-        private fun dayKey(iso: String): String =
-            runCatching { Instant.parse(iso).atZone(ZoneId.systemDefault()).toLocalDate().toString() }
+        /** Every rebuild groups each row by day; the parsed key is reused until the device time zone changes. */
+        private fun dayKey(iso: String): String {
+            val zone = ZoneId.systemDefault()
+            if (zone != dayKeysZone) {
+                dayKeys.clear()
+                dayKeysZone = zone
+            }
+            dayKeys[iso]?.let { return it }
+            if (dayKeys.size >= 2_048) dayKeys.remove(dayKeys.keys.first())
+            return runCatching { Instant.parse(iso).atZone(zone).toLocalDate().toString() }
                 .getOrDefault(iso)
+                .also { dayKeys[iso] = it }
+        }
 
         private fun dayLabel(iso: String): String =
             runCatching {
@@ -4393,7 +4406,7 @@ class ChatConversationViewModel
             neighbor: ChatMessageDto?,
             sameDay: Boolean,
         ): Boolean =
-            neighbor != null && neighbor.resolvedType !in setOf("system", "broadcast_reference") &&
+            neighbor != null && neighbor.resolvedType !in GROUP_BREAKING_TYPES &&
                 neighbor.userId == message.userId && sameDay
 
         private fun stampLabel(message: ChatMessageDto): String? =
@@ -4531,6 +4544,9 @@ private const val ROOM_JOIN_RETRY_INITIAL_MS = 1_000L
 private const val ROOM_JOIN_RETRY_MAX_MS = 15_000L
 
 private val dayFormatter = DateTimeFormatter.ofPattern("MMM d")
+
+/** System notices and broadcast references never join a sender's bubble group. */
+private val GROUP_BREAKING_TYPES = setOf("system", "broadcast_reference")
 private val stampFormatter = DateTimeFormatter.ofPattern("h:mm a")
 
 /** How many lists of 50 "Delete conversation" works through before it gives up. */
