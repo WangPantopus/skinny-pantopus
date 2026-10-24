@@ -158,6 +158,8 @@ async function canSubmitOwnerClaim(homeId, userId) {
   if (homeError) throw claimCheckUnavailable();
   if (!home) return { allowed: false, errors: ['Home not found'], blockCode: null };
 
+  // A claim on a home with verified owners is a challenge, which ordinary review refuses: an unread
+  // classification must not file it as standalone.
   try {
     const classification = await homeClaimRoutingService.classifySubmission({ homeId, userId });
     routingClassification = classification.routingClassification;
@@ -167,6 +169,7 @@ async function canSubmitOwnerClaim(homeId, userId) {
       claimant_user_id: userId,
       error: error.message,
     });
+    throw claimCheckUnavailable();
   }
 
   if (home.home_status !== 'active') {
