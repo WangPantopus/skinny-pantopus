@@ -347,6 +347,31 @@ async function getBusinessMessagingMemberIds(businessUserId) {
 // owner and staff are never members of its conversations (services/chatBusinessAccess). They act for it when the
 // request says so (`asBusinessUserId`), and in the chat room of a task it posted, where they always answer as the
 // business. Otherwise it is the caller's own row; `activeOnly` refuses one they left.
+// A started read, kept from rejecting unobserved while the checks before it decide; `settled` rethrows its error.
+function settle(promise) {
+  return Promise.resolve(promise).then((value) => ({ value }), (error) => ({ error }));
+}
+function settled({ value, error }) {
+  if (error) throw error;
+  return value;
+}
+
+// A retried send is bound to the authorized room, displayed sender and human actor. client_message_id
+// is globally unique, so a conflicting key from another scope must never return that scope's private message.
+async function retryMessage(clientMessageId, roomId, senderUserId, actorUserId) {
+  let query = supabaseAdmin.from('ChatMessage')
+    .select(`*, sender:user_id(id, username, name, profile_picture_url)`)
+    .eq('client_message_id', clientMessageId)
+    .eq('room_id', roomId)
+    .eq('user_id', senderUserId);
+  query = String(senderUserId) === String(actorUserId)
+    ? query.is('actor_user_id', null)
+    : query.eq('actor_user_id', actorUserId);
+  const { data, error } = await query.maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
 async function roomMembership(roomId, userId, asBusinessUserId, { activeOnly = false } = {}) {
   const { data: own, error } = await supabaseAdmin
     .from('ChatParticipant')
@@ -633,8 +658,10 @@ async function emitCommittedChatChange(io, change, prepared) {
     await emitChatMutation(io, room, 'message:deleted', { messageId: change.m, roomId: room.id, sync_version: version });
     return version;
   }
+  // The insert's own snapshot has no reactions yet; skip that read on the recipient's path.
   const [people, summaries] = await Promise.all([
-    prepared?.people || loadMessageSenders([message]), buildReactionSummary([message.id]),
+    prepared?.people || loadMessageSenders([message]),
+    change.insert && prepared?.message ? new Map() : buildReactionSummary([message.id]),
   ]);
   const reactions = summaries.get(message.id) || [];
   const safe = { ...serializeChatMessageForViewer(message, { people }), reactions };
@@ -2161,23 +2188,30 @@ router.post('/messages', verifyToken, messageSendLimiter, messageBurstLimiter, v
     }
     logger.info('message_send_start', { requestId, roomId, userId, messageType });
     let senderUserId = userId;
-    
+
+    // These reads don't depend on one another, so they start together; their answers are
+    // still applied in the order below, so each refusal is the one the sequential checks gave.
+    const membershipCheck = settle(roomMembership(roomId, userId, asBusinessUserId, { activeOnly: true }));
+    const closedCheck = settle(gigRoomClosed(roomId, userId, asBusinessUserId));
+    const roomRead = settle(supabaseAdmin.from('ChatRoom').select('id, type, gig_id, is_active').eq('id', roomId).single());
+    const otherMembersRead = settle(supabaseAdmin.from('ChatParticipant').select('user_id')
+      .eq('room_id', roomId).neq('user_id', userId).eq('is_active', true));
+    // A person writing as themselves is the likely sender; a business or task identity reads its own below.
+    const ownRetryRead = clientMessageId && !asBusinessUserId ? settle(retryMessage(clientMessageId, roomId, userId, userId)) : null;
+    const ownPeopleRead = asBusinessUserId ? null : settle(loadChatPeople([userId]));
+
     // Verify participant
-    const participant = await roomMembership(roomId, userId, asBusinessUserId, { activeOnly: true });
+    const participant = settled(await membershipCheck);
     if (!participant) return res.status(403).json({ error: 'Not a participant' });
 
-    if (await gigRoomClosed(roomId, userId, asBusinessUserId)) {
+    if (settled(await closedCheck)) {
       return res.status(403).json({ error: 'Not a participant' });
     }
 
     // ─── Pre-bid message limit for gig chats ───
     const PRE_BID_MESSAGE_LIMIT = 3;
 
-    const { data: room, error: roomError } = await supabaseAdmin
-      .from('ChatRoom')
-      .select('id, type, gig_id, is_active')
-      .eq('id', roomId)
-      .single();
+    const { data: room, error: roomError } = settled(await roomRead);
 
     if (roomError) throw blockCheckUnavailable();
     if (!room) return res.status(404).json({ error: 'Room not found' });
@@ -2196,12 +2230,7 @@ router.post('/messages', verifyToken, messageSendLimiter, messageBurstLimiter, v
     // For gig/group chats, blocking is handled differently (not enforced here).
     let directMemberIds = [];
     if (room && room.type === 'direct') {
-      const { data: otherParticipants, error: participantsError } = await supabaseAdmin
-        .from('ChatParticipant')
-        .select('user_id')
-        .eq('room_id', roomId)
-        .neq('user_id', userId)
-        .eq('is_active', true);
+      const { data: otherParticipants, error: participantsError } = settled(await otherMembersRead);
       if (participantsError || !Array.isArray(otherParticipants)) throw blockCheckUnavailable();
       for (const participant of otherParticipants) {
         if (await isBlocked(userId, participant.user_id)) {
@@ -2417,26 +2446,13 @@ router.post('/messages', verifyToken, messageSendLimiter, messageBurstLimiter, v
       }
     }
 
-    // A retry is bound to the authorized room, displayed sender and human actor.
-    // client_message_id is globally unique, so a conflicting key from another
-    // scope must never return that scope's private message.
-    const findRetryMessage = async () => {
-      let query = supabaseAdmin.from('ChatMessage')
-        .select(`*, sender:user_id(id, username, name, profile_picture_url)`)
-        .eq('client_message_id', clientMessageId)
-        .eq('room_id', roomId)
-        .eq('user_id', senderUserId);
-      query = String(senderUserId) === String(userId)
-        ? query.is('actor_user_id', null)
-        : query.eq('actor_user_id', userId);
-      const { data, error: retryError } = await query.maybeSingle();
-      if (retryError) throw retryError;
-      return data;
-    };
+    const findRetryMessage = () => retryMessage(clientMessageId, roomId, senderUserId, userId);
+    const ownSender = String(senderUserId) === String(userId);
     // Read alongside the write: the reply and the room hear the sender as the chat list names them.
-    const senderPeople = loadChatPeople([senderUserId]);
+    const senderPeople = ownSender && ownPeopleRead ? ownPeopleRead.then(settled) : loadChatPeople([senderUserId]);
+    senderPeople.catch(() => {}); // awaited below; a failure surfaces there
     if (clientMessageId) {
-      const existingMsg = await findRetryMessage();
+      const existingMsg = ownSender && ownRetryRead ? settled(await ownRetryRead) : await findRetryMessage();
       if (existingMsg) return res.json({ message: serializeChatMessageForViewer(existingMsg, { people: await senderPeople, viewerId: userId }) });
     }
 
@@ -2467,6 +2483,7 @@ router.post('/messages', verifyToken, messageSendLimiter, messageBurstLimiter, v
     }
 
     let supportsMetadataColumn = true;
+    const insertStartMs = Date.now();
     let { data: message, error } = await insertMessage(messageData);
 
     // Attachment admission is rechecked while holding its File locks in the
@@ -2548,13 +2565,19 @@ router.post('/messages', verifyToken, messageSendLimiter, messageBurstLimiter, v
       return res.status(500).json({ error: 'Failed to send message' });
     }
 
+    const insertedMs = Date.now();
     const people = await senderPeople;
-    await deliverNewMessage(req.app.get('io'), { room, message, actorUserId: userId, senderUserId, requestId, people });
+    // Realtime delivery is announced synchronously inside deliverNewMessage; the sender's
+    // acceptance doesn't also wait for the badge-recipient read and push hand-off after it.
+    deliverNewMessage(req.app.get('io'), { room, message, actorUserId: userId, senderUserId, requestId, people })
+      .catch((deliveryError) => logger.warn('chat_delivery_after_accept_failed', { requestId, roomId, code: deliveryError.code }));
 
     const sendDurationMs = Date.now() - sendStartMs;
     incCounter('chat.message.sent', { room_type: room?.type || 'unknown' });
     recordHistogram('chat.message.send_latency_ms', sendDurationMs);
-    logger.info('message_send_complete', { requestId, roomId, userId, senderUserId, messageId: message.id, durationMs: sendDurationMs });
+    recordHistogram('chat.message.insert_latency_ms', insertedMs - insertStartMs);
+    logger.info('message_send_complete', { requestId, roomId, userId, senderUserId, messageId: message.id, durationMs: sendDurationMs,
+      checksMs: insertStartMs - sendStartMs, insertMs: insertedMs - insertStartMs });
 
     res.status(201).json({ message: serializeChatMessageForViewer(message, { people, viewerId: userId }) });
     

@@ -48,7 +48,14 @@ function announce(change, prepared) {
     inserted: change.op === 'INSERT' || previous?.inserted || false,
     prepared: newer ? prepared : previous.prepared,
   });
-  if (!timer) timer = setTimeout(drain, 10);
+  // A message announced by its own insert goes out at once: the recipient is
+  // waiting. Other changes wait 10 ms so rapid revisions of one row coalesce.
+  const urgent = change.op === 'INSERT' && Boolean(prepared?.message);
+  if (urgent && timer) {
+    clearTimeout(timer);
+    timer = null;
+  }
+  if (!timer) timer = setTimeout(drain, urgent ? 0 : 10);
 }
 
 function drain() {

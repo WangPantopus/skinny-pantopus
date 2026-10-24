@@ -485,14 +485,16 @@ module.exports = (io) => {
         const openRooms = rooms.filter((r) => !closedRoomIds.has(String(r.id)));
         if (!await checkConnectedSession(socket)) return;
 
+        let joinedCount = 0;
         for (const room of openRooms) {
           const roomId = room.id;
           if (skipStartupJoins || startupLeaves.has(roomId) || pendingRoomJoins.has(roomId)) continue;
           socket.join(roomId);
           roomIds.add(roomId);
-
-          logger.info('User joined room', { sessionId, userId, roomId, roomType: room.room_type });
+          joinedCount += 1;
         }
+        // One line per connection: a line per room made every reconnect of a long-lived account write hundreds.
+        logger.info('User joined rooms', { sessionId, userId, joined: joinedCount });
 
         userRooms.set(userId, roomIds);
 
