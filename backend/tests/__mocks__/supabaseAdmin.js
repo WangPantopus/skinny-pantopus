@@ -260,10 +260,14 @@ function getTable(name) {
 // The message revision triggers (migrations 20261023140000 and 20261023234000): every ChatMessage write, and every
 // MessageReaction write on its message, gives the message the room's next message_revision as its sync_version, and a
 // new message without a timestamp gets the server's. Realtime delivery and incremental sync order changes by these.
+// Revisions keep rising across resetTables: the realtime service remembers what it delivered for the life of the
+// module, so a test's change must never look older than one an earlier test made to the same seeded message.
+let chatRevisionClock = 0;
 function advanceChatRevision(message) {
   if (!message) return;
   const room = getTable('ChatRoom').find((r) => r.id === message.room_id);
-  const revision = Math.max(Number(room?.message_revision) || 0, Number(message.sync_version) || 0) + 1;
+  const revision = Math.max(Number(room?.message_revision) || 0, Number(message.sync_version) || 0, chatRevisionClock) + 1;
+  chatRevisionClock = revision;
   if (room) room.message_revision = revision;
   message.sync_version = revision;
 }

@@ -70,6 +70,18 @@ function createApp() {
   return { app, mockIo };
 }
 
+// Committed changes fan out asynchronously, and an earlier test's delivery can still arrive. Wait for the emit that
+// matches, and report the connection io.to() named for it (the call made just before that emit).
+async function deliveredTo(mockIo, matches) {
+  const find = () => mockIo.emit.mock.calls.findIndex((call) => matches(...call));
+  for (let i = 0; i < 400 && find() < 0; i += 1) await new Promise((r) => setTimeout(r, 5));
+  const index = find();
+  if (index < 0) return null;
+  const emitted = mockIo.emit.mock.invocationCallOrder[index];
+  const toIndex = mockIo.to.mock.invocationCallOrder.findLastIndex((order) => order < emitted);
+  return { target: mockIo.to.mock.calls[toIndex]?.[0], payload: mockIo.emit.mock.calls[index][1] };
+}
+
 function seedBaseData() {
   seedTable('User', [
     { id: U1, username: 'alice', name: 'Alice', first_name: 'Alice', last_name: 'A', profile_picture_url: null, account_type: 'personal' },
@@ -793,12 +805,13 @@ describe('Direct send denied at the persistence boundary', () => {
     connectedUsers.set(U2, new Set(['socket-u2']));
     try {
       const response = await send(app);
-      for (let i = 0; i < 400 && !mockIo.emit.mock.calls.length; i += 1) await new Promise((r) => setTimeout(r, 5));
+      const delivery = await deliveredTo(mockIo, (event, payload) => event === 'message:new' && payload?.id === response.body.message?.id);
 
       expect(response.status).toBe(201);
       expect(insertSpy).toHaveBeenCalledTimes(2);
       expect(getTable('ChatMessage')).toHaveLength(before + 1);
-      expect(mockIo.emit).toHaveBeenCalledWith('message:new', expect.anything());
+      expect(delivery).not.toBeNull();
+      expect(delivery.target).toBe('socket-u2');
     } finally {
       connectedUsers.delete(U2);
     }

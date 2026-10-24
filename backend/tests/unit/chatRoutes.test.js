@@ -67,6 +67,18 @@ function createApp() {
   return { app, mockIo };
 }
 
+// Committed changes fan out asynchronously, and an earlier test's delivery can still arrive. Wait for the emit that
+// matches, and report the connection io.to() named for it (the call made just before that emit).
+async function deliveredTo(mockIo, matches) {
+  const find = () => mockIo.emit.mock.calls.findIndex((call) => matches(...call));
+  for (let i = 0; i < 400 && find() < 0; i += 1) await new Promise((r) => setTimeout(r, 5));
+  const index = find();
+  if (index < 0) return null;
+  const emitted = mockIo.emit.mock.invocationCallOrder[index];
+  const toIndex = mockIo.to.mock.invocationCallOrder.findLastIndex((order) => order < emitted);
+  return { target: mockIo.to.mock.calls[toIndex]?.[0], payload: mockIo.emit.mock.calls[index][1] };
+}
+
 // ── Seed data ────────────────────────────────────────────────
 const ROOM_DIRECT = {
   id: ROOM_D,
@@ -233,7 +245,7 @@ describe('POST /api/chat/messages', () => {
     const { connectedUsers } = require('../../socket/chatSocketio');
     connectedUsers.set(U2, new Set(['socket-u2']));
     try {
-      await request(app)
+      const sent = await request(app)
         .post('/api/chat/messages')
         .set('Authorization', 'Bearer test-token')
         .send({
@@ -241,11 +253,13 @@ describe('POST /api/chat/messages', () => {
           messageText: 'Socket test',
           messageType: 'text',
         });
+      expect(sent.status).toBe(201);
       // Delivered after the reply, once the room's members are read (normally within a few milliseconds).
-      for (let i = 0; i < 400 && !mockIo.emit.mock.calls.length; i += 1) await new Promise((r) => setTimeout(r, 5));
+      const delivery = await deliveredTo(mockIo, (event, payload) => event === 'message:new' && payload?.id === sent.body.message.id);
 
-      expect(mockIo.to).toHaveBeenCalledWith('socket-u2');
-      expect(mockIo.emit).toHaveBeenCalledWith('message:new', expect.objectContaining({
+      expect(delivery).not.toBeNull();
+      expect(delivery.target).toBe('socket-u2');
+      expect(delivery.payload).toEqual(expect.objectContaining({
         message: 'Socket test',
         preview: 'Socket test',
         other_user_id: U1,
