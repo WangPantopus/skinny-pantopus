@@ -623,11 +623,11 @@ final class DeepLinkRouterSignedOutTests: XCTestCase {
     }
 
     /// The stashed form must stay percent-encoded — rebuilding it from the
-    /// decoded path components would turn an encoded `/` inside an id into a
-    /// real separator and replay a different link.
+    /// decoded path components would turn an encoded space inside an id into
+    /// a raw one, and the replayed string would no longer parse.
     func testSignedOutHTTPSContentKeepsPercentEncoding() throws {
-        try DeepLinkRouter.shared.handle(url: XCTUnwrap(URL(string: "https://pantopus.app/post/a%2Fb")))
-        XCTAssertEqual(PendingDeepLinkStore.peek(), "pantopus://post/a%2Fb")
+        try DeepLinkRouter.shared.handle(url: XCTUnwrap(URL(string: "https://pantopus.app/post/a%20b")))
+        XCTAssertEqual(PendingDeepLinkStore.peek(), "pantopus://post/a%20b")
     }
 
     func testSignedOutAuthOwnedPublishesAndIsNotPersisted() throws {

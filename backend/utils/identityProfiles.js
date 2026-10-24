@@ -163,13 +163,16 @@ async function localDisplayNames(userIds) {
   return names;
 }
 
+// A failed read throws: syncLocalProfileLocality would otherwise clear the person's public place as if they had hidden
+// it, and public_neighborhood can't be derived again.
 async function canExposePublicLocality(userId) {
   if (!userId) return false;
-  const { data } = await supabaseAdmin
+  const { data, error } = await supabaseAdmin
     .from('UserPrivacySettings')
     .select('show_neighborhood')
     .eq('user_id', userId)
     .maybeSingle();
+  if (error) throw error;
   return data?.show_neighborhood === 'public';
 }
 
@@ -208,21 +211,40 @@ async function getLocalProfileByUserId(userId) {
   return data || null;
 }
 
+// A Local Profile read that failed. The caller refuses (503): guessing would show the private account instead.
+function localProfileUnavailable(cause) {
+  return Object.assign(new Error('This profile can\'t be loaded right now. Please try again.'), {
+    code: 'LOCAL_PROFILE_UNAVAILABLE', status: 503, cause,
+  });
+}
+
+// The Local Profile a handle names. An account username finds its person's Local Profile too, and only someone who
+// has none is shown by a profile made from their account. A failed read throws: the account's name, photo and bio,
+// with none of the Local Profile's visibility settings, are never shown in its place.
 async function getLocalProfileByHandle(handle) {
   const normalized = normalizeHandle(handle);
-  const { data } = await supabaseAdmin
+  const { data, error } = await supabaseAdmin
     .from('LocalProfile')
     .select('*')
     .eq('handle_normalized', normalized)
     .maybeSingle();
+  if (error) throw localProfileUnavailable(error);
   if (data) return data;
 
-  const { data: user } = await supabaseAdmin
+  const { data: user, error: userError } = await supabaseAdmin
     .from('User')
     .select('id, username, name, first_name, middle_name, last_name, profile_picture_url, bio, city, state, verified')
     .eq('username', handle)
     .maybeSingle();
+  if (userError) throw localProfileUnavailable(userError);
   if (!user) return null;
+  const { data: own, error: ownError } = await supabaseAdmin
+    .from('LocalProfile')
+    .select('*')
+    .eq('user_id', user.id)
+    .maybeSingle();
+  if (ownError) throw localProfileUnavailable(ownError);
+  if (own) return own;
   const exposeLocality = await canExposePublicLocality(user.id);
   return {
     id: `legacy-local-${user.id}`,

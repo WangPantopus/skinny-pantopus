@@ -85,7 +85,7 @@ sealed interface PlanRowEnd {
  * The plan row (board P2): a 44 dp tile, the title (16/21 semibold) and one line of when, where and distance, and
  * one thing at the end. At large text both lines wrap instead of cutting off, and a status or note moves under them.
  * When the words don't fit on one line each, they take two, and a status moves under them (as on iOS), so a title or
- * a distance is never cut off.
+ * a distance is never cut off. [below] adds lines under the second one (H6's hours and why a place was suggested).
  */
 @Composable
 fun PlanRow(
@@ -97,6 +97,7 @@ fun PlanRow(
     leading: @Composable () -> Unit,
     spoken: String? = null,
     onClick: (() -> Unit)? = null,
+    below: (@Composable () -> Unit)? = null,
 ) {
     val large = LocalDensity.current.fontScale >= LARGE_TEXT_SCALE
     var crowded by remember(title, subtitle, end) { mutableStateOf(false) }
@@ -144,6 +145,7 @@ fun PlanRow(
                     overflow = TextOverflow.Ellipsis,
                     onTextLayout = onLayout,
                 )
+                below?.invoke()
                 // At large text, or when the words are crowded, the end goes under them so it doesn't squeeze the title.
                 if (endBelow) {
                     Box(modifier = Modifier.padding(top = Spacing.s1)) { PlanRowEndSlot(end) }

@@ -12,6 +12,7 @@ import app.pantopus.android.data.api.models.plans.PlanGameRefDto
 import app.pantopus.android.data.api.models.plans.PlanGpsInput
 import app.pantopus.android.data.api.models.plans.PlanNearbyPlaceDto
 import app.pantopus.android.data.api.models.plans.PlanPlaceInput
+import app.pantopus.android.data.api.models.plans.PlanPlaceSuggestBody
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.GeoApi
@@ -21,6 +22,7 @@ import app.pantopus.android.data.plans.PlanAutoRule
 import app.pantopus.android.data.plans.PlanFormat
 import app.pantopus.android.data.plans.PlanKind
 import app.pantopus.android.data.plans.PlanLocationResolver
+import app.pantopus.android.data.plans.PlanPlaceQuery
 import app.pantopus.android.data.plans.PlanStudyStyle
 import app.pantopus.android.data.plans.PlansEvents
 import app.pantopus.android.data.plans.PlansFeature
@@ -116,9 +118,15 @@ data class HostUi(
     val home: HostHome? = null,
     val places: List<PlanNearbyPlaceDto> = emptyList(),
     val placesLoading: Boolean = false,
+    /** The server is still gathering the area's places (a first look can take up to a minute). */
+    val placesGathering: Boolean = false,
+    /** Why H6's places couldn't load, shown with "Try again". */
+    val placesError: String? = null,
     val placesQuery: String = "",
     /** The places' credit, shown under the list ("© OpenStreetMap contributors"). */
     val placesAttribution: String? = null,
+    /** H6's "Suggest places" (or "Ask Pantopus" for the search text). */
+    val suggestions: PlaceSuggestions = PlaceSuggestions.Idle,
     val placeCandidate: PickedPlace? = null,
     val hereNow: HereNowState = HereNowState.Idle,
     /** Every home of the host's with a point: "You're here now" never picks a place right at one. */
@@ -159,6 +167,8 @@ class HostFlowViewModel
         private var againFrom: String? = null
 
         private var placesSearch: Job? = null
+        private var placesRead: Job? = null
+        private var suggestJob: Job? = null
 
         private val _ui =
             MutableStateFlow(
@@ -249,6 +259,7 @@ class HostFlowViewModel
             // Hosting a playdate needs a verified address (`/mine` says where the person stands; unknown means yes).
             val verified = (repository.mineCopy() ?: repository.mine().data)?.viewer?.verifiedAddress ?: true
             _ui.update { it.copy(home = home, homePoints = homePoints, games = games, canHostPlaydates = verified) }
+            warmPlaces(home)
             val draft = _ui.value.draft
             when {
                 gameId != null -> games.firstOrNull { it.id == gameId }?.let(::pickGame)
@@ -390,8 +401,40 @@ class HostFlowViewModel
         // ---- H6 ----
 
         fun openPlaces() {
-            _ui.update { it.copy(step = HostStep.Place, placeCandidate = it.draft.place, hereNow = HereNowState.Idle) }
-            viewModelScope.launch { loadPlaces() }
+            suggestJob?.cancel()
+            _ui.update {
+                it.copy(
+                    step = HostStep.Place,
+                    placeCandidate = it.draft.place,
+                    hereNow = HereNowState.Idle,
+                    placesError = null,
+                    suggestions = PlaceSuggestions.Idle,
+                )
+            }
+            placesRead?.cancel()
+            placesRead = viewModelScope.launch { loadPlaces() }
+        }
+
+        /** "Try again" under H6's list: the same read again (the search's, while searching). */
+        fun retryPlaces() {
+            val origin = _ui.value.origin
+            val query = _ui.value.placesQuery.trim().takeIf(String::isNotEmpty)
+            placesRead?.cancel()
+            placesRead = viewModelScope.launch { if (origin == null) loadPlaces() else fetchPlaces(origin, query) }
+        }
+
+        /**
+         * Starts the server gathering the public places around the host when the flow opens, so H6 usually opens on a
+         * full list: a new area can take the map servers up to a minute (as on iOS). Nothing is shown from it.
+         */
+        private fun warmPlaces(home: HostHome?) {
+            viewModelScope.launch {
+                val point =
+                    locations.gpsFix()?.let { it.latitude to it.longitude }
+                        ?: home?.let { h -> if (h.latitude != null && h.longitude != null) h.latitude to h.longitude else null }
+                        ?: return@launch
+                repository.nearbyPlaces(point.first, point.second, wait = false)
+            }
         }
 
         private suspend fun loadPlaces() {
@@ -402,57 +445,103 @@ class HostFlowViewModel
                     ?: home?.let { h -> if (h.latitude != null && h.longitude != null) h.latitude to h.longitude else null }
                     ?: locations.resolve()?.let { it.latitude to it.longitude }
             if (origin == null) {
-                _ui.update { it.copy(error = "Share your location or add your home to find places nearby.") }
+                _ui.update { it.copy(placesError = "Share your location or add your home to find places nearby.") }
                 return
             }
-            _ui.update { it.copy(origin = origin, placesLoading = true) }
+            _ui.update { it.copy(origin = origin) }
             fetchPlaces(origin, query = null)
         }
 
+        /** What H6's list and suggestions are for: the draft's kind, a pickup game's sport, and its time. */
+        private fun planPlaceQuery(): PlanPlaceQuery? {
+            val ui = _ui.value
+            val kind = ui.draft.kind ?: return null
+            val start = ui.draft.start ?: return null
+            return placeQuery(kind, ui.draft.sport, start, ui.draft.end, ui.zone)
+        }
+
         /**
-         * One places read. The first ask for an area may come back `loading` while OpenStreetMap is slow: the list
-         * keeps its skeleton and asks again a few seconds later.
+         * One places read, ordered for the plan. A first ask for an area may come back `loading` while OpenStreetMap is
+         * slow: the list keeps its skeleton (saying why after the first such answer) and the read asks again.
          */
         private suspend fun fetchPlaces(
             origin: Pair<Double, Double>,
             query: String?,
         ) {
-            repeat(PLACES_ATTEMPTS) { attempt ->
-                val result = repository.nearbyPlaces(origin.first, origin.second, query)
-                if (query != _ui.value.placesQuery.trim().takeIf(String::isNotEmpty)) return
+            val stillAsked = { query == _ui.value.placesQuery.trim().takeIf(String::isNotEmpty) }
+            _ui.update { it.copy(placesLoading = true, placesGathering = false, placesError = null) }
+            val result =
+                repository.nearbyPlacesWhenReady(origin.first, origin.second, query, planPlaceQuery()) { reply ->
+                    if (stillAsked()) {
+                        _ui.update { it.copy(placesGathering = true, placesAttribution = reply.attribution ?: it.placesAttribution) }
+                    }
+                }
+            if (!stillAsked()) return
+            _ui.update {
                 when (result) {
-                    is NetworkResult.Success -> {
-                        val reply = result.data
-                        val waiting = reply.loading && reply.places.isEmpty() && attempt < PLACES_ATTEMPTS - 1
-                        _ui.update {
+                    is NetworkResult.Success ->
+                        if (result.data.loading) {
+                            it.copy(placesLoading = false, placesGathering = false, placesError = PLACES_SLOW)
+                        } else {
                             it.copy(
-                                placesLoading = waiting,
-                                places = if (waiting) it.places else reply.places,
-                                placesAttribution = reply.attribution ?: it.placesAttribution,
-                                error = null,
+                                placesLoading = false,
+                                placesGathering = false,
+                                places = result.data.places,
+                                placesAttribution = result.data.attribution ?: it.placesAttribution,
                             )
                         }
-                        if (!waiting) return
-                        delay(PLACES_RETRY_MS)
-                    }
-                    is NetworkResult.Failure -> {
-                        _ui.update { it.copy(placesLoading = false, error = result.error.planMessage) }
-                        return
-                    }
+                    is NetworkResult.Failure ->
+                        it.copy(placesLoading = false, placesGathering = false, placesError = placesFailure(result.error))
                 }
             }
         }
 
         /** Search by name: the list filters at once, and the server looks further than the nearest 40. */
         fun searchPlaces(query: String) {
+            if (query.trim() != _ui.value.placesQuery.trim()) {
+                // Suggestions answer the words they were asked with (as on iOS).
+                suggestJob?.cancel()
+                _ui.update { it.copy(suggestions = PlaceSuggestions.Idle) }
+            }
             _ui.update { it.copy(placesQuery = query) }
             placesSearch?.cancel()
             val origin = _ui.value.origin ?: return
             placesSearch =
                 viewModelScope.launch {
                     delay(SEARCH_DEBOUNCE_MS)
-                    _ui.update { it.copy(placesLoading = true) }
                     fetchPlaces(origin, query.trim().takeIf(String::isNotEmpty))
+                }
+        }
+
+        /** H6's "Suggest places" ([ask] null), or "Ask Pantopus" for what the host typed in the search box. */
+        fun suggestPlaces(ask: String?) {
+            val ui = _ui.value
+            val origin = ui.origin ?: return
+            val draft = ui.draft
+            val kind = draft.kind ?: return
+            val plan = planPlaceQuery() ?: return
+            val body =
+                PlanPlaceSuggestBody(
+                    latitude = origin.first,
+                    longitude = origin.second,
+                    kind = kind.wire,
+                    title = draft.title.trim().takeIf(String::isNotEmpty),
+                    about = draft.about.trim().takeIf(String::isNotEmpty),
+                    startsAt = plan.startsAt,
+                    endsAt = plan.endsAt,
+                    spots = draft.spots,
+                    details = details(kind, draft, ui.games.firstOrNull { it.id == draft.gameId }),
+                    ask = ask,
+                )
+            suggestJob?.cancel()
+            _ui.update { it.copy(suggestions = PlaceSuggestions.Loading(gathering = false)) }
+            suggestJob =
+                viewModelScope.launch {
+                    val result =
+                        repository.suggestPlacesWhenReady(body) {
+                            _ui.update { it.copy(suggestions = PlaceSuggestions.Loading(gathering = true)) }
+                        }
+                    _ui.update { it.copy(suggestions = PlaceSuggestions.from(result, ask)) }
                 }
         }
 
@@ -701,7 +790,7 @@ class HostFlowViewModel
             const val QUARTER_HOUR = 15L
             const val GAME_ON_LEAD_MINUTES = 5L
             const val MAX_MINUTES = 8 * 60L
-            const val PLACES_ATTEMPTS = 4
+            const val PLACES_ATTEMPTS = 8
             const val PLACES_RETRY_MS = 3_000L
             const val SEARCH_DEBOUNCE_MS = 350L
 

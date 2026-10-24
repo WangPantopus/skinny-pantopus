@@ -12,8 +12,21 @@
 
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
+const { userFacing } = require('./userFacingError');
 const householdClaimConfig = require('../config/householdClaims');
 const homeClaimRoutingService = require('../services/homeClaimRoutingService');
+
+/**
+ * A read a decision depends on failed: refuse (503) instead of deciding on
+ * missing data. A failed count is not zero owners and a failed lookup is not
+ * "no earlier claim".
+ */
+function policyUnavailable(code, message) {
+  return userFacing(Object.assign(new Error(message), { code, status: 503, statusCode: 503 }));
+}
+
+const claimCheckUnavailable = () => policyUnavailable('HOME_CLAIM_CHECK_UNAVAILABLE',
+  'Couldn\'t check this claim. Nothing was submitted. Please try again.');
 
 // ============================================================
 // CONSTANTS
@@ -68,11 +81,12 @@ const MAX_RESIDENCY_CLAIMS_PER_30D = 5;
 async function canSubmitResidencyClaim(homeId, userId) {
   const errors = [];
 
-  const { data: home } = await supabaseAdmin
+  const { data: home, error: homeError } = await supabaseAdmin
     .from('Home')
     .select('id, security_state, home_status')
     .eq('id', homeId)
-    .single();
+    .maybeSingle();
+  if (homeError) throw claimCheckUnavailable();
   if (!home) return { allowed: false, errors: ['Home not found'], blockCode: null, existingClaimId: null };
 
   if (home.home_status !== 'active') errors.push('Home is not active');
@@ -82,18 +96,19 @@ async function canSubmitResidencyClaim(homeId, userId) {
 
   const now = new Date();
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-  const { count: userClaimCount } = await supabaseAdmin
+  const { count: userClaimCount, error: userCountError } = await supabaseAdmin
     .from('HomeOwnershipClaim')
     .select('id', { count: 'exact', head: true })
     .eq('claimant_user_id', userId)
     .eq('claim_type', 'resident')
     .gte('created_at', thirtyDaysAgo.toISOString());
+  if (userCountError) throw claimCheckUnavailable();
   if ((userClaimCount || 0) >= MAX_RESIDENCY_CLAIMS_PER_30D) {
     errors.push('You have reached the maximum number of residency claims for this period');
   }
 
   const cooldownDate = new Date(now.getTime() - REJECTION_COOLDOWN_DAYS * 24 * 60 * 60 * 1000);
-  const { data: recentRejection } = await supabaseAdmin
+  const { data: recentRejection, error: rejectionError } = await supabaseAdmin
     .from('HomeOwnershipClaim')
     .select('id')
     .eq('home_id', homeId)
@@ -103,9 +118,10 @@ async function canSubmitResidencyClaim(homeId, userId) {
     .gte('updated_at', cooldownDate.toISOString())
     .limit(1)
     .maybeSingle();
+  if (rejectionError) throw claimCheckUnavailable();
   if (recentRejection) errors.push('Please wait before submitting another claim for this home');
 
-  const { data: existingActive } = await supabaseAdmin
+  const { data: existingActive, error: activeError } = await supabaseAdmin
     .from('HomeOwnershipClaim')
     .select('id')
     .eq('home_id', homeId)
@@ -115,6 +131,7 @@ async function canSubmitResidencyClaim(homeId, userId) {
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
+  if (activeError) throw claimCheckUnavailable();
 
   return {
     allowed: errors.length === 0 && !existingActive,
@@ -132,14 +149,17 @@ async function canSubmitOwnerClaim(homeId, userId) {
   const errors = [];
   let routingClassification = 'standalone_claim';
 
-  const { data: home } = await supabaseAdmin
+  const { data: home, error: homeError } = await supabaseAdmin
     .from('Home')
     .select('id, security_state, tenure_mode, owner_claim_policy, home_status')
     .eq('id', homeId)
-    .single();
+    .maybeSingle();
 
+  if (homeError) throw claimCheckUnavailable();
   if (!home) return { allowed: false, errors: ['Home not found'], blockCode: null };
 
+  // A claim on a home with verified owners is a challenge, which ordinary review refuses: an unread
+  // classification must not file it as standalone.
   try {
     const classification = await homeClaimRoutingService.classifySubmission({ homeId, userId });
     routingClassification = classification.routingClassification;
@@ -149,6 +169,7 @@ async function canSubmitOwnerClaim(homeId, userId) {
       claimant_user_id: userId,
       error: error.message,
     });
+    throw claimCheckUnavailable();
   }
 
   if (home.home_status !== 'active') {
@@ -167,28 +188,30 @@ async function canSubmitOwnerClaim(homeId, userId) {
   const now = new Date();
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-  const { count: userClaimCount } = await supabaseAdmin
+  const { count: userClaimCount, error: userCountError } = await supabaseAdmin
     .from('HomeOwnershipClaim')
     .select('id', { count: 'exact', head: true })
     .eq('claimant_user_id', userId)
     .gte('created_at', thirtyDaysAgo.toISOString());
 
+  if (userCountError) throw claimCheckUnavailable();
   if (userClaimCount >= MAX_OWNER_CLAIMS_PER_30D) {
     errors.push('You have reached the maximum number of ownership claims for this period');
   }
 
-  const { count: homeClaimCount } = await supabaseAdmin
+  const { count: homeClaimCount, error: homeCountError } = await supabaseAdmin
     .from('HomeOwnershipClaim')
     .select('id', { count: 'exact', head: true })
     .eq('home_id', homeId)
     .gte('created_at', thirtyDaysAgo.toISOString());
 
+  if (homeCountError) throw claimCheckUnavailable();
   if (homeClaimCount >= MAX_CLAIMS_PER_HOME_PER_30D) {
     errors.push('This home has reached the maximum number of claims for this period');
   }
 
   const cooldownDate = new Date(now.getTime() - REJECTION_COOLDOWN_DAYS * 24 * 60 * 60 * 1000);
-  const { data: recentRejection } = await supabaseAdmin
+  const { data: recentRejection, error: rejectionError } = await supabaseAdmin
     .from('HomeOwnershipClaim')
     .select('id')
     .eq('home_id', homeId)
@@ -198,11 +221,12 @@ async function canSubmitOwnerClaim(homeId, userId) {
     .limit(1)
     .maybeSingle();
 
+  if (rejectionError) throw claimCheckUnavailable();
   if (recentRejection) {
     errors.push('Please wait before submitting another claim for this home');
   }
 
-  const { data: existingActive } = await supabaseAdmin
+  const { data: existingActive, error: activeError } = await supabaseAdmin
     .from('HomeOwnershipClaim')
     .select('id')
     .eq('home_id', homeId)
@@ -211,6 +235,7 @@ async function canSubmitOwnerClaim(homeId, userId) {
     .limit(1)
     .maybeSingle();
 
+  if (activeError) throw claimCheckUnavailable();
   if (existingActive) {
     errors.push('You already have an active claim for this home');
   }
@@ -218,7 +243,7 @@ async function canSubmitOwnerClaim(homeId, userId) {
   // idx_home_claim_active_unique: only one row per home in submitted / pending_review /
   // pending_challenge_window. Block before insert so clients get a clear code (not 23505).
   if (!existingActive) {
-    const { data: otherInFlight } = await supabaseAdmin
+    const { data: otherInFlight, error: inFlightError } = await supabaseAdmin
       .from('HomeOwnershipClaim')
       .select('id')
       .eq('home_id', homeId)
@@ -227,6 +252,7 @@ async function canSubmitOwnerClaim(homeId, userId) {
       .limit(1)
       .maybeSingle();
 
+    if (inFlightError) throw claimCheckUnavailable();
     if (otherInFlight) {
       if (!householdClaimConfig.flags.parallelSubmission) {
         errors.push('Another ownership verification is already in progress for this home');
@@ -301,20 +327,29 @@ async function calculateQuorumRequirement(actionType, homeId) {
     return { needed: false, riskTier: 0 };
   }
 
-  const { data: owners } = await supabaseAdmin
+  // A failed read is not "no other owners": without the count, refuse rather than let one owner act alone.
+  const { data: owners, error } = await supabaseAdmin
     .from('HomeOwner')
     .select('id, subject_id, is_primary_owner')
     .eq('home_id', homeId)
     .eq('owner_status', 'verified');
 
-  const ownerCount = owners?.length || 0;
+  if (error || !Array.isArray(owners)) {
+    throw policyUnavailable('HOME_OWNERS_UNAVAILABLE',
+      'Couldn\'t check this home\'s owners. Nothing was changed. Please try again.');
+  }
+
+  const ownerCount = owners.length;
   if (ownerCount <= 1) {
     return { needed: false, riskTier, reason: 'single_owner' };
   }
 
   const config = RISK_TIER_CONFIG[riskTier];
   let requiredRule = 'majority';
-  let requiredApprovals = Math.ceil(ownerCount / 2);
+  // More than half of the owners. The proposer's own approval counts, so with
+  // two owners the other one approves, or (constructive consent) lets the
+  // waiting period pass without rejecting.
+  let requiredApprovals = Math.floor(ownerCount / 2) + 1;
 
   if (riskTier === 3) {
     requiredRule = ownerCount === 2 ? '2_of_n' : 'primary_plus_one';
@@ -415,15 +450,18 @@ function shouldTriggerDispute(home, claim, existingOwners) {
 // Risk scoring
 // ============================================================
 
+// A failed read refuses: a missing count would lower the score and let a risky
+// claim skip review.
 async function getClaimRiskScore(claim, claimantUserId) {
   let score = 0;
 
-  const { data: user } = await supabaseAdmin
+  const { data: user, error: userError } = await supabaseAdmin
     .from('User')
     .select('created_at')
     .eq('id', claimantUserId)
-    .single();
+    .maybeSingle();
 
+  if (userError) throw claimCheckUnavailable();
   if (user) {
     const accountAgeDays = (Date.now() - new Date(user.created_at).getTime()) / (1000 * 60 * 60 * 24);
     if (accountAgeDays < 1) score += 40;
@@ -432,21 +470,23 @@ async function getClaimRiskScore(claim, claimantUserId) {
   }
 
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-  const { count: recentClaims } = await supabaseAdmin
+  const { count: recentClaims, error: recentError } = await supabaseAdmin
     .from('HomeOwnershipClaim')
     .select('id', { count: 'exact', head: true })
     .eq('claimant_user_id', claimantUserId)
     .gte('created_at', thirtyDaysAgo.toISOString());
 
+  if (recentError) throw claimCheckUnavailable();
   if (recentClaims > 3) score += 30;
   else if (recentClaims > 1) score += 15;
 
-  const { count: rejections } = await supabaseAdmin
+  const { count: rejections, error: rejectionsError } = await supabaseAdmin
     .from('HomeOwnershipClaim')
     .select('id', { count: 'exact', head: true })
     .eq('claimant_user_id', claimantUserId)
     .eq('state', 'rejected');
 
+  if (rejectionsError) throw claimCheckUnavailable();
   if (rejections > 2) score += 25;
   else if (rejections > 0) score += 10;
 

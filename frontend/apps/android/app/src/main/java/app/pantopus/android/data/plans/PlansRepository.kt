@@ -14,6 +14,8 @@ import app.pantopus.android.data.api.models.plans.PlanGameDto
 import app.pantopus.android.data.api.models.plans.PlanGpsInput
 import app.pantopus.android.data.api.models.plans.PlanNearbyPlacesResponse
 import app.pantopus.android.data.api.models.plans.PlanPinsResponse
+import app.pantopus.android.data.api.models.plans.PlanPlaceSuggestBody
+import app.pantopus.android.data.api.models.plans.PlanPlaceSuggestionsResponse
 import app.pantopus.android.data.api.models.plans.PlanReportBody
 import app.pantopus.android.data.api.models.plans.PlanRequestsResponse
 import app.pantopus.android.data.api.models.plans.PlansListResponse
@@ -30,6 +32,7 @@ import app.pantopus.android.data.store.ScreenStore
 import app.pantopus.android.data.store.StoreKeys
 import app.pantopus.android.data.store.StoreTopics
 import app.pantopus.android.data.store.Stored
+import kotlinx.coroutines.delay
 import org.json.JSONObject
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -307,13 +310,67 @@ class PlansRepository
                 is NetworkResult.Failure -> result
             }
 
-        /** Public places for H6, nearest first; `loading` asks the caller to try again in a few seconds. */
+        /**
+         * Public places for H6: nearest first, or for [plan] the ones that suit it first, each saying whether it's open
+         * then. `loading` asks the caller to try again in a few seconds. [wait] false only starts the server gathering a
+         * new area (the host flow opening) and answers at once.
+         */
         suspend fun nearbyPlaces(
             latitude: Double,
             longitude: Double,
             query: String? = null,
+            plan: PlanPlaceQuery? = null,
+            wait: Boolean = true,
         ): NetworkResult<PlanNearbyPlacesResponse> =
-            safeApiCall { api.nearbyPlaces(latitude, longitude, query?.trim()?.takeIf(String::isNotEmpty)) }
+            safeApiCall {
+                api.nearbyPlaces(
+                    latitude = latitude,
+                    longitude = longitude,
+                    query = query?.trim()?.takeIf(String::isNotEmpty),
+                    kind = plan?.kind,
+                    sport = plan?.sport,
+                    startsAt = plan?.startsAt,
+                    endsAt = plan?.endsAt,
+                    wait = if (wait) null else "0",
+                )
+            }
+
+        /**
+         * H6's places once the server has them. An area it hasn't looked at yet answers `loading` while it gathers the
+         * places (up to a minute when the map servers are busy), so this asks again every 3 seconds, telling
+         * [onGathering] each time, for up to [PLACES_GATHER_LIMIT_MS]; the last reply still says `loading` when that ran
+         * out.
+         */
+        suspend fun nearbyPlacesWhenReady(
+            latitude: Double,
+            longitude: Double,
+            query: String? = null,
+            plan: PlanPlaceQuery? = null,
+            onGathering: (PlanNearbyPlacesResponse) -> Unit = {},
+        ): NetworkResult<PlanNearbyPlacesResponse> =
+            whenGathered({ nearbyPlaces(latitude, longitude, query, plan) }, { it.loading }, onGathering)
+
+        /** H6's "Suggest places": up to three places for the draft, each with `why`, once the area's places are in. */
+        suspend fun suggestPlacesWhenReady(
+            body: PlanPlaceSuggestBody,
+            onGathering: () -> Unit = {},
+        ): NetworkResult<PlanPlaceSuggestionsResponse> =
+            whenGathered({ safeApiCall { api.suggestPlaces(body) } }, { it.loading }, { onGathering() })
+
+        private suspend fun <T> whenGathered(
+            read: suspend () -> NetworkResult<T>,
+            gathering: (T) -> Boolean,
+            onGathering: (T) -> Unit,
+        ): NetworkResult<T> {
+            val started = System.nanoTime()
+            while (true) {
+                val result = read()
+                if (result !is NetworkResult.Success || !gathering(result.data)) return result
+                if ((System.nanoTime() - started) / NANOS_PER_MILLI > PLACES_GATHER_LIMIT_MS) return result
+                onGathering(result.data)
+                delay(PLACES_POLL_MS)
+            }
+        }
 
         /** Plans changed elsewhere (a push, another device): the next read of every Plans entry asks again. */
         fun changed(planId: String? = null) {
@@ -356,6 +413,22 @@ class PlansRepository
             const val CARD_CACHE = 64
         }
     }
+
+/** How long H6 keeps asking while the server gathers a new area's places, and how often. */
+const val PLACES_GATHER_LIMIT_MS = 150_000L
+const val PLACES_POLL_MS = 3_000L
+private const val NANOS_PER_MILLI = 1_000_000L
+
+/**
+ * What H6's list is for: the plan's [kind] (the places that suit it come first), a pickup game's [sport], and its time
+ * (each place says whether it's open then), as instants (`2026-10-24T19:00:00Z`).
+ */
+data class PlanPlaceQuery(
+    val kind: String,
+    val sport: String?,
+    val startsAt: String,
+    val endsAt: String,
+)
 
 /** Where the person browses from: distances are measured from here; [gps] is the fix time when it's GPS. */
 data class PlanOrigin(

@@ -122,7 +122,7 @@ final class PlaceFridgeCardViewModel {
                 )
             )
             pendingIssue = nil
-            UIPasteboard.general.string = response.card.cardUrl
+            SensitivePasteboard.copy(response.card.cardUrl)
             toast = ("Card issued — link copied. Open it to print for the fridge.", false)
             await load()
         } catch let error as APIError {
@@ -133,7 +133,7 @@ final class PlaceFridgeCardViewModel {
     }
 
     func copyLink(_ card: FridgeCard) {
-        UIPasteboard.general.string = card.cardUrl
+        SensitivePasteboard.copy(card.cardUrl)
         toast = ("Card link copied.", false)
     }
 

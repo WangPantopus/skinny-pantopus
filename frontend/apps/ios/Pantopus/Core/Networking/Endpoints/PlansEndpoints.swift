@@ -144,12 +144,36 @@ public enum PlansEndpoints {
     }
 
     /// `GET /api/plans/places/nearby` — public places for H6, cached per
-    /// area for 24 hours on the server. Route `backend/routes/plans.js`.
-    public static func nearbyPlaces(latitude: Double, longitude: Double, query text: String? = nil) -> Endpoint {
+    /// area for 24 hours on the server. With the plan (`for`), the places
+    /// that suit it come first and each says whether it's open then.
+    /// `wait: false` only starts gathering a new area (the host flow
+    /// opening) and answers at once. Route `backend/routes/plans.js`.
+    public static func nearbyPlaces(
+        latitude: Double,
+        longitude: Double,
+        query text: String? = nil,
+        for plan: PlanPlaceQuery? = nil,
+        wait: Bool = true
+    ) -> Endpoint {
         var query = ["latitude": String(latitude), "longitude": String(longitude)]
         // `q` filters the same public places by name (never a street address).
         if let text, !text.isEmpty { query["q"] = text }
+        if let plan {
+            query["kind"] = plan.kind.rawValue
+            if let sport = plan.sport { query["sport"] = sport }
+            query["starts_at"] = PlanTime.string(plan.startsAt)
+            query["ends_at"] = PlanTime.string(plan.endsAt)
+        }
+        if !wait { query["wait"] = "0" }
         return Endpoint(method: .get, path: "\(base)/places/nearby", query: query)
+    }
+
+    /// `POST /api/plans/places/suggest` — H6's "Suggest places": up to three
+    /// public places from the same list that suit the draft, each with
+    /// `why`; 202 while the area's places are still loading. Route
+    /// `backend/routes/plans.js`.
+    public static func suggestPlaces(_ body: PlanPlaceSuggestBody) -> Endpoint {
+        Endpoint(method: .post, path: "\(base)/places/suggest", body: body)
     }
 
     // MARK: - Hosting
