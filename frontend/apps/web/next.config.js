@@ -72,6 +72,17 @@ const createNextConfig = (phase) => ({
     ];
     const pageCsp = `object-src ${objectSources.join(' ')}; base-uri 'self'`;
     return [
+      {
+        source: '/chat-offline',
+        headers: [
+          { key: 'X-Pantopus-Chat-Shell', value: '1' },
+          { key: 'X-Robots-Tag', value: 'noindex, nofollow' },
+        ],
+      },
+      {
+        source: '/chat-service-worker.js',
+        headers: [{ key: 'Cache-Control', value: 'no-cache' }],
+      },
       // Clickjacking protection for every page except booking embeds, which
       // other sites frame on purpose. Rules below override these per path.
       {

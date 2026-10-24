@@ -31,7 +31,7 @@ export function readTaskRecoveryValue<T>(db: IDBDatabase, store: string, key: st
   });
 }
 
-export async function taskRecoveryEncryptionKey(db: IDBDatabase, keyId: string): Promise<CryptoKey> {
+export async function taskRecoveryEncryptionKey(db: IDBDatabase, keyId: string, isCurrent: () => boolean = () => true): Promise<CryptoKey> {
   const saved = await readTaskRecoveryValue<CryptoKey>(db, 'keys', keyId);
   if (saved) return saved;
   const candidate = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
@@ -43,6 +43,7 @@ export async function taskRecoveryEncryptionKey(db: IDBDatabase, keyId: string):
     const request = keys.get(keyId);
     let selected: CryptoKey;
     request.onsuccess = () => {
+      if (!isCurrent()) { transaction.abort(); return; }
       selected = request.result || candidate;
       // A synchronous quota/security failure must reject the protected write,
       // not escape this callback or leave the caller waiting on initialization.

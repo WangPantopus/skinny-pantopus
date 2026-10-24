@@ -14,6 +14,7 @@ export default function ConversationPage() {
   // Back and Block go here, and anyone can put anything in a link: only our own
   // pages (a `javascript:` value would run in this page, `//host` would leave the site).
   const returnTo = safeRedirectPath(searchParams.get('returnTo'), '/app/chat');
+  const messageId = searchParams.get('message') || undefined;
 
   useEffect(() => {
     if (!otherUserId) router.replace('/app/chat');
@@ -26,6 +27,8 @@ export default function ConversationPage() {
       otherUserId={otherUserId}
       initialTopicId={topicId}
       returnTo={returnTo}
+      initialMessageId={messageId}
+      key={messageId || 'latest'}
     />
   );
 }

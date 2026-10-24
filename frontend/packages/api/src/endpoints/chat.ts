@@ -3,7 +3,7 @@
 // Real-time chat rooms and messages
 // ============================================================
 
-import { get, post, put, del } from '../client';
+import { get, post, put, patch, del, ApiRequestError } from '../client';
 import type { ApiRequestConfig } from '../client';
 import type {
   ChatRoom,
@@ -21,15 +21,20 @@ import type {
 export async function getChatRooms(filters?: {
   type?: 'direct' | 'group' | 'gig' | 'home';
   limit?: number;
+  before?: string;
 }): Promise<{ 
   rooms: ChatRoomWithDetails[];
   total: number;
   totalUnread: number;
+  hasMore?: boolean;
+  nextCursor?: string | null;
 }> {
   return get<{ 
     rooms: ChatRoomWithDetails[]; 
     total: number;
     totalUnread: number;
+    hasMore?: boolean;
+    nextCursor?: string | null;
   }>('/api/chat/rooms', filters);
 }
 
@@ -41,17 +46,22 @@ export async function getBusinessChatRooms(
   filters?: {
     type?: 'direct' | 'group' | 'gig' | 'home';
     limit?: number;
+    before?: string;
   }
 ): Promise<{
   rooms: ChatRoomWithDetails[];
   total: number;
   totalUnread: number;
+  hasMore?: boolean;
+  nextCursor?: string | null;
   businessUserId: string;
 }> {
   return get<{
     rooms: ChatRoomWithDetails[];
     total: number;
     totalUnread: number;
+    hasMore?: boolean;
+    nextCursor?: string | null;
     businessUserId: string;
   }>(`/api/chat/business/${businessUserId}/rooms`, filters);
 }
@@ -148,6 +158,7 @@ export async function getMessages(roomId: string, params?: {
   limit?: number;
   before?: string; // message ID for pagination
   after?: string;
+  sync?: boolean;
   asBusinessUserId?: string;
 }): Promise<{
   messages: (ChatMessage & {
@@ -160,11 +171,13 @@ export async function getMessages(roomId: string, params?: {
   })[];
   hasMore: boolean;
   nextCursor?: string | null;
+  syncCursors?: ChatSyncCursors;
 }> {
   return get<{
     messages: any[];
     hasMore: boolean;
     nextCursor?: string | null;
+    syncCursors?: ChatSyncCursors;
   }>(`/api/chat/rooms/${roomId}/messages`, params);
 }
 
@@ -175,6 +188,7 @@ export async function getConversationMessages(otherUserId: string, params?: {
   limit?: number;
   before?: string;
   after?: string;
+  sync?: boolean;
   asBusinessUserId?: string;
   topicId?: string;
 }): Promise<{
@@ -189,13 +203,65 @@ export async function getConversationMessages(otherUserId: string, params?: {
   hasMore: boolean;
   nextCursor?: string | null;
   roomIds: string[];
+  syncCursors?: ChatSyncCursors;
 }> {
   return get<{
     messages: any[];
     hasMore: boolean;
     nextCursor?: string | null;
     roomIds: string[];
+    syncCursors?: ChatSyncCursors;
   }>(`/api/chat/conversations/${otherUserId}/messages`, params);
+}
+
+export type ChatSyncCursors = Record<string, number>;
+export type ChatSyncMessage = ChatMessage & { sync_version?: number };
+export type ChatMessageTombstone = { id: string; room_id: string; deleted: true; sync_version: number };
+export type ChatReadReceipt = { roomId: string; userId: string; readAt: string; throughMessageId?: string; throughCreatedAt?: string };
+export interface ChatChanges {
+  messages: Array<ChatSyncMessage | ChatMessageTombstone>;
+  syncCursors: ChatSyncCursors;
+  untilCursors: ChatSyncCursors;
+  hasMore: boolean;
+  roomIds: string[];
+  removedRoomIds: string[];
+  resetRequired: boolean;
+  readReceipts: ChatReadReceipt[];
+  messageReadReceipts?: Array<{ messageId: string; readAt: string | null }>;
+}
+
+/** Resume a captured history snapshot; all topics share the same room revision. */
+export async function getMessageChanges(target: { roomId?: string; otherUserId?: string }, params: {
+  cursor: ChatSyncCursors;
+  until?: ChatSyncCursors;
+  limit?: number;
+  asBusinessUserId?: string;
+  readMessageIds?: string[];
+}): Promise<ChatChanges> {
+  const path = target.roomId ? `rooms/${target.roomId}` : `conversations/${target.otherUserId}`;
+  const url = `/api/chat/${path}/changes`;
+  try {
+    return await post<ChatChanges>(url, { ...params, limit: params.limit ?? 200 });
+  } catch (error) {
+    const status = (error as { statusCode?: number })?.statusCode;
+    if (status !== 404 && status !== 405) throw error;
+  }
+  // Older servers only accept GET. A large cursor map must fall back to the
+  // authorized history refresh rather than overflowing a proxy's URL limit.
+  const legacyParams = {
+    cursor: JSON.stringify(params.cursor),
+    ...(params.until ? { until: JSON.stringify(params.until) } : {}),
+    limit: String(params.limit ?? 200),
+    ...(params.asBusinessUserId ? { asBusinessUserId: params.asBusinessUserId } : {}),
+  };
+  if (url.length + 1 + new URLSearchParams(legacyParams).toString().length > 1900) {
+    throw new ApiRequestError({
+      message: 'Refresh conversation history to continue recovery.',
+      code: 'CHAT_SYNC_REFRESH_REQUIRED',
+      statusCode: 404,
+    });
+  }
+  return get<ChatChanges>(url, legacyParams);
 }
 
 /**
@@ -203,12 +269,17 @@ export async function getConversationMessages(otherUserId: string, params?: {
  */
 export async function markConversationAsRead(
   otherUserId: string,
-  options?: { asBusinessUserId?: string }
-): Promise<{ unreadCount: number; updatedRooms: number }> {
-  return post<{ unreadCount: number; updatedRooms: number }>(
-    `/api/chat/conversations/${otherUserId}/read`,
+  options?: { asBusinessUserId?: string; throughMessageId?: string; throughMessageIds?: Record<string, string>; topicId?: string }
+): Promise<{ unreadCount: number; updatedRooms: number; topicId?: string; readScope?: 'topic' }> {
+  // A selected topic has its own endpoint. Never retry against the legacy
+  // route: an older server would acknowledge every topic in the room.
+  const scope = options?.topicId ? `/topics/${encodeURIComponent(options.topicId)}` : '';
+  return post<{ unreadCount: number; updatedRooms: number; topicId?: string; readScope?: 'topic' }>(
+    `/api/chat/conversations/${otherUserId}${scope}/read`,
     {
       ...(options?.asBusinessUserId ? { asBusinessUserId: options.asBusinessUserId } : {}),
+      ...(options?.throughMessageId ? { throughMessageId: options.throughMessageId } : {}),
+      ...(options?.throughMessageIds ? { throughMessageIds: options.throughMessageIds } : {}),
     }
   );
 }
@@ -244,8 +315,8 @@ export async function editMessage(messageId: string, messageText: string): Promi
 /**
  * Delete a message
  */
-export async function deleteMessage(messageId: string): Promise<ApiResponse> {
-  return del<ApiResponse>(`/api/chat/messages/${messageId}`);
+export async function deleteMessage(messageId: string): Promise<ApiResponse & { sync_version?: number }> {
+  return del<ApiResponse & { sync_version?: number }>(`/api/chat/messages/${messageId}`);
 }
 
 /**
@@ -261,10 +332,13 @@ export async function markMessagesAsRead(roomId: string, messageId?: string): Pr
 
 export async function markMessagesAsReadForIdentity(
   roomId: string,
-  options: { messageId?: string; asBusinessUserId?: string }
-): Promise<{ unreadCount: number }> {
-  return post<{ unreadCount: number }>(`/api/chat/rooms/${roomId}/read`, {
+  options: { messageId?: string; asBusinessUserId?: string; throughMessageId?: string; throughMessageIds?: Record<string, string>; topicId?: string }
+): Promise<{ unreadCount: number; topicId?: string; readScope?: 'topic' }> {
+  const scope = options?.topicId ? `/topics/${encodeURIComponent(options.topicId)}` : '';
+  return post<{ unreadCount: number; topicId?: string; readScope?: 'topic' }>(`/api/chat/rooms/${roomId}${scope}/read`, {
     ...(options?.messageId ? { messageId: options.messageId } : {}),
+    ...(options?.throughMessageId ? { throughMessageId: options.throughMessageId } : {}),
+    ...(options?.throughMessageIds ? { throughMessageIds: options.throughMessageIds } : {}),
     ...(options?.asBusinessUserId ? { asBusinessUserId: options.asBusinessUserId } : {}),
   });
 }
@@ -298,6 +372,7 @@ export async function getChatStats(config?: ApiRequestConfig): Promise<{
     total_chats: number;
     total_messages: number;
     total_unread: number;
+    total_unmuted_unread?: number;
     direct_chats: number;
     gig_chats: number;
     home_chats: number;
@@ -306,28 +381,56 @@ export async function getChatStats(config?: ApiRequestConfig): Promise<{
   return get<{ stats: any }>('/api/chat/stats', undefined, config);
 }
 
-/**
- * Search messages in a room
- * @deprecated Not implemented server-side. No backend route exists.
- */
-export async function searchMessages(roomId: string, query: string): Promise<{
-  messages: ChatMessage[];
-  total: number;
-}> {
-  console.warn('searchMessages: not implemented server-side');
-  return get<{ messages: ChatMessage[]; total: number }>(
-    `/api/chat/rooms/${roomId}/search`,
-    { q: query }
-  );
+export interface ChatSearchResult {
+  messages: ChatSyncMessage[];
+  roomContexts: Record<string, { conversationId: string; kind: 'conversation' | 'room'; name: string; identity?: Record<string, unknown> | null }>;
+  hasMore: boolean;
+  nextCursor: string | null;
 }
 
-/**
- * Mute/unmute a chat room
- * @deprecated Not implemented server-side. No backend route exists.
- */
-export async function muteRoom(roomId: string, muted: boolean): Promise<ApiResponse> {
-  console.warn('muteRoom: not implemented server-side');
-  return put<ApiResponse>(`/api/chat/rooms/${roomId}/mute`, { muted });
+/** Server-authorized literal search, including messages outside loaded history. */
+export function searchChatMessages(query: string, options?: {
+  roomId?: string; otherUserId?: string; asBusinessUserId?: string; before?: string; limit?: number;
+}): Promise<ChatSearchResult> {
+  const path = options?.roomId ? `/rooms/${options.roomId}` : options?.otherUserId ? `/conversations/${options.otherUserId}` : '';
+  return get<ChatSearchResult>(`/api/chat${path}/search`, {
+    q: query, limit: options?.limit ?? 50,
+    ...(options?.before ? { before: options.before } : {}),
+    ...(options?.asBusinessUserId ? { asBusinessUserId: options.asBusinessUserId } : {}),
+  });
+}
+
+export function searchMessages(roomId: string, query: string): Promise<ChatSearchResult> {
+  return searchChatMessages(query, { roomId });
+}
+
+export interface ChatMessageContext {
+  messages: ChatSyncMessage[];
+  roomIds: string[];
+  anchorMessageId: string;
+  hasMore: boolean;
+  nextCursor: string | null;
+  hasMoreAfter: boolean;
+}
+
+export function getMessageContext(target: { roomId?: string; otherUserId?: string }, messageId: string,
+  params?: { limit?: number; asBusinessUserId?: string }): Promise<ChatMessageContext> {
+  const path = target.roomId ? `rooms/${target.roomId}` : `conversations/${target.otherUserId}`;
+  return get<ChatMessageContext>(`/api/chat/${path}/messages/${messageId}/context`, { limit: 25, ...params });
+}
+
+export type ChatPreferences = { notificationsEnabled: boolean; roomIds: string[] };
+export function getChatPreferences(target: { roomId?: string; otherUserId?: string }, asBusinessUserId?: string): Promise<ChatPreferences> {
+  const path = target.roomId ? `rooms/${target.roomId}` : `conversations/${target.otherUserId}`;
+  return get<ChatPreferences>(`/api/chat/${path}/preferences`, asBusinessUserId ? { asBusinessUserId } : undefined);
+}
+export function setChatPreferences(target: { roomId?: string; otherUserId?: string }, notificationsEnabled: boolean,
+  asBusinessUserId?: string): Promise<ChatPreferences> {
+  const path = target.roomId ? `rooms/${target.roomId}` : `conversations/${target.otherUserId}`;
+  return patch<ChatPreferences>(`/api/chat/${path}/preferences`, { notificationsEnabled, ...(asBusinessUserId ? { asBusinessUserId } : {}) });
+}
+export function muteRoom(roomId: string, muted: boolean): Promise<ChatPreferences> {
+  return setChatPreferences({ roomId }, !muted);
 }
 
 /**
@@ -372,18 +475,27 @@ export async function getArchivedRooms(): Promise<{ rooms: ChatRoomWithDetails[]
  * Get person-grouped conversations list (one row per person + group/home rooms)
  */
 export async function getUnifiedConversations(params?: {
+  q?: string;
   limit?: number;
+  before?: string;
+  since?: string;
 }): Promise<{
   conversations: UnifiedConversationItem[];
   total: number;
   totalUnread: number;
+  totalUnmutedUnread?: number;
   totalMessages: number;
+  hasMore: boolean;
+  nextCursor: string | null;
 }> {
   return get<{
     conversations: UnifiedConversationItem[];
     total: number;
     totalUnread: number;
+    totalUnmutedUnread?: number;
     totalMessages: number;
+    hasMore: boolean;
+    nextCursor: string | null;
   }>('/api/chat/unified-conversations', params);
 }
 

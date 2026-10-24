@@ -6,6 +6,7 @@ import { MessageCircle, AtSign, ChevronRight } from 'lucide-react';
 import * as api from '@pantopus/api';
 import { formatTimeAgo } from '@pantopus/ui-utils';
 import { chosenUsername } from '@pantopus/utils';
+import { useBusinessChatRooms } from '@/hooks/useBusinessChatRooms';
 
 type Section = 'messages' | 'mentions';
 
@@ -16,39 +17,23 @@ interface Props {
 export default function InboxTab({ businessId }: Props) {
   const router = useRouter();
   const [section, setSection] = useState<Section>('messages');
-  const [rooms, setRooms] = useState<any[]>([]);
   const [matchedPosts, setMatchedPosts] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [totalUnread, setTotalUnread] = useState(0);
-  // A failed read is not "No messages yet": a role without inbox access gets a 403.
-  const [roomsFailure, setRoomsFailure] = useState<'forbidden' | 'failed' | null>(null);
-
-  const loadRooms = async () => {
-    setLoading(true);
-    try {
-      const result = await api.chat.getBusinessChatRooms(businessId);
-      setRooms(result.rooms || []);
-      setTotalUnread(result.totalUnread || 0);
-      setRoomsFailure(null);
-    } catch (e: unknown) {
-      setRoomsFailure((e as { statusCode?: number } | null)?.statusCode === 403 ? 'forbidden' : 'failed');
-    }
-    finally { setLoading(false); }
-  };
+  const [mentionsLoading, setMentionsLoading] = useState(false);
+  const { rooms, totalUnread, loading: roomsLoading, failure: roomsFailure, error: roomsError, hasMore, loadingMore, refresh: loadRooms, loadMore } = useBusinessChatRooms(businessId, section === 'messages');
+  const loading = section === 'messages' ? roomsLoading : mentionsLoading;
 
   const loadMentions = async () => {
-    setLoading(true);
+    setMentionsLoading(true);
     try {
       const result = await api.businesses.getMatchedPosts(businessId, { page_size: 30 });
       setMatchedPosts(result.posts || []);
     } catch { /* ignore */ }
-    finally { setLoading(false); }
+    finally { setMentionsLoading(false); }
   };
 
   useEffect(() => {
-    if (section === 'messages') loadRooms();
-    else loadMentions();
-  }, [section]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (section === 'mentions') void loadMentions();
+  }, [section, businessId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div>
@@ -80,6 +65,7 @@ export default function InboxTab({ businessId }: Props) {
         </button>
       </div>
 
+      {section === 'messages' && roomsError && rooms.length > 0 && <p role="alert" className="mb-3 text-sm text-red-600">{roomsError}</p>}
       {loading ? (
         <div className="flex items-center justify-center py-16"><div className="animate-spin h-8 w-8 border-2 border-violet-600 border-t-transparent rounded-full" /></div>
       ) : section === 'messages' && roomsFailure ? (
@@ -101,7 +87,7 @@ export default function InboxTab({ businessId }: Props) {
           </div>
         ) : (
           <div className="space-y-2">
-            {rooms.map((room: any) => {
+            {rooms.map((room) => {
               // GET /api/chat/business/:id/rooms sends the other party and the last message as flat fields.
               const title = room.other_participant_name || chosenUsername(room.other_participant_username) || room.room_name || 'Chat';
               const avatarUrl = room.other_participant_identity?.avatarUrl || null;
@@ -143,6 +129,11 @@ export default function InboxTab({ businessId }: Props) {
                 </button>
               );
             })}
+            {hasMore && <div className="pt-2 text-center">
+              <button onClick={() => void loadMore()} disabled={loadingMore} className="text-sm text-violet-600 hover:underline disabled:opacity-50">
+                {loadingMore ? 'Loading…' : 'Load more conversations'}
+              </button>
+            </div>}
           </div>
         )
       ) : (
