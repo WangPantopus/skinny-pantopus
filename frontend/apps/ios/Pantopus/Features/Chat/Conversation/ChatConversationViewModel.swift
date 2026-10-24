@@ -667,6 +667,9 @@ public final class ChatConversationViewModel {
     /// still hold it for a moment after the composer clears; a keystroke in
     /// that moment must not bring the sent text back.
     @ObservationIgnored private var sentComposerText: (text: String, at: Date)?
+    /// The picked photos of photo messages still sending, by client id: their
+    /// bubbles show the in-memory previews (`ChatPhotoPreviews`).
+    @ObservationIgnored private var pendingPhotoIds: [String: [String]] = [:]
     private var failedClientIds: Set<String> = []
     /// Failed sends the server refused with a 403 (blocked, not a
     /// participant, the account can't message). They show "Not sent"
@@ -1401,6 +1404,7 @@ public final class ChatConversationViewModel {
             replyRoomId: capturedReplyRoom,
             sendRoomId: replyDestination
         )
+        rememberPendingPhotos(capturedAttachments, clientId: clientId)
         // The sending bubble and retry keep the immutable captured reply.
         rebuild()
         if usesDurableOutbox {
@@ -1487,6 +1491,7 @@ public final class ChatConversationViewModel {
                 if case let .accepted(message) = event, let clientId = message.clientMessageId,
                    pendingByClientId[clientId] != nil {
                     ChatPerformance.signposter.emitEvent("SendAccepted")
+                    carryPhotoPreviews(to: message)
                     retireConfirmedSend(clientId: clientId)
                     if case .person = mode { directRoomId = message.roomId }
                     activeRoomIds.insert(message.roomId)
@@ -1602,6 +1607,7 @@ public final class ChatConversationViewModel {
             // Swap optimistic → server message. The socket echo may have
             // landed it via a refetch already, so replace-by-id.
             ChatPerformance.signposter.emitEvent("SendAccepted")
+            carryPhotoPreviews(to: response.message)
             retireConfirmedSend(clientId: clientId)
             upsert(response.message, confirmedSend: true)
             sendLimitNotice = nil
@@ -2737,6 +2743,9 @@ public final class ChatConversationViewModel {
     private func appendQueuedAttachment(_ attachment: ChatQueuedAttachment) {
         guard !queuedAttachments.contains(where: { $0.id == attachment.id }) else { return }
         queuedAttachments = Array((queuedAttachments + [attachment]).prefix(5))
+        if mode != .ai, queuedAttachments.contains(where: { $0.id == attachment.id }) {
+            ChatPhotoPreviews.shared.prepare(attachment)
+        }
     }
 
     private func uploadQueuedAttachmentsIfNeeded(
@@ -3331,10 +3340,12 @@ public final class ChatConversationViewModel {
                 ChatOutbox.shared.confirm(message)
             }
         }
-        for clientId in messages.compactMap(\.clientMessageId)
-            where pendingByClientId[clientId] != nil
-            || sendContextsByClientId[clientId] != nil
-            || failedClientIds.contains(clientId) {
+        for message in messages {
+            guard let clientId = message.clientMessageId,
+                  pendingByClientId[clientId] != nil
+                  || sendContextsByClientId[clientId] != nil
+                  || failedClientIds.contains(clientId) else { continue }
+            carryPhotoPreviews(to: message)
             retireConfirmedSend(clientId: clientId)
         }
     }
@@ -3342,6 +3353,7 @@ public final class ChatConversationViewModel {
     /// Every confirmation path consumes only the original send's
     /// attachments. A newer composer draft keeps its text and files.
     private func retireConfirmedSend(clientId: String) {
+        pendingPhotoIds[clientId] = nil
         if let context = sendContextsByClientId.removeValue(forKey: clientId) {
             let attachmentIds = Set(context.attachments.map(\.id))
             queuedAttachments.removeAll { attachmentIds.contains($0.id) }
@@ -3795,7 +3807,10 @@ public final class ChatConversationViewModel {
             scheduleTopicsRefresh()
         }
         let confirmsPending = message.clientMessageId.map { pendingByClientId[$0] != nil } == true
-        if let clientId = message.clientMessageId { retireConfirmedSend(clientId: clientId) }
+        if let clientId = message.clientMessageId {
+            carryPhotoPreviews(to: message)
+            retireConfirmedSend(clientId: clientId)
+        }
         let isNewIncoming = message.userId != sendingIdentityId && !messages.contains { $0.id == message.id }
         upsert(message, confirmedSend: confirmsPending)
         if isNewIncoming, messages.contains(where: { $0.id == message.id }) {
@@ -4106,8 +4121,32 @@ public final class ChatConversationViewModel {
         if !photos.isEmpty || !files.isEmpty {
             return .textWithImages(text: message.messageText ?? "", imageURLs: photos, files: files)
         }
+        if let sending = pendingPhotoBody(for: message) { return sending }
         guard message.messageType == "ai_reply" else { return Self.bodyForMessage(message) }
         return .aiReply(text: message.messageText ?? "", estimate: nil, drafts: aiDraftsByMessageId[message.id] ?? [])
+    }
+
+    private func rememberPendingPhotos(_ attachments: [ChatQueuedAttachment], clientId: String) {
+        let photoIds = attachments.filter { $0.kind == .image && $0.data != nil }.map(\.id)
+        if !photoIds.isEmpty { pendingPhotoIds[clientId] = photoIds }
+    }
+
+    /// A photo message still sending shows the pictures just picked, in the
+    /// photo bubble, instead of a bare "Attachment" line.
+    private func pendingPhotoBody(for message: ChatMessageDTO) -> ChatBubbleContent.Body? {
+        guard message.id.hasPrefix("client_"), let clientId = message.clientMessageId,
+              let photoIds = pendingPhotoIds[clientId] else { return nil }
+        let urls = photoIds.compactMap(ChatPhotoPreviews.url(for:))
+        guard let first = urls.first else { return nil }
+        let text = sendContextsByClientId[clientId]?.text.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return .image(url: first, caption: text.isEmpty ? nil : text, moreURLs: Array(urls.dropFirst()))
+    }
+
+    /// The sent copy shows the same pictures while its photos first load.
+    private func carryPhotoPreviews(to message: ChatMessageDTO) {
+        guard let clientId = message.clientMessageId, let photoIds = pendingPhotoIds[clientId],
+              case let .image(first?, _, more) = Self.bodyForMessage(message) else { return }
+        ChatPhotoPreviews.shared.alias([first] + more, to: photoIds)
     }
 
     /// A room's incoming messages name their sender, as on Android: a room

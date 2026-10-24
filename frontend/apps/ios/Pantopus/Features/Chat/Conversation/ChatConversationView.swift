@@ -25,6 +25,10 @@ private final class ChatScrollMetrics {
     /// How far the user has scrolled below the top of the loaded
     /// history, in points. Drives the near-top pagination trigger.
     var distanceFromTop: CGFloat = .greatestFiniteMagnitude
+    /// Where the content's bottom edge sits below the viewport's top. Rows
+    /// joining above leave it unchanged when nothing on screen moved.
+    var contentMaxY: CGFloat = 0
+    var contentHeight: CGFloat = 0
 }
 
 /// A photo message's photos for the full-screen viewer, opened at the
@@ -82,6 +86,14 @@ public struct ChatConversationView: View {
     /// The thread opened at its latest message once; coming back (a pushed
     /// profile, a tab switch) keeps the reading position (Instant Screens).
     @State private var hasLandedAtLatest = false
+    /// Newest rows first: a thread opens (and returns to its latest message)
+    /// rendering only its newest rows; the older loaded rows join when the
+    /// reader scrolls up to them or a scroll target needs them. Rendering
+    /// every loaded row made each open, send and incoming message pay a
+    /// SwiftUI pass over the whole non-lazy stack. `nil` renders all rows.
+    @State private var renderFloorId: String?
+    /// The opening window is chosen once, from the first rows shown.
+    @State private var openingWindowDecided = false
     /// Debug builds note missed frames while the thread is on screen.
     @State private var frameGapMonitor = ChatFrameGapMonitor()
     @Environment(\.openURL) private var openURL
@@ -1117,6 +1129,7 @@ extension ChatConversationView {
     private func populatedFrame(_ rows: [ChatTimelineRow]) -> some View {
         // Resolve the accepted room tails once per rendered snapshot, not per row.
         let readBoundaryIds = viewModel.latestAcceptedMessageIds
+        let shown = renderedRows(rows)
         // Gig context strip is loaded by `ChatConversationViewModel.loadGigContextIfNeeded`.
         return GeometryReader { geo in
             ScrollViewReader { proxy in
@@ -1138,7 +1151,7 @@ extension ChatConversationView {
                             aiWelcomeCard
                                 .padding(.bottom, 10)
                         }
-                        ForEach(rows) { row in
+                        ForEach(shown) { row in
                             // Row width is measured once at the list level
                             // (viewport minus the 12pt side paddings) — a
                             // per-row GeometryReader made every bubble lay
@@ -1162,16 +1175,19 @@ extension ChatConversationView {
                             let frame = contentGeo.frame(in: .named(Self.scrollSpaceName))
                             Color.clear
                                 .onAppear {
-                                    handleScrollGeometry(frame: frame, viewportHeight: geo.size.height, rows: rows, proxy: proxy)
+                                    handleScrollGeometry(frame: frame, viewportHeight: geo.size.height, shown: shown, proxy: proxy)
                                 }
                                 .onChange(of: frame) { _, newFrame in
-                                    handleScrollGeometry(frame: newFrame, viewportHeight: geo.size.height, rows: rows, proxy: proxy)
+                                    handleScrollGeometry(frame: newFrame, viewportHeight: geo.size.height, shown: shown, proxy: proxy)
                                 }
                         }
                     )
                 }
                 .coordinateSpace(name: Self.scrollSpaceName)
-                .onAppear { ChatPerformance.mark("ThreadRows", rows: rows.count) }
+                .onAppear {
+                    ChatPerformance.mark("ThreadRows", rows: shown.count)
+                    decideOpeningWindow(rows)
+                }
                 // Threads open at the latest message (rows project
                 // oldest-first), and the bottom stays anchored when new
                 // rows land while the user is already at the bottom.
@@ -1186,29 +1202,20 @@ extension ChatConversationView {
                     // scroll geometry, so the near-top check never
                     // re-fires — kick one fetch so backward pagination
                     // still works there.
-                    if scrollMetrics.distanceFromTop < 200, viewModel.canLoadOlder {
-                        loadOlderPreservingPosition(rows: rows, proxy: proxy)
+                    if scrollMetrics.distanceFromTop < 200 {
+                        extendUpward(shown, proxy: proxy)
                     }
                 }
                 .task { await landAtLatestMessage(proxy) }
                 .onChange(of: rows.last) { oldLast, newLast in
+                    keepWindowAtBottom(rows)
                     pinToBottomIfNeeded(oldLast: oldLast, newLast: newLast, proxy: proxy)
                 }
                 // `initial`: a target published before this frame appeared
                 // (a slow first layout) still scrolls.
                 .onChange(of: viewModel.pendingScrollTargetId, initial: true) { _, target in
                     guard let target else { return }
-                    // A brief or nudge opens at its start, its cards below it;
-                    // a searched message sits in the middle.
-                    let anchor: UnitPoint = mode == .aiAssistant ? .top : .center
-                    if reduceMotion {
-                        proxy.scrollTo(target, anchor: anchor)
-                    } else {
-                        withAnimation(.easeOut(duration: 0.2)) {
-                            proxy.scrollTo(target, anchor: anchor)
-                        }
-                    }
-                    viewModel.consumePendingScroll()
+                    scrollToPendingTarget(target, rows: rows, shown: shown, proxy: proxy)
                 }
             }
         }
@@ -1220,19 +1227,159 @@ extension ChatConversationView {
     private func handleScrollGeometry(
         frame: CGRect,
         viewportHeight: CGFloat,
-        rows: [ChatTimelineRow],
+        shown: ArraySlice<ChatTimelineRow>,
         proxy: ScrollViewProxy
     ) {
         scrollMetrics.distanceFromTop = -frame.minY
+        scrollMetrics.contentMaxY = frame.maxY
+        scrollMetrics.contentHeight = frame.height
         let nearBottom = (frame.maxY - viewportHeight) < 120
         if isAtBottom != nearBottom {
             isAtBottom = nearBottom
         }
         guard isLoadOlderArmed,
               !isLoadingOlder,
-              viewModel.canLoadOlder,
               scrollMetrics.distanceFromTop < 200 else { return }
-        loadOlderPreservingPosition(rows: rows, proxy: proxy)
+        extendUpward(shown, proxy: proxy)
+    }
+
+    // MARK: - Newest rows first
+
+    /// About two screens of rows: the first frame and a first scroll up.
+    private static let openingRowWindow = 40
+
+    /// The rows this frame renders: every loaded row from the window's floor on.
+    private func renderedRows(_ rows: [ChatTimelineRow]) -> ArraySlice<ChatTimelineRow> {
+        let floor = openingWindowDecided ? renderFloorId : openingFloorId(in: rows)
+        guard let floor, let start = rows.firstIndex(where: { $0.id == floor }) else { return rows[...] }
+        return rows[start...]
+    }
+
+    /// The first bubble among the newest rows, for a thread shown at its
+    /// latest message with well over a window of rows loaded.
+    private func openingFloorId(in rows: [ChatTimelineRow]) -> String? {
+        guard mode != .aiAssistant, rows.count > Self.openingRowWindow + 20,
+              !viewModel.hasPendingSearchTarget, !viewModel.isViewingEarlierHistory,
+              !viewModel.isViewingSearchContext else { return nil }
+        return rows[(rows.count - Self.openingRowWindow)...].first(where: Self.isBubble)?.id
+    }
+
+    private static func isBubble(_ row: ChatTimelineRow) -> Bool {
+        if case .bubble = row { return true }
+        return false
+    }
+
+    private func decideOpeningWindow(_ rows: [ChatTimelineRow]) {
+        guard !openingWindowDecided else { return }
+        setWindowFloor(openingFloorId(in: rows), rows: rows)
+    }
+
+    private func setWindowFloor(_ floor: String?, rows: [ChatTimelineRow]) {
+        renderFloorId = floor
+        openingWindowDecided = true
+        let start = floor.flatMap { id in rows.firstIndex { $0.id == id } } ?? rows.startIndex
+        ChatPerformance.mark("RenderWindow", rows: rows.count - start)
+    }
+
+    /// New rows at the bottom while the reader is there (a long gap filled on
+    /// open, or arrivals after reading back): render only the newest rows
+    /// again. The rows leaving are far above the viewport.
+    private func keepWindowAtBottom(_ rows: [ChatTimelineRow]) {
+        guard openingWindowDecided, isAtBottom, !isLoadingOlder else { return }
+        let start = renderFloorId.flatMap { floor in rows.firstIndex { $0.id == floor } } ?? rows.startIndex
+        guard rows.count - start > Self.openingRowWindow * 2, let floor = openingFloorId(in: rows) else { return }
+        setWindowFloor(floor, rows: rows)
+    }
+
+    /// Up past the top of what is rendered: the loaded rows the window holds
+    /// back join first, then the next older page.
+    private func extendUpward(_ shown: ArraySlice<ChatTimelineRow>, proxy: ScrollViewProxy) {
+        if renderFloorId != nil {
+            revealHeldRowsPreservingPosition(shown, proxy: proxy)
+        } else if viewModel.canLoadOlder {
+            loadOlderPreservingPosition(rows: shown, proxy: proxy)
+        }
+    }
+
+    /// The held-back rows join above the viewport the way an older page
+    /// does, keeping the rows on screen where they are.
+    private func revealHeldRowsPreservingPosition(_ shown: ArraySlice<ChatTimelineRow>, proxy: ScrollViewProxy) {
+        guard !isLoadingOlder else { return }
+        isLoadingOlder = true
+        let anchorId = shown.first(where: Self.isBubble)?.id
+        let place = (maxY: scrollMetrics.contentMaxY, height: scrollMetrics.contentHeight)
+        let interval = ChatPerformance.signposter.beginInterval("RevealRows")
+        renderFloorId = nil
+        Task {
+            await keepPlaceAfterPrepend(anchorId: anchorId, before: place, proxy: proxy)
+            ChatPerformance.end("RevealRows", interval, rows: shown.count)
+            isLoadingOlder = false
+        }
+    }
+
+    /// Rows were added above the viewport. iOS 18 and later keep the
+    /// bottom-anchored offset across content-size changes, so the rows on
+    /// screen stay put and re-pinning would snap the old top row to the top
+    /// edge; re-pin only when the place was not kept (iOS 17).
+    private func keepPlaceAfterPrepend(
+        anchorId: String?,
+        before: (maxY: CGFloat, height: CGFloat),
+        proxy: ScrollViewProxy
+    ) async {
+        guard #available(iOS 18, *) else {
+            await repinAfterPrepend(anchorId, proxy: proxy)
+            return
+        }
+        try? await Task.sleep(nanoseconds: 32_000_000)
+        let grew = scrollMetrics.contentHeight - before.height
+        let shift = scrollMetrics.contentMaxY - before.maxY
+        let kept = grew <= 0 || abs(shift) < grew / 2
+        if !kept { await repinAfterPrepend(anchorId, proxy: proxy) }
+        ChatPerformance.signposter.emitEvent("PrependPlace", "grew=\(Int(grew)) shift=\(Int(shift)) kept=\(kept)")
+    }
+
+    private func repinAfterPrepend(_ anchorId: String?, proxy: ScrollViewProxy) async {
+        guard let anchorId else { return }
+        proxy.scrollTo(anchorId, anchor: .top)
+        // Second pass once the prepended rows have laid out.
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        proxy.scrollTo(anchorId, anchor: .top)
+    }
+
+    /// A search match, a brief, or the latest message after a jump back.
+    private func scrollToPendingTarget(
+        _ target: String,
+        rows: [ChatTimelineRow],
+        shown: ArraySlice<ChatTimelineRow>,
+        proxy: ScrollViewProxy
+    ) {
+        // A brief or nudge opens at its start, its cards below it;
+        // a searched message sits in the middle.
+        let anchor: UnitPoint = mode == .aiAssistant ? .top : .center
+        let scroll: @MainActor () -> Void = {
+            if reduceMotion {
+                proxy.scrollTo(target, anchor: anchor)
+            } else {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    proxy.scrollTo(target, anchor: anchor)
+                }
+            }
+            viewModel.consumePendingScroll()
+        }
+        if target == Self.bottomAnchorId {
+            // Back at the latest message: render its newest rows again.
+            setWindowFloor(openingFloorId(in: rows), rows: rows)
+        } else if renderFloorId != nil, !shown.contains(where: { $0.id == target }) {
+            // The target is among the held-back rows: show them, then scroll
+            // once they have laid out.
+            renderFloorId = nil
+            Task {
+                try? await Task.sleep(nanoseconds: 32_000_000)
+                scroll()
+            }
+            return
+        }
+        scroll()
     }
 
     @ViewBuilder
@@ -1320,21 +1467,15 @@ extension ChatConversationView {
     /// The anchor is the first BUBBLE row: divider ids (day keys) move to
     /// the top of the merged day when older same-day messages prepend,
     /// while a bubble id stays glued to its message.
-    private func loadOlderPreservingPosition(rows: [ChatTimelineRow], proxy: ScrollViewProxy) {
+    private func loadOlderPreservingPosition(rows: ArraySlice<ChatTimelineRow>, proxy: ScrollViewProxy) {
         guard !isLoadingOlder else { return }
         isLoadingOlder = true
-        let anchorId = rows.first { row in
-            if case .bubble = row { return true }
-            return false
-        }?.id
+        let anchorId = rows.first(where: Self.isBubble)?.id
         Task {
             await viewModel.loadOlder()
-            if let anchorId {
-                proxy.scrollTo(anchorId, anchor: .top)
-                // Second pass once the prepended rows have laid out.
-                try? await Task.sleep(nanoseconds: 50_000_000)
-                proxy.scrollTo(anchorId, anchor: .top)
-            }
+            // The page is applied but not laid out yet.
+            let place = (maxY: scrollMetrics.contentMaxY, height: scrollMetrics.contentHeight)
+            await keepPlaceAfterPrepend(anchorId: anchorId, before: place, proxy: proxy)
             isLoadingOlder = false
         }
     }
@@ -3111,7 +3252,8 @@ private struct ChatBubbleRow: View {
     /// opens them all full screen) and its caption in a bubble below.
     private func photoMessage(url: URL?, caption: String?, moreURLs: [URL]) -> some View {
         VStack(alignment: alignment, spacing: 2) {
-            if let url, !isLockedIncoming {
+            // A photo still sending opens once it is sent.
+            if let url, !isLockedIncoming, url.scheme != ChatPhotoPreviews.scheme {
                 Button { onOpenPhotos([url] + moreURLs, 0) } label: {
                     photoBubble(url, moreCount: moreURLs.count)
                 }
@@ -3169,15 +3311,26 @@ private struct ChatBubbleRow: View {
 
     @ViewBuilder
     private func imageBody(_ url: URL?) -> some View {
-        if let url {
+        if let url, url.scheme == ChatPhotoPreviews.scheme {
+            // Sending: the picture just picked, from memory.
+            previewOrPlaceholder(url)
+        } else if let url {
             CachedAsyncImage(url: ChatMediaURL.thumbnail(url)) { phase in
                 switch phase {
                 case let .success(image): image.resizable().scaledToFill()
-                case .failure: PhotoBubblePlaceholder()
-                case .empty: PhotoBubblePlaceholder()
-                @unknown default: PhotoBubblePlaceholder()
+                // A photo just sent keeps its picked preview until its copy loads.
+                default: previewOrPlaceholder(url)
                 }
             }
+        } else {
+            PhotoBubblePlaceholder()
+        }
+    }
+
+    @ViewBuilder
+    private func previewOrPlaceholder(_ url: URL) -> some View {
+        if let preview = ChatPhotoPreviews.shared.image(for: url) {
+            Image(uiImage: preview).resizable().scaledToFill()
         } else {
             PhotoBubblePlaceholder()
         }

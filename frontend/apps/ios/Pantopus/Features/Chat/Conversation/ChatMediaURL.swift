@@ -8,6 +8,7 @@
 //
 
 import ImageIO
+import Observation
 import UIKit
 import UniformTypeIdentifiers
 
@@ -247,5 +248,77 @@ enum ChatMediaURL {
               let ext = mimeType.flatMap({ UTType(mimeType: $0)?.preferredFilenameExtension })
         else { return name }
         return "\(name).\(ext)"
+    }
+}
+
+/// Photos the user just picked, downscaled in memory for their own bubble: it
+/// shows them while the message sends, and while the sent copy first loads.
+/// Never written to the phone; cleared at sign-out.
+@MainActor
+@Observable
+final class ChatPhotoPreviews {
+    static let shared = ChatPhotoPreviews()
+    /// Links of the form `pantopus-pending-photo://<picked photo id>`.
+    nonisolated static let scheme = "pantopus-pending-photo"
+    /// The photo bubble is 200 x 130 pt: 600 px covers it at 3x.
+    private nonisolated static let pixels = 600
+    /// Keys kept, newest last (a picked photo's id, then its sent link).
+    private static let limit = 24
+
+    private var images: [String: UIImage] = [:]
+    @ObservationIgnored private var order: [String] = []
+
+    nonisolated static func url(for photoId: String) -> URL? {
+        URL(string: "\(scheme)://\(photoId)")
+    }
+
+    func image(for url: URL) -> UIImage? {
+        images[Self.key(url)]
+    }
+
+    /// Shrink a picked photo off the main thread, ready for its bubble.
+    func prepare(_ attachment: ChatQueuedAttachment) {
+        guard attachment.kind == .image, let data = attachment.data, images[attachment.id] == nil else { return }
+        let id = attachment.id
+        Task.detached(priority: .userInitiated) {
+            guard let image = Self.downscaled(data) else { return }
+            await ChatPhotoPreviews.shared.keep(image, key: id)
+        }
+    }
+
+    /// The sent message's photo links show the same pictures while they load.
+    func alias(_ urls: [URL], to photoIds: [String]) {
+        for (url, id) in zip(urls, photoIds) {
+            if let image = images[id] { keep(image, key: Self.key(url)) }
+        }
+    }
+
+    func clear() {
+        images.removeAll()
+        order.removeAll()
+    }
+
+    private func keep(_ image: UIImage, key: String) {
+        images[key] = image
+        order.removeAll { $0 == key }
+        order.append(key)
+        while order.count > Self.limit {
+            images[order.removeFirst()] = nil
+        }
+    }
+
+    private nonisolated static func key(_ url: URL) -> String {
+        url.scheme == scheme ? (url.host ?? url.absoluteString) : PantopusImagePipeline.cacheKey(for: url)
+    }
+
+    private nonisolated static func downscaled(_ data: Data) -> UIImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
+              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                  kCGImageSourceCreateThumbnailFromImageAlways: true,
+                  kCGImageSourceCreateThumbnailWithTransform: true,
+                  kCGImageSourceThumbnailMaxPixelSize: pixels
+              ] as CFDictionary)
+        else { return nil }
+        return UIImage(cgImage: image)
     }
 }

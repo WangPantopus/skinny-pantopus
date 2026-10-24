@@ -592,12 +592,14 @@ extension AuthManager {
         apiClient.purgeCache()
         // So do the images AsyncImage kept in the shared URL cache (chat and
         // mail photos, avatars), the widgets' snapshots of Today and nearby
-        // tasks, and what this account's chat badge, link previews, AI thread,
-        // Support Train edits and chat hide/mute choices left in memory.
+        // tasks, and what this account's chat badge, link previews, picked
+        // photo previews, AI thread, Support Train edits and chat hide/mute
+        // choices left in memory.
         URLCache.shared.removeAllCachedResponses()
         WidgetSnapshotStore.shared.clear()
         ChatBadgeStore.shared.reset()
         LinkPreviewStore.shared.clear()
+        ChatPhotoPreviews.shared.clear()
         AIConversationStore.shared.clear()
         SupportTrainReservationsStore.shared.reset()
         ChatConversationPreferences.shared.clear()
