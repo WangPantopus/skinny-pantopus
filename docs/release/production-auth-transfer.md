@@ -1,9 +1,17 @@
 # Production Auth transfer: April logins into the new project
 
-**Founder confirmation, October 23:** the native apps will update the original `com.pantopus.app` store listings. Transfer existing sign-ins and their matching profiles only; all product content starts fresh. Complete the rehearsal, founder-run production transfer and old-account sign-in checks before releasing 2.0.4. This instruction does not authorize a production database write.
+**Founder confirmation, October 23:** the native apps will update the original `com.pantopus.app` store listings. Transfer existing sign-ins and their matching profiles only; all product content starts fresh. Complete the rehearsal, explicitly authorized production transfer and old-account sign-in checks before releasing 2.0.4.
 
-**October 24 inspection:** the founder confirmed that the full transfer is still
-pending. The previous **Backend Production** project in **us-east-2** is paused.
+**October 24 completed transfer:** the founder explicitly authorized importing
+the 35 non-overlapping legacy accounts as ordinary users and keeping the four
+overlapping current accounts and their sign-in methods unchanged. The import
+committed 35 Auth users, 37 identities and 35 matching app profiles. The
+destination now has 41 Auth users, 43 identities and 42 profiles. Independent
+post-import comparisons confirmed that all six pre-existing Auth users, six
+identities and seven profiles are unchanged. The Auth Admin API sees all 35
+imported users, and production API/database health passed afterward.
+
+The previous **Backend Production** project in **us-east-2** remains paused.
 Its October 16 database backup was downloaded through the authenticated
 dashboard and stored privately on an encrypted volume. No source restart or
 password reset was needed. The snapshot contains 39 Auth users, 43 identities
@@ -12,17 +20,40 @@ profile; the two profiles without Auth users are excluded from the transfer.
 No deleted, banned, anonymous or super-admin Auth users, or MFA factors, were
 found in this snapshot.
 
-The destination is already live and contains six Auth users, six identities and
-seven app profiles. Every destination Auth user has a profile. Four source
+Before import, the live destination contained six Auth users, six identities and
+seven app profiles. Every destination Auth user had a profile. Four source
 emails match destination accounts with different IDs; two also match OAuth
 identities in the destination, and one has a username collision. The identity
 matches do not all point to the same destination accounts as the email matches,
-so these cases require explicit ownership and mapping review. There are 34 new accounts without detected collisions or
-legacy privileges. Two source accounts need privilege review, one of which is
-among the four overlaps. Record-level comparisons remain private. These are
-inspection results, **not an approved reconciliation plan or completed import**.
-Current destination schema verification, local rehearsal and founder review
-are still required.
+so none of those four source accounts was imported, merged or used to replace
+current passwords or identities. Of the other 35 accounts, one had a legacy
+admin role; all 35 imported profiles are now ordinary, unverified individual
+users. Existing destination privileges remain unchanged. Record-level
+comparisons remain private.
+
+A fresh full destination backup was captured and checksummed privately before
+the write. The live columns, constraints, triggers and migration ledger were
+checked. An isolated local rehearsal used the actual destination's schema and
+synthetic accounts only. It verified password hashes, Google/Apple identity
+subjects, confirmation state, removal of legacy privileges and product fields,
+preservation of existing rows, five collision types, destination-drift rejection,
+repeat-execution rejection and rollback after a forced post-write failure.
+Through the local Auth service, a confirmed synthetic user signed in with its
+original password (HTTP 200); an unconfirmed user remained blocked with
+`email_not_confirmed` (HTTP 400).
+
+The production transaction used explicit columns, fresh collision checks and
+before/after comparisons under locks on the three account tables. It preserved
+17 password hashes, 33 confirmed emails and two unconfirmed emails. It imported
+no legacy sessions, tokens, addresses, verification/ownership claims, payment
+bindings, file references or other product content. No schema or production
+configuration was changed by this import. Backups, the executed script,
+payloads, checksums and receipts are retained privately on the encrypted volume.
+
+**Remaining release acceptance:** owners must verify their imported
+email/password, Google and Apple sign-ins as applicable in the real apps,
+including profile loading and fresh content. Synthetic Auth-service checks and
+the production Admin API inventory do not establish those user journeys.
 
 **Decision, October 8, 2026:** create a new production Supabase project from the
 canonical migrations. Preserve April users' ability to sign in, including
@@ -31,9 +62,10 @@ payments, uploads and other product records in the old project. Keep the old
 project available as an archive. This is the D3 path in
 [the launch checklist](prod-config-checklist.md).
 
-This is a preparation and acceptance runbook. **There is no approved import
-command yet.** Write and rehearse the import against the new project's actual
-Auth schema before the founder runs it. Never run `pg_restore` directly from an
+This runbook records the approved October 24 transfer and its remaining
+acceptance checks. The executed import is private and must not be rerun; any
+additional transfer needs a fresh inventory, reconciliation and authorization.
+Never run `pg_restore` directly from an
 April dump into the production project: the old managed Auth schema and the
 new application schema may differ.
 
@@ -54,11 +86,13 @@ users, no identities and no `public."User"` table yet. The source and destinatio
 had the Data API enabled, automatic exposure of new tables disabled, and the
 automatic RLS event trigger enabled. At that time it had no application
 migrations or scheduled backups. That empty-project state is historical; the
-October 24 account inventory above supersedes it. Recheck the actual destination
-schema and backup state before preparing an import.
+October 24 completed transfer above supersedes it. The full private backup
+taken for this transfer does not establish recurring managed backups.
 
-Only the founder enters credentials, writes secrets into hosted services and
-runs the production import. Keep source dumps, temporary tables and every
+The founder controls credential entry, hosted secret changes and production
+imports. The October 24 import was explicitly delegated for the 35-account
+scope above; that authorization does not cover future imports. Keep source
+dumps, temporary tables and every
 record-level comparison outside the public repository, PRs, screenshots and
 chat. Use a private directory on an encrypted disk with mode `0700`; files in
 it should have mode `0600`. Print counts and pass/fail results, never email

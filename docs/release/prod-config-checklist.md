@@ -113,11 +113,10 @@ here supersede their earlier status snapshots, not founder decisions.
    sign-in with founder accounts.
    Choose when to upgrade Supabase for managed backups and the two 100 MB
    buckets. The recorded Free-plan deferral remains in force. April Auth
-   transfer still requires the private export and isolated rehearsal in
-   [its runbook](production-auth-transfer.md); there is no approved import
-   command yet. The founder's later cutover-before-transfer decision is
-   recorded in P2A's plan decision; its users' login limitation must remain
-   explicit.
+   transfer was pending at this October 13 check. **October 24 update:** the
+   approved 35-account transfer and isolated rehearsal are complete; four
+   overlaps were skipped and current accounts preserved. Real imported-account
+   sign-in checks remain open in [its runbook](production-auth-transfer.md).
 3. **Supply provider credentials (Appendix A and P7).** Enter keys privately
    in the designated backend/GitHub/AWS destinations. Review Census, AirNow,
    Anthropic, Mapbox, SMTP and Stripe test configuration and webhooks. Google
@@ -197,7 +196,7 @@ Each has a default that the steps below follow until you change it here.
   logins and matching app profiles after an isolated rehearsal. Preserve the
   Auth identities needed for email, Google and Apple sign-in; leave April's
   Homes, Trains and other product data in the old project. The founder runs
-  the reviewed production import. **Reconfirmed October 23:** transfer sign-ins and matching profiles only; existing users start with fresh content. Complete old-account sign-in checks before releasing 2.0.4. See [the Auth transfer runbook](production-auth-transfer.md).
+  the reviewed production import or explicitly delegates its scope. **October 24:** the founder authorized importing 35 non-overlapping accounts as ordinary users and preserving current accounts. That transfer is complete; four legacy overlaps were skipped. Product content starts fresh. Complete imported-account sign-in checks before releasing 2.0.4. See [the Auth transfer runbook](production-auth-transfer.md).
 - [x] **D4 Payments during the pilot.** Decided October 6, as recommended. Default: production uses Stripe **test**
   keys until you activate live payments; no pilot journey takes money. Pilot
   store builds then carry the matching `pk_test_` key (L4 adjusts the Android
@@ -635,7 +634,10 @@ done.
 4. Transfer April logins and matching app profiles only after the private
    export and isolated rehearsal in [the Auth transfer runbook](production-auth-transfer.md).
    Check matching IDs, email/password and OAuth sign-in, and new-app access
-   before pointing the API at the project. The founder runs the reviewed import.
+   before release. **October 24:** the API already serves this project; its
+   endpoints were unchanged. The explicitly authorized 35-account import is
+   complete, with all current accounts preserved and four overlaps skipped.
+   Real imported-account sign-in checks remain open.
 5. Keep the April project available until the login transfer and sign-in checks
    pass; don't delete it. A project in a Pro organization cannot be paused, so
    keeping both projects in `Pantopus` will also keep the April archive active
@@ -1141,11 +1143,13 @@ This section supersedes the historical signing/upload instructions below. Both s
 - [x] Granted the existing Play release service account app-scoped read information/quality access and testing-track release access for original Pantopus. Production publishing, admin, financial and store-presence permissions remain off. Reopened the console to verify persistence; the service account successfully read the original tracks, including production **1.5.0 / version code 25**. Discarded the temporary API inspection edit without committing changes. No bundle upload or release occurred.
 - [ ] Match Maps/OAuth restrictions to the restored package and verify real sign-in and physical push delivery. Firebase registration, stored fingerprints, API access and secret-update acknowledgements do not establish these runtime checks or a store-signed upgrade.
 - [x] October 24, with the founder's explicit authorization: changed only production `APNS_BUNDLE_ID` to `com.pantopus.app` and restarted the API and worker on their unchanged image. Both containers and public API health passed; a private rollback copy of the prior environment is retained. The backend has one global APNs topic, so this no longer delivers to the separate `app.pantopus.ios` pilot builds. A fresh physical push check after this change is still required.
-- [ ] Complete D3's Auth/profile transfer and verify old email/password, Google and Apple sign-ins as applicable; fresh content is the approved behavior. Explain the content reset in the store update notes. New minimum iOS is 17; the old build supported 15.1.
+- [x] October 24, with explicit founder authorization: completed D3's transfer of 35 non-overlapping legacy accounts as ordinary users, importing 37 identities and 35 profiles. Skipped the four overlapping legacy records. Fresh comparisons verified all six existing Auth users, six identities and seven profiles unchanged. Destination totals are 41 Auth users, 43 identities and 42 profiles. The Auth Admin API sees all imported users and production API/database health passed. No legacy product content was imported.
+- [ ] Verify imported email/password, Google and Apple sign-ins as applicable in the real apps, including profile loading and fresh content. Explain the content reset in the store update notes. New minimum iOS is 17; the old build supported 15.1. Earlier phone checks predate the full transfer.
 - [x] October 24, founder-reported physical checks on **iOS 2.0.4 (85)** and **Android 2.0.4 (26)**: in-place upgrade from 1.5.0, existing-account sign-in, and receiving/opening a push passed on both phones. This evidence applies to those exact builds and predates the APNs topic correction above; it does not establish transfer coverage for every April account or validate a refreshed build.
-- [x] The refreshed source at `7b8ab3c7a3` passed [full CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/40126546394), including Android instrumented tests, Android quality/build checks, iOS simulator tests and database replay/lint. The CI iOS app signed into a real local backend/database, created a synthetic household task, and retained both sign-in and the task after relaunch. The corresponding Android app check is still in progress.
+- [x] The refreshed source at `7b8ab3c7a3` passed [full CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/40126546394), including Android instrumented tests, Android quality/build checks, iOS simulator tests and database replay/lint. Both CI apps signed into a real local backend/database. A synthetic household task created on iOS persisted after relaunch and appeared on Android. Android completed it and retained sign-in and the completed task after force-stop/relaunch; iOS then displayed that completion after relaunch.
+- [ ] Investigate an intermittent iOS 27 simulator relaunch stall: one launch remained on the splash screen for several minutes with sustained main-thread SwiftUI/Observation work. Terminating and reopening recovered the signed-in app and task state. The cause and release-build/physical-device impact are unverified; successful launches do not close this gate.
 - [ ] Upload refreshed signed builds through an allowed release ref. The branch-triggered [iOS](https://github.com/WangPantopus/skinny-pantopus/actions/runs/40128914101) and [Android](https://github.com/WangPantopus/skinny-pantopus/actions/runs/40128915997) attempts stopped before any build step because the release environments allow only `master` and their platform's release tags. No new signed build was produced, no protection rule was changed, and existing tags remain pinned.
-- [x] Read-only legacy-account inspection: downloaded the paused previous production project's October 16 backup and compared its 39 Auth users with the six current destination users. Four emails overlap under different IDs; two legacy accounts require privilege review, with one among the overlaps. There are 34 accounts without detected collisions or legacy privileges. The [Auth transfer runbook](production-auth-transfer.md) now accounts for the live, nonempty destination. No production database write or completed rehearsal is claimed.
+- [x] Before the approved transfer, captured a fresh full private destination backup and checked its live schema. Rehearsed with the actual destination schema and synthetic accounts only: password/provider identity preservation, ordinary-user conversion, unchanged existing rows, collision/drift/repeat rejection and rollback after a forced failure all passed. The local Auth service accepted the confirmed synthetic user's original password and rejected the unconfirmed user. The [Auth transfer runbook](production-auth-transfer.md) records the completed production scope and remaining real-account acceptance; account rows, SQL payloads and operator logs remain private.
 - [ ] Complete fresh-install, links, widgets, relaunch and old-local-data checks, and recheck the refreshed release builds on physical phones. The release branch now incorporates master `f561a6f375`, including the native privacy repairs in #2812 and the recent Plans fixes; the earlier build numbers do not contain those changes.
 - [x] Signed builds **2.0.4 (85)** and **2.0.4 (26)** reached the original records. October 24: Apple reports build 85 valid and unexpired; its public 2.0.4 version remains Prepare for Submission with manual release and no build selected. Play reports 2.0.4 available to internal testers. Refreshed candidates need new build numbers; existing tags and artifacts remain preserved.
 - [x] October 24: the reviewer credentials already saved in App Store Connect successfully signed in through the production API. This verifies API login, not the complete reviewer journey in the native apps.
