@@ -11,6 +11,7 @@ import io.sentry.SentryOptions
 import io.sentry.android.core.SentryAndroid
 import io.sentry.android.timber.SentryTimberIntegration
 import io.sentry.protocol.User
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -50,6 +51,10 @@ class Observability
                 options.isAttachScreenshot = false
                 options.isAttachViewHierarchy = false
                 options.isSendDefaultPii = false
+                // The OkHttp interceptor adds sentry-trace and baggage (trace id, release, environment, Sentry key)
+                // to every request whose URL matches a target, and the default target matches all of them: Coil's
+                // images from any host too. Only the API gets them.
+                options.setTracePropagationTargets(tracePropagationTargets(BuildConfig.PANTOPUS_API_BASE_URL))
 
                 // P15: scrub PII from every event + breadcrumb before send.
                 options.beforeSend =
@@ -231,6 +236,15 @@ class Observability
  * typed addresses, coordinates, search terms and signed-URL tokens, so only the path leaves the device.
  */
 private val URL_QUERY_KEYS = setOf("http.query", "http.fragment")
+
+/**
+ * The API's origin (scheme, host and port) as Sentry's only trace propagation target. The SDK matches a target as a
+ * substring of the URL or as a regex for all of it, so a plain origin would also match another host's URL carrying
+ * the API's address. This regex matches only a URL that starts with the origin and its `/`. No target, so no headers,
+ * if the base URL won't parse.
+ */
+private fun tracePropagationTargets(apiBaseUrl: String): List<String> =
+    listOfNotNull(apiBaseUrl.toHttpUrlOrNull()?.resolve("/")?.let { Regex.escape(it.toString()) + ".*" })
 
 private fun SentryLevel.toTimberPriority(): Int =
     when (this) {

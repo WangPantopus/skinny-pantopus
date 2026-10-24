@@ -10,11 +10,14 @@
 
 const ngeohash = require('ngeohash');
 const logger = require('../../../utils/logger');
+const { readCappedJson } = require('../../../utils/cappedBody');
 const { getContextCache, getContextCacheStale, setContextCache } = require('../contextCacheService');
 
 const PROVIDER = 'OPEN_METEO';
 const BASE_URL = 'https://api.open-meteo.com/v1/forecast';
 const FETCH_TIMEOUT_MS = 5000;
+// The forecast this asks for is about 3 KB.
+const MAX_BODY_BYTES = 2 * 1024 * 1024;
 const GEOHASH_PRECISION = 5;
 
 // Cache TTLs (minutes)
@@ -260,17 +263,16 @@ async function fetchWeather(latitude, longitude) {
     };
   }
 
-  // ── Fetch live ──
+  // ── Fetch live (the timeout covers the whole body, not just the headers) ──
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-
     const url = buildUrl(latitude, longitude);
     const res = await fetch(url, {
       signal: controller.signal,
+      redirect: 'error',
       headers: { Accept: 'application/json' },
     });
-    clearTimeout(timeout);
 
     if (!res.ok) {
       logger.warn('Open-Meteo API error', { status: res.status, geohash });
@@ -279,7 +281,7 @@ async function fetchWeather(latitude, longitude) {
       return { ...ERROR_RESULT, fetchedAt: new Date().toISOString(), source: 'error' };
     }
 
-    const raw = await res.json();
+    const raw = await readCappedJson(res, MAX_BODY_BYTES, controller.signal);
     const fetchedAt = new Date().toISOString();
 
     const current = normalizeCurrent(raw.current);
@@ -304,6 +306,8 @@ async function fetchWeather(latitude, longitude) {
     const stale = await readStale(geohash);
     if (stale) return stale;
     return { ...ERROR_RESULT, fetchedAt: new Date().toISOString(), source: 'error' };
+  } finally {
+    clearTimeout(timeout);
   }
 }
 

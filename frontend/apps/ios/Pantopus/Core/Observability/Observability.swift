@@ -40,6 +40,11 @@ final class Observability {
             options.tracesSampleRate = environment.target == .production ? 0.1 : 1.0
             options.enableUserInteractionTracing = true
             options.enableNetworkTracking = true
+            // The SDK adds sentry-trace and baggage (trace id, release,
+            // environment, Sentry key) to every URLSession request whose URL
+            // matches a target, and its default target matches all of them:
+            // Stripe, PostHog, storage images. Only the API gets them.
+            options.tracePropagationTargets = Self.tracePropagationTargets(apiBaseURL: environment.apiBaseURL)
             options.attachViewHierarchy = false
             options.attachScreenshot = false
             options.sendDefaultPii = false
@@ -89,6 +94,19 @@ final class Observability {
     /// breadcrumbs and spans). Queries carry typed addresses, coordinates,
     /// search terms and signed-URL tokens, so only the path leaves the device.
     private nonisolated static let urlQueryKeys = ["http.query", "http.fragment"]
+
+    /// The API's origin (scheme, host and port) as Sentry's only trace
+    /// propagation target. The SDK looks for a string or regex target anywhere
+    /// in a URL, so another host's URL carrying the API's address would
+    /// match; this pattern is anchored to the start and ends at the port. No
+    /// target, so no headers, if the base URL has no host.
+    private nonisolated static func tracePropagationTargets(apiBaseURL: URL) -> [NSRegularExpression] {
+        guard let scheme = apiBaseURL.scheme, let host = apiBaseURL.host else { return [] }
+        let origin = "\(scheme)://\(host)" + (apiBaseURL.port.map { ":\($0)" } ?? "")
+        let pattern = "^\(NSRegularExpression.escapedPattern(for: origin))(?:[/?#]|$)"
+        guard let target = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { return [] }
+        return [target]
+    }
 
     /// `GET /api/link-preview?url=` answers 502 for a link that won't load.
     private nonisolated static func isLinkPreview(_ url: String?) -> Bool {

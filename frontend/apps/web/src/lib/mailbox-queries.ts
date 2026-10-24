@@ -581,15 +581,6 @@ export function useMapPins(
   });
 }
 
-export function useAddPinToCalendar(
-  options?: UseMutationOptions<void, MailboxApiError, string>,
-) {
-  return useMutation<void, MailboxApiError, string>({
-    mutationFn: api.addPinToCalendar,
-    ...options,
-  });
-}
-
 // ============================================================
 // COMMUNITY HOOKS (Phase 3)
 // ============================================================

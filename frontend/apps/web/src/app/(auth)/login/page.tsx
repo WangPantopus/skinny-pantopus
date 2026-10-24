@@ -9,6 +9,7 @@ import PantopusBadge from '@/components/PantopusBadge';
 import AuthForm from '@/components/auth/AuthForm';
 import { toast } from '@/components/ui/toast-store';
 import { takeSignInHandoff } from '@/lib/email-verified-handoff';
+import { OAUTH_ATTEMPT_UNAVAILABLE_ERROR, beginOAuthAttempt } from '@/lib/oauth-attempt';
 import { ACCOUNT_DELETED_NOTICE_KEY, ACCOUNT_DELETED_NOTICE_MAX_AGE_MS, SESSION_ENDED_NOTICE_KEY } from '@/lib/session-refresh';
 import {
   authPageHref,
@@ -131,9 +132,15 @@ function LoginContent() {
     try {
       const params = new URLSearchParams(window.location.search);
       const rawRedirect = readAuthRedirectQuery(params);
+      const nonce = beginOAuthAttempt();
+      if (!nonce) {
+        setError(OAUTH_ATTEMPT_UNAVAILABLE_ERROR);
+        setOauthLoading(null);
+        return;
+      }
       const { url } = await api.auth.getOAuthUrl(
         provider,
-        oauthRedirectParamForWeb(rawRedirect, typeof window !== 'undefined' ? window.location.origin : undefined),
+        oauthRedirectParamForWeb(rawRedirect, typeof window !== 'undefined' ? window.location.origin : undefined, nonce),
       );
       window.location.href = url;
     } catch (err: unknown) {
