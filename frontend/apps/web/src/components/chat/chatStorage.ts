@@ -141,6 +141,11 @@ function open(): Promise<IDBDatabase> {
   return database;
 }
 
+// Start opening the store while the app loads. A browser's first open of it
+// takes tens of milliseconds, and saved conversations, the inbox, the outbox
+// and the inbox request's access fence all wait for it. Opening reads nothing.
+if (typeof window !== 'undefined' && typeof indexedDB !== 'undefined') void open().catch(() => {});
+
 export function isChatStorageCurrent(scope: ChatStorageScope): boolean {
   return active === scope && scope.generation === generation && getAuthToken() !== null && authSessionMarker() === scope.marker;
 }
