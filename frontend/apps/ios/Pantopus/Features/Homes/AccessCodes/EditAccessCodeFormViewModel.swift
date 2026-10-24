@@ -171,7 +171,7 @@ final class EditAccessCodeFormViewModel {
         initialCategory: AccessCategory? = nil,
         api: APIClient = .shared,
         clipboard: @escaping @MainActor (String) -> Void = { value in
-            UIPasteboard.general.string = value
+            SensitivePasteboard.copy(value)
         }
     ) {
         self.homeId = homeId

@@ -319,7 +319,7 @@ describe('attachment webhook and post-sheet races', () => {
       if (table === 'StripeWebhookEvent') builder.insert = async () => ({ data: null, error: { code: '08006' } });
       return builder;
     });
-    expect((await webhook()).status).toBe(500);
+    expect((await webhook()).status).toBe(503);
     expect(mockRetrieveMethod).not.toHaveBeenCalled();
     expect(getTable('PaymentMethod')).toHaveLength(0);
   });

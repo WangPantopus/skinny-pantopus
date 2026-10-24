@@ -17,9 +17,11 @@ struct PlanFooter: View {
     let onConfirm: (PlanConfirmation) -> Void
 
     var body: some View {
-        if let card = viewModel.card, let content = content(card) {
+        // Hosting and closed plans have no footer button, but an action that failed there
+        // ("Remove from plan", a report) still says so here.
+        if let card = viewModel.card, content(card) != nil || viewModel.actionError != nil {
             VStack(spacing: Spacing.s2) {
-                content
+                content(card)
                 if let error = viewModel.actionError {
                     Text(error)
                         .planFont(.footnote)

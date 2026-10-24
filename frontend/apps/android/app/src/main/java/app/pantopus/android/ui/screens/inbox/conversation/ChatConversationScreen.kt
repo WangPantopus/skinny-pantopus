@@ -26,6 +26,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -91,6 +92,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -98,6 +100,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -416,6 +419,7 @@ fun ChatConversationScreen(
     val rootView = LocalView.current.rootView
     val keyboardPx = WindowInsets.ime.getBottom(density)
     var belowChatPx by remember { mutableIntStateOf(0) }
+    val focusManager = LocalFocusManager.current
     Box(
         modifier =
             Modifier
@@ -491,7 +495,15 @@ fun ChatConversationScreen(
                     onSelect = viewModel::selectTopic,
                 )
             }
-            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            // A tap on the thread puts the keyboard away, so the whole conversation shows again, as on iOS; buttons,
+            // links and cards keep their own taps. Scrolling still scrolls, and Back still closes the keyboard too.
+            Box(
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .pointerInput(focusManager) { detectTapGestures(onTap = { focusManager.clearFocus() }) },
+            ) {
                 when (val s = state) {
                     ChatConversationUiState.Loading -> LoadingFrame()
                     ChatConversationUiState.Empty ->
@@ -529,7 +541,8 @@ fun ChatConversationScreen(
                                     if (isSelectionMode) viewModel.toggleSelection(it.id) else actionTarget = it
                                 },
                                 selectedMessageIds = if (isSelectionMode) selectedMessageIds else emptySet(),
-                                onBubbleTap = { if (isSelectionMode) viewModel.toggleSelection(it.id) },
+                                // A message takes the tap itself, so it puts the keyboard away too.
+                                onBubbleTap = { if (isSelectionMode) viewModel.toggleSelection(it.id) else focusManager.clearFocus() },
                                 // A pickup-days card saves here; once saved it opens Today. Other drafts open composers.
                                 onUseAIDraft = { draft ->
                                     when {

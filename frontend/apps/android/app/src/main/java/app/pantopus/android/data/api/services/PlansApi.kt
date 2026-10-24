@@ -14,6 +14,8 @@ import app.pantopus.android.data.api.models.plans.PlanFeedbackBody
 import app.pantopus.android.data.api.models.plans.PlanGamesResponse
 import app.pantopus.android.data.api.models.plans.PlanNearbyPlacesResponse
 import app.pantopus.android.data.api.models.plans.PlanPinsResponse
+import app.pantopus.android.data.api.models.plans.PlanPlaceSuggestBody
+import app.pantopus.android.data.api.models.plans.PlanPlaceSuggestionsResponse
 import app.pantopus.android.data.api.models.plans.PlanReportBody
 import app.pantopus.android.data.api.models.plans.PlanRequestsResponse
 import app.pantopus.android.data.api.models.plans.PlansListResponse
@@ -201,13 +203,32 @@ interface PlansApi {
     suspend fun games(): PlanGamesResponse
 
     /**
-     * `GET /api/plans/places/nearby`: public places for H6, nearest first. A first ask for an area may answer 202
-     * `{ loading: true }` with no places while the source is slow: ask again in a few seconds.
+     * `GET /api/plans/places/nearby`: public places for H6, nearest first, or with the plan's [kind] (and a pickup
+     * game's [sport]) the ones that suit it first, each saying whether it's open between [startsAt] and [endsAt]. A
+     * first ask for an area may answer 202 `{ loading: true }` with no places while the source is slow: ask again in a
+     * few seconds. [wait] `"0"` only starts gathering a new area (the host flow opening) and answers at once.
+     * Route `backend/routes/plans.js`.
      */
+    @Suppress("LongParameterList")
     @GET("api/plans/places/nearby")
     suspend fun nearbyPlaces(
         @Query("latitude") latitude: Double,
         @Query("longitude") longitude: Double,
         @Query("q") query: String? = null,
+        @Query("kind") kind: String? = null,
+        @Query("sport") sport: String? = null,
+        @Query("starts_at") startsAt: String? = null,
+        @Query("ends_at") endsAt: String? = null,
+        @Query("wait") wait: String? = null,
     ): PlanNearbyPlacesResponse
+
+    /**
+     * `POST /api/plans/places/suggest`: H6's "Suggest places", up to three public places from the same list that suit
+     * the draft, each with `why`; 202 `{ loading: true }` while the area's places are still loading. Route
+     * `backend/routes/plans.js`.
+     */
+    @POST("api/plans/places/suggest")
+    suspend fun suggestPlaces(
+        @Body body: PlanPlaceSuggestBody,
+    ): PlanPlaceSuggestionsResponse
 }

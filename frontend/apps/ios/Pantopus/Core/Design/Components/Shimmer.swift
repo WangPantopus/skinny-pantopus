@@ -3,10 +3,12 @@
 //  Pantopus
 //
 //  Animated placeholder block. Renders a sliding gradient sweep on a
-//  neutral base; collapses to a flat fill when Reduce Motion is enabled.
+//  neutral base (light or dark with the appearance); collapses to a flat
+//  fill when Reduce Motion is enabled.
 //
 
 import SwiftUI
+import UIKit
 
 /// 1.4-second linear-gradient shimmer. Decorative — always hidden from
 /// assistive tech.
@@ -54,8 +56,18 @@ public struct Shimmer: View {
         .frame(width: width, height: height)
     }
 
-    private static let base = Color(red: 0.933, green: 0.941, blue: 0.953) // #eef0f3
-    private static let highlight = Color(red: 0.965, green: 0.969, blue: 0.976) // #f6f7f9
+    // Light: #eef0f3 sweeping to #f6f7f9. Dark: the hover grey (#21262e) sweeping to the
+    // border grey (#2b313b), so a loading screen in dark mode isn't rows of white blocks.
+    private static let base = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.129, green: 0.149, blue: 0.180, alpha: 1)
+            : UIColor(red: 0.933, green: 0.941, blue: 0.953, alpha: 1)
+    })
+    private static let highlight = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.169, green: 0.192, blue: 0.231, alpha: 1)
+            : UIColor(red: 0.965, green: 0.969, blue: 0.976, alpha: 1)
+    })
 
     private static func sweepGradient(width _: CGFloat, phase: CGFloat) -> LinearGradient {
         LinearGradient(
