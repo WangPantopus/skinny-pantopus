@@ -40,9 +40,9 @@ import app.pantopus.android.data.profile.UserReportsRepository
 import app.pantopus.android.data.realtime.SocketManager
 import app.pantopus.android.data.upload.UploadRepository
 import app.pantopus.android.ui.theme.PantopusIcon
+import io.mockk.Runs
 import io.mockk.coEvery
 import io.mockk.coVerify
-import io.mockk.Runs
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
@@ -649,13 +649,6 @@ class ChatConversationViewModelTest {
             )
         }
 
-    /**
-     * Person threads aggregate messages from every shared room (direct +
-     * gig + group), but Phase 1 always sends to the direct room. Replying
-     * to a bubble that lives in a different room must drop replyToId —
-     * otherwise the backend 400s "Reply target not found in this room"
-     * and the row fails forever.
-     */
     /**
      * A reply to a message from another of this person's rooms (a task's room) is never re-routed into the direct chat
      * without its quote: that room's audience is not this person thread's, so the send is refused and the draft and its
