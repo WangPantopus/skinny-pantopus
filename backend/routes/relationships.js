@@ -50,6 +50,11 @@ function isPersonalBlockAdmissionError(error) {
   return error?.code === 'PT403' && error.message === 'PERSONAL_CONNECTION_BLOCKED';
 }
 
+// A block that couldn't finish (blockService.removeFollowsBetween) or couldn't be read: try again.
+function blockUnfinished(res, err) {
+  return res.status(503).json({ error: err.message, code: err.code });
+}
+
 function connectionReadUnavailable(res) {
   return res.status(503).json({
     error: 'Connections are temporarily unavailable. Please try again.',
@@ -62,6 +67,8 @@ function connectionReadUnavailable(res) {
 // in force if the other person unblocks later. The answer is a plain success
 // that does not return the other person's relationship row.
 async function blockSomeoneWhoBlockedYou(req, res, userId, otherUserId, reason) {
+  // Follows go before and after the block is recorded, as on every block route (blockService.removeFollowsBetween).
+  await blockService.removeFollowsBetween(userId, otherUserId);
   const { error } = await supabaseAdmin
     .from('UserBlock')
     .upsert(
@@ -74,6 +81,7 @@ async function blockSomeoneWhoBlockedYou(req, res, userId, otherUserId, reason) 
   }
   blockService.invalidateBlockCache(userId, otherUserId);
   invalidateBlockFilters(userId, otherUserId);
+  await blockService.removeFollowsBetween(userId, otherUserId);
   // Same personal-block cascade as POST /api/users/:userId/block (P1.14).
   setImmediate(async () => {
     try {
@@ -514,11 +522,14 @@ router.post('/:id/block', verifyToken, async (req, res) => {
     const userId = req.user.id;
     const { reason } = req.body || {};
 
-    const { data: rel } = await supabaseAdmin
+    const { data: rel, error: readError } = await supabaseAdmin
       .from('Relationship')
       .select('*')
       .eq('id', relationshipId)
-      .single();
+      .maybeSingle();
+
+    // 22P02: the id isn't one at all, so there is no such relationship.
+    if (readError && readError.code !== '22P02') return connectionReadUnavailable(res);
 
     if (!rel) {
       return res.status(404).json({ error: 'Relationship not found' });
@@ -533,9 +544,17 @@ router.post('/:id/block', verifyToken, async (req, res) => {
       return res.status(404).json({ error: 'Relationship not found' });
     }
 
+    const otherUserId = rel.requester_id === userId ? rel.addressee_id : rel.requester_id;
+
+    // The caller's own block, already recorded: a retry of one whose follows
+    // couldn't be removed finishes them.
     if (rel.status === 'blocked') {
-      return res.status(400).json({ error: 'Already blocked' });
+      await blockService.removeFollowsBetween(userId, otherUserId);
+      return res.json({ message: 'User blocked', relationship: rel });
     }
+
+    // First, so a failure records nothing and Block is still offered.
+    await blockService.removeFollowsBetween(userId, otherUserId);
 
     const { data: updated, error } = await supabaseAdmin
       .from('Relationship')
@@ -554,12 +573,6 @@ router.post('/:id/block', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to block user' });
     }
 
-    const otherUserId = rel.requester_id === userId ? rel.addressee_id : rel.requester_id;
-    await Promise.allSettled([
-      supabaseAdmin.from('UserFollow').delete().eq('follower_id', userId).eq('following_id', otherUserId),
-      supabaseAdmin.from('UserFollow').delete().eq('follower_id', otherUserId).eq('following_id', userId),
-    ]);
-
     invalidateBlockFilters(userId, otherUserId);
     await writeIdentityAuditLog({
       req,
@@ -572,8 +585,11 @@ router.post('/:id/block', verifyToken, async (req, res) => {
         had_reason: !!reason,
       },
     });
+    // Again now that the block is recorded, for a follow added in between.
+    await blockService.removeFollowsBetween(userId, otherUserId);
     res.json({ message: 'User blocked', relationship: updated });
   } catch (err) {
+    if (err.code === 'BLOCK_INCOMPLETE') return blockUnfinished(res, err);
     logger.error('Block user error', { error: err.message });
     res.status(500).json({ error: 'Failed to block user' });
   }
@@ -591,26 +607,40 @@ router.post('/block-user', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'user_id is required' });
     }
 
+    // An account id only: the lookup below writes it into a filter, where
+    // anything else could match a relationship between two other people.
+    if (Joi.string().uuid().validate(targetId).error) {
+      return res.status(400).json({ error: 'user_id must be an account id' });
+    }
+
     if (userId === targetId) {
       return res.status(400).json({ error: 'Cannot block yourself' });
     }
 
-    // Check existing relationship
-    const { data: existing } = await supabaseAdmin
+    // Check existing relationship (the unique pair index enforces one row)
+    const { data: existing, error: readError } = await supabaseAdmin
       .from('Relationship')
-      .select('id, status, blocked_by')
+      .select('*')
       .or(
         `and(requester_id.eq.${userId},addressee_id.eq.${targetId}),and(requester_id.eq.${targetId},addressee_id.eq.${userId})`
       )
-      .single();
+      .maybeSingle();
+
+    if (readError) return connectionReadUnavailable(res);
 
     if (existing) {
       if (isHiddenBlock(existing, userId)) {
-        return blockSomeoneWhoBlockedYou(req, res, userId, targetId, reason);
+        return await blockSomeoneWhoBlockedYou(req, res, userId, targetId, reason);
       }
+      // The caller's own block, already recorded: a retry of one whose follows
+      // couldn't be removed finishes them.
       if (existing.status === 'blocked') {
-        return res.status(400).json({ error: 'Already blocked' });
+        await blockService.removeFollowsBetween(userId, targetId);
+        return res.json({ message: 'User blocked', relationship: existing });
       }
+
+      // First, so a failure records nothing and Block is still offered.
+      await blockService.removeFollowsBetween(userId, targetId);
 
       // Update existing relationship to blocked
       const { data: updated, error } = await supabaseAdmin
@@ -630,11 +660,6 @@ router.post('/block-user', verifyToken, async (req, res) => {
         return res.status(500).json({ error: 'Failed to block user' });
       }
 
-      await Promise.allSettled([
-        supabaseAdmin.from('UserFollow').delete().eq('follower_id', userId).eq('following_id', targetId),
-        supabaseAdmin.from('UserFollow').delete().eq('follower_id', targetId).eq('following_id', userId),
-      ]);
-
       invalidateBlockFilters(userId, targetId);
       await writeIdentityAuditLog({
         req,
@@ -648,8 +673,13 @@ router.post('/block-user', verifyToken, async (req, res) => {
           mode: 'existing_relationship',
         },
       });
+      // Again now that the block is recorded, for a follow added in between.
+      await blockService.removeFollowsBetween(userId, targetId);
       return res.json({ message: 'User blocked', relationship: updated });
     }
+
+    // Follows first, so a failure records nothing; again after the block below.
+    await blockService.removeFollowsBetween(userId, targetId);
 
     // Create a new blocked relationship
     const { data: rel, error } = await supabaseAdmin
@@ -670,11 +700,6 @@ router.post('/block-user', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to block user' });
     }
 
-    await Promise.allSettled([
-      supabaseAdmin.from('UserFollow').delete().eq('follower_id', userId).eq('following_id', targetId),
-      supabaseAdmin.from('UserFollow').delete().eq('follower_id', targetId).eq('following_id', userId),
-    ]);
-
     invalidateBlockFilters(userId, targetId);
     await writeIdentityAuditLog({
       req,
@@ -688,8 +713,10 @@ router.post('/block-user', verifyToken, async (req, res) => {
         mode: 'created_relationship',
       },
     });
+    await blockService.removeFollowsBetween(userId, targetId);
     res.json({ message: 'User blocked', relationship: rel });
   } catch (err) {
+    if (err.code === 'BLOCK_INCOMPLETE') return blockUnfinished(res, err);
     logger.error('Block user error', { error: err.message });
     res.status(500).json({ error: 'Failed to block user' });
   }
@@ -703,11 +730,13 @@ router.post('/:id/unblock', verifyToken, async (req, res) => {
     const relationshipId = req.params.id;
     const userId = req.user.id;
 
-    const { data: rel } = await supabaseAdmin
+    const { data: rel, error: readError } = await supabaseAdmin
       .from('Relationship')
       .select('*')
       .eq('id', relationshipId)
-      .single();
+      .maybeSingle();
+
+    if (readError && readError.code !== '22P02') return connectionReadUnavailable(res);
 
     // Only the blocker can unblock. Everyone else, participant or not, gets
     // the same not-found answer, so this route never confirms a block.

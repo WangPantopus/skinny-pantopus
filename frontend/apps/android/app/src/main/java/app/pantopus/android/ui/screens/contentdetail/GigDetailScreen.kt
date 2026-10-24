@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.LaunchFeatures
+import app.pantopus.android.core.security.SensitiveClipboard
 import app.pantopus.android.data.api.models.offers.BidDto
 import app.pantopus.android.ui.screens.gigs.checkout.GigBidCheckoutHost
 import app.pantopus.android.ui.screens.my_bids.EditBidFailure
@@ -180,9 +181,7 @@ fun GigDetailScreen(
     // (`components/gig-detail-v2/ETATracker.tsx:57`).
     LaunchedEffect(Unit) {
         viewModel.liveStatusEvents.collect { event ->
-            val clipboard =
-                context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
-            clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("Live status link", event.url))
+            SensitiveClipboard.copy(context, "Live status link", event.url)
             showToast("Live status link copied — it expires in 24 hours.", false)
         }
     }

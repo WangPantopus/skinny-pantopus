@@ -128,7 +128,7 @@ final class AccessCodesViewModel: ListOfRowsDataSource {
         api: APIClient = .shared,
         onSelect: @escaping @MainActor (AccessCodesTarget) -> Void = { _ in },
         clipboard: @escaping @MainActor (String) -> Void = { value in
-            UIPasteboard.general.string = value
+            SensitivePasteboard.copy(value)
         }
     ) {
         self.homeId = homeId

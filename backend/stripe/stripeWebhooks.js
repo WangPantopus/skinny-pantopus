@@ -86,7 +86,7 @@ router.post('/', async (req, res) => {
   if (insertError) {
     if (insertError.code !== '23505') {
       logger.error('Could not record Stripe webhook', { errorCode: insertError.code });
-      return res.status(500).json({ error: 'Webhook handler failed' });
+      return res.status(503).json({ error: 'Webhook handler failed' });
     }
     // Duplicate stripe_event_id — look up existing row
     const { data: existing, error: readError } = await supabaseAdmin
@@ -96,7 +96,7 @@ router.post('/', async (req, res) => {
       .single();
 
     if (readError || !existing) {
-      return res.status(500).json({ error: 'Webhook handler failed' });
+      return res.status(503).json({ error: 'Webhook handler failed' });
     }
 
     if (existing && existing.processed) {
@@ -304,7 +304,8 @@ router.post('/', async (req, res) => {
       eventId: event.id,
     });
 
-    // Record error and increment retry_count; return 500 so Stripe retries
+    // Record error and increment retry_count; the event stays unprocessed and the
+    // error status makes Stripe retry (503 when the database could not answer).
     const currentRetry = existingRow ? (existingRow.retry_count || 0) : 0;
     await supabaseAdmin
       .from('StripeWebhookEvent')
@@ -314,7 +315,7 @@ router.post('/', async (req, res) => {
       })
       .eq('stripe_event_id', event.id);
 
-    return res.status(500).json({ error: 'Webhook handler failed' });
+    return res.status(err.statusCode === 503 ? 503 : 500).json({ error: 'Webhook handler failed' });
   }
 });
 
@@ -322,14 +323,33 @@ router.post('/', async (req, res) => {
 // HELPER: Look up Payment by various Stripe IDs
 // ============================================================
 
+// supabase-js returns a failed query as { error } and never throws. Read as "no
+// matching row", a failed lookup answered 200 and marked the event processed, so
+// Stripe never sent it again: a dispute never froze its payment. A failed read
+// answers 503 and leaves the event unprocessed for Stripe's retry; only a real
+// "not found" is acknowledged.
+function lookupUnavailable(operation, metadata, error) {
+  logger.error(operation, { ...metadata, errorCode: error?.code, error: error?.message });
+  return Object.assign(new Error(`${operation}: ${error?.message || 'database unavailable'}`), { statusCode: 503 });
+}
+
 async function findPaymentByField(field, value) {
   if (!value) return null;
-  const { data } = await supabaseAdmin
+  const { data, error } = await supabaseAdmin
     .from('Payment')
     .select('*')
     .eq(field, value)
-    .single();
+    .maybeSingle();
+  if (error) throw lookupUnavailable('Payment lookup failed', { field }, error);
   return data;
+}
+
+// A transition this event could not apply is acknowledged only while the payment
+// can still be read: then another writer moved it on, or a guard keeps it, and the
+// log says so. When the read fails too, the transition may simply not have run, so
+// the event answers 503 and Stripe sends it again.
+async function requirePaymentReadable(paymentId) {
+  await findPaymentByField('id', paymentId);
 }
 
 async function findPaymentByPI(paymentIntentId) {
@@ -410,13 +430,16 @@ async function handleAccountUpdated(account) {
   // actually clears. P1.7: when a connected account first becomes
   // ready, every paid tier on the owner's persona gets a Stripe Price
   // created on the connected account.
-  const { data: prior } = await supabaseAdmin
+  const { data: prior, error: priorError } = await supabaseAdmin
     .from('StripeAccount')
     .select('user_id, charges_enabled')
     .eq('stripe_account_id', account.id)
     .maybeSingle();
+  if (priorError) throw lookupUnavailable('Connect account lookup failed', { accountId: account.id }, priorError);
 
-  await supabaseAdmin
+  // Payouts and the payout screens read these flags: a lost update would show a
+  // finished onboarding as unfinished until Stripe's next account event.
+  assertSupabaseOk(await supabaseAdmin
     .from('StripeAccount')
     .update({
       charges_enabled: account.charges_enabled,
@@ -428,7 +451,7 @@ async function handleAccountUpdated(account) {
       last_synced_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
-    .eq('stripe_account_id', account.id);
+    .eq('stripe_account_id', account.id), 'Connect account record failed', { accountId: account.id });
 
   const becameReady = !prior?.charges_enabled && !!account.charges_enabled
                       && !!account.details_submitted;
@@ -461,7 +484,7 @@ async function handleAccountAuthorized(application) {
 async function handleAccountDeauthorized(application) {
   logger.info('Account deauthorized', { accountId: application.account });
 
-  await supabaseAdmin
+  assertSupabaseOk(await supabaseAdmin
     .from('StripeAccount')
     .update({
       charges_enabled: false,
@@ -469,7 +492,9 @@ async function handleAccountDeauthorized(application) {
       onboarding_completed: false,
       updated_at: new Date().toISOString(),
     })
-    .eq('stripe_account_id', application.account);
+    .eq('stripe_account_id', application.account), 'Connect account deauthorization record failed', {
+    accountId: application.account,
+  });
 }
 
 // ============================================================
@@ -512,6 +537,7 @@ async function handleSetupIntentSucceeded(setupIntent) {
       paymentMethod: setupIntent.payment_method,
     });
   } catch (err) {
+    await requirePaymentReadable(payment.id);
     logger.error('Error processing SetupIntent succeeded', {
       paymentId: payment.id,
       error: err.message,
@@ -600,21 +626,18 @@ async function handlePaymentIntentSucceeded(paymentIntent) {
 
   // Support Train gift fund contribution: update contribution status on async confirmation
   if (paymentIntent.metadata?.type === 'support_train_gift_fund' && paymentIntent.metadata?.contribution_id) {
-    try {
-      await supabaseAdmin
-        .from('SupportTrainFundContribution')
-        .update({ payment_status: 'succeeded' })
-        .eq('id', paymentIntent.metadata.contribution_id)
-        .eq('payment_status', 'pending');
-      logger.info('Updated SupportTrainFundContribution on PI succeeded', {
-        contributionId: paymentIntent.metadata.contribution_id,
-      });
-    } catch (contribErr) {
-      logger.warn('Failed to update SupportTrainFundContribution', {
-        contributionId: paymentIntent.metadata.contribution_id,
-        error: contribErr.message,
-      });
-    }
+    // supabase-js reports a failed update in { error } rather than throwing; a
+    // contribution left pending would show a gift that went through as unpaid.
+    assertSupabaseOk(await supabaseAdmin
+      .from('SupportTrainFundContribution')
+      .update({ payment_status: 'succeeded' })
+      .eq('id', paymentIntent.metadata.contribution_id)
+      .eq('payment_status', 'pending'), 'SupportTrainFundContribution record failed', {
+      contributionId: paymentIntent.metadata.contribution_id,
+    });
+    logger.info('Updated SupportTrainFundContribution on PI succeeded', {
+      contributionId: paymentIntent.metadata.contribution_id,
+    });
   }
 
   if (paymentIntent.capture_method === 'manual') {
@@ -652,6 +675,7 @@ async function handlePaymentIntentSucceeded(paymentIntent) {
         });
       } catch (transErr) {
         // Likely already transitioned by capturePayment() — that's fine
+        await requirePaymentReadable(payment.id);
         logger.info('PI succeeded: transition to captured_hold skipped (likely already done)', {
           paymentId: payment.id,
           error: transErr.message,
@@ -766,6 +790,7 @@ async function handlePaymentIntentFailed(paymentIntent, req) {
         off_session_auth_required: true,
       });
     } catch (transErr) {
+      await requirePaymentReadable(payment.id);
       logger.error('PI failed: transition error', { paymentId: payment.id, error: transErr.message });
     }
 
@@ -887,6 +912,7 @@ async function handlePaymentIntentRequiresAction(paymentIntent, req) {
         failure_message: 'Strong Customer Authentication (SCA) required. Please complete payment on-session.',
       });
     } catch (transErr) {
+      await requirePaymentReadable(payment.id);
       logger.error('PI requires_action: transition error', { paymentId: payment.id, error: transErr.message });
     }
 
@@ -963,6 +989,7 @@ async function handleAmountCapturableUpdated(paymentIntent, req) {
     });
   } catch (transErr) {
     // Likely already transitioned by createPaymentIntentForGig
+    await requirePaymentReadable(payment.id);
     logger.info('amount_capturable_updated: transition skipped (likely already done)', {
       paymentId: payment.id,
       error: transErr.message,
@@ -1282,11 +1309,7 @@ async function handleDisputeUpdated(dispute) {
   });
 
   // Find payment by dispute ID
-  const { data: payment } = await supabaseAdmin
-    .from('Payment')
-    .select('id, gig_id')
-    .eq('dispute_id', dispute.id)
-    .single();
+  const payment = await findPaymentByField('dispute_id', dispute.id);
 
   if (!payment) {
     logger.warn('Dispute updated but no matching Payment found', { disputeId: dispute.id });
@@ -1314,11 +1337,7 @@ async function handleDisputeClosed(dispute) {
     status,
   });
 
-  const { data: payment } = await supabaseAdmin
-    .from('Payment')
-    .select('*')
-    .eq('dispute_id', dispute.id)
-    .single();
+  const payment = await findPaymentByField('dispute_id', dispute.id);
 
   if (!payment) {
     logger.warn('Dispute closed but no matching Payment found', { disputeId: dispute.id });
@@ -1655,23 +1674,20 @@ async function handlePayoutCreated(payout, connectedAccountId) {
   // Look up StripeAccount — prefer event.account (works for all payout types),
   // fall back to payout.destination (only works for automatic payouts where
   // destination is the Connect account ID, not a bank account ID like ba_xxx).
-  let account = null;
-  if (connectedAccountId) {
-    const { data } = await supabaseAdmin
+  // A failed read is not "no account": acknowledging it would leave the payout out
+  // of the payee's history for good.
+  const findAccount = async (stripeAccountId) => {
+    if (!stripeAccountId || typeof stripeAccountId !== 'string') return null;
+    const { data, error } = await supabaseAdmin
       .from('StripeAccount')
       .select('id, user_id')
-      .eq('stripe_account_id', connectedAccountId)
-      .single();
-    account = data;
-  }
-  if (!account) {
-    const { data } = await supabaseAdmin
-      .from('StripeAccount')
-      .select('id, user_id')
-      .eq('stripe_account_id', payout.destination)
-      .single();
-    account = data;
-  }
+      .eq('stripe_account_id', stripeAccountId)
+      .maybeSingle();
+    if (error) throw lookupUnavailable('Payout account lookup failed', { payoutId: payout.id }, error);
+    return data;
+  };
+  let account = await findAccount(connectedAccountId);
+  if (!account) account = await findAccount(payout.destination);
 
   if (account) {
     const inserted = await supabaseAdmin.from('Payout').insert({
@@ -1766,10 +1782,10 @@ async function handleCapabilityUpdated(capability) {
   if (Object.keys(updates).length > 0) {
     updates.updated_at = new Date().toISOString();
 
-    await supabaseAdmin
+    assertSupabaseOk(await supabaseAdmin
       .from('StripeAccount')
       .update(updates)
-      .eq('stripe_account_id', capability.account);
+      .eq('stripe_account_id', capability.account), 'Capability record failed', { accountId: capability.account });
   }
 }
 

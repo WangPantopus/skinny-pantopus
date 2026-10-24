@@ -2,8 +2,6 @@
 
 package app.pantopus.android.ui.screens.mailbox.item_detail.bodies
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -39,6 +37,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import app.pantopus.android.core.routing.ExternalLinks
 import app.pantopus.android.ui.components.SectionHeader
 import app.pantopus.android.ui.screens.mailbox.item_detail.MailItemSampleData
 import app.pantopus.android.ui.screens.mailbox.item_detail.PackageBodyContent
@@ -241,14 +240,7 @@ private fun EtaProgressBar() {
 private fun PackageTimelineCard(content: PackageBodyContent) {
     val context = LocalContext.current
     val openCarrier: (() -> Unit)? =
-        content.trackingUrl?.let { url ->
-            {
-                val intent =
-                    Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                context.startActivity(intent)
-            }
-        }
+        content.trackingUrl?.takeIf(ExternalLinks::isWeb)?.let { url -> { ExternalLinks.open(context, url) } }
     PackageTrackingTimeline(
         steps = content.trackingSteps,
         modifier = Modifier.testTag("packageBody.trackingTimeline"),
@@ -491,14 +483,7 @@ private fun PackageSplitDock(
     val context = LocalContext.current
     val carrierShort = remember(content.carrier) { carrierShort(content.carrier) }
     val openTracking: (() -> Unit)? =
-        content.trackingUrl?.let { url ->
-            {
-                val intent =
-                    Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                context.startActivity(intent)
-            }
-        }
+        content.trackingUrl?.takeIf(ExternalLinks::isWeb)?.let { url -> { ExternalLinks.open(context, url) } }
     Row(
         modifier = Modifier.fillMaxWidth().testTag("packageBody.actions"),
         horizontalArrangement = Arrangement.spacedBy(Spacing.s2),

@@ -272,8 +272,11 @@ async function resolveAcceptedGigBid({ gigId, acceptedBy }) {
     .limit(1)
     .maybeSingle();
 
+  // The accepted bid sets the price. Read as "no bid", a failed lookup charged the
+  // task's listed price instead of the amount the two people agreed.
   if (error) {
     logger.warn('Payment intent: accepted bid lookup failed', { gigId, acceptedBy, error: error.message });
+    throw paymentRouteError(503, 'Payment details are unavailable. Please try again.');
   }
   return data || null;
 }
@@ -500,6 +503,9 @@ async function linkGigCheckoutPayment({ checkout, result }) {
       paymentId: result.paymentId,
       error: error.message,
     });
+    // The task finds its payment through this link. A retry reuses the same
+    // payment and links it again.
+    throw paymentRouteError(503, 'Payment could not be saved. Please try again.');
   }
 }
 
@@ -564,17 +570,16 @@ router.post('/connect/account', verifyToken, validate(createConnectAccountSchema
 router.post('/connect/onboarding', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
-    const { returnUrl, refreshUrl } = req.body;
-    
+
+    // Stripe sends people back to these URLs from connect.stripe.com, so only
+    // Pantopus's own pages are used. A caller's returnUrl/refreshUrl is ignored
+    // (no client sends one): taking it made a lasting Stripe link that
+    // redirected to any site.
     const clientUrl = process.env.CLIENT_URL || process.env.APP_URL || 'http://localhost:3000';
-    const defaultReturnUrl = `${clientUrl}/app/settings/payments?onboarding=success`;
-    const defaultRefreshUrl = `${clientUrl}/app/settings/payments?onboarding=refresh`;
-    
-    const result = await stripeService.createAccountLink(
-      userId,
-      returnUrl || defaultReturnUrl,
-      refreshUrl || defaultRefreshUrl
-    );
+    const returnUrl = `${clientUrl}/app/settings/payments?onboarding=success`;
+    const refreshUrl = `${clientUrl}/app/settings/payments?onboarding=refresh`;
+
+    const result = await stripeService.createAccountLink(userId, returnUrl, refreshUrl);
     
     res.json({
       onboardingUrl: result.url,

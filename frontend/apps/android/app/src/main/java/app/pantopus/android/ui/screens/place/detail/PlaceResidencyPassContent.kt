@@ -25,13 +25,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.security.SensitiveClipboard
 import app.pantopus.android.data.api.models.place.ResidencyClaim
 import app.pantopus.android.data.api.models.place.ResidencyClaimScope
 import app.pantopus.android.data.api.models.place.ResidencyClaimStatus
@@ -85,11 +85,11 @@ fun PlaceResidencyPassSection(
 ) {
     val state by viewModel.claims.collectAsStateWithLifecycle()
     val linkToCopy by viewModel.claimLinkToCopy.collectAsStateWithLifecycle()
-    val clipboard = LocalClipboardManager.current
+    val context = LocalContext.current
 
     LaunchedEffect(linkToCopy) {
         linkToCopy?.let {
-            clipboard.setText(AnnotatedString(it))
+            SensitiveClipboard.copy(context, "Verification link", it)
             viewModel.consumeClaimLink()
         }
     }
@@ -251,7 +251,7 @@ private fun ResidencyClaimRow(
     claim: ResidencyClaim,
     viewModel: PlaceDetailViewModel,
 ) {
-    val clipboard = LocalClipboardManager.current
+    val context = LocalContext.current
     val expiresAt = remember(claim.expiresAt) { runCatching { Instant.parse(claim.expiresAt).toEpochMilli() }.getOrNull() }
     var now by remember(claim.id, claim.expiresAt) { mutableStateOf(System.currentTimeMillis()) }
     var confirmingRevoke by remember { mutableStateOf(false) }
@@ -308,7 +308,7 @@ private fun ResidencyClaimRow(
                         modifier =
                             Modifier.clickable {
                                 if (expiresAt == null || expiresAt > System.currentTimeMillis()) {
-                                    clipboard.setText(AnnotatedString(claim.verifyUrl))
+                                    SensitiveClipboard.copy(context, "Verification link", claim.verifyUrl)
                                 }
                             },
                     )

@@ -205,7 +205,7 @@ public struct BusinessTeamView: View {
                 viewModel.handleInvited(seat)
                 // The invitee joins only through this link, so it goes straight to the clipboard.
                 if let inviteLink {
-                    UIPasteboard.general.string = inviteLink
+                    SensitivePasteboard.copy(inviteLink)
                     let name = [seat.displayName, seat.inviteEmail]
                         .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
                         .first { !$0.isEmpty } ?? "them"

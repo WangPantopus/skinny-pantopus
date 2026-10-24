@@ -416,6 +416,18 @@ function inviteBackHtml({ street, verifiedCount, optOutCode }) {
 }
 
 /**
+ * A safeguard that could not be read refuses the send. supabase-js returns a
+ * failed read as { error } and never throws, and an unread opt-out list, member
+ * check or count looks exactly like "no rows" — a pass. A card paid for and
+ * mailed to an address that opted out cannot be unsent, so the answer is the
+ * same retryable refusal as a failed reservation.
+ */
+function safeguardUnavailable(check, error, userId) {
+  logger.error('blockFounders: invite safeguard read failed', { check, userId, error: error.message });
+  return new BlockFoundersError('The invitation could not be sent. Try again shortly.', 'SEND_FAILED');
+}
+
+/**
  * Send one template postcard invite. Every safeguard is checked
  * server-side, in order, before any money is spent:
  * opt-out registry → already-on-Pantopus → 90-day recipient dedup →
@@ -450,38 +462,44 @@ async function sendInvite({ home, userId, recipient }) {
 
   // Read the registry under BOTH hashes. A suppression must never
   // regress because the hashing scheme changed underneath it.
-  const { data: optedOutRows } = await supabaseAdmin
+  const { data: optedOutRows, error: optOutError } = await supabaseAdmin
     .from('BlockInviteOptOut')
     .select('address_hash')
     .in('address_hash', [suppressionHash, memberHash]);
+  if (optOutError) throw safeguardUnavailable('opt_out', optOutError, userId);
   if (optedOutRows && optedOutRows.length > 0) {
     throw new BlockFoundersError('That address has asked not to receive invitations.', 'OPTED_OUT');
   }
 
-  const { data: existingHome } = await supabaseAdmin
+  // Home.address_hash is not unique: two homes at one address made
+  // maybeSingle() fail, and that failure read as "not a member".
+  const { data: existingHomes, error: memberError } = await supabaseAdmin
     .from('Home')
     .select('id')
     .eq('address_hash', memberHash)
-    .maybeSingle();
-  if (existingHome) {
+    .limit(1);
+  if (memberError) throw safeguardUnavailable('already_member', memberError, userId);
+  if (existingHomes && existingHomes.length > 0) {
     throw new BlockFoundersError('That address is already on Pantopus.', 'ALREADY_MEMBER');
   }
 
   const dedupSince = new Date(Date.now() - RECIPIENT_DEDUP_DAYS * DAY_MS).toISOString();
-  const { count: recentToRecipient } = await supabaseAdmin
+  const { count: recentToRecipient, error: dedupError } = await supabaseAdmin
     .from('BlockInvite')
     .select('id', { count: 'exact', head: true })
     .in('recipient_address_hash', [suppressionHash, memberHash])
     .gte('created_at', dedupSince);
+  if (dedupError) throw safeguardUnavailable('recipient_dedup', dedupError, userId);
   if ((recentToRecipient || 0) > 0) {
     throw new BlockFoundersError('That address was invited recently — one invitation per season, from anyone.', 'RECENTLY_INVITED');
   }
 
-  const { count: weekCount } = await supabaseAdmin
+  const { count: weekCount, error: weekError } = await supabaseAdmin
     .from('BlockInvite')
     .select('id', { count: 'exact', head: true })
     .eq('sender_user_id', userId)
     .gte('created_at', new Date(Date.now() - WEEK_MS).toISOString());
+  if (weekError) throw safeguardUnavailable('weekly_cap', weekError, userId);
   if ((weekCount || 0) >= WEEKLY_INVITE_CAP) {
     throw new BlockFoundersError(`You've sent this week's ${WEEKLY_INVITE_CAP} invitations.`, 'WEEKLY_CAP');
   }
@@ -534,12 +552,19 @@ async function sendInvite({ home, userId, recipient }) {
   }
 
   const releaseReservation = async () => {
-    await supabaseAdmin.from('BlockInvite').delete().eq('id', reservationId);
+    const { error } = await supabaseAdmin.from('BlockInvite').delete().eq('id', reservationId);
+    // A reservation that stays errs toward silence: it holds one of the
+    // sender's weekly invitations and suppresses the address, and no card
+    // goes out.
+    if (error) logger.error('blockFounders: invite reservation release failed', { inviteId: reservationId, error: error.message });
   };
 
   // Re-count WITH the reservation present. Anything above the allowance
   // means a concurrent request beat us to the budget.
-  const [{ count: recipientNow }, { count: weekNow }] = await Promise.all([
+  const [
+    { count: recipientNow, error: recipientNowError },
+    { count: weekNow, error: weekNowError },
+  ] = await Promise.all([
     supabaseAdmin
       .from('BlockInvite')
       .select('id', { count: 'exact', head: true })
@@ -551,6 +576,11 @@ async function sendInvite({ home, userId, recipient }) {
       .eq('sender_user_id', userId)
       .gte('created_at', new Date(Date.now() - WEEK_MS).toISOString()),
   ]);
+  if (recipientNowError || weekNowError) {
+    await releaseReservation().catch(() => {});
+    throw safeguardUnavailable(recipientNowError ? 'recipient_dedup_recount' : 'weekly_cap_recount',
+      recipientNowError || weekNowError, userId);
+  }
   if ((recipientNow || 0) > 1) {
     await releaseReservation().catch(() => {});
     throw new BlockFoundersError('That address was invited recently — one invitation per season, from anyone.', 'RECENTLY_INVITED');
@@ -602,11 +632,18 @@ async function redeemOptOut(code) {
   if (normalized.length !== 16) return { done: false };
   const formatted = normalized.match(/.{4}/g).join('-');
 
-  const { data: invite } = await supabaseAdmin
+  // A failed read or save throws (the route answers 500, "try again"): an
+  // answer of { done: false } would tell the recipient their valid code is
+  // unknown while the opt-out was never recorded.
+  const { data: invite, error: inviteError } = await supabaseAdmin
     .from('BlockInvite')
     .select('recipient_address_hash')
     .eq('opt_out_code', formatted)
     .maybeSingle();
+  if (inviteError) {
+    logger.error('blockFounders: opt-out code lookup failed', { error: inviteError.message });
+    throw new Error('Opt-out code lookup failed');
+  }
   if (!invite) return { done: false };
 
   const { error } = await supabaseAdmin
@@ -614,7 +651,7 @@ async function redeemOptOut(code) {
     .upsert({ address_hash: invite.recipient_address_hash, created_at: new Date().toISOString() });
   if (error) {
     logger.error('blockFounders: opt-out upsert failed', { error: error.message });
-    return { done: false };
+    throw new Error('Opt-out could not be saved');
   }
   return { done: true };
 }

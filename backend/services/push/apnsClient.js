@@ -106,6 +106,15 @@ function buildPayload({ title, body, data } = {}) {
   return payload;
 }
 
+// The hex form of a device token's bytes: 32 today, and Apple says not to rely
+// on the length, so up to 100. It is the request path's last segment.
+const DEVICE_TOKEN_RE = /^(?:[0-9a-fA-F]{2}){32,100}$/;
+
+/** True for a well-formed APNs device token. Pure — exported for registration. */
+function isDeviceToken(token) {
+  return typeof token === 'string' && DEVICE_TOKEN_RE.test(token);
+}
+
 /**
  * Map an APNs HTTP response to an action. Pure — exported for tests.
  * `invalid` → the device token is dead and should be pruned.
@@ -141,9 +150,16 @@ function sendOne(session, token, payloadString, providerToken, bundleId, collaps
       resolve(value);
     };
 
+    // A malformed token never reaches Apple, where it would change the request
+    // path; it is pruned like a dead one.
+    if (!isDeviceToken(token)) {
+      finish({ token, action: 'invalid', status: 0, reason: 'BadDeviceToken' });
+      return;
+    }
+
     const req = session.request({
       ':method': 'POST',
-      ':path': `/3/device/${token}`,
+      ':path': `/3/device/${encodeURIComponent(token)}`,
       authorization: `bearer ${providerToken}`,
       'apns-topic': bundleId,
       'apns-push-type': 'alert',
@@ -222,6 +238,7 @@ function close() {
 
 module.exports = {
   isConfigured,
+  isDeviceToken,
   buildPayload,
   classifyApnsFailure,
   getProviderToken,

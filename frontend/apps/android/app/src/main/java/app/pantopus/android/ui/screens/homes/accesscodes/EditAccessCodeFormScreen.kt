@@ -2,9 +2,6 @@
 
 package app.pantopus.android.ui.screens.homes.accesscodes
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -53,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.security.SecureScreenEffect
+import app.pantopus.android.core.security.SensitiveClipboard
 import app.pantopus.android.ui.components.PantopusFieldState
 import app.pantopus.android.ui.components.PantopusTextField
 import app.pantopus.android.ui.screens.shared.form.FormFieldGroup
@@ -94,15 +92,9 @@ fun EditAccessCodeFormScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    val clipboard =
-        remember {
-            context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-        }
 
     LaunchedEffect(Unit) {
-        viewModel.bindClipboard { value ->
-            clipboard?.setPrimaryClip(ClipData.newPlainText("Access code", value))
-        }
+        viewModel.bindClipboard { value -> SensitiveClipboard.copy(context, "Access code", value) }
         viewModel.load()
     }
 
