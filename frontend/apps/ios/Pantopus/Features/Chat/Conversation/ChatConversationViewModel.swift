@@ -1257,14 +1257,14 @@ public final class ChatConversationViewModel {
         let generation = historyGeneration
         await loadTopicsIfNeeded()
         guard generation == historyGeneration, !Task.isCancelled else { return }
-        if isViewingSearchContext {
-            didResolveScrollTarget = false
-            await fetch(.reload)
-            return
-        }
         if case .error = state {
+            // Nothing is on screen to keep: a search context opens at its match again.
+            if isViewingSearchContext { didResolveScrollTarget = false }
             await fetch(.reload)
         } else {
+            // Catch-up, reconnect and pull-to-refresh merge quietly, a search
+            // context included (its anchored window is requested again): the
+            // rows stay on screen and the reader stays where they are.
             await fetch(.merge)
         }
     }
@@ -3004,6 +3004,15 @@ public final class ChatConversationViewModel {
                 guard heldIds.contains(message.id), !historyTouchedIds.contains(message.id),
                       !fetchedIds.contains(message.id) else { return false }
                 return page.hasMore != true || lowerBound.map { !Self.messagePrecedes(message, $0) } == true
+            }
+        } else if case .merge = kind, response.anchorMessageId != nil,
+                  let lower = fetched.min(by: Self.messagePrecedes), let upper = fetched.max(by: Self.messagePrecedes) {
+            // A search context's window read again: its rows the server no
+            // longer returns were deleted (or left this view) meanwhile.
+            let fetchedIds = Set(fetched.map(\.id))
+            messages.removeAll { message in
+                heldIds.contains(message.id) && !historyTouchedIds.contains(message.id) && !fetchedIds.contains(message.id)
+                    && !Self.messagePrecedes(message, lower) && !Self.messagePrecedes(upper, message)
             }
         }
         if let authorizedRooms {
