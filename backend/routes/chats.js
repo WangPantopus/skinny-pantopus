@@ -2479,6 +2479,15 @@ router.post('/messages', verifyToken, messageSendLimiter, messageBurstLimiter, v
     if (error?.code === 'PT400' && String(error.message || '').trim() === 'CHAT_TOPIC_SCOPE_INVALID') {
       return res.status(400).json({ error: 'Invalid topic for this conversation' });
     }
+    // These checks share the inserting transaction with the room revision and
+    // sender membership locks. Never retry a revoked send or deleted reply via
+    // a legacy payload fallback after its earlier REST preflight succeeded.
+    if (error?.code === 'PT403' && String(error.message || '').trim() === 'CHAT_WRITER_NOT_MEMBER') {
+      return res.status(403).json({ error: 'Not a participant' });
+    }
+    if (error?.code === 'PT400' && String(error.message || '').trim() === 'CHAT_REPLY_SCOPE_INVALID') {
+      return res.status(400).json({ error: 'Reply target not found in this room' });
+    }
 
     // The database re-decides direct-room admission inside the inserting
     // transaction (20260916010000_direct_message_block_admission): the isBlocked
