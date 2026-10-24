@@ -647,12 +647,24 @@ public struct ChatConversationView: View {
         }
     }
 
-    @ViewBuilder private var content: some View {
-        switch viewModel.state {
-        case .loading: loadingFrame
-        case .empty: emptyFrame
-        case let .loaded(rows): populatedFrame(rows)
-        case let .error(message): errorFrame(message)
+    /// The thread between the header and the composer. With the keyboard up,
+    /// dragging the thread down pulls the keyboard away with the finger (as in
+    /// Messages) and a tap on the thread puts it away, so the whole
+    /// conversation shows again. Buttons and links in the thread keep their
+    /// own taps: a tap there does what it did before, keyboard and all.
+    private var content: some View {
+        Group {
+            switch viewModel.state {
+            case .loading: loadingFrame
+            case .empty: emptyFrame
+            case let .loaded(rows): populatedFrame(rows)
+            case let .error(message): errorFrame(message)
+            }
+        }
+        .scrollDismissesKeyboard(.interactively)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         }
     }
 
