@@ -141,7 +141,7 @@ function getSession() {
   return _session;
 }
 
-function sendOne(session, token, payloadString, providerToken, bundleId) {
+function sendOne(session, token, payloadString, providerToken, bundleId, collapseId) {
   return new Promise((resolve) => {
     let settled = false;
     const finish = (value) => {
@@ -164,6 +164,7 @@ function sendOne(session, token, payloadString, providerToken, bundleId) {
       'apns-topic': bundleId,
       'apns-push-type': 'alert',
       'apns-priority': '10',
+      ...(collapseId ? { 'apns-collapse-id': collapseId } : {}),
       'content-type': 'application/json',
     });
 
@@ -213,9 +214,14 @@ async function sendMany(tokens, message) {
   const providerToken = getProviderToken();
   const payloadString = JSON.stringify(buildPayload(message));
   const session = getSession();
+  // One durable chat delivery retains one OS notification across uncertain retries.
+  // Different messages have different IDs and are never collapsed together.
+  const id = message?.data?.notificationId;
+  const collapseId = ['chat_message', 'business_message'].includes(message?.data?.type)
+    && /^[0-9a-f-]{36}$/i.test(id || '') ? id : undefined;
 
   const results = await Promise.all(
-    tokens.map((token) => sendOne(session, token, payloadString, providerToken, bundleId)),
+    tokens.map((token) => sendOne(session, token, payloadString, providerToken, bundleId, collapseId)),
   );
 
   const invalidTokens = results.filter((r) => r.action === 'invalid').map((r) => r.token);

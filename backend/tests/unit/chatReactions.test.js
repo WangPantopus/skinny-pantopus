@@ -59,7 +59,21 @@ function createApp() {
   };
   app.set('io', mockIo);
   app.use('/api/chat', require('../../routes/chats'));
+  // Committed messages fan out through the realtime service, which the socket server starts with the app's io.
+  require('../../services/chatRealtime').init(mockIo);
   return { app, mockIo };
+}
+
+// Committed changes fan out asynchronously, and an earlier test's delivery can still arrive. Wait for the emit that
+// matches, and report the connection io.to() named for it (the call made just before that emit).
+async function deliveredTo(mockIo, matches) {
+  const find = () => mockIo.emit.mock.calls.findIndex((call) => matches(...call));
+  for (let i = 0; i < 400 && find() < 0; i += 1) await new Promise((r) => setTimeout(r, 5));
+  const index = find();
+  if (index < 0) return null;
+  const emitted = mockIo.emit.mock.invocationCallOrder[index];
+  const toIndex = mockIo.to.mock.invocationCallOrder.findLastIndex((order) => order < emitted);
+  return { target: mockIo.to.mock.calls[toIndex]?.[0], payload: mockIo.emit.mock.calls[index][1] };
 }
 
 // ── Seed data ────────────────────────────────────────────────
@@ -316,19 +330,31 @@ describe('POST /api/chat/messages/:messageId/react', () => {
     expect(heart.reacted_by_me).toBe(true);
   });
 
+  // Approved: a reaction reaches each current member's own connections, personalized for that member, once the
+  // committed change is read back. A stale Socket.IO room subscription is not access, so nothing goes to the room.
   test('broadcasts message:reaction_updated via socket.io', async () => {
     const { app, mockIo } = createApp();
+    const { connectedUsers } = require('../../socket/chatSocketio');
+    connectedUsers.set(U2, new Set(['socket-u2']));
+    try {
+      await request(app)
+        .post(`/api/chat/messages/${MSG_1}/react`)
+        .set('Authorization', 'Bearer test-token')
+        .send({ reaction: '\u{1F44D}' });
+      const delivery = await deliveredTo(mockIo, (event, payload) => event === 'message:reaction_updated'
+        && payload?.messageId === MSG_1 && payload.reactions?.some((r) => r.reaction === '\u{1F44D}' && r.count === 1));
 
-    await request(app)
-      .post(`/api/chat/messages/${MSG_1}/react`)
-      .set('Authorization', 'Bearer test-token')
-      .send({ reaction: '\u{1F44D}' });
-
-    expect(mockIo.to).toHaveBeenCalledWith(ROOM_D);
-    expect(mockIo.emit).toHaveBeenCalledWith('message:reaction_updated', expect.objectContaining({
-      messageId: MSG_1,
-      reactions: expect.any(Array),
-    }));
+      expect(delivery).not.toBeNull();
+      expect(delivery.target).toBe('socket-u2');
+      expect(mockIo.to).not.toHaveBeenCalledWith(ROOM_D);
+      expect(delivery.payload).toEqual(expect.objectContaining({
+        messageId: MSG_1,
+        roomId: ROOM_D,
+        reactions: [expect.objectContaining({ reaction: '\u{1F44D}', count: 1, reacted_by_me: false })],
+      }));
+    } finally {
+      connectedUsers.delete(U2);
+    }
   });
 });
 
