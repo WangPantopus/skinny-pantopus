@@ -9,6 +9,7 @@ import { useChatMedia } from '@/hooks/useChatMedia';
 interface ImageLightboxProps {
   currentUserId?: string | null;
   roomId?: string;
+  messageId?: string;
   imageUrl: string | null;
   title?: string;
   mimeType?: string;
@@ -16,8 +17,8 @@ interface ImageLightboxProps {
   onClose: () => void;
 }
 
-export default function ImageLightbox({ imageUrl, currentUserId, roomId, title, mimeType, liveUrl, onClose }: ImageLightboxProps) {
-  const media = useChatMedia(imageUrl, currentUserId, roomId);
+export default function ImageLightbox({ imageUrl, currentUserId, roomId, messageId, title, mimeType, liveUrl, onClose }: ImageLightboxProps) {
+  const media = useChatMedia(imageUrl, currentUserId, roomId, messageId);
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
 

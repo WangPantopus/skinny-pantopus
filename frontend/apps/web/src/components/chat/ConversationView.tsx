@@ -70,7 +70,7 @@ export default function ConversationView({
   // ── Attachment modals ───────────────────────────────────
   const [showGigPicker, setShowGigPicker] = useState(false);
   const [showListingPicker, setShowListingPicker] = useState(false);
-  const [lightboxImage, setLightboxImage] = useState<{ url: string; title?: string; roomId?: string } | null>(null);
+  const [lightboxImage, setLightboxImage] = useState<{ url: string; title?: string; roomId?: string; messageId?: string } | null>(null);
 
   // ── Listing topic owner tracking (for Share Address) ───
   const [listingOwnerMap, setListingOwnerMap] = useState<Record<string, string>>({});
@@ -281,8 +281,8 @@ export default function ConversationView({
     listingSendMutation.mutate(listing);
   }, [chat, listingSendMutation]);
 
-  const handleImageClick = useCallback((url: string, title?: string, roomId?: string) => {
-    setLightboxImage({ url, title, roomId });
+  const handleImageClick = useCallback((url: string, title?: string, roomId?: string, messageId?: string) => {
+    setLightboxImage({ url, title, roomId, messageId });
   }, []);
 
   // ── Reaction handler ────────────────────────────────
@@ -488,6 +488,7 @@ export default function ConversationView({
       <ImageLightbox
         currentUserId={currentUserId}
         roomId={lightboxImage?.roomId}
+        messageId={lightboxImage?.messageId}
         imageUrl={lightboxImage?.url || null}
         title={lightboxImage?.title}
         onClose={() => setLightboxImage(null)}

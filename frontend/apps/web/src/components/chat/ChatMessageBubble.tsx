@@ -41,7 +41,7 @@ interface ChatMessageBubbleProps {
   showSender?: boolean;
   /** Set when this message replies to one that is loaded. */
   reply?: ChatReplyQuote;
-  onImageClick?: (url: string, title?: string, roomId?: string) => void;
+  onImageClick?: (url: string, title?: string, roomId?: string, messageId?: string) => void;
   onReact?: (messageId: string, emoji: string) => void;
   onRetry?: (messageId: string) => void;
   onRemovePending?: (messageId: string) => void;
@@ -65,8 +65,8 @@ function chatImagePreview(url: string): string {
 }
 
 
-function ChatImage({ url, accountId, roomId, alt }: { url: string; accountId?: string | null; roomId: string; alt: string }) {
-  const media = useChatMedia(chatImagePreview(url), accountId, roomId);
+function ChatImage({ url, accountId, roomId, messageId, alt }: { url: string; accountId?: string | null; roomId: string; messageId: string; alt: string }) {
+  const media = useChatMedia(chatImagePreview(url), accountId, roomId, messageId);
   if (!media.url) return <span role="status" className="block p-3 text-xs">{media.loading ? 'Loading photo…' : 'Photo unavailable. Open to retry.'}</span>;
   return <img src={media.url} onError={media.rejectMedia} alt={alt} className="rounded-lg transition-opacity hover:opacity-90"
     loading="lazy" decoding="async" style={{ width: 'auto', height: 'auto', maxWidth: '100%', maxHeight: 'min(180px, 48vw)', objectFit: 'contain' }} />;
@@ -340,13 +340,13 @@ function ChatMessageBubble({ msg, currentUserId, isMine, showSender = false, rep
                       <button
                         key={`${msg.id}-att-${i}`}
                         type="button"
-                        onClick={() => live || !onImageClick ? setPreview({ url, title: a.original_filename, liveUrl: live?.file_url }) : onImageClick(url, a.original_filename, msg.room_id)}
+                        onClick={() => live || !onImageClick ? setPreview({ url, title: a.original_filename, liveUrl: live?.file_url }) : onImageClick(url, a.original_filename, msg.room_id, msg.id)}
                         className={`block max-w-[min(100%,240px)] overflow-hidden rounded-lg text-left ${
                           isMine ? 'bg-primary-700/40' : 'bg-black/[0.06]'
                         }`}
                       >
                         {live && <span className="block px-2 py-1 text-xs">● LIVE</span>}
-                        <ChatImage url={url} accountId={currentUserId} roomId={msg.room_id} alt={showText ? `Photo: ${msgText}` : 'Photo'} />
+                        <ChatImage url={url} accountId={currentUserId} roomId={msg.room_id} messageId={msg.id} alt={showText ? `Photo: ${msgText}` : 'Photo'} />
                       </button>
                     );
                   }
@@ -390,7 +390,7 @@ function ChatMessageBubble({ msg, currentUserId, isMine, showSender = false, rep
         </div>
         {reactionBar}
         {actionsMenu}
-        <ImageLightbox currentUserId={currentUserId} roomId={msg.room_id} imageUrl={preview?.url ?? null} title={preview?.title} mimeType={preview?.mimeType}
+        <ImageLightbox messageId={msg.id} currentUserId={currentUserId} roomId={msg.room_id} imageUrl={preview?.url ?? null} title={preview?.title} mimeType={preview?.mimeType}
           liveUrl={preview?.liveUrl} onClose={() => setPreview(null)} />
       </div>
     </div>

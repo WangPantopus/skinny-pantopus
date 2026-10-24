@@ -28,7 +28,7 @@ interface ChatMessageListProps {
   /** Optional topic divider renderer */
   renderTopicDivider?: (msg: ChatMessage, prevMsg: ChatMessage | null) => React.ReactNode | null;
   /** Called when an image attachment is clicked */
-  onImageClick?: (url: string, title?: string, roomId?: string) => void;
+  onImageClick?: (url: string, title?: string, roomId?: string, messageId?: string) => void;
   /** Called when a user reacts to a message */
   onReact?: (messageId: string, emoji: string) => void;
   /** Explicitly retry a failed send or a retained person reply after a refusal. */

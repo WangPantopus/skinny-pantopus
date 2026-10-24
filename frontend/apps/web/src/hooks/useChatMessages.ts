@@ -476,8 +476,25 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
   }, []);
 
   useEffect(() => onChatHistoryRetired((event) => {
-    if (event.mediaOnly) return;
     if (!currentUserId || event.account !== JSON.stringify([api.getApiBaseUrl(), currentUserId]) || !isCurrentScope()) return;
+    if (event.mediaOnly) {
+      if (event.messageIds?.length) {
+        const deleted = new Set(event.messageIds);
+        // Message IDs are not reused. A confirmed deletion also retires older
+        // socket/history copies in other same-account views of the message.
+        deleted.forEach((id) => tombstonesRef.current.set(id, Number.MAX_SAFE_INTEGER));
+        setMessages((previous) => previous.filter((message) => !deleted.has(String(message.id))));
+        setEditingMessage((current) => current && deleted.has(current.messageId) ? null : current);
+        setReplyingTo((current) => current && deleted.has(current.messageId) ? null : current);
+      }
+      // This event does not revoke readable text. Advance only an unbroken
+      // fence; a missed account/access retirement still requires a fresh read.
+      if (event.previousGeneration === historyGenerationRef.current) {
+        historyGenerationRef.current = event.generation;
+        setRetainedHistoryGeneration(event.generation);
+      }
+      return;
+    }
     const denied = new Set(event.rooms);
     if (!(roomId && denied.has(roomId)) && !conversationRoomIdsRef.current.some((id) => denied.has(id))
       && !messagesRef.current.some((message) => denied.has(message.room_id))) return;
@@ -650,6 +667,11 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
       syncCursorsRef.current = cursor;
       completedRefreshRef.current += 1;
       setSyncGeneration((value) => value + 1);
+      const deleted = changes.filter((message) => 'deleted' in message && message.deleted);
+      if (deleted.length && isCurrentScope()) {
+        void retireChatHistoryRooms(currentUserId, deleted.map((message) => message.room_id), true,
+          deleted.map((message) => String(message.id))).catch(() => {});
+      }
     };
     const promise = (async () => {
       do {
@@ -831,8 +853,8 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     return () => { cancelled = true; };
   }, [cacheKeyId, loadAttempt, initialMessageId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Recent accepted history is encrypted on this device; pending originals
-  // are retained separately until acceptance. Never persist received media.
+  // Recent accepted history is encrypted on this device. Attachment bytes
+  // have separate bounded storage; pending originals remain until acceptance.
   useEffect(() => {
     if (!cacheKey || loading || loadFailure || contextWindowRef.current || shownKeyRef.current !== cacheKeyId) return;
     const accepted = messages.filter((message) => !isUnsent(message));
@@ -1012,7 +1034,11 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     setMessages(prev => prev.filter(m => String(m.id) !== String(data.messageId)));
     setEditingMessage((current) => current?.messageId === String(data.messageId) ? null : current);
     setReplyingTo((current) => current?.messageId === String(data.messageId) ? null : current);
-  }, [activeRoomIds, isCurrentScope, noteLiveChange]);
+    const deletedRoomId = String(data.roomId || existing?.room_id || '');
+    if (currentUserId && deletedRoomId) {
+      void retireChatHistoryRooms(currentUserId, [deletedRoomId], true, [String(data.messageId)]).catch(() => {});
+    }
+  }, [activeRoomIds, currentUserId, isCurrentScope, noteLiveChange]);
 
   const handleMessageEdited = useCallback((data: Record<string, any>) => {
     if (!data?.messageId || !data?.message || !isCurrentScope()) return;

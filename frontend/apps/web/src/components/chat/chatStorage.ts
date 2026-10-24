@@ -9,7 +9,7 @@ const OUTBOX_BYTES = 100 * 1024 * 1024;
 const OUTBOX_FULL = 'Your pending messages and drafts are full (100 items or 100 MB). Send or remove an item before adding more.';
 type Kind = 'history' | 'outbox' | 'media' | 'draft' | 'received-media';
 const isRetained = (kind: Kind) => kind === 'history' || kind === 'received-media';
-interface Metadata { id: string; account: string; kind: Kind; key: string; at: number; bytes: number; revision?: string; rooms?: string[]; mimeType?: string; historyGeneration?: number }
+interface Metadata { id: string; account: string; kind: Kind; key: string; at: number; bytes: number; revision?: string; rooms?: string[]; mimeType?: string; historyGeneration?: number; messageIds?: string[] }
 export interface ChatDraftCommit { key: string; revision: string; mediaKeys: string[] }
 export interface ChatRecordMutation {
   expectedDraft?: { key: string; revision: string | null };
@@ -26,7 +26,7 @@ let database: Promise<IDBDatabase> | undefined;
 let generation = 0;
 let active: ChatStorageScope | null = null;
 const HISTORY_RETIREMENT = 'pantopus-chat-history-retired';
-type HistoryRetirement = { account: string; marker: string; generation: number; rooms: string[]; cleared?: boolean; mediaOnly?: boolean };
+type HistoryRetirement = { account: string; marker: string; generation: number; previousGeneration?: number; rooms: string[]; cleared?: boolean; mediaOnly?: boolean; messageIds?: string[] };
 const historyGenerations = new Map<string, number>();
 const receivedHistoryGenerations = new Map<string, number>();
 const historyListeners = new Set<(event: HistoryRetirement) => void>();
@@ -243,10 +243,11 @@ export async function readChatBytes(scope: ChatStorageScope, kind: Kind, key: st
 
 /** Fence late writes first, then remove only snapshots containing denied rooms.
  * The generation is one bounded value per account, not an ever-growing deny list. */
-export async function retireChatHistoryRooms(accountId: string, roomIds: string[], mediaOnly = false): Promise<void> {
+export async function retireChatHistoryRooms(accountId: string, roomIds: string[], mediaOnly = false, messageIds?: string[]): Promise<void> {
   const rooms = [...new Set(roomIds.filter(Boolean))];
   if (!rooms.length) return;
   const denied = new Set(rooms);
+  const deletedMessages = messageIds?.length ? new Set(messageIds) : null;
   const scope = await activateChatStorage(accountId);
   const db = await open();
   // Older snapshots predate the metadata room index. There are at most 20.
@@ -270,7 +271,8 @@ export async function retireChatHistoryRooms(accountId: string, roomIds: string[
       generation = previousGeneration + 1;
       metas.put({ account: scope.account, generation }, HISTORY_FENCE);
       for (const entry of request.result as Metadata[]) if (entry.account === scope.account && isRetained(entry.kind)) {
-        if ((!mediaOnly || entry.kind === 'received-media') && (legacy.has(entry.id) || entry.rooms?.some((room) => denied.has(room)))) {
+        const affectedMessage = !deletedMessages || !entry.messageIds || entry.messageIds.some((id) => deletedMessages.has(id));
+        if ((!mediaOnly || entry.kind === 'received-media') && affectedMessage && (legacy.has(entry.id) || entry.rooms?.some((room) => denied.has(room)))) {
           metas.delete(entry.id); transaction.objectStore('payloads').delete(entry.id);
         } else if (entry.kind === 'received-media' && entry.historyGeneration === previousGeneration) {
           metas.put({ ...entry, historyGeneration: generation }, entry.id);
@@ -281,7 +283,7 @@ export async function retireChatHistoryRooms(accountId: string, roomIds: string[
     transaction.onabort = transaction.onerror = () => reject(new Error('Revoked chat history could not be removed.'));
   });
   if (!isChatStorageCurrent(scope)) return;
-  const event = { account: scope.account, marker: sessionMarker(), generation: next, rooms, mediaOnly };
+  const event = { account: scope.account, marker: sessionMarker(), generation: next, previousGeneration: next - 1, rooms, mediaOnly, messageIds };
   publishHistoryRetirement(event);
 }
 
@@ -321,7 +323,7 @@ export async function assertChatOutboxCapacity(scope: ChatStorageScope, records:
 
 /** Metadata and original attachment bytes commit together, before a send starts. */
 export async function writeChatRecords(scope: ChatStorageScope, records: Array<{ kind: Kind; key: string; value: unknown; revision?: string } | { kind: 'media'; key: string; bytes: ArrayBuffer }
-  | { kind: 'received-media'; key: string; bytes: ArrayBuffer; roomId: string; historyGeneration: number; mimeType: string }>, mutation: ChatRecordMutation = {}): Promise<void> {
+  | { kind: 'received-media'; key: string; bytes: ArrayBuffer; roomId: string; messageId: string; historyGeneration: number; mimeType: string }>, mutation: ChatRecordMutation = {}): Promise<void> {
   const prepared = await Promise.all(records.map(async (record) => {
     const id = recordId(scope, record.kind, record.key);
     const bytes = 'bytes' in record ? record.bytes : new TextEncoder().encode(JSON.stringify(record.value)).buffer;
@@ -331,6 +333,7 @@ export async function writeChatRecords(scope: ChatStorageScope, records: Array<{
       ...('roomId' in record ? { rooms: [record.roomId] } : {}),
       ...('mimeType' in record ? { mimeType: record.mimeType } : {}),
       ...('historyGeneration' in record ? { historyGeneration: record.historyGeneration } : {}),
+      ...('messageId' in record ? { messageIds: [record.messageId] } : {}),
       ...('revision' in record ? { revision: record.revision } : {}) }, sealed };
   }));
   const db = await open();

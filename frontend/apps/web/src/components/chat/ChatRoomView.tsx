@@ -52,7 +52,7 @@ export default function ChatRoomView({
   // ── Attachment modals ───────────────────────────────────
   const [showGigPicker, setShowGigPicker] = useState(false);
   const [showListingPicker, setShowListingPicker] = useState(false);
-  const [lightboxImage, setLightboxImage] = useState<{ url: string; title?: string; roomId?: string } | null>(null);
+  const [lightboxImage, setLightboxImage] = useState<{ url: string; title?: string; roomId?: string; messageId?: string } | null>(null);
 
   // ── Load current user ─────────────────────────────────
   useEffect(() => {
@@ -266,8 +266,8 @@ export default function ChatRoomView({
     listingSendMutation.mutate(listing);
   }, [listingSendMutation]);
 
-  const handleImageClick = useCallback((url: string, title?: string, roomId?: string) => {
-    setLightboxImage({ url, title, roomId });
+  const handleImageClick = useCallback((url: string, title?: string, roomId?: string, messageId?: string) => {
+    setLightboxImage({ url, title, roomId, messageId });
   }, []);
 
   // ── Reaction handler ────────────────────────────────
@@ -563,6 +563,7 @@ export default function ChatRoomView({
       <ImageLightbox
         currentUserId={currentUserId}
         roomId={lightboxImage?.roomId}
+        messageId={lightboxImage?.messageId}
         imageUrl={lightboxImage?.url || null}
         title={lightboxImage?.title}
         onClose={() => setLightboxImage(null)}

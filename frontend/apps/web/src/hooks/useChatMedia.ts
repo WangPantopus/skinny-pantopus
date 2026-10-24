@@ -55,10 +55,10 @@ async function download(url: string, signal: AbortSignal): Promise<Blob> {
 
 /** Private originals and thumbnails use the same account/room retirement fence
  * as history. A server denial never falls back to a previously saved file. */
-export function useChatMedia(url: string | null | undefined, accountId?: string | null, roomId?: string) {
+export function useChatMedia(url: string | null | undefined, accountId?: string | null, roomId?: string, messageId?: string) {
   const [version, setVersion] = useState(0);
   const [result, setResult] = useState<{ key: string; url: string | null; error: boolean; loading: boolean } | null>(null);
-  const key = JSON.stringify([accountId, roomId, url]);
+  const key = JSON.stringify([accountId, roomId, messageId, url]);
   const renderMarker = authSessionMarker();
   let source: string | null = null;
   if (url && typeof window !== 'undefined') {
@@ -71,7 +71,7 @@ export function useChatMedia(url: string | null | undefined, accountId?: string 
   }
 
   useEffect(() => {
-    if (!source || !accountId || !roomId) return;
+    if (!source || !accountId || !roomId || !messageId) return;
     let disposed = false;
     let objectUrl: string | undefined;
     const controller = new AbortController();
@@ -88,7 +88,7 @@ export function useChatMedia(url: string | null | undefined, accountId?: string 
     const stopAccount = onTokenChange(retireView);
     const stopHistory = onChatHistoryRetired((event) => {
       if (event.account !== JSON.stringify([getApiBaseUrl(), accountId])) return;
-      if (event.cleared || event.rooms.includes(roomId)) retireView();
+      if (event.cleared || event.rooms.includes(roomId) && (!event.messageIds || event.messageIds.includes(messageId))) retireView();
       else if (!disposed) setVersion(value => value + 1);
     });
     const online = () => { if (!disposed) setVersion(value => value + 1); };
@@ -118,7 +118,7 @@ export function useChatMedia(url: string | null | undefined, accountId?: string 
           if (!await current()) return;
           // Quota/storage failure must not hide a freshly authorized image.
           if (scope && generation !== null) await writeChatRecords(scope, [{ kind: 'received-media', key: mediaKey, bytes: await blob.arrayBuffer(),
-            roomId, historyGeneration: generation, mimeType: blob.type }]).catch(() => {});
+            roomId, messageId, historyGeneration: generation, mimeType: blob.type }]).catch(() => {});
         } catch (error) {
           const status = (error as { status?: number }).status;
           if (disposed || controller.signal.aborted && !timedOut) return;
@@ -148,7 +148,7 @@ export function useChatMedia(url: string | null | undefined, accountId?: string 
       stopAccount(); stopHistory(); window.removeEventListener('online', online);
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [source, accountId, roomId, key, version]);
+  }, [source, accountId, roomId, messageId, key, version]);
 
   const retry = () => setVersion(value => value + 1);
   const rejectMedia = () => {
@@ -159,6 +159,6 @@ export function useChatMedia(url: string | null | undefined, accountId?: string 
     }).catch(() => {});
   };
   if (!source) return { url: url || null, error: false, loading: false, retry, rejectMedia };
-  if (!accountId || !roomId) return { url: null, error: true, loading: false, retry, rejectMedia };
+  if (!accountId || !roomId || !messageId) return { url: null, error: true, loading: false, retry, rejectMedia };
   return { ...(result?.key === key ? result : { url: null, error: false, loading: true }), retry, rejectMedia };
 }
