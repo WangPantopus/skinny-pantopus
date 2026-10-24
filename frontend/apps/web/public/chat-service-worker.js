@@ -12,7 +12,7 @@ let preparing;
 
 function publicAsset(url) {
   return url.origin === self.location.origin && !url.search
-    && /^\/_next\/static\/[a-zA-Z0-9_./%-]+\.(?:js|css|woff2?)$/.test(url.pathname);
+    && /^\/_next\/static\/[a-zA-Z0-9_./%-]+\.(?:m?js|css|woff2?)$/.test(url.pathname);
 }
 
 async function retainAsset(cache, url, response) {
