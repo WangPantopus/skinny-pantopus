@@ -852,10 +852,10 @@ public final class ChatConversationViewModel {
         aiPrompts = topic?.starterChips ?? Self.launchAICapabilities
         emptyChips = Self.launchEmptyChips
         // Continue the user's existing AI conversation across thread
-        // opens within this app session. Ask on a screen starts a new one
-        // with its first message; until then the earlier one stays current.
-        // A thread opened at a nudge continues the nudge's conversation.
-        if case .ai = mode, topic == nil, nudge == nil {
+        // opens within this app session, from Messages or an Ask on a
+        // screen alike (as on Android). A thread opened at a nudge
+        // continues the nudge's conversation.
+        if case .ai = mode, nudge == nil {
             aiConversationId = aiConversationStore.conversationId(forUserId: currentUserId)
         }
     }
@@ -1018,18 +1018,19 @@ public final class ChatConversationViewModel {
     /// too, so the assistant never refers to something the person can't
     /// see. When the session store already holds an id (a same-session
     /// reopen), only that conversation's turns are read. A thread opened
-    /// with Ask on a screen continues the same conversation but shows only
-    /// what is asked there, so its starters stay in view.
+    /// with Ask on a screen continues the same conversation and shows it
+    /// too, so closing the sheet never loses what was said; its starters
+    /// stay in the welcome card at the top of the thread.
     private func restoreAIConversationIfNeeded() async {
         guard case .ai = mode else { return }
         if let aiNudge {
             await openAINudge(aiNudge)
             return
         }
-        // Reopened this session (or after an Ask on a screen): show the
-        // conversation it continues, as a relaunch does.
+        // Reopened this session (from Messages or an Ask on a screen): show
+        // the conversation it continues, as a relaunch does.
         if let aiConversationId {
-            if aiTopic == nil { await loadAIHistory(conversationId: aiConversationId) }
+            await loadAIHistory(conversationId: aiConversationId)
             return
         }
         guard !aiConversationStore.didStartFresh(forUserId: currentUserId) else { return }
@@ -1039,7 +1040,7 @@ public final class ChatConversationViewModel {
             guard let latest = response.conversations.first, aiConversationId == nil else { return }
             aiConversationId = latest.id
             aiConversationStore.setConversationId(latest.id, forUserId: currentUserId)
-            if aiTopic == nil { await loadAIHistory(conversationId: latest.id) }
+            await loadAIHistory(conversationId: latest.id)
         } catch {
             // Non-fatal — the thread simply starts a fresh conversation.
             logger.warning("AI conversation restore failed: \(error)")

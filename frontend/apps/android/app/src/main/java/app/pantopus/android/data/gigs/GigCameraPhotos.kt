@@ -12,16 +12,22 @@ import java.util.UUID
 object GigCameraPhotos {
     private const val PREFIX = "gig-camera-"
 
-    /** A new file for the camera app to write into (shared through the FileProvider's cache path). */
-    fun newFile(cacheDir: File) = File(cacheDir, "$PREFIX${UUID.randomUUID()}.jpg")
+    /** Where they go: one of the FileProvider's folders. */
+    private fun folder(cacheDir: File) = File(cacheDir, "gig-camera")
+
+    /** A new file for the camera app to write into (shared through the FileProvider). */
+    fun newFile(cacheDir: File) = File(folder(cacheDir).apply { mkdirs() }, "$PREFIX${UUID.randomUUID()}.jpg")
 
     fun remove(
         cacheDir: File,
         olderThanMs: Long = 0,
     ) {
         val cutoff = System.currentTimeMillis() - olderThanMs
-        cacheDir
-            .listFiles { file -> file.isFile && file.name.startsWith(PREFIX) && (olderThanMs == 0L || file.lastModified() < cutoff) }
-            ?.forEach { it.delete() }
+        // Earlier builds took them at the top of the cache.
+        for (dir in listOf(folder(cacheDir), cacheDir)) {
+            dir
+                .listFiles { file -> file.isFile && file.name.startsWith(PREFIX) && (olderThanMs == 0L || file.lastModified() < cutoff) }
+                ?.forEach { it.delete() }
+        }
     }
 }

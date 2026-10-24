@@ -60,7 +60,8 @@ internal fun rememberReadingSources(
             }
         }
     val takePhoto = {
-        val file = File(context.cacheDir, "$cacheName-${UUID.randomUUID()}.jpg")
+        // The FileProvider shares only its own folders of the cache.
+        val file = File(File(context.cacheDir, "reading-camera").apply { mkdirs() }, "$cacheName-${UUID.randomUUID()}.jpg")
         cameraFile = file.path
         onLeave()
         // No camera app (or a broken resolver) must not crash the screen.

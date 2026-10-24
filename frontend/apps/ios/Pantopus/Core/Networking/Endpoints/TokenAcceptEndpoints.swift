@@ -18,7 +18,7 @@ public enum TokenAcceptEndpoints {
     public static func homeInvite(token: String) -> Endpoint {
         Endpoint(
             method: .get,
-            path: "/api/homes/invitations/token/\(token)",
+            path: "/api/homes/invitations/token/\(Endpoint.pathSegment(token))",
             authenticated: false
         )
     }
@@ -39,7 +39,7 @@ public enum TokenAcceptEndpoints {
     public static func guestPass(token: String) -> Endpoint {
         Endpoint(
             method: .get,
-            path: "/api/homes/guest/\(token)",
+            path: "/api/homes/guest/\(Endpoint.pathSegment(token))",
             authenticated: false
         )
     }
@@ -58,7 +58,7 @@ public enum TokenAcceptEndpoints {
     /// `POST /api/homes/invitations/token/:token/accept`. Route
     /// `backend/routes/home.js:2040`.
     public static func acceptHomeInvite(token: String) -> Endpoint {
-        Endpoint(method: .post, path: "/api/homes/invitations/token/\(token)/accept")
+        Endpoint(method: .post, path: "/api/homes/invitations/token/\(Endpoint.pathSegment(token))/accept")
     }
 
     /// `POST /api/homes/invitations/:invitationId/reject`. Route

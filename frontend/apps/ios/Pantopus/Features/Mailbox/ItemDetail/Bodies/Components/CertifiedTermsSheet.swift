@@ -67,7 +67,8 @@ public struct CertifiedTermsSheet: View {
 
             PrimaryButton(title: "Open in browser") {
                 await MainActor.run {
-                    openURL(termsURL)
+                    // The sender sets the terms address: only a web page opens.
+                    if ExternalLink.isWeb(termsURL) { openURL(termsURL) }
                     onDismiss()
                 }
             }

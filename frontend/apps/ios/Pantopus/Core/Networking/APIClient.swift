@@ -511,6 +511,12 @@ final class APIClient: @unchecked Sendable {
     // MARK: - Building requests
 
     private func buildRequest(for endpoint: Endpoint, extraHeaders: [String: String] = [:]) async throws -> URLRequest {
+        // `appendingPathComponent` encodes the path but keeps `.` and `..`
+        // segments, which a proxy that normalizes paths resolves to another
+        // route. No endpoint has one; only an id from a link or a payload can.
+        guard !endpoint.path.split(separator: "/").contains(where: { $0 == "." || $0 == ".." }) else {
+            throw APIError.invalidURL
+        }
         guard var components = URLComponents(
             url: environment.apiBaseURL.appendingPathComponent(endpoint.path),
             resolvingAgainstBaseURL: false

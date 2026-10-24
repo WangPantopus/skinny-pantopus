@@ -9,6 +9,7 @@ import app.pantopus.android.data.auth.OAuthSessionStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.net.URLDecoder
 
 /**
  * Mirrors iOS `Core/Routing/DeepLinkRouter.swift`. The host activity
@@ -741,6 +742,10 @@ object DeepLinkRouter {
             }
         val segments = if (rawSegments.firstOrNull() == "app") rawSegments.drop(1) else rawSegments
         if (segments.isEmpty()) return Destination.Unknown(raw)
+        // A link's ids go into API paths and nav routes, decoded: one carrying `/` (`%2F`), a `.` or `..` segment
+        // (which Retrofit refuses by throwing), a control character or an overlong id would reach another route, so
+        // the link resolves to nothing. Mirrors iOS `DeepLinkRouter.isSafeSegment`.
+        if (!segments.all(Paths::isSafeSegment)) return Destination.Unknown(raw)
         val first = segments.first()
         if (first.startsWith("@") && first.length > 1) {
             return Destination.BeaconProfile(first.drop(1))
@@ -760,12 +765,12 @@ object DeepLinkRouter {
         val emailQuery =
             Paths.queryParam(queryPart, "email") ?: Paths.queryParam(fragmentPart, "email")
         // B1.6 — `?id=` seeds the translation / unboxing mailbox sub-screens.
-        val idQuery = Paths.queryParam(queryPart, "id")
+        val idQuery = Paths.queryParam(queryPart, "id")?.takeIf(Paths::isSafeSegment)
 
         return when (segments.first()) {
             // `/app/pulse` is the Pulse tab, as `/app/feed` is.
             "feed", "pulse" -> {
-                val post = Paths.queryParam(queryPart, "post")
+                val post = Paths.queryParam(queryPart, "post")?.takeIf(Paths::isSafeSegment)
                 when {
                     !post.isNullOrBlank() -> Destination.Post(post)
                     Paths.queryParam(queryPart, "surface") == "personas" -> Destination.Beacons
@@ -967,7 +972,7 @@ object DeepLinkRouter {
                 // Singular `business/:username` is the A10.6 public profile.
                 // `?pageSlug=` is RN's redirect target for `/b/:username/:slug`.
                 val id = segments.getOrNull(1)
-                val pageSlug = Paths.queryParam(queryPart, "pageSlug")
+                val pageSlug = Paths.queryParam(queryPart, "pageSlug")?.takeIf(Paths::isSafeSegment)
                 when {
                     id.isNullOrBlank() -> Destination.Unknown(raw)
                     !pageSlug.isNullOrBlank() -> Destination.BusinessPage(id, pageSlug)
@@ -1193,6 +1198,16 @@ object DeepLinkRouter {
      */
     private object Paths {
         private const val SCHEME_SEPARATOR = "://"
+
+        /** The longest id a link may carry: UUIDs are 36 characters, invite and booking tokens 64. */
+        private const val MAX_SEGMENT_LENGTH = 128
+
+        /** Whether [segment] (raw, still percent-encoded), once decoded into an API path, stays one segment of its route. */
+        fun isSafeSegment(segment: String): Boolean {
+            val decoded = runCatching { URLDecoder.decode(segment, "UTF-8") }.getOrNull() ?: return false
+            return decoded.length <= MAX_SEGMENT_LENGTH && decoded != "." && decoded != ".." &&
+                '/' !in decoded && '\\' !in decoded && decoded.none(Char::isISOControl)
+        }
 
         /**
          * String-shaped sibling of [OAuthSessionStore.isOAuthCallback], for the

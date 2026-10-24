@@ -227,16 +227,22 @@ async function canViewLocalProfile(profile, context) {
   return true;
 }
 
+// A profile, block or privacy read that fails refuses the profile with 503 (try again), never a guess.
 async function resolveViewableLocalProfile(handle, viewerId) {
-  const profile = await getLocalProfileByHandle(handle);
-  if (!profile || await isUnpublishedBusiness(profile.user_id)) {
-    return { errorStatus: 404, error: 'Local profile not found' };
+  try {
+    const profile = await getLocalProfileByHandle(handle);
+    if (!profile || await isUnpublishedBusiness(profile.user_id)) {
+      return { errorStatus: 404, error: 'Local profile not found' };
+    }
+    const viewerContext = await getLocalProfileViewerContext(profile, viewerId);
+    if (!(await canViewLocalProfile(profile, viewerContext))) {
+      return { errorStatus: 404, error: 'Local profile not found' };
+    }
+    return { profile, viewerContext };
+  } catch (err) {
+    logger.warn('localProfiles.resolve_unavailable', { errorCode: err.code || null, error: err.message });
+    return { errorStatus: 503, error: 'This profile can\'t be loaded right now. Please try again.' };
   }
-  const viewerContext = await getLocalProfileViewerContext(profile, viewerId);
-  if (!(await canViewLocalProfile(profile, viewerContext))) {
-    return { errorStatus: 404, error: 'Local profile not found' };
-  }
-  return { profile, viewerContext };
 }
 
 async function getLocalProfileBridgePersona(profile) {

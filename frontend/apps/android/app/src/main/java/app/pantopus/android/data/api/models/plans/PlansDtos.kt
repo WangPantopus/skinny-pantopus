@@ -443,6 +443,64 @@ data class PlanNearbyPlaceDto(
     @Json(name = "kind") val kind: String? = null,
     @Json(name = "distance_m") val distanceMeters: Double? = null,
     @Json(name = "distance_band") val distanceBand: String? = null,
+    /** Whether it's open for the plan's time, when the picker sent one and the place has hours. */
+    @Json(name = "hours") val hours: PlanPlaceHoursDto? = null,
+    /** The line under the place: hours that need a look, or open hours and a fact or two. */
+    @Json(name = "detail") val detail: PlanPlaceDetailDto? = null,
+    /** "Suggest places": why it suits the plan. */
+    @Json(name = "why") val why: String? = null,
+)
+
+/** A place's hours for the plan's time: [status] is `open`, `closes_early`, `opens_late` or `closed`. */
+@JsonClass(generateAdapter = true)
+data class PlanPlaceHoursDto(
+    @Json(name = "status") val status: String? = null,
+    /** "Open until 11 PM", "Closes at 2 PM", "Closed on Sunday". */
+    @Json(name = "text") val text: String? = null,
+) {
+    val isClosed: Boolean get() = status == "closed"
+
+    /** Open for part of the plan only. */
+    val isPartial: Boolean get() = status == "closes_early" || status == "opens_late"
+}
+
+/** H6's ready-made line under a place ("Open until 11 PM · Outdoor seating"); [tone] is `neutral` or `warning`. */
+@JsonClass(generateAdapter = true)
+data class PlanPlaceDetailDto(
+    @Json(name = "text") val text: String? = null,
+    @Json(name = "tone") val tone: String? = null,
+) {
+    val isWarning: Boolean get() = tone == "warning"
+}
+
+/**
+ * `POST /api/plans/places/suggest` body: H6's "Suggest places" for the draft. [ask] is what the host typed in the
+ * search box ("big screens and food"), when they asked from there.
+ */
+@Suppress("LongParameterList")
+@JsonClass(generateAdapter = true)
+data class PlanPlaceSuggestBody(
+    @Json(name = "latitude") val latitude: Double,
+    @Json(name = "longitude") val longitude: Double,
+    @Json(name = "kind") val kind: String,
+    @Json(name = "title") val title: String? = null,
+    @Json(name = "about") val about: String? = null,
+    @Json(name = "starts_at") val startsAt: String? = null,
+    @Json(name = "ends_at") val endsAt: String? = null,
+    @Json(name = "spots") val spots: Int? = null,
+    @Json(name = "details") val details: PlanDetailsDto? = null,
+    @Json(name = "ask") val ask: String? = null,
+)
+
+/**
+ * Up to three places for the plan, best first, each with `why`. [loading] (a 202) while the area's places are still
+ * on their way; [source] is `ai` when Pantopus chose them, `rules` when the list's own order did.
+ */
+@JsonClass(generateAdapter = true)
+data class PlanPlaceSuggestionsResponse(
+    @Json(name = "picks") val picks: List<PlanNearbyPlaceDto> = emptyList(),
+    @Json(name = "loading") val loading: Boolean = false,
+    @Json(name = "source") val source: String? = null,
 )
 
 /**

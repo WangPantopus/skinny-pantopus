@@ -62,6 +62,14 @@ Cloud** (`https://eu.i.posthog.com`); override for US Cloud or self-host.
   search terms and signed-URL tokens. iOS failed-request events also drop their
   request headers (device id, DPoP proof, step-up token); Android's SDK sends
   none without `sendDefaultPii`.
+- **Bearer path segments are redacted.** Where the URL path itself is the
+  credential (home invites, guest passes, booking one-off and manage links,
+  and the public residency, fridge-card and opt-out codes), breadcrumbs, span
+  descriptions and failed-request events carry the route with that segment
+  replaced by `[redacted]`, matching the backend's `BEARER_CODE_PATH` request
+  log rule. iOS rewrites spans in `beforeSendSpan`; Android rewrites them in
+  `SentryOkHttpInterceptor`'s `beforeSpan` hook (`scrubbedHttpSpan`), because a
+  finished span's description can't change.
 - Analytics events are also mirrored into **Sentry breadcrumbs** so they appear
   as context on the next crash (parity across iOS + Android).
 

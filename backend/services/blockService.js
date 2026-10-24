@@ -119,6 +119,24 @@ async function hasBlocked(blockerId, viewerId) {
 }
 
 /**
+ * A block ends the two people's follows, both ways; new follows are refused once it is recorded. Throws when either
+ * delete fails (BLOCK_INCOMPLETE, 503), so a block is never reported done with a follow left. The block routes call it
+ * before recording the block, so a failure changes nothing and the person can block again (the apps offer Block only
+ * while no block is on record), and again after, for a follow added in between.
+ */
+async function removeFollowsBetween(userId1, userId2) {
+  const results = await Promise.all([
+    supabaseAdmin.from('UserFollow').delete().eq('follower_id', userId1).eq('following_id', userId2),
+    supabaseAdmin.from('UserFollow').delete().eq('follower_id', userId2).eq('following_id', userId1),
+  ]);
+  const failed = results.find((result) => result.error);
+  if (failed) {
+    logger.warn('[blockService] follow removal failed', { error: failed.error.message });
+    throw Object.assign(new Error('Blocking didn\'t finish. Please try again.'), { code: 'BLOCK_INCOMPLETE', status: 503 });
+  }
+}
+
+/**
  * A filter for Notification queries (lists and counts) that leaves out the notices whose actor
  * (metadata.user_id) is across a block from userId, in either direction: blocks hide people from
  * each other, including what they did before the block. A notice with no actor stays. If the block
@@ -134,4 +152,5 @@ async function notificationBlockFilter(userId) {
 
 module.exports = {
   isBlocked, hasBlocked, blockedUserIds, notificationBlockFilter, invalidateBlockCache, blockCheckUnavailable,
+  removeFollowsBetween,
 };

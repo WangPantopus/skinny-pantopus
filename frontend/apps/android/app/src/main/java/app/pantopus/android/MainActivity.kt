@@ -215,9 +215,12 @@ class MainActivity : FragmentActivity() {
             val pushType = intent.getStringExtra(ReminderActionReceiver.PUSH_TYPE)
             intent.removeExtra(ReminderActionReceiver.PUSH_OPEN)
             intent.removeExtra(ReminderActionReceiver.PUSH_TYPE)
+            // Any app can start MainActivity with these extras; the app's own notifications
+            // open it through the not-exported alias.
+            val fromNotification = intent.component?.className == NOTIFICATION_OPEN
             // Task-history restoration can retain the original notification intent.
             // It is an organic return, not another response to that notification.
-            if (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY == 0) {
+            if (fromNotification && intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY == 0) {
                 pilotEvents.notificationOpened(pushType)
             }
         }
@@ -294,5 +297,10 @@ class MainActivity : FragmentActivity() {
             val outcome = pushTokenSyncer.syncIfNeeded()
             Timber.d("Push token sync outcome=$outcome")
         }
+    }
+
+    companion object {
+        /** The manifest's not-exported alias of this activity that notification taps open. */
+        const val NOTIFICATION_OPEN = "app.pantopus.android.NotificationOpen"
     }
 }

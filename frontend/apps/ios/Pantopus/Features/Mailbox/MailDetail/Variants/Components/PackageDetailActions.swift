@@ -28,7 +28,7 @@ struct PackageDetailActions: View {
 
     @ViewBuilder
     private var trackButton: some View {
-        if let trackingUrl, let url = URL(string: trackingUrl) {
+        if let url = ExternalLink.webURL(trackingUrl) {
             Link(destination: url) {
                 trackButtonLabel
             }
