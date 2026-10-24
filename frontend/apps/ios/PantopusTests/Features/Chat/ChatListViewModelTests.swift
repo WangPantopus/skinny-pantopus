@@ -205,17 +205,52 @@ final class ChatListViewModelTests: XCTestCase {
         XCTAssertFalse(rows.contains { $0.id == "u1" })
     }
 
-    func testMuteConversationExcludesUnreadFromFilterBadge() async {
+    /// Mute is confirmed by the server (so other devices and push agree):
+    /// the badge changes once the server has accepted it and the inbox it
+    /// returns next marks the conversation muted.
+    func testMuteConversationExcludesUnreadFromFilterBadge() async throws {
+        let mutedDirect = Self.directConversationJSON.replacingOccurrences(
+            of: "\"room_ids\": [\"r1\"],",
+            with: "\"room_ids\": [\"r1\"],\n  \"notifications_enabled\": false,"
+        )
         URLProtocolStub.stub(
             path: "/api/chat/unified-conversations",
-            response: .json(Self.listJSON(Self.directConversationJSON, Self.businessConversationJSON, Self.groupRoomJSON))
+            responses: [
+                .json(Self.listJSON(Self.directConversationJSON, Self.businessConversationJSON, Self.groupRoomJSON)),
+                .json(Self.listJSON(mutedDirect, Self.businessConversationJSON, Self.groupRoomJSON))
+            ]
         )
         URLProtocolStub.stub(path: "/api/chat/stats", response: .json(Self.statsJSON))
+        URLProtocolStub.stub(
+            path: "/api/chat/conversations/u1/preferences",
+            response: .json("{\"notificationsEnabled\":false,\"roomIds\":[\"r1\"]}")
+        )
         let prefs = ChatConversationPreferences(defaults: makeDefaults())
         let vm = ChatListViewModel(api: makeAPI(), socket: .shared, preferences: prefs)
         await vm.load()
+        XCTAssertEqual(vm.unreadByFilter[.unread], 3)
         vm.toggleMute(storageKey: "person:u1")
+        XCTAssertEqual(vm.unreadByFilter[.unread], 3, "Nothing changes before the server confirms the mute")
+        await waitFor { vm.unreadByFilter[.unread] != 3 }
         XCTAssertEqual(vm.unreadByFilter[.unread], 1)
+        let inboxReads = { URLProtocolStub.capturedRequests.filter { $0.url?.path == "/api/chat/unified-conversations" } }
+        await waitFor { inboxReads().count == 2 }
+        XCTAssertEqual(inboxReads().count, 2, "After the server confirms, the inbox is read again")
+        let patch = try XCTUnwrap(
+            URLProtocolStub.capturedRequests.first { $0.url?.path == "/api/chat/conversations/u1/preferences" }
+        )
+        XCTAssertEqual(patch.httpMethod, "PATCH")
+        XCTAssertEqual(patch.authTestJSONBody()?["notificationsEnabled"] as? Bool, false)
+        guard case let .loaded(rows) = vm.state else { return XCTFail("Expected loaded after mute") }
+        XCTAssertEqual(rows.first { $0.id == "u1" }?.isMuted, true)
+    }
+
+    /// Polls up to 3 s for a server-confirmed change, instead of a fixed sleep.
+    private func waitFor(_ condition: () -> Bool) async {
+        for _ in 0..<300 {
+            if condition() { return }
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
     }
 
     func testHiddenConversationAutoUnhidesWhenUnreadArrives() async {

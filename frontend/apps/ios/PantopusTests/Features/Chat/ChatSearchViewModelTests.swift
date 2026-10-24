@@ -2,10 +2,10 @@
 //  ChatSearchViewModelTests.swift
 //  PantopusTests
 //
-//  P4.3 — Covers the Chat Search view-model + text helpers: index build
-//  (conversation list + per-conversation message pages), name vs. body
-//  matching, snippet windowing, the scroll-to-match message id, and the
-//  highlight attribution.
+//  P4.3 — Covers the Chat Search view-model + text helpers: the debounced
+//  server search (inbox name search + message search, no conversation
+//  history downloaded), name vs. body results, snippet windowing, the
+//  scroll-to-match message id, and the highlight attribution.
 //
 
 import XCTest
@@ -26,54 +26,29 @@ final class ChatSearchViewModelTests: XCTestCase {
         )
     }
 
-    /// u1 = DM "Marcus R." (verified). g1 = group room "Rose Court Block".
-    private static let listJSON = """
+    /// u1 = DM "Marcus R." (verified), as the inbox name search returns it.
+    private static let marcusConversationJSON = """
     {
-      "conversations": [
-        {
-          "_type": "conversation",
-          "other_participant_id": "u1",
-          "other_participant_name": "Marcus R.",
-          "other_participant_avatar": null,
-          "other_participant_identity": { "identity_kind": "personal", "verified": true },
-          "total_unread": 1,
-          "last_message_at": "2026-04-20T10:00:00Z",
-          "last_message_preview": "Can you start at 9?",
-          "topics": []
-        },
-        {
-          "_type": "room",
-          "id": "g1",
-          "room_type": "group",
-          "room_name": "Rose Court Block",
-          "total_unread": 0,
-          "last_message_at": "2026-04-19T12:00:00Z",
-          "last_message_preview": "See you Sunday",
-          "topics": []
-        }
-      ],
-      "total": 2,
-      "totalUnread": 1
+      "_type": "conversation",
+      "other_participant_id": "u1",
+      "other_participant_name": "Marcus R.",
+      "other_participant_avatar": null,
+      "other_participant_identity": { "identity_kind": "personal", "verified": true },
+      "total_unread": 1,
+      "last_message_at": "2026-04-20T10:00:00Z",
+      "last_message_preview": "Can you start at 9?",
+      "topics": []
     }
     """
 
-    private static let u1MessagesJSON = """
-    {
-      "messages": [
-        {
-          "id": "m_u1",
-          "room_id": "r1",
-          "user_id": "u1",
-          "message_text": "Sounds good, see you then.",
-          "message_type": "text",
-          "created_at": "2026-04-20T10:00:00Z"
-        }
-      ],
-      "hasMore": false
+    /// `GET /api/chat/unified-conversations?q=`: the conversations whose names match.
+    private static func namesJSON(_ rows: String...) -> String {
+        "{\"conversations\":[\(rows.joined(separator: ","))],\"total\":\(rows.count),\"totalUnread\":0,\"hasMore\":false}"
     }
-    """
 
-    private static let g1MessagesJSON = """
+    /// `GET /api/chat/search?q=chairs`: the matching message in g1 = group room
+    /// "Rose Court Block", with that room's navigation context.
+    private static let chairsSearchJSON = """
     {
       "messages": [
         {
@@ -85,29 +60,89 @@ final class ChatSearchViewModelTests: XCTestCase {
           "created_at": "2026-04-19T12:00:00Z"
         }
       ],
-      "hasMore": false
+      "roomContexts": {
+        "g1": { "conversationId": "g1", "kind": "room", "name": "Rose Court Block", "identity": null }
+      },
+      "hasMore": false,
+      "nextCursor": null
     }
     """
 
-    private func stubIndex() {
-        URLProtocolStub.stub(path: "unified-conversations", response: .json(Self.listJSON))
-        URLProtocolStub.stub(path: "conversations/u1/messages", response: .json(Self.u1MessagesJSON))
-        URLProtocolStub.stub(path: "rooms/g1/messages", response: .json(Self.g1MessagesJSON))
+    /// `GET /api/chat/search` with no matching message.
+    private static let noMessagesJSON = """
+    {"messages":[],"roomContexts":{},"hasMore":false,"nextCursor":null}
+    """
+
+    /// The server answers the query: names from the inbox search, bodies from the message search.
+    private func stubSearch(names: String, messages: String, namesStatus: Int = 200) {
+        URLProtocolStub.stub(path: "/api/chat/unified-conversations", response: .json(names, status: namesStatus))
+        URLProtocolStub.stub(path: "/api/chat/search", response: .json(messages))
+    }
+
+    /// Waits out the 250 ms debounce and the stubbed answer (polls up to 3 s, no fixed sleep).
+    private func waitForSearch(_ vm: ChatSearchViewModel) async {
+        for _ in 0..<300 {
+            if !vm.isLoading { return }
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTFail("The search never finished")
+    }
+
+    private func requests(to path: String) -> [URLRequest] {
+        URLProtocolStub.capturedRequests.filter { $0.url?.path == path }
+    }
+
+    /// The name searches and message searches a query made. An inbox read
+    /// without `q` (another test's late refresh) is not a search.
+    private func searchRequests() -> [URLRequest] {
+        nameSearches() + requests(to: "/api/chat/search")
+    }
+
+    private func nameSearches() -> [URLRequest] {
+        requests(to: "/api/chat/unified-conversations").filter { query("q", of: $0) != nil }
+    }
+
+    /// The histories the old index build downloaded for these conversations.
+    private func historyRequests() -> [URLRequest] {
+        requests(to: "/api/chat/conversations/u1/messages") + requests(to: "/api/chat/rooms/g1/messages")
+    }
+
+    private func query(_ name: String, of request: URLRequest?) -> String? {
+        request?.url.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false) }?
+            .queryItems?.first { $0.name == name }?.value
+    }
+
+    /// The text went to the server once, as typed: one inbox name search and one
+    /// message search, and no conversation's history was downloaded to search it.
+    private func assertServerSearch(for text: String, file: StaticString = #filePath, line: UInt = #line) {
+        let names = nameSearches()
+        let bodies = requests(to: "/api/chat/search")
+        XCTAssertEqual(names.count, 1, "One inbox name search", file: file, line: line)
+        XCTAssertEqual(bodies.count, 1, "One message search", file: file, line: line)
+        XCTAssertEqual(query("q", of: names.first), text, file: file, line: line)
+        XCTAssertEqual(query("q", of: bodies.first), text, file: file, line: line)
+        XCTAssertTrue(historyRequests().isEmpty, "No conversation history is downloaded to search it", file: file, line: line)
     }
 
     // MARK: - Lifecycle
 
     func testLoadStartsLoadingThenClears() async {
-        stubIndex()
+        stubSearch(names: Self.namesJSON(Self.marcusConversationJSON), messages: Self.noMessagesJSON)
         let vm = ChatSearchViewModel(api: makeAPI())
-        XCTAssertTrue(vm.isLoading, "Index build is in flight before load()")
+        XCTAssertFalse(vm.isLoading, "No index is built up front: nothing is in flight before a query")
         await vm.load()
-        XCTAssertFalse(vm.isLoading, "Index build finished")
+        XCTAssertFalse(vm.isLoading, "load() without a query starts no search")
         XCTAssertTrue(vm.results.isEmpty, "No query yet → no results")
+        XCTAssertTrue(searchRequests().isEmpty && historyRequests().isEmpty, "Nothing is downloaded before a query")
+        vm.setQuery("marcus")
+        XCTAssertTrue(vm.isLoading, "A query shows loading from the keystroke, through the debounce")
+        await waitForSearch(vm)
+        XCTAssertFalse(vm.isLoading, "The server answered")
+        XCTAssertEqual(vm.results.map(\.conversationId), ["u1"])
     }
 
     func testBlankQueryYieldsNoResults() async {
-        stubIndex()
+        stubSearch(names: Self.namesJSON(), messages: Self.noMessagesJSON)
         let vm = ChatSearchViewModel(api: makeAPI())
         await vm.load()
         vm.setQuery("   ")
@@ -117,10 +152,13 @@ final class ChatSearchViewModelTests: XCTestCase {
     // MARK: - Matching
 
     func testNameMatchHasNoScrollTargetAndPreviewSnippet() async {
-        stubIndex()
+        stubSearch(names: Self.namesJSON(Self.marcusConversationJSON), messages: Self.noMessagesJSON)
         let vm = ChatSearchViewModel(api: makeAPI())
         await vm.load()
         vm.setQuery("marcus")
+        XCTAssertTrue(searchRequests().isEmpty, "The query is sent after the debounce, not per keystroke")
+        await waitForSearch(vm)
+        assertServerSearch(for: "marcus")
         XCTAssertEqual(vm.results.count, 1)
         let result = try? XCTUnwrap(vm.results.first)
         XCTAssertEqual(result?.conversationId, "u1")
@@ -130,28 +168,37 @@ final class ChatSearchViewModelTests: XCTestCase {
     }
 
     func testBodyMatchCarriesMatchedMessageIdAndSnippet() async {
-        stubIndex()
+        stubSearch(names: Self.namesJSON(), messages: Self.chairsSearchJSON)
         let vm = ChatSearchViewModel(api: makeAPI())
         await vm.load()
         vm.setQuery("chairs")
+        await waitForSearch(vm)
+        assertServerSearch(for: "chairs")
         XCTAssertEqual(vm.results.count, 1)
         let result = try? XCTUnwrap(vm.results.first)
         XCTAssertEqual(result?.conversationId, "g1")
         XCTAssertEqual(result?.kind, .group)
+        XCTAssertEqual(result?.displayName, "Rose Court Block", "The row names the conversation the message is in")
         XCTAssertEqual(result?.matchedMessageId, "m_g1", "Body match scrolls to the message")
         XCTAssertTrue(result?.snippet.localizedCaseInsensitiveContains("chairs") ?? false)
     }
 
     func testCaseInsensitiveMatch() async {
-        stubIndex()
+        stubSearch(names: Self.namesJSON(Self.marcusConversationJSON), messages: Self.noMessagesJSON)
         let vm = ChatSearchViewModel(api: makeAPI())
         await vm.load()
         vm.setQuery("MARCUS")
+        await waitForSearch(vm)
+        assertServerSearch(for: "MARCUS")
         XCTAssertEqual(vm.results.first?.conversationId, "u1")
+        XCTAssertTrue(
+            ChatSearchText.matches(vm.results.first?.displayName ?? "", query: vm.results.first?.query ?? ""),
+            "The row highlights \"Marcus\" for \"MARCUS\""
+        )
     }
 
     func testNoMatchYieldsEmptyResults() async {
-        stubIndex()
+        stubSearch(names: Self.namesJSON(), messages: Self.noMessagesJSON)
         let vm = ChatSearchViewModel(api: makeAPI())
         await vm.load()
         vm.setQuery("zzzzz")
@@ -159,22 +206,35 @@ final class ChatSearchViewModelTests: XCTestCase {
     }
 
     func testClearingQueryResetsResults() async {
-        stubIndex()
+        stubSearch(names: Self.namesJSON(Self.marcusConversationJSON), messages: Self.noMessagesJSON)
         let vm = ChatSearchViewModel(api: makeAPI())
         await vm.load()
         vm.setQuery("marcus")
+        await waitForSearch(vm)
         XCTAssertFalse(vm.results.isEmpty)
         vm.setQuery("")
+        XCTAssertTrue(vm.results.isEmpty)
+        XCTAssertFalse(vm.isLoading, "A cleared query has nothing in flight")
+        // Cleared within the debounce, a query is never sent.
+        let sent = searchRequests().count
+        vm.setQuery("marc")
+        vm.setQuery("")
+        try? await Task.sleep(nanoseconds: 400_000_000)
+        XCTAssertEqual(searchRequests().count, sent, "Clearing cancels the pending search")
         XCTAssertTrue(vm.results.isEmpty)
     }
 
     func testConversationListFailureDegradesToNoResults() async {
-        URLProtocolStub.stub(path: "unified-conversations", response: .json("{}", status: 500))
+        stubSearch(names: "{}", messages: Self.noMessagesJSON, namesStatus: 500)
         let vm = ChatSearchViewModel(api: makeAPI())
         await vm.load()
         vm.setQuery("marcus")
+        await waitForSearch(vm)
         XCTAssertFalse(vm.isLoading)
         XCTAssertTrue(vm.results.isEmpty)
+        XCTAssertTrue(vm.searchFailed, "A failed search says so instead of claiming no matches")
+        XCTAssertEqual(vm.emptyState.headline, "Search unavailable")
+        XCTAssertEqual(vm.failureMessage, "Couldn't search messages. Try again.")
     }
 
     // MARK: - Text helpers
