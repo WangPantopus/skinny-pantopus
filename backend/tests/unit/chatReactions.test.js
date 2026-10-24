@@ -59,6 +59,8 @@ function createApp() {
   };
   app.set('io', mockIo);
   app.use('/api/chat', require('../../routes/chats'));
+  // Committed messages fan out through the realtime service, which the socket server starts with the app's io.
+  require('../../services/chatRealtime').init(mockIo);
   return { app, mockIo };
 }
 
@@ -316,19 +318,31 @@ describe('POST /api/chat/messages/:messageId/react', () => {
     expect(heart.reacted_by_me).toBe(true);
   });
 
+  // Approved: a reaction reaches each current member's own connections, personalized for that member, once the
+  // committed change is read back. A stale Socket.IO room subscription is not access, so nothing goes to the room.
   test('broadcasts message:reaction_updated via socket.io', async () => {
     const { app, mockIo } = createApp();
+    const { connectedUsers } = require('../../socket/chatSocketio');
+    connectedUsers.set(U2, new Set(['socket-u2']));
+    try {
+      await request(app)
+        .post(`/api/chat/messages/${MSG_1}/react`)
+        .set('Authorization', 'Bearer test-token')
+        .send({ reaction: '\u{1F44D}' });
+      for (let i = 0; i < 400 && !mockIo.emit.mock.calls.some(([event]) => event === 'message:reaction_updated'); i += 1) {
+        await new Promise((r) => setTimeout(r, 5));
+      }
 
-    await request(app)
-      .post(`/api/chat/messages/${MSG_1}/react`)
-      .set('Authorization', 'Bearer test-token')
-      .send({ reaction: '\u{1F44D}' });
-
-    expect(mockIo.to).toHaveBeenCalledWith(ROOM_D);
-    expect(mockIo.emit).toHaveBeenCalledWith('message:reaction_updated', expect.objectContaining({
-      messageId: MSG_1,
-      reactions: expect.any(Array),
-    }));
+      expect(mockIo.to).toHaveBeenCalledWith('socket-u2');
+      expect(mockIo.to).not.toHaveBeenCalledWith(ROOM_D);
+      expect(mockIo.emit).toHaveBeenCalledWith('message:reaction_updated', expect.objectContaining({
+        messageId: MSG_1,
+        roomId: ROOM_D,
+        reactions: [expect.objectContaining({ reaction: '\u{1F44D}', count: 1, reacted_by_me: false })],
+      }));
+    } finally {
+      connectedUsers.delete(U2);
+    }
   });
 });
 
