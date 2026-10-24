@@ -58,6 +58,7 @@ platform :android do
       aab: "app/build/outputs/bundle/release/app-release.aab",
       json_key: JSON_KEY_PATH,
       release_status: "draft",
+      changes_not_sent_for_review: true,
       skip_upload_metadata: true,
       skip_upload_images: true,
       skip_upload_screenshots: true,
