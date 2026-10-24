@@ -240,6 +240,20 @@ data class ChatSentFile(
     val sizeLabel: String? = null,
 )
 
+/**
+ * A photo sent from this phone, shown from its picked bytes (never written to an image cache). Equal by the
+ * attachment id, which names one picked file.
+ */
+@Immutable
+class ChatLocalPhoto(
+    val id: String,
+    val bytes: ByteArray,
+) {
+    override fun equals(other: Any?): Boolean = other is ChatLocalPhoto && other.id == id
+
+    override fun hashCode(): Int = id.hashCode()
+}
+
 @Immutable
 data class ChatQueuedAttachment(
     val id: String,
@@ -417,12 +431,14 @@ sealed interface ChatBubbleBody {
 
     /**
      * One or more photos. [caption] is the text sent with them; [moreUrls]
-     * are the message's further photos after [url].
+     * are the message's further photos after [url]. [local] are the same
+     * photos as picked on this phone, shown while they send and after.
      */
     data class Image(
         val url: String?,
         val caption: String? = null,
         val moreUrls: List<String> = emptyList(),
+        val local: List<ChatLocalPhoto> = emptyList(),
     ) : ChatBubbleBody
 
     /**

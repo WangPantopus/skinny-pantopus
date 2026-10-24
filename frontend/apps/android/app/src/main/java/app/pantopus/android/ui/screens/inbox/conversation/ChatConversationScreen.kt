@@ -3334,13 +3334,14 @@ private fun BubbleRow(
                             ) {
                                 PhotoBubble(
                                     url = body.url,
+                                    local = body.local.firstOrNull(),
                                     isOut = isOut,
                                     hasTail = content.hasTail && body.caption == null,
                                     isContinuation = content.isContinuation,
                                     lockedTier = lockedTier,
                                     onLockedAction = onLockedAction,
                                     contentId = content.id,
-                                    moreCount = body.moreUrls.size,
+                                    moreCount = maxOf(body.moreUrls.size, body.local.size - 1),
                                     onOpen =
                                         onOpenPhotos
                                             ?.takeIf { photos.isNotEmpty() && lockedTier == null }
@@ -4630,6 +4631,8 @@ private fun MiniAvatar(
 private fun PhotoBubble(
     url: String?,
     isOut: Boolean,
+    // The same photo as picked on this phone: shown at once while it sends, and kept once it is sent.
+    local: ChatLocalPhoto? = null,
     hasTail: Boolean,
     isContinuation: Boolean = false,
     lockedTier: String? = null,
@@ -4663,7 +4666,14 @@ private fun PhotoBubble(
                     },
                 ).testTag("chatPhotoBubble"),
     ) {
-        if (url != null) {
+        if (local != null) {
+            AsyncImage(
+                model = localPhotoRequest(local),
+                contentDescription = "Photo attachment",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else if (url != null) {
             AsyncImage(
                 model = inlinePhotoRequest(url),
                 contentDescription = "Photo attachment",
@@ -4708,6 +4718,23 @@ private fun inlinePhotoRequest(url: String): ImageRequest {
         ImageRequest.Builder(context)
             .data(thumbnail ?: url)
             .diskCachePolicy(if (thumbnail != null) CachePolicy.ENABLED else CachePolicy.READ_ONLY)
+            .build()
+    }
+}
+
+/**
+ * A picked photo decodes from its bytes in this process; nothing is written to disk. Its decoded thumbnail is kept in
+ * memory under the attachment id, so the sent bubble that replaces the sending one shows it without decoding again.
+ */
+@Composable
+private fun localPhotoRequest(photo: ChatLocalPhoto): ImageRequest {
+    val context = LocalContext.current
+    return remember(context, photo.id) {
+        ImageRequest.Builder(context)
+            .data(photo.bytes)
+            .memoryCacheKey("chat-local-photo:${photo.id}")
+            .diskCachePolicy(CachePolicy.DISABLED)
+            .crossfade(false)
             .build()
     }
 }

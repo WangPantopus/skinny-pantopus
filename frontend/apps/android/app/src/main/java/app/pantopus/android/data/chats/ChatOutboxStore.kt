@@ -234,6 +234,18 @@ class ChatOutboxStore
                 UploadFile(attachment.filename, attachment.mimeType, streamingBody = body)
             }
 
+        /** One queued attachment's original bytes, decrypted in memory to show it on this phone. */
+        fun attachmentBytes(
+            entry: ChatOutboxEntry,
+            attachment: ChatOutboxAttachment,
+        ): ByteArray {
+            val file = File(entryFolder(entry), "${UUID.fromString(attachment.id)}.enc")
+            return ByteArrayOutputStream(attachment.size).use { output ->
+                writeDecryptedAttachment(file, attachment.size, output, attachment.encryptionScope ?: scope(file))
+                output.toByteArray()
+            }
+        }
+
         fun remove(entry: ChatOutboxEntry) {
             entryFolder(entry).deleteRecursively()
         }

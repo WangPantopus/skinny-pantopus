@@ -271,6 +271,27 @@ class ChatOutbox
                 error
             }
 
+        /**
+         * A queued photo for its own sending bubble after a relaunch: decrypted in memory while the message is still this
+         * account's queued work, never sent anywhere or written elsewhere.
+         */
+        suspend fun queuedPhoto(
+            entry: ChatOutboxEntry,
+            attachmentId: String,
+        ): ByteArray? =
+            withContext(Dispatchers.IO) {
+                val held =
+                    lock.withLock {
+                        _entries.value.firstOrNull { it.clientId == entry.clientId && it.target.accountId == account }
+                    } ?: return@withContext null
+                val attachment =
+                    held.attachments.firstOrNull {
+                        it.id == attachmentId && it.mimeType.startsWith("image/") && it.size <= MAX_PHOTO_PREVIEW_BYTES
+                    } ?: return@withContext null
+                // Read outside the writer: the queued file never changes, and a delivered message's removal only ends this.
+                runCatching { store.attachmentBytes(held, attachment) }.getOrNull()
+            }
+
         fun retry(clientId: String) {
             scope.launch {
                 lock.withLock {
@@ -539,5 +560,6 @@ class ChatOutbox
             const val BACKGROUND_DELAY_MS = 5_000L
             const val BACKGROUND_BUDGET_MS = 30_000L
             const val FOREGROUND_JOB_DELAY_MS = 1_000L
+            const val MAX_PHOTO_PREVIEW_BYTES = 10 * 1024 * 1024
         }
     }

@@ -283,6 +283,17 @@ class ChatConversationViewModel
         private val pendingByClientId = LinkedHashMap<String, ChatMessageDto>()
         private val failedClientIds = mutableSetOf<String>()
 
+        /** Photos sent from this phone, by client message id: their bubbles show the picked bytes, sending and sent. */
+        private val localPhotos = LinkedHashMap<String, LocalPhotos>()
+        private val localPhotoLoads = mutableSetOf<String>()
+
+        private class LocalPhotos(
+            val caption: String?,
+            val photos: List<ChatLocalPhoto>,
+        ) {
+            val bytes: Long = photos.sumOf { it.bytes.size.toLong() }
+        }
+
         /**
          * Failed sends the server refused with a 403 (blocked, not a
          * participant, the account can't message). They show "Not sent"
@@ -465,6 +476,8 @@ class ChatConversationViewModel
                 messages.clear()
                 deletedMessageVersions.clear()
                 pendingByClientId.clear()
+                localPhotos.clear()
+                localPhotoLoads.clear()
                 sendContextsByClientId.clear()
                 outboxClientIds.clear()
                 _isSending.value = false
@@ -1405,6 +1418,7 @@ class ChatConversationViewModel
                         val confirmed = messages.mapNotNullTo(mutableSetOf()) { it.clientMessageId }
                         held.filterNot { it.clientId in confirmed }.forEach { entry ->
                             pendingByClientId[entry.clientId] = entry.pending
+                            restoreLocalPhotos(queue, entry)
                             if (entry.error != null) failedClientIds.add(entry.clientId) else failedClientIds.remove(entry.clientId)
                             if (entry.refused) refusedClientIds.add(entry.clientId) else refusedClientIds.remove(entry.clientId)
                         }
@@ -1476,6 +1490,11 @@ class ChatConversationViewModel
             submittingDraft = savedDraft
             _isSending.value = true
             pendingByClientId[clientId] = pending
+            rememberLocalPhotos(
+                clientId,
+                text.ifEmpty { null },
+                attachments.filter { it.mimeType.startsWith("image/") }.map { ChatLocalPhoto(it.id, requireNotNull(it.bytes)) },
+            )
             // The encrypted save starts first (off the main thread) and keeps the composer's previous draft on disk until
             // it commits the entry; the bubble and the cleared composer follow in this same frame.
             viewModelScope.launch {
@@ -1509,7 +1528,10 @@ class ChatConversationViewModel
             attachments: List<ChatQueuedAttachment>,
             reply: ChatReplyPreview?,
         ) {
-            if (clientId !in outboxClientIds) pendingByClientId.remove(clientId)
+            if (clientId !in outboxClientIds) {
+                pendingByClientId.remove(clientId)
+                localPhotos.remove(clientId)
+            }
             val typed = _composerText.value
             _composerText.value = if (typed.isBlank()) draft else "$draft\n$typed"
             val queued = _queuedAttachments.value
@@ -1517,6 +1539,43 @@ class ChatConversationViewModel
             if (_replyingTo.value == null) _replyingTo.value = reply
             composerChanged()
             rebuild()
+        }
+
+        /** Keep the newest sends' picked photos within a bound; a send still pending keeps its own. */
+        private fun rememberLocalPhotos(
+            clientId: String,
+            caption: String?,
+            photos: List<ChatLocalPhoto>,
+        ) {
+            if (photos.isEmpty()) return
+            localPhotos[clientId] = LocalPhotos(caption, photos)
+            var total = localPhotos.values.sumOf { it.bytes }
+            val held = localPhotos.entries.iterator()
+            while ((total > LOCAL_PHOTO_MAX_BYTES || localPhotos.size > LOCAL_PHOTO_MAX_MESSAGES) && held.hasNext()) {
+                val (id, sent) = held.next()
+                if (id == clientId || pendingByClientId.containsKey(id)) continue
+                total -= sent.bytes
+                held.remove()
+            }
+        }
+
+        /** After a relaunch, a queued photo's bubble shows it from the encrypted queue. */
+        private fun restoreLocalPhotos(
+            queue: ChatOutbox,
+            entry: ChatOutboxEntry,
+        ) {
+            if (entry.clientId in localPhotos || entry.attachments.none { it.mimeType.startsWith("image/") }) return
+            if (!localPhotoLoads.add(entry.clientId)) return
+            val target = sendTarget()
+            viewModelScope.launch {
+                val photos =
+                    entry.attachments.filter { it.mimeType.startsWith("image/") }.mapNotNull { attachment ->
+                        queue.queuedPhoto(entry, attachment.id)?.let { ChatLocalPhoto(attachment.id, it) }
+                    }
+                if (photos.isEmpty() || target != sendTarget() || !pendingByClientId.containsKey(entry.clientId)) return@launch
+                rememberLocalPhotos(entry.clientId, entry.body.messageText, photos)
+                rebuild()
+            }
         }
 
         /**
@@ -4129,8 +4188,15 @@ class ChatConversationViewModel
             )
         }
 
+        /** A photo sent from this phone shows from its picked bytes, sending or sent; the viewer opens the sent copy. */
+        private fun localPhotoBodyOf(message: ChatMessageDto): ChatBubbleBody? {
+            val local = message.clientMessageId?.let { localPhotos[it] } ?: return null
+            if (message.id.startsWith("client_")) return ChatBubbleBody.Image(url = null, caption = local.caption, local = local.photos)
+            return (attachmentBodyOf(message) as? ChatBubbleBody.Image)?.copy(local = local.photos)
+        }
+
         private fun bodyOf(message: ChatMessageDto): ChatBubbleBody =
-            attachmentBodyOf(message) ?: when (message.resolvedType) {
+            localPhotoBodyOf(message) ?: attachmentBodyOf(message) ?: when (message.resolvedType) {
                 "ai_reply" ->
                     ChatBubbleBody.AiReply(
                         text = message.resolvedText,
@@ -4602,3 +4668,7 @@ private fun <T> NetworkResult<T>.orThrow(): T =
 private const val MAX_CHANGE_PAGES = 100
 private const val MAX_TOMBSTONES = 2000
 private const val MAX_TIMELINE_MESSAGES = 500
+
+/** Picked photos kept for the sends' own bubbles: a few recent messages, bounded in bytes. */
+private const val LOCAL_PHOTO_MAX_MESSAGES = 8
+private const val LOCAL_PHOTO_MAX_BYTES = 24L * 1024 * 1024
