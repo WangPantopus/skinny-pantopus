@@ -105,7 +105,11 @@ async function prepareCreate({ userId, accountType, body, retry = false }) {
   if (!READ_SCOPES.includes(readScope) || !PULSE_TYPES.includes(postType)
     || (body.areaId != null && !UUID.test(body.areaId))
     || (body.claimMode != null && postType !== 'offer')
-    || (body.expiresAt != null && postType !== 'alert')) return { refusal: refusal('INVALID_PULSE_POST') };
+    || (body.expiresAt != null && postType !== 'alert')
+    // Asking a Known entry again is a public Ask (contract §2.14).
+    || (body.knownEntryId != null && (postType !== 'ask_local' || readScope !== 'public'))) {
+    return { refusal: refusal('INVALID_PULSE_POST') };
+  }
   if (body.postAs && body.postAs !== 'personal') {
     return { refusal: refusal(body.postAs === 'business' ? 'BUSINESS_CANNOT_POST' : 'AUDIENCE_NOT_ALLOWED') };
   }
@@ -121,10 +125,13 @@ async function prepareCreate({ userId, accountType, body, retry = false }) {
 
   const homes = await homeAreaContext(userId);
   const defaults = await myAreas(userId, homes);
-  const areaId = body.areaId || defaults.town?.id;
+  const entry = body.knownEntryId != null ? await require('./known').forAsk(body.knownEntryId) : null;
+  if (body.knownEntryId != null && !entry) return { refusal: refusal('INVALID_PULSE_POST') };
+  const areaId = body.areaId || entry?.area_id || defaults.town?.id;
   if (!areaId) return { refusal: refusal('AREA_REQUIRED') };
   const area = await checked(openAreas(db.from('PulseArea').select(`${AREA_SELECT}, centroid`)).eq('id', areaId).maybeSingle());
   if (!area) return { refusal: refusal('AREA_NOT_FOUND') };
+  if (entry && entry.area_id !== area.id) return { refusal: refusal('INVALID_PULSE_POST') };
   if (area.kind === 'town') {
     if (!['public', 'verified_town'].includes(readScope)) return { refusal: refusal('AUDIENCE_NOT_ALLOWED') };
   } else if (['street', 'neighborhood'].includes(area.kind)) {
@@ -171,9 +178,10 @@ async function prepareCreate({ userId, accountType, body, retry = false }) {
   const hold = checks.holds[0];
   const named = typeof body.locationName === 'string' && body.locationName.trim() ? body.locationName.trim() : null;
   return {
-    plan: { area, label, scopes, held: !!hold },
-    // The place the author named, shown as the card's "About" (contract §2.1).
-    metadata: named ? { pulse_about: named } : {},
+    plan: { area, label, scopes, held: !!hold, knownEntryId: entry?.id || null },
+    // The place the author named, shown as the card's "About" (contract §2.1), and the Known
+    // entry an Ask asks again (§2.14).
+    metadata: { ...(named ? { pulse_about: named } : {}), ...(entry ? { known_entry_id: entry.id } : {}) },
     fields: {
       read_scope: readScope, area_id: area.id,
       audience: 'nearby', visibility: readScope === 'public' ? 'public' : 'neighborhood',
@@ -190,6 +198,7 @@ async function prepareCreate({ userId, accountType, body, retry = false }) {
       geocode_source_flow: null, geocode_created_at: null,
       claim_mode: postType === 'offer' ? (body.claimMode || 'choose') : 'choose',
       expires_at: await endsAtFor(body, now),
+      ...(entry && !body.topic && entry.topic ? { topic: entry.topic } : {}),
       ...(hold ? { moderation_state: 'held', moderation_rule: hold.rule, moderated_at: new Date(now).toISOString() } : {}),
     },
   };
