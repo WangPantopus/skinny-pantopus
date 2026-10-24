@@ -9,7 +9,8 @@
  *   AI_GLOBAL_DAILY_TURNS=4000    turns everyone together may take since midnight UTC
  *
  * The kindness check a post composer runs when the person taps Post (postCheck.js, logged as
- * post_check) counts as a turn too, and is skipped, never refused, when these say no.
+ * post_check) and the place picker's "Suggest places" (planPlaceSuggest.js, logged as plan_place)
+ * count as turns too, and fall back to their plain rules, never refused, when these say no.
  *
  * A count that can't be read lets the turn through: the in-process rate limiter
  * still applies, and an outage of the log must not take the assistant down.
@@ -32,7 +33,7 @@ const PERSON_LIMIT = { error: 'AI_BUDGET', message: 'Pantopus AI has done a lot 
 const GLOBAL_LIMIT = { error: 'AI_BUDGET', message: 'Pantopus AI has done a lot today. Try again tomorrow.' };
 const GLOBAL_MEMO_MS = 60_000;
 // The endpoint names that count as turns.
-const TURN_ENDPOINTS = ['chat', 'post_check'];
+const TURN_ENDPOINTS = ['chat', 'post_check', 'plan_place'];
 
 let globalMemo = { count: 0, until: 0 };
 

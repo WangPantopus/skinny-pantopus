@@ -6,14 +6,21 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.plans.PlanDto
 import app.pantopus.android.data.api.models.plans.PlanNearbyPlaceDto
 import app.pantopus.android.data.api.models.plans.PlanPlaceInput
+import app.pantopus.android.data.api.models.plans.PlanPlaceSuggestBody
 import app.pantopus.android.data.api.models.plans.UpdatePlanBody
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.plans.PlanFormat
+import app.pantopus.android.data.plans.PlanPlaceQuery
 import app.pantopus.android.data.plans.PlansRepository
 import app.pantopus.android.data.plans.isAtHome
+import app.pantopus.android.data.plans.planKind
 import app.pantopus.android.data.plans.planMessage
 import app.pantopus.android.ui.screens.plans.PlansRoutes
+import app.pantopus.android.ui.screens.plans.host.PLACES_SLOW
 import app.pantopus.android.ui.screens.plans.host.PickedPlace
+import app.pantopus.android.ui.screens.plans.host.PlaceSuggestions
+import app.pantopus.android.ui.screens.plans.host.placeQuery
+import app.pantopus.android.ui.screens.plans.host.placesFailure
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -43,7 +50,13 @@ data class PlanChangeUi(
     val placesQuery: String = "",
     val places: List<PlanNearbyPlaceDto> = emptyList(),
     val placesLoading: Boolean = false,
+    /** The server is still gathering the area's places (a first look can take up to a minute). */
+    val placesGathering: Boolean = false,
+    /** Why H6's places couldn't load, shown with "Try again". */
+    val placesError: String? = null,
     val placesAttribution: String? = null,
+    /** H6's "Suggest places" (or "Ask Pantopus" for the search text), for the plan at its new time. */
+    val suggestions: PlaceSuggestions = PlaceSuggestions.Idle,
     val saving: Boolean = false,
     val error: String? = null,
     val saved: Boolean = false,
@@ -96,6 +109,7 @@ class PlanChangeViewModel
         private val _ui = MutableStateFlow(PlanChangeUi())
         val ui: StateFlow<PlanChangeUi> = _ui.asStateFlow()
         private var placesRead: Job? = null
+        private var suggestJob: Job? = null
 
         fun load() {
             if (_ui.value.plan != null) return
@@ -138,14 +152,68 @@ class PlanChangeViewModel
 
         fun openPlaces() {
             if (!_ui.value.canChangePlace) return
-            _ui.update { it.copy(picking = true, placeCandidate = it.newPlace, error = null) }
-            if (_ui.value.places.isEmpty()) findPlaces(query = null, debounce = false)
+            suggestJob?.cancel()
+            _ui.update {
+                it.copy(picking = true, placeCandidate = it.newPlace, error = null, suggestions = PlaceSuggestions.Idle)
+            }
+            // Read again when the time changed since: each place says whether it's open for the plan's new time.
+            findPlaces(query = _ui.value.placesQuery.trim().takeIf(String::isNotEmpty), debounce = false)
         }
 
         /** Search by name: the list filters at once, and the server looks further than the nearest 40. */
         fun searchPlaces(query: String) {
+            if (query.trim() != _ui.value.placesQuery.trim()) {
+                // Suggestions answer the words they were asked with (as on iOS).
+                suggestJob?.cancel()
+                _ui.update { it.copy(suggestions = PlaceSuggestions.Idle) }
+            }
             _ui.update { it.copy(placesQuery = query) }
             findPlaces(query.trim().takeIf(String::isNotEmpty), debounce = true)
+        }
+
+        /** "Try again" under H6's list. */
+        fun retryPlaces() {
+            findPlaces(_ui.value.placesQuery.trim().takeIf(String::isNotEmpty), debounce = false)
+        }
+
+        /** What H6's list and suggestions are for: the plan's kind and sport, at the time chosen here. */
+        private fun planPlaceQuery(): PlanPlaceQuery? {
+            val ui = _ui.value
+            val plan = ui.plan ?: return null
+            val kind = plan.planKind ?: return null
+            val start = ui.start ?: return null
+            return placeQuery(kind, plan.details?.sport, start, ui.end, ui.zone)
+        }
+
+        /** H6's "Suggest places" ([ask] null), or "Ask Pantopus" for what the host typed in the search box. */
+        fun suggestPlaces(ask: String?) {
+            val ui = _ui.value
+            val plan = ui.plan ?: return
+            val origin = ui.placesOrigin ?: return
+            val query = planPlaceQuery() ?: return
+            val body =
+                PlanPlaceSuggestBody(
+                    latitude = origin.first,
+                    longitude = origin.second,
+                    kind = query.kind,
+                    title = plan.title.trim().takeIf(String::isNotEmpty),
+                    about = plan.about?.trim()?.takeIf(String::isNotEmpty),
+                    startsAt = query.startsAt,
+                    endsAt = query.endsAt,
+                    spots = plan.spots.takeIf { it > 0 },
+                    details = plan.details,
+                    ask = ask,
+                )
+            suggestJob?.cancel()
+            _ui.update { it.copy(suggestions = PlaceSuggestions.Loading(gathering = false)) }
+            suggestJob =
+                viewModelScope.launch {
+                    val result =
+                        repository.suggestPlacesWhenReady(body) {
+                            _ui.update { it.copy(suggestions = PlaceSuggestions.Loading(gathering = true)) }
+                        }
+                    _ui.update { it.copy(suggestions = PlaceSuggestions.from(result, ask)) }
+                }
         }
 
         fun pickPlaceCandidate(place: PickedPlace) {
@@ -168,7 +236,10 @@ class PlanChangeViewModel
             _ui.update { it.copy(picking = false) }
         }
 
-        /** One places read; a first read for an area may come back `loading` while OpenStreetMap is slow (as on H6). */
+        /**
+         * One places read, ordered for the plan at its new time; a first read for an area may come back `loading` while
+         * OpenStreetMap is slow, and the read asks again (as on H6).
+         */
         private fun findPlaces(
             query: String?,
             debounce: Boolean,
@@ -178,26 +249,26 @@ class PlanChangeViewModel
             placesRead =
                 viewModelScope.launch {
                     if (debounce) delay(SEARCH_DEBOUNCE_MS)
-                    _ui.update { it.copy(placesLoading = true) }
-                    repeat(PLACES_ATTEMPTS) { attempt ->
-                        when (val result = repository.nearbyPlaces(origin.first, origin.second, query)) {
-                            is NetworkResult.Success -> {
-                                val reply = result.data
-                                val waiting = reply.loading && reply.places.isEmpty() && attempt < PLACES_ATTEMPTS - 1
-                                _ui.update {
+                    _ui.update { it.copy(placesLoading = true, placesGathering = false, placesError = null) }
+                    val result =
+                        repository.nearbyPlacesWhenReady(origin.first, origin.second, query, planPlaceQuery()) { reply ->
+                            _ui.update { it.copy(placesGathering = true, placesAttribution = reply.attribution ?: it.placesAttribution) }
+                        }
+                    _ui.update {
+                        when (result) {
+                            is NetworkResult.Success ->
+                                if (result.data.loading) {
+                                    it.copy(placesLoading = false, placesGathering = false, placesError = PLACES_SLOW)
+                                } else {
                                     it.copy(
-                                        placesLoading = waiting,
-                                        places = if (waiting) it.places else reply.places,
-                                        placesAttribution = reply.attribution ?: it.placesAttribution,
+                                        placesLoading = false,
+                                        placesGathering = false,
+                                        places = result.data.places,
+                                        placesAttribution = result.data.attribution ?: it.placesAttribution,
                                     )
                                 }
-                                if (!waiting) return@launch
-                                delay(PLACES_RETRY_MS)
-                            }
-                            is NetworkResult.Failure -> {
-                                _ui.update { it.copy(placesLoading = false, error = result.error.planMessage) }
-                                return@launch
-                            }
+                            is NetworkResult.Failure ->
+                                it.copy(placesLoading = false, placesGathering = false, placesError = placesFailure(result.error))
                         }
                     }
                 }
@@ -255,8 +326,6 @@ class PlanChangeViewModel
             const val MAX_DAYS_AHEAD = 14L
             const val MIN_MINUTES = 15L
             const val MAX_MINUTES = 8 * 60L
-            const val PLACES_ATTEMPTS = 4
-            const val PLACES_RETRY_MS = 3_000L
             const val SEARCH_DEBOUNCE_MS = 350L
         }
     }

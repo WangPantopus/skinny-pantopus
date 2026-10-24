@@ -131,11 +131,16 @@ private fun ChangePlacePicker(
                 attribution = ui.placesAttribution,
                 origin = ui.placesOrigin,
                 error = ui.error,
+                gathering = ui.placesGathering,
+                placesError = ui.placesError,
+                suggestions = ui.suggestions,
             ),
         onClose = viewModel::closePlaces,
         onUse = viewModel::usePlace,
         onSearch = viewModel::searchPlaces,
         onPick = viewModel::pickPlaceCandidate,
+        onRetry = viewModel::retryPlaces,
+        onSuggest = viewModel::suggestPlaces,
     )
 }
 
