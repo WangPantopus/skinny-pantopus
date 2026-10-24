@@ -1,6 +1,6 @@
 # Chat reliability consolidation map — October 23, 2026
 
-The four replacement drafts share master `4e7582831e1aa71e03c50f28728e324a57ebaf7a`. Original branches and commits remain untouched. All 131 registered old drafts were confirmed open and draft before consolidation. No PR is merged or deployed.
+The four replacement drafts share master `4e7582831e1aa71e03c50f28728e324a57ebaf7a`. Original branches and commits remain untouched. All 131 registered old drafts were confirmed open and draft before consolidation. After all replacements were pushed, cross-linked and audited, the originals were closed as superseded. Their branches, commits, complete descriptions and CI failure history are preserved. No PR is merged or deployed.
 
 Backend/database owns `backend/`, `supabase/migrations/` and the chat documentation. Web owns `frontend/apps/web/` and the shared `frontend/packages/api/src/endpoints/chat.ts` contract. iOS and Android own their existing native app directories. Clients depend on the backend’s additive topic/read/recovery protocol; validate the combined candidate before any release.
 
@@ -15,7 +15,7 @@ Local archive refs pin each captured old PR head. Private snapshots, manifests, 
 | iOS | [#2803](https://github.com/WangPantopus/skinny-pantopus/pull/2803) · `codex/chat-consolidated-ios` | `3837b1f96` | 32 |
 | Android | [#2806](https://github.com/WangPantopus/skinny-pantopus/pull/2806) · `codex/chat-consolidated-android` | `7c2dcb7d9` | 26 |
 
-All 223 migration files match the backend candidate bytes. Every file present in running backend `ba1a00e3d` also matches byte-for-byte. `20261024002500` remains unapplied during consolidation; approved topic state and all earlier applied migrations remain immutable.
+All 223 migration files match the backend candidate bytes. Every file present in running backend `ba1a00e3d` also matches byte-for-byte. `20261024002500` remained unapplied throughout consolidation, then was reviewed and applied only to the owned local database for verification. It is now immutable alongside approved topic state and all earlier applied migrations.
 
 The new master baseline adds native URL-query redaction and its documentation; these upstream changes are retained and are not counted as chat implementation. No conflicts or authored test-code changes were needed.
 
