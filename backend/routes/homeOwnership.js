@@ -29,6 +29,20 @@ const { ownershipClaimLimiter, postcardLimiter, homePostcardRequestLimiter, veri
 const logger = require('../utils/logger');
 const homePostcardService = require('../services/homePostcardService');
 const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
+const { userFacing, isUserFacing } = require('../utils/userFacingError');
+const { resolveHomeRole } = require('../utils/homeAccessPolicy');
+
+/** A read or write an ownership decision depends on failed: the request is refused (503), never answered as done. */
+function ownershipUnavailable(message, code = 'HOME_OWNERSHIP_UNAVAILABLE') {
+  return userFacing(Object.assign(new Error(message), { code, status: 503, statusCode: 503 }));
+}
+
+/** Answer a refusal from homePermissions, homeSecurityPolicy or the helpers below with its own copy. */
+function sendUnavailable(res, err) {
+  if (Number(err?.status) !== 503 || !isUserFacing(err)) return false;
+  res.status(503).json({ error: err.message, code: err.code });
+  return true;
+}
 
 // ============================================================
 // VALIDATION SCHEMAS
@@ -118,6 +132,30 @@ const updateSecuritySchema = Joi.object({
 const voteSchema = Joi.object({
   vote: Joi.string().valid('approve', 'reject').required(),
   reason: Joi.string().max(500).allow('', null),
+});
+
+// The Home column each policy change sets when its owner vote passes.
+const HOME_POLICY_COLUMNS = {
+  CHANGE_OWNER_CLAIM_POLICY: 'owner_claim_policy',
+  CHANGE_MEMBER_ATTACH_POLICY: 'member_attach_policy',
+  CHANGE_PRIVACY_MASK: 'privacy_mask_level',
+  CHANGE_TENURE_MODE: 'tenure_mode',
+};
+
+// What POST /:id/quorum-actions may propose, and the fields each change needs. Removing an owner and transferring
+// the home have their own requests (DELETE /:id/owners/:ownerId, POST /:id/owners/transfer), which check the owner
+// and the buyer first; mail routing and service providers have nothing that applies them.
+const QUORUM_PROPOSAL_FIELDS = {
+  ...Object.fromEntries(Object.entries(HOME_POLICY_COLUMNS).map(([actionType, column]) => [
+    actionType, Joi.object({ new_value: updateSecuritySchema.extract(column).required() }),
+  ])),
+  CHANGE_PRIMARY_OWNER: Joi.object({ new_primary_subject_id: Joi.string().uuid().required() }),
+  FREEZE_HOME: Joi.object({}),
+};
+
+const proposeQuorumSchema = Joi.object({
+  action_type: Joi.string().valid(...Object.keys(QUORUM_PROPOSAL_FIELDS)).required(),
+  metadata: Joi.object().unknown(true).default({}),
 });
 
 async function recalculateHouseholdResolutionState(homeId) {
@@ -270,12 +308,13 @@ router.post('/:id/ownership-claims', verifyToken, ownershipClaimLimiter, validat
       });
     }
 
-    const { data: home } = await supabaseAdmin
+    const { data: home, error: homeError } = await supabaseAdmin
       .from('Home')
       .select('id, address, city, state, zipcode, security_state, tenure_mode, owner_claim_policy, claim_window_ends_at')
       .eq('id', homeId)
-      .single();
+      .maybeSingle();
 
+    if (homeError) return res.status(503).json({ error: 'Couldn\'t check this home. Nothing was submitted. Please try again.' });
     if (!home) return res.status(404).json({ error: 'Home not found' });
 
     const rentalCheck = isResidencyClaim ? { blocked: false } : policy.evaluateRentalFirewall(home, method);
@@ -416,6 +455,7 @@ router.post('/:id/ownership-claims', verifyToken, ownershipClaimLimiter, validat
       next_step: 'upload_evidence',
     });
   } catch (err) {
+    if (sendUnavailable(res, err)) return;
     logger.error('Failed to submit ownership claim', { error: err.message });
     res.status(500).json({ error: 'Failed to submit claim' });
   }
@@ -462,6 +502,7 @@ router.get('/:id/ownership-claims', verifyToken, async (req, res) => {
 
     res.json({ claims: maskedClaims });
   } catch (err) {
+    if (sendUnavailable(res, err)) return;
     logger.error('Failed to fetch ownership claims', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch claims' });
   }
@@ -495,6 +536,7 @@ router.get('/:id/ownership-claims/compare', verifyToken, async (req, res) => {
 
     res.json(comparison);
   } catch (err) {
+    if (sendUnavailable(res, err)) return;
     logger.error('Failed to fetch ownership claim comparison', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch claim comparison' });
   }
@@ -797,6 +839,7 @@ router.get('/:id/owners', verifyToken, async (req, res) => {
 
     res.json({ owners: enriched });
   } catch (err) {
+    if (sendUnavailable(res, err)) return;
     logger.error('Failed to fetch owners', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch owners' });
   }
@@ -820,11 +863,12 @@ router.post('/:id/owners/invite', verifyToken, validate(inviteOwnerSchema), asyn
     // Resolve invitee user
     let targetUserId = inviteeUserId;
     if (!targetUserId && email) {
-      const { data: user } = await supabaseAdmin
+      const { data: user, error: userError } = await supabaseAdmin
         .from('User')
         .select('id')
         .eq('email', email)
         .maybeSingle();
+      if (userError) return res.status(503).json({ error: 'Couldn\'t check that account. Nothing was sent. Please try again.' });
       targetUserId = user?.id;
     }
 
@@ -833,7 +877,7 @@ router.post('/:id/owners/invite', verifyToken, validate(inviteOwnerSchema), asyn
     }
 
     // Check if already an owner
-    const { data: existingOwner } = await supabaseAdmin
+    const { data: existingOwner, error: existingOwnerError } = await supabaseAdmin
       .from('HomeOwner')
       .select('id')
       .eq('home_id', homeId)
@@ -841,6 +885,7 @@ router.post('/:id/owners/invite', verifyToken, validate(inviteOwnerSchema), asyn
       .neq('owner_status', 'revoked')
       .maybeSingle();
 
+    if (existingOwnerError) return res.status(503).json({ error: 'Couldn\'t check this home\'s owners. Nothing was sent. Please try again.' });
     if (existingOwner) {
       return res.status(400).json({ error: 'This user is already an owner of this home' });
     }
@@ -907,6 +952,7 @@ router.post('/:id/owners/invite', verifyToken, validate(inviteOwnerSchema), asyn
       claim_id: claim.id,
     });
   } catch (err) {
+    if (sendUnavailable(res, err)) return;
     logger.error('Failed to invite co-owner', { error: err.message });
     res.status(500).json({ error: 'Failed to invite co-owner' });
   }
@@ -1064,6 +1110,7 @@ router.post('/:id/owners/transfer', verifyToken, validate(transferOwnerSchema), 
       transfer_claim_id: transferResult.claimId,
     });
   } catch (err) {
+    if (sendUnavailable(res, err)) return;
     logger.error('Failed to initiate transfer', { error: err.message });
     res.status(500).json({ error: 'Failed to initiate transfer' });
   }
@@ -1083,50 +1130,41 @@ router.delete('/:id/owners/:ownerId', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'Not authorized' });
     }
 
-    const { data: home } = await supabaseAdmin
-      .from('Home')
-      .select('security_state')
-      .eq('id', homeId)
-      .single();
+    const [homeRead, ownerRead] = await Promise.all([
+      supabaseAdmin
+        .from('Home')
+        .select('security_state')
+        .eq('id', homeId)
+        .maybeSingle(),
+      supabaseAdmin
+        .from('HomeOwner')
+        .select('id, subject_type, subject_id, owner_status, is_primary_owner')
+        .eq('id', ownerId)
+        .eq('home_id', homeId)
+        .maybeSingle(),
+    ]);
+    if (homeRead.error || ownerRead.error) {
+      return res.status(503).json({ error: 'Couldn\'t check this home\'s owners. Nothing was changed. Please try again.' });
+    }
+    if (!homeRead.data) return res.status(404).json({ error: 'Home not found' });
 
-    if (policy.isActionBlockedByState(home.security_state, 'REMOVE_OWNER')) {
+    if (policy.isActionBlockedByState(homeRead.data.security_state, 'REMOVE_OWNER')) {
       return res.status(403).json({ error: 'Owner removal is restricted in the current home state' });
     }
 
-    const { data: targetOwner } = await supabaseAdmin
-      .from('HomeOwner')
-      .select('*')
-      .eq('id', ownerId)
-      .eq('home_id', homeId)
-      .single();
-
+    const targetOwner = ownerRead.data;
     if (!targetOwner) return res.status(404).json({ error: 'Owner not found' });
 
     const quorum = await policy.calculateQuorumRequirement('REMOVE_OWNER', homeId);
 
     if (quorum.needed) {
-      const { data: action, error } = await supabaseAdmin
-        .from('HomeQuorumAction')
-        .insert({
-          home_id: homeId,
-          proposed_by: userId,
-          action_type: 'REMOVE_OWNER',
-          state: 'proposed',
-          risk_tier: quorum.riskTier,
-          required_rule: quorum.requiredRule,
-          required_approvals: quorum.requiredApprovals,
-          min_rejects_to_block: quorum.minRejectsToBlock,
-          expires_at: quorum.expiresAt.toISOString(),
-          metadata: { target_owner_id: ownerId, target_subject_id: targetOwner.subject_id },
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      await supabaseAdmin
-        .from('HomeQuorumVote')
-        .insert({ quorum_action_id: action.id, voter_user_id: userId, vote: 'approve' });
+      const action = await createQuorumProposal({
+        homeId,
+        userId,
+        actionType: 'REMOVE_OWNER',
+        quorum,
+        metadata: { target_owner_id: ownerId, target_subject_id: targetOwner.subject_id },
+      });
 
       return res.json({
         message: 'Owner removal requires approval from other owners',
@@ -1134,11 +1172,8 @@ router.delete('/:id/owners/:ownerId', verifyToken, async (req, res) => {
       });
     }
 
-    // Single owner self-removal or direct removal
-    await supabaseAdmin
-      .from('HomeOwner')
-      .update({ owner_status: 'revoked', updated_at: new Date().toISOString() })
-      .eq('id', ownerId);
+    // One verified owner: remove directly (self-removal, or an owner who isn't verified).
+    await removeOwnerAccess(homeId, targetOwner);
 
     await writeAuditLog(homeId, userId, 'OWNER_REMOVED', 'HomeOwner', ownerId, {
       subject_id: targetOwner.subject_id,
@@ -1146,6 +1181,7 @@ router.delete('/:id/owners/:ownerId', verifyToken, async (req, res) => {
 
     res.json({ message: 'Owner removed' });
   } catch (err) {
+    if (sendUnavailable(res, err)) return;
     logger.error('Failed to remove owner', { error: err.message });
     res.status(500).json({ error: 'Failed to remove owner' });
   }
@@ -1173,6 +1209,10 @@ router.get('/:id/security', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'Not authorized' });
     }
 
+    // Settle owner votes first: a change whose waiting period passed without a rejection ("auto-approves in 7 days
+    // unless rejected"), or an approved change that wasn't applied yet, shows in the settings read below.
+    await processQuorumExpirations(homeId, userId);
+
     const { data: home, error } = await supabaseAdmin
       .from('Home')
       .select(`
@@ -1181,15 +1221,18 @@ router.get('/:id/security', verifyToken, async (req, res) => {
         privacy_mask_level, tenure_mode
       `)
       .eq('id', homeId)
-      .single();
+      .maybeSingle();
 
-    if (error || !home) return res.status(404).json({ error: 'Home not found' });
+    if (error) return res.status(503).json({ error: 'Couldn\'t load this home\'s security settings. Please try again.' });
+    if (!home) return res.status(404).json({ error: 'Home not found' });
 
-    const { data: owners } = await supabaseAdmin
+    const { data: owners, error: ownersError } = await supabaseAdmin
       .from('HomeOwner')
       .select('id')
       .eq('home_id', homeId)
       .eq('owner_status', 'verified');
+
+    if (ownersError) return res.status(503).json({ error: 'Couldn\'t load this home\'s security settings. Please try again.' });
 
     const claimWindowActive = policy.isClaimWindowActive(home);
 
@@ -1201,6 +1244,7 @@ router.get('/:id/security', verifyToken, async (req, res) => {
       },
     });
   } catch (err) {
+    if (sendUnavailable(res, err)) return;
     logger.error('Failed to fetch security settings', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch security settings' });
   }
@@ -1223,12 +1267,13 @@ router.patch('/:id/security', verifyToken, validate(updateSecuritySchema), async
       return res.status(403).json({ error: 'Not authorized' });
     }
 
-    const { data: home } = await supabaseAdmin
+    const { data: home, error: homeError } = await supabaseAdmin
       .from('Home')
       .select('security_state, claim_window_ends_at, owner_claim_policy, member_attach_policy, privacy_mask_level, tenure_mode')
       .eq('id', homeId)
-      .single();
+      .maybeSingle();
 
+    if (homeError) return res.status(503).json({ error: 'Couldn\'t check this home. Nothing was changed. Please try again.' });
     if (!home) return res.status(404).json({ error: 'Home not found' });
 
     const updates = {};
@@ -1243,27 +1288,13 @@ router.patch('/:id/security', verifyToken, validate(updateSecuritySchema), async
       // Check if quorum needed
       const quorum = await policy.calculateQuorumRequirement('CHANGE_OWNER_CLAIM_POLICY', homeId);
       if (quorum.needed) {
-        const { data: action } = await supabaseAdmin
-          .from('HomeQuorumAction')
-          .insert({
-            home_id: homeId,
-            proposed_by: userId,
-            action_type: 'CHANGE_OWNER_CLAIM_POLICY',
-            state: 'proposed',
-            risk_tier: quorum.riskTier,
-            required_rule: quorum.requiredRule,
-            required_approvals: quorum.requiredApprovals,
-            min_rejects_to_block: quorum.minRejectsToBlock,
-            expires_at: quorum.expiresAt.toISOString(),
-            passive_approval_at: quorum.passiveApprovalAt?.toISOString() || null,
-            metadata: { new_value: req.body.owner_claim_policy, old_value: home.owner_claim_policy },
-          })
-          .select()
-          .single();
-
-        await supabaseAdmin
-          .from('HomeQuorumVote')
-          .insert({ quorum_action_id: action.id, voter_user_id: userId, vote: 'approve' });
+        const action = await createQuorumProposal({
+          homeId,
+          userId,
+          actionType: 'CHANGE_OWNER_CLAIM_POLICY',
+          quorum,
+          metadata: { new_value: req.body.owner_claim_policy, old_value: home.owner_claim_policy },
+        });
 
         return res.json({
           message: `This change will auto-approve in ${policy.CONSTRUCTIVE_CONSENT_DAYS} days unless rejected`,
@@ -1310,6 +1341,7 @@ router.patch('/:id/security', verifyToken, validate(updateSecuritySchema), async
 
     res.json({ message: 'Settings updated', security: updated });
   } catch (err) {
+    if (sendUnavailable(res, err)) return;
     logger.error('Failed to update security settings', { error: err.message });
     res.status(500).json({ error: 'Failed to update settings' });
   }
@@ -1322,7 +1354,8 @@ router.patch('/:id/security', verifyToken, validate(updateSecuritySchema), async
 
 /**
  * GET /:id/quorum-actions
- * List pending quorum actions for a home.
+ * List pending quorum actions for a home: open votes, and approved changes that
+ * aren't applied yet (applied: false; metadata.execution says why).
  */
 router.get('/:id/quorum-actions', verifyToken, async (req, res) => {
   try {
@@ -1334,7 +1367,7 @@ router.get('/:id/quorum-actions', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'Not authorized' });
     }
 
-    // Check and process constructive consent + expired quorum actions
+    // Check and process constructive consent + expired quorum actions, and retry approved ones not applied yet
     await processQuorumExpirations(homeId, userId);
 
     const { data: actions, error } = await supabaseAdmin
@@ -1345,19 +1378,22 @@ router.get('/:id/quorum-actions', verifyToken, async (req, res) => {
         votes:HomeQuorumVote (id, voter_user_id, vote, voted_at)
       `)
       .eq('home_id', homeId)
-      .in('state', ['proposed', 'collecting_votes'])
+      .in('state', ['proposed', 'collecting_votes', 'approved'])
       .order('created_at', { ascending: false });
 
     if (error) throw error;
 
+    const pending = (actions || []).filter(action => action.state !== 'approved' || quorumAwaitsApply(action));
     // Proposers go by the Local Profile they show neighbors (services/chatPeople.js).
-    const people = await loadChatPeople((actions || []).map(action => action.proposer?.id));
-    res.json({ actions: (actions || []).map((action) => {
-      if (!action.proposer) return action;
+    const people = await loadChatPeople(pending.map(action => action.proposer?.id));
+    res.json({ actions: pending.map((action) => {
+      const row = action.state === 'approved' ? { ...action, applied: false } : action;
+      if (!action.proposer) return row;
       const { id, username, name } = chatPersonRow(action.proposer, people);
-      return { ...action, proposer: { id, username, name } };
+      return { ...row, proposer: { id, username, name } };
     }) });
   } catch (err) {
+    if (sendUnavailable(res, err)) return;
     logger.error('Failed to fetch quorum actions', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch quorum actions' });
   }
@@ -1367,56 +1403,57 @@ router.get('/:id/quorum-actions', verifyToken, async (req, res) => {
  * POST /:id/quorum-actions
  * Propose a new quorum action.
  */
-router.post('/:id/quorum-actions', verifyToken, async (req, res) => {
+router.post('/:id/quorum-actions', verifyToken, validate(proposeQuorumSchema), async (req, res) => {
   try {
     const homeId = req.params.id;
     const userId = req.user.id;
-    const { action_type, metadata } = req.body;
+    const { action_type } = req.body;
 
     const access = await checkHomePermission(homeId, userId, 'quorum.propose');
     if (!access.hasAccess) {
       return res.status(403).json({ error: 'Not authorized' });
     }
 
-    const { data: home } = await supabaseAdmin
+    // Only the fields this change uses are stored, so a proposal can't carry another home's owner or a made-up record.
+    const { value: fields, error: fieldsError } = QUORUM_PROPOSAL_FIELDS[action_type]
+      .validate(req.body.metadata, { stripUnknown: true });
+    if (fieldsError) return res.status(400).json({ error: 'This change is missing a valid setting.' });
+
+    const { data: home, error: homeError } = await supabaseAdmin
       .from('Home')
-      .select('security_state')
+      .select('security_state, owner_claim_policy, member_attach_policy, privacy_mask_level, tenure_mode')
       .eq('id', homeId)
-      .single();
+      .maybeSingle();
+
+    if (homeError) return res.status(503).json({ error: 'Couldn\'t check this home. Nothing was changed. Please try again.' });
+    if (!home) return res.status(404).json({ error: 'Home not found' });
 
     if (policy.isActionBlockedByState(home.security_state, action_type)) {
       return res.status(403).json({ error: 'This action is restricted in the current home state' });
     }
 
+    const metadata = { ...fields };
+    if (HOME_POLICY_COLUMNS[action_type]) metadata.old_value = home[HOME_POLICY_COLUMNS[action_type]];
+    if (action_type === 'CHANGE_PRIMARY_OWNER') {
+      const { data: target, error: targetError } = await supabaseAdmin
+        .from('HomeOwner')
+        .select('id')
+        .eq('home_id', homeId)
+        .eq('subject_id', fields.new_primary_subject_id)
+        .eq('owner_status', 'verified')
+        .maybeSingle();
+      if (targetError) return res.status(503).json({ error: 'Couldn\'t check this home\'s owners. Nothing was changed. Please try again.' });
+      if (!target) return res.status(400).json({ error: 'The new primary owner must be a verified owner of this home.' });
+    }
+
     const quorum = await policy.calculateQuorumRequirement(action_type, homeId);
 
     if (!quorum.needed) {
-      return res.json({ message: 'No quorum needed for this action', auto_approved: true });
+      // Nothing is applied here: say so instead of answering "approved".
+      return res.status(409).json({ error: 'This home has one verified owner, so no owner vote is needed.', code: 'QUORUM_NOT_NEEDED' });
     }
 
-    const { data: action, error } = await supabaseAdmin
-      .from('HomeQuorumAction')
-      .insert({
-        home_id: homeId,
-        proposed_by: userId,
-        action_type,
-        state: 'proposed',
-        risk_tier: quorum.riskTier,
-        required_rule: quorum.requiredRule,
-        required_approvals: quorum.requiredApprovals,
-        min_rejects_to_block: quorum.minRejectsToBlock,
-        expires_at: quorum.expiresAt.toISOString(),
-        passive_approval_at: quorum.passiveApprovalAt?.toISOString() || null,
-        metadata: metadata || {},
-      })
-      .select()
-      .single();
-
-    if (error) throw error;
-
-    await supabaseAdmin
-      .from('HomeQuorumVote')
-      .insert({ quorum_action_id: action.id, voter_user_id: userId, vote: 'approve' });
+    const action = await createQuorumProposal({ homeId, userId, actionType: action_type, quorum, metadata });
 
     await writeAuditLog(homeId, userId, 'QUORUM_ACTION_PROPOSED', 'HomeQuorumAction', action.id, {
       action_type, risk_tier: quorum.riskTier,
@@ -1424,6 +1461,7 @@ router.post('/:id/quorum-actions', verifyToken, async (req, res) => {
 
     res.status(201).json({ action });
   } catch (err) {
+    if (sendUnavailable(res, err)) return;
     logger.error('Failed to propose quorum action', { error: err.message });
     res.status(500).json({ error: 'Failed to propose action' });
   }
@@ -1445,7 +1483,7 @@ router.post('/:id/quorum-actions/:actionId/vote', verifyToken, validate(voteSche
     }
 
     // Must be a verified owner to vote
-    const { data: ownerRecord } = await supabaseAdmin
+    const { data: ownerRecord, error: ownerError } = await supabaseAdmin
       .from('HomeOwner')
       .select('id')
       .eq('home_id', homeId)
@@ -1453,20 +1491,33 @@ router.post('/:id/quorum-actions/:actionId/vote', verifyToken, validate(voteSche
       .eq('owner_status', 'verified')
       .maybeSingle();
 
+    if (ownerError) return res.status(503).json({ error: 'Couldn\'t check this home\'s owners. Your vote wasn\'t recorded. Please try again.' });
     if (!ownerRecord) {
       return res.status(403).json({ error: 'Only verified owners can vote' });
     }
 
-    const { data: action } = await supabaseAdmin
+    const { data: action, error: actionError } = await supabaseAdmin
       .from('HomeQuorumAction')
       .select('*')
       .eq('id', actionId)
       .eq('home_id', homeId)
-      .single();
+      .maybeSingle();
 
+    if (actionError) return res.status(503).json({ error: 'Couldn\'t load this vote. Your vote wasn\'t recorded. Please try again.' });
     if (!action) return res.status(404).json({ error: 'Action not found' });
 
-    if (!['proposed', 'collecting_votes'].includes(action.state)) {
+    // Past expires_at a vote is over even before a read marks it expired.
+    const expired = Boolean(action.expires_at) && new Date(action.expires_at) <= new Date();
+
+    // Approved but not applied yet: voting is over, and sending the vote again retries the change.
+    if (action.state === 'approved' && quorumAwaitsApply(action) && !expired) {
+      const outcome = quorumApplyDue(action)
+        ? await applyApprovedQuorumAction(homeId, action, userId)
+        : quorumApplyOutcome(action);
+      return sendQuorumOutcome(res, 'approved', outcome);
+    }
+
+    if (expired || !['proposed', 'collecting_votes'].includes(action.state)) {
       return res.status(400).json({ error: 'Voting is closed for this action' });
     }
 
@@ -1481,16 +1532,26 @@ router.post('/:id/quorum-actions/:actionId/vote', verifyToken, validate(voteSche
         voted_at: new Date().toISOString(),
       }, { onConflict: 'quorum_action_id,voter_user_id' });
 
-    if (voteError) throw voteError;
+    if (voteError) return res.status(503).json({ error: 'Couldn\'t record your vote. Please try again.' });
 
-    // Check if action should resolve
-    const { data: votes } = await supabaseAdmin
+    await writeAuditLog(homeId, userId, 'QUORUM_VOTE_CAST', 'HomeQuorumAction', actionId, { vote });
+
+    // Check if action should resolve. The vote is saved; if counting fails, sending it again counts it.
+    const notCounted = () => res.status(503).json({
+      error: 'Your vote is saved, but it couldn\'t be counted yet. Please try again.',
+      code: 'QUORUM_VOTE_NOT_COUNTED',
+      action_state: action.state,
+    });
+    const { data: votes, error: votesError } = await supabaseAdmin
       .from('HomeQuorumVote')
       .select('vote')
       .eq('quorum_action_id', actionId);
 
-    const approvals = (votes || []).filter(v => v.vote === 'approve').length;
-    const rejections = (votes || []).filter(v => v.vote === 'reject').length;
+    if (votesError || !Array.isArray(votes)) return notCounted();
+
+    const approvals = votes.filter(v => v.vote === 'approve').length;
+    const rejections = votes.filter(v => v.vote === 'reject').length;
+    const counts = { approvals, rejections };
 
     let newState = action.state === 'proposed' ? 'collecting_votes' : action.state;
 
@@ -1500,24 +1561,45 @@ router.post('/:id/quorum-actions/:actionId/vote', verifyToken, validate(voteSche
       newState = 'approved';
     }
 
-    if (newState !== action.state) {
-      await supabaseAdmin
-        .from('HomeQuorumAction')
-        .update({ state: newState, updated_at: new Date().toISOString() })
-        .eq('id', actionId);
-
-      // Execute the action if approved
-      if (newState === 'approved') {
-        await executeQuorumAction(homeId, action, userId);
-      }
+    if (newState === action.state) {
+      return res.json({ message: 'Vote recorded', action_state: newState, ...counts });
     }
 
-    await writeAuditLog(homeId, userId, 'QUORUM_VOTE_CAST', 'HomeQuorumAction', actionId, {
-      vote, result_state: newState,
-    });
+    // Compare-and-set from the state this request read, so a concurrent vote or expiry can't be overwritten and
+    // exactly one request applies an approved change. Approving also claims applying it ('applying').
+    const now = new Date().toISOString();
+    const transition = { state: newState, updated_at: now };
+    if (newState === 'approved') transition.metadata = approvedQuorumMetadata(action, now);
+    const { data: moved, error: moveError } = await supabaseAdmin
+      .from('HomeQuorumAction')
+      .update(transition)
+      .eq('id', actionId)
+      .eq('home_id', homeId)
+      .eq('state', action.state)
+      .select('*');
 
-    res.json({ message: 'Vote recorded', action_state: newState, approvals, rejections });
+    if (moveError) return notCounted();
+    if (!moved?.length) {
+      // Another request moved it first: answer with what it is now.
+      const { data: latest, error: latestError } = await supabaseAdmin
+        .from('HomeQuorumAction')
+        .select('*')
+        .eq('id', actionId)
+        .maybeSingle();
+      if (latestError || !latest) return notCounted();
+      if (latest.state === 'approved') return sendQuorumOutcome(res, 'approved', quorumApplyOutcome(latest), counts);
+      return res.json({ message: 'Vote recorded', action_state: latest.state, ...counts });
+    }
+
+    if (newState !== 'approved') {
+      return res.json({ message: 'Vote recorded', action_state: newState, ...counts });
+    }
+
+    // Execute the action now that it is approved; the vote answers "done" only once it took effect.
+    const outcome = await applyApprovedQuorumAction(homeId, moved[0], userId, { claimed: true });
+    return sendQuorumOutcome(res, 'approved', outcome, counts);
   } catch (err) {
+    if (sendUnavailable(res, err)) return;
     logger.error('Failed to vote on quorum action', { error: err.message });
     res.status(500).json({ error: 'Failed to vote' });
   }
@@ -1542,11 +1624,14 @@ router.get('/:id/dispute', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'Not authorized' });
     }
 
-    const { data: home } = await supabaseAdmin
+    const { data: home, error: homeError } = await supabaseAdmin
       .from('Home')
       .select('security_state')
       .eq('id', homeId)
-      .single();
+      .maybeSingle();
+
+    // A failed read is not a "normal" home.
+    if (homeError) return res.status(503).json({ error: 'Couldn\'t load this home\'s state. Please try again.' });
 
     // Product: in-app dispute center disabled — keep endpoint for clients without surfacing active disputes.
     res.json({
@@ -1559,6 +1644,7 @@ router.get('/:id/dispute', verifyToken, async (req, res) => {
       },
     });
   } catch (err) {
+    if (sendUnavailable(res, err)) return;
     logger.error('Failed to fetch dispute details', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch dispute details' });
   }
@@ -1571,99 +1657,360 @@ router.get('/:id/dispute', verifyToken, async (req, res) => {
 
 
 /**
- * Execute a quorum action that has been approved.
- * Applies the actual change to the home/owners based on action_type.
+ * Open an owner vote with the proposer's approval. If the approval can't be
+ * saved the proposal is withdrawn, so no vote stands without its proposer.
+ * Throws a 503 error when nothing was proposed.
  */
-async function executeQuorumAction(homeId, action, actorUserId) {
-  const meta = action.metadata || {};
+async function createQuorumProposal({ homeId, userId, actionType, quorum, metadata }) {
+  const failed = () => ownershipUnavailable('Couldn\'t ask the other owners. Nothing was changed. Please try again.');
+  const { data: action, error } = await supabaseAdmin
+    .from('HomeQuorumAction')
+    .insert({
+      home_id: homeId,
+      proposed_by: userId,
+      action_type: actionType,
+      state: 'proposed',
+      risk_tier: quorum.riskTier,
+      required_rule: quorum.requiredRule,
+      required_approvals: quorum.requiredApprovals,
+      min_rejects_to_block: quorum.minRejectsToBlock,
+      expires_at: quorum.expiresAt.toISOString(),
+      passive_approval_at: quorum.passiveApprovalAt?.toISOString() || null,
+      metadata,
+    })
+    .select()
+    .single();
+  if (error || !action) throw failed();
+
+  const { error: voteError } = await supabaseAdmin
+    .from('HomeQuorumVote')
+    .insert({ quorum_action_id: action.id, voter_user_id: userId, vote: 'approve' });
+  if (voteError) {
+    const { error: withdrawError } = await supabaseAdmin.from('HomeQuorumAction').delete().eq('id', action.id);
+    if (withdrawError) {
+      logger.error('Owner vote without its proposer\'s approval could not be withdrawn', {
+        homeId, actionId: action.id, error: withdrawError.message,
+      });
+    }
+    throw failed();
+  }
+  return action;
+}
+
+// An approved owner vote records applying its change in metadata.execution:
+//   'applying' one request is applying it (since attempt_at);
+//   'pending'  approved, not applied yet: sending a vote again, or reading the
+//              votes or the security settings, tries again;
+//   'applied'  done (applied_at);
+//   'failed'   it can't be applied any more (failure.message says why).
+// Approved actions without it predate the record and are left as they are.
+const QUORUM_APPLY_STALE_MS = 2 * 60 * 1000;
+
+const quorumExecution = action => action?.metadata?.execution || null;
+
+/** Approved, and its change isn't applied (yet). */
+function quorumAwaitsApply(action) {
+  const execution = quorumExecution(action);
+  return action?.state === 'approved' && Boolean(execution) && execution.status !== 'applied';
+}
+
+/** May a request start applying it now: not applied and not being applied (an attempt that stopped goes stale). */
+function quorumApplyDue(action, now = Date.now()) {
+  if (!quorumAwaitsApply(action)) return false;
+  const execution = quorumExecution(action);
+  if (execution.status === 'pending') return true;
+  return execution.status === 'applying' && !(Date.parse(execution.attempt_at) > now - QUORUM_APPLY_STALE_MS);
+}
+
+/** Metadata of an action the owners just approved: the approving request holds applying it. */
+function approvedQuorumMetadata(action, now) {
+  return { ...(action.metadata || {}), execution: { status: 'applying', approved_at: now, attempt_at: now } };
+}
+
+function withQuorumExecution(action, changes) {
+  const metadata = action.metadata || {};
+  return { ...metadata, execution: { ...(metadata.execution || {}), ...changes } };
+}
+
+const QUORUM_NOT_APPLIED_COPY = {
+  QUORUM_ACTION_NOT_APPLIED: 'The owners approved this change, but it isn\'t applied yet. Please try again.',
+  QUORUM_ACTION_APPLYING: 'The owners approved this change and it\'s being applied. Check again in a minute.',
+  QUORUM_ACTION_CANNOT_APPLY: 'The owners approved this change, but it can\'t be applied any more.',
+  QUORUM_ACTION_UNCONFIRMED: 'The owners approved this change, but we couldn\'t confirm it was applied. Check again in a few minutes.',
+};
+
+function quorumNotApplied(status, code = 'QUORUM_ACTION_NOT_APPLIED', reason = null) {
+  const copy = QUORUM_NOT_APPLIED_COPY[code];
+  return { applied: false, status, code, error: reason ? `${copy} ${reason}` : copy };
+}
+
+/** The outcome of an approved action this request isn't applying. */
+function quorumApplyOutcome(action) {
+  const execution = quorumExecution(action);
+  if (!execution || execution.status === 'applied') return { applied: true };
+  if (execution.status === 'failed') return quorumNotApplied(409, 'QUORUM_ACTION_CANNOT_APPLY', execution.failure?.message);
+  if (execution.status === 'applying') return quorumNotApplied(409, 'QUORUM_ACTION_APPLYING');
+  return quorumNotApplied(503);
+}
+
+/** Answer for an approved action: done only once its change took effect. */
+function sendQuorumOutcome(res, actionState, outcome, counts = null) {
+  if (outcome.applied) {
+    return res.json({ message: counts ? 'Vote recorded' : 'Change applied', action_state: actionState, applied: true, ...counts });
+  }
+  return res.status(outcome.status).json({
+    error: outcome.error, code: outcome.code, action_state: actionState, applied: false, ...counts,
+  });
+}
+
+/**
+ * Apply an approved owner vote's change, then record it applied. One request
+ * applies an action at a time: unless it already holds it (`claimed`, the
+ * approving request), it claims the action ('applying') first. A failure
+ * releases it as 'pending' (try again) or 'failed' (no longer possible).
+ * Returns { applied: true } or a quorumNotApplied outcome.
+ */
+async function applyApprovedQuorumAction(homeId, action, actorUserId, { claimed = false } = {}) {
+  let current = action;
+  if (!claimed) {
+    const now = new Date().toISOString();
+    const { data: rows, error } = await supabaseAdmin
+      .from('HomeQuorumAction')
+      .update({ metadata: withQuorumExecution(current, { status: 'applying', attempt_at: now }), updated_at: now })
+      .eq('id', current.id)
+      .eq('home_id', homeId)
+      .eq('state', 'approved')
+      .eq('updated_at', current.updated_at)
+      .select('*');
+    if (error) return quorumNotApplied(503);
+    if (!rows?.length) return quorumNotApplied(409, 'QUORUM_ACTION_APPLYING');
+    [current] = rows;
+  }
 
   try {
-    switch (action.action_type) {
-      case 'CHANGE_OWNER_CLAIM_POLICY': {
-        if (meta.new_value) {
-          await supabaseAdmin
-            .from('Home')
-            .update({ owner_claim_policy: meta.new_value, updated_at: new Date().toISOString() })
-            .eq('id', homeId);
-        }
-        break;
-      }
-      case 'CHANGE_MEMBER_ATTACH_POLICY': {
-        if (meta.new_value) {
-          await supabaseAdmin
-            .from('Home')
-            .update({ member_attach_policy: meta.new_value, updated_at: new Date().toISOString() })
-            .eq('id', homeId);
-        }
-        break;
-      }
-      case 'CHANGE_PRIVACY_MASK': {
-        if (meta.new_value) {
-          await supabaseAdmin
-            .from('Home')
-            .update({ privacy_mask_level: meta.new_value, updated_at: new Date().toISOString() })
-            .eq('id', homeId);
-        }
-        break;
-      }
-      case 'CHANGE_TENURE_MODE': {
-        if (meta.new_value) {
-          await supabaseAdmin
-            .from('Home')
-            .update({ tenure_mode: meta.new_value, updated_at: new Date().toISOString() })
-            .eq('id', homeId);
-        }
-        break;
-      }
-      case 'REMOVE_OWNER': {
-        if (meta.target_owner_id) {
-          await supabaseAdmin
-            .from('HomeOwner')
-            .update({ owner_status: 'revoked', updated_at: new Date().toISOString() })
-            .eq('id', meta.target_owner_id);
-        }
-        break;
-      }
-      case 'CHANGE_PRIMARY_OWNER': {
-        if (meta.new_primary_subject_id) {
-          // Remove primary from all current owners
-          await supabaseAdmin
-            .from('HomeOwner')
-            .update({ is_primary_owner: false })
-            .eq('home_id', homeId)
-            .eq('is_primary_owner', true);
-          // Set new primary
-          await supabaseAdmin
-            .from('HomeOwner')
-            .update({ is_primary_owner: true, updated_at: new Date().toISOString() })
-            .eq('home_id', homeId)
-            .eq('subject_id', meta.new_primary_subject_id)
-            .eq('owner_status', 'verified');
-        }
-        break;
-      }
-      case 'FREEZE_HOME': {
-        await supabaseAdmin
-          .from('Home')
-          .update({ security_state: 'frozen', updated_at: new Date().toISOString() })
-          .eq('id', homeId);
-        break;
-      }
-      case 'TRANSFER_OWNERSHIP': {
-        // The seller is the owner who proposed the transfer, not whoever cast
-        // the deciding vote.
-        await executeOwnershipTransfer(homeId, meta, action.proposed_by);
-        break;
-      }
-      default:
-        logger.info('Quorum action executed (no-op handler)', { action_type: action.action_type, homeId });
-    }
-
-    await writeAuditLog(homeId, actorUserId, `QUORUM_ACTION_EXECUTED`, 'HomeQuorumAction', action.id, {
-      action_type: action.action_type, metadata: meta,
-    });
+    await executeQuorumAction(homeId, current);
   } catch (err) {
-    logger.error('Failed to execute quorum action', { error: err.message, action_type: action.action_type, homeId });
+    const status = Number(err.status);
+    const permanent = status >= 400 && status < 500;
+    logger.error('Quorum action not applied', {
+      homeId, actionId: current.id, action_type: current.action_type, errorCode: err.code, error: err.message,
+    });
+    const now = new Date().toISOString();
+    const { error: releaseError } = await supabaseAdmin
+      .from('HomeQuorumAction')
+      .update({
+        metadata: withQuorumExecution(current, permanent
+          ? { status: 'failed', failed_at: now, failure: { code: err.code || null, message: err.message } }
+          : { status: 'pending', failed_at: now }),
+        updated_at: now,
+      })
+      .eq('id', current.id)
+      .eq('updated_at', current.updated_at);
+    // Left 'applying', it can be claimed again once the attempt is stale.
+    if (releaseError) logger.error('Quorum action release failed', { homeId, actionId: current.id, error: releaseError.message });
+    return permanent ? quorumNotApplied(409, 'QUORUM_ACTION_CANNOT_APPLY', err.message) : quorumNotApplied(503);
+  }
+
+  const now = new Date().toISOString();
+  const { error: markError } = await supabaseAdmin
+    .from('HomeQuorumAction')
+    .update({ metadata: withQuorumExecution(current, { status: 'applied', applied_at: now }), updated_at: now })
+    .eq('id', current.id);
+  if (markError) {
+    // It took effect but isn't recorded: once the attempt is stale a retry applies it again (each step is safe to
+    // repeat) and records it.
+    logger.error('Quorum action applied but not recorded', { homeId, actionId: current.id, error: markError.message });
+    return quorumNotApplied(503, 'QUORUM_ACTION_UNCONFIRMED');
+  }
+
+  const { execution: _execution, ...meta } = current.metadata || {};
+  await writeAuditLog(homeId, actorUserId, 'QUORUM_ACTION_EXECUTED', 'HomeQuorumAction', current.id, {
+    action_type: current.action_type, metadata: meta,
+  });
+  return { applied: true };
+}
+
+const quorumCannotApply = message => Object.assign(new Error(message), { status: 409, code: 'QUORUM_ACTION_CANNOT_APPLY' });
+const quorumApplyUnavailable = () => ownershipUnavailable('Couldn\'t apply this change. Please try again.');
+
+/**
+ * Execute a quorum action that has been approved: apply the change the owners
+ * voted for. Every write is checked and scoped to this home, and every step is
+ * safe to repeat, so a retry finishes an attempt that stopped half way. Throws
+ * when the change didn't take effect: a 503 error (try again) or a 409 one
+ * (the change is no longer possible).
+ */
+async function executeQuorumAction(homeId, action) {
+  const meta = action.metadata || {};
+  const now = new Date().toISOString();
+
+  // The home can have changed since the vote opened.
+  const { data: home, error: homeError } = await supabaseAdmin
+    .from('Home')
+    .select('security_state, claim_window_ends_at')
+    .eq('id', homeId)
+    .maybeSingle();
+  if (homeError) throw quorumApplyUnavailable();
+  if (!home) throw quorumCannotApply('This home no longer exists.');
+  if (action.action_type === 'FREEZE_HOME' && home.security_state === 'frozen') return;
+  if (policy.isActionBlockedByState(home.security_state, action.action_type)) {
+    throw quorumCannotApply('It is restricted in the home\'s current state.');
+  }
+
+  const updateHome = async (fields) => {
+    const { data, error } = await supabaseAdmin
+      .from('Home')
+      .update({ ...fields, updated_at: now })
+      .eq('id', homeId)
+      .select('id');
+    if (error) throw quorumApplyUnavailable();
+    if (!data?.length) throw quorumCannotApply('This home no longer exists.');
+  };
+
+  switch (action.action_type) {
+    case 'CHANGE_OWNER_CLAIM_POLICY':
+    case 'CHANGE_MEMBER_ATTACH_POLICY':
+    case 'CHANGE_PRIVACY_MASK':
+    case 'CHANGE_TENURE_MODE': {
+      if (!meta.new_value) throw quorumCannotApply('It has no new setting.');
+      if (action.action_type === 'CHANGE_OWNER_CLAIM_POLICY') {
+        const policyCheck = policy.canChangeOwnerClaimPolicy(home, meta.new_value);
+        if (!policyCheck.allowed) throw quorumCannotApply(`${policyCheck.reason}.`);
+      }
+      await updateHome({ [HOME_POLICY_COLUMNS[action.action_type]]: meta.new_value });
+      return;
+    }
+    case 'REMOVE_OWNER': {
+      const { data: owner, error } = meta.target_owner_id
+        ? await supabaseAdmin
+          .from('HomeOwner')
+          .select('id, subject_type, subject_id, owner_status, is_primary_owner')
+          .eq('id', meta.target_owner_id)
+          .eq('home_id', homeId)
+          .maybeSingle()
+        : { data: null, error: null };
+      if (error) throw quorumApplyUnavailable();
+      if (!owner) throw quorumCannotApply('This owner is no longer on this home.');
+      await removeOwnerAccess(homeId, owner);
+      return;
+    }
+    case 'CHANGE_PRIMARY_OWNER': {
+      const { data: target, error } = meta.new_primary_subject_id
+        ? await supabaseAdmin
+          .from('HomeOwner')
+          .select('id')
+          .eq('home_id', homeId)
+          .eq('subject_id', meta.new_primary_subject_id)
+          .eq('owner_status', 'verified')
+          .maybeSingle()
+        : { data: null, error: null };
+      if (error) throw quorumApplyUnavailable();
+      if (!target) throw quorumCannotApply('The new primary owner is no longer a verified owner of this home.');
+      // One primary per home (homeowner_primary_unique): clear the others, then set the new one.
+      const { error: clearError } = await supabaseAdmin
+        .from('HomeOwner')
+        .update({ is_primary_owner: false, updated_at: now })
+        .eq('home_id', homeId)
+        .eq('is_primary_owner', true)
+        .neq('id', target.id);
+      if (clearError) throw quorumApplyUnavailable();
+      const { data: primary, error: primaryError } = await supabaseAdmin
+        .from('HomeOwner')
+        .update({ is_primary_owner: true, updated_at: now })
+        .eq('id', target.id)
+        .eq('owner_status', 'verified')
+        .select('id');
+      if (primaryError || !primary?.length) throw quorumApplyUnavailable();
+      return;
+    }
+    case 'FREEZE_HOME':
+      await updateHome({ security_state: 'frozen' });
+      return;
+    case 'TRANSFER_OWNERSHIP': {
+      // The seller is the owner who proposed the transfer, not whoever cast
+      // the deciding vote.
+      try {
+        await executeOwnershipTransfer(homeId, meta, action.proposed_by);
+      } catch (err) {
+        // A retry of a transfer that took effect before it was recorded finds the seller no longer an owner and the
+        // buyer's claim open: that is done, not failed.
+        if (err.code === 'TRANSFER_SELLER_NOT_OWNER' && meta.buyer_user_id
+          && await findOpenClaim({ homeId, claimantId: meta.buyer_user_id, claimType: 'owner', method: 'invite' })) return;
+        throw err;
+      }
+      return;
+    }
+    default:
+      throw quorumCannotApply('Nothing applies this kind of change.');
+  }
+}
+
+/**
+ * Remove an owner: revoke their HomeOwner row, clear a legacy Home.owner_id
+ * pointer to them, and make an owner occupancy a member's (they stay in the
+ * household, as a transfer's seller does). Any one of the three gives owner
+ * access (homePermissions.getUserAccess). If a later step fails the earlier
+ * ones are undone, so they keep owner access until all of it took effect.
+ * Every step is safe to repeat. Throws a 503 error when it didn't take effect.
+ */
+async function removeOwnerAccess(homeId, owner) {
+  const now = new Date().toISOString();
+  const failed = () => ownershipUnavailable('Couldn\'t remove this owner. Please try again.');
+
+  // A revoked row gives up the primary flag too: homeowner_primary_unique counts revoked rows.
+  const { error: revokeError } = await supabaseAdmin
+    .from('HomeOwner')
+    .update({ owner_status: 'revoked', is_primary_owner: false, updated_at: now })
+    .eq('id', owner.id)
+    .eq('home_id', homeId);
+  if (revokeError) throw failed();
+  if (owner.subject_type !== 'user') return;
+
+  const { data: cleared, error: pointerError } = await supabaseAdmin
+    .from('Home')
+    .update({ owner_id: null, updated_at: now })
+    .eq('id', homeId)
+    .eq('owner_id', owner.subject_id)
+    .select('id');
+  if (pointerError) {
+    await undoOwnerRemoval(homeId, owner, { pointerCleared: false });
+    throw failed();
+  }
+  const pointerCleared = Boolean(cleared?.length);
+
+  try {
+    const { data: occupancy, error: occupancyError } = await supabaseAdmin
+      .from('HomeOccupancy')
+      .select('role, role_base, is_active, verification_status')
+      .eq('home_id', homeId)
+      .eq('user_id', owner.subject_id)
+      .maybeSingle();
+    if (occupancyError) throw occupancyError;
+    if (occupancy?.is_active === true && resolveHomeRole(occupancy) === 'owner') {
+      await applyOccupancyTemplate(homeId, owner.subject_id, 'member', occupancy.verification_status || 'verified');
+    }
+  } catch (_) {
+    await undoOwnerRemoval(homeId, owner, { pointerCleared });
+    throw failed();
+  }
+}
+
+/** Put back what a failed removal changed (best effort, logged): the owner row as it was, then the pointer. */
+async function undoOwnerRemoval(homeId, owner, { pointerCleared }) {
+  const steps = [['owner', supabaseAdmin.from('HomeOwner')
+    .update({ owner_status: owner.owner_status, is_primary_owner: owner.is_primary_owner })
+    .eq('id', owner.id).eq('owner_status', 'revoked')]];
+  if (pointerCleared) {
+    steps.push(['home_owner_id', supabaseAdmin.from('Home').update({ owner_id: owner.subject_id })
+      .eq('id', homeId).is('owner_id', null)]);
+  }
+  for (const [step, query] of steps) {
+    try {
+      const { error } = await query;
+      if (error) logger.error('Owner removal undo step failed', { homeId, step, error: error.message });
+    } catch (err) {
+      logger.error('Owner removal undo step failed', { homeId, step, error: err.message });
+    }
   }
 }
 
@@ -1702,13 +2049,15 @@ async function resolveTransferBuyer({ buyer_user_id, buyer_email }, sellerUserId
 }
 
 /** Undo the steps a failed transfer already took (best effort, logged). */
-async function undoOwnershipTransfer(homeId, sellerUserId, { claimId, sellerOwnerId = null, restoreOwnerId = false }) {
+async function undoOwnershipTransfer(homeId, sellerUserId, {
+  claimId, sellerOwnerId = null, sellerWasPrimary = false, restoreOwnerId = false,
+}) {
   const steps = [];
   if (restoreOwnerId) {
     steps.push(['home_owner_id', supabaseAdmin.from('Home').update({ owner_id: sellerUserId }).eq('id', homeId).is('owner_id', null)]);
   }
   if (sellerOwnerId) {
-    steps.push(['seller_owner', supabaseAdmin.from('HomeOwner').update({ owner_status: 'verified' })
+    steps.push(['seller_owner', supabaseAdmin.from('HomeOwner').update({ owner_status: 'verified', is_primary_owner: sellerWasPrimary })
       .eq('id', sellerOwnerId).eq('owner_status', 'revoked')]);
   }
   if (claimId) steps.push(['buyer_claim', supabaseAdmin.from('HomeOwnershipClaim').delete().eq('id', claimId).eq('home_id', homeId)]);
@@ -1745,7 +2094,7 @@ async function executeOwnershipTransfer(homeId, meta, sellerUserId) {
   const [ownerRead, homeRead] = await Promise.all([
     supabaseAdmin
       .from('HomeOwner')
-      .select('id')
+      .select('id, is_primary_owner')
       .eq('home_id', homeId)
       .eq('subject_id', sellerUserId)
       .eq('owner_status', 'verified')
@@ -1761,6 +2110,7 @@ async function executeOwnershipTransfer(homeId, meta, sellerUserId) {
     throw transferFailure(409, 'TRANSFER_SELLER_NOT_OWNER', 'Only a current verified owner can transfer this home.');
   }
   const sellerOwnerId = ownerRead.data.id;
+  const sellerWasPrimary = ownerRead.data.is_primary_owner === true;
   const sellerHeldOwnerId = homeRead.data.owner_id === sellerUserId;
 
   // 1. The buyer's claim first: until it exists, nothing else changes. A buyer who already holds an open owner
@@ -1810,10 +2160,11 @@ async function executeOwnershipTransfer(homeId, meta, sellerUserId) {
   // The undo removes the buyer's claim only when this transfer created it.
   const undoClaimId = claimCreated ? claimId : null;
 
-  // 2. Revoke the seller's ownership.
+  // 2. Revoke the seller's ownership. The revoked row gives up the primary flag, so the buyer's approval can take it
+  //    (homeowner_primary_unique counts revoked rows).
   const { data: revoked, error: revokeError } = await supabaseAdmin
     .from('HomeOwner')
-    .update({ owner_status: 'revoked', updated_at: now })
+    .update({ owner_status: 'revoked', is_primary_owner: false, updated_at: now })
     .eq('id', sellerOwnerId)
     .eq('owner_status', 'verified')
     .select('id');
@@ -1831,7 +2182,7 @@ async function executeOwnershipTransfer(homeId, meta, sellerUserId) {
       .eq('id', homeId)
       .eq('owner_id', sellerUserId);
     if (ownerIdError) {
-      await undoOwnershipTransfer(homeId, sellerUserId, { claimId: undoClaimId, sellerOwnerId });
+      await undoOwnershipTransfer(homeId, sellerUserId, { claimId: undoClaimId, sellerOwnerId, sellerWasPrimary });
       throw unavailable();
     }
   }
@@ -1840,7 +2191,9 @@ async function executeOwnershipTransfer(homeId, meta, sellerUserId) {
   try {
     await applyOccupancyTemplate(homeId, sellerUserId, 'member', 'verified');
   } catch (err) {
-    await undoOwnershipTransfer(homeId, sellerUserId, { claimId: undoClaimId, sellerOwnerId, restoreOwnerId: sellerHeldOwnerId });
+    await undoOwnershipTransfer(homeId, sellerUserId, {
+      claimId: undoClaimId, sellerOwnerId, sellerWasPrimary, restoreOwnerId: sellerHeldOwnerId,
+    });
     throw unavailable();
   }
 
@@ -1923,52 +2276,84 @@ async function checkAndExpireClaimWindow(homeId) {
 
 
 /**
- * Process constructive consent and expiration for pending quorum actions.
+ * Process constructive consent and expiration for pending quorum actions
+ * (when someone reads the votes or the security settings; no job does):
+ * - All tiers: expire if expires_at is reached (an approved change that
+ *   still isn't applied expires too)
  * - Tier 1-2: auto-approve if passive_approval_at is reached and no rejections
- * - All tiers: expire if expires_at is reached
+ * - Approved changes not applied yet: try again
+ * Every state change is a compare-and-set. Failures are logged and leave the
+ * votes as they are for the next read.
  */
 async function processQuorumExpirations(homeId, actorUserId) {
   try {
-    const { data: pendingActions } = await supabaseAdmin
+    const { data: pendingActions, error } = await supabaseAdmin
       .from('HomeQuorumAction')
       .select('*, votes:HomeQuorumVote(vote)')
       .eq('home_id', homeId)
-      .in('state', ['proposed', 'collecting_votes']);
+      .in('state', ['proposed', 'collecting_votes', 'approved']);
 
+    if (error) {
+      logger.warn('Failed to read quorum actions to settle (non-fatal)', { homeId, error: error.message });
+      return;
+    }
     if (!pendingActions || pendingActions.length === 0) return;
 
     const now = new Date();
+    const nowIso = now.toISOString();
 
-    for (const action of pendingActions) {
-      const votes = action.votes || [];
-      const rejections = votes.filter(v => v.vote === 'reject').length;
+    for (const { votes = [], ...action } of pendingActions) {
+      if (action.state === 'approved' && !quorumApplyDue(action, now.getTime())) continue;
+      const rejections = (votes || []).filter(v => v.vote === 'reject').length;
 
       // Check hard expiration
       if (action.expires_at && new Date(action.expires_at) <= now) {
-        await supabaseAdmin
+        const { data: expired, error: expireError } = await supabaseAdmin
           .from('HomeQuorumAction')
-          .update({ state: 'expired', updated_at: now.toISOString() })
-          .eq('id', action.id);
+          .update({ state: 'expired', updated_at: nowIso })
+          .eq('id', action.id)
+          .eq('state', action.state)
+          .eq('updated_at', action.updated_at)
+          .select('id');
 
-        await writeAuditLog(homeId, actorUserId, 'QUORUM_ACTION_EXPIRED', 'HomeQuorumAction', action.id, {
-          action_type: action.action_type,
-        });
+        if (expireError) {
+          logger.warn('Quorum action could not be expired (non-fatal)', { homeId, actionId: action.id, error: expireError.message });
+        } else if (expired?.length) {
+          await writeAuditLog(homeId, actorUserId, 'QUORUM_ACTION_EXPIRED', 'HomeQuorumAction', action.id, {
+            action_type: action.action_type,
+          });
+        }
+        continue;
+      }
+
+      if (action.state === 'approved') {
+        const outcome = await applyApprovedQuorumAction(homeId, action, actorUserId);
+        if (!outcome.applied) logger.warn('Approved quorum action still not applied', { homeId, actionId: action.id, errorCode: outcome.code });
         continue;
       }
 
       // Check constructive consent (Tier 1-2 only)
       if (action.passive_approval_at && action.risk_tier <= 2) {
         if (new Date(action.passive_approval_at) <= now && rejections === 0) {
-          await supabaseAdmin
+          const { data: approved, error: approveError } = await supabaseAdmin
             .from('HomeQuorumAction')
-            .update({ state: 'approved', updated_at: now.toISOString() })
-            .eq('id', action.id);
+            .update({ state: 'approved', metadata: approvedQuorumMetadata(action, nowIso), updated_at: nowIso })
+            .eq('id', action.id)
+            .eq('state', action.state)
+            .select('*');
 
-          await executeQuorumAction(homeId, action, actorUserId);
+          if (approveError) {
+            logger.warn('Quorum action could not be auto-approved (non-fatal)', { homeId, actionId: action.id, error: approveError.message });
+            continue;
+          }
+          if (!approved?.length) continue;
 
           await writeAuditLog(homeId, actorUserId, 'QUORUM_ACTION_AUTO_APPROVED', 'HomeQuorumAction', action.id, {
             action_type: action.action_type, reason: 'constructive_consent',
           });
+
+          const outcome = await applyApprovedQuorumAction(homeId, approved[0], actorUserId, { claimed: true });
+          if (!outcome.applied) logger.warn('Auto-approved quorum action not applied yet', { homeId, actionId: action.id, errorCode: outcome.code });
         }
       }
     }
