@@ -19,6 +19,7 @@ import ListingPickerModal from './ListingPickerModal';
 import ImageLightbox from './ImageLightbox';
 import ListingShareAddressButton from './ListingShareAddressButton';
 import ReportModal from '../ui/ReportModal';
+import ErrorState from '@/components/ui/ErrorState';
 import { confirmStore } from '../ui/confirm-store';
 import { toast } from '../ui/toast-store';
 import { launchFeatures } from '@/lib/featureFlags';
@@ -332,6 +333,16 @@ export default function ConversationView({
     archived: 'bg-surface-muted text-app-text-secondary',
   };
 
+  // The conversation could not be opened: say why instead of "No messages yet",
+  // as the room view does, and offer no composer.
+  const loadFailureMessage = chat.loadFailure && chat.messages.length === 0
+    ? chat.loadFailure === 'forbidden'
+      ? "You don't have access to this conversation."
+      : chat.loadFailure === 'notFound'
+        ? "This conversation isn't available."
+        : "We couldn't load this conversation. Check your connection and try again."
+    : null;
+
   return (
     <div className="bg-app-surface-sunken flex flex-col h-full min-h-0 overflow-hidden pb-[var(--fab-lift,0px)]">
       {/* Header */}
@@ -410,6 +421,15 @@ export default function ConversationView({
         </div>
       )}
 
+      {loadFailureMessage ? (
+        <div className="flex-1 min-h-0 flex flex-col justify-center">
+          <ErrorState
+            message={loadFailureMessage}
+            onRetry={chat.loadFailure === 'unavailable' ? chat.retryLoad : undefined}
+          />
+        </div>
+      ) : (
+      <>
       {/* Messages — flex-1 min-h-0 so this area gets a bounded height and can scroll */}
       <div className="flex-1 min-h-0 flex flex-col">
         <ChatMessageList
@@ -469,6 +489,8 @@ export default function ConversationView({
         onSaveEdit={chat.saveEdit}
         lockedNote={chat.sendRefusal}
       />
+      </>
+      )}
 
       {/* Gig Picker Modal */}
       <GigPickerModal
