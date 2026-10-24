@@ -15,9 +15,15 @@ Local archive refs pin each captured old PR head. Private snapshots, manifests, 
 | iOS | [#2803](https://github.com/WangPantopus/skinny-pantopus/pull/2803) · `codex/chat-consolidated-ios` | `3837b1f96` | 32 |
 | Android | [#2806](https://github.com/WangPantopus/skinny-pantopus/pull/2806) · `codex/chat-consolidated-android` | `7c2dcb7d9` | 26 |
 
-All 223 migration files match the backend candidate bytes. Every file present in running backend `ba1a00e3d` also matches byte-for-byte. `20261024002500` remained unapplied throughout consolidation, then was reviewed and applied only to the owned local database for verification. It is now immutable alongside approved topic state and all earlier applied migrations.
+All 223 migration files match the backend candidate bytes. At consolidation, every migration file present in the then-running backend `ba1a00e3d` also matched byte-for-byte. `20261024002500` remained unapplied throughout consolidation, then was reviewed and applied only to the owned local database for verification. It is now immutable alongside approved topic state and all earlier applied migrations.
 
 The new master baseline adds native URL-query redaction and its documentation; these upstream changes are retained and are not counted as chat implementation. No conflicts or authored test-code changes were needed.
+
+## Final continuation checkpoint — October 24, 2026
+
+The [latest detailed handoff](chat-performance-handoff-2026-10-24.md) is authoritative for current source, artifact, CI and remaining-work status. The preserved tips in the table above are consolidation baselines, not the latest repair heads. Current implementation checkpoints are backend `495493f56`, web `52bcf5ab7`, iOS `aed5ac098` and Android `5732fc834`; backend documentation follows in a later commit. All four replacements remain open drafts, unmerged.
+
+Final preservation recheck found all 131 original archive refs at their captured full heads, all 131 originals closed as superseded, and all 223 original migration files byte-identical. The later local migrations `20261024010000` and `20261024011500`, as well as `20261024002500`, are now applied and immutable. They add transactional writer admission and preserve existing actor-denial precedence; no new table was created. Both owned APIs run the backend implementation checkpoint from e0bb. New client sources remain ahead of exact locally verified artifacts. Existing check requirements and historical failures are retained; CI is not green. No hosted changes or release occurred.
 
 ## Old-to-new mapping
 

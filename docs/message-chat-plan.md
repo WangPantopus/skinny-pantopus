@@ -1,10 +1,10 @@
 # Chat reliability and latency repairs — October 23, 2026
 
-**Continuation handoff:** [Messages / Chat performance handoff — October 23](chat-performance-handoff-2026-10-23.md) records the final PR inventory, exact artifacts, remaining work and next-session prompt. Later verification distinctions in that handoff supersede progress statements below.
+**Continuation handoff:** [Messages / Chat consolidated handoff — October 24](chat-performance-handoff-2026-10-24.md) records the final PR inventory, exact artifacts, remaining work and next-session prompt. Later verification distinctions in that handoff supersede progress statements below.
 
 The founder requested repairs in the real web, iOS and Android apps, preserving the current design, with no unit tests or coverage work. This section tracks the current work; the older inventory below is background and contains items already shipped.
 
-Ownership: `codex/chat-reliability-backend` owns backend/database integration; `codex/chat-web-reliability`, `codex/chat-ios-reliability` and `codex/chat-android-reliability` own their clients. Shared TypeScript chat API changes belong to the web session. Other open LocalProfile/security work is preserved. No hosted configuration or database changes are part of local verification.
+Ownership: `codex/chat-consolidated-backend` (#2804) owns backend/database integration; `codex/chat-consolidated-web` (#2805), `codex/chat-consolidated-ios` (#2803) and `codex/chat-consolidated-android` (#2806) own their clients. Shared TypeScript chat API changes belong to the web session. Other open LocalProfile/security work is preserved. No hosted configuration or database changes are part of local verification.
 
 ## Full person-conversation scope
 

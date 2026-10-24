@@ -1,5 +1,7 @@
 # Messages / Chat performance and reliability handoff — October 23, 2026
 
+**Superseded checkpoint:** Read the [October 24 consolidated handoff](chat-performance-handoff-2026-10-24.md) first for the current four drafts, runtime, applied migrations, exact artifacts, CI and continuation prompt. All 131 originals below are now closed as superseded; their history is preserved. The older runtime/backlog statements below are historical. Nothing has been merged or deployed.
+
 **Founder amendment — October 23: consolidate first.** The next session must first preserve and consolidate this stack into **four draft implementation PRs: backend/database, web, iOS and Android**, then finish the remaining repairs and verification on those branches. This supersedes earlier instructions to keep adding small stacked PRs. Preserve all changes, original refs, artifacts and evidence. **Do not merge any PR or deploy, even after green CI.** This amendment originally updated the plan only; the continuation checkpoint below records the subsequent consolidation.
 
 **Final handoff checkpoint: October 23, 2026, approximately 23:45 UTC.** The founder requested this handoff after the resumed repair/verification session. This is a continuation checkpoint, not a release approval.
