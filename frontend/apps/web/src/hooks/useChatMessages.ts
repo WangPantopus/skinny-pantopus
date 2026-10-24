@@ -45,7 +45,12 @@ function messageRevision(message: Partial<ChatMessage>): number {
 }
 
 function mergeMessageRecord(existing: ChatMessage | undefined, incoming: ChatMessage): ChatMessage {
-  if (existing && messageRevision(existing) > messageRevision(incoming)) return existing;
+  if (existing && messageRevision(existing) > messageRevision(incoming)) {
+    // Text/reactions and peer receipts have independent revisions. An older
+    // message body can still carry a newer authorized acknowledgement.
+    return incoming.read_at && (!existing.read_at || Date.parse(incoming.read_at) > Date.parse(existing.read_at))
+      ? { ...existing, read_at: incoming.read_at } : existing;
+  }
   const merged = { ...existing, ...incoming } as ChatMessage;
   // Receipt state is monotonic even when an equal-version history row races a
   // newer peer acknowledgement (read state has its own participant cursor).
@@ -468,12 +473,17 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
   // Socket edits/deletes/new sends that arrive during a history read win over its
   // older snapshot. Reset per scope; no message content is persisted here.
   const liveChangesRef = useRef(new Map<string, number>());
+  const liveReceiptsRef = useRef(new Map<string, number>());
   const changeVersionRef = useRef(0);
   const reactionRequestsRef = useRef(new Map<string, Promise<void>>());
   const pendingReactionsRef = useRef(new Map<string, { intent: symbol; wanted: boolean; scope: number }>());
   const noteLiveChange = useCallback((id: string) => {
     liveChangesRef.current.set(String(id), ++changeVersionRef.current);
   }, []);
+  const noteLiveReceipt = useCallback((id: string) => {
+    noteLiveChange(id);
+    liveReceiptsRef.current.set(String(id), changeVersionRef.current);
+  }, [noteLiveChange]);
 
   useEffect(() => onChatHistoryRetired((event) => {
     if (!currentUserId || event.account !== JSON.stringify([api.getApiBaseUrl(), currentUserId]) || !isCurrentScope()) return;
@@ -563,12 +573,21 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
           refreshed = mergeMessages(page.messages, refreshed);
         }
         const changedAfterStart = (id: string) => (liveChangesRef.current.get(String(id)) || 0) > startedVersion;
+        const canonicalRows = new Map(refreshed.filter(survivesDeletion).map((message) => [String(message.id), message]));
         setRetainedHistoryGeneration(historyGeneration ?? -1);
         historyDeniedScopeRef.current = null;
         setLoadFailure(null);
         setMessages((previous) => mergeMessages(
           previous.filter((m) => isUnsent(m) || changedAfterStart(String(m.id))
-            || (page.hasMore && refreshed[0] && compareMessages(m, refreshed[0]) < 0)),
+            || (page.hasMore && refreshed[0] && compareMessages(m, refreshed[0]) < 0)).map((message) => {
+            const canonicalRow = canonicalRows.get(String(message.id));
+            // A join ACK can add a row while canonical history is pending.
+            // Keep its newer content, but still apply the history receipt;
+            // only a later peer acknowledgement supersedes that receipt.
+            return canonicalRow && !isUnsent(message)
+              && (liveReceiptsRef.current.get(String(message.id)) || 0) <= startedVersion
+              ? { ...message, read_at: canonicalRow.read_at ?? null } : message;
+          }),
           refreshed.filter((m) => !changedAfterStart(String(m.id)) && survivesDeletion(m)),
         ));
         syncCursorsRef.current = firstPageCursors;
@@ -814,6 +833,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     setLoadFailure(null);
     shownKeyRef.current = cacheKeyId;
     liveChangesRef.current.clear();
+    liveReceiptsRef.current.clear();
     reactionRequestsRef.current.clear();
     pendingReactionsRef.current.clear();
     visibleThroughRef.current.clear();
@@ -1109,10 +1129,10 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
       if (isUnsent(message) || message.room_id !== data.roomId
         || (message.user_id || message.sender_id) !== (asBusinessUserId || currentUserId)
         || (through ? compareMessages(message, through) > 0 : messageTime(message) > Date.parse(data.readAt!))) return message;
-      noteLiveChange(String(message.id));
+      noteLiveReceipt(String(message.id));
       return { ...message, read_at: data.readAt };
     }));
-  }, [receiptPeerId, asBusinessUserId, currentUserId, isCurrentScope, noteLiveChange, refresh]);
+  }, [receiptPeerId, asBusinessUserId, currentUserId, isCurrentScope, noteLiveReceipt, refresh]);
   useSocketEvent('messages:read', handleMessagesRead);
 
   const handleTopicMessagesRead = useCallback((data: { userId?: string; roomId?: string; topicId?: string;
@@ -1129,10 +1149,10 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
         || String(message.topic_id || '') !== data.topicId
         || (message.user_id || message.sender_id) !== (asBusinessUserId || currentUserId)
         || compareMessages(message, boundary) > 0) return message;
-      noteLiveChange(String(message.id));
+      noteLiveReceipt(String(message.id));
       return mergeMessageRecord(message, { ...message, read_at: data.readAt });
     }));
-  }, [receiptPeerId, asBusinessUserId, currentUserId, isCurrentScope, noteLiveChange, refresh]);
+  }, [receiptPeerId, asBusinessUserId, currentUserId, isCurrentScope, noteLiveReceipt, refresh]);
   useSocketEvent('messages:topic_read', handleTopicMessagesRead);
 
   useEffect(() => {
