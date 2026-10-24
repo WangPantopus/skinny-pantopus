@@ -3462,20 +3462,17 @@ router.get('/files/:fileId', tokenFromQuery, verifyToken, async (req, res) => {
       .then(() => {})
       .catch(() => {});
 
-    // Photos are served here, under this stable address, after the same membership check: a chat file's
-    // bytes never change under its id, so the apps' image caches keep it (private, a year, immutable) and a
-    // repeat ask answers 304. A browser signed in by cookie keeps no copy on disk (Instant Screens contract §5).
+    // Received media belongs in each client's explicit encrypted,
+    // account-scoped store. Generic HTTP/OS image caches must not retain a
+    // plaintext copy that outlives sign-out or a room's access generation.
     if (STREAMED_CHAT_IMAGE_TYPES.has(file.mime_type)) {
-      res.set('Cache-Control', req._authMethod === 'cookie' ? 'private, no-store' : 'private, max-age=31536000, immutable');
-      res.set('ETag', `"chat-file-${file.id}${thumbnail ? '-thumbnail-v1' : ''}"`);
-      if (req.fresh) return res.status(304).end();
       let object;
       try {
         if (thumbnail) {
           const buffer = await require('../services/chatThumbnails').getThumbnail(file);
           if (res.destroyed) return;
           trackAccess();
-          return res.type('image/webp').send(buffer);
+          return res.type('image/webp').set('Content-Length', String(buffer.length)).end(buffer);
         }
         object = await s3Service.getObjectStream(file.file_path);
       } catch (storageErr) {
@@ -3490,7 +3487,8 @@ router.get('/files/:fileId', tokenFromQuery, verifyToken, async (req, res) => {
       if (Number.isSafeInteger(object.contentLength)) res.set('Content-Length', String(object.contentLength));
       trackAccess();
       return pipeline(object.body, res).catch((streamErr) => {
-        logger.warn('Chat file stream ended early', { requestId: req.requestId, fileId, error: streamErr.message });
+        logger.warn('Chat file stream ended early', { requestId: req.requestId,
+          interrupted: streamErr.code === 'ERR_STREAM_PREMATURE_CLOSE' });
       });
     }
 
@@ -3524,10 +3522,12 @@ router.get('/files/:fileId', tokenFromQuery, verifyToken, async (req, res) => {
     // A player asks for many ranges per view: count the first.
     if (!range || range.start === 0) trackAccess();
     return pipeline(object.body, res).catch((streamErr) => {
-      logger.warn('Chat file stream ended early', { requestId: req.requestId, fileId, error: streamErr.message });
+      logger.warn('Chat file stream ended early', { requestId: req.requestId,
+        interrupted: streamErr.code === 'ERR_STREAM_PREMATURE_CLOSE' });
     });
   } catch (err) {
-    logger.error('Chat file download error', { requestId: req.requestId, userId: req.user?.id, fileId: req.params.fileId, error: err.message });
+    logger.error('Chat file download error', { requestId: req.requestId,
+      unavailable: err.status === 503 || err.name === 'AbortError' });
     if (res.destroyed || res.headersSent) return;
     res.set('Cache-Control', 'private, no-store');
     res.removeHeader('ETag');
