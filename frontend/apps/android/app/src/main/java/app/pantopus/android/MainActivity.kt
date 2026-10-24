@@ -45,12 +45,10 @@ import app.pantopus.android.ui.navigation.PantopusNavHost
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusTheme
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -80,8 +78,7 @@ class MainActivity : FragmentActivity() {
     /** Live chat reconnects as soon as the network returns or the app comes back, not after socket.io's backoff. */
     @Inject lateinit var socketManager: SocketManager
 
-    /** Built off the main thread: its first state is a connectivity query, which is slow while the app starts. */
-    @Inject lateinit var networkMonitor: dagger.Lazy<NetworkMonitor>
+    @Inject lateinit var networkMonitor: NetworkMonitor
 
     @Inject lateinit var appLockManager: AppLockManager
 
@@ -137,10 +134,9 @@ class MainActivity : FragmentActivity() {
             authRepository.state.collect { pilotEvents.authChanged() }
         }
         lifecycleScope.launch {
-            val online = withContext(Dispatchers.IO) { networkMonitor.get().isOnline }
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 // The value present on start is skipped: onStart already asked for a reconnect.
-                online.drop(1).filter { it }.collect { socketManager.reconnectNow() }
+                networkMonitor.isOnline.drop(1).filter { it }.collect { socketManager.reconnectNow() }
             }
         }
         // A recreated Activity retains its navigation/ViewModel state. Replaying the
