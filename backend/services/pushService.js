@@ -139,12 +139,14 @@ async function sendToUser(userId, { title, body, data }) {
 }
 
 /** Durable relay variant: no tokens is settled; DB/unknown provider results retry. */
-async function sendToUserWithReceipt(userId, message) {
-  const { data: rows, error } = await supabaseAdmin.from('PushToken')
-    .select('token, platform, provider').eq('user_id', userId);
+async function sendToUserWithReceipt(userId, message, { settledRegistrationIds = null } = {}) {
+  const { data: registrations, error } = await supabaseAdmin.from('PushToken')
+    .select(settledRegistrationIds ? 'id, token, platform, provider' : 'token, platform, provider').eq('user_id', userId);
+  const settled = new Set(settledRegistrationIds || []);
+  const rows = registrations?.filter((row) => !settled.has(row.id));
   if (error || !Array.isArray(rows)) throw new Error('Push registration read unavailable');
-  if (rows.length === 0) return { acceptedCount: 0, unresolvedCount: 0 };
-  const result = await dispatchToTokens(rows, senders, message, { receipt: true });
+  if (rows.length === 0) return { acceptedCount: 0, unresolvedCount: 0, ...(settledRegistrationIds ? { acceptedRegistrationIds: [] } : {}) };
+  const result = await dispatchToTokens(rows, senders, message, { receipt: true, registrationReceipts: !!settledRegistrationIds });
   if (result.invalidTokens.length > 0) {
     // Bind cleanup to the current recipient: a shared device can change owners
     // while the provider is processing this request.
@@ -152,7 +154,9 @@ async function sendToUserWithReceipt(userId, message) {
       .eq('user_id', userId).in('token', result.invalidTokens);
     if (pruneError) logger.warn('Deferred invalid push token cleanup', { count: result.invalidTokens.length });
   }
-  return { acceptedCount: result.acceptedCount, unresolvedCount: result.unresolvedCount };
+  const accepted = new Set(result.acceptedTokens || []);
+  return { acceptedCount: result.acceptedCount, unresolvedCount: result.unresolvedCount,
+    ...(settledRegistrationIds ? { acceptedRegistrationIds: rows.filter((row) => accepted.has(row.token)).map((row) => row.id) } : {}) };
 }
 
 /**

@@ -172,6 +172,11 @@ const io = socketIo(server, {
   // redirects /socket.io/ to /socket.io, which used to 404 here, so the web's
   // realtime never connected off localhost. The apps keep the default path.
   addTrailingSlash: false,
+  // A connection that dies silently (a phone changing networks, a NAT dropping it) is noticed by
+  // both ends after pingInterval + pingTimeout. The defaults (25 s + 20 s) left a client up to about
+  // 45 s without live messages; a ping is a few bytes and runs only while a socket is open.
+  pingInterval: 10_000,
+  pingTimeout: 10_000,
   cors: {
     origin: (origin, callback) => {
       if (isAllowedOrigin(origin)) return callback(null, true);
@@ -615,6 +620,8 @@ server.listen(PORT, HOST, async () => {
   // Compile the AI response schemas ahead of the first draft after a quiet day (staging and production only).
   if (process.env.NODE_ENV !== 'test') require('./services/ai/warmup').startSchemaWarmup();
 
+  require('./services/chatPushDelivery').start();
+
   // Start pg-boss queue workers (Tier 2 jobs)
   // Set PGBOSS_ENABLED=false when running a separate worker container.
   let pgBossBackedJobsStarted = false;
@@ -649,6 +656,7 @@ const gracefulShutdown = async (signal) => {
   await stopPgBoss().catch((err) => {
     logger.error('[pg-boss] Error during shutdown:', { error: err.message });
   });
+  require('./services/chatPushDelivery').stop();
   await require('./services/syncChangedService').stop();
 
   server.close(() => {
