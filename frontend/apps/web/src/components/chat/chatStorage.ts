@@ -152,6 +152,11 @@ export function isChatStorageCurrent(scope: ChatStorageScope): boolean {
 
 export function suspendChatStorage(): void { generation++; active = null; }
 
+/** True while the active storage scope belongs to this account and is current. */
+export function isChatStorageActiveFor(accountId: string): boolean {
+  return !!active && active.account === JSON.stringify([getApiBaseUrl(), accountId]) && isChatStorageCurrent(active);
+}
+
 function metadata(db: IDBDatabase): Promise<Metadata[]> {
   return new Promise((resolve, reject) => {
     const transaction = db.transaction('metadata');

@@ -1,6 +1,6 @@
 import * as api from '@pantopus/api';
 import type { ChatMessage, ChatRoomWithDetails } from '@pantopus/types';
-import { activateChatStorage, assertChatOutboxCapacity, consumeChatDraft, deleteChatRecords, isChatStorageCurrent, listChatRecordKeys, readChatBytes,
+import { activateChatStorage, assertChatOutboxCapacity, consumeChatDraft, deleteChatRecords, isChatStorageActiveFor, isChatStorageCurrent, listChatRecordKeys, readChatBytes,
   readChatRecord, suspendChatStorage, writeChatRecords, type ChatDraftCommit, type ChatStorageScope } from './chatStorage';
 
 interface PendingFile { key: string; name: string; type: string; lastModified: number }
@@ -93,7 +93,10 @@ function schedule(delay = 0) {
   if (current(scope)) timer = setTimeout(() => { void drain(); }, delay);
 }
 
-export function suspendChatOutbox(): void {
+/** Retire this tab's outbox state. `keepStorageFor` keeps an already active
+ * storage scope of that same account, so its in-flight reads (a saved inbox or
+ * conversation being restored) are not cancelled when the outbox starts. */
+export function suspendChatOutbox(keepStorageFor?: string): void {
   clearTimeout(timer);
   window.removeEventListener('online', wake);
   window.removeEventListener('focus', wake);
@@ -103,7 +106,7 @@ export function suspendChatOutbox(): void {
   pending = [];
   staged = [];
   readVersion++;
-  suspendChatStorage();
+  if (!keepStorageFor || !isChatStorageActiveFor(keepStorageFor)) suspendChatStorage();
   publish();
 }
 function wake() { void resumeChatOutbox(); }
@@ -131,7 +134,10 @@ export async function resumeChatOutbox(): Promise<void> {
 export function startChatOutbox(actorId: string): Promise<void> {
   if (accountId === actorId && current(scope)) return starting ?? Promise.resolve();
   if (accountId === actorId && starting) return starting;
-  suspendChatOutbox();
+  // The first start after a page load used to suspend the storage scope too,
+  // cancelling a saved inbox or conversation being restored for this same
+  // account, so cached rows did not appear until the network answered.
+  suspendChatOutbox(actorId);
   accountId = actorId;
   const attempt = activateChatStorage(actorId).then(async (saved) => {
     if (accountId !== actorId || !isChatStorageCurrent(saved)) return;
