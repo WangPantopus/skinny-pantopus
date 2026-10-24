@@ -15,8 +15,12 @@
 // ============================================================
 
 const logger = require('../../utils/logger');
+const { readCappedJson } = require('../../utils/cappedBody');
 
 const FETCH_TIMEOUT_MS = 8000;
+// A gridpoint forecast is about 200 KB; a point lookup is a few KB.
+const MAX_BODY_BYTES = 4 * 1024 * 1024;
+const NWS_ORIGIN = 'https://api.weather.gov';
 // NWS refuses requests without a contact User-Agent.
 const USER_AGENT = '(Pantopus, admin@pantopus.app)';
 
@@ -38,12 +42,23 @@ async function fetchJson(url) {
   try {
     const res = await fetch(url, {
       signal: controller.signal,
+      redirect: 'error',
       headers: { 'User-Agent': USER_AGENT, Accept: 'application/geo+json' },
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
+    return await readCappedJson(res, MAX_BODY_BYTES, controller.signal);
   } finally {
     clearTimeout(timer);
+  }
+}
+
+/** Whether a URL taken from an NWS answer is on NWS's own API. */
+function isNwsApiUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.origin === NWS_ORIGIN && !url.username && !url.password;
+  } catch {
+    return false;
   }
 }
 
@@ -65,10 +80,14 @@ async function fetchHeatIndexDays(latitude, longitude, { now = Date.now() } = {}
   const lng = Number(longitude);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
   try {
-    const point = await fetchJson(`https://api.weather.gov/points/${lat.toFixed(4)},${lng.toFixed(4)}`);
+    const point = await fetchJson(`${NWS_ORIGIN}/points/${lat.toFixed(4)},${lng.toFixed(4)}`);
     const gridUrl = point && point.properties && point.properties.forecastGridData;
     const timeZone = point && point.properties && point.properties.timeZone;
     if (!gridUrl || !timeZone) return null;
+    if (!isNwsApiUrl(gridUrl)) {
+      logger.warn('nwsHeatIndex: grid URL is not on api.weather.gov');
+      return null;
+    }
 
     const grid = await fetchJson(gridUrl);
     const values = grid && grid.properties && grid.properties.heatIndex && grid.properties.heatIndex.values;
