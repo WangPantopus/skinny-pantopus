@@ -112,7 +112,11 @@ final class SocketClient {
                 .compress,
                 .reconnects(true),
                 .reconnectAttempts(-1),
-                .reconnectWait(2)
+                .reconnectWait(2),
+                // The library's default 30 s cap left a chat without live
+                // messages for up to 30 s after a server or network outage
+                // ended (measured 27 s after a 65 s outage).
+                .reconnectWaitMax(5)
             ]
         )
         self.manager = manager
@@ -179,9 +183,8 @@ final class SocketClient {
     }
 
     /// Try at once when the app returns to the foreground or the network
-    /// comes back. Socket.IO's own backoff grows to 30 s during a long
-    /// outage, and live messages waited that long after the connection was
-    /// usable again.
+    /// comes back, instead of waiting out the rest of Socket.IO's backoff
+    /// (up to `reconnectWaitMax` between attempts).
     func reconnectNowIfWaiting() {
         guard isRetryingAfterDrop, !stoppedForRevocation, let token = authToken else { return }
         disconnectTransport()

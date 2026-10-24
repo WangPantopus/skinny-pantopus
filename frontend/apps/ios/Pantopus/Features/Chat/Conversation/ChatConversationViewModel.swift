@@ -3627,7 +3627,9 @@ public final class ChatConversationViewModel {
                 guard !Task.isCancelled else { return }
                 guard let self else { return }
                 await refresh()
-                delay = min(delay * 2, 30)
+                // While the socket is down an open thread keeps polling at
+                // least every 10 s, so it catches up soon after the outage.
+                delay = min(delay * 2, 10)
             }
         }
     }
