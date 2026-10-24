@@ -12,8 +12,8 @@ import type { UnifiedConversationItem } from '@pantopus/types';
 import { queryKeys } from '@/lib/query-keys';
 import { fetchMe } from '@/lib/me';
 import { useSocket } from '@/hooks/useSocket';
-import { activateChatStorage, captureChatHistoryFence, deleteChatRecords, isChatStorageActiveFor, readCachedChatAccountId,
-  readChatRecord, writeChatRecords } from '@/components/chat/chatStorage';
+import { activateChatStorage, captureChatHistoryFence, deleteChatRecords, isChatStorageActiveFor, onChatHistoryRetired,
+  readCachedChatAccountId, readChatRecord, writeChatRecords, type ChatStorageScope } from '@/components/chat/chatStorage';
 
 type ConversationTail = { generation?: string; rows: UnifiedConversationItem[]; nextCursor: string | null; hasMore: boolean };
 export type ConversationsReply = Awaited<ReturnType<typeof api.chat.getUnifiedConversations>> & { refreshId?: string; keptTail?: ConversationTail };
@@ -50,6 +50,29 @@ export async function retainInboxAfterRetirement(client: QueryClient, event: { a
   if (typeof accountId !== 'string' || !isChatStorageActiveFor(accountId)) return;
   await retainInbox(reply, accountId, api.authSessionMarker(), { account: event.account, generation: event.generation },
     () => client.getQueryData(queryKeys.conversations()) === reply);
+}
+
+async function readSavedInbox(marker: string, live: () => boolean = () => true): Promise<{ saved: SavedInbox; scope: ChatStorageScope } | null> {
+  const actor = await readCachedChatAccountId();
+  if (!actor || !live() || marker !== api.authSessionMarker()) return null;
+  const scope = await activateChatStorage(actor);
+  const saved = await readChatRecord<SavedInbox>(scope, 'history', INBOX_KEY);
+  return marker === api.authSessionMarker() && saved?.inbox && Array.isArray(saved.inbox.conversations) ? { saved, scope } : null;
+}
+
+// One read of the saved inbox, started while the Messages page's code loads.
+// A cold load then shows it as the page mounts instead of starting the read
+// afterwards. It serves only this session, briefly, and only until a deletion
+// or access change retires history.
+const EARLY_INBOX_MS = 5000;
+let earlyInbox: { marker: string; at: number; read: ReturnType<typeof readSavedInbox> } | null = null;
+let forgetsEarlyInbox = false;
+
+export function preloadSavedInbox(): void {
+  if (typeof window === 'undefined' || !api.getAuthToken()) return;
+  if (!forgetsEarlyInbox) { forgetsEarlyInbox = true; onChatHistoryRetired(() => { earlyInbox = null; }); }
+  const marker = api.authSessionMarker();
+  earlyInbox = { marker, at: Date.now(), read: readSavedInbox(marker).catch(() => null) };
 }
 
 export function conversationsQuery(search = '') {
@@ -214,11 +237,12 @@ export function useConversationPages(search = '') {
     const marker = api.authSessionMarker();
     setRestored(false);
     void (async () => {
-      const actor = await readCachedChatAccountId();
-      if (!actor || cancelled || marker !== api.authSessionMarker()) return;
-      const scope = await activateChatStorage(actor);
-      const saved = await readChatRecord<SavedInbox>(scope, 'history', INBOX_KEY);
-      if (cancelled || marker !== api.authSessionMarker() || !saved?.inbox || !Array.isArray(saved.inbox.conversations)) return;
+      const early = earlyInbox?.marker === marker && Date.now() - earlyInbox.at < EARLY_INBOX_MS ? earlyInbox : null;
+      let found = early ? await early.read : null;
+      // Read again when there was no early read or history was retired since.
+      if (!early || earlyInbox !== early) found = await readSavedInbox(marker, () => !cancelled);
+      if (cancelled || marker !== api.authSessionMarker() || !found) return;
+      const { saved, scope } = found;
       const state = client.getQueryState(conversationsQuery().queryKey);
       const status = (state?.error as { statusCode?: number } | null)?.statusCode;
       if (status === 401 || status === 403 || status === 404) {
