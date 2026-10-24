@@ -37,6 +37,10 @@ private final class ChatScrollMetrics {
     /// from a place restore that did not take.
     var velocity: CGFloat = 0
     var sampledAt: CFTimeInterval = 0
+    var viewportHeight: CGFloat = 0
+    /// The reader sent a message while rows were joining above: the joining
+    /// stops and the timeline goes to the latest message after it.
+    var pinsBottomAfterJoin = false
 }
 
 /// What the timeline needs to keep the reader's place when rows join above.
@@ -1208,12 +1212,12 @@ extension ChatConversationView {
                             Color.clear
                                 .onAppear {
                                     handleScrollGeometry(
-                                        frame: frame, viewportHeight: geo.size.height, rows: rows, shown: shown, proxy: proxy
+                                        frame: frame, viewportHeight: geo.size.height, shown: shown, proxy: proxy
                                     )
                                 }
                                 .onChange(of: frame) { _, newFrame in
                                     handleScrollGeometry(
-                                        frame: newFrame, viewportHeight: geo.size.height, rows: rows, shown: shown, proxy: proxy
+                                        frame: newFrame, viewportHeight: geo.size.height, shown: shown, proxy: proxy
                                     )
                                 }
                         }
@@ -1239,7 +1243,7 @@ extension ChatConversationView {
                     // re-fires — kick one fetch so backward pagination
                     // still works there.
                     if scrollMetrics.distanceFromTop < 200 {
-                        extendUpward(shown, rows: rows)
+                        extendUpward(shown, proxy: proxy)
                     }
                 }
                 .task { await landAtLatestMessage(proxy) }
@@ -1269,16 +1273,18 @@ extension ChatConversationView {
     private func handleScrollGeometry(
         frame: CGRect,
         viewportHeight: CGFloat,
-        rows: [ChatTimelineRow],
         shown: ArraySlice<ChatTimelineRow>,
         proxy: ScrollViewProxy
     ) {
         let previous = (maxY: scrollMetrics.contentMaxY, height: scrollMetrics.contentHeight)
         noteScrollMotion(frame, previous: previous)
+        scrollMetrics.viewportHeight = viewportHeight
         scrollMetrics.distanceFromTop = -frame.minY
         scrollMetrics.contentMaxY = frame.maxY
         scrollMetrics.contentHeight = frame.height
-        if let pending = scrollMetrics.pendingPrepend, frame.height > previous.height + 1,
+        // Rows joined above (the content grew), or an older page landed and
+        // took the divider above the first message with it (it shrank).
+        if let pending = scrollMetrics.pendingPrepend, abs(frame.height - previous.height) > 1,
            pending.olderPagesApplied.map({ viewModel.olderPagesApplied > $0 }) ?? true {
             scrollMetrics.pendingPrepend = nil
             keepPlace(
@@ -1297,7 +1303,7 @@ extension ChatConversationView {
         guard isLoadOlderArmed,
               !isLoadingOlder,
               scrollMetrics.distanceFromTop < 200 else { return }
-        extendUpward(shown, rows: rows)
+        extendUpward(shown, proxy: proxy)
     }
 
     /// Frames that only scrolled set the velocity; a pause clears it.
@@ -1315,15 +1321,23 @@ extension ChatConversationView {
 
     /// About two screens of rows: the first frame and a first scroll up.
     private static let openingRowWindow = 40
-    /// Held rows join a page (60 messages) at a time.
+    /// Held rows join up to a page (60 messages) per trip to the top, a few
+    /// rows per layout pass so that no frame lays out a page of rows. A pass
+    /// aims at about 40 ms on this device.
     private static let revealChunk = 60
+    private static let revealStepRows = 4...24
+    private static let revealStepTargetMs: Double = 40
     /// A join smaller than this is never re-applied by the place check.
     private static let smallestReappliedJoin: CGFloat = 64
 
-    /// The rows this frame renders: every loaded row from the window's floor on.
+    /// The rows this frame renders: every loaded row from the window's floor
+    /// on, with the dividers just above its first message.
     private func renderedRows(_ rows: [ChatTimelineRow]) -> ArraySlice<ChatTimelineRow> {
         let floor = openingWindowDecided ? renderFloorId : openingFloorId(in: rows)
-        guard let floor, let start = rows.firstIndex(where: { $0.id == floor }) else { return rows[...] }
+        guard let floor, var start = rows.firstIndex(where: { $0.id == floor }) else { return rows[...] }
+        while start > rows.startIndex, !Self.isBubble(rows[start - 1]) {
+            start -= 1
+        }
         return rows[start...]
     }
 
@@ -1349,8 +1363,7 @@ extension ChatConversationView {
     private func setWindowFloor(_ floor: String?, rows: [ChatTimelineRow]) {
         renderFloorId = floor
         openingWindowDecided = true
-        let start = floor.flatMap { id in rows.firstIndex { $0.id == id } } ?? rows.startIndex
-        ChatPerformance.mark("RenderWindow", rows: rows.count - start)
+        ChatPerformance.mark("RenderWindow", rows: renderedRows(rows).count)
     }
 
     /// New rows at the bottom while the reader is there (a long gap filled on
@@ -1365,37 +1378,84 @@ extension ChatConversationView {
 
     /// Up past the top of what is rendered: the loaded rows the window holds
     /// back join first, then the next older page.
-    private func extendUpward(_ shown: ArraySlice<ChatTimelineRow>, rows: [ChatTimelineRow]) {
+    private func extendUpward(_ shown: ArraySlice<ChatTimelineRow>, proxy: ScrollViewProxy) {
         if renderFloorId != nil {
-            revealHeldRowsPreservingPosition(shown, rows: rows)
+            revealHeldRowsPreservingPosition(proxy: proxy)
         } else if viewModel.canLoadOlder {
-            loadOlderPreservingPosition(rows: shown)
+            loadOlderPreservingPosition(rows: shown, proxy: proxy)
         }
     }
 
-    /// The held-back rows join above the viewport the way an older page
-    /// does, keeping the rows on screen where they are.
-    private func revealHeldRowsPreservingPosition(_ shown: ArraySlice<ChatTimelineRow>, rows: [ChatTimelineRow]) {
+    /// Held-back rows join above the viewport, up to a page per trip to the
+    /// top, keeping the rows on screen where they are.
+    private func revealHeldRowsPreservingPosition(proxy: ScrollViewProxy) {
         guard !isLoadingOlder else { return }
         isLoadingOlder = true
-        let interval = ChatPerformance.signposter.beginInterval("RevealRows")
+        Task {
+            let interval = ChatPerformance.signposter.beginInterval("RevealRows")
+            let joined = await joinHeldRows(upTo: Self.revealChunk)
+            ChatPerformance.end("RevealRows", interval, rows: joined)
+            finishJoining(proxy)
+        }
+    }
+
+    /// Joining is over: a message sent meanwhile is shown now.
+    private func finishJoining(_ proxy: ScrollViewProxy) {
+        isLoadingOlder = false
+        guard scrollMetrics.pinsBottomAfterJoin else { return }
+        scrollMetrics.pinsBottomAfterJoin = false
+        proxy.scrollTo(Self.bottomAnchorId, anchor: .bottom)
+    }
+
+    /// Lowers the window's floor a few rows per layout pass until `limit`
+    /// rows joined, none are held, or two screens of rows sit above the
+    /// viewport; each pass keeps the place. A pass's size follows how long
+    /// the last one took. Returns the rows that joined.
+    private func joinHeldRows(upTo limit: Int) async -> Int {
+        var joined = 0
+        var step = Self.revealStepRows.lowerBound * 2
+        while joined < limit, !scrollMetrics.pinsBottomAfterJoin,
+              scrollMetrics.distanceFromTop < scrollMetrics.viewportHeight * 2,
+              let floor = renderFloorId, case let .loaded(rows) = viewModel.state,
+              let floorIndex = rows.firstIndex(where: { $0.id == floor }) {
+            let next = Self.passFloor(target: floorIndex - min(step, limit - joined), below: floorIndex, in: rows)
+            let started = CACurrentMediaTime()
+            await joinRows(to: next, rows: rows)
+            let tookMs = (CACurrentMediaTime() - started) * 1000
+            let count = floorIndex - (next.flatMap { id in rows.firstIndex { $0.id == id } } ?? rows.startIndex)
+            joined += count
+            ChatPerformance.signposter.emitEvent("RevealStep", "rows=\(count) ms=\(Int(tookMs))")
+            // Done once every held row joined, or when the window moved for something else.
+            guard let next, renderFloorId == next else { break }
+            let scaled = Int(Double(step) * Self.revealStepTargetMs / max(tookMs, 1))
+            step = min(max(scaled, Self.revealStepRows.lowerBound), Self.revealStepRows.upperBound)
+            // A frame between passes, for scrolling and touches.
+            try? await Task.sleep(nanoseconds: 16_000_000)
+        }
+        return joined
+    }
+
+    /// A pass's new floor: the first message at or after `target`, else the
+    /// nearest one before it; nil when no message is left above.
+    private static func passFloor(target: Int, below floorIndex: Int, in rows: [ChatTimelineRow]) -> String? {
+        guard target > rows.startIndex else { return nil }
+        return (rows[target..<floorIndex].first(where: isBubble) ?? rows[..<target].last(where: isBubble))?.id
+    }
+
+    /// One pass: the floor moves to `floor`, and the layout that adds the rows
+    /// above the old floor restores the place.
+    private func joinRows(to floor: String?, rows: [ChatTimelineRow]) async {
+        let shown = renderedRows(rows)
         scrollMetrics.pendingPrepend = ChatPendingPrepend(
             lastRowId: shown.last?.id, anchorId: shown.first(where: Self.isBubble)?.id, olderPagesApplied: nil
         )
-        // A page's worth at a time: hundreds of held rows (a long gap, or a
-        // window kept after reading far back) would otherwise lay out at once.
-        let target = shown.startIndex - Self.revealChunk
-        let floor = target > rows.startIndex
-            ? rows[target..<shown.startIndex].first(where: Self.isBubble)?.id
-            : nil
         setWindowFloor(floor, rows: rows)
-        Task {
-            // The rows lay out on the next pass; an unused place is dropped.
-            try? await Task.sleep(nanoseconds: 300_000_000)
-            scrollMetrics.pendingPrepend = nil
-            ChatPerformance.end("RevealRows", interval, rows: shown.count)
-            isLoadingOlder = false
+        var waits = 0
+        while scrollMetrics.pendingPrepend != nil, waits < 25 {
+            try? await Task.sleep(nanoseconds: 16_000_000)
+            waits += 1
         }
+        scrollMetrics.pendingPrepend = nil
     }
 
     /// Rows joined above the viewport on this layout. The scroll view keeps
@@ -1523,6 +1583,9 @@ extension ChatConversationView {
         // The message's trailing edge must be on-screen. A tall message can
         // still be read at its end; typing and padding below it do not count.
         let visible = frame.maxY > 0 && frame.maxY <= viewportHeight + 4 && frame.minY < viewportHeight
+        // Every scrolled frame lands here; only a change in what is visible
+        // is news for this view's state and the view model.
+        guard visible != visibleReadMessageIds.contains(messageId) else { return }
         if visible { visibleReadMessageIds.insert(messageId) } else { visibleReadMessageIds.remove(messageId) }
         viewModel.setVisibleReadBoundaries(scenePhase == .active ? visibleReadMessageIds : [])
     }
@@ -1552,12 +1615,18 @@ extension ChatConversationView {
         newLast: ChatTimelineRow?,
         proxy: ScrollViewProxy
     ) {
-        guard let newLast, !isLoadingOlder, !viewModel.isViewingEarlierHistory else { return }
+        guard let newLast, !viewModel.isViewingEarlierHistory else { return }
         let isNewRow = oldLast?.id != newLast.id
         let isOwnSend: Bool = {
             guard isNewRow, case let .bubble(bubble) = newLast else { return false }
             return bubble.side == .outgoing
         }()
+        // Rows are joining above (an older page, held rows): a scroll now would
+        // fight their place restores, so an own send waits for them to stop.
+        guard !isLoadingOlder else {
+            if isOwnSend { scrollMetrics.pinsBottomAfterJoin = true }
+            return
+        }
         guard isAtBottom || isOwnSend else { return }
         if isNewRow, !reduceMotion {
             withAnimation(.easeOut(duration: 0.2)) {
@@ -1570,25 +1639,39 @@ extension ChatConversationView {
         }
     }
 
-    /// Fetch the next older page, then put the row that was at the top of
-    /// the viewport back there — prepending shifts the existing content
-    /// down, which otherwise lands the user on a random older message.
-    /// The anchor is the first BUBBLE row: divider ids (day keys) move to
-    /// the top of the merged day when older same-day messages prepend,
-    /// while a bubble id stays glued to its message.
-    private func loadOlderPreservingPosition(rows: ArraySlice<ChatTimelineRow>) {
+    /// Fetch the next older page and keep the reader's place. The page is
+    /// held above the rows on screen (the window's floor stays on their first
+    /// bubble, a bubble id staying glued to its message while divider ids
+    /// move up a merged day) and then joins a few rows per pass, like rows
+    /// the window held back, so no frame lays out a whole page.
+    private func loadOlderPreservingPosition(rows: ArraySlice<ChatTimelineRow>, proxy: ScrollViewProxy) {
         guard !isLoadingOlder else { return }
         isLoadingOlder = true
+        let pagesApplied = viewModel.olderPagesApplied
+        let holdsPage = mode != .aiAssistant
+        if holdsPage, let top = rows.first(where: Self.isBubble)?.id {
+            renderFloorId = top
+            openingWindowDecided = true
+        }
         scrollMetrics.pendingPrepend = ChatPendingPrepend(
             lastRowId: rows.last?.id, anchorId: rows.first(where: Self.isBubble)?.id,
-            olderPagesApplied: viewModel.olderPagesApplied
+            olderPagesApplied: pagesApplied
         )
         Task {
             await viewModel.loadOlder()
-            // The page lays out on the next pass; an unused place is dropped.
-            try? await Task.sleep(nanoseconds: 300_000_000)
+            // The page's own pass restores the place (a held page only moves the
+            // divider above the first message up with it); then it is dropped.
+            try? await Task.sleep(nanoseconds: holdsPage ? 64_000_000 : 300_000_000)
             scrollMetrics.pendingPrepend = nil
-            isLoadingOlder = false
+            if holdsPage, viewModel.olderPagesApplied > pagesApplied {
+                let interval = ChatPerformance.signposter.beginInterval("RevealRows")
+                let joined = await joinHeldRows(upTo: .max)
+                ChatPerformance.end("RevealRows", interval, rows: joined)
+            } else if holdsPage {
+                // Nothing arrived: the rows on screen are all there is.
+                renderFloorId = nil
+            }
+            finishJoining(proxy)
         }
     }
 
