@@ -9,6 +9,10 @@ import com.squareup.moshi.JsonClass
 import com.squareup.moshi.Moshi
 import dagger.hilt.android.qualifiers.ApplicationContext
 import timber.log.Timber
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.io.DataInputStream
+import java.io.DataOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.lang.reflect.Type
@@ -25,6 +29,9 @@ const val SAVED_PAGES_MAX_BYTES = 20L * 1024 * 1024
 /** …and nothing older than 7 days is read (a saved household copy is shown for at most 7 days, contract §5). */
 private const val CHAT_MAX_BYTES = 5L * 1024 * 1024
 private const val CHAT_MAX_THREADS = 20
+const val CHAT_MEDIA_FILE_MAX_BYTES = 5L * 1024 * 1024
+private const val CHAT_MEDIA_MAX_BYTES = 15L * 1024 * 1024
+private const val CHAT_MEDIA_MAX_FILES = 40
 
 private const val MAX_AGE_MS = 7L * 24 * 60 * 60 * 1000
 
@@ -47,6 +54,7 @@ private const val SCHEMA = 3
  * includes the account and key hashes. Sign-out, an account switch and Clear cache delete everything.
  */
 @Singleton
+@Suppress("TooManyFunctions") // Page/history/media copies share the same encryption, budget and durable retirement namespace.
 class SavedCopies
     internal constructor(
         private val root: File,
@@ -71,6 +79,63 @@ class SavedCopies
         )
 
         private val envelopes = moshi.adapter(Envelope::class.java)
+
+        /** Small received files share history's account/retirement boundary, never the generic image cache. */
+        class MediaCopy(val bytes: ByteArray, val contentType: String)
+
+        fun mediaNamespace(account: String): String = file(account, "chat-media", encrypted = true).name
+
+        fun loadMedia(
+            account: String,
+            key: String,
+        ): MediaCopy? {
+            val target = mediaFile(account, key)
+            if (!target.isFile) return null
+            return runCatching {
+                require(target.length() <= CHAT_MEDIA_FILE_MAX_BYTES + MEDIA_ENVELOPE_BYTES)
+                val plain = requireNotNull(chatCipher).decrypt(target.readBytes(), scope(target))
+                DataInputStream(ByteArrayInputStream(plain)).use { input ->
+                    require(System.currentTimeMillis() - input.readLong() in 0 until MAX_AGE_MS)
+                    val contentType = input.readUTF()
+                    val size = input.readInt()
+                    require(size in 1..CHAT_MEDIA_FILE_MAX_BYTES)
+                    val bytes = ByteArray(size).also { input.readFully(it) }
+                    target.setLastModified(System.currentTimeMillis())
+                    MediaCopy(bytes, contentType)
+                }
+            }.getOrElse {
+                target.delete()
+                null
+            }
+        }
+
+        fun saveMedia(
+            account: String,
+            key: String,
+            copy: MediaCopy,
+        ) {
+            if (copy.bytes.isEmpty() || copy.bytes.size > CHAT_MEDIA_FILE_MAX_BYTES) return
+            runCatching {
+                val buffer = ByteArrayOutputStream()
+                DataOutputStream(buffer).use { output ->
+                    output.writeLong(System.currentTimeMillis())
+                    output.writeUTF(copy.contentType.take(MEDIA_CONTENT_TYPE_LENGTH))
+                    output.writeInt(copy.bytes.size)
+                    output.write(copy.bytes)
+                }
+                val target = mediaFile(account, key)
+                writeBytes(target, requireNotNull(chatCipher).encrypt(buffer.toByteArray(), scope(target)))
+                trim()
+            }.onFailure { Timber.w("Received chat file was not saved") }
+        }
+
+        private fun mediaFile(
+            account: String,
+            key: String,
+        ): File {
+            val target = file(account, "chat-media:$key", encrypted = true)
+            return File(target.parentFile, "${target.nameWithoutExtension}.media")
+        }
 
         init {
             // An offline upgrade might never open an old household entry: retire it before any screen reads.
@@ -258,10 +323,17 @@ class SavedCopies
             envelope: Envelope,
             data: String,
         ) {
-            val folder = target.parentFile ?: return
-            if (!folder.isDirectory && !folder.mkdirs()) return
             val body = (envelopes.toJson(envelope) + "\n" + data).toByteArray(Charsets.UTF_8)
             val bytes = if (target.extension == "enc") requireNotNull(chatCipher).encrypt(body, scope(target)) else body
+            writeBytes(target, bytes)
+        }
+
+        private fun writeBytes(
+            target: File,
+            bytes: ByteArray,
+        ) {
+            val folder = target.parentFile ?: return
+            if (!folder.isDirectory && !folder.mkdirs()) return
             val temporary = File.createTempFile("entry-", ".tmp", folder)
             try {
                 FileOutputStream(temporary).use { output ->
@@ -292,7 +364,7 @@ class SavedCopies
             val accountHash = accountHash(account)
             rotateEpoch(accountHash)
             // Cleanup is optional for correctness: all these paths became unreadable at the atomic marker change.
-            File(root, accountHash).listFiles()?.filter { it.extension == "enc" }?.forEach { it.delete() }
+            File(root, accountHash).listFiles()?.filter { it.extension in setOf("enc", "media") }?.forEach { it.delete() }
         }
 
         private fun rotateEpoch(name: String) {
@@ -329,7 +401,18 @@ class SavedCopies
 
         /** Least recently used first, until the folder fits [SAVED_PAGES_MAX_BYTES]. */
         private fun trim() {
-            val files = root.walkBottomUp().filter { it.isFile && it.extension in setOf("json", "enc") }.toMutableList()
+            val files = root.walkBottomUp().filter { it.isFile && it.extension in setOf("json", "enc", "media") }.toMutableList()
+            val media = files.filter { it.extension == "media" }.sortedBy { it.lastModified() }
+            var mediaBytes = media.sumOf { it.length() }
+            var mediaCount = media.size
+            media.forEach { file ->
+                if (mediaBytes > CHAT_MEDIA_MAX_BYTES || mediaCount > CHAT_MEDIA_MAX_FILES) {
+                    mediaBytes -= file.length()
+                    mediaCount--
+                    file.delete()
+                    files.remove(file)
+                }
+            }
             val chats = files.filter { it.extension == "enc" }.sortedBy { it.lastModified() }
             var chatBytes = chats.sumOf { it.length() }
             var chatCount = chats.size
@@ -389,5 +472,7 @@ class SavedCopies
 
         private companion object {
             const val HASH_CHARS = 32
+            const val MEDIA_ENVELOPE_BYTES = 512
+            const val MEDIA_CONTENT_TYPE_LENGTH = 128
         }
     }

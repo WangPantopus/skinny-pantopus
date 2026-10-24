@@ -184,6 +184,35 @@ class ScreenStore
         /** The entry as it is now, without a request. */
         fun <T : Any> peek(key: StoreKey<T>): Stored<T> = state(key).value
 
+        class ChatMediaAccess internal constructor(
+            val read: () -> SavedCopies.MediaCopy?,
+            val write: (SavedCopies.MediaCopy) -> Unit,
+            val isCurrent: () -> Boolean,
+            val refuse: () -> Unit,
+        )
+
+        /** Bind a binary fetch to the same durable access epoch as the history that made it visible. */
+        fun chatMediaAccess(key: String): ChatMediaAccess? =
+            synchronized(slots) {
+                val account = accountId() ?: return@synchronized null
+                val gen = generation
+                val session = identity(account)
+                val namespace = synchronized(diskLock) { saved.mediaNamespace(account) }
+
+                fun current(): Boolean = gen == generation && session == identity() && saved.mediaNamespace(account) == namespace
+                ChatMediaAccess(
+                    read = {
+                        synchronized(slots) { synchronized(diskLock) { if (current()) saved.loadMedia(account, key) else null } }
+                    },
+                    write = {
+                            copy ->
+                        synchronized(slots) { synchronized(diskLock) { if (current()) saved.saveMedia(account, key, copy) } }
+                    },
+                    isCurrent = { synchronized(slots) { synchronized(diskLock) { current() } } },
+                    refuse = { synchronized(slots) { if (synchronized(diskLock) { current() }) retireChatLocked(account) } },
+                )
+            }
+
         /** True while the entry's copy is fresh and no topic marked it out of date: a read would send nothing. */
         fun isCurrent(key: StoreKey<*>): Boolean {
             val account = accountId() ?: return false
@@ -387,14 +416,16 @@ class ScreenStore
             }
         }
 
-        /** Capture the account per socket and access per event, before a callback can queue across either change. */
+        /** Capture the session per socket and account/access per event, before a callback can queue across either change. */
         fun chatBadgeUpdater(): () -> (suspend (Int, Int?) -> Boolean) {
-            val account = accountId()
             val gen = generation
-            val session = identity(account)
+            // Auth publishes the new socket just before its signed-in UI state, including account return.
+            val session = tokens.sessionMarker()
             return {
                 synchronized(slots) {
-                    if (account == null || gen != generation || session != identity()) {
+                    val account = accountId()
+                    val currentSession = session != null && session == tokens.sessionMarker()
+                    if (account == null || gen != generation || !currentSession) {
                         { _, _ -> false }
                     } else {
                         captureBadgeEvent(account)

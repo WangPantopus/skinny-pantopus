@@ -1,5 +1,9 @@
 package app.pantopus.android.data.chats
 
+import android.app.job.JobInfo
+import android.app.job.JobScheduler
+import android.content.ComponentName
+import android.content.Context
 import app.pantopus.android.data.api.models.chats.ChatMessageDto
 import app.pantopus.android.data.api.models.chats.FindOrCreateTopicBody
 import app.pantopus.android.data.api.net.NetworkError
@@ -8,10 +12,12 @@ import app.pantopus.android.data.auth.TokenStorage
 import app.pantopus.android.data.realtime.SocketManager
 import app.pantopus.android.data.upload.UploadFile
 import app.pantopus.android.data.upload.UploadRepository
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
@@ -19,6 +25,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -42,6 +49,7 @@ class ChatOutbox
         private val repo: ChatRepository,
         private val uploads: UploadRepository,
         private val socket: SocketManager,
+        @ApplicationContext private val context: Context,
     ) {
         private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         private val lock = Mutex()
@@ -52,6 +60,10 @@ class ChatOutbox
         val accepted = _accepted.asSharedFlow()
 
         @Volatile private var foreground = false
+
+        @Volatile private var backgroundRuns = 0
+
+        @Volatile private var accountRestored = false
 
         @Volatile private var account: String? = null
 
@@ -92,6 +104,7 @@ class ChatOutbox
                 }
             }
             scope.launch { drain() }
+            scope.launch { _entries.collect { scheduleDelivery() } }
         }
 
         fun foregrounded() {
@@ -102,6 +115,55 @@ class ChatOutbox
 
         fun backgrounded() {
             foreground = false
+            scope.launch { scheduleDelivery() }
+        }
+
+        /** The platform grants a finite opportunity; foreground and background share the same ordered writer. */
+        suspend fun runScheduledDelivery(): Boolean {
+            lock.withLock { backgroundRuns++ }
+            try {
+                synchronizeAccount()
+                wake.trySend(Unit)
+                withTimeoutOrNull(BACKGROUND_BUDGET_MS) { entries.first { pending -> pending.none { !it.terminal } } }
+            } finally {
+                withContext(NonCancellable) {
+                    lock.withLock {
+                        backgroundRuns--
+                        // A stopped job must release its upload/send. Lost acceptance is retried with the durable id.
+                        if (!foreground && backgroundRuns == 0) request?.cancel()
+                    }
+                    wake.trySend(Unit)
+                }
+            }
+            return _entries.value.any { !it.terminal }
+        }
+
+        fun hasPendingDelivery(): Boolean = !accountRestored || _entries.value.any { !it.terminal }
+
+        /** One persisted job carries no account, credentials, body or attachment path in its system metadata. */
+        @Synchronized
+        private fun scheduleDelivery() {
+            runCatching { scheduleDeliveryIfNeeded() }
+                .onFailure { Timber.w("Background chat delivery was not scheduled") }
+        }
+
+        private fun scheduleDeliveryIfNeeded() {
+            if (!accountRestored || backgroundRuns > 0) return
+            val scheduler = context.getSystemService(JobScheduler::class.java) ?: return
+            val next = _entries.value.filterNot { it.terminal }.minOfOrNull { it.retryAt }
+            if (next == null) {
+                scheduler.cancel(DELIVERY_JOB_ID)
+                return
+            }
+            if (scheduler.getPendingJob(DELIVERY_JOB_ID) != null) return
+            val job =
+                JobInfo.Builder(DELIVERY_JOB_ID, ComponentName(context, ChatOutboxJobService::class.java))
+                    .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
+                    .setMinimumLatency((next - System.currentTimeMillis()).coerceAtLeast(BACKGROUND_DELAY_MS))
+                    .setBackoffCriteria(BACKGROUND_BUDGET_MS, JobInfo.BACKOFF_POLICY_EXPONENTIAL)
+                    .setPersisted(true)
+                    .build()
+            if (scheduler.schedule(job) != JobScheduler.RESULT_SUCCESS) Timber.w("Background chat delivery was not scheduled")
         }
 
         /** Keep draft writes independent of the screen's lifetime, but serialized with logout and sends. */
@@ -145,7 +207,9 @@ class ChatOutbox
                     account = user
                     _entries.value = if (user == null) emptyList() else store.load(user)
                 }
+                accountRestored = true
             }
+            scheduleDelivery()
             wake.trySend(Unit)
         }
 
@@ -235,12 +299,13 @@ class ChatOutbox
                     _entries.value = emptyList()
                     synchronized(this@ChatOutbox) { draftRevisions.clear() }
                     store.clear()
+                    synchronized(this@ChatOutbox) { context.getSystemService(JobScheduler::class.java)?.cancel(DELIVERY_JOB_ID) }
                 }
             }
 
         private suspend fun drain() {
             while (scope.isActive) {
-                val next = lock.withLock { if (!foreground || account == null) null else nextEntry() }
+                val next = lock.withLock { if ((!foreground && backgroundRuns == 0) || account == null) null else nextEntry() }
                 when {
                     next == null -> wake.receive()
                     next.retryAt > System.currentTimeMillis() ->
@@ -253,8 +318,11 @@ class ChatOutbox
         @Suppress("TooGenericExceptionCaught") // A provider failure must not stop delivery of every subsequent queued message.
         private suspend fun attempt(next: ChatOutboxEntry) {
             val revision = generation
-            val sending = scope.async { deliver(next, revision) }
-            request = sending
+            val sending =
+                lock.withLock {
+                    if (!foreground && backgroundRuns == 0) return
+                    scope.async { deliver(next, revision) }.also { request = it }
+                }
             try {
                 sending.await()
             } catch (_: CancellationException) {
@@ -437,5 +505,8 @@ class ChatOutbox
             const val INITIAL_BACKOFF_MS = 1000L
             const val MAX_BACKOFF_MS = 60_000L
             const val MAX_EXPONENT = 6
+            const val DELIVERY_JOB_ID = 63_109
+            const val BACKGROUND_DELAY_MS = 5_000L
+            const val BACKGROUND_BUDGET_MS = 30_000L
         }
     }
