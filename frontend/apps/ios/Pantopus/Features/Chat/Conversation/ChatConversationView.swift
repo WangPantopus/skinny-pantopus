@@ -1190,10 +1190,14 @@ extension ChatConversationView {
                             let frame = contentGeo.frame(in: .named(Self.scrollSpaceName))
                             Color.clear
                                 .onAppear {
-                                    handleScrollGeometry(frame: frame, viewportHeight: geo.size.height, shown: shown, proxy: proxy)
+                                    handleScrollGeometry(
+                                        frame: frame, viewportHeight: geo.size.height, rows: rows, shown: shown, proxy: proxy
+                                    )
                                 }
                                 .onChange(of: frame) { _, newFrame in
-                                    handleScrollGeometry(frame: newFrame, viewportHeight: geo.size.height, shown: shown, proxy: proxy)
+                                    handleScrollGeometry(
+                                        frame: newFrame, viewportHeight: geo.size.height, rows: rows, shown: shown, proxy: proxy
+                                    )
                                 }
                         }
                     )
@@ -1218,7 +1222,7 @@ extension ChatConversationView {
                     // re-fires — kick one fetch so backward pagination
                     // still works there.
                     if scrollMetrics.distanceFromTop < 200 {
-                        extendUpward(shown)
+                        extendUpward(shown, rows: rows)
                     }
                 }
                 .task { await landAtLatestMessage(proxy) }
@@ -1248,6 +1252,7 @@ extension ChatConversationView {
     private func handleScrollGeometry(
         frame: CGRect,
         viewportHeight: CGFloat,
+        rows: [ChatTimelineRow],
         shown: ArraySlice<ChatTimelineRow>,
         proxy: ScrollViewProxy
     ) {
@@ -1274,13 +1279,15 @@ extension ChatConversationView {
         guard isLoadOlderArmed,
               !isLoadingOlder,
               scrollMetrics.distanceFromTop < 200 else { return }
-        extendUpward(shown)
+        extendUpward(shown, rows: rows)
     }
 
     // MARK: - Newest rows first
 
     /// About two screens of rows: the first frame and a first scroll up.
     private static let openingRowWindow = 40
+    /// Held rows join a page (60 messages) at a time.
+    private static let revealChunk = 60
 
     /// The rows this frame renders: every loaded row from the window's floor on.
     private func renderedRows(_ rows: [ChatTimelineRow]) -> ArraySlice<ChatTimelineRow> {
@@ -1327,9 +1334,9 @@ extension ChatConversationView {
 
     /// Up past the top of what is rendered: the loaded rows the window holds
     /// back join first, then the next older page.
-    private func extendUpward(_ shown: ArraySlice<ChatTimelineRow>) {
+    private func extendUpward(_ shown: ArraySlice<ChatTimelineRow>, rows: [ChatTimelineRow]) {
         if renderFloorId != nil {
-            revealHeldRowsPreservingPosition(shown)
+            revealHeldRowsPreservingPosition(shown, rows: rows)
         } else if viewModel.canLoadOlder {
             loadOlderPreservingPosition(rows: shown)
         }
@@ -1337,14 +1344,20 @@ extension ChatConversationView {
 
     /// The held-back rows join above the viewport the way an older page
     /// does, keeping the rows on screen where they are.
-    private func revealHeldRowsPreservingPosition(_ shown: ArraySlice<ChatTimelineRow>) {
+    private func revealHeldRowsPreservingPosition(_ shown: ArraySlice<ChatTimelineRow>, rows: [ChatTimelineRow]) {
         guard !isLoadingOlder else { return }
         isLoadingOlder = true
         let interval = ChatPerformance.signposter.beginInterval("RevealRows")
         scrollMetrics.pendingPrepend = ChatPendingPrepend(
             lastRowId: shown.last?.id, anchorId: shown.first(where: Self.isBubble)?.id, olderPagesApplied: nil
         )
-        renderFloorId = nil
+        // A page's worth at a time: hundreds of held rows (a long gap, or a
+        // window kept after reading far back) would otherwise lay out at once.
+        let target = shown.startIndex - Self.revealChunk
+        let floor = target > rows.startIndex
+            ? rows[target..<shown.startIndex].first(where: Self.isBubble)?.id
+            : nil
+        setWindowFloor(floor, rows: rows)
         Task {
             // The rows lay out on the next pass; an unused place is dropped.
             try? await Task.sleep(nanoseconds: 300_000_000)
