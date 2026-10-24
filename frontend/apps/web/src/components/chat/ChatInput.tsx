@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import ChatAttachmentMenu from './ChatAttachmentMenu';
-import EmojiPickerPopover from './EmojiPickerPopover';
+import EmojiPickerPopover, { preloadEmojiPicker } from './EmojiPickerPopover';
 import type { ChatReplyQuote } from './ChatMessageBubble';
 import { chatDraftCommit, chatDraftSignature, loadChatDraft, saveChatDraft,
   type ChatComposerDraft, type ChatDraftConfig, type ChatDraftSnapshot } from './chatDrafts';
@@ -111,6 +111,16 @@ export default function ChatInput({ onSend, draft, sending, disabled = false, pl
     setError(null);
     if (editingMessage) inputRef.current?.focus();
   }, [editingMessage]);
+  // The emoji picker is not in the page bundle: fetch it while the page is idle
+  // so the first tap on the emoji button opens it at once.
+  useEffect(() => {
+    if (typeof window.requestIdleCallback === 'function') {
+      const id = window.requestIdleCallback(preloadEmojiPicker, { timeout: 4000 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const id = window.setTimeout(preloadEmojiPicker, 2000);
+    return () => window.clearTimeout(id);
+  }, []);
   const visibleText = editingMessage ? editText : text;
   const setVisibleText = editingMessage ? setEditText : setText;
   const saveEdit = async () => {
@@ -254,6 +264,8 @@ export default function ChatInput({ onSend, draft, sending, disabled = false, pl
             <button
               ref={emojiBtnRef}
               type="button"
+              onPointerEnter={preloadEmojiPicker}
+              onFocus={preloadEmojiPicker}
               onClick={() => setShowEmoji(prev => !prev)}
               className="p-2 text-app-text-secondary hover:text-app-text rounded-full hover:bg-surface-muted transition-colors"
               title="Emoji"

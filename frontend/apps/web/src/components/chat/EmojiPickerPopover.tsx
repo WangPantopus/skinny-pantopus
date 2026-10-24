@@ -3,12 +3,19 @@
 import { useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 
-// The picker and its emoji table (about half a megabyte) load the first time
-// someone opens a picker, not with every page that shows a composer or message.
+// The picker and its emoji table (about half a megabyte) are not part of every
+// page that shows a composer or message. A chat composer preloads them while
+// the page is idle; opening a picker earlier loads both at once.
 const Picker = dynamic(() => import('@emoji-mart/react'), { ssr: false });
 let emojiData: Promise<unknown> | null = null;
 const loadEmojiData = () => (emojiData ??= import('@emoji-mart/data').then((module) => module.default)
   .catch((error: unknown) => { emojiData = null; throw error; }));
+
+/** Start loading the picker and its emoji table without showing anything. */
+export function preloadEmojiPicker(): void {
+  void import('@emoji-mart/react').catch(() => {});
+  void loadEmojiData().catch(() => {});
+}
 
 interface EmojiPickerPopoverProps {
   isOpen?: boolean;
@@ -23,6 +30,7 @@ export default function EmojiPickerPopover({ isOpen = true, onClose, onSelect, a
   useEffect(() => {
     if (!isOpen || data) return;
     let live = true;
+    preloadEmojiPicker();
     void loadEmojiData().then((loaded) => { if (live) setData(loaded); }).catch(() => {});
     return () => { live = false; };
   }, [isOpen, data]);
