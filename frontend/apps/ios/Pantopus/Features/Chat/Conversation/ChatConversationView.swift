@@ -1367,17 +1367,26 @@ extension ChatConversationView {
         shown: ArraySlice<ChatTimelineRow>,
         proxy: ScrollViewProxy
     ) {
-        if shown.last?.id == pending.lastRowId, viewportHeight > 8 {
-            // The bottom sentinel's top was `previousMaxY - 4` below the viewport's top.
-            let anchor = UnitPoint(x: 0.5, y: (change.previousMaxY - 4) / (viewportHeight - 4))
-            proxy.scrollTo(Self.bottomAnchorId, anchor: anchor)
-        } else if let anchorId = pending.anchorId {
-            proxy.scrollTo(anchorId, anchor: .top)
+        guard shown.last?.id == pending.lastRowId, viewportHeight > 8 else {
+            if let anchorId = pending.anchorId { proxy.scrollTo(anchorId, anchor: .top) }
+            return
         }
+        // The bottom sentinel's top was `previousMaxY - 4` below the viewport's top.
+        let anchor = UnitPoint(x: 0.5, y: (change.previousMaxY - 4) / (viewportHeight - 4))
+        proxy.scrollTo(Self.bottomAnchorId, anchor: anchor)
         Task {
             try? await Task.sleep(nanoseconds: 60_000_000)
-            let shift = Int(scrollMetrics.contentMaxY - change.previousMaxY)
-            ChatPerformance.signposter.emitEvent("PrependPlace", "grew=\(Int(change.grew)) shift=\(shift)")
+            var shift = scrollMetrics.contentMaxY - change.previousMaxY
+            // A fling still decelerating can swallow the first restore.
+            let retried = abs(shift) > change.grew / 2
+            if retried {
+                proxy.scrollTo(Self.bottomAnchorId, anchor: anchor)
+                try? await Task.sleep(nanoseconds: 60_000_000)
+                shift = scrollMetrics.contentMaxY - change.previousMaxY
+            }
+            ChatPerformance.signposter.emitEvent(
+                "PrependPlace", "grew=\(Int(change.grew)) shift=\(Int(shift)) retried=\(retried)"
+            )
         }
     }
 
