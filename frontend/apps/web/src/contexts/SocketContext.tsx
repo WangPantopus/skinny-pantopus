@@ -193,6 +193,23 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     };
   }, [authToken, sessionRevision, replaceSession]);
 
+  // After an outage socket.io may be waiting out a reconnect back-off of up to
+  // 30 seconds. When the browser is online again or the tab returns to the
+  // foreground, try at once (a manual reconnect also resets the back-off).
+  useEffect(() => {
+    if (!socket) return;
+    const retryNow = () => {
+      if (socket.connected || !navigator.onLine || document.visibilityState !== 'visible') return;
+      socket.disconnect().connect();
+    };
+    window.addEventListener('online', retryNow);
+    document.addEventListener('visibilitychange', retryNow);
+    return () => {
+      window.removeEventListener('online', retryNow);
+      document.removeEventListener('visibilitychange', retryNow);
+    };
+  }, [socket]);
+
   return (
     <SocketContext.Provider value={{ socket, connected }}>
       {children}

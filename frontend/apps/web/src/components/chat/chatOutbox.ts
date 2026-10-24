@@ -62,8 +62,17 @@ let enqueueTime = 0;
 let readVersion = 0;
 let storageWrites = Promise.resolve();
 const listeners = new Set<Listener>();
+// Sends shown from the moment Send is pressed while their durable commit is
+// still in progress. A failed commit removes the bubble and the composer keeps
+// the text; the saved outbox stays the only source for sending and retries.
+let staged: PendingChatSend[] = [];
 
-function publish(accepted?: ChatMessage) { listeners.forEach((listener) => listener(pending, accepted)); }
+function visible(): PendingChatSend[] {
+  if (!staged.length) return pending;
+  const saved = new Set(pending.map((message) => message.clientMessageId));
+  return [...pending, ...staged.filter((message) => !saved.has(message.clientMessageId))];
+}
+function publish(accepted?: ChatMessage) { const shown = visible(); listeners.forEach((listener) => listener(shown, accepted)); }
 const current = (saved: ChatStorageScope | null): saved is ChatStorageScope => !!saved && saved === scope && isChatStorageCurrent(saved);
 const save = (saved: ChatStorageScope, message: PendingChatSend) => writeChatRecords(saved, [{ kind: 'outbox', key: message.clientMessageId, value: message }]);
 
@@ -92,6 +101,7 @@ export function suspendChatOutbox(): void {
   scope = null;
   starting = null;
   pending = [];
+  staged = [];
   readVersion++;
   suspendChatStorage();
   publish();
@@ -141,7 +151,7 @@ export function startChatOutbox(actorId: string): Promise<void> {
 
 export function subscribeChatOutbox(listener: Listener): () => void {
   listeners.add(listener);
-  listener(pending);
+  listener(visible());
   return () => { listeners.delete(listener); };
 }
 
@@ -153,6 +163,9 @@ export async function enqueueChatSend(actorId: string, input: Omit<PendingChatSe
   const message: PendingChatSend = { ...input, createdAt: new Date(enqueueTime).toISOString(), attempts: 0,
     nextAttemptAt: 0, state: 'queued', files: files.map((file, index) => ({ key: `${input.clientMessageId}:${index}`,
       name: file.name, type: file.type, lastModified: file.lastModified })) };
+  // Show the bubble at once; sending still starts only from the saved outbox.
+  staged = [...staged, message];
+  publish();
   // Serialize disk commits so rapid sends retain the same order after a crash.
   const write = storageWrites.catch(() => {}).then(async () => {
     const mutation = consumeChatDraft(draft);
@@ -166,11 +179,21 @@ export async function enqueueChatSend(actorId: string, input: Omit<PendingChatSe
     // a reload sees either the original composer or the retained send.
     await writeChatRecords(saved, [{ kind: 'outbox', key: message.clientMessageId, value: message }, ...media], mutation);
     if (!current(saved)) return;
+    // The read below supersedes any older in-flight read before it publishes,
+    // so the committed copy replaces the staged bubble without a gap.
+    staged = staged.filter((entry) => entry !== message);
     await readPending(saved);
     schedule();
   });
   storageWrites = write;
-  await write;
+  try {
+    await write;
+  } finally {
+    if (staged.includes(message)) {
+      staged = staged.filter((entry) => entry !== message);
+      if (current(saved)) publish();
+    }
+  }
 }
 
 async function discard(saved: ChatStorageScope, message: PendingChatSend) {
