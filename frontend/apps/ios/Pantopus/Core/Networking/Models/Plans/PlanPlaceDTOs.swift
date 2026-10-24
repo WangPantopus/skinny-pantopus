@@ -64,14 +64,22 @@ public struct PlanPlaceOptionDTO: Decodable, Sendable, Hashable, Identifiable {
         why = try? container.decodeIfPresent(String.self, forKey: .why)
     }
 
-    public init(placeId: String?, name: String, category: String?, address: String?, latitude: Double, longitude: Double) {
+    public init(
+        placeId: String?,
+        name: String,
+        category: String?,
+        address: String?,
+        latitude: Double,
+        longitude: Double,
+        distanceMeters: Double? = nil
+    ) {
         self.placeId = placeId
         self.name = name
         self.category = category
         self.address = address
         self.latitude = latitude
         self.longitude = longitude
-        distanceMeters = nil
+        self.distanceMeters = distanceMeters
         categories = []
         hours = nil
         detail = nil

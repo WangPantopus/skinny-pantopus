@@ -50,6 +50,8 @@ struct PlanPlacePicker: View {
     @State private var camera: MapCameraPosition = .automatic
     /// "© OpenStreetMap contributors", from the places reply.
     @State private var attribution: String?
+    /// "Pick it on the map" is open (PlanPlaceMapPick).
+    @State private var pickingOnMap = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -92,6 +94,12 @@ struct PlanPlacePicker: View {
         .task(id: nearbyRetry) { await loadNearby() }
         .task(id: [query, String(searchRetry), center.map { "\($0.latitude),\($0.longitude)" } ?? ""]) {
             await search()
+        }
+        .planPlaceMapPick(isPresented: $pickingOnMap, kind: model.kind, center: center, homes: model.homePoints) { place in
+            choose(place)
+            model.place = place
+            model.placeIsHereNow = false
+            onClose()
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("planPlacePicker")
@@ -139,8 +147,12 @@ struct PlanPlacePicker: View {
         .mapStyle(.standard(pointsOfInterest: .excludingAll))
         .frame(height: 150)
         .clipShape(RoundedRectangle(cornerRadius: Radii.xl, style: .continuous))
+        .overlay(alignment: .bottomTrailing) { if center != nil { PlanPlaceMapPickChip() } }
+        .overlay { Color.clear.contentShape(Rectangle()).onTapGesture { if center != nil { pickingOnMap = true } } }
         .accessibilityElement()
         .accessibilityLabel(chosen.map { "Map showing \($0.name)" } ?? "Map near you")
+        .accessibilityAddTraits(center != nil ? .isButton : [])
+        .accessibilityHint(center != nil ? "Pick a place on the map" : "")
     }
 
     /// "Suggest places" once the list is in; from the search box, "Ask Pantopus" once the search is
@@ -204,6 +216,7 @@ struct PlanPlacePicker: View {
                     center: center
                 ) { choose(place) }
             }
+            if center != nil { PlanPlaceMapPickRow { pickingOnMap = true } }
             if model.kind == .playdate { playdateHomeRow }
         }
     }
