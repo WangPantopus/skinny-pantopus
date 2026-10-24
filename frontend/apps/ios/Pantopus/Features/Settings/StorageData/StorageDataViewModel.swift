@@ -58,6 +58,7 @@ final class StorageDataViewModel {
         defer { isClearing = false }
         let freed = sizes?.clearable ?? 0
         ScreenStore.shared.wipe()
+        ChatLocalStore.shared.clearHistory()
         sizes = await Self.measure()
         toastMessage = "Cleared \(Self.format(freed))"
     }
@@ -71,8 +72,8 @@ final class StorageDataViewModel {
         await Task.detached(priority: .userInitiated) {
             Sizes(
                 photos: PantopusImagePipeline.shared.totalBytes(),
-                savedPages: ScreenStoreDisk.shared.totalBytes(),
-                drafts: draftBytes()
+                savedPages: ScreenStoreDisk.shared.totalBytes() + ChatLocalStore.shared.historyBytes(),
+                drafts: draftBytes() + ChatLocalStore.shared.pendingBytes()
             )
         }.value
     }

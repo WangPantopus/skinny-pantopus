@@ -31,15 +31,7 @@ struct ChatAttachmentList: View {
         } else {
             return nil
         }
-        var thumbnail: URL?
-        if mime.hasPrefix("image/"), ChatMediaURL.isSameOrigin(url, AppEnvironment.current.apiBaseURL),
-           url.path.hasPrefix("/api/chat/files/") {
-            var parts = URLComponents(url: url, resolvingAgainstBaseURL: false)
-            var queryItems = parts?.queryItems ?? []
-            queryItems.append(URLQueryItem(name: "variant", value: "thumbnail"))
-            parts?.queryItems = queryItems
-            thumbnail = parts?.url
-        }
+        let thumbnail = mime.hasPrefix("image/") ? ChatMediaURL.thumbnail(url) : nil
         return PostMediaItem(id: file.id, kind: kind, url: url, thumbnailURL: thumbnail, liveVideoURL: liveURL)
     }
 

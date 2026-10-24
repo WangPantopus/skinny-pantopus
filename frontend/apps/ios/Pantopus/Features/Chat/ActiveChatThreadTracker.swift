@@ -23,21 +23,26 @@ public final class ActiveChatThreadTracker {
     public static let shared = ActiveChatThreadTracker()
 
     private var roomIdsByOwner: [ObjectIdentifier: Set<String>] = [:]
+    private var topicIdsByOwner: [ObjectIdentifier: String] = [:]
 
     public init() {}
 
     /// Replace the set of rooms an owner (one conversation VM) is viewing.
-    public func setActiveRooms(_ roomIds: Set<String>, owner: ObjectIdentifier) {
+    public func setActiveRooms(_ roomIds: Set<String>, owner: ObjectIdentifier, topicId: String? = nil) {
         roomIdsByOwner[owner] = roomIds
+        topicIdsByOwner[owner] = topicId
     }
 
     /// Withdraw an owner's registration (conversation screen torn down).
     public func clear(owner: ObjectIdentifier) {
         roomIdsByOwner[owner] = nil
+        topicIdsByOwner[owner] = nil
     }
 
     /// Whether any mounted conversation screen is showing this room.
-    public func isViewingRoom(_ roomId: String) -> Bool {
-        roomIdsByOwner.values.contains { $0.contains(roomId) }
+    public func isViewingRoom(_ roomId: String, topicId: String? = nil) -> Bool {
+        roomIdsByOwner.contains { owner, rooms in
+            rooms.contains(roomId) && (topicIdsByOwner[owner] == nil || topicIdsByOwner[owner] == topicId)
+        }
     }
 }

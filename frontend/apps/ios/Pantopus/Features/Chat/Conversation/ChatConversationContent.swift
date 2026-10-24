@@ -184,6 +184,8 @@ public enum ChatDeliveryState: Sendable, Hashable {
     case failed
     /// The server refused the send (403); resending cannot succeed.
     case refused
+    /// Persisted by the server; recipient delivery is not implied.
+    case sent
     case delivered
     case read
 }
@@ -378,10 +380,11 @@ public struct ChatAIActionDone: Codable, Sendable, Hashable {
     public let note: String?
 }
 
-public struct ChatReplyPreview: Sendable, Hashable {
+public struct ChatReplyPreview: Codable, Sendable, Hashable {
     public let messageId: String
     public let senderName: String
     public let text: String
+    public var roomId: String?
 }
 
 public struct ChatBubbleReaction: Identifiable, Sendable, Hashable {
@@ -391,7 +394,7 @@ public struct ChatBubbleReaction: Identifiable, Sendable, Hashable {
     public let reactedByMe: Bool
 }
 
-public struct ChatConversationTopic: Identifiable, Sendable, Hashable {
+public struct ChatConversationTopic: Identifiable, Sendable, Hashable, Codable {
     public let id: String
     public let topicType: String
     public let title: String

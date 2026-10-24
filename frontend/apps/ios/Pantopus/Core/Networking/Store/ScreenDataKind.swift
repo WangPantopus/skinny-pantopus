@@ -92,8 +92,8 @@ enum ScreenDataKind: String, CaseIterable {
     /// section 7). Household copies only for owners and household roles.
     var savedOnPhone: Bool {
         switch self {
-        case .publicPlace, .today, .todayAlerts, .place, .homes, .nearby, .messagesList, .you: true
-        case .post, .notifications, .otherPeople, .supportTrain, .sensitive, .mailbox: false
+        case .publicPlace, .today, .todayAlerts, .place, .homes, .nearby, .you: true
+        case .post, .messagesList, .notifications, .otherPeople, .supportTrain, .sensitive, .mailbox: false
         }
     }
 }

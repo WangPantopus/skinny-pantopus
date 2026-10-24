@@ -106,6 +106,7 @@ public struct InboxTabRoot: View {
         NavigationStack(path: navigationPathBinding) {
             ChatListView(
                 onOpenConversation: { row in
+                    ChatPerformance.signposter.emitEvent("ThreadTap")
                     path.append(.conversation(destination(from: row)))
                 },
                 onCompose: { path.append(.compose) },

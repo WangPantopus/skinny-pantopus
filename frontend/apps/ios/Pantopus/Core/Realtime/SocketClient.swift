@@ -60,6 +60,15 @@ final class SocketClient {
     /// replacement token must not start an unbounded refresh/reconnect loop.
     private var attemptedAuthRecovery = false
     private var connectionGeneration = 0
+    /// True while Socket.IO retries (its backoff): after an unexpected drop,
+    /// or after a first connection attempt failed (the app opened offline).
+    private var isRetrying = false
+    /// Set by any retry and cleared by the connection that ends it (or sign-out).
+    private var retriedSinceConnected = false
+    /// The current connection came only after failed attempts, so realtime
+    /// signals may have been missed before it: `ScreenStoreLive` re-checks
+    /// the screens, as it does after a drop.
+    private(set) var connectedAfterRetry = false
     /// Set once the server said the device / session is revoked: reconnecting
     /// with any token from this session is pointless, so we stop until the
     /// HTTP path confirms (401 `SESSION_REVOKED`) and a fresh sign-in
@@ -110,7 +119,11 @@ final class SocketClient {
                 .compress,
                 .reconnects(true),
                 .reconnectAttempts(-1),
-                .reconnectWait(2)
+                .reconnectWait(2),
+                // The library's default 30 s cap left a chat without live
+                // messages for up to 30 s after a server or network outage
+                // ended (measured 27 s after a 65 s outage).
+                .reconnectWaitMax(5)
             ]
         )
         self.manager = manager
@@ -141,8 +154,17 @@ final class SocketClient {
         socket.on(clientEvent: .reconnect) { [weak self] _, _ in
             Task { @MainActor in
                 guard let self, self.connectionGeneration == generation else { return }
+                self.noteRetry()
                 self.setConnectionState(.connecting)
                 self.logger.info("Socket reconnecting")
+            }
+        }
+        // A first connection that fails is retried without `reconnect`, which
+        // Socket.IO reports only for a socket that was connected.
+        socket.on(clientEvent: .reconnectAttempt) { [weak self] _, _ in
+            Task { @MainActor in
+                guard let self, self.connectionGeneration == generation else { return }
+                self.noteRetry()
             }
         }
         socket.on(clientEvent: .error) { [weak self] data, _ in
@@ -172,11 +194,27 @@ final class SocketClient {
         authRecoveryTask?.cancel()
         authRecoveryTask = nil
         attemptedAuthRecovery = false
+        retriedSinceConnected = false
         disconnectTransport()
+    }
+
+    /// Try at once when the app returns to the foreground or the network
+    /// comes back, instead of waiting out the rest of Socket.IO's backoff
+    /// (up to `reconnectWaitMax` between attempts).
+    func reconnectNowIfWaiting() {
+        guard isRetrying, !stoppedForRevocation, let token = authToken else { return }
+        disconnectTransport()
+        connect(token: token)
+    }
+
+    private func noteRetry() {
+        isRetrying = true
+        retriedSinceConnected = true
     }
 
     private func disconnectTransport() {
         connectionGeneration += 1
+        isRetrying = false
         socket?.removeAllHandlers()
         attachedHandlers.removeAll()
         socket?.disconnect()
@@ -189,6 +227,9 @@ final class SocketClient {
     // MARK: - Auth-error recovery
 
     func handleSocketConnected() {
+        connectedAfterRetry = retriedSinceConnected
+        retriedSinceConnected = false
+        isRetrying = false
         attemptedAuthRecovery = false
         setConnectionState(.connected)
         logger.info("Socket connected")
@@ -279,7 +320,8 @@ final class SocketClient {
     /// ```
     func events<T: Decodable & Sendable>(
         named event: String,
-        as _: T.Type = T.self
+        as _: T.Type = T.self,
+        keyDecodingStrategy: JSONDecoder.KeyDecodingStrategy = .convertFromSnakeCase
     ) -> AsyncStream<T> {
         AsyncStream { continuation in
             let subscriptionId = UUID()
@@ -288,7 +330,7 @@ final class SocketClient {
                 do {
                     let jsonData = try JSONSerialization.data(withJSONObject: first, options: [])
                     let decoder = JSONDecoder()
-                    decoder.keyDecodingStrategy = .convertFromSnakeCase
+                    decoder.keyDecodingStrategy = keyDecodingStrategy
                     decoder.dateDecodingStrategy = .iso8601
                     let decoded = try decoder.decode(T.self, from: jsonData)
                     continuation.yield(decoded)
