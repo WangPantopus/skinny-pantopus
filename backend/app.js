@@ -3,7 +3,6 @@ const http = require('http');
 const socketIo = require('socket.io');
 const cors = require('cors');
 const helmet = require('helmet');
-const bodyParser = require('body-parser');
 const cookieParser = require('cookie-parser');
 const compression = require('compression');
 const fs = require('fs');
@@ -240,11 +239,8 @@ app.use(
   require('./routes/internalEmailInbound'),
 );
 
-// Body parsing middleware
-app.use(bodyParser.json({ limit: '20mb' }));
-app.use(bodyParser.urlencoded({ extended: true, limit: '20mb' }));
-
-// Cookie parsing (AUTH-3.3) — after body parsers, after webhook routes
+// Cookie parsing (AUTH-3.3) — after webhook routes. JSON and urlencoded bodies are read
+// only after the rate limiters below (REQUEST BODIES).
 app.use(cookieParser());
 
 // Compress JSON answers over 1 KB for clients that accept it (the apps' HTTP stacks and browsers do, and decompress
@@ -291,7 +287,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// APM: response time tracking (before routes, after body parsing)
+// APM: response time tracking (before routes)
 app.use(apmMiddleware);
 
 // ============ HEALTH CHECK ============
@@ -368,6 +364,11 @@ app.use('/api/reviews', contentCreationLimiter);
 app.use('/api/homes', homeCreationLimiter);
 app.use('/api/users/login', authEndpointLimiter);
 app.use('/api/users/register', authEndpointLimiter);
+
+// ============ REQUEST BODIES ============
+// Read only once a write is through the limiters above: 1 MB of JSON by default,
+// more only on the routes that need it (middleware/bodyLimits.js).
+app.use('/api', require('./middleware/bodyLimits'));
 
 // ============ API ROUTES ============
 
