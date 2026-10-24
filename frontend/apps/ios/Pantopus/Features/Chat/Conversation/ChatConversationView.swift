@@ -1309,10 +1309,13 @@ extension ChatConversationView {
     private static let openingRowWindow = 40
     /// Held rows join up to a page (60 messages) per trip to the top, a few
     /// rows per layout pass so that no frame lays out a page of rows. A pass
-    /// aims at about 40 ms on this device.
+    /// aims at about 40 ms on this device; every pass also pays for all the
+    /// rows rendered, so with many of them passes take more rows at once
+    /// (one per 20 rendered) rather than repeat that cost.
     private static let revealChunk = 60
     private static let revealStepRows = 4...24
     private static let revealStepTargetMs: Double = 40
+    private static let renderedRowsPerStepRow = 20
     /// A join smaller than this is never re-applied by the place check: a
     /// drag or fling can move that far on its own before the check runs.
     private static let smallestReappliedJoin: CGFloat = 600
@@ -1422,11 +1425,13 @@ extension ChatConversationView {
     /// the last one took. Returns the rows that joined.
     private func joinHeldRows(upTo limit: Int) async -> Int {
         var joined = 0
-        var step = Self.revealStepRows.lowerBound
+        var step = 0
         while joined < limit, !scrollMetrics.pinsBottomAfterJoin,
               scrollMetrics.distanceFromTop < scrollMetrics.viewportHeight * 2,
               let floor = renderFloorId, case let .loaded(rows) = viewModel.state,
               let floorIndex = rows.firstIndex(where: { $0.id == floor }) {
+            let byRendered = renderedRows(rows).count / Self.renderedRowsPerStepRow
+            step = min(max(step, byRendered, Self.revealStepRows.lowerBound), Self.revealStepRows.upperBound)
             let next = Self.passFloor(target: floorIndex - min(step, limit - joined), below: floorIndex, in: rows)
             let started = CACurrentMediaTime()
             await joinRows(to: next, rows: rows)
@@ -1436,8 +1441,7 @@ extension ChatConversationView {
             ChatPerformance.signposter.emitEvent("RevealStep", "rows=\(count) ms=\(Int(tookMs))")
             // Done once every held row joined, or when the window moved for something else.
             guard let next, renderFloorId == next else { break }
-            let scaled = Int(Double(step) * Self.revealStepTargetMs / max(tookMs, 1))
-            step = min(max(scaled, Self.revealStepRows.lowerBound), Self.revealStepRows.upperBound)
+            step = Int(Double(step) * Self.revealStepTargetMs / max(tookMs, 1))
             // A frame between passes, for scrolling and touches.
             try? await Task.sleep(nanoseconds: 16_000_000)
         }
