@@ -239,23 +239,22 @@ public struct ChatConversationView: View {
                         .foregroundStyle(Theme.Color.appTextSecondary)
                         .accessibilityIdentifier("chatBusinessReplyIdentity")
                 }
-                ChatComposer(
-                    text: Binding(
-                        get: { viewModel.composerText },
-                        set: { viewModel.composerText = $0 }
-                    ),
-                    placeholder: composerPlaceholder,
-                    canSend: viewModel.canSend && !isCreatorQuotaLocked,
-                    // The "−1" send-cost badge is a claim about the fan's
-                    // quota — only shown once the allowance is known.
-                    showsSendCost: mode == .fanThread && viewModel.fanEntitlement != nil && !isFanReplyLocked,
-                    isLockedAction: isFanReplyLocked || isCreatorQuotaLocked,
-                    isStreaming: viewModel.isAIStreaming,
-                    onAttach: { attachmentsPresented = true },
-                    onEmoji: { emojiPickerPresented = true },
-                    onSend: { sendOrPromptForUpgrade() },
-                    onStop: { viewModel.cancelAIStream() }
-                )
+                ChatComposerReader(viewModel: viewModel) { text, canSend in
+                    ChatComposer(
+                        text: text,
+                        placeholder: composerPlaceholder,
+                        canSend: canSend && !isCreatorQuotaLocked,
+                        // The "−1" send-cost badge is a claim about the fan's
+                        // quota — only shown once the allowance is known.
+                        showsSendCost: mode == .fanThread && viewModel.fanEntitlement != nil && !isFanReplyLocked,
+                        isLockedAction: isFanReplyLocked || isCreatorQuotaLocked,
+                        isStreaming: viewModel.isAIStreaming,
+                        onAttach: { attachmentsPresented = true },
+                        onEmoji: { emojiPickerPresented = true },
+                        onSend: { sendOrPromptForUpgrade() },
+                        onStop: { viewModel.cancelAIStream() }
+                    )
+                }
                 if isCreatorQuotaLocked {
                     CreatorQuotaLockRow(
                         tierName: resolvedCreatorContext.fanTierName,
@@ -1444,6 +1443,7 @@ extension ChatConversationView {
                 Task { await viewModel.retry(clientId: bubble.id) }
             }
         }
+        .equatable()
     }
 
     private func errorFrame(_ message: String) -> some View {
@@ -3637,6 +3637,17 @@ private struct ChatBubbleRow: View {
     }
 }
 
+extension ChatBubbleRow: Equatable {
+    /// A bubble re-renders only when what it shows changes. Its action
+    /// closures are rebuilt on every pass and act on this message, which
+    /// `content` already identifies, so they are left out of the comparison.
+    /// Without this, every update to the thread re-rendered every bubble.
+    nonisolated static func == (lhs: ChatBubbleRow, rhs: ChatBubbleRow) -> Bool {
+        lhs.content == rhs.content && lhs.rowWidth == rhs.rowWidth && lhs.incomingInitials == rhs.incomingInitials
+            && lhs.aiStatus == rhs.aiStatus && lhs.canManage == rhs.canManage && lhs.canDiscard == rhs.canDiscard
+    }
+}
+
 private struct ChatMiniAvatar: View {
     let initials: String
     var hidden = false
@@ -3868,6 +3879,20 @@ private struct AttachmentTile: View {
 }
 
 // MARK: - Composer
+
+/// Reads the composer's text where it is typed, so a keystroke re-renders the
+/// composer instead of the whole conversation, timeline included.
+private struct ChatComposerReader<Content: View>: View {
+    let viewModel: ChatConversationViewModel
+    @ViewBuilder let content: (Binding<String>, Bool) -> Content
+
+    var body: some View {
+        content(
+            Binding(get: { viewModel.composerText }, set: { viewModel.updateComposerFromField($0) }),
+            viewModel.canSend
+        )
+    }
+}
 
 private struct ChatComposer: View {
     @Binding var text: String

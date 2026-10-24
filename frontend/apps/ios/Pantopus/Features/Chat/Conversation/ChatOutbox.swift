@@ -232,6 +232,9 @@ final class ChatOutbox {
             guard let roomId = message.roomId else { throw APIError.invalidResponse }
             if message.fileIds == nil {
                 if message.attachments.isEmpty {
+                    // Nothing was uploaded, so the request goes out without
+                    // another durable write first: a retry derives the same
+                    // empty list and reuses the same idempotency key.
                     message.fileIds = []
                 } else {
                     let upload = try await storage.uploadBody(message, scope: scope, version: version)
@@ -243,10 +246,10 @@ final class ChatOutbox {
                         roomId: roomId, prepared: upload, expectedSessionGeneration: requestGeneration
                     )
                     message.fileIds = response.media.map(\.id)
+                    // Persist successful upload ids before the message request. A
+                    // relaunch after a lost POST response reuses both idempotency keys.
+                    try await saveProgress(message, lifetime: started)
                 }
-                // Persist successful upload ids before the message request. A
-                // relaunch after a lost POST response reuses both idempotency keys.
-                try await saveProgress(message, lifetime: started)
             }
             let files = message.fileIds ?? []
             ChatPerformance.signposter.emitEvent("SendPost")

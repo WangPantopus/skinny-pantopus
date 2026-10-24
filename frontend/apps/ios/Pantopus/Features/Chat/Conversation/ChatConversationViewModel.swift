@@ -394,7 +394,6 @@ public final class ChatConversationViewModel {
     private var earlierHistoryBefore: String?
     private var hasLatestHistoryWindow = false
     private var historyCacheVersion: Int?
-    private var ineligibleReceiptRooms: Set<String> = []
 
     /// True while the screen was opened from Chat Search (or at a nudge) and
     /// the matched message hasn't been scrolled to yet — the view skips its
@@ -660,6 +659,14 @@ public final class ChatConversationViewModel {
     /// Rows whose first appearance is timed (`ChatPerformance`): a send's
     /// sending bubble (true) or a live incoming message (false).
     @ObservationIgnored private var awaitingFirstRender: [String: Bool] = [:]
+    /// Messages this person may edit or delete, derived once per rebuild:
+    /// every bubble asks on every render, and a scan per bubble made a long
+    /// thread's render quadratic.
+    @ObservationIgnored private var manageableMessageIds: Set<String> = []
+    /// The text a send just took from the composer, and when. The field can
+    /// still hold it for a moment after the composer clears; a keystroke in
+    /// that moment must not bring the sent text back.
+    @ObservationIgnored private var sentComposerText: (text: String, at: Date)?
     private var failedClientIds: Set<String> = []
     /// Failed sends the server refused with a 403 (blocked, not a
     /// participant, the account can't message). They show "Not sent"
@@ -1339,6 +1346,7 @@ public final class ChatConversationViewModel {
         }
         let consumedDraft = usesDurableOutbox && editingMessageId == nil ? composerDraft() : nil
         if consumedDraft != nil { draftId = Self.newClientMessageId() }
+        sentComposerText = composerText.isEmpty ? nil : (composerText, Date())
         composerText = ""
         if capturedEdit == nil { replyingTo = nil }
         let clearedMutation = draftMutation
@@ -1493,6 +1501,7 @@ public final class ChatConversationViewModel {
     }
 
     private func applyOutboxSnapshot() {
+        let before = (pendingByClientId, failedClientIds, refusedClientIds, outboxIds)
         let held = ChatOutbox.shared.messages.filter { message in
             guard message.businessUserId == asBusinessUserId else { return false }
             switch mode {
@@ -1541,6 +1550,11 @@ public final class ChatConversationViewModel {
         let failure = ChatOutbox.shared.restoreFailure ?? held.last { $0.status != .queued }?.failure
         if let failure { sendLimitNotice = failure } else if sendLimitNotice == outboxNotice { sendLimitNotice = nil }
         outboxNotice = failure
+        // Most outbox events (saved progress, another thread's send, the
+        // first snapshot of an empty queue) change no row here. Re-rendering
+        // the timeline for them delayed the send itself and, before history
+        // arrived, flashed the empty "start of your conversation" state.
+        guard (pendingByClientId, failedClientIds, refusedClientIds, outboxIds) != before else { return }
         rebuild()
     }
 
@@ -2082,7 +2096,7 @@ public final class ChatConversationViewModel {
     /// one they wrote for the business they answer as here. A teammate's
     /// message for the same business stays theirs (the API refuses it).
     public func canManageMessage(_ messageId: String) -> Bool {
-        messages.contains { $0.id == messageId && wroteMessage($0) }
+        manageableMessageIds.contains(messageId)
     }
 
     private func wroteMessage(_ message: ChatMessageDTO) -> Bool {
@@ -2175,7 +2189,10 @@ public final class ChatConversationViewModel {
 
     /// Only accepted messages can establish a read boundary. A person thread
     /// can combine several rooms; each room needs its own visible boundary.
-    public var latestAcceptedMessageIds: Set<String> {
+    /// Derived once per rebuild: every render and scrolled frame reads it.
+    @ObservationIgnored public private(set) var latestAcceptedMessageIds: Set<String> = []
+
+    private func acceptedReadBoundaries() -> Set<String> {
         var latest: [String: ChatMessageDTO] = [:]
         for message in messages where message.deletedAt == nil && UUID(uuidString: message.id) != nil
             && (selectedTopicId == nil || message.topicId == selectedTopicId) {
@@ -2382,6 +2399,21 @@ public final class ChatConversationViewModel {
         isProgrammaticComposerWrite = true
         composerText = text
         isProgrammaticComposerWrite = false
+    }
+
+    /// Text the composer field reports. Right after a send clears the
+    /// composer, the field can report its old contents with a new keystroke
+    /// appended before it has shown the cleared value; keep only what was
+    /// typed after the send instead of reviving the sent text.
+    public func updateComposerFromField(_ text: String) {
+        if let sent = sentComposerText {
+            if Date().timeIntervalSince(sent.at) < 2, text.hasPrefix(sent.text) {
+                composerText = String(text.dropFirst(sent.text.count))
+                return
+            }
+            sentComposerText = nil
+        }
+        composerText = text
     }
 
     private func emitTypingStopIfNeeded() {
@@ -3109,7 +3141,6 @@ public final class ChatConversationViewModel {
         invalidateSavedThreadCache()
         messages.removeAll { reset || !roomIds.contains($0.roomId) }
         activeRoomIds = roomIds
-        ineligibleReceiptRooms.formIntersection(roomIds)
         if let directRoomId, !roomIds.contains(directRoomId) { self.directRoomId = nil }
         visibleReadBoundaries = visibleReadBoundaries.filter { roomIds.contains($0.key) }
         lastReadBoundaries = lastReadBoundaries.filter { roomIds.contains($0.key) }
@@ -3816,7 +3847,6 @@ public final class ChatConversationViewModel {
             if recoverOtherRooms { scheduleFallbackRefresh() }
             return
         }
-        ineligibleReceiptRooms.remove(event.roomId)
         guard let throughMessageId = event.throughMessageId, let readAt = event.readAt else { return }
         guard event.roomId == directRoomId else {
             // Aggregate history also contains groups and older direct rooms.
@@ -3827,15 +3857,20 @@ public final class ChatConversationViewModel {
         let boundary = messages.first { $0.id == throughMessageId && $0.roomId == event.roomId }
         guard let createdAt = boundary?.createdAt ?? event.throughCreatedAt,
               let boundaryDate = Self.parseISO(createdAt), Self.parseISO(readAt) != nil else { return }
+        var changed = false
         for index in messages.indices {
             let message = messages[index]
             guard message.roomId == event.roomId, message.userId == sendingIdentityId,
                   let messageDate = Self.parseISO(message.createdAt),
                   (messageDate, message.id) <= (boundaryDate, throughMessageId) else { continue }
             historyTouchedIds.insert(message.id)
+            guard message.readAt != readAt else { continue }
             messages[index] = message.replacingReadAt(readAt)
+            changed = true
         }
-        rebuild()
+        // A receipt that moves no stamp (the reader's own new message, a
+        // repeat) must not re-render the whole timeline.
+        if changed { rebuild() }
     }
 
     private func handleTopicRead(_ event: ChatRealtimeTopicRead) {
@@ -3850,7 +3885,6 @@ public final class ChatConversationViewModel {
             scheduleFallbackRefresh()
             return
         }
-        ineligibleReceiptRooms.remove(event.roomId)
         guard selectedTopicId == nil || selectedTopicId == event.topicId,
               let throughId = event.throughMessageId, let readAt = event.readAt else { return }
         guard event.roomId == directRoomId else {
@@ -3860,6 +3894,7 @@ public final class ChatConversationViewModel {
         let boundary = messages.first { $0.id == throughId && $0.roomId == event.roomId && $0.topicId == event.topicId }
         guard let createdAt = boundary?.createdAt ?? event.throughCreatedAt,
               let boundaryDate = Self.parseISO(createdAt), Self.parseISO(readAt) != nil else { return }
+        var changed = false
         for index in messages.indices {
             let message = messages[index]
             guard message.roomId == event.roomId, message.topicId == event.topicId,
@@ -3867,14 +3902,18 @@ public final class ChatConversationViewModel {
                   let date = Self.parseISO(message.createdAt), (date, message.id) <= (boundaryDate, throughId) else { continue }
             historyTouchedIds.insert(message.id)
             messages[index] = message.replacingReadAt(readAt)
+            changed = true
         }
-        rebuild()
+        if changed { rebuild() }
     }
 
-    /// Explicit server ineligibility overrides a legacy optimistic Read. Retire
-    /// all encrypted topic variants before canonical recovery can fail offline.
+    /// Explicit server ineligibility overrides a legacy optimistic Read. When
+    /// this screen showed one, retire all encrypted topic variants before
+    /// canonical recovery can fail offline. Saved history comes from the same
+    /// canonical rows, which never carry a Read for such a room, so a refusal
+    /// that changes nothing here (any read in a shared task room) leaves the
+    /// account's cached threads and inbox in place.
     private func retireIneligibleReceipts(roomId: String) {
-        let firstRefusal = ineligibleReceiptRooms.insert(roomId).inserted
         var changed = false
         for index in messages.indices {
             let message = messages[index]
@@ -3883,7 +3922,7 @@ public final class ChatConversationViewModel {
             messages[index] = message.replacingReadAt(nil)
             changed = true
         }
-        guard firstRefusal || changed else { return }
+        guard changed else { return }
         invalidateSavedThreadCache()
         historyCacheVersion = nil
         rebuild()
@@ -3948,6 +3987,8 @@ public final class ChatConversationViewModel {
         }
         let interval = ChatPerformance.signposter.beginInterval("Rebuild")
         rebuildTimeline()
+        manageableMessageIds = Set(messages.lazy.filter { self.wroteMessage($0) }.map(\.id))
+        latestAcceptedMessageIds = acceptedReadBoundaries()
         ChatPerformance.end("Rebuild", interval, rows: messages.count)
         scheduleHistorySave()
     }
