@@ -645,6 +645,15 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
         cursor = result.syncCursors;
         until = result.untilCursors;
       } while (result.hasMore || receiptOffset < receiptIds.length);
+      const deleted = changes.filter((message) => 'deleted' in message && message.deleted);
+      if (deleted.length) {
+        const retired = await retireChatHistoryRooms(currentUserId, deleted.map((message) => message.room_id), true,
+          deleted.map((message) => String(message.id)));
+        // Only our contiguous deletion may advance this request's fence. An
+        // intervening access retirement still requires a new authorized read.
+        if (retired?.previousGeneration === historyGeneration) historyGeneration = retired.generation;
+        if (!current()) return;
+      }
       for (const message of changes) {
         if ('deleted' in message && message.deleted) {
           tombstonesRef.current.set(String(message.id), Math.max(tombstonesRef.current.get(String(message.id)) ?? 0, Number(message.sync_version) || 0));
@@ -688,11 +697,6 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
       syncCursorsRef.current = cursor;
       completedRefreshRef.current += 1;
       setSyncGeneration((value) => value + 1);
-      const deleted = changes.filter((message) => 'deleted' in message && message.deleted);
-      if (deleted.length && isCurrentScope()) {
-        void retireChatHistoryRooms(currentUserId, deleted.map((message) => message.room_id), true,
-          deleted.map((message) => String(message.id))).catch(() => {});
-      }
     };
     const promise = (async () => {
       do {
@@ -1045,21 +1049,24 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
 
   // Listen for incoming messages via socket (new + legacy event names)
   // ── Socket event handlers (extracted for stable identity + profiling) ──
-  const handleMessageDeleted = useCallback((data: Record<string, any>) => {
+  const handleMessageDeleted = useCallback(async (data: Record<string, any>) => {
     if (!data?.messageId || !isCurrentScope()) return;
     if (data.roomId && !activeRoomIds.includes(String(data.roomId))) return;
     const revision = Number(data.sync_version) || 0;
     const existing = messagesRef.current.find((message) => String(message.id) === String(data.messageId));
     if (existing && messageRevision(existing) > revision) return;
+    const deletedRoomId = String(data.roomId || existing?.room_id || '');
+    if (currentUserId && deletedRoomId) {
+      // Commit retirement before presenting success; a reload immediately
+      // after the row disappears must not recover its older encrypted copy.
+      await retireChatHistoryRooms(currentUserId, [deletedRoomId], true, [String(data.messageId)]);
+      if (!isCurrentScope()) return;
+    }
     tombstonesRef.current.set(String(data.messageId), Math.max(tombstonesRef.current.get(String(data.messageId)) ?? 0, revision));
     noteLiveChange(String(data.messageId));
     setMessages(prev => prev.filter(m => String(m.id) !== String(data.messageId)));
     setEditingMessage((current) => current?.messageId === String(data.messageId) ? null : current);
     setReplyingTo((current) => current?.messageId === String(data.messageId) ? null : current);
-    const deletedRoomId = String(data.roomId || existing?.room_id || '');
-    if (currentUserId && deletedRoomId) {
-      void retireChatHistoryRooms(currentUserId, [deletedRoomId], true, [String(data.messageId)]).catch(() => {});
-    }
   }, [activeRoomIds, currentUserId, isCurrentScope, noteLiveChange]);
 
   const handleMessageEdited = useCallback((data: Record<string, any>) => {
@@ -1112,7 +1119,11 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
 
   useSocketEvent('message:new', handleIncomingMessage);
   useSocketEvent('newMessage', handleIncomingMessage);
-  useSocketEvent('message:deleted', handleMessageDeleted);
+  useSocketEvent('message:deleted', useCallback((data: Parameters<typeof handleMessageDeleted>[0]) => {
+    void handleMessageDeleted(data).catch(() => {
+      if (isCurrentScope()) setError('A deleted message could not be removed from this browser. Reconnect and refresh to retry.');
+    });
+  }, [handleMessageDeleted, isCurrentScope]));
   useSocketEvent('message:edited', handleMessageEdited);
   useSocketEvent('message:reaction_updated', handleReactionUpdated);
 
@@ -1337,7 +1348,8 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
       if (!yes || !isCurrentScope() || marker !== api.authSessionMarker()) return;
       const result = await api.chat.deleteMessage(message.id);
       if (!isCurrentScope() || marker !== api.authSessionMarker()) return;
-      handleMessageDeleted({ messageId: message.id, roomId: message.room_id, sync_version: result.sync_version ?? messageRevision(message) });
+      await handleMessageDeleted({ messageId: message.id, roomId: message.room_id, sync_version: result.sync_version ?? messageRevision(message) });
+      if (!isCurrentScope() || marker !== api.authSessionMarker()) return;
       setEditingMessage((current) => current?.messageId === message.id ? null : current);
       setReplyingTo((current) => current?.messageId === message.id ? null : current);
       setError(null);

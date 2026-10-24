@@ -7,6 +7,7 @@ import { getInitials } from '@pantopus/ui-utils';
 import { launchFeatures } from '@/lib/featureFlags';
 import { chosenUsername } from '@pantopus/utils';
 import { conversationKey, useConversationPages } from '@/lib/conversations';
+import { useOnlineStatus } from '@/components/map/OfflineIndicator';
 
 interface MiniConversationListProps {
   onSelectConversation: (chat: {
@@ -38,8 +39,10 @@ export default function MiniConversationList({ onSelectConversation }: MiniConve
   const pages = useConversationPages();
   const listQuery = pages.query;
   const conversations = pages.conversations;
-  const loading = listQuery.isPending;
-  const error = listQuery.isError && !listQuery.data ? 'Failed to load conversations' : null;
+  const { isOnline } = useOnlineStatus();
+  const offlineUnavailable = !isOnline && pages.restored && !listQuery.data;
+  const loading = !offlineUnavailable && listQuery.isPending;
+  const error = offlineUnavailable ? 'Reconnect to load your inbox.' : listQuery.isError && !listQuery.data ? 'Failed to load conversations' : null;
   const fetchConversations = useCallback(() => { void listQuery.refetch(); }, [listQuery]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const virtualizer = useVirtualizer({ count: conversations.length, getScrollElement: () => scrollRef.current,

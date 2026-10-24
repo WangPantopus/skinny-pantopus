@@ -61,6 +61,7 @@ import { Search, MessageCircle, Menu, X, ChevronsLeft, ChevronsRight, WifiOff, U
 import { useOnlineStatus } from '@/components/map/OfflineIndicator';
 import { chosenUsername } from '@pantopus/utils';
 import { startChatOutbox } from '@/components/chat/chatOutbox';
+import { establishVerifiedChatSession } from '@/components/chat/chatStorage';
 
 // ── Constants ──────────────────────────────────────────────────
 const SIDEBAR_EXPANDED = 240;
@@ -245,7 +246,9 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const { data: me } = useMe({ enabled: mounted && !!getAuthToken() });
   const user: User | null = me ?? null;
   useConversationEvents(user?.id);
-  useEffect(() => { if (user?.id) void startChatOutbox(user.id).catch(() => {}); }, [user?.id]);
+  useEffect(() => {
+    if (user?.id && !establishVerifiedChatSession()) void startChatOutbox(user.id).catch(() => {});
+  }, [user?.id]);
 
   // ── Tile prefetch for home area ──────────────────────────────
   const { viewerHome } = useViewerHome();

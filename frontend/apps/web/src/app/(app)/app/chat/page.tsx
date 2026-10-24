@@ -19,6 +19,8 @@ import { launchFeatures } from '@/lib/featureFlags';
 import { chosenUsername, usernameHandle } from '@pantopus/utils';
 import { fetchMe } from '@/lib/me';
 import { useConversationPages, conversationKey } from '@/lib/conversations';
+import { useOnlineStatus } from '@/components/map/OfflineIndicator';
+import { navigateChatPath, useChatOfflineShell } from '@/hooks/useChatOfflineShell';
 
 type NewChatPerson = { id: string; name: string; handle: string; avatar?: string | null };
 
@@ -98,6 +100,8 @@ function NewChatPersonRow({ person, starting, onStart }: {
 }
 
 export default function ChatListPage() {
+  useChatOfflineShell();
+  const { isOnline } = useOnlineStatus();
   const router = useRouter();
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -120,10 +124,11 @@ export default function ChatListPage() {
   const conversationsQuery = pages.query;
   const conversations = pages.conversations;
   const totalUnread = Number(conversationsQuery.data?.totalUnread || 0);
-  const loading = search.trim() !== inboxSearch || conversationsQuery.isPending;
+  const offlineUnavailable = !isOnline && pages.restored && !conversationsQuery.data;
+  const loading = !offlineUnavailable && (search.trim() !== inboxSearch || conversationsQuery.isPending);
   // A failed first read has no list to describe: no count, no empty-inbox card.
-  const listFailed = conversationsQuery.isError && !conversationsQuery.data;
-  const error = conversationsQuery.error
+  const listFailed = offlineUnavailable || conversationsQuery.isError && !conversationsQuery.data;
+  const error = offlineUnavailable ? 'No saved inbox is available on this browser. Reconnect to load Messages.' : conversationsQuery.error
     ? (conversationsQuery.error instanceof Error ? conversationsQuery.error.message : 'Failed to load conversations')
     : null;
 
@@ -223,9 +228,9 @@ export default function ChatListPage() {
 
   const handleConversationPress = (conv: UnifiedConversationItem) => {
     if (conv._type === 'room') {
-      router.push(`/app/chat/${conv.id}`);
+      navigateChatPath(`/app/chat/${conv.id}`, router.push);
     } else {
-      router.push(`/app/chat/conversation/${conv.other_participant_id}`);
+      navigateChatPath(`/app/chat/conversation/${conv.other_participant_id}`, router.push);
     }
   };
 

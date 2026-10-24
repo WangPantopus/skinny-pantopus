@@ -10,13 +10,31 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient, type QueryFunctionContext } from '@tanstack/react-query';
 import type { UnifiedConversationItem } from '@pantopus/types';
 import { queryKeys } from '@/lib/query-keys';
+import { fetchMe } from '@/lib/me';
 import { useSocket } from '@/hooks/useSocket';
+import { activateChatStorage, captureChatHistoryFence, deleteChatRecords, readCachedChatAccountId,
+  readChatRecord, writeChatRecords } from '@/components/chat/chatStorage';
 
 type ConversationTail = { generation?: string; rows: UnifiedConversationItem[]; nextCursor: string | null; hasMore: boolean };
 export type ConversationsReply = Awaited<ReturnType<typeof api.chat.getUnifiedConversations>> & { refreshId?: string; keptTail?: ConversationTail };
 
 export const CONVERSATIONS_LIMIT = 50;
 export const CONVERSATIONS_FRESH_MS = 30 * 1000;
+const INBOX_KEY = 'personal-inbox-v1';
+type SavedInbox = { inbox: ConversationsReply; roomIds: string[]; historyGeneration: number };
+
+async function retainInbox(reply: ConversationsReply, accountId: string | undefined, marker: string,
+  fence: Awaited<ReturnType<typeof captureChatHistoryFence>> | undefined) {
+  if (fence === undefined) return;
+  const actor = accountId || await readCachedChatAccountId() || (await fetchMe()).id;
+  if (!actor || marker !== api.authSessionMarker()) return;
+  const scope = await activateChatStorage(actor);
+  if (marker !== api.authSessionMarker()) return;
+  const inbox = { ...reply, conversations: reply.conversations.slice(0, CONVERSATIONS_LIMIT), keptTail: undefined };
+  const rooms = inbox.conversations.flatMap((row) => row._type === 'room' ? [row.id] : row.room_ids);
+  const value: SavedInbox = { inbox, roomIds: [...new Set(rooms)], historyGeneration: fence?.account === scope.account ? fence.generation : 0 };
+  await writeChatRecords(scope, [{ kind: 'history', key: INBOX_KEY, value }]);
+}
 
 export function conversationsQuery(search = '') {
   const q = search.trim();
@@ -30,6 +48,9 @@ export function conversationsQuery(search = '') {
       const current = () => {
         if (signal.aborted || marker !== api.authSessionMarker()) throw new DOMException('Inbox request cancelled', 'AbortError');
       };
+      // Read the bounded fence before the request. Adopting a fence afterwards
+      // could retain a response which raced a room/account access change.
+      const fence = q ? undefined : await captureChatHistoryFence().catch(() => undefined);
       current();
       const first = await api.chat.getUnifiedConversations({ limit: CONVERSATIONS_LIMIT, ...(q ? { q } : {}) });
       current();
@@ -50,9 +71,11 @@ export function conversationsQuery(search = '') {
       const refreshId = crypto.randomUUID();
       const rows = preserveNewerPreviews([...first.conversations, ...tail], client.getQueryData<ConversationsReply>(queryKey), previous)
         .sort((a, b) => compareConversationTime(b.last_message_at, a.last_message_at));
-      return { ...first, conversations: rows.slice(0, first.conversations.length), refreshId,
+      const reply = { ...first, conversations: rows.slice(0, first.conversations.length), refreshId,
         ...(pageCount > 1 ? { keptTail: { generation: refreshId, rows: rows.slice(first.conversations.length),
           nextCursor: page.nextCursor, hasMore: page.hasMore } } : {}) };
+      if (!q) void retainInbox(reply, client.getQueryData<{ id?: string }>(queryKeys.me())?.id, marker, fence).catch(() => {});
+      return reply;
     },
     staleTime: CONVERSATIONS_FRESH_MS,
   };
@@ -156,6 +179,39 @@ export function useConversationPages(search = '') {
   const q = search.trim();
   const client = useQueryClient();
   const query = useQuery(conversationsQuery(q));
+  const [restored, setRestored] = useState(false);
+  const status = (query.error as { statusCode?: number; status?: number } | null)?.statusCode
+    ?? (query.error as { status?: number } | null)?.status;
+  useEffect(() => {
+    if (q || (status !== 401 && status !== 403 && status !== 404)) return;
+    const marker = api.authSessionMarker();
+    void (async () => {
+      const actor = await readCachedChatAccountId();
+      if (!actor || marker !== api.authSessionMarker()) return;
+      const scope = await activateChatStorage(actor);
+      if (marker === api.authSessionMarker()) await deleteChatRecords(scope, [{ kind: 'history', key: INBOX_KEY }]);
+    })().catch(() => {});
+  }, [q, status]);
+  useEffect(() => {
+    if (q) { setRestored(true); return; }
+    let cancelled = false;
+    const marker = api.authSessionMarker();
+    setRestored(false);
+    void (async () => {
+      const actor = await readCachedChatAccountId();
+      if (!actor || cancelled || marker !== api.authSessionMarker()) return;
+      const scope = await activateChatStorage(actor);
+      const saved = await readChatRecord<SavedInbox>(scope, 'history', INBOX_KEY);
+      if (cancelled || marker !== api.authSessionMarker() || !saved?.inbox || !Array.isArray(saved.inbox.conversations)) return;
+      const state = client.getQueryState(conversationsQuery().queryKey);
+      const status = (state?.error as { statusCode?: number } | null)?.statusCode;
+      if (status === 401 || status === 403 || status === 404) {
+        await deleteChatRecords(scope, [{ kind: 'history', key: INBOX_KEY }]); return;
+      }
+      if (!state?.data) client.setQueryData(conversationsQuery().queryKey, saved.inbox, { updatedAt: 0 });
+    })().catch(() => {}).finally(() => { if (!cancelled) setRestored(true); });
+    return () => { cancelled = true; };
+  }, [client, q]);
   const head = query.data;
   const generation = head?.refreshId;
   const [loadingMore, setLoadingMore] = useState(false);
@@ -202,5 +258,5 @@ export function useConversationPages(search = '') {
       if (ownRequest === request.current) { inFlight.current = false; setLoadingMore(false); }
     }
   }, [nextCursor, hasMore, generation, scope, q, client]);
-  return { query, conversations, hasMore, loadMore, loadingMore, moreError };
+  return { query, conversations, hasMore, loadMore, loadingMore, moreError, restored };
 }

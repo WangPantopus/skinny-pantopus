@@ -7,7 +7,7 @@ import { subscribeConnectivity } from '@/lib/connectivity';
 import { clearCachedMapTiles } from '@/utils/tilePrefetch';
 import { AUTH_SESSION_CHANGE_KEY, getAuthToken, onTokenChange } from '@pantopus/api';
 import { setActiveQueryClient } from '@/lib/active-query-client';
-import { chatHistoryRooms, clearChatStorage, onChatHistoryRetired } from '@/components/chat/chatStorage';
+import { chatHistoryMessageIds, chatHistoryRooms, clearChatStorage, onChatHistoryRetired } from '@/components/chat/chatStorage';
 import { suspendChatOutbox } from '@/components/chat/chatOutbox';
 import type { ConversationsReply } from '@/lib/conversations';
 import { queryKeys } from '@/lib/query-keys';
@@ -102,8 +102,27 @@ export default function QueryProvider({ children }: { children: React.ReactNode 
   // Set while rendering, so children's first effects already read this session's cache.
   setActiveQueryClient(queryClient);
 
-  useEffect(() => onChatHistoryRetired(({ rooms, mediaOnly }) => {
-    if (mediaOnly) return;
+  useEffect(() => onChatHistoryRetired(({ rooms, mediaOnly, messageIds }) => {
+    if (mediaOnly) {
+      if (!messageIds?.length) return;
+      const deleted = new Set(messageIds);
+      queryClient.removeQueries({ predicate: (query) => query.queryKey[0] === 'chat' && query.queryKey[1] === 'messages'
+        && chatHistoryMessageIds(query.state.data).some((id) => deleted.has(id)) });
+      // The inbox does not carry last-message IDs. Its preview must be read
+      // again before it can be retained after a confirmed deletion.
+      const affected = new Set(rooms);
+      void queryClient.cancelQueries({ queryKey: queryKeys.conversations() });
+      queryClient.setQueriesData<ConversationsReply>({ queryKey: queryKeys.conversations() }, (previous) => {
+        if (!previous) return previous;
+        const clearPreview = (row: ConversationsReply['conversations'][number]) =>
+          (row._type === 'room' ? affected.has(row.id) : row.room_ids.some((room) => affected.has(room)))
+            ? { ...row, last_message_preview: null } : row;
+        return { ...previous, conversations: previous.conversations.map(clearPreview),
+          ...(previous.keptTail ? { keptTail: { ...previous.keptTail, rows: previous.keptTail.rows.map(clearPreview) } } : {}) };
+      });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.conversations() });
+      return;
+    }
     const denied = new Set(rooms);
     queryClient.removeQueries({ predicate: (query) => query.queryKey[0] === 'chat'
       && (query.queryKey[1] === 'messages' && chatHistoryRooms(query.state.data).some((room) => denied.has(room))

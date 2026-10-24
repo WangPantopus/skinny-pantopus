@@ -9,7 +9,7 @@ const OUTBOX_BYTES = 100 * 1024 * 1024;
 const OUTBOX_FULL = 'Your pending messages and drafts are full (100 items or 100 MB). Send or remove an item before adding more.';
 type Kind = 'history' | 'outbox' | 'media' | 'draft' | 'received-media';
 const isRetained = (kind: Kind) => kind === 'history' || kind === 'received-media';
-interface Metadata { id: string; account: string; kind: Kind; key: string; at: number; bytes: number; revision?: string; rooms?: string[]; mimeType?: string; historyGeneration?: number; messageIds?: string[] }
+interface Metadata { id: string; account: string; kind: Kind; key: string; at: number; bytes: number; revision?: string; rooms?: string[]; mimeType?: string; historyGeneration?: number; messageIds?: string[]; inbox?: boolean }
 export interface ChatDraftCommit { key: string; revision: string; mediaKeys: string[] }
 export interface ChatRecordMutation {
   expectedDraft?: { key: string; revision: string | null };
@@ -41,6 +41,16 @@ export function chatHistoryRooms(value: unknown): string[] {
   return [...new Set([...(Array.isArray(snapshot?.roomIds) ? snapshot.roomIds : []), snapshot?.resolvedRoomId,
     ...(Array.isArray(snapshot?.messages) ? snapshot.messages.map((message) => message.room_id) : [])]
     .filter((room): room is string => typeof room === 'string' && room.length > 0))];
+}
+
+export function chatHistoryMessageIds(value: unknown): string[] {
+  const messages = (value as { messages?: Array<{ id?: string }> } | null)?.messages;
+  return Array.isArray(messages) ? messages.map((message) => String(message.id || '')).filter(Boolean) : [];
+}
+
+/** Capture before an inbox request, even before its profile query completes. */
+export async function captureChatHistoryFence(): Promise<HistoryFence | null> {
+  return await readTaskRecoveryValue<HistoryFence>(await open(), 'metadata', HISTORY_FENCE) ?? null;
 }
 
 function receiveHistoryRetirement(event: HistoryRetirement) {
@@ -87,6 +97,20 @@ export async function readChatHistoryGeneration(scope: ChatStorageScope): Promis
 }
 
 function sessionMarker(): string { try { return localStorage.getItem(AUTH_SESSION_CHANGE_KEY) || ''; } catch { return ''; } }
+
+/** Existing cookie sessions can predate this origin's local marker. Call only
+ * after a verified profile; never weaken the offline binding check below. */
+export function establishVerifiedChatSession(): boolean {
+  if (!getAuthToken() || sessionMarker()) return false;
+  try {
+    const marker = `${Date.now()}:chat-${crypto.randomUUID()}`;
+    localStorage.setItem(AUTH_SESSION_CHANGE_KEY, marker);
+    // Other tabs receive the browser's storage event. This tab must retire its
+    // pending reads too, then bind the profile under the established marker.
+    window.dispatchEvent(new StorageEvent('storage', { key: AUTH_SESSION_CHANGE_KEY, newValue: marker }));
+    return true;
+  } catch { return false; }
+}
 
 /** Only a previously verified account from this exact browser session may
  * open its encrypted history while profile requests are unavailable. */
@@ -243,7 +267,7 @@ export async function readChatBytes(scope: ChatStorageScope, kind: Kind, key: st
 
 /** Fence late writes first, then remove only snapshots containing denied rooms.
  * The generation is one bounded value per account, not an ever-growing deny list. */
-export async function retireChatHistoryRooms(accountId: string, roomIds: string[], mediaOnly = false, messageIds?: string[]): Promise<void> {
+export async function retireChatHistoryRooms(accountId: string, roomIds: string[], mediaOnly = false, messageIds?: string[]): Promise<HistoryRetirement | undefined> {
   const rooms = [...new Set(roomIds.filter(Boolean))];
   if (!rooms.length) return;
   const denied = new Set(rooms);
@@ -253,10 +277,12 @@ export async function retireChatHistoryRooms(accountId: string, roomIds: string[
   // Older snapshots predate the metadata room index. There are at most 20.
   const legacy = new Set<string>();
   for (const entry of await metadata(db)) {
-    if (mediaOnly || entry.account !== scope.account || entry.kind !== 'history' || entry.rooms) continue;
+    if (entry.account !== scope.account || entry.kind !== 'history'
+      || (mediaOnly && !deletedMessages) || (entry.rooms && (!deletedMessages || entry.messageIds || entry.inbox))) continue;
     try {
       const value = await readChatRecord(scope, 'history', entry.key);
-      if (!value || chatHistoryRooms(value).some((room) => denied.has(room))) legacy.add(entry.id);
+      if (!value || chatHistoryRooms(value).some((room) => denied.has(room))
+        && (!deletedMessages || chatHistoryMessageIds(value).some((id) => deletedMessages.has(id)))) legacy.add(entry.id);
     } catch { legacy.add(entry.id); }
   }
   const next = await new Promise<number>((resolve, reject) => {
@@ -271,8 +297,10 @@ export async function retireChatHistoryRooms(accountId: string, roomIds: string[
       generation = previousGeneration + 1;
       metas.put({ account: scope.account, generation }, HISTORY_FENCE);
       for (const entry of request.result as Metadata[]) if (entry.account === scope.account && isRetained(entry.kind)) {
-        const affectedMessage = !deletedMessages || !entry.messageIds || entry.messageIds.some((id) => deletedMessages.has(id));
-        if ((!mediaOnly || entry.kind === 'received-media') && affectedMessage && (legacy.has(entry.id) || entry.rooms?.some((room) => denied.has(room)))) {
+        const affectedMessage = !deletedMessages || entry.inbox || legacy.has(entry.id)
+          || (entry.kind === 'received-media' && !entry.messageIds) || entry.messageIds?.some((id) => deletedMessages.has(id));
+        if ((!mediaOnly || entry.kind === 'received-media' || deletedMessages && entry.kind === 'history')
+          && affectedMessage && (legacy.has(entry.id) || entry.rooms?.some((room) => denied.has(room)))) {
           metas.delete(entry.id); transaction.objectStore('payloads').delete(entry.id);
         } else if (entry.kind === 'received-media' && entry.historyGeneration === previousGeneration) {
           metas.put({ ...entry, historyGeneration: generation }, entry.id);
@@ -285,6 +313,7 @@ export async function retireChatHistoryRooms(accountId: string, roomIds: string[
   if (!isChatStorageCurrent(scope)) return;
   const event = { account: scope.account, marker: sessionMarker(), generation: next, previousGeneration: next - 1, rooms, mediaOnly, messageIds };
   publishHistoryRetirement(event);
+  return event;
 }
 
 export async function listChatRecordKeys(scope: ChatStorageScope, kind: Kind): Promise<string[]> {
@@ -329,7 +358,8 @@ export async function writeChatRecords(scope: ChatStorageScope, records: Array<{
     const bytes = 'bytes' in record ? record.bytes : new TextEncoder().encode(JSON.stringify(record.value)).buffer;
     const sealed = await seal(scope, id, bytes);
     return { meta: { id, account: scope.account, kind: record.kind, key: record.key, at: Date.now(), bytes: sealed.ciphertext.byteLength,
-      ...(record.kind === 'history' ? { rooms: chatHistoryRooms(record.value) } : {}),
+      ...(record.kind === 'history' ? { rooms: chatHistoryRooms(record.value), messageIds: chatHistoryMessageIds(record.value),
+        inbox: Boolean((record.value as { inbox?: unknown } | null)?.inbox) } : {}),
       ...('roomId' in record ? { rooms: [record.roomId] } : {}),
       ...('mimeType' in record ? { mimeType: record.mimeType } : {}),
       ...('historyGeneration' in record ? { historyGeneration: record.historyGeneration } : {}),
