@@ -13,13 +13,14 @@ const express = require('express');
 const verifyToken = require('../middleware/verifyToken');
 const requireFeatureFlag = require('../middleware/requireFeatureFlag');
 const logger = require('../utils/logger');
-const { contentCreationLimiter } = require('../middleware/rateLimiter');
+const { contentCreationLimiter, aiDraftLimiter } = require('../middleware/rateLimiter');
 const { recordFunnelEvent } = require('../services/funnelEvents');
 const { loadViewer } = require('../services/plans/planViewer');
 const planService = require('../services/plans/planService');
 const planActions = require('../services/plans/planActions');
 const planGames = require('../services/plans/planGames');
 const planPlaces = require('../services/plans/planPlaces');
+const { suggestPlaces } = require('../services/ai/planPlaceSuggest');
 const { KINDS, WINDOWS } = require('../services/plans/planRules');
 
 const router = express.Router();
@@ -61,6 +62,11 @@ function gpsFromQuery(query) {
   return { ...point, timestamp: String(query.gps_timestamp) };
 }
 
+/** The host's homes and fresh fix: their areas' public places start loading now, ready for H6. */
+function warmPlaces(viewer) {
+  planPlaces.warmAround(viewer.locations.filter((l) => l.kind === 'home' || l.kind === 'gps'));
+}
+
 function kindsFromQuery(value) {
   if (!value) return [];
   return String(value).split(',').map((k) => k.trim()).filter((k) => KINDS.includes(k));
@@ -73,6 +79,7 @@ router.get('/', async (req, res) => {
     if (!point) return fail(res, 422, 'validation', 'A latitude and longitude are needed to find plans nearby.');
     const window = WINDOWS.includes(req.query.window) ? req.query.window : 'week';
     const viewer = await loadViewer(req.user, { point, gps: gpsFromQuery(req.query) });
+    warmPlaces(viewer);
     let kinds = kindsFromQuery(req.query.kinds);
     if (!viewer.seesPlaydates) kinds = kinds.filter((k) => k !== 'playdate');
     if (req.query.kinds && kinds.length === 0) return res.json({ items: [], next_cursor: null, nearest_elsewhere: null });
@@ -87,6 +94,7 @@ router.get('/', async (req, res) => {
 router.get('/mine', async (req, res) => {
   try {
     const viewer = await loadViewer(req.user, { point: pointFromQuery(req.query), gps: gpsFromQuery(req.query) });
+    warmPlaces(viewer);
     return res.json(await planService.listMine(viewer));
   } catch (err) {
     return serverError(res, err, 'mine', req);
@@ -99,6 +107,7 @@ router.get('/mine', async (req, res) => {
 router.get('/games', async (req, res) => {
   try {
     const viewer = await loadViewer(req.user, { point: pointFromQuery(req.query), gps: gpsFromQuery(req.query) });
+    warmPlaces(viewer);
     const near = viewer.origin ? [...viewer.locations, viewer.origin] : viewer.locations;
     return res.json({ games: planGames.upcomingGames(Date.now(), { near }) });
   } catch (err) {
@@ -106,18 +115,71 @@ router.get('/games', async (req, res) => {
   }
 });
 
-// GET /api/plans/places/nearby?latitude&longitude[&q]: public places for H6, nearest first.
+/** The plan's start or end from a query or body value (ISO 8601), or null. */
+function isoTime(value) {
+  if (typeof value !== 'string' || value.length > 40) return null;
+  return Number.isNaN(Date.parse(value)) ? null : value;
+}
+
+const PLACES_UNAVAILABLE = "Places near you aren't loading right now. Try again in a minute.";
+
+// GET /api/plans/places/nearby?latitude&longitude[&q][&kind&sport&starts_at&ends_at][&wait=0]:
+// public places for H6, nearest first, or with a kind the ones that suit the plan first, each
+// with its hours for the plan's time and a few facts. wait=0 only starts gathering a new area
+// (the host flow opening) and answers at once.
 router.get('/places/nearby', async (req, res) => {
   try {
     const point = pointFromQuery(req.query);
     if (!point) return fail(res, 422, 'validation', 'A latitude and longitude are needed to find places nearby.');
     const q = typeof req.query.q === 'string' ? req.query.q.slice(0, 60) : '';
-    const result = await planPlaces.placesNear({ ...point, q });
+    const kind = KINDS.includes(req.query.kind) ? req.query.kind : null;
+    const sport = typeof req.query.sport === 'string' ? req.query.sport.slice(0, 30) : null;
+    const result = await planPlaces.placesNear({
+      ...point,
+      q,
+      kind,
+      sport,
+      startsAt: isoTime(req.query.starts_at),
+      endsAt: isoTime(req.query.ends_at),
+      ...(req.query.wait === '0' ? { waitMs: 0 } : {}),
+    });
     // 202 while an area seen for the first time is still loading: ask again in a few seconds.
     return res.status(result.loading ? 202 : 200).json(result);
   } catch (err) {
     logger.warn('plans.places.unavailable', { error: err?.message });
-    return fail(res, 503, 'unavailable', "Places nearby aren't loading right now. Search, or try again in a minute.");
+    return fail(res, 503, 'unavailable', PLACES_UNAVAILABLE);
+  }
+});
+
+// POST /api/plans/places/suggest { latitude, longitude, kind, title?, about?, starts_at?, ends_at?,
+// spots?, details?, ask? }: H6's "Suggest places", up to three public places from the same list,
+// best first, each with `why`. 202 while the area's places are still loading, as above.
+router.post('/places/suggest', aiDraftLimiter, async (req, res) => {
+  try {
+    const input = body(req);
+    const point = pointFromQuery(input);
+    if (!point) return fail(res, 422, 'validation', 'A latitude and longitude are needed to find places nearby.');
+    if (!KINDS.includes(input.kind)) return fail(res, 422, 'validation', 'Choose what kind of plan it is.');
+    const details = input.details && typeof input.details === 'object' && !Array.isArray(input.details) ? input.details : {};
+    const spots = Number.isInteger(input.spots) && input.spots > 0 && input.spots <= 50 ? input.spots : null;
+    const result = await suggestPlaces({
+      userId: req.user.id,
+      ...point,
+      plan: {
+        kind: input.kind,
+        title: typeof input.title === 'string' ? input.title : null,
+        about: typeof input.about === 'string' ? input.about : null,
+        startsAt: isoTime(input.starts_at),
+        endsAt: isoTime(input.ends_at),
+        spots,
+        details,
+      },
+      ask: typeof input.ask === 'string' ? input.ask.slice(0, 120) : '',
+    });
+    return res.status(result.loading ? 202 : 200).json(result);
+  } catch (err) {
+    logger.warn('plans.places.suggest_unavailable', { error: err?.message });
+    return fail(res, 503, 'unavailable', PLACES_UNAVAILABLE);
   }
 });
 

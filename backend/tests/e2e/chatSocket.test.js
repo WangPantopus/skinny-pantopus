@@ -439,28 +439,33 @@ describe('Typing indicators', () => {
 // ============================================================
 
 describe('Disconnect', () => {
+  // Typing is ephemeral: it is relayed live, never stored, and each client expires it. A disconnect leaves
+  // nothing behind and tells the room's subscribers the person went offline, so they drop the indicator at once.
   test('disconnect cleans up typing indicators', async () => {
+    const socketU2 = await connect(TOKEN_U2);
+    await emitWithAck(socketU2, 'room:join', { roomId: ROOM_1 });
     const socketU1 = await connect(TOKEN_U1);
     await emitWithAck(socketU1, 'room:join', { roomId: ROOM_1 });
 
-    // Start typing
+    // Start typing: the peer hears it, and no typing row is written.
+    const typingPromise = waitForEvent(socketU2, 'typing:user');
     socketU1.emit('typing:start', { roomId: ROOM_1 });
-    await new Promise(r => setTimeout(r, 200));
+    expect(await typingPromise).toEqual({ userId: U1, roomId: ROOM_1 });
+    expect(getTable('ChatTyping').filter(t => t.user_id === U1)).toHaveLength(0);
 
-    // Verify typing row exists
-    const typingBefore = getTable('ChatTyping').filter(t => t.user_id === U1);
-    expect(typingBefore.length).toBeGreaterThanOrEqual(1);
-
-    // Disconnect
+    // Disconnect: the subscriber is told U1 is offline, and no typing state remains anywhere.
+    const offlinePromise = waitForEvent(socketU2, 'user:offline');
+    let typingAfterDisconnect = false;
     await disconnectSocket(socketU1);
+    socketU2.on('typing:user', (data) => { if (data.userId === U1) typingAfterDisconnect = true; });
     // Remove from tracking so afterEach doesn't try to disconnect again
     const idx = activeSockets.indexOf(socketU1);
     if (idx >= 0) activeSockets.splice(idx, 1);
-    await new Promise(r => setTimeout(r, 300));
 
-    // Verify typing cleaned up
-    const typingAfter = getTable('ChatTyping').filter(t => t.user_id === U1);
-    expect(typingAfter.length).toBe(0);
+    expect(await offlinePromise).toEqual({ userId: U1, roomId: ROOM_1 });
+    await new Promise(r => setTimeout(r, 300));
+    expect(typingAfterDisconnect).toBe(false);
+    expect(getTable('ChatTyping').filter(t => t.user_id === U1)).toHaveLength(0);
   });
 });
 
@@ -496,8 +501,10 @@ describe('Reconnect', () => {
 
 describe('Online/offline events', () => {
   test('user:online fires on first connect, user:offline on last disconnect, only for shared conversations', async () => {
-    // U2 shares ROOM_1 with U1; U3 shares no conversation with U1.
+    // U2 shares ROOM_1 with U1; U3 shares no conversation with U1. Presence reaches only a room's explicit
+    // subscribers (room:join), after the same authorization as typing.
     const observer = await connect(TOKEN_U2);
+    await emitWithAck(observer, 'room:join', { roomId: ROOM_1 });
     const outsider = await connect(TOKEN_U3);
     const outsiderEvents = [];
     outsider.on('user:online', (data) => outsiderEvents.push(['online', data.userId]));
@@ -560,7 +567,9 @@ describe('Multi-device (same user, multiple sockets)', () => {
   });
 
   test('user:offline only fires when last socket disconnects', async () => {
+    // Presence reaches the room's explicit subscribers (room:join).
     const observer = await connect(TOKEN_U1);
+    await emitWithAck(observer, 'room:join', { roomId: ROOM_1 });
 
     // U2 connects with two sockets
     const device1 = await connect(TOKEN_U2);

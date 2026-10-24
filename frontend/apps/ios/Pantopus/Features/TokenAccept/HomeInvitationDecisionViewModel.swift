@@ -184,7 +184,7 @@ final class HomeInvitationDecisionViewModel {
               let serverSession else { throw HomeInvitationDecisionError.changed }
         let endpoint = Endpoint(
             method: .get,
-            path: "/api/homes/invitations/token/\(token)/decision-context",
+            path: "/api/homes/invitations/token/\(Endpoint.pathSegment(token))/decision-context",
             headers: headers,
             cachePolicy: .reloadIgnoringLocalCacheData
         )

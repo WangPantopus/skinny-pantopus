@@ -1,8 +1,9 @@
-@file:Suppress("MagicNumber", "LongMethod", "CyclomaticComplexMethod")
+@file:Suppress("MagicNumber", "LongMethod", "CyclomaticComplexMethod", "LongParameterList")
 
 package app.pantopus.android.ui.screens.plans.host
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,19 +16,33 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import app.pantopus.android.R
 import app.pantopus.android.data.api.models.plans.PlanNearbyPlaceDto
+import app.pantopus.android.data.api.models.plans.PlanPlaceSuggestionsResponse
+import app.pantopus.android.data.api.net.NetworkError
+import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.plans.PlanFormat
 import app.pantopus.android.data.plans.PlanKind
+import app.pantopus.android.data.plans.PlanPlaceQuery
+import app.pantopus.android.data.plans.planMessage
 import app.pantopus.android.ui.screens.plans.colors
 import app.pantopus.android.ui.screens.plans.components.PlanAreaGlow
 import app.pantopus.android.ui.screens.plans.components.PlanAvatar
@@ -39,6 +54,7 @@ import app.pantopus.android.ui.screens.plans.components.PlanRow
 import app.pantopus.android.ui.screens.plans.components.PlanRowEnd
 import app.pantopus.android.ui.screens.plans.components.PlanTextArea
 import app.pantopus.android.ui.screens.plans.components.PlanTile
+import app.pantopus.android.ui.screens.plans.components.PlanTonalButton
 import app.pantopus.android.ui.screens.plans.components.PlanTypeTag
 import app.pantopus.android.ui.screens.plans.components.PlanVerifiedBadge
 import app.pantopus.android.ui.screens.plans.components.planCard
@@ -60,6 +76,8 @@ import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.google.maps.android.compose.rememberMarkerState
+import java.time.LocalDateTime
+import java.time.ZoneId
 
 /**
  * H6: choose a public place (or "You're here now" for a pickup game, or your place where it's allowed). Pickup games
@@ -83,11 +101,17 @@ internal fun PlacePickerStep(
                 origin = ui.origin,
                 error = ui.error,
                 hereNow = ui.hereNow,
+                gathering = ui.placesGathering,
+                placesError = ui.placesError,
+                suggestions = ui.suggestions,
+                homePoints = ui.homePoints,
             ),
         onClose = vm::closePlaces,
         onUse = vm::usePlace,
         onSearch = vm::searchPlaces,
         onPick = vm::pickPlaceCandidate,
+        onRetry = vm::retryPlaces,
+        onSuggest = vm::suggestPlaces,
         onHereNow = if (kind == PlanKind.PICKUP_GAME) vm::pickHereNow else null,
         homeRow =
             if (kind != PlanKind.PICKUP_GAME && kind != PlanKind.STUDY_GROUP) {
@@ -114,12 +138,104 @@ internal data class PlacePickerState(
     val origin: Pair<Double, Double>?,
     val error: String?,
     val hereNow: HereNowState = HereNowState.Idle,
+    /** The server is still gathering this area's places (a first look can take up to a minute). */
+    val gathering: Boolean = false,
+    /** Why the places couldn't load, shown with "Try again". */
+    val placesError: String? = null,
+    val suggestions: PlaceSuggestions = PlaceSuggestions.Idle,
+    /** The host's homes: "Pick it on the map" never takes a place at one. */
+    val homePoints: List<Pair<Double, Double>> = emptyList(),
 )
 
 /**
- * H6's picker: search, a small map, the public places near you, then "Use …". [onHereNow] adds "You're here now"
- * (pickup games): it finds the public place the host is at, and once found the row names it, as board H4 does ("City
- * courts / You're here now"); [homeRow] adds "My place" after the places (the host flow only).
+ * H6's "Suggest places" (and "Ask Pantopus" for what the host typed in the search box), as iOS's
+ * PlanPlaceSuggestions: Pantopus picks up to three of the public places near the host, each with why.
+ */
+sealed interface PlaceSuggestions {
+    data object Idle : PlaceSuggestions
+
+    /** [gathering]: the area's places are still on their way. */
+    data class Loading(
+        val gathering: Boolean,
+    ) : PlaceSuggestions
+
+    data class Loaded(
+        val picks: List<PlanNearbyPlaceDto>,
+        val fromAi: Boolean,
+    ) : PlaceSuggestions
+
+    data class Empty(
+        val line: String,
+    ) : PlaceSuggestions
+
+    data class Failed(
+        val line: String,
+    ) : PlaceSuggestions
+
+    companion object {
+        /** What a finished "Suggest places" read shows. */
+        fun from(
+            result: NetworkResult<PlanPlaceSuggestionsResponse>,
+            ask: String?,
+        ): PlaceSuggestions =
+            when (result) {
+                is NetworkResult.Success ->
+                    when {
+                        result.data.loading -> Failed(PLACES_SLOW)
+                        result.data.picks.isEmpty() ->
+                            Empty(
+                                ask?.let { "Nothing nearby fits “$it”. Try other words, or pick from the list." }
+                                    ?: "Nothing nearby fits this plan. Pick from the list below.",
+                            )
+                        else -> Loaded(result.data.picks, fromAi = result.data.source == "ai")
+                    }
+                is NetworkResult.Failure ->
+                    Failed(
+                        when {
+                            result.error.code == HTTP_TOO_MANY -> result.error.planMessage
+                            result.error is NetworkError.Server -> PLACES_UNAVAILABLE
+                            else -> "Couldn't get suggestions. Check your connection and try again."
+                        },
+                    )
+            }
+    }
+}
+
+internal const val PLACES_SLOW = "Places near you are taking longer than usual to load. Try again in a minute."
+internal const val PLACES_UNAVAILABLE = "Places near you aren't loading right now. Try again in a minute."
+private const val HTTP_TOO_MANY = 429
+
+/** The server's "unavailable" (its map servers failed just now), offline, or anything else (as on iOS). */
+internal fun placesFailure(error: NetworkError): String =
+    when (error) {
+        is NetworkError.Server -> PLACES_UNAVAILABLE
+        is NetworkError.Transport -> "Couldn't load places. Check your connection and try again."
+        else -> error.planMessage
+    }
+
+/**
+ * What H6's list is for: the plan's kind, a pickup game's sport, and its time, as the server reads them
+ * ([PlanPlaceQuery]).
+ */
+internal fun placeQuery(
+    kind: PlanKind,
+    sport: String?,
+    start: LocalDateTime,
+    end: LocalDateTime?,
+    zone: ZoneId,
+): PlanPlaceQuery =
+    PlanPlaceQuery(
+        kind = kind.wire,
+        sport = sport.takeIf { kind == PlanKind.PICKUP_GAME },
+        startsAt = start.atZone(zone).toInstant().toString(),
+        endsAt = (end ?: start.plusHours(1)).atZone(zone).toInstant().toString(),
+    )
+
+/**
+ * H6's picker: search, a small map, "Suggest places", the public places near you, then "Use …". [onHereNow] adds
+ * "You're here now" (pickup games): it finds the public place the host is at, and once found the row names it, as
+ * board H4 does ("City courts / You're here now"); [homeRow] adds "My place" after the places (the host flow only);
+ * [onSuggest] asks Pantopus for places that suit the plan (with the search text when the host asked from there).
  */
 @Composable
 internal fun PublicPlacePicker(
@@ -128,16 +244,43 @@ internal fun PublicPlacePicker(
     onUse: () -> Unit,
     onSearch: (String) -> Unit,
     onPick: (PickedPlace) -> Unit,
+    onRetry: () -> Unit = {},
+    onSuggest: ((ask: String?) -> Unit)? = null,
     onHereNow: (() -> Unit)? = null,
     homeRow: (@Composable (first: Boolean) -> Unit)? = null,
 ) {
     val kind = state.kind
     val candidate = state.candidate
     val query = state.query.trim()
+    val searching = query.length >= 2
+    // By name or kind of place, as the server's search reads `q` (so "cafe" keeps the cafés it found).
     val places =
         remember(state.places, query, kind) {
-            orderedForKind(state.places.filter { query.isEmpty() || it.name.orEmpty().contains(query, ignoreCase = true) }, kind)
+            orderedForKind(
+                state.places.filter {
+                    query.isEmpty() ||
+                        it.name.orEmpty().contains(query, ignoreCase = true) ||
+                        it.category.orEmpty().contains(query, ignoreCase = true)
+                },
+                kind,
+            )
         }
+    var pickingOnMap by rememberSaveable { mutableStateOf(false) }
+    val origin = state.origin
+    if (pickingOnMap && origin != null) {
+        PlaceMapPick(
+            kind = kind,
+            origin = origin,
+            homePoints = state.homePoints,
+            onUse = { picked ->
+                pickingOnMap = false
+                onPick(picked)
+                onUse()
+            },
+            onClose = { pickingOnMap = false },
+        )
+        return
+    }
     HostStepScaffold(
         title = "Where?",
         step = null,
@@ -162,9 +305,20 @@ internal fun PublicPlacePicker(
                 label = "Search places",
                 singleLine = true,
             )
-            PickerMap(origin = state.origin, picked = candidate, kind = kind)
+            PickerMap(origin = state.origin, picked = candidate, kind = kind, onPickOnMap = { pickingOnMap = true })
+            if (onSuggest != null) {
+                // "Suggest places" once the list is in; from the search box, "Ask Pantopus" once the search is in and
+                // the words name no place ("big screens and food", as on iOS).
+                val ask = query.take(ASK_MAX).takeIf { searching }
+                val listIn = !state.loading && state.placesError == null
+                val namesAPlace = places.any { it.name.orEmpty().contains(query, ignoreCase = true) }
+                val shows = if (searching) listIn && !namesAPlace else listIn && places.isNotEmpty()
+                if (shows) {
+                    PlaceSuggestionsSection(state = state, ask = ask, onSuggest = { onSuggest(ask) }, onPick = onPick)
+                }
+            }
             Column {
-                PlanOverline(if (query.length >= 2) "Results" else "Public places near you", modifier = Modifier.padding(bottom = 2.dp))
+                PlanOverline(if (searching) "Results" else "Public places near you", modifier = Modifier.padding(bottom = 2.dp))
                 var first = true
                 if (onHereNow != null) {
                     val found = candidate?.takeIf { it.hereNow }
@@ -188,14 +342,37 @@ internal fun PublicPlacePicker(
                     first = false
                 }
                 when {
-                    state.loading && places.isEmpty() -> PlanRowsSkeleton(rows = 3)
+                    state.loading && places.isEmpty() -> {
+                        PlanRowsSkeleton(rows = 3)
+                        if (state.gathering) {
+                            Text(
+                                text = "Gathering the public places near you. The first look at an area can take up to a minute.",
+                                style = PantopusTextStyle.small.copy(fontSize = 13.sp),
+                                color = PantopusColors.appTextSecondary,
+                                modifier = Modifier.padding(top = Spacing.s1).testTag("planPlaceGathering"),
+                            )
+                        }
+                    }
+                    state.placesError != null && places.isEmpty() ->
+                        Column(
+                            modifier = Modifier.padding(vertical = Spacing.s3),
+                            verticalArrangement = Arrangement.spacedBy(Spacing.s2),
+                        ) {
+                            Text(
+                                text = state.placesError,
+                                style = PantopusTextStyle.small,
+                                color = PantopusColors.appTextSecondary,
+                                modifier = Modifier.testTag("planPlaceError"),
+                            )
+                            PlanTonalButton(title = "Try again", onClick = onRetry, modifier = Modifier.testTag("planPlaceRetry"))
+                        }
                     places.isEmpty() ->
                         Text(
                             text =
                                 if (query.isEmpty()) {
-                                    "No public places found nearby. Search for one."
+                                    "No public places are on the map within 3 miles of you yet."
                                 } else {
-                                    "No places match “$query”."
+                                    "No public places match “$query” within 3 miles."
                                 },
                             style = PantopusTextStyle.small,
                             color = PantopusColors.appTextSecondary,
@@ -204,25 +381,11 @@ internal fun PublicPlacePicker(
                     else ->
                         places.forEach { place ->
                             val picked = place.toPicked() ?: return@forEach
-                            val selected = candidate?.name == picked.name && candidate.latitude == picked.latitude
-                            PlanRow(
-                                title = picked.name,
-                                subtitle = placeRowCaption(picked),
-                                end = if (selected) PlanRowEnd.Check else PlanRowEnd.None,
-                                first = first,
-                                leading = {
-                                    if (selected) {
-                                        PlanTile(kind)
-                                    } else {
-                                        PlanIconTile(iconFor(place.category), PantopusColors.appSurfaceSunken, PantopusColors.appTextStrong)
-                                    }
-                                },
-                                spoken = "${picked.name}, ${placeRowCaption(picked)}${if (selected) ", selected" else ""}",
-                                onClick = { onPick(picked) },
-                            )
+                            PlaceRow(place = place, picked = picked, kind = kind, candidate = candidate, first = first, onPick = onPick)
                             first = false
                         }
                 }
+                if (origin != null) PlaceMapPickRow { pickingOnMap = true }
                 state.attribution?.takeIf { places.isNotEmpty() }?.let { credit ->
                     Text(
                         text = "Places $credit",
@@ -241,6 +404,174 @@ internal fun PublicPlacePicker(
         }
     }
 }
+
+/**
+ * One public place: its kind and distance, then what matters for the plan's time ("Open until 11 PM · Outdoor
+ * seating", or "Closes at 2 PM" in amber), and for a suggestion why it suits the plan (as iOS's PlanPlaceRow).
+ */
+@Composable
+private fun PlaceRow(
+    place: PlanNearbyPlaceDto,
+    picked: PickedPlace,
+    kind: PlanKind,
+    candidate: PickedPlace?,
+    first: Boolean,
+    onPick: (PickedPlace) -> Unit,
+) {
+    val selected = candidate?.name == picked.name && candidate.latitude == picked.latitude
+    val caption = placeRowCaption(picked)
+    val why = place.why?.takeIf(String::isNotBlank)
+    val detail = place.detail?.takeIf { !it.text.isNullOrBlank() }
+    PlanRow(
+        title = picked.name,
+        subtitle = caption,
+        end = if (selected) PlanRowEnd.Check else PlanRowEnd.None,
+        first = first,
+        leading = {
+            if (selected) {
+                PlanTile(kind)
+            } else {
+                PlanIconTile(iconFor(place.category), PantopusColors.appSurfaceSunken, PantopusColors.appTextStrong)
+            }
+        },
+        spoken = listOfNotNull(picked.name, caption, why, detail?.text, "selected".takeIf { selected }).joinToString(", "),
+        onClick = { onPick(picked) },
+        below =
+            if (why == null && detail == null) {
+                null
+            } else {
+                {
+                    if (why != null) {
+                        Row(
+                            modifier = Modifier.padding(top = 2.dp),
+                            horizontalArrangement = Arrangement.spacedBy(5.dp),
+                            verticalAlignment = Alignment.Top,
+                        ) {
+                            PantopusIconImage(
+                                icon = PantopusIcon.Sparkles,
+                                contentDescription = null,
+                                size = 12.dp,
+                                tint = PantopusColors.primary600,
+                                modifier = Modifier.padding(top = 3.dp),
+                            )
+                            Text(text = why, style = PantopusTextStyle.small.copy(fontSize = 13.sp), color = PantopusColors.appTextStrong)
+                        }
+                    }
+                    if (detail != null) {
+                        Text(
+                            text = detail.text.orEmpty(),
+                            style = PantopusTextStyle.small.copy(fontSize = 13.sp),
+                            color = if (detail.isWarning) PantopusColors.warning else PantopusColors.appTextSecondary,
+                            maxLines = 2,
+                        )
+                    }
+                }
+            },
+    )
+}
+
+/** "Suggest places" and its picks (H6), or "Ask Pantopus" for what the host typed. */
+@Composable
+private fun PlaceSuggestionsSection(
+    state: PlacePickerState,
+    ask: String?,
+    onSuggest: () -> Unit,
+    onPick: (PickedPlace) -> Unit,
+) {
+    val noun = suggestNoun(state.kind)
+    val heading = ask?.let { "For “$it”" } ?: "Suggested for your $noun"
+    val status = Modifier.testTag("planPlaceSuggestStatus")
+    Column(modifier = Modifier.fillMaxWidth().testTag("planPlaceSuggestions")) {
+        when (val suggestions = state.suggestions) {
+            PlaceSuggestions.Idle ->
+                PlanRow(
+                    title = ask?.let { "Ask Pantopus: “$it”" } ?: "Suggest places for your $noun",
+                    subtitle =
+                        if (ask == null) {
+                            "Pantopus picks from the public places near you, for your plan's time"
+                        } else {
+                            "Find places nearby that fit what you typed"
+                        },
+                    end = PlanRowEnd.Chevron,
+                    first = true,
+                    leading = { PlanIconTile(PantopusIcon.Sparkles, PantopusColors.primary100, PantopusColors.primary700) },
+                    onClick = onSuggest,
+                    modifier = Modifier.testTag(if (ask == null) "planPlaceSuggest" else "planPlaceAskPantopus"),
+                )
+            is PlaceSuggestions.Loading -> {
+                PlanOverline(heading, modifier = Modifier.padding(bottom = 2.dp))
+                PlanRowsSkeleton(rows = 2)
+                Text(
+                    text =
+                        if (suggestions.gathering) {
+                            "Gathering the public places near you first…"
+                        } else {
+                            "Pantopus is picking places for your $noun…"
+                        },
+                    style = PantopusTextStyle.small.copy(fontSize = 13.sp),
+                    color = PantopusColors.appTextSecondary,
+                    modifier = status,
+                )
+            }
+            is PlaceSuggestions.Loaded -> {
+                PlanOverline(heading, modifier = Modifier.padding(bottom = 2.dp))
+                suggestions.picks.forEachIndexed { index, place ->
+                    val picked = place.toPicked() ?: return@forEachIndexed
+                    PlaceRow(
+                        place = place,
+                        picked = picked,
+                        kind = state.kind,
+                        candidate = state.candidate,
+                        first = index == 0,
+                        onPick = onPick,
+                    )
+                }
+                Text(
+                    text =
+                        if (suggestions.fromAi) {
+                            "Picked by Pantopus from the public places near you. Check the details before you go."
+                        } else {
+                            "Good fits from the public places near you."
+                        },
+                    style = PantopusTextStyle.caption,
+                    color = PantopusColors.appTextMuted,
+                    modifier = Modifier.padding(top = Spacing.s1),
+                )
+            }
+            is PlaceSuggestions.Empty -> {
+                PlanOverline(heading, modifier = Modifier.padding(bottom = 2.dp))
+                Text(
+                    text = suggestions.line,
+                    style = PantopusTextStyle.small,
+                    color = PantopusColors.appTextSecondary,
+                    modifier = status.padding(vertical = Spacing.s2),
+                )
+            }
+            is PlaceSuggestions.Failed ->
+                Column(modifier = Modifier.padding(vertical = Spacing.s2), verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+                    Text(
+                        text = suggestions.line,
+                        style = PantopusTextStyle.small,
+                        color = PantopusColors.appTextSecondary,
+                        modifier = status,
+                    )
+                    PlanTonalButton(title = "Try again", onClick = onSuggest, height = 40.dp)
+                }
+        }
+    }
+}
+
+/** "Suggested for your watch party", "… your game" (as on iOS). */
+private fun suggestNoun(kind: PlanKind): String =
+    when (kind) {
+        PlanKind.WATCH_PARTY -> "watch party"
+        PlanKind.PLAYDATE -> "playdate"
+        PlanKind.PICKUP_GAME -> "game"
+        PlanKind.WALK_COFFEE -> "walk"
+        PlanKind.STUDY_GROUP -> "study group"
+    }
+
+private const val ASK_MAX = 120
 
 /** "My place" / "My porch" under H6's places: only where hosting at home is allowed (never playdates). */
 @Composable
@@ -269,8 +600,10 @@ private fun HomeRow(
 }
 
 /**
- * The kind's own public places first, nearest first within each, then the rest, as iOS's `PlanPlaceFit` orders them:
- * libraries, cafés and community centers for a study group. The other kinds keep the server's nearest-first order.
+ * The kind's own public places first, in the server's order within each (its nearest first, a pickup game's courts
+ * for its sport first), then the rest, as iOS's `PlanPlaceFit` orders them; places open for only part of the plan
+ * after those open for all of it, closed ones last (`fitOrder` in backend/services/plans/planPlaces.js). Never a bar
+ * for a playdate.
  */
 internal fun orderedForKind(
     places: List<PlanNearbyPlaceDto>,
@@ -278,12 +611,27 @@ internal fun orderedForKind(
 ): List<PlanNearbyPlaceDto> {
     val preferred =
         when (kind) {
+            PlanKind.WATCH_PARTY -> listOf("bar", "restaurant", "cafe", "community_center")
+            PlanKind.PLAYDATE -> listOf("playground", "park", "library", "community_center")
+            PlanKind.PICKUP_GAME -> listOf("court", "park", "playground", "community_center")
+            PlanKind.WALK_COFFEE -> listOf("trail", "park", "cafe")
             PlanKind.STUDY_GROUP -> listOf("library", "cafe", "community_center")
-            else -> return places
         }
-    // A stable sort: places of the same rank keep their distance order.
-    return places.sortedBy { place -> preferred.indexOf(place.category?.lowercase()).takeIf { it >= 0 } ?: preferred.size }
+    val allowed = places.filter { kind != PlanKind.PLAYDATE || it.category?.lowercase() != "bar" }
+    // A stable sort: places of the same rank keep the server's order.
+    return allowed.sortedBy { place ->
+        val category = preferred.indexOf(place.category?.lowercase()).takeIf { it >= 0 } ?: preferred.size
+        val hours =
+            when {
+                place.hours?.isClosed == true -> 2
+                place.hours?.isPartial == true -> 1
+                else -> 0
+            }
+        hours * HOURS_TIER + category
+    }
 }
+
+private const val HOURS_TIER = 100
 
 internal fun PlanNearbyPlaceDto.toPicked(): PickedPlace? {
     val lat = center?.lat ?: latitude ?: return null
@@ -310,12 +658,13 @@ private fun iconFor(category: String?): PantopusIcon {
     }
 }
 
-/** H6's small map: the place you picked, as a pin, near where you are. */
+/** H6's small map: the place you picked, as a pin, near where you are. Tapping it opens "Pick it on the map" (as on iOS). */
 @Composable
 private fun PickerMap(
     origin: Pair<Double, Double>?,
     picked: PickedPlace?,
     kind: PlanKind,
+    onPickOnMap: () -> Unit,
 ) {
     origin ?: return
     val center = picked?.let { LatLng(it.latitude, it.longitude) } ?: LatLng(origin.first, origin.second)
@@ -342,10 +691,14 @@ private fun PickerMap(
             Modifier
                 .fillMaxWidth()
                 .height(150.dp)
-                .clip(RoundedCornerShape(Radii.xl))
-                .clearAndSetSemantics {},
+                .clip(RoundedCornerShape(Radii.xl)),
     ) {
-        GoogleMap(modifier = Modifier.fillMaxSize(), cameraPositionState = camera, properties = properties, uiSettings = settings) {
+        GoogleMap(
+            modifier = Modifier.fillMaxSize().clearAndSetSemantics {},
+            cameraPositionState = camera,
+            properties = properties,
+            uiSettings = settings,
+        ) {
             if (picked != null) {
                 val state =
                     rememberMarkerState(
@@ -361,6 +714,17 @@ private fun PickerMap(
                 radiusPx = 120f,
                 modifier = Modifier.align(Alignment.Center).fillMaxSize(),
             )
+        }
+        // Over the map, so the tap reaches it rather than the map view.
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .clickable(onClickLabel = "Pick a place on the map", role = Role.Button, onClick = onPickOnMap)
+                    .semantics { contentDescription = "Map near you" }
+                    .testTag("planPlaceMapPickOpen"),
+        ) {
+            PlaceMapPickChip(modifier = Modifier.align(Alignment.BottomEnd))
         }
     }
 }

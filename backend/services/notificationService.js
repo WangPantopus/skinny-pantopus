@@ -309,6 +309,26 @@ async function shouldSuppressAudienceNotification(userId, type, metadata) {
   return false;
 }
 
+async function publishStoredNotification(data) {
+  const userId = data.user_id;
+  // Stored references remain subject to current access on every inbox read.
+  // A quote the recipient cannot read must not leave through a live channel.
+  if (!(await readableNotifications([data])).length) return false;
+
+  // Push updated badge counts to the user in real-time
+  badgeService.emitBadgeUpdate(userId);
+
+  // Push the notification itself so frontends can prepend it instantly
+  if (_io && _connectedUsers) {
+    const socketIds = getUserSocketIds(userId);
+    for (const socketId of socketIds) {
+      _io.to(socketId).emit('notification:new', data);
+    }
+  }
+
+  return true;
+}
+
 /**
  * Create a notification for a user.
  * @param {Object} opts
@@ -378,20 +398,7 @@ async function createNotification({ id, userId, type, title, body, icon, link, m
       return null;
     }
 
-    // Stored references remain subject to current access on every inbox read.
-    // A quote the recipient cannot read must not leave through a live channel.
-    if (!(await readableNotifications([data])).length) return null;
-
-    // Push updated badge counts to the user in real-time
-    badgeService.emitBadgeUpdate(userId);
-
-    // Push the notification itself so frontends can prepend it instantly
-    if (_io && _connectedUsers) {
-      const socketIds = getUserSocketIds(userId);
-      for (const socketId of socketIds) {
-        _io.to(socketId).emit('notification:new', data);
-      }
-    }
+    if (!(await publishStoredNotification(data))) return null;
 
     // Send push notification only if:
     // 1. User has global push enabled (MailPreferences.push_notifications)
@@ -1427,6 +1434,8 @@ async function deliverStoredHomeTaskNotification(notification, { pushAllowedAtAs
 module.exports = {
   init,
   createNotification,
+  publishStoredNotification,
+  emitDesktopAlert,
   isPushEnabled,
   deliverStoredGigNotification,
   deliverStoredHomeTaskNotification,

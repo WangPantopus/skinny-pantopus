@@ -10,6 +10,7 @@ import app.pantopus.android.data.api.models.businesses.BusinessAccessDto
 import app.pantopus.android.data.api.models.businesses.BusinessRolePresetDto
 import app.pantopus.android.data.api.models.businesses.BusinessSeatDto
 import app.pantopus.android.data.api.models.businesses.BusinessTeamMemberDto
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.businesses.BusinessTeamRepository
 import app.pantopus.android.data.network.NetworkMonitor
@@ -107,6 +108,11 @@ class BusinessTeamViewModel
         private val _rolePresets = MutableStateFlow<List<BusinessRolePresetDto>>(emptyList())
         val rolePresets: StateFlow<List<BusinessRolePresetDto>> = _rolePresets.asStateFlow()
 
+        private val _mutationError = MutableStateFlow<String?>(null)
+
+        /** Why the last role change, removal or invite cancellation was rolled back (iOS `mutationError`). */
+        val mutationError: StateFlow<String?> = _mutationError.asStateFlow()
+
         private var access: BusinessAccessDto? = null
         private var members: List<BusinessTeamMemberDto> = emptyList()
         private var pendingSeats: List<BusinessSeatDto> = emptyList()
@@ -183,7 +189,7 @@ class BusinessTeamViewModel
             applyState()
         }
 
-        /** Optimistic role change with rollback. */
+        /** Optimistic role change; a failure rolls it back and says so. */
         fun changeRole(
             userId: String,
             preset: BusinessRolePresetDto,
@@ -195,47 +201,61 @@ class BusinessTeamViewModel
                 }
             applyState()
             viewModelScope.launch {
-                when (repo.changeRole(businessId, userId, preset.key)) {
+                when (val result = repo.changeRole(businessId, userId, preset.key)) {
                     is NetworkResult.Success -> Unit
                     is NetworkResult.Failure -> {
                         members = previous
                         applyState()
+                        _mutationError.value = failureMessage("Couldn't confirm the role change.", result.error)
                     }
                 }
             }
         }
 
-        /** Optimistic member removal with rollback. */
+        /** Optimistic member removal; a failure rolls it back and says so. */
         fun remove(userId: String) {
             val previous = members
             members = previous.filterNot { it.user?.id == userId }
             applyState()
             viewModelScope.launch {
-                when (repo.removeMember(businessId, userId)) {
+                when (val result = repo.removeMember(businessId, userId)) {
                     is NetworkResult.Success -> Unit
                     is NetworkResult.Failure -> {
                         members = previous
                         applyState()
+                        _mutationError.value = failureMessage("Couldn't confirm member removal.", result.error)
                     }
                 }
             }
         }
 
-        /** Optimistic cancel of a pending seat invite with rollback. */
+        /** Optimistic cancel of a pending seat invite; a failure rolls it back and says so. */
         fun cancelInvite(seatId: String) {
             val previous = pendingSeats
             pendingSeats = previous.filterNot { it.id == seatId }
             applyState()
             viewModelScope.launch {
-                when (repo.cancelSeat(businessId, seatId)) {
+                when (val result = repo.cancelSeat(businessId, seatId)) {
                     is NetworkResult.Success -> Unit
                     is NetworkResult.Failure -> {
                         pendingSeats = previous
                         applyState()
+                        _mutationError.value = failureMessage("Couldn't confirm invite cancellation.", result.error)
                     }
                 }
             }
         }
+
+        /** The "Couldn't update team" alert was dismissed. */
+        fun mutationErrorShown() {
+            _mutationError.value = null
+        }
+
+        /** iOS words: the request may still have gone through, so the alert says to refresh. */
+        private fun failureMessage(
+            failure: String,
+            error: NetworkError,
+        ): String = "$failure ${error.message} Refresh to check the latest state."
 
         /** Fetch the effective permission set for one member. */
         suspend fun memberPermissions(userId: String): Result<List<String>> =

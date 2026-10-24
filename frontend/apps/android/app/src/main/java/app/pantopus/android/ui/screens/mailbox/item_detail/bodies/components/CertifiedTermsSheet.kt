@@ -2,8 +2,6 @@
 
 package app.pantopus.android.ui.screens.mailbox.item_detail.bodies.components
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -32,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.pantopus.android.core.routing.ExternalLinks
 import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -107,11 +106,8 @@ fun CertifiedTermsSheet(
             PrimaryButton(
                 title = "Open in browser",
                 onClick = {
-                    val intent =
-                        Intent(Intent.ACTION_VIEW, Uri.parse(termsUrl)).apply {
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        }
-                    runCatching { context.startActivity(intent) }
+                    // The sender sets the terms address: only a web page opens.
+                    ExternalLinks.open(context, termsUrl)
                     onDismiss()
                 },
                 modifier = Modifier.fillMaxWidth(),

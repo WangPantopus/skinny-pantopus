@@ -549,7 +549,7 @@ final class DeepLinkRouter {
         let comps = URLComponents(url: url, resolvingAgainstBaseURL: false)
         let tabQuery = queryValue("tab", in: comps)
         // B1.6 — `?id=` seeds the translation / unboxing mailbox sub-screens.
-        let idQuery = queryValue("id", in: comps)
+        let idQuery = idValue("id", in: comps)
         let tokenQuery = queryValue("token", in: comps)
             ?? queryValue("token_hash", in: comps)
             ?? fragmentParam(url.fragment, name: "token")
@@ -559,7 +559,7 @@ final class DeepLinkRouter {
 
         switch firstSegment {
         case "feed":
-            if let postId = queryValue("post", in: comps), !postId.isEmpty { return .post(id: postId) }
+            if let postId = idValue("post", in: comps), !postId.isEmpty { return .post(id: postId) }
             return queryValue("surface", in: comps) == "personas" ? .beacons : .feed
         case "home":
             return .home
@@ -621,7 +621,7 @@ final class DeepLinkRouter {
             // Singular `business/:username` is the A10.6 public profile.
             // `?pageSlug=` is RN's redirect target for `/b/:username/:slug`.
             guard let id = segments.dropFirst().first else { return .unknown(url) }
-            if let slug = queryValue("pageSlug", in: comps), !slug.isEmpty {
+            if let slug = idValue("pageSlug", in: comps), !slug.isEmpty {
                 return .businessPage(businessId: id, pageSlug: slug)
             }
             return .businessProfile(businessId: id)
@@ -779,7 +779,23 @@ final class DeepLinkRouter {
            let host = Self.customSchemeAuthority(for: url), !host.isEmpty {
             segments.insert(host, at: 0)
         }
+        // A link's ids go into API paths, decoded: one carrying `/` (`%2F`),
+        // a `.` or `..` segment, a control character or an overlong id would
+        // send the request to another route, so the link resolves to nothing.
+        guard segments.allSatisfy(Self.isSafeSegment) else { return [] }
         return segments
+    }
+
+    /// Whether `value`, once in an API path, stays one segment of its route.
+    private nonisolated static func isSafeSegment(_ value: String) -> Bool {
+        value.count <= 128 && value != "." && value != ".."
+            && !value.contains("/") && !value.contains("\\")
+            && !value.unicodeScalars.contains { CharacterSet.controlCharacters.contains($0) }
+    }
+
+    /// A query value that names an id (`?id=`, `?post=`, `?pageSlug=`), when it is one.
+    private func idValue(_ name: String, in components: URLComponents?) -> String? {
+        queryValue(name, in: components).flatMap { Self.isSafeSegment($0) ? $0 : nil }
     }
 
     /// The authority of a custom-scheme link, read off the raw string.

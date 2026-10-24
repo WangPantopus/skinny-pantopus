@@ -106,6 +106,15 @@ function buildPayload({ title, body, data } = {}) {
   return payload;
 }
 
+// The hex form of a device token's bytes: 32 today, and Apple says not to rely
+// on the length, so up to 100. It is the request path's last segment.
+const DEVICE_TOKEN_RE = /^(?:[0-9a-fA-F]{2}){32,100}$/;
+
+/** True for a well-formed APNs device token. Pure — exported for registration. */
+function isDeviceToken(token) {
+  return typeof token === 'string' && DEVICE_TOKEN_RE.test(token);
+}
+
 /**
  * Map an APNs HTTP response to an action. Pure — exported for tests.
  * `invalid` → the device token is dead and should be pruned.
@@ -132,7 +141,7 @@ function getSession() {
   return _session;
 }
 
-function sendOne(session, token, payloadString, providerToken, bundleId) {
+function sendOne(session, token, payloadString, providerToken, bundleId, collapseId) {
   return new Promise((resolve) => {
     let settled = false;
     const finish = (value) => {
@@ -141,13 +150,21 @@ function sendOne(session, token, payloadString, providerToken, bundleId) {
       resolve(value);
     };
 
+    // A malformed token never reaches Apple, where it would change the request
+    // path; it is pruned like a dead one.
+    if (!isDeviceToken(token)) {
+      finish({ token, action: 'invalid', status: 0, reason: 'BadDeviceToken' });
+      return;
+    }
+
     const req = session.request({
       ':method': 'POST',
-      ':path': `/3/device/${token}`,
+      ':path': `/3/device/${encodeURIComponent(token)}`,
       authorization: `bearer ${providerToken}`,
       'apns-topic': bundleId,
       'apns-push-type': 'alert',
       'apns-priority': '10',
+      ...(collapseId ? { 'apns-collapse-id': collapseId } : {}),
       'content-type': 'application/json',
     });
 
@@ -197,9 +214,14 @@ async function sendMany(tokens, message) {
   const providerToken = getProviderToken();
   const payloadString = JSON.stringify(buildPayload(message));
   const session = getSession();
+  // One durable chat delivery retains one OS notification across uncertain retries.
+  // Different messages have different IDs and are never collapsed together.
+  const id = message?.data?.notificationId;
+  const collapseId = ['chat_message', 'business_message'].includes(message?.data?.type)
+    && /^[0-9a-f-]{36}$/i.test(id || '') ? id : undefined;
 
   const results = await Promise.all(
-    tokens.map((token) => sendOne(session, token, payloadString, providerToken, bundleId)),
+    tokens.map((token) => sendOne(session, token, payloadString, providerToken, bundleId, collapseId)),
   );
 
   const invalidTokens = results.filter((r) => r.action === 'invalid').map((r) => r.token);
@@ -216,6 +238,7 @@ function close() {
 
 module.exports = {
   isConfigured,
+  isDeviceToken,
   buildPayload,
   classifyApnsFailure,
   getProviderToken,

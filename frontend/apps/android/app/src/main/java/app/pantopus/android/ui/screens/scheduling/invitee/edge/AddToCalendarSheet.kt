@@ -104,7 +104,8 @@ fun AddToCalendarSheet(
     LaunchedEffect(icsState) {
         val ready = icsState as? AddToCalendarViewModel.IcsState.Ready ?: return@LaunchedEffect
         runCatching {
-            val file = File(context.cacheDir, "invite.ics").apply { writeText(ready.content) }
+            val folder = File(context.cacheDir, "share").apply { mkdirs() }
+            val file = File(folder, "invite.ics").apply { writeText(ready.content) }
             val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
             val view =
                 Intent(Intent.ACTION_VIEW).apply {

@@ -238,7 +238,7 @@ private struct PackageTimelineCard: View {
     }
 
     private var openCarrierAction: (@MainActor () -> Void)? {
-        guard let urlString = content.trackingUrl, let url = URL(string: urlString) else {
+        guard let url = ExternalLink.webURL(content.trackingUrl) else {
             return nil
         }
         return {
@@ -501,7 +501,7 @@ private struct PackageSplitDock: View {
 
     @ViewBuilder
     private var trackButton: some View {
-        if let urlString = content.trackingUrl, let url = URL(string: urlString) {
+        if let url = ExternalLink.webURL(content.trackingUrl) {
             Link(destination: url) { trackLabel }
                 .accessibilityIdentifier("mailDetail_package_trackOnCarrier")
         } else {
