@@ -10,6 +10,7 @@ import ChatMessageBubble from './ChatMessageBubble';
 import type { ChatMessage, ChatReplyQuote } from './ChatMessageBubble';
 
 interface ChatMessageListProps {
+  currentUserId?: string | null;
   asBusinessUserId?: string;
   messages: ChatMessage[];
   loading: boolean;
@@ -27,7 +28,7 @@ interface ChatMessageListProps {
   /** Optional topic divider renderer */
   renderTopicDivider?: (msg: ChatMessage, prevMsg: ChatMessage | null) => React.ReactNode | null;
   /** Called when an image attachment is clicked */
-  onImageClick?: (url: string, title?: string) => void;
+  onImageClick?: (url: string, title?: string, roomId?: string) => void;
   /** Called when a user reacts to a message */
   onReact?: (messageId: string, emoji: string) => void;
   /** Explicitly retry a failed send or a retained person reply after a refusal. */
@@ -55,6 +56,7 @@ function replyQuote(original: ChatMessage, isMine: boolean): ChatReplyQuote {
 }
 
 export default function ChatMessageList({
+  currentUserId,
   asBusinessUserId,
   messages,
   loading,
@@ -327,7 +329,7 @@ export default function ChatMessageList({
                     {startsDate && <ChatDateSeparator label={formatDateLabel(dateKey)} />}
                     {renderTopicDivider?.(msg, previous)}
                     <ChatMessageBubble msg={msg} isMine={isMine} showSender={!isMine && (startsDate || senderId !== previousSenderId)} reply={reply}
-                      onEdit={!canChangeMessage || canChangeMessage(msg) ? onEdit : undefined} onDelete={!canChangeMessage || canChangeMessage(msg) ? onDelete : undefined} onImageClick={onImageClick} onReact={onReact} onRetry={onRetry} onRemovePending={onRemovePending}
+                      currentUserId={currentUserId} onEdit={!canChangeMessage || canChangeMessage(msg) ? onEdit : undefined} onDelete={!canChangeMessage || canChangeMessage(msg) ? onDelete : undefined} onImageClick={onImageClick} onReact={onReact} onRetry={onRetry} onRemovePending={onRemovePending}
                       onReply={onReply ? handleReply : undefined} />
                   </div>
                 );

@@ -476,6 +476,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
   }, []);
 
   useEffect(() => onChatHistoryRetired((event) => {
+    if (event.mediaOnly) return;
     if (!currentUserId || event.account !== JSON.stringify([api.getApiBaseUrl(), currentUserId]) || !isCurrentScope()) return;
     const denied = new Set(event.rooms);
     if (!(roomId && denied.has(roomId)) && !conversationRoomIdsRef.current.some((id) => denied.has(id))

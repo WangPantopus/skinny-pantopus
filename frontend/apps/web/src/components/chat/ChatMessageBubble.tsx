@@ -15,6 +15,7 @@ import EmojiPickerPopover from './EmojiPickerPopover';
 import MessageActionMenu from './MessageActionMenu';
 import type { MessageAction } from './MessageActionMenu';
 import { launchFeatures } from '@/lib/featureFlags';
+import { useChatMedia } from '@/hooks/useChatMedia';
 
 const EMOJI_ONLY_REGEX = /^(\p{Emoji_Presentation}|\p{Emoji}\uFE0F|\p{Emoji_Modifier_Base}\p{Emoji_Modifier}?){1,5}$/u;
 function isEmojiOnly(text?: string): boolean {
@@ -34,12 +35,13 @@ export interface ChatReplyQuote {
 }
 
 interface ChatMessageBubbleProps {
+  currentUserId?: string | null;
   msg: ChatMessage;
   isMine: boolean;
   showSender?: boolean;
   /** Set when this message replies to one that is loaded. */
   reply?: ChatReplyQuote;
-  onImageClick?: (url: string, title?: string) => void;
+  onImageClick?: (url: string, title?: string, roomId?: string) => void;
   onReact?: (messageId: string, emoji: string) => void;
   onRetry?: (messageId: string) => void;
   onRemovePending?: (messageId: string) => void;
@@ -63,7 +65,14 @@ function chatImagePreview(url: string): string {
 }
 
 
-function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClick, onReact, onRetry, onRemovePending, onReply, onEdit, onDelete }: ChatMessageBubbleProps) {
+function ChatImage({ url, accountId, roomId, alt }: { url: string; accountId?: string | null; roomId: string; alt: string }) {
+  const media = useChatMedia(chatImagePreview(url), accountId, roomId);
+  if (!media.url) return <span role="status" className="block p-3 text-xs">{media.loading ? 'Loading photo…' : 'Photo unavailable. Open to retry.'}</span>;
+  return <img src={media.url} onError={media.rejectMedia} alt={alt} className="rounded-lg transition-opacity hover:opacity-90"
+    loading="lazy" decoding="async" style={{ width: 'auto', height: 'auto', maxWidth: '100%', maxHeight: 'min(180px, 48vw)', objectFit: 'contain' }} />;
+}
+
+function ChatMessageBubble({ msg, currentUserId, isMine, showSender = false, reply, onImageClick, onReact, onRetry, onRemovePending, onReply, onEdit, onDelete }: ChatMessageBubbleProps) {
   const [preview, setPreview] = useState<{ url: string; title?: string; mimeType?: string; liveUrl?: string } | null>(null);
   const [hovered, setHovered] = useState(false);
   const [showQuickPicker, setShowQuickPicker] = useState(false);
@@ -331,33 +340,13 @@ function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClic
                       <button
                         key={`${msg.id}-att-${i}`}
                         type="button"
-                        onClick={() => live || !onImageClick ? setPreview({ url, title: a.original_filename, liveUrl: live?.file_url }) : onImageClick(url, a.original_filename)}
+                        onClick={() => live || !onImageClick ? setPreview({ url, title: a.original_filename, liveUrl: live?.file_url }) : onImageClick(url, a.original_filename, msg.room_id)}
                         className={`block max-w-[min(100%,240px)] overflow-hidden rounded-lg text-left ${
                           isMine ? 'bg-primary-700/40' : 'bg-black/[0.06]'
                         }`}
                       >
                         {live && <span className="block px-2 py-1 text-xs">● LIVE</span>}
-                        {/* Native img: user URLs + cookies on /api/chat/files/; avoids next/image dev sizing warnings. */}
-                        <img
-                          src={chatImagePreview(url)}
-                          onError={(event) => {
-                            // Older servers or an unavailable preview still allow
-                            // the same authorized original, without a retry loop.
-                            const original = new URL(url, window.location.href).href;
-                            if (event.currentTarget.src !== original) event.currentTarget.src = original;
-                          }}
-                          alt={showText ? `Photo: ${msgText}` : 'Photo'}
-                          className="rounded-lg transition-opacity hover:opacity-90"
-                          loading="lazy"
-                          decoding="async"
-                          style={{
-                            width: 'auto',
-                            height: 'auto',
-                            maxWidth: '100%',
-                            maxHeight: 'min(180px, 48vw)',
-                            objectFit: 'contain',
-                          }}
-                        />
+                        <ChatImage url={url} accountId={currentUserId} roomId={msg.room_id} alt={showText ? `Photo: ${msgText}` : 'Photo'} />
                       </button>
                     );
                   }
@@ -401,7 +390,7 @@ function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClic
         </div>
         {reactionBar}
         {actionsMenu}
-        <ImageLightbox imageUrl={preview?.url ?? null} title={preview?.title} mimeType={preview?.mimeType}
+        <ImageLightbox currentUserId={currentUserId} roomId={msg.room_id} imageUrl={preview?.url ?? null} title={preview?.title} mimeType={preview?.mimeType}
           liveUrl={preview?.liveUrl} onClose={() => setPreview(null)} />
       </div>
     </div>
@@ -410,6 +399,7 @@ function ChatMessageBubble({ msg, isMine, showSender = false, reply, onImageClic
 
 export default React.memo(ChatMessageBubble, (prev, next) => {
   return prev.msg === next.msg
+    && prev.currentUserId === next.currentUserId
     && prev.isMine === next.isMine
     && prev.showSender === next.showSender
     && prev.reply?.senderName === next.reply?.senderName

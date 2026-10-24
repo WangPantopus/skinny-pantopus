@@ -52,7 +52,7 @@ export default function ChatRoomView({
   // ── Attachment modals ───────────────────────────────────
   const [showGigPicker, setShowGigPicker] = useState(false);
   const [showListingPicker, setShowListingPicker] = useState(false);
-  const [lightboxImage, setLightboxImage] = useState<{ url: string; title?: string } | null>(null);
+  const [lightboxImage, setLightboxImage] = useState<{ url: string; title?: string; roomId?: string } | null>(null);
 
   // ── Load current user ─────────────────────────────────
   useEffect(() => {
@@ -266,8 +266,8 @@ export default function ChatRoomView({
     listingSendMutation.mutate(listing);
   }, [listingSendMutation]);
 
-  const handleImageClick = useCallback((url: string, title?: string) => {
-    setLightboxImage({ url, title });
+  const handleImageClick = useCallback((url: string, title?: string, roomId?: string) => {
+    setLightboxImage({ url, title, roomId });
   }, []);
 
   // ── Reaction handler ────────────────────────────────
@@ -468,6 +468,7 @@ export default function ChatRoomView({
       {/* Messages — flex-1 min-h-0 so this area gets a bounded height and can scroll */}
       <div className="flex-1 min-h-0 flex flex-col">
         <ChatMessageList
+          currentUserId={currentUserId}
           asBusinessUserId={asBusinessUserId}
           messages={chat.messages}
           loading={chat.loading}
@@ -560,6 +561,8 @@ export default function ChatRoomView({
 
       {/* Image Lightbox */}
       <ImageLightbox
+        currentUserId={currentUserId}
+        roomId={lightboxImage?.roomId}
         imageUrl={lightboxImage?.url || null}
         title={lightboxImage?.title}
         onClose={() => setLightboxImage(null)}

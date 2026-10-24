@@ -154,6 +154,7 @@ export default function MiniChatView({ roomId, otherUserId, name, avatar, onBack
       {/* Messages — override max-w-3xl from ChatMessageList/ChatMessageBubble */}
       <div className="flex-1 overflow-hidden flex flex-col [&_.max-w-3xl]:max-w-none">
         <ChatMessageList
+          currentUserId={currentUserId}
           messages={chat.messages}
           loading={chat.loading}
           // A conversation that takes no messages says why in place of the composer instead.
