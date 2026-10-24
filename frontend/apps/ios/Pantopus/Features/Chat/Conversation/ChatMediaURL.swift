@@ -19,6 +19,15 @@ enum ChatMediaURL {
     static let sentPhotosRoot = FileManager.default.temporaryDirectory.appendingPathComponent("ai-photos", isDirectory: true)
     /// Files opened from chats (QuickLook needs a file on the phone).
     static let openedFilesFolder = FileManager.default.temporaryDirectory.appendingPathComponent("chat-files", isDirectory: true)
+    private static let downloadSession: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.urlCache = nil
+        return URLSession(configuration: configuration)
+    }()
+
+    static func isChatFile(_ url: URL) -> Bool {
+        isSameOrigin(url, AppEnvironment.current.apiBaseURL) && url.path.hasPrefix("/api/chat/files/")
+    }
 
     /// Files opened from chats and copies of photos sent to the assistant go at the next launch and
     /// with the account's data (sign-out, a switch), so nothing of one person's chats stays for the next.
@@ -135,20 +144,65 @@ enum ChatMediaURL {
     @MainActor
     static func download(raw: String, filename: String, mimeType: String?) async throws -> URL {
         let session = AuthManager.shared.requestSessionGeneration
+        let version = ChatLocalStore.shared.version
         guard let url = resolve(raw: raw) else { throw URLError(.badURL) }
-        let (temporary, response) = try await URLSession.shared.download(from: url)
+        let scope: String? = if isChatFile(url), case let .signedIn(user) = AuthManager.shared.state {
+            ChatLocalStore.scope(server: AppEnvironment.current.apiBaseURL.absoluteString, account: user.id)
+        } else { nil }
+        let key = PantopusImagePipeline.cacheKey(for: url)
+        if let scope, let bytes = await ChatLocalStore.shared.media(scope: scope, key: key, version: version) {
+            try requireMediaSession(session, version: version)
+            let target = try openedFile(filename, mimeType: mimeType)
+            try bytes.write(to: target, options: [.atomic, .completeFileProtection])
+            return target
+        }
+        let (temporary, response) = try await downloadSession.download(from: url)
         defer { try? FileManager.default.removeItem(at: temporary) }
         // Sign-out clears opened files while a download may still be in flight.
         // Its late response must not recreate the previous account's bytes.
-        try AuthManager.shared.requireRequestSession(session)
+        try requireMediaSession(session, version: version)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw URLError(.badServerResponse)
         }
-        try FileManager.default.createDirectory(at: openedFilesFolder, withIntermediateDirectories: true)
-        let target = openedFilesFolder.appendingPathComponent(localName(filename, mimeType: mimeType))
-        try? FileManager.default.removeItem(at: target)
+        if let scope, let bytes = await boundedMediaBytes(temporary) {
+            await ChatLocalStore.shared.saveMedia(bytes, scope: scope, key: key, version: version)
+        }
+        try requireMediaSession(session, version: version)
+        let target = try openedFile(filename, mimeType: mimeType)
         try FileManager.default.moveItem(at: temporary, to: target)
+        try FileManager.default.setAttributes([.protectionKey: FileProtectionType.complete], ofItemAtPath: target.path)
         return target
+    }
+
+    @MainActor
+    static func imageData(_ url: URL) async -> Data? {
+        let session = AuthManager.shared.requestSessionGeneration
+        let version = ChatLocalStore.shared.version
+        guard let file = try? await download(raw: url.absoluteString, filename: "image", mimeType: nil) else { return nil }
+        defer { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
+        let bytes = await boundedMediaBytes(file)
+        do { try requireMediaSession(session, version: version) } catch { return nil }
+        return bytes
+    }
+
+    private static func boundedMediaBytes(_ url: URL) async -> Data? {
+        await Task.detached(priority: .utility) {
+            guard let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize,
+                  size <= ChatLocalStore.mediaFileLimit else { return nil }
+            return try? Data(contentsOf: url)
+        }.value
+    }
+
+    @MainActor
+    private static func requireMediaSession(_ session: Int, version: Int) throws {
+        try AuthManager.shared.requireRequestSession(session)
+        guard ChatLocalStore.shared.version == version else { throw CancellationError() }
+    }
+
+    private static func openedFile(_ filename: String, mimeType: String?) throws -> URL {
+        let folder = openedFilesFolder.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try ChatLocalStore.createProtectedDirectory(folder)
+        return folder.appendingPathComponent(localName(filename, mimeType: mimeType))
     }
 
     /// A small copy of a photo sent to the assistant, for its bubble: the server deletes the

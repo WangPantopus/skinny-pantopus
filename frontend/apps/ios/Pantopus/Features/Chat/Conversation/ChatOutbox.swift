@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 /// A conversation may disappear while its request is still running. The signed-in
 /// session owns sends, and screens observe them without owning their lifetime.
@@ -19,6 +20,9 @@ final class ChatOutbox {
     private var socketTask: Task<Void, Never>?
     private var connectionTask: Task<Void, Never>?
     private var wakeTask: Task<Void, Never>?
+    private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
+    private var backgroundExpired = false
+    private var backgroundGeneration = 0
     private struct Worker {
         let id: UUID
         let messageId: String
@@ -77,6 +81,8 @@ final class ChatOutbox {
 
     func stop() {
         lifetime += 1
+        endBackgroundTime()
+        backgroundExpired = false
         loadTask?.cancel()
         socketTask?.cancel()
         connectionTask?.cancel()
@@ -175,6 +181,8 @@ final class ChatOutbox {
 
     private func pump() {
         wakeTask?.cancel()
+        guard !backgroundExpired else { return }
+        if UIApplication.shared.applicationState == .background { enteredBackground() }
         var visited = Set<String>()
         var nextWake: Date?
         for message in messages where message.status == .queued || message.status == .retrying {
@@ -202,6 +210,7 @@ final class ChatOutbox {
                 self?.pump()
             }
         }
+        if workers.isEmpty, nextWake == nil { endBackgroundTime() }
     }
 
     private func transmit(_ original: ChatOutboxMessage, lifetime started: Int) async {
@@ -335,5 +344,41 @@ private extension ChatOutbox {
             try await saveProgress(message, lifetime: started)
         }
         return message
+    }
+}
+
+extension ChatOutbox {
+    /// Finish pending work within the OS's finite background allowance. The
+    /// encrypted queue remains authoritative when time expires or iOS kills us.
+    func enteredBackground() {
+        guard account != nil, !backgroundExpired, backgroundTask == .invalid,
+              !workers.isEmpty || messages.contains(where: { $0.status == .queued || $0.status == .retrying }) else { return }
+        backgroundGeneration += 1
+        let generation = backgroundGeneration
+        backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "Chat send") { [weak self] in
+            Task { @MainActor in
+                guard let self, backgroundGeneration == generation else { return }
+                backgroundExpired = true
+                wakeTask?.cancel()
+                for worker in workers.values {
+                    worker.task.cancel()
+                }
+                workers.removeAll()
+                endBackgroundTime()
+            }
+        }
+    }
+
+    func enteredForeground() {
+        backgroundExpired = false
+        endBackgroundTime()
+        pump()
+    }
+
+    private func endBackgroundTime() {
+        backgroundGeneration += 1
+        guard backgroundTask != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(backgroundTask)
+        backgroundTask = .invalid
     }
 }

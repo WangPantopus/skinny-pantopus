@@ -75,13 +75,21 @@ final class PantopusImagePipeline: @unchecked Sendable {
 
     /// The decoded image already in memory, for a screen's first frame.
     func cachedImage(for url: URL) -> UIImage? {
-        memory.image(for: memoryKey(Self.cacheKey(for: url)))
+        guard !ChatMediaURL.isChatFile(url) else { return nil }
+        return memory.image(for: memoryKey(Self.cacheKey(for: url)))
     }
 
     /// Memory, then the phone, then the network. `keepsOnDisk: false` for
     /// full-size originals (the photo viewer): memory only.
     func image(for url: URL, keepsOnDisk: Bool = true) async -> UIImage? {
         let key = Self.cacheKey(for: url)
+        if ChatMediaURL.isChatFile(url) {
+            // Chat media belongs to the account and its authorization epoch.
+            // Remove a legacy generic copy; only the encrypted store may serve it.
+            try? FileManager.default.removeItem(at: root.appendingPathComponent(Self.fileName(for: key)))
+            guard let bytes = await ChatMediaURL.imageData(url) else { return nil }
+            return Self.decode(bytes)
+        }
         if let image = memory.image(for: memoryKey(key)) { return image }
         let (task, started) = lock.withLock { () -> (Task<UIImage?, Never>, Int) in
             if let running = inFlight[key] { return (running, generation) }

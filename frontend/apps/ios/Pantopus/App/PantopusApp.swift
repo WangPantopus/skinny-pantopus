@@ -66,6 +66,7 @@ struct PantopusApp: App {
                     switch phase {
                     case .active:
                         PilotEvents.shared.enterForeground()
+                        ChatOutbox.shared.enteredForeground()
                         capturePrivacy.coversAppSwitcher = false
                         appLock.appDidBecomeActive()
                         // Proactive DPoP refresh when < 120 s of access-token
@@ -84,6 +85,7 @@ struct PantopusApp: App {
                         capturePrivacy.coversAppSwitcher = true
                     case .background:
                         PilotEvents.shared.enterBackground()
+                        ChatOutbox.shared.enteredBackground()
                         capturePrivacy.coversAppSwitcher = true
                         appLock.appDidEnterBackground()
                     @unknown default:

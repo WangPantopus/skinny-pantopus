@@ -234,8 +234,11 @@ final class ChatLocalStore: @unchecked Sendable {
 
     func historyBytes() -> Int {
         lock.withLock {
-            let directory = root.appendingPathComponent("history")
-            let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.fileSizeKey])) ?? []
+            let files = ["history", "media"].flatMap { name in
+                (try? FileManager.default.contentsOfDirectory(
+                    at: root.appendingPathComponent(name), includingPropertiesForKeys: [.fileSizeKey]
+                )) ?? []
+            }
             return files.reduce(0) { $0 + ((try? $1.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0) }
         }
     }
@@ -336,6 +339,7 @@ extension ChatLocalStore {
             // Interrupted deletion is harmless: every prior envelope fails its
             // epoch check, including inbox previews and all topic query keys.
             try? FileManager.default.removeItem(at: directory)
+            try? FileManager.default.removeItem(at: root.appendingPathComponent("media"))
         } catch {
             historyRetirementFailed = true
             // The existing device-only Keychain is an independent durable
@@ -363,6 +367,11 @@ extension ChatLocalStore {
         let marker = root.appendingPathComponent("history-epoch")
         guard FileManager.default.fileExists(atPath: marker.path) else { return nil }
         return try JSONDecoder().decode(HistoryEpoch.self, from: Data(contentsOf: marker))
+    }
+
+    /// Called with the storage lock held, including the durable tombstone check.
+    func mediaEpoch() throws -> String? {
+        try historyEpoch()?.id
     }
 }
 
