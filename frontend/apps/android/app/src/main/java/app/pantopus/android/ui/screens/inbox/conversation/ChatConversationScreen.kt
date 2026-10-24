@@ -73,6 +73,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -500,54 +501,59 @@ fun ChatConversationScreen(
                             aiStarters = aiStarters,
                         )
                     is ChatConversationUiState.Loaded ->
-                        PopulatedFrame(
-                            rows = s.rows,
-                            onRetry = viewModel::retry,
-                            onLoadOlder = viewModel::loadOlder,
-                            olderPageFailed = olderPageFailed,
-                            onVisibleMessage = viewModel::markVisibleMessageRead,
-                            onViewport = viewModel::observeTimelineViewport,
-                            scrollToRowId = pendingScroll,
-                            onScrollConsumed = viewModel::consumePendingScroll,
-                            showLatestMessages = showLatestMessages,
-                            onLatestMessages = viewModel::returnToLatestMessages,
-                            conversationMode = conversationMode,
-                            incomingInitials = incomingInitialsFor(conversationMode, activeCounterparty),
-                            aiPrompts = viewModel.aiPrompts,
-                            onCapabilityTap = viewModel::sendCapabilityPrompt,
-                            onLockedAction = { showFanUpgradePrompt = true },
-                            onBubbleLongPress = {
-                                if (isSelectionMode) viewModel.toggleSelection(it.id) else actionTarget = it
-                            },
-                            selectedMessageIds = if (isSelectionMode) selectedMessageIds else emptySet(),
-                            onBubbleTap = { if (isSelectionMode) viewModel.toggleSelection(it.id) },
-                            // A pickup-days card saves here; once saved it opens Today. Other drafts open composers.
-                            onUseAIDraft = { draft ->
-                                when {
-                                    draft.pickup == null -> onUseAIDraft(draft)
-                                    draft.pickup.save == ChatAIPickupSave.Saved -> onOpenToday()
-                                    else -> viewModel.savePickupSchedule(draft)
-                                }
-                            },
-                            aiReplyActions = aiReplyActions,
-                            onOpenGig = onOpenGig,
-                            onOpenListing = onOpenListing,
-                            onOpenLocation = { lat, lng ->
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("geo:$lat,$lng?q=$lat,$lng"))
-                                runCatching { context.startActivity(intent) }
-                            },
-                            onReact = viewModel::react,
-                            linkPreviews = linkPreviews,
-                            onResolveLink = viewModel::resolveLinkPreview,
-                            onOpenUrl = { url ->
-                                runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
-                            },
-                            onOpenPhotos = { urls, index -> viewerPhotos = urls to index },
-                            onOpenAttachment = { attachment ->
-                                viewModel.openAttachment(attachment, ChatMediaUrl.openedFilesFolder(context.cacheDir).apply { mkdirs() })
-                            },
-                            timelineSession = viewModel.timelineSession,
-                        )
+                        // A topic switch is a new timeline: it opens at that topic's newest message, never at the
+                        // previous topic's scroll anchor.
+                        key(selectedTopicId) {
+                            PopulatedFrame(
+                                rows = s.rows,
+                                onRetry = viewModel::retry,
+                                onLoadOlder = viewModel::loadOlder,
+                                olderPageFailed = olderPageFailed,
+                                onVisibleMessage = viewModel::markVisibleMessageRead,
+                                onViewport = viewModel::observeTimelineViewport,
+                                scrollToRowId = pendingScroll,
+                                onScrollConsumed = viewModel::consumePendingScroll,
+                                showLatestMessages = showLatestMessages,
+                                onLatestMessages = viewModel::returnToLatestMessages,
+                                conversationMode = conversationMode,
+                                incomingInitials = incomingInitialsFor(conversationMode, activeCounterparty),
+                                aiPrompts = viewModel.aiPrompts,
+                                onCapabilityTap = viewModel::sendCapabilityPrompt,
+                                onLockedAction = { showFanUpgradePrompt = true },
+                                onBubbleLongPress = {
+                                    if (isSelectionMode) viewModel.toggleSelection(it.id) else actionTarget = it
+                                },
+                                selectedMessageIds = if (isSelectionMode) selectedMessageIds else emptySet(),
+                                onBubbleTap = { if (isSelectionMode) viewModel.toggleSelection(it.id) },
+                                // A pickup-days card saves here; once saved it opens Today. Other drafts open composers.
+                                onUseAIDraft = { draft ->
+                                    when {
+                                        draft.pickup == null -> onUseAIDraft(draft)
+                                        draft.pickup.save == ChatAIPickupSave.Saved -> onOpenToday()
+                                        else -> viewModel.savePickupSchedule(draft)
+                                    }
+                                },
+                                aiReplyActions = aiReplyActions,
+                                onOpenGig = onOpenGig,
+                                onOpenListing = onOpenListing,
+                                onOpenLocation = { lat, lng ->
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("geo:$lat,$lng?q=$lat,$lng"))
+                                    runCatching { context.startActivity(intent) }
+                                },
+                                onReact = viewModel::react,
+                                linkPreviews = linkPreviews,
+                                onResolveLink = viewModel::resolveLinkPreview,
+                                onOpenUrl = { url ->
+                                    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+                                },
+                                onOpenPhotos = { urls, index -> viewerPhotos = urls to index },
+                                onOpenAttachment = { attachment ->
+                                    val folder = ChatMediaUrl.openedFilesFolder(context.cacheDir).apply { mkdirs() }
+                                    viewModel.openAttachment(attachment, folder)
+                                },
+                                timelineSession = viewModel.timelineSession,
+                            )
+                        }
                     is ChatConversationUiState.Error -> ErrorFrame(message = s.message, onRetry = viewModel::refresh)
                 }
             }
