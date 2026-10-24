@@ -122,7 +122,8 @@ export function useChatMedia(url: string | null | undefined, accountId?: string 
         } catch (error) {
           const status = (error as { status?: number }).status;
           if (disposed || controller.signal.aborted && !timedOut) return;
-          if (status === 401 || status === 403 || status === 404) {
+          // 410: the server deleted this file with its message (#2809).
+          if (status === 401 || status === 403 || status === 404 || status === 410) {
             // A missing/deleted file does not prove that the room itself was
             // revoked. Retire its saved media without hiding readable text.
             retireView();
