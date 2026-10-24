@@ -206,6 +206,15 @@ async function list(viewerId, { areaId, q, topic } = {}) {
     blocked: context.filters.blockedUserIds, areas: [context.area], full: false }) };
 }
 
+/** Search's Known results (contract §2.17): up to `limit` matching entries in the context's area. */
+async function search(context, text, limit = 5) {
+  const entries = await checked(db.from('KnownEntry').select(ENTRY_SELECT).eq('area_id', context.area.id).in('status', SHOWN)
+    .textSearch('search', text, { type: 'websearch', config: 'english' })
+    .order('last_confirmed_at', { ascending: false, nullsFirst: false }).order('id').limit(limit));
+  return dtos(entries || [], { viewerId: context.userId, homes: context.homes, blocked: context.filters.blockedUserIds,
+    areas: [context.area], full: false });
+}
+
 async function readable(viewerId, id, homes) {
   if (typeof id !== 'string' || !UUID.test(id)) throw fail('KNOWN_NOT_FOUND');
   const entry = await checked(db.from('KnownEntry').select(ENTRY_SELECT).eq('id', id).in('status', SHOWN).maybeSingle());
@@ -375,5 +384,5 @@ async function answered(post, replyId) {
   }).eq('id', entry.id).in('status', SHOWN).select('id').maybeSingle());
 }
 
-module.exports = { list, read, respond, saveDraft, publish, retire, openCorrections, resolveCorrection,
+module.exports = { list, read, respond, search, saveDraft, publish, retire, openCorrections, resolveCorrection,
   similar, forAsk, linkAsk, answered, dtos };
