@@ -46,6 +46,9 @@ export default function PackageUnboxing({
     try {
       await onUploadConditionPhoto(file);
       setPhotoUploaded(true);
+    } catch {
+      // Not attached: the caller says so, and the same photo can be chosen again.
+      e.target.value = '';
     } finally {
       setUploading(false);
     }

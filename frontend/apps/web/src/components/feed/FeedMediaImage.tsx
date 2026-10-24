@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { useEffect, useMemo, useState } from 'react';
 import { API_BASE_URL } from '@pantopus/utils';
 import type { ImgHTMLAttributes } from 'react';
+import { isPantopusMediaUrl } from '@/lib/media-hosts';
 
 interface FeedMediaImageProps extends Omit<ImgHTMLAttributes<HTMLImageElement>, 'src'> {
   src?: string | null;
@@ -88,12 +89,14 @@ export function canUseNextImage(src: string): boolean {
   try {
     const { protocol, hostname } = new URL(src);
     if (protocol !== 'http:' && protocol !== 'https:') return false;
+    // Our own S3/CloudFront storage only (the optimizer refuses everyone else's,
+    // such as a news site's CDN, so those load as a plain <img>). Supabase
+    // Storage media keeps loading directly, as before.
     return (
       hostname === 'localhost' ||
       hostname === 'pantopus.com' ||
       hostname === 'www.pantopus.com' ||
-      hostname.endsWith('.amazonaws.com') ||
-      hostname.endsWith('.cloudfront.net')
+      ((hostname.endsWith('.amazonaws.com') || hostname.endsWith('.cloudfront.net')) && isPantopusMediaUrl(src))
     );
   } catch {
     return false;
