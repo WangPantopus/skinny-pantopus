@@ -58,7 +58,11 @@ function requireBusinessSeat(permission = null) {
 
       next();
     } catch (err) {
-      // Avoid leaking internal details
+      // A failed seat or permission read (utils/businessPermissions authorizationUnavailable) is retryable; its
+      // message is fixed copy. Anything else: avoid leaking internal details.
+      if (err.code === 'AUTHORIZATION_UNAVAILABLE') {
+        return res.status(503).json({ error: err.message, code: err.code });
+      }
       return res.status(500).json({ error: 'Failed to verify business access' });
     }
   };

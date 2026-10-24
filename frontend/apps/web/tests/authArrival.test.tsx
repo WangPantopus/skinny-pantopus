@@ -2,6 +2,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server.node';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { authPageHref, oauthRedirectParamForWeb, safeRedirectPath } from '../src/lib/auth-utils';
+import { beginOAuthAttempt } from '../src/lib/oauth-attempt';
 
 const push = jest.fn();
 const replace = jest.fn();
@@ -116,7 +117,7 @@ test('email verification succeeds in Strict Mode and keeps the original destinat
 });
 
 test('OAuth exchanges once in Strict Mode before returning to the Beacon', async () => {
-  search = new URLSearchParams({ redirectTo: TARGETS[2], code: 'test-code' });
+  search = new URLSearchParams({ redirectTo: TARGETS[2], code: 'test-code', app_nonce: beginOAuthAttempt()! });
   oauth.mockResolvedValue({ user: { id: 'u1' } });
   render(<React.StrictMode><Callback /></React.StrictMode>);
   await waitFor(() => expect(replace).toHaveBeenCalledWith(TARGETS[2]));

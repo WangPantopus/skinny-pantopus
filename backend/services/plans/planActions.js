@@ -641,9 +641,10 @@ async function enforceCapacity(plan) {
     if (seats > plan.spots) overflow.push(request.id);
   }
   if (overflow.length > 0) {
-    await supabaseAdmin.from('PlanRequest')
+    const { error } = await supabaseAdmin.from('PlanRequest')
       .update({ status: 'waitlisted', decided_by: null, decided_at: null, updated_at: nowIso() })
       .in('id', overflow).eq('status', 'accepted');
+    if (error) throw new Error(`Failed to keep the plan to its spots: ${error.message}`);
   }
   return new Set(overflow);
 }
@@ -661,6 +662,19 @@ async function ruleFor(plan, userId) {
   // They were nearby when they asked (asking checks the location).
   if (autoRules.includes('anyone_nearby') && ['pickup_game', 'walk_coffee'].includes(plan.kind)) return 'anyone_nearby';
   return null;
+}
+
+/**
+ * Someone who leaves or is removed is out of the plan's chat before their request changes, so a failure leaves
+ * them in the plan and doing it again finishes the job, never an "out" answer while they can still read the room.
+ */
+async function leaveChat(plan, userId, { io, message }) {
+  try {
+    await planChat.removeMember(plan.chat_room_id, userId, { io });
+  } catch (err) {
+    logger.error('plans.chat.remove_failed', { planId: plan.post_id, error: err.message });
+    fail(503, 'unavailable', message);
+  }
 }
 
 /** Let someone in: the chat, the grey line, the notice. When a rule did it, the host hears who is in. */
@@ -875,6 +889,7 @@ async function withdrawMine(user, postId, { io = null, reason = 'withdraw' } = {
 
   const stamp = nowIso();
   const leaving = mine.status === 'accepted';
+  if (leaving) await leaveChat(plan, viewer.id, { io, message: "We couldn't take you out of the plan. Please try again." });
   const patch = { status: leaving ? 'left' : 'withdrawn', updated_at: stamp };
   if (reason === 'not_coming') patch.reconfirmed = false;
   const { data: changed, error: updateError } = await supabaseAdmin.from('PlanRequest')
@@ -885,7 +900,6 @@ async function withdrawMine(user, postId, { io = null, reason = 'withdraw' } = {
     const who = partyLabel(names.get(viewer.id), mine.party_size);
     if (plan.chat_room_id) {
       await planChat.systemLine(plan.chat_room_id, viewer.id, `${who} can't make it`);
-      await planChat.removeMember(plan.chat_room_id, viewer.id, { io });
     }
     // The host hears it before a spot goes to someone waiting (who then has their own notice).
     await activeRequests(postId)
@@ -987,12 +1001,12 @@ async function decide(user, postId, requestId, action, body = {}, { io = null } 
   } else if (action === 'remove') {
     if (request.status !== 'removed') {
       if (request.status !== 'accepted') fail(409, 'not_in', 'This person isn’t in the plan.');
+      await leaveChat(plan, request.user_id, { io, message: "We couldn't remove them from the plan. Please try again." });
       const { data: moved, error } = await supabaseAdmin.from('PlanRequest')
         .update({ status: 'removed', decided_by: 'host', decided_at: stamp, updated_at: stamp })
         .eq('id', request.id).eq('status', 'accepted').select('id');
       if (error) throw new Error(`Failed to remove: ${error.message}`);
       if (moved && moved.length > 0) {
-        await planChat.removeMember(plan.chat_room_id, request.user_id, { io });
         await planNotify.declined({ plan, request, hostFirst });
         await offerOpenSpots(plan, { io });
       }
@@ -1021,8 +1035,9 @@ async function onMyWay(user, postId) {
   const state = rules.planState(plan, plan.post.event_date, plan.post.event_end_date);
   if (state === 'ended' || state === 'cancelled') fail(409, 'ended', 'This plan is over.');
   if (!mine.on_my_way_at) {
-    const { data: changed } = await supabaseAdmin.from('PlanRequest')
+    const { data: changed, error } = await supabaseAdmin.from('PlanRequest')
       .update({ on_my_way_at: nowIso(), updated_at: nowIso() }).eq('id', mine.id).is('on_my_way_at', null).select('id');
+    if (error) throw new Error(`Failed to say you're on the way: ${error.message}`);
     if (changed && changed.length > 0 && plan.chat_room_id) {
       const names = await userNames([viewer.id]);
       await planChat.systemLine(plan.chat_room_id, viewer.id, `${firstOf(names.get(viewer.id))} is on the way`);
@@ -1037,7 +1052,8 @@ async function stillComing(user, postId, { coming }, { io = null } = {}) {
   await loadVisiblePlan(postId, viewer);
   const mine = await myAcceptedRequest(viewer, postId);
   if (!coming) return withdrawMine(user, postId, { io, reason: 'not_coming' });
-  await supabaseAdmin.from('PlanRequest').update({ reconfirmed: true, updated_at: nowIso() }).eq('id', mine.id);
+  const { error } = await supabaseAdmin.from('PlanRequest').update({ reconfirmed: true, updated_at: nowIso() }).eq('id', mine.id);
+  if (error) throw new Error(`Failed to save that you're coming: ${error.message}`);
   return requestResult(postId, viewer, mine.id);
 }
 
@@ -1051,9 +1067,10 @@ async function giveFeedback(user, postId, { answer, note }) {
   if (state === 'upcoming') fail(409, 'not_started', 'You can say how it went once it starts.');
   const cleanNote = cleanText(note, 500, 'Your note');
   const first = !mine.feedback;
-  await supabaseAdmin.from('PlanRequest')
+  const { error } = await supabaseAdmin.from('PlanRequest')
     .update({ feedback: answer, feedback_note: cleanNote, feedback_at: nowIso(), updated_at: nowIso() })
     .eq('id', mine.id);
+  if (error) throw new Error(`Failed to save how it went: ${error.message}`);
   if (first && answer !== 'not_right') {
     recordFunnelEvent('plan_attended', { userId: viewer.id, meta: { plan_id: postId, kind: plan.kind, answer } });
   }

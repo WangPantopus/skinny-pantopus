@@ -93,16 +93,27 @@ export function normalizeEmail(email: string): string {
 }
 
 /**
+ * Query parameter that carries a sign-in attempt's random check through the provider and back to the
+ * callback, which accepts only the check its own attempt started with (the iOS and Android apps use the
+ * same name on `pantopus://auth/callback`).
+ */
+export const OAUTH_NONCE_PARAM = 'app_nonce';
+
+/**
  * Backend OAuth validates `redirectTo` with `new URL(...)` — must be absolute same-origin on web.
+ * The attempt's check goes last, after `redirectTo`, so the address still matches the Auth server's
+ * allowed redirect patterns.
  */
 export function oauthRedirectParamForWeb(
   raw: string | undefined,
-  origin: string | undefined
+  origin: string | undefined,
+  nonce?: string
 ): string | undefined {
   if (!origin) return undefined;
   try {
     const callback = new URL('/auth/callback', origin);
     callback.searchParams.set('redirectTo', safeRedirectPath(raw, '/app/place'));
+    if (nonce) callback.searchParams.set(OAUTH_NONCE_PARAM, nonce);
     return callback.href;
   } catch {
     return undefined;

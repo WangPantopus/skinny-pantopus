@@ -598,12 +598,6 @@ export async function getMapPins(
   });
 }
 
-export async function addPinToCalendar(pinId: string): Promise<void> {
-  return call(async () => {
-    await post(`/api/mailbox/v2/p3/map/pin/${pinId}/calendar`);
-  });
-}
-
 // ============================================================
 // COMMUNITY (Phase 3)
 // ============================================================

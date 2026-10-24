@@ -1386,6 +1386,56 @@ router.post(
   })
 );
 
+/**
+ * Takes someone out of the train's campaign chat once nothing keeps them in it: being the organizer or the
+ * recipient, a co-organizer role (unless `exceptOrganizer`: the role being removed) or a signup that isn't
+ * canceled (other than `exceptReservationId`: the one being canceled). Their open connections stop getting the
+ * room's live messages at once, as in routes/chats.js. Returns whether they're out. A failed read or write throws,
+ * so a removal is never answered as done while they can still read the chat.
+ */
+async function leaveTrainChatUnlessInvolved(req, userId, { exceptOrganizer = false, exceptReservationId = null } = {}) {
+  const st = req.supportTrain;
+  const roomId = req.activity?.chat_thread_id;
+  if (!roomId || !userId) return true;
+  if (userId === st.organizer_user_id || userId === st.recipient_user_id) return false;
+
+  let signups = supabaseAdmin
+    .from('SupportTrainReservation')
+    .select('id', { count: 'exact', head: true })
+    .eq('support_train_id', st.id)
+    .eq('user_id', userId)
+    .neq('status', 'canceled');
+  if (exceptReservationId) signups = signups.neq('id', exceptReservationId);
+  const [signupRead, organizerRead] = await Promise.all([
+    signups,
+    exceptOrganizer
+      ? { data: null, error: null }
+      : supabaseAdmin
+          .from('SupportTrainOrganizer')
+          .select('id')
+          .eq('support_train_id', st.id)
+          .eq('user_id', userId)
+          .maybeSingle(),
+  ]);
+  const readError = signupRead.error || organizerRead.error;
+  if (readError) throw new Error(`Could not check their place on the train: ${readError.message}`);
+  if ((signupRead.count || 0) > 0 || organizerRead.data) return false;
+
+  const { error } = await supabaseAdmin
+    .from('ChatParticipant')
+    .delete()
+    .eq('room_id', roomId)
+    .eq('user_id', userId);
+  if (error) throw new Error(`Could not remove them from the train's chat: ${error.message}`);
+
+  const io = req.app.get('io');
+  const { connectedUsers } = require('../socket/chatSocketio');
+  for (const socketId of connectedUsers.get(userId) || []) {
+    io?.sockets?.sockets?.get(socketId)?.leave(roomId);
+  }
+  return true;
+}
+
 // Remove a co-organizer
 router.delete(
   '/:id/organizers/:userId',
@@ -1404,47 +1454,27 @@ router.delete(
         .json({ error: 'CANNOT_REMOVE_PRIMARY', message: 'Cannot remove the primary organizer.' });
     }
 
-    const { error } = await supabaseAdmin
-      .from('SupportTrainOrganizer')
-      .delete()
-      .eq('support_train_id', st.id)
-      .eq('user_id', targetUserId);
+    // A removed co-organizer leaves the campaign chat unless they're the recipient or a helper with an active
+    // signup. They leave it before the role goes, so a failure leaves them listed and the organizer's retry
+    // finishes it; a signup that keeps them in may be canceled meanwhile, so that's checked again after.
+    try {
+      const leftChat = await leaveTrainChatUnlessInvolved(req, targetUserId, { exceptOrganizer: true });
 
-    if (error) {
+      const { error } = await supabaseAdmin
+        .from('SupportTrainOrganizer')
+        .delete()
+        .eq('support_train_id', st.id)
+        .eq('user_id', targetUserId);
+      if (error) throw new Error(`Could not remove the role: ${error.message}`);
+
+      if (!leftChat) await leaveTrainChatUnlessInvolved(req, targetUserId);
+    } catch (removeErr) {
       logger.error('Remove organizer failed', {
         supportTrainId: st.id,
         targetUserId,
-        error: error.message,
+        error: removeErr.message,
       });
-      return res.status(500).json({ error: 'INTERNAL', message: 'Failed to remove organizer.' });
-    }
-
-    // A removed co-organizer leaves the campaign chat unless they are still the recipient or a helper
-    // with an active signup (the same rule as a helper's cancel).
-    try {
-      const chatThreadId = req.activity?.chat_thread_id;
-      if (chatThreadId && targetUserId !== st.recipient_user_id) {
-        const { count: activeRes } = await supabaseAdmin
-          .from('SupportTrainReservation')
-          .select('id', { count: 'exact', head: true })
-          .eq('support_train_id', st.id)
-          .eq('user_id', targetUserId)
-          .neq('status', 'canceled');
-
-        if ((activeRes || 0) === 0) {
-          await supabaseAdmin
-            .from('ChatParticipant')
-            .delete()
-            .eq('room_id', chatThreadId)
-            .eq('user_id', targetUserId);
-        }
-      }
-    } catch (chatErr) {
-      logger.error('Remove organizer from chat failed (non-fatal)', {
-        supportTrainId: st.id,
-        targetUserId,
-        error: chatErr.message,
-      });
+      return supportTrainUnavailable(res, "Couldn't remove this co-organizer. Please try again.");
     }
 
     res.status(204).end();
@@ -3611,9 +3641,21 @@ router.post(
         .json({ error: 'FORBIDDEN', message: 'You can only cancel your own reservation.' });
     }
 
+    // A helper leaves the campaign chat with their last signup, unless they organize the train or receive it.
+    // They leave it before the signup is canceled, so a failure leaves the signup there to cancel again.
+    const chatUnavailable = (chatErr) => {
+      logger.error('Remove helper from chat failed', { supportTrainId: st.id, reservationId, error: chatErr.message });
+      return supportTrainUnavailable(res, "Couldn't finish cancelling this signup. Please try again.");
+    };
+
     if (reservation.status === 'canceled') {
-      // The prior cancellation may have committed before its reply was lost.
-      // Keep its original timestamp and avoid repeating notifications.
+      // The prior cancellation may have committed before its reply was lost, or before its chat
+      // removal failed: finish that, but keep its original timestamp and avoid repeating notifications.
+      try {
+        await leaveTrainChatUnlessInvolved(req, reservation.user_id);
+      } catch (chatErr) {
+        return chatUnavailable(chatErr);
+      }
       return res.json(reservation);
     }
 
@@ -3622,6 +3664,13 @@ router.post(
         error: 'INVALID_TRANSITION',
         message: `Cannot cancel from status '${reservation.status}'. Only reserved signups can be removed.`,
       });
+    }
+
+    let leftChat;
+    try {
+      leftChat = await leaveTrainChatUnlessInvolved(req, reservation.user_id, { exceptReservationId: reservationId });
+    } catch (chatErr) {
+      return chatUnavailable(chatErr);
     }
 
     // Cancel the reservation
@@ -3690,48 +3739,14 @@ router.post(
       });
     }
 
-    // Remove helper from chat if they have no other active reservations
-    try {
-      const canceledUserId = reservation.user_id;
-      const chatThreadId = req.activity?.chat_thread_id;
-      if (chatThreadId && canceledUserId) {
-        // Check for other active reservations on this train
-        const { count: otherRes } = await supabaseAdmin
-          .from('SupportTrainReservation')
-          .select('id', { count: 'exact', head: true })
-          .eq('support_train_id', st.id)
-          .eq('user_id', canceledUserId)
-          .neq('status', 'canceled')
-          .neq('id', reservationId);
-
-        if ((otherRes || 0) === 0) {
-          // Don't remove organizers or recipients from chat
-          const isOrgOrRecipient =
-            canceledUserId === st.organizer_user_id || canceledUserId === st.recipient_user_id;
-
-          if (!isOrgOrRecipient) {
-            const { data: orgCheck } = await supabaseAdmin
-              .from('SupportTrainOrganizer')
-              .select('id')
-              .eq('support_train_id', st.id)
-              .eq('user_id', canceledUserId)
-              .single();
-
-            if (!orgCheck) {
-              await supabaseAdmin
-                .from('ChatParticipant')
-                .delete()
-                .eq('room_id', chatThreadId)
-                .eq('user_id', canceledUserId);
-            }
-          }
-        }
+    // Another signup or a co-organizer role kept them in the chat, and either may have ended meanwhile: check
+    // again. A failure here is answered too, and cancelling again finishes it (above).
+    if (!leftChat) {
+      try {
+        await leaveTrainChatUnlessInvolved(req, reservation.user_id);
+      } catch (chatErr) {
+        return chatUnavailable(chatErr);
       }
-    } catch (chatErr) {
-      logger.error('Remove helper from chat failed (non-fatal)', {
-        supportTrainId: st.id,
-        error: chatErr.message,
-      });
     }
 
     res.json(updated);

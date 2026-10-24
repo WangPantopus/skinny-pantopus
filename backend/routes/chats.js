@@ -2667,20 +2667,19 @@ router.delete('/messages/:messageId', verifyToken, messageDeleteLimiter, async (
       return res.status(403).json({ error: 'Not authorized' });
     }
     // A deleted message's files go with it: the file route answers 410 for a deleted file, so the
-    // other people in the chat can't open them from an old link either. A repeat delete retries this.
-    const deleteAttachments = async () => {
-      const fileIds = [...new Set((Array.isArray(message.attachments) ? message.attachments : [])
-        .map((attachment) => attachment?.id).filter((id) => typeof id === 'string'))];
-      for (const fileId of fileIds) {
-        const { data, error } = await supabaseAdmin.rpc('soft_delete_file', { p_file_id: fileId, p_user_id: userId });
-        if (error || (!data?.success && data?.error !== 'File not found or already deleted')) {
-          logger.warn('Chat attachment delete failed', { messageId, fileId, error: error?.message || data?.error });
-        }
+    // other people in the chat can't open them from an old link either. They go first: the message is
+    // deleted only once all of them are, so a failure leaves it in place and a repeat delete finishes it.
+    const fileIds = [...new Set((Array.isArray(message.attachments) ? message.attachments : [])
+      .map((attachment) => attachment?.id).filter((id) => typeof id === 'string'))];
+    for (const fileId of fileIds) {
+      const { data, error } = await supabaseAdmin.rpc('soft_delete_file', { p_file_id: fileId, p_user_id: userId });
+      if (error || (!data?.success && data?.error !== 'File not found or already deleted')) {
+        logger.error('Chat attachment delete failed', { requestId: req.requestId, messageId, fileId, error: error?.message || data?.error });
+        return res.status(503).json({ error: "Couldn't delete this message's files. Please try again." });
       }
-    };
+    }
 
     if (message.deleted) {
-      await deleteAttachments();
       return res.json({ message: 'Message deleted successfully' });
     }
 
@@ -2698,7 +2697,6 @@ router.delete('/messages/:messageId', verifyToken, messageDeleteLimiter, async (
     }
 
     incCounter('chat.message.deleted');
-    await deleteAttachments();
 
     // Broadcast via socket
     const io = req.app.get('io');
@@ -3451,6 +3449,26 @@ router.get('/files/:fileId', tokenFromQuery, verifyToken, async (req, res) => {
     if (await isGigRoomClosedTo(roomId, userId, actingFor ? [actingFor] : [])) {
       return res.status(403).json({ error: 'Not authorized to access this file' });
     }
+
+    // A deleted message's files are gone for everyone, from a link saved before the delete too, even where the
+    // file itself wasn't marked deleted (an older delete that failed partway, or a file someone else uploaded).
+    // Matched by the stored id (the path's may differ in case, which a JSON match would miss), as a JSON string:
+    // supabase-js sends an array as a Postgres array literal, which a jsonb column refuses.
+    const { data: deletedWith, error: deletedWithError } = await supabaseAdmin
+      .from('ChatMessage')
+      .select('id')
+      .eq('room_id', roomId)
+      .eq('deleted', true)
+      .contains('attachments', JSON.stringify([{ id: file.id }]))
+      .limit(1);
+    if (deletedWithError) {
+      logger.error('Chat file message check failed', { requestId: req.requestId, fileId, error: deletedWithError.message });
+      return res.status(503).json({ error: 'File access is temporarily unavailable. Please retry.' });
+    }
+    if (deletedWith?.length) {
+      return res.status(410).json({ error: 'File has been deleted' });
+    }
+
     if (thumbnail && !STREAMED_CHAT_IMAGE_TYPES.has(file.mime_type)) {
       return res.status(415).json({ error: 'Thumbnails are available only for images' });
     }

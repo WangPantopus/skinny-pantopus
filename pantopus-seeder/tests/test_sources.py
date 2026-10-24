@@ -90,7 +90,7 @@ class TestContentSourceMakeItem:
 # ---------------------------------------------------------------------------
 
 class TestRssSource:
-    @patch("src.sources.rss.httpx.get")
+    @patch("src.sources.rss._fetch_feed")
     @patch("src.sources.rss.feedparser.parse")
     def test_sets_user_agent_header(self, mock_parse, mock_get):
         """RSS fetches send the Pantopus user agent."""
@@ -102,7 +102,7 @@ class TestRssSource:
 
         assert mock_get.call_args.kwargs["headers"]["User-Agent"] == "Pantopus-Seeder/1.0"
 
-    @patch("src.sources.rss.httpx.get")
+    @patch("src.sources.rss._fetch_feed")
     @patch("src.sources.rss.feedparser.parse")
     def test_well_formed_feed(self, mock_parse, mock_get):
         """Returns correct RawContentItem list from well-formed feed."""
@@ -126,7 +126,7 @@ class TestRssSource:
         assert items[0].region == "clark_county"
         mock_parse.assert_called_once_with(b"<rss>...</rss>")
 
-    @patch("src.sources.rss.httpx.get")
+    @patch("src.sources.rss._fetch_feed")
     @patch("src.sources.rss.feedparser.parse")
     def test_empty_feed(self, mock_parse, mock_get):
         """Returns empty list from feed with no entries."""
@@ -136,7 +136,7 @@ class TestRssSource:
         src = RssSource(_make_rss_config())
         assert src.fetch() == []
 
-    @patch("src.sources.rss.httpx.get")
+    @patch("src.sources.rss._fetch_feed")
     @patch("src.sources.rss.feedparser.parse")
     def test_bozo_feed_no_entries(self, mock_parse, mock_get):
         """Returns empty list from unreachable/bozo feed with no entries."""
@@ -146,7 +146,7 @@ class TestRssSource:
         src = RssSource(_make_rss_config())
         assert src.fetch() == []
 
-    @patch("src.sources.rss.httpx.get")
+    @patch("src.sources.rss._fetch_feed")
     @patch("src.sources.rss.feedparser.parse")
     def test_skips_stale_entries(self, mock_parse, mock_get):
         """Skips entries older than freshness threshold."""
@@ -164,7 +164,7 @@ class TestRssSource:
         assert len(items) == 1
         assert items[0].title == "Fresh"
 
-    @patch("src.sources.rss.httpx.get")
+    @patch("src.sources.rss._fetch_feed")
     @patch("src.sources.rss.feedparser.parse")
     def test_skips_entries_no_title(self, mock_parse, mock_get):
         """Skips entries with no title."""
@@ -183,7 +183,7 @@ class TestRssSource:
         assert len(items) == 1
         assert items[0].title == "Valid"
 
-    @patch("src.sources.rss.httpx.get")
+    @patch("src.sources.rss._fetch_feed")
     @patch("src.sources.rss.feedparser.parse")
     def test_caps_at_20_items(self, mock_parse, mock_get):
         """Caps at 20 items maximum."""
@@ -200,7 +200,7 @@ class TestRssSource:
 
         assert len(items) == 20
 
-    @patch("src.sources.rss.httpx.get")
+    @patch("src.sources.rss._fetch_feed")
     def test_network_error_returns_empty(self, mock_get):
         """Returns empty list on network error."""
         mock_get.side_effect = Exception("Connection refused")
@@ -209,7 +209,7 @@ class TestRssSource:
         assert src.fetch() == []
         assert src.last_fetch_error == "fetch_error:Exception"
 
-    @patch("src.sources.rss.httpx.get")
+    @patch("src.sources.rss._fetch_feed")
     def test_reddit_403_sets_specific_fetch_error(self, mock_get):
         """Reddit feed blocks are tagged clearly for fetcher metrics."""
         response = _make_response(status_code=403, content_type="text/html")
@@ -224,7 +224,7 @@ class TestRssSource:
         assert src.fetch() == []
         assert src.last_fetch_error == "http_403:reddit_blocked"
 
-    @patch("src.sources.rss.httpx.get")
+    @patch("src.sources.rss._fetch_feed")
     @patch("src.sources.rss.feedparser.parse")
     def test_entry_no_link(self, mock_parse, mock_get):
         """Includes entries with no link (source_url=None)."""
@@ -241,7 +241,7 @@ class TestRssSource:
         assert len(items) == 1
         assert items[0].source_url is None
 
-    @patch("src.sources.rss.httpx.get")
+    @patch("src.sources.rss._fetch_feed")
     @patch("src.sources.rss.feedparser.parse")
     def test_event_category_uses_72h_freshness(self, mock_parse, mock_get):
         """Event category uses 72h freshness window."""
@@ -457,7 +457,7 @@ class TestRssMediaExtraction:
         assert urls[0] == "https://example.com/mc.jpg"
         assert len(urls) == 3
 
-    @patch("src.sources.rss.httpx.get")
+    @patch("src.sources.rss._fetch_feed")
     @patch("src.sources.rss.feedparser.parse")
     def test_fetch_passes_media_to_items(self, mock_parse, mock_get):
         """fetch() includes extracted media in RawContentItem."""
@@ -475,7 +475,7 @@ class TestRssMediaExtraction:
         assert items[0].media_urls == ["https://example.com/hero.jpg"]
         assert items[0].media_types == ["image"]
 
-    @patch("src.sources.rss.httpx.get")
+    @patch("src.sources.rss._fetch_feed")
     @patch("src.sources.rss.feedparser.parse")
     def test_fetch_no_media_returns_empty_lists(self, mock_parse, mock_get):
         """fetch() returns empty media lists when entry has no media."""
