@@ -9,6 +9,7 @@ final class ChatLocalStore: @unchecked Sendable {
     static let historyLimit = 5 * 1024 * 1024
     static let threadLimit = 20
     static let historyLifetime: TimeInterval = 7 * 24 * 3600
+    static let historyRetired = Notification.Name("pantopus.chatHistoryRetired")
 
     private struct SavedInbox: Codable {
         let schema: Int
@@ -327,6 +328,10 @@ extension ChatLocalStore {
     /// Called with the lock held. A failed epoch write blocks history reads and
     /// writes in this process; a directory rename is the durable fallback.
     private func retireHistory() {
+        Task { @MainActor in
+            ChatMediaURL.removeOpenedFiles()
+            NotificationCenter.default.post(name: Self.historyRetired, object: nil)
+        }
         let directory = root.appendingPathComponent("history", isDirectory: true)
         let scope = try? String(contentsOf: root.appendingPathComponent("scope"), encoding: .utf8)
         let epoch = HistoryEpoch(id: UUID().uuidString, retiredAt: Date(), scope: scope)

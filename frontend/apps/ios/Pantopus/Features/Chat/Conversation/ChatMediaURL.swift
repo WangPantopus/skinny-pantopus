@@ -32,8 +32,12 @@ enum ChatMediaURL {
     /// Files opened from chats and copies of photos sent to the assistant go at the next launch and
     /// with the account's data (sign-out, a switch), so nothing of one person's chats stays for the next.
     static func removeLocalFiles() {
-        try? FileManager.default.removeItem(at: openedFilesFolder)
+        removeOpenedFiles()
         try? FileManager.default.removeItem(at: sentPhotosRoot)
+    }
+
+    static func removeOpenedFiles() {
+        try? FileManager.default.removeItem(at: openedFilesFolder)
     }
 
     /// Turn a stored attachment URL into something `AsyncImage` can fetch.
@@ -176,19 +180,24 @@ enum ChatMediaURL {
 
     @MainActor
     static func imageData(_ url: URL) async -> Data? {
+        try? await openedData(url, limit: ChatLocalStore.mediaFileLimit)
+    }
+
+    @MainActor
+    static func openedData(_ url: URL, limit: Int) async throws -> Data {
         let session = AuthManager.shared.requestSessionGeneration
         let version = ChatLocalStore.shared.version
-        guard let file = try? await download(raw: url.absoluteString, filename: "image", mimeType: nil) else { return nil }
+        let file = try await download(raw: url.absoluteString, filename: "attachment", mimeType: nil)
         defer { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
-        let bytes = await boundedMediaBytes(file)
-        do { try requireMediaSession(session, version: version) } catch { return nil }
+        guard let bytes = await boundedMediaBytes(file, limit: limit) else { throw URLError(.dataLengthExceedsMaximum) }
+        try requireMediaSession(session, version: version)
         return bytes
     }
 
-    private static func boundedMediaBytes(_ url: URL) async -> Data? {
+    private static func boundedMediaBytes(_ url: URL, limit: Int = ChatLocalStore.mediaFileLimit) async -> Data? {
         await Task.detached(priority: .utility) {
             guard let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize,
-                  size <= ChatLocalStore.mediaFileLimit else { return nil }
+                  size <= limit else { return nil }
             return try? Data(contentsOf: url)
         }.value
     }

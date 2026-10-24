@@ -428,6 +428,10 @@ public struct ChatConversationView: View {
             )
         }
         .quickLookPreview($viewModel.previewFileURL)
+        .onReceive(NotificationCenter.default.publisher(for: ChatLocalStore.historyRetired)) { _ in
+            viewerPhotos = nil
+            viewModel.previewFileURL = nil
+        }
         .refreshFailureToast($viewModel.actionFailure)
         .accessibilityIdentifier("chatConversation")
     }
