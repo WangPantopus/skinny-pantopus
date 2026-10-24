@@ -24,7 +24,7 @@ import { confirmStore } from '../ui/confirm-store';
 import { toast } from '../ui/toast-store';
 import { launchFeatures } from '@/lib/featureFlags';
 import { usernameHandle } from '@pantopus/utils';
-import { fetchMe } from '@/lib/me';
+import { fetchMe, peekMe } from '@/lib/me';
 import { navigateChatPath } from '@/hooks/useChatOfflineShell';
 import { readCachedChatAccountId, type ChatDraftCommit } from './chatStorage';
 import { queryKeys } from '@/lib/query-keys';
@@ -48,7 +48,9 @@ export default function ConversationView({
   const router = useRouter();
 
   // ── Conversation-specific state ───────────────────────
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  // This session's profile is usually loaded already (the shell shows it):
+  // start with it so the saved conversation is read on the first render.
+  const [currentUserId, setCurrentUserId] = useState<string | null>(() => (api.getAuthToken() ? peekMe()?.id ?? null : null));
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(initialTopicId || null);
   const [showDrawer, setShowDrawer] = useState(false);
   const drawerTitleId = useId();
@@ -109,12 +111,14 @@ export default function ConversationView({
       }
       ownedConfirmation.current = null;
     };
-    const changed = () => {
+    const changed = (opening = false) => {
       retire();
       setBlocking(false);
       setReportTarget(null);
       setShowDrawer(false);
-      setCurrentUserId(null);
+      // A session change clears the account; opening the view keeps the
+      // profile it started with, which the reads below confirm.
+      if (!opening) setCurrentUserId(null);
       const current = captureSafetyScope();
       if (api.getAuthToken()) {
         let confirmed = false;
@@ -130,9 +134,9 @@ export default function ConversationView({
     const storage = (event: StorageEvent) => {
       if (event.key === null || event.key === api.AUTH_SESSION_CHANGE_KEY) changed();
     };
-    const unsubscribe = api.onTokenChange(changed);
+    const unsubscribe = api.onTokenChange(() => changed());
     window.addEventListener('storage', storage);
-    changed();
+    changed(true);
     return () => { retire(); unsubscribe(); window.removeEventListener('storage', storage); };
   }, [captureSafetyScope]);
 

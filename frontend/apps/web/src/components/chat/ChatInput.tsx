@@ -111,15 +111,16 @@ export default function ChatInput({ onSend, draft, sending, disabled = false, pl
     setError(null);
     if (editingMessage) inputRef.current?.focus();
   }, [editingMessage]);
-  // The emoji picker is not in the page bundle: fetch it while the page is idle
-  // so the first tap on the emoji button opens it at once.
+  // The emoji picker is not in the page bundle: fetch it once the conversation
+  // has opened and the page is idle, so the first tap on the emoji button opens
+  // it at once. Its ~550 KB parse must not land in the conversation's first paint.
   useEffect(() => {
-    if (typeof window.requestIdleCallback === 'function') {
-      const id = window.requestIdleCallback(preloadEmojiPicker, { timeout: 4000 });
-      return () => window.cancelIdleCallback(id);
-    }
-    const id = window.setTimeout(preloadEmojiPicker, 2000);
-    return () => window.clearTimeout(id);
+    let idle: number | undefined;
+    const timer = window.setTimeout(() => {
+      if (typeof window.requestIdleCallback === 'function') idle = window.requestIdleCallback(preloadEmojiPicker, { timeout: 4000 });
+      else preloadEmojiPicker();
+    }, 2500);
+    return () => { window.clearTimeout(timer); if (idle !== undefined) window.cancelIdleCallback(idle); };
   }, []);
   const visibleText = editingMessage ? editText : text;
   const setVisibleText = editingMessage ? setEditText : setText;

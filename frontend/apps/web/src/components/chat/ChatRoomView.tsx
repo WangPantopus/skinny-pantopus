@@ -20,7 +20,7 @@ import ImageLightbox from './ImageLightbox';
 import MessageReactionBar from './MessageReactionBar';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import { launchFeatures } from '@/lib/featureFlags';
-import { fetchMe } from '@/lib/me';
+import { fetchMe, peekMe } from '@/lib/me';
 import { navigateChatPath } from '@/hooks/useChatOfflineShell';
 import { readCachedChatAccountId, type ChatDraftCommit } from './chatStorage';
 import { queryKeys } from '@/lib/query-keys';
@@ -44,7 +44,9 @@ export default function ChatRoomView({
   const router = useRouter();
 
   // ── Room-specific state ───────────────────────────────
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  // Start with this session's already loaded profile (confirmed below), so
+  // the saved conversation is read on the first render.
+  const [currentUserId, setCurrentUserId] = useState<string | null>(() => (api.getAuthToken() ? peekMe()?.id ?? null : null));
   const [representedUserIds, setRepresentedUserIds] = useState<string[]>([]);
   const [preBidStatus, setPreBidStatus] = useState<Record<string, any> | null>(null);
   const [historicalMessages, setHistoricalMessages] = useState<ChatMessage[]>([]);

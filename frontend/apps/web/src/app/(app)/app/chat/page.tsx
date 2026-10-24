@@ -174,6 +174,21 @@ export default function ChatListPage() {
     return () => { cancelled = true; };
   }, []);
 
+  // Opening a first conversation loads and runs the conversation views' code.
+  // Do that once the inbox has settled and is idle, so a tap only has to render.
+  useEffect(() => {
+    const warm = () => {
+      void import('@/components/chat/ConversationView').catch(() => {});
+      void import('@/components/chat/ChatRoomView').catch(() => {});
+    };
+    let idle: number | undefined;
+    const timer = window.setTimeout(() => {
+      if (typeof window.requestIdleCallback === 'function') idle = window.requestIdleCallback(warm, { timeout: 3000 });
+      else warm();
+    }, 1000);
+    return () => { window.clearTimeout(timer); if (idle !== undefined) window.cancelIdleCallback(idle); };
+  }, []);
+
   useEffect(() => {
     if (connected) return;
     const timer = setInterval(() => {
