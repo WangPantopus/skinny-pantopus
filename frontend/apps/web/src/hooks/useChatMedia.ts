@@ -7,6 +7,8 @@ import { activateChatStorage, deleteChatRecords, isChatStorageCurrent, onChatHis
 
 const MAX_FILE_BYTES = 25 * 1024 * 1024;
 const passiveMedia = /^(image\/(jpeg|png|gif|webp|avif|heic|heif)|video\/(mp4|webm|quicktime)|application\/pdf)$/;
+// Files this tab saw answer 404/410: a download that raced the answer may not save them again.
+const goneMedia = new Set<string>();
 let downloads = 0;
 const waiting: Array<() => void> = [];
 
@@ -117,17 +119,32 @@ export function useChatMedia(url: string | null | undefined, accountId?: string 
           }
           if (!await current()) return;
           // Quota/storage failure must not hide a freshly authorized image.
-          if (scope && generation !== null) await writeChatRecords(scope, [{ kind: 'received-media', key: mediaKey, bytes: await blob.arrayBuffer(),
-            roomId, messageId, historyGeneration: generation, mimeType: blob.type }]).catch(() => {});
+          if (scope && generation !== null && !goneMedia.has(`${scope.account}|${roomId}:${source.split('?')[0]}`)) {
+            await writeChatRecords(scope, [{ kind: 'received-media', key: mediaKey, bytes: await blob.arrayBuffer(),
+              roomId, messageId, historyGeneration: generation, mimeType: blob.type }]).catch(() => {});
+          }
         } catch (error) {
           const status = (error as { status?: number }).status;
           if (disposed || controller.signal.aborted && !timedOut) return;
-          // 410: the server deleted this file with its message (#2809).
-          if (status === 401 || status === 403 || status === 404 || status === 410) {
-            // A missing/deleted file does not prove that the room itself was
-            // revoked. Retire its saved media without hiding readable text.
+          if (status === 401 || status === 403) {
+            // Access to the room's files ended: retire every saved file of the
+            // room behind the history fence, without hiding readable text.
             retireView();
             await retireChatHistoryRooms(accountId, [roomId], true).catch(() => {});
+            return;
+          }
+          if (status === 404 || status === 410) {
+            // This file is gone (410: deleted with its message, #2809). Remove
+            // only its saved copies. Advancing the room's history fence here
+            // would cancel the history read that carries the message's deletion,
+            // so the deleted message stayed on screen after every reload.
+            retireView();
+            const original = `${roomId}:${source.split('?')[0]}`;
+            if (scope) {
+              goneMedia.add(`${scope.account}|${original}`);
+              await deleteChatRecords(scope, [{ kind: 'received-media', key: original },
+                { kind: 'received-media', key: `${original}?variant=thumbnail` }]).catch(() => {});
+            }
             return;
           }
           if (status && status < 500 && status !== 408 && status !== 429) throw error;
