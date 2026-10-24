@@ -11,7 +11,7 @@ const { distanceFormatter } = require('./distanceText');
 const parsePoint = require('../../utils/parsePostGISPoint');
 const { UUID } = require('./feedCursor');
 
-const POST_SELECT = `${legacy.FEED_POST_SELECT}, allow_external_share, moderation_state, radius_miles`;
+const POST_SELECT = `${legacy.FEED_POST_SELECT}, allow_external_share, moderation_state, radius_miles, right_now_event_id`;
 const REPLY_SELECT = `id, post_id, user_id, comment, parent_comment_id, created_at, is_edited, is_deleted,
   moderation_state, helpful_at, helpful_by, author:user_id (${SAFE_CREATOR_SELECT})`;
 

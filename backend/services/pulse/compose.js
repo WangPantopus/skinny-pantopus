@@ -107,7 +107,9 @@ async function prepareCreate({ userId, accountType, body, retry = false }) {
     || (body.claimMode != null && postType !== 'offer')
     || (body.expiresAt != null && postType !== 'alert')
     // Asking a Known entry again is a public Ask (contract §2.14).
-    || (body.knownEntryId != null && (postType !== 'ask_local' || readScope !== 'public'))) {
+    || (body.knownEntryId != null && (postType !== 'ask_local' || readScope !== 'public'))
+    // Only a Heads-up waits on a Right now event (§2.16).
+    || (body.rightNowEventId != null && postType !== 'alert')) {
     return { refusal: refusal('INVALID_PULSE_POST') };
   }
   if (body.postAs && body.postAs !== 'personal') {
@@ -132,6 +134,8 @@ async function prepareCreate({ userId, accountType, body, retry = false }) {
   const area = await checked(openAreas(db.from('PulseArea').select(`${AREA_SELECT}, centroid`)).eq('id', areaId).maybeSingle());
   if (!area) return { refusal: refusal('AREA_NOT_FOUND') };
   if (entry && entry.area_id !== area.id) return { refusal: refusal('INVALID_PULSE_POST') };
+  const event = body.rightNowEventId != null ? await require('./rightNow').forHeadsUp(body.rightNowEventId, area) : null;
+  if (body.rightNowEventId != null && !event) return { refusal: refusal('INVALID_PULSE_POST') };
   if (area.kind === 'town') {
     if (!['public', 'verified_town'].includes(readScope)) return { refusal: refusal('AUDIENCE_NOT_ALLOWED') };
   } else if (['street', 'neighborhood'].includes(area.kind)) {
@@ -178,10 +182,14 @@ async function prepareCreate({ userId, accountType, body, retry = false }) {
   const hold = checks.holds[0];
   const named = typeof body.locationName === 'string' && body.locationName.trim() ? body.locationName.trim() : null;
   return {
-    plan: { area, label, scopes, held: !!hold, knownEntryId: entry?.id || null },
+    plan: { area, label, scopes, held: !!hold, knownEntryId: entry?.id || null, rightNowEventId: event?.id || null },
     // The place the author named, shown as the card's "About" (contract §2.1), and the Known
     // entry an Ask asks again (§2.14).
-    metadata: { ...(named ? { pulse_about: named } : {}), ...(entry ? { known_entry_id: entry.id } : {}) },
+    // A Heads-up's own end time is remembered, so tagging it to a Right now event later keeps it;
+    // one without waits on the event it is tagged to (§2.16).
+    metadata: { ...(named ? { pulse_about: named } : {}), ...(entry ? { known_entry_id: entry.id } : {}),
+      ...(postType === 'alert' && body.expiresAt != null ? { alert_ends_set: true } : {}),
+      ...(event && body.expiresAt == null ? { ends_with_event: true } : {}) },
     fields: {
       read_scope: readScope, area_id: area.id,
       audience: 'nearby', visibility: readScope === 'public' ? 'public' : 'neighborhood',
@@ -197,7 +205,8 @@ async function prepareCreate({ userId, accountType, body, retry = false }) {
       geocode_provider: null, geocode_mode: null, geocode_accuracy: null, geocode_place_id: null,
       geocode_source_flow: null, geocode_created_at: null,
       claim_mode: postType === 'offer' ? (body.claimMode || 'choose') : 'choose',
-      expires_at: await endsAtFor(body, now),
+      expires_at: event && body.expiresAt == null ? new Date(now + 14 * DAY_MS).toISOString() : await endsAtFor(body, now),
+      ...(event ? { right_now_event_id: event.id } : {}),
       ...(entry && !body.topic && entry.topic ? { topic: entry.topic } : {}),
       ...(hold ? { moderation_state: 'held', moderation_rule: hold.rule, moderated_at: new Date(now).toISOString() } : {}),
     },

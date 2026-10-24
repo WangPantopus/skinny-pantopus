@@ -10,8 +10,10 @@ const seen = require('./seen');
 const cursor = require('./feedCursor');
 const follows = require('./follows');
 const { DAY_MS } = require('./lifecycle');
+const rightNow = require('./rightNow');
 
-const SELECT = `${legacy.FEED_POST_SELECT}, allow_external_share, moderation_state, radius_miles, pulse_post_town_id`;
+const SELECT = `${legacy.FEED_POST_SELECT}, allow_external_share, moderation_state, radius_miles, pulse_post_town_id,
+  right_now_event_id`;
 const BATCH = 100;
 
 async function checked(query) {
@@ -140,7 +142,7 @@ async function page(userId, { view, topic, areaId, earlierBefore, limit }) {
   }
   return {
     view, read_at: readAt, area: areaDto(context.area), areas_available: context.available.map(areaDto), quiet,
-    right_now: null, groups: groupsFor(cards, context, !!before),
+    right_now: before ? null : await rightNow.current(context), groups: groupsFor(cards, context, !!before),
     end: { caught_up: !overflow || Date.parse(result[limit]?.created_at) <= Date.parse(since), since,
       can_show_earlier: older, earlier_cursor: older ? cursor.encode(last, since, readAt) : null },
   };
