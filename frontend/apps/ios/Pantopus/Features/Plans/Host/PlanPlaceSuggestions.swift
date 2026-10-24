@@ -131,7 +131,7 @@ struct PlanPlaceSuggestions: View {
     private func suggest() async {
         guard request > 0 else { return }
         guard let center else {
-            phase = .failed("Couldn't find your location. Check location access and try again.")
+            phase = .failed(PlanPlacePicker.noLocationLine)
             return
         }
         phase = .loading(gathering: false)

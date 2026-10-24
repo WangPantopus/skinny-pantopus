@@ -22,6 +22,8 @@ struct PlanPlacePicker: View {
     static let gatherLimit: TimeInterval = 150
     static let slowLine = "Places near you are taking longer than usual to load. Try again in a minute."
     static let unavailableLine = "Places near you aren't loading right now. Try again in a minute."
+    /// No fix, no home and no last map center (as on Android).
+    static let noLocationLine = "Share your location or add your home to find places nearby."
 
     /// What "You're here now" says while it looks, or after it found nothing.
     private enum HereNow {
@@ -277,7 +279,7 @@ private extension PlanPlacePicker {
         guard !Task.isCancelled else { return }
         center = resolvedCenter
         guard let center else {
-            loadError = "Couldn't find your location. Check location access and try again."
+            loadError = Self.noLocationLine
             loading = false
             return
         }
@@ -351,7 +353,7 @@ private extension PlanPlacePicker {
         try? await Task.sleep(for: .milliseconds(300))
         guard !Task.isCancelled else { return }
         guard let center = center ?? PlansStoreReads.lastCenter else {
-            searchError = "Couldn't find your location. Check location access and try again."
+            searchError = Self.noLocationLine
             searchLoading = false
             return
         }
