@@ -1136,8 +1136,10 @@ This section supersedes the historical signing/upload instructions below. Both s
 - [x] Local checks: iOS simulator build and Android debug assembly passed under the restored identities; Android ktlint/detekt, both Ruby Fastfile syntax checks, existing native-config tests (6), and association-file tests (5) passed. Both apps signed into a real local backend/database and displayed the same synthetic home/tasks. Created tasks persisted across iOS relaunch and were visible on Android; Android sign-in persisted after force-stop/relaunch. Initial native evidence used base `fc3223d3f`; these checks do not prove release signing, old-account transfer or a physical upgrade.
 - [ ] iOS: the original App ID already has Apple sign-in, push and associated domains. **App Groups is not enabled**, and `com.pantopus.app.widgets` was absent on October 23. Assign the existing `group.app.pantopus.ios` to the original app and register/assign the renamed widget. Generate matching App Store profiles in the signing repository; CI's readonly match cannot create them. Reuse the team's distribution certificate where valid.
 - [x] Android: recovered the **original app's upload keystore** from the existing Expo/EAS project. Its certificate matches the certificate downloaded from the original Play record: SHA-256 `20:D3:0B:09:8D:06:A4:E1:9D:E1:40:65:EF:70:96:55:EF:4D:F7:91:BB:89:BB:DA:33:48:F7:0B:B1:F3:FB:8B`. The private key successfully signed a local verification JAR, whose signature passed verification. **No upload-key reset is needed**; the unused reset form was discarded.
-- [ ] Founder: replace the four `android-release` signing secrets with the recovered original key and its passwords/alias. The separate Pantopus Home key must not be used for this release. Local recovery does not update GitHub secrets or prove a store-signed upgrade.
-- [ ] Android: the release Firebase JSON must contain `com.pantopus.app` in the backend's FCM project; staging debug needs `com.pantopus.app.debug`. A read-only October 23 check confirmed production Firebase (`pantopus-prod`) currently registers only `app.pantopus.android`; register the original package and download its real config before replacing `GOOGLE_SERVICES_JSON`. The checked-in file is a build-only placeholder. Match Maps/OAuth restrictions to the original package and its Play-signing certificate (SHA-1 `42:AC:48:11:1A:63:75:95:03:4E:01:0F:5F:F1:DF:DE:F5:8F:6C:6C`). Ensure the existing Play service account can access the original listing.
+- [x] With the founder's explicit October 23 authorization, replaced the four `android-release` signing secrets with the recovered original key and its passwords/alias. GitHub accepted all four updates and their modification timestamps were verified. The separate Pantopus Home key remains unchanged locally. No build or upload was triggered.
+- [x] Registered `com.pantopus.app` in production Firebase (`pantopus-prod`) and added the original Play app-signing SHA-1 `42:AC:48:11:1A:63:75:95:03:4E:01:0F:5F:F1:DF:DE:F5:8F:6C:6C` and SHA-256 `33:60:AE:F8:09:B6:BF:18:3F:FB:DE:4F:F7:CD:BD:68:0A:F0:2E:5F:84:61:5A:2E:9A:A0:F3:89:EF:73:02:EF`. Both persisted after reload. Downloaded its genuine config, verified project/package/app identity, and updated `android-release/GOOGLE_SERVICES_JSON`. Also registered `com.pantopus.app.debug` in `pantopus-staging` and saved its config privately. Existing pilot Firebase apps remain registered; the checked-in JSON remains a build-only placeholder.
+- [x] Granted the existing Play release service account app-scoped read information/quality access and testing-track release access for original Pantopus. Production publishing, admin, financial and store-presence permissions remain off. Reopened the console to verify persistence; the service account successfully read the original tracks, including production **1.5.0 / version code 25**. Discarded the temporary API inspection edit without committing changes. No bundle upload or release occurred.
+- [ ] Match Maps/OAuth restrictions to the restored package and verify real sign-in and physical push delivery. Firebase registration, stored fingerprints, API access and secret-update acknowledgements do not establish these runtime checks or a store-signed upgrade.
 - [ ] Founder: align production `APNS_BUNDLE_ID=com.pantopus.app` with the release and verify a physical push. The backend currently has one global APNs topic; changing it does not also support the separate `app.pantopus.ios` pilot tokens. Keep this coordinated with the release, rather than changing only the native build.
 - [ ] Complete D3's Auth/profile transfer and verify old email/password, Google and Apple sign-ins as applicable; fresh content is the approved behavior. Explain the content reset in the store update notes. New minimum iOS is 17; the old build supported 15.1.
 - [ ] Validate a fresh install, and then an in-place **1.5.0 → 2.0.4** update on physical phones without uninstalling. Check sign-in, notification taps, links, widgets, relaunch, and old local data handling. Simulator/emulator builds alone cannot establish a store-signed upgrade.
@@ -1164,20 +1166,22 @@ passwords are now stored outside Git in
 700, private files mode 600). `upload-signing.json` references the recovered
 `pantopus-upload.jks`; preserve the separate pilot credentials unchanged.
 Both the exported certificate and a successful private-key signing check
-confirm this is usable, not merely a public certificate copy. No reset,
-credential upload or hosted secret change was performed.
+confirm this is usable, not merely a public certificate copy. No key reset
+was needed. Recovery itself made no hosted credential changes; the subsequent
+founder-authorized configuration updates are recorded above.
 
-The founder must set `ANDROID_KEYSTORE_BASE64`, `PANTOPUS_KEYSTORE_PASSWORD`,
-`PANTOPUS_KEY_ALIAS` and `PANTOPUS_KEY_PASSWORD` in GitHub's `android-release`
-environment from that private material. Keep Play's existing app-signing key
+`ANDROID_KEYSTORE_BASE64`, `PANTOPUS_KEYSTORE_PASSWORD`, `PANTOPUS_KEY_ALIAS`
+and `PANTOPUS_KEY_PASSWORD` are now set in GitHub's `android-release`
+environment from that private material. Play's existing app-signing key is
 unchanged. Validate a signed internal-track update after the other release
 gates pass; the local verification JAR is not an app upload or upgrade test.
 
 A local `apply-github-signing.py` in the same private directory verifies the
 original certificate and previews these four secret names by default. The
-founder can run it with `--apply` to set only those secrets. Its dry run passed;
-the hosted-write mode was not run. It does not configure Firebase or start a
-build, upload or release.
+founder authorized its `--apply` mode after reviewing the prepared setup; the
+dry run and all four secret writes succeeded. It does not configure Firebase
+or start a build, upload or release. Firebase's config was updated separately
+from the genuine downloaded file, without printing any secret values.
 
 ### Historical October 6–22 setup (different app identities)
 
