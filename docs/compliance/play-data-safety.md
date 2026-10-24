@@ -1,12 +1,30 @@
 # Google Play "Data safety" Form — Pantopus Android
 
 **Derived from:** `docs/compliance/privacy-data-inventory.md`
-**Package:** `app.pantopus.android`
+**Package:** `com.pantopus.app`
 **Last reviewed:** 2026-10-07 (founder approved the answers with decisions A and B below; earlier: *Health info* added for emergency info, photo rows no longer mention listings)
 
 Answers to enter in **Play Console → App content → Data safety**. Play's
 taxonomy differs from Apple's, so the same inventory is re-expressed in
 Play's terms. Human/console work; this file is the script.
+
+**Original-listing transition, October 23:** these rows describe the current
+native build. Google's [Data safety rules](https://support.google.com/googleplay/android-developer/answer/10787469?hl=en)
+require the form to cover all versions currently distributed under the same
+package. Do not remove the original listing's legacy declarations merely
+because a current-native row below says "not collected."
+
+An unpublished draft was saved on `com.pantopus.app`: added optional Health
+info and Voice or sound recordings (collected, not shared, not ephemeral;
+App functionality), added App functionality and Fraud prevention/security to
+Device IDs, added Account management to Name/Email/Phone, and changed the
+account-deletion URL to `https://pantopus.com/delete-account`. Existing legacy
+types and purposes were retained, including User IDs, Files and docs, Emails,
+Purchase history, Calendar events, and In-app search history. Reconcile these
+against the still-distributed versions before submission. Also verify the
+separate data-deletion mechanism and its existing URL; only the account-
+deletion URL was corrected in this pass. Saving the draft did not send it
+for review or publish it.
 
 ---
 
@@ -169,7 +187,7 @@ Installed apps, SMS/Call logs, Purchase history (no IAP), Advertising ID
 | Location | Approximate + Precise location | Coarse + Precise Location |
 | User Content (photos) | Photos / Videos | Photos or Videos |
 | User Content (audio) | Voice or sound recordings | Audio Data |
-| User Content (messages) | Other in-app messages | (User Content) |
+| User Content (messages) | Other in-app messages | Emails or Text Messages |
 | User Content (other) | Other user-generated content | Other User Content |
 | Identifiers (incl. 2026-08 device id / install id / device public key / session id) | Device or other IDs (App functionality + Fraud prevention, security, and compliance) | User ID + Device ID |
 | Security & session records (§2.9: IP + UA, security events) | Device or other IDs (same row, security purpose) | Other Data Types (note) |

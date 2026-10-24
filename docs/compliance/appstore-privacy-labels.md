@@ -2,8 +2,8 @@
 
 **Derived from:** `docs/compliance/privacy-data-inventory.md`
 **Mirrors:** `frontend/apps/ios/Pantopus/PrivacyInfo.xcprivacy`
-**Bundle:** `app.pantopus.ios`
-**Last reviewed:** 2026-10-07 (founder approved these answers; earlier: Health added for emergency info, location provider wired)
+**Bundle:** `com.pantopus.app`
+**Last reviewed:** 2026-10-23 (console type names checked; underlying collection and purposes remain the founder-approved October 7 answers)
 
 These are the answers to enter in **App Store Connect → your app → App
 Privacy**. This is human/console work; this file is the script for it. Every
@@ -57,11 +57,19 @@ Apple groups by category → type. Enter each, then pick **purposes**,
 |------|-----------|------------|--------|----------|
 | Photos or Videos | Yes | App Functionality | Yes | No |
 | Audio Data | Yes | App Functionality | Yes | No |
-| Other User Content (messages, posts, listings, gigs, reviews, documents) | Yes | App Functionality | Yes | No |
+| Emails or Text Messages | Yes | App Functionality | Yes | No |
+| Other User Content (posts, listings, gigs, reviews, documents) | Yes | App Functionality | Yes | No |
 
-> Apple's label UI folds chat messages and other content under **User
-> Content**. (The bundled manifest splits them into `EmailsOrTextMessages` +
-> `OtherUserContent` for finer granularity — same underlying data.)
+> The October 23 App Store Connect form has a separate **Emails or Text
+> Messages** checkbox under User Content. Select it as well as Other User
+> Content, matching the manifest's existing `EmailsOrTextMessages` and
+> `OtherUserContent` entries. This corrects the console instructions, not
+> the underlying data inventory or collection behavior.
+>
+> On the original Pantopus record, completing the data-type form says
+> **Publish and Continue**, so it is not an unpublished 2.0.4 draft. Coordinate
+> the label update with release and recheck the still-live 1.5.0 disclosures.
+> The October 23 preparation cancelled that form without publishing changes.
 
 ### Health & Fitness
 | Type | Collected | Purpose(s) | Linked | Tracking |
@@ -148,7 +156,7 @@ sexual orientation, etc.), Gameplay Content, Advertising Data.
 | Other Data (DOB) | ✔ Other Data Types | OtherDataTypes |
 | Financial Info | ✔ Payment Info | PaymentInfo |
 | Location | ✔ Precise + Coarse | PreciseLocation, CoarseLocation |
-| User Content | ✔ Photos/Audio/Other | PhotosorVideos, AudioData, EmailsOrTextMessages, OtherUserContent |
+| User Content | ✔ Photos/Audio/Messages/Other | PhotosorVideos, AudioData, EmailsOrTextMessages, OtherUserContent |
 | Identifiers (incl. 2026-08 device id / install id / device public key / session id) | ✔ User ID + Device ID | UserID, DeviceID |
 | Security & session records (§2.9: IP + UA, security events) | ✔ Other Data Types (note) | OtherDataTypes |
 | Health (§2.10, emergency info) | ✔ Health | Health |

@@ -191,20 +191,13 @@ Each has a default that the steps below follow until you change it here.
   `api.pantopus.app`, which has no DNS; L4 switches them.) Also point
   `pantopus.app` and `www.pantopus.app` at the website (step P10): the apps share
   `https://pantopus.app` links.
-- [x] **D2 Store listings.** Decided October 6, as recommended. Default: new listings for `app.pantopus.ios` and
-  `app.pantopus.android`; take the April apps off sale once the new ones are
-  live. The App Store won't accept a second app named exactly "Pantopus" while
-  the April app holds that name, so either give the new listing a longer name
-  (for example "Pantopus Home") or rename the April app first with an update.
-  The alternative, shipping the native apps as updates to `com.pantopus.app`,
-  means changing the native app IDs, push setup and signing; L4 doesn't
-  recommend it this close to the pilot.
+- [x] **D2 Store listings.** **Replaced October 23 by the founder:** update the existing **Pantopus** listings, using `com.pantopus.app` on both platforms. iOS App Store ID `6760512315`; Google Play app ID `4974977490173375457`. Prepare **2.0.4** as the next update. Do not rename the original app, take it off sale, or publish the separate Pantopus Home records (`6821263216` / `app.pantopus.ios`, and `app.pantopus.android`). Earlier October 6–22 new-listing instructions and build evidence below are historical.
 - [x] **D3 Production database.** Decided October 8: create a new production
   Supabase project from the canonical migrations and transfer April users'
   logins and matching app profiles after an isolated rehearsal. Preserve the
   Auth identities needed for email, Google and Apple sign-in; leave April's
   Homes, Trains and other product data in the old project. The founder runs
-  the reviewed production import. See [the Auth transfer runbook](production-auth-transfer.md).
+  the reviewed production import. **Reconfirmed October 23:** transfer sign-ins and matching profiles only; existing users start with fresh content. Complete old-account sign-in checks before releasing 2.0.4. See [the Auth transfer runbook](production-auth-transfer.md).
 - [x] **D4 Payments during the pilot.** Decided October 6, as recommended. Default: production uses Stripe **test**
   keys until you activate live payments; no pilot journey takes money. Pilot
   store builds then carry the matching `pk_test_` key (L4 adjusts the Android
@@ -1120,6 +1113,79 @@ dispute opens.
 
 ## 4. Store builds
 
+### Current direction — October 23: update the original Pantopus apps
+
+This section supersedes the historical signing/upload instructions below. Both stores still serve 1.5.0. The next intended version is **2.0.4**; do not trigger a beta upload until its signing and service configuration are correct.
+
+| Setting | Required value |
+|---|---|
+| iOS record / main bundle | `6760512315` / `com.pantopus.app` |
+| iOS widget bundle | `com.pantopus.app.widgets` |
+| iOS signing team | `6UYZBA546R` (same as published 1.5.0) |
+| App Group | Reuse `group.app.pantopus.ios`; both original app and renamed widget need membership and matching profiles |
+| Android record / application ID | `4974977490173375457` / `com.pantopus.app` |
+| Android Kotlin namespace | Keep `app.pantopus.android`; this is source packaging, not the store identity |
+| Android debug application ID | `com.pantopus.app.debug` |
+| Store title | `Pantopus` |
+
+- [x] Read the original records: iOS 1.5.0 (84), iPhone family, team `6UYZBA546R`; Android original production listing exists. The old Android Play-signing SHA-256 matches the repository's `com.pantopus.app` association.
+- [x] Created the original iOS record's **2.0.4 / Prepare for Submission** draft, with current description, subtitle, keywords, promotional text, update notes, support/marketing links and reviewer instructions. Manual release is selected. Updated age-rating answers (13+ in most regions) and content-rights information to the current app's answers. No build is selected or submitted.
+- [x] Saved the original Play listing's current title, descriptions, icon, feature graphic and four phone screenshots as a draft. Removed obsolete tablet screenshot references; no new tablet screenshots are claimed. No changes were sent for review.
+- [x] Replaced repository store screenshots with actual October 23 native captures of welcome, Place, Today and household tasks. iPhone images are 1320×2868 (large Dynamic Island display); Android images are 1080×2400. Synthetic test household only. Apple's four images are saved in the large-display slot and inherited by smaller sizes; obsolete 1.5.0 screenshot references were removed from the editable version.
+- [x] Saved an additive Play Data safety draft: optional health/audio collection, device-ID functionality/security purposes, contact account-management purposes, and the current account-deletion URL. Kept existing legacy declarations pending a review covering every distributed version. See the compliance document's transition note; this is not final compliance approval.
+- [x] Local checks: iOS simulator build and Android debug assembly passed under the restored identities; Android ktlint/detekt, both Ruby Fastfile syntax checks, existing native-config tests (6), and association-file tests (5) passed. Both apps signed into a real local backend/database and displayed the same synthetic home/tasks. Created tasks persisted across iOS relaunch and were visible on Android; Android sign-in persisted after force-stop/relaunch. Initial native evidence used base `fc3223d3f`; these checks do not prove release signing, old-account transfer or a physical upgrade.
+- [x] With the founder's explicit October 23 authorization, enabled App Groups on `com.pantopus.app`, registered `com.pantopus.app.widgets`, and assigned both to the existing `group.app.pantopus.ios`. Reopened both App IDs to verify membership. Generated active `match AppStore com.pantopus.app` and `match AppStore com.pantopus.app.widgets` profiles using the existing team distribution certificate; both expire October 16, 2027. Stored the encrypted profiles in the existing private Match repository. Readonly retrieval using CI's existing signing credential, profile entitlement/certificate checks, and private-key signing/signature verification all passed. Existing iOS release secrets, pilot profiles and distribution certificate are unchanged. No release archive/export, upload, submission or physical upgrade was performed.
+- [x] Android: recovered the **original app's upload keystore** from the existing Expo/EAS project. Its certificate matches the certificate downloaded from the original Play record: SHA-256 `20:D3:0B:09:8D:06:A4:E1:9D:E1:40:65:EF:70:96:55:EF:4D:F7:91:BB:89:BB:DA:33:48:F7:0B:B1:F3:FB:8B`. The private key successfully signed a local verification JAR, whose signature passed verification. **No upload-key reset is needed**; the unused reset form was discarded.
+- [x] With the founder's explicit October 23 authorization, replaced the four `android-release` signing secrets with the recovered original key and its passwords/alias. GitHub accepted all four updates and their modification timestamps were verified. The separate Pantopus Home key remains unchanged locally. No build or upload was triggered.
+- [x] Registered `com.pantopus.app` in production Firebase (`pantopus-prod`) and added the original Play app-signing SHA-1 `42:AC:48:11:1A:63:75:95:03:4E:01:0F:5F:F1:DF:DE:F5:8F:6C:6C` and SHA-256 `33:60:AE:F8:09:B6:BF:18:3F:FB:DE:4F:F7:CD:BD:68:0A:F0:2E:5F:84:61:5A:2E:9A:A0:F3:89:EF:73:02:EF`. Both persisted after reload. Downloaded its genuine config, verified project/package/app identity, and updated `android-release/GOOGLE_SERVICES_JSON`. Also registered `com.pantopus.app.debug` in `pantopus-staging` and saved its config privately. Existing pilot Firebase apps remain registered; the checked-in JSON remains a build-only placeholder.
+- [x] Granted the existing Play release service account app-scoped read information/quality access and testing-track release access for original Pantopus. Production publishing, admin, financial and store-presence permissions remain off. Reopened the console to verify persistence; the service account successfully read the original tracks, including production **1.5.0 / version code 25**. Discarded the temporary API inspection edit without committing changes. No bundle upload or release occurred.
+- [ ] Match Maps/OAuth restrictions to the restored package and verify real sign-in and physical push delivery. Firebase registration, stored fingerprints, API access and secret-update acknowledgements do not establish these runtime checks or a store-signed upgrade.
+- [ ] Founder: align production `APNS_BUNDLE_ID=com.pantopus.app` with the release and verify a physical push. The backend currently has one global APNs topic; changing it does not also support the separate `app.pantopus.ios` pilot tokens. Keep this coordinated with the release, rather than changing only the native build.
+- [ ] Complete D3's Auth/profile transfer and verify old email/password, Google and Apple sign-ins as applicable; fresh content is the approved behavior. Explain the content reset in the store update notes. New minimum iOS is 17; the old build supported 15.1.
+- [ ] Validate a fresh install, and then an in-place **1.5.0 → 2.0.4** update on physical phones without uninstalling. Check sign-in, notification taps, links, widgets, relaunch, and old local data handling. Simulator/emulator builds alone cannot establish a store-signed upgrade.
+- [ ] Upload signed builds to the original records. Existing 2.0.x uploads under the separate identities cannot be moved across records. iOS build numbers come from the original TestFlight history; Android version codes must exceed every used code on the original listing.
+- [ ] Finish privacy labels/Data safety and verify dedicated reviewer access against production. Apple privacy's final data-type action is **Publish and Continue**, so the form was cancelled without publishing; reconcile the live 1.5.0 collection before the cutover. Play's additive draft still needs the legacy/current-version review and its separate data-deletion URL verified. Review credentials were not replaced or validated. The App Store icon comes from the new binary; uploading screenshots alone does not replace it.
+- [ ] Founder submits and releases after these gates pass. Use manual release on iOS and keep Android listing/release edits unsubmitted while preparing.
+
+Draft-only listing commands (after loading the correct private credentials):
+
+```sh
+# frontend/apps/ios; saves metadata/screenshots without a binary or review submission
+bundle exec fastlane listing version:2.0.4
+# frontend/apps/android; commits listing edits without sending changes for review
+bundle exec fastlane listing
+```
+
+The `release` lanes submit/promote builds and remain founder actions. The existing store links on the website already point to the correct original records.
+
+**Android key recovery, October 23:** after the initial Mac file search found
+no matching keystore, the existing Expo CLI login provided access to the
+original project's matching Android build credentials. The original key and
+passwords are now stored outside Git in
+`~/.config/pantopus/credentials/android/original-pantopus/` (directory mode
+700, private files mode 600). `upload-signing.json` references the recovered
+`pantopus-upload.jks`; preserve the separate pilot credentials unchanged.
+Both the exported certificate and a successful private-key signing check
+confirm this is usable, not merely a public certificate copy. No key reset
+was needed. Recovery itself made no hosted credential changes; the subsequent
+founder-authorized configuration updates are recorded above.
+
+`ANDROID_KEYSTORE_BASE64`, `PANTOPUS_KEYSTORE_PASSWORD`, `PANTOPUS_KEY_ALIAS`
+and `PANTOPUS_KEY_PASSWORD` are now set in GitHub's `android-release`
+environment from that private material. Play's existing app-signing key is
+unchanged. Validate a signed internal-track update after the other release
+gates pass; the local verification JAR is not an app upload or upgrade test.
+
+A local `apply-github-signing.py` in the same private directory verifies the
+original certificate and previews these four secret names by default. The
+founder authorized its `--apply` mode after reviewing the prepared setup; the
+dry run and all four secret writes succeeded. It does not configure Firebase
+or start a build, upload or release. Firebase's config was updated separately
+from the genuine downloaded file, without printing any secret values.
+
+### Historical October 6–22 setup (different app identities)
+
+
 ### iOS (TestFlight, then App Store)
 
 - [x] Already registered (found October 13; see the verification section at the
@@ -1198,7 +1264,7 @@ native access checks; passing data and offline checks alone does not close this 
 
 - [x] Founder approved the listing text, screenshots, privacy answers and the
   account-deletion page on October 7 (decisions A and B are written into the
-  privacy scripts). Both listings use the name "Pantopus Home" per D2.
+  privacy scripts). The October 23 D2 amendment changes both store titles to "Pantopus".
 - [x] L4: the approved files are where the lanes read them. iOS: text in
   `frontend/apps/ios/fastlane/metadata/en-US/` and 8 iPhone screenshots
   (6.9-inch, 1320 × 2868) in `frontend/apps/ios/fastlane/screenshots/en-US/`;
