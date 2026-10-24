@@ -124,8 +124,19 @@ export default function ItemDetailPage() {
   const [showGigModal, setShowGigModal] = useState(false);
   const [gigSource, setGigSource] = useState<'post_delivery' | 'pre_delivery'>('post_delivery');
 
+  // As the iOS and Android apps do: store the photo, then record it on the
+  // package (the server has no single condition-photo upload route).
   const handleConditionPhotoUpload = useCallback(async (file: File) => {
-    await api.uploadFile(`/api/mailbox/v2/p2/package/${itemId}/condition-photo`, file);
+    try {
+      const upload = await api.uploadFile<{ file: { url: string } }>('/api/files/upload', file, {
+        file_type: 'mailbox_unboxing',
+        visibility: 'private',
+      });
+      await api.mailboxV2P2.recordUnboxing(itemId, { conditionPhotoUrl: upload.file.url });
+    } catch (err) {
+      toast.error("Couldn't attach the photo — try again");
+      throw err;
+    }
   }, [itemId]);
 
   const handleCreatePackageGig = useCallback(async (data: {

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import calendar
 from datetime import datetime, timezone
 
@@ -12,7 +13,13 @@ from src.config.constants import FRESHNESS_HOURS
 from src.sources.base import ContentSource, RawContentItem
 from src.utils.media import canonicalize_media_url
 
-_FETCH_TIMEOUT = 15  # seconds
+_FETCH_TIMEOUT = 15  # seconds for the whole fetch: connecting, redirects, headers and body
+_MAX_FEED_BYTES = 5 * 1024 * 1024  # the largest feed we read is about 0.6 MB
+_MAX_REDIRECTS = 3
+# Hosts any feed may redirect to besides its own site (its host, with or without "www.").
+_REDIRECT_HOSTS: frozenset[str] = frozenset()
+# The kept body is already decoded, so a copy of the response drops these.
+_BODY_HEADERS = frozenset({"content-encoding", "content-length", "transfer-encoding"})
 _MAX_ITEMS = 20
 _MAX_MEDIA_PER_ITEM = 4
 _USER_AGENT = "Pantopus-Seeder/1.0"
@@ -27,6 +34,52 @@ _IMAGE_MIMES = ("image/jpeg", "image/png", "image/gif", "image/webp", "image/avi
 _VIDEO_MIMES = ("video/mp4", "video/webm", "video/quicktime")
 
 
+class FeedRefused(Exception):
+    """A feed answer this source won't read: too large, or a redirect off the feed's site."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)
+        self.reason = reason
+
+
+def _site(host: str) -> str:
+    return host[4:] if host.startswith("www.") else host
+
+
+def _may_redirect(feed: httpx.URL, target: httpx.URL) -> bool:
+    return target.scheme == "https" and (
+        _site(target.host) == _site(feed.host) or target.host in _REDIRECT_HOSTS
+    )
+
+
+async def _download(url: str, headers: dict[str, str]) -> httpx.Response:
+    feed = target = httpx.URL(url)
+    async with httpx.AsyncClient(headers=headers, timeout=_FETCH_TIMEOUT) as client:
+        for _ in range(_MAX_REDIRECTS + 1):
+            async with client.stream("GET", target) as response:
+                if response.is_redirect:
+                    target = response.url.join(response.headers["location"])
+                    if not _may_redirect(feed, target):
+                        raise FeedRefused("redirect_off_site")
+                    continue
+                body = bytearray()
+                if response.is_success:
+                    async for chunk in response.aiter_bytes():
+                        body += chunk
+                        if len(body) > _MAX_FEED_BYTES:
+                            raise FeedRefused("too_large")
+                kept = [(k, v) for k, v in response.headers.multi_items() if k.lower() not in _BODY_HEADERS]
+                return httpx.Response(
+                    response.status_code, headers=kept, content=bytes(body), request=response.request,
+                )
+    raise FeedRefused("too_many_redirects")
+
+
+def _fetch_feed(url: str, *, headers: dict[str, str]) -> httpx.Response:
+    """GET a feed: one deadline for the whole fetch, at most _MAX_FEED_BYTES, https redirects within its site."""
+    return asyncio.run(asyncio.wait_for(_download(url, headers), _FETCH_TIMEOUT))
+
+
 class RssSource(ContentSource):
     """Fetches and parses an RSS/Atom feed into RawContentItems."""
 
@@ -38,14 +91,13 @@ class RssSource(ContentSource):
         """Parse the RSS feed and return content items."""
         self._clear_fetch_error()
         try:
-            response = httpx.get(
-                self.feed_url,
-                timeout=_FETCH_TIMEOUT,
-                follow_redirects=True,
-                headers=_REQUEST_HEADERS,
-            )
+            response = _fetch_feed(self.feed_url, headers=_REQUEST_HEADERS)
             response.raise_for_status()
             feed = feedparser.parse(response.content)
+        except FeedRefused as exc:
+            self._set_fetch_error(f"fetch_refused:{exc.reason}")
+            self.log.warning("Refused feed %s: %s", self.feed_url, exc.reason)
+            return []
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code == 403 and "reddit.com" in self.feed_url:
                 self._set_fetch_error("http_403:reddit_blocked")

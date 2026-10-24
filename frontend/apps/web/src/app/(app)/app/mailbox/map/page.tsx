@@ -4,7 +4,7 @@ import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import 'leaflet/dist/leaflet.css';
 import type { HomeMapPin, MapPinType } from '@/types/mailbox';
-import { useMapPins, useAddPinToCalendar } from '@/lib/mailbox-queries';
+import { useMapPins } from '@/lib/mailbox-queries';
 import { TrustBadge } from '@/components/mailbox';
 import { TILE_URL, TILE_ATTRIBUTION } from '@/components/map/constants';
 // The map requires this Home's actual stored location.
@@ -81,7 +81,6 @@ export default function MailMapPage() {
   const [selectedPin, setSelectedPin] = useState<HomeMapPin | null>(null);
   const [leafletReady, setLeafletReady] = useState(false);
   const leafletRef = useRef<typeof import('leaflet') | null>(null);
-  const calendarMutation = useAddPinToCalendar();
 
   const { data: allPins, isLoading } = useMapPins(home.homeId, undefined, {
     enabled: hasLocation && !!home.homeId,
@@ -148,10 +147,6 @@ export default function MailMapPage() {
     if (activeFilter === 'all' || !pins) return new Set<string>();
     return new Set(pins.filter(p => p.pin_type !== activeFilter).map(p => p.id));
   }, [pins, activeFilter]);
-
-  const handleAddToCalendar = useCallback((pinId: string) => {
-    calendarMutation.mutate(pinId);
-  }, [calendarMutation]);
 
   // ── No home location ──────────────────────────────────────
   if (home.lat == null || home.lng == null) {
@@ -314,35 +309,15 @@ export default function MailMapPage() {
               )}
             </div>
 
-            {/* Panel actions */}
-            {/* Launch cut #7 (Household extras): no "Add to Calendar" (the household calendar). */}
-            {(selectedPin.mail_id || launchFeatures.householdExtras) && <div className="border-t border-app-border-subtle px-4 py-3 flex flex-col gap-2 flex-shrink-0">
-              {selectedPin.mail_id && (
-                <a
-                  href={`/app/mailbox/home/${selectedPin.mail_id}`}
-                  className="w-full py-2 text-center text-sm font-medium text-primary-600 border border-primary-200 dark:border-primary-800 rounded-lg hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors"
-                >
-                  View full notice
-                </a>
-              )}
-              {launchFeatures.householdExtras && <button
-                type="button"
-                onClick={() => handleAddToCalendar(selectedPin.id)}
-                disabled={calendarMutation.isPending}
-                className={`w-full py-2 text-center text-sm font-semibold rounded-lg transition-colors ${
-                  calendarMutation.isPending
-                    ? 'bg-app-surface-sunken text-app-text-muted cursor-not-allowed'
-                    : calendarMutation.isSuccess
-                      ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
-                      : 'bg-primary-600 text-white hover:bg-primary-700'
-                }`}
+            {/* Panel actions. No "Add to Calendar": the server has no route for
+                it and a pin has no date, so the button could only ever fail. */}
+            {selectedPin.mail_id && <div className="border-t border-app-border-subtle px-4 py-3 flex flex-col gap-2 flex-shrink-0">
+              <a
+                href={`/app/mailbox/home/${selectedPin.mail_id}`}
+                className="w-full py-2 text-center text-sm font-medium text-primary-600 border border-primary-200 dark:border-primary-800 rounded-lg hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors"
               >
-                {calendarMutation.isPending
-                  ? 'Adding...'
-                  : calendarMutation.isSuccess
-                    ? 'Added to Calendar'
-                    : 'Add to Calendar'}
-              </button>}
+                View full notice
+              </a>
             </div>}
           </div>
         )}
