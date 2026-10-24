@@ -78,10 +78,12 @@ public struct ChatConversationView: View {
     /// message. Gates stay-pinned-on-new-rows scrolling. Only flips on
     /// actual boundary crossings, so it stays a cheap @State.
     @State private var isAtBottom = false
+    @State private var visibleReadMessageIds: Set<String> = []
     /// The thread opened at its latest message once; coming back (a pushed
     /// profile, a tab switch) keeps the reading position (Instant Screens).
     @State private var hasLandedAtLatest = false
     @Environment(\.openURL) private var openURL
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// A Nearby Plan's chat (board A4): the plan above the messages.
     @Environment(\.chatPlanContext) private var planContext
@@ -191,6 +193,21 @@ public struct ChatConversationView: View {
                     Task { await viewModel.selectTopic(topicId) }
                 }
             }
+            if viewModel.isViewingSearchContext || viewModel.isViewingEarlierHistory {
+                HStack {
+                    Text(viewModel.isViewingSearchContext ? "Showing a search match" : "Showing earlier messages")
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                    Spacer()
+                    Button("Return to latest") {
+                        hasLandedAtLatest = false
+                        Task { await viewModel.returnToLatest() }
+                    }
+                }
+                .font(.footnote)
+                .padding(.horizontal, Spacing.s4)
+                .frame(minHeight: 44)
+                .accessibilityIdentifier("chatReturnToLatest")
+            }
             content
             if viewModel.isCounterpartyTyping {
                 ChatTypingIndicator(initials: incomingInitials ?? initials(of: viewModel.counterparty.displayName))
@@ -263,6 +280,10 @@ public struct ChatConversationView: View {
             if loaded { onContentLoaded() }
         }
         .onDisappear { viewModel.teardown() }
+        .onChange(of: scenePhase) { _, phase in
+            viewModel.setVisibleReadBoundaries(phase == .active ? visibleReadMessageIds : [])
+            if phase == .active { Task { await viewModel.refresh() } }
+        }
         // RN attach-grid parity: Camera / Photos / Document / Location /
         // Task / Marketplace. Camera hides itself where no capture device
         // exists (simulator).
@@ -374,7 +395,7 @@ public struct ChatConversationView: View {
             Text("Deleted messages are removed for everyone in this conversation.")
         }
         .alert(
-            "Delete message?",
+            pendingDeleteId?.hasPrefix("client_") == true ? "Discard unsent message?" : "Delete message?",
             isPresented: Binding(
                 get: { pendingDeleteId != nil },
                 set: { if !$0 { pendingDeleteId = nil } }
@@ -382,11 +403,13 @@ public struct ChatConversationView: View {
             presenting: pendingDeleteId
         ) { messageId in
             Button("Cancel", role: .cancel) {}
-            Button("Delete", role: .destructive) {
+            Button(messageId.hasPrefix("client_") ? "Discard" : "Delete", role: .destructive) {
                 Task { await viewModel.delete(messageId: messageId) }
             }
-        } message: { _ in
-            Text("Deleted messages are removed for everyone in this conversation.")
+        } message: { messageId in
+            Text(messageId.hasPrefix("client_")
+                ? "This stops retries. If it has already been sent, it will remain in the conversation."
+                : "Deleted messages are removed for everyone in this conversation.")
         }
         .alert("Delete this conversation?", isPresented: $aiDeleteConfirmPresented) {
             Button("Cancel", role: .cancel) {}
@@ -597,27 +620,29 @@ public struct ChatConversationView: View {
 
     private func handlePickedDocuments(_ result: Result<[URL], any Error>) {
         guard case let .success(urls) = result else { return }
+        let generation = AuthManager.shared.requestSessionGeneration
+        let isAssistant = mode == .aiAssistant
         Task {
             for url in urls.prefix(5) {
-                let didStart = url.startAccessingSecurityScopedResource()
-                defer {
-                    if didStart { url.stopAccessingSecurityScopedResource() }
-                }
-                guard let data = try? Data(contentsOf: url) else { continue }
-                let values = try? url.resourceValues(forKeys: [.contentTypeKey, .localizedNameKey])
-                let mimeType = values?.contentType?.preferredMIMEType ?? "application/octet-stream"
-                let filename = values?.localizedName ?? url.lastPathComponent
-                if mode == .aiAssistant {
-                    await MainActor.run { viewModel.queueAIDocument(filename: filename, data: data) }
-                    continue
-                }
-                await MainActor.run {
-                    viewModel.queueAttachment(
-                        kind: mimeType.hasPrefix("image/") ? .image : .document,
-                        filename: filename,
-                        mimeType: mimeType,
-                        data: data
-                    )
+                do {
+                    let document = try await Task.detached(priority: .userInitiated) {
+                        try ChatMediaURL.readDocument(url, isAssistant: isAssistant)
+                    }.value
+                    guard !Task.isCancelled, AuthManager.shared.requestSessionGeneration == generation else { return }
+                    if isAssistant {
+                        viewModel.queueAIDocument(filename: document.filename, data: document.data)
+                    } else {
+                        viewModel.queueAttachment(
+                            kind: document.mimeType.hasPrefix("image/") ? .image : .document,
+                            filename: document.filename,
+                            mimeType: document.mimeType,
+                            data: document.data
+                        )
+                    }
+                } catch {
+                    guard AuthManager.shared.requestSessionGeneration == generation else { return }
+                    viewModel.actionFailure = (error as? ChatLocalStorageError)?.localizedDescription
+                        ?? "Couldn't open this file. Try choosing it again."
                 }
             }
         }
@@ -1078,8 +1103,10 @@ extension ChatConversationView {
     private static let scrollSpaceName = "chatConversationScroll"
 
     private func populatedFrame(_ rows: [ChatTimelineRow]) -> some View {
+        // Resolve the accepted room tails once per rendered snapshot, not per row.
+        let readBoundaryIds = viewModel.latestAcceptedMessageIds
         // Gig context strip is loaded by `ChatConversationViewModel.loadGigContextIfNeeded`.
-        GeometryReader { geo in
+        return GeometryReader { geo in
             ScrollViewReader { proxy in
                 ScrollView {
                     // A plain (non-lazy) VStack on purpose: pages are
@@ -1106,6 +1133,7 @@ extension ChatConversationView {
                             // out twice and snap from the fallback width
                             // while scrolling.
                             timelineRowView(row, rowWidth: max(0, geo.size.width - 24))
+                                .background { readBoundaryTracker(row: row, acceptedIds: readBoundaryIds, viewportHeight: geo.size.height) }
                         }
                         Color.clear
                             .frame(height: 4)
@@ -1135,7 +1163,7 @@ extension ChatConversationView {
                 // oldest-first), and the bottom stays anchored when new
                 // rows land while the user is already at the bottom.
                 .defaultScrollAnchor(.bottom)
-                .refreshable { await viewModel.refresh() }
+                .refreshable { await viewModel.refresh(retryRoomSubscriptions: true) }
                 .accessibilityIdentifier("chatConversationContent")
                 .task {
                     guard !isLoadOlderArmed else { return }
@@ -1194,6 +1222,42 @@ extension ChatConversationView {
         loadOlderPreservingPosition(rows: rows, proxy: proxy)
     }
 
+    @ViewBuilder
+    private func readBoundaryTracker(row: ChatTimelineRow, acceptedIds: Set<String>, viewportHeight: CGFloat) -> some View {
+        let messageId: String? = switch row {
+        case let .bubble(bubble): bubble.id
+        case let .broadcastReference(reference): reference.id
+        case let .systemLine(line): line.id
+        case .dayDivider, .topicDivider: nil
+        }
+        if let messageId, acceptedIds.contains(messageId) {
+            GeometryReader { geometry in
+                let frame = geometry.frame(in: .named(Self.scrollSpaceName))
+                Color.clear
+                    .onAppear { updateReadBoundary(messageId, frame: frame, viewportHeight: viewportHeight) }
+                    .onChange(of: frame) { _, frame in
+                        updateReadBoundary(messageId, frame: frame, viewportHeight: viewportHeight)
+                    }
+                    .onChange(of: viewportHeight) { _, height in
+                        updateReadBoundary(messageId, frame: frame, viewportHeight: height)
+                    }
+                    .onDisappear {
+                        visibleReadMessageIds.remove(messageId)
+                        viewModel.setVisibleReadBoundaries(scenePhase == .active ? visibleReadMessageIds : [])
+                    }
+            }
+        }
+    }
+
+    private func updateReadBoundary(_ messageId: String, frame: CGRect, viewportHeight: CGFloat) {
+        guard viewModel.latestAcceptedMessageIds.contains(messageId) else { return }
+        // The message's trailing edge must be on-screen. A tall message can
+        // still be read at its end; typing and padding below it do not count.
+        let visible = frame.maxY > 0 && frame.maxY <= viewportHeight + 4 && frame.minY < viewportHeight
+        if visible { visibleReadMessageIds.insert(messageId) } else { visibleReadMessageIds.remove(messageId) }
+        viewModel.setVisibleReadBoundaries(scenePhase == .active ? visibleReadMessageIds : [])
+    }
+
     /// Force the thread to open at the latest message. The bottom anchor
     /// positions the first frame, but row content that resolves a beat
     /// later (remote images, link previews) can still nudge the layout —
@@ -1201,7 +1265,7 @@ extension ChatConversationView {
     private func landAtLatestMessage(_ proxy: ScrollViewProxy) async {
         // Opened from Chat Search → the pendingScrollTargetId path
         // positions on the matched message instead.
-        guard !viewModel.hasPendingSearchTarget, !hasLandedAtLatest else { return }
+        guard !viewModel.hasPendingSearchTarget, !viewModel.isViewingEarlierHistory, !hasLandedAtLatest else { return }
         proxy.scrollTo(Self.bottomAnchorId, anchor: .bottom)
         for delayMs: UInt64 in [80, 250, 600] {
             try? await Task.sleep(nanoseconds: delayMs * 1_000_000)
@@ -1219,7 +1283,7 @@ extension ChatConversationView {
         newLast: ChatTimelineRow?,
         proxy: ScrollViewProxy
     ) {
-        guard let newLast else { return }
+        guard let newLast, !isLoadingOlder, !viewModel.isViewingEarlierHistory else { return }
         let isNewRow = oldLast?.id != newLast.id
         let isOwnSend: Bool = {
             guard isNewRow, case let .bubble(bubble) = newLast else { return false }
@@ -1326,6 +1390,7 @@ extension ChatConversationView {
             incomingInitials: incomingInitials,
             aiStatus: viewModel.aiStatus,
             canManage: viewModel.canManageMessage(bubble.id),
+            canDiscard: viewModel.canDiscardMessage(bubble.id),
             onLockedAction: { upgradePromptPresented = true },
             onReply: { viewModel.beginReply(to: bubble.id) },
             onEdit: { viewModel.beginEdit(messageId: bubble.id) },
@@ -1377,7 +1442,7 @@ extension ChatConversationView {
                 .font(.system(size: 13.5))
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .multilineTextAlignment(.center)
-            Button { Task { await viewModel.refresh() } } label: {
+            Button { Task { await viewModel.refresh(retryRoomSubscriptions: true) } } label: {
                 Text("Try again")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(Theme.Color.appTextInverse)
@@ -2617,6 +2682,7 @@ private struct ChatBubbleRow: View {
     /// What the assistant is doing while a reply is pending ("Drafting your post…").
     var aiStatus: String?
     let canManage: Bool
+    let canDiscard: Bool
     let onLockedAction: @MainActor () -> Void
     let onReply: @MainActor () -> Void
     let onEdit: @MainActor () -> Void
@@ -2683,6 +2749,9 @@ private struct ChatBubbleRow: View {
                 Button(role: .destructive) { onDelete() } label: {
                     Text("Delete")
                 }
+            }
+            if canDiscard {
+                Button(role: .destructive) { onDelete() } label: { Text("Discard") }
             }
         }
         // A reply with action cards or link buttons keeps each button its own element.
@@ -3086,7 +3155,7 @@ private struct ChatBubbleRow: View {
     @ViewBuilder
     private func imageBody(_ url: URL?) -> some View {
         if let url {
-            CachedAsyncImage(url: url) { phase in
+            CachedAsyncImage(url: ChatMediaURL.thumbnail(url)) { phase in
                 switch phase {
                 case let .success(image): image.resizable().scaledToFill()
                 case .failure: PhotoBubblePlaceholder()
@@ -3461,8 +3530,9 @@ private struct ChatBubbleRow: View {
                     switch content.deliveryState {
                     case .read:
                         EmptyView()
-                    case .delivered:
+                    case .sent, .delivered:
                         Icon(.check, size: 10, strokeWidth: 2.0, color: Theme.Color.appTextMuted)
+                            .accessibilityLabel(content.deliveryState == .delivered ? "Delivered" : "Sent")
                     case .sending:
                         ProgressView().scaleEffect(0.6).tint(Theme.Color.appTextMuted)
                     case .failed:
@@ -3493,8 +3563,8 @@ private struct ChatBubbleRow: View {
     private func stampString(_ raw: String) -> String {
         switch content.deliveryState {
         case .read: "Read \(raw)"
-        // Delivered is conveyed by the small check icon, not a loud word (RN).
-        case .delivered: raw
+        // A single check confirms the server accepted the message.
+        case .sent, .delivered: raw
         case .sending: "Sending..."
         case .failed: "Failed to send"
         case .refused: "Not sent"

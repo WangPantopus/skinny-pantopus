@@ -58,6 +58,11 @@ enum ScreenStoreLive {
         guard tasks.isEmpty else { return }
         liveStore = store
         tasks.append(Task {
+            for await _ in socket.events(named: "message:new", as: ChatMessageEvent.self) {
+                ChatLocalStore.shared.invalidateInboxReadCheckpoint()
+            }
+        })
+        tasks.append(Task {
             for await change in socket.events(named: "sync:changed", as: SyncChangedEvent.self) {
                 changed(topics: Set(change.topics), in: store)
             }

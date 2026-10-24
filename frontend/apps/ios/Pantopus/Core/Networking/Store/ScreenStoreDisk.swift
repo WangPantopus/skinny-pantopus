@@ -79,6 +79,7 @@ final class ScreenStoreDisk: @unchecked Sendable {
         guard let bytes = try? Data(contentsOf: url) else { return nil }
         guard let entry = try? Self.decoder.decode(SavedScreenEntry.self, from: bytes),
               entry.schema == SavedScreenEntry.currentSchema,
+              entry.kind != ScreenDataKind.messagesList.rawValue,
               now.timeIntervalSince(entry.fetchedAt) <= Self.maxAge
         else {
             remove(folder: folder, file: file)
@@ -92,6 +93,11 @@ final class ScreenStoreDisk: @unchecked Sendable {
     // MARK: - Writing (in the background, in order)
 
     func write(_ entry: SavedScreenEntry, folder: String, file: String) {
+        // Received previews belong only to the encrypted chat store.
+        guard entry.kind != ScreenDataKind.messagesList.rawValue else {
+            remove(folder: folder, file: file)
+            return
+        }
         let started = lock.withLock {
             index[folder, default: []].insert(file)
             return generation
@@ -145,7 +151,8 @@ final class ScreenStoreDisk: @unchecked Sendable {
         for file in files() {
             guard let bytes = try? Data(contentsOf: file.url) else { continue }
             if let saved = try? Self.decoder.decode(SavedScreenEntry.self, from: bytes),
-               saved.schema == SavedScreenEntry.currentSchema { continue }
+               saved.schema == SavedScreenEntry.currentSchema,
+               saved.kind != ScreenDataKind.messagesList.rawValue { continue }
             try? FileManager.default.removeItem(at: file.url)
             let folder = file.url.deletingLastPathComponent().lastPathComponent
             lock.withLock { _ = index[folder]?.remove(file.url.lastPathComponent) }

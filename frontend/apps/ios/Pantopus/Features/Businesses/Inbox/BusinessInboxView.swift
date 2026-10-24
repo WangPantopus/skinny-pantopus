@@ -52,6 +52,11 @@ public struct BusinessInboxView: View {
         VStack(spacing: Spacing.s0) {
             ContentDetailTopBar(title: headerTitle, onBack: onBack, action: nil)
             sectionToggle
+            if let failure = viewModel.refreshFailure, viewModel.section == .messages {
+                Button(failure) { Task { await viewModel.refresh() } }
+                    .font(Theme.Font.caption)
+                    .padding(Spacing.s3)
+            }
             stateBody
         }
         // No `.offlineBanner` here — this frame always renders inside
@@ -59,6 +64,10 @@ public struct BusinessInboxView: View {
         .background(Theme.Color.appBg)
         .accessibilityIdentifier("businessInbox")
         .task { await viewModel.load() }
+        .onDisappear { viewModel.teardown() }
+        .refreshesOnStoreChange(affects: { $0.names(topic: ScreenTopic.chats, kind: .messagesList) }, perform: {
+            viewModel.invalidateMessages()
+        })
     }
 
     private var headerTitle: String {
@@ -126,6 +135,14 @@ public struct BusinessInboxView: View {
                         BusinessInboxRoomCard(room: room) {
                             onOpenRoom(room.id, room.title, room.handle)
                         }
+                    }
+                    if viewModel.canLoadMore {
+                        Button(viewModel.isLoadingMore ? "Loading…" : "Load more messages") {
+                            Task { await viewModel.loadMore() }
+                        }
+                        .disabled(viewModel.isLoadingMore || viewModel.isRefreshingRooms)
+                        .padding(Spacing.s3)
+                        .accessibilityIdentifier("businessInbox.loadMore")
                     }
                 }
                 .padding(Spacing.s4)

@@ -704,6 +704,10 @@ final class ChatBadgeStore {
     private var badgeTask: Task<Void, Never>?
     private var reconnectTask: Task<Void, Never>?
     private var serverTotalUnread: Int = 0
+    private var serverTotalUnmutedUnread: Int?
+    private var countGeneration = 0
+    private var refreshRequestId: UUID?
+    private var hasAuthoritativeCount = false
     private var cachedRows: [ConversationRowContent] = []
 
     init(
@@ -717,19 +721,40 @@ final class ChatBadgeStore {
     }
 
     func start() async {
-        await refresh()
         subscribeIfNeeded()
+        if api === APIClient.shared, !hasAuthoritativeCount,
+           case let .signedIn(user) = AuthManager.shared.state {
+            let generation = countGeneration
+            let scope = ChatLocalStore.scope(server: api.apiBaseURL.absoluteString, account: user.id)
+            let cached = await ChatLocalStore.shared.inbox(scope: scope)
+            if generation == countGeneration, !Task.isCancelled, let cached {
+                let rows = cached.response.conversations.map {
+                    Self.snapshotRow(from: $0, mutedKeys: preferences.mutedKeys())
+                }
+                applyListSnapshot(
+                    totalUnread: cached.stats?.totalUnread ?? cached.response.totalUnread ?? 0,
+                    totalUnmutedUnread: cached.stats?.totalUnmutedUnread ?? cached.response.totalUnmutedUnread,
+                    rows: rows
+                )
+            }
+        }
+        await refresh()
     }
 
-    /// The Messages list's own reads, through the screen store: the badge at
-    /// launch also warms the Messages tab (it opens on this copy) and its
-    /// saved copy.
+    /// Warm the list through its screen store, but read counts directly from
+    /// the server so an offline fallback cannot become badge authority.
     func refresh() async {
+        guard refreshRequestId == nil else { return }
+        let requestId = UUID()
+        refreshRequestId = requestId
+        defer { if refreshRequestId == requestId { refreshRequestId = nil } }
+        let generation = countGeneration
+        await preferences.migrateLegacyMutes(api: api)
+        guard generation == countGeneration, !Task.isCancelled else { return }
         let store = ScreenStore.store(for: api)
         let statsTask = Task { [self] in
             await optional {
-                try await store.load(ChatEndpoints.stats(), as: ChatStatsResponse.self, kind: .messagesList, topics: [ScreenTopic.chats])
-                    .value
+                try await api.request(ChatEndpoints.stats(), as: ChatStatsResponse.self)
             }
         }
         let conversationsTask = Task { [self] in
@@ -746,8 +771,14 @@ final class ChatBadgeStore {
             logger.warning("Chat badge refresh failed: stats unavailable")
             return
         }
+        let conversations = await conversationsTask.value
+        // A newer socket count (or account reset) wins over an older HTTP read.
+        guard generation == countGeneration, !Task.isCancelled else { return }
+        hasAuthoritativeCount = true
         serverTotalUnread = stats.stats.totalUnread
-        if let conversations = await conversationsTask.value {
+        serverTotalUnmutedUnread = stats.stats.totalUnmutedUnread
+        if let conversations {
+            preferences.applyServer(conversations.conversations)
             let mutedKeys = preferences.mutedKeys()
             cachedRows = conversations.conversations.map {
                 Self.snapshotRow(from: $0, mutedKeys: mutedKeys)
@@ -756,14 +787,20 @@ final class ChatBadgeStore {
         applyAdjustedUnread()
     }
 
-    /// Called by the chat list whenever rows or server totals change.
-    func applyListSnapshot(totalUnread: Int, rows: [ConversationRowContent]) {
-        serverTotalUnread = totalUnread
+    /// Cached list counts can seed an offline launch, but cannot overwrite a
+    /// newer server count while a covered list is still finishing its refresh.
+    func applyListSnapshot(totalUnread: Int, totalUnmutedUnread: Int? = nil, rows: [ConversationRowContent]) {
+        if !hasAuthoritativeCount {
+            serverTotalUnread = totalUnread
+            serverTotalUnmutedUnread = totalUnmutedUnread
+        }
         cachedRows = rows
         applyAdjustedUnread()
     }
 
     func stop() {
+        countGeneration += 1
+        refreshRequestId = nil
         badgeTask?.cancel()
         reconnectTask?.cancel()
         badgeTask = nil
@@ -775,12 +812,14 @@ final class ChatBadgeStore {
     func reset() {
         stop()
         serverTotalUnread = 0
+        serverTotalUnmutedUnread = nil
+        hasAuthoritativeCount = false
         cachedRows = []
         unreadMessages = 0
     }
 
     private func applyAdjustedUnread() {
-        unreadMessages = ChatUnreadBadgeMath.adjustedTotal(
+        unreadMessages = serverTotalUnmutedUnread ?? ChatUnreadBadgeMath.adjustedTotal(
             serverTotal: serverTotalUnread,
             rows: cachedRows,
             mutedKeys: preferences.mutedKeys()
@@ -828,7 +867,10 @@ final class ChatBadgeStore {
             badgeTask = Task { [weak self] in
                 guard let self else { return }
                 for await update in socket.events(named: "badge:update", as: ChatBadgeUpdate.self) {
+                    countGeneration += 1
+                    hasAuthoritativeCount = true
                     serverTotalUnread = update.totalUnread
+                    serverTotalUnmutedUnread = update.totalUnmutedUnread
                     applyAdjustedUnread()
                 }
             }

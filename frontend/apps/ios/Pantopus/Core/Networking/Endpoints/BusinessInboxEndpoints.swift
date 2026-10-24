@@ -19,9 +19,10 @@ public enum BusinessInboxEndpoints {
     /// business identity participates in (shared team inbox), newest
     /// last-message first. Route `backend/routes/chats.js:662`; mounted at
     /// `/api/chat` (`backend/app.js:330`).
-    public static func rooms(businessId: String, limit: Int = 200, type: String? = nil) -> Endpoint {
+    public static func rooms(businessId: String, limit: Int = 50, type: String? = nil, before: String? = nil) -> Endpoint {
         var query: [String: String] = ["limit": String(limit)]
         if let type, !type.isEmpty { query["type"] = type }
+        if let before { query["before"] = before }
         return Endpoint(
             method: .get,
             path: "/api/chat/business/\(businessId)/rooms",

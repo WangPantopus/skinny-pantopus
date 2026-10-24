@@ -279,7 +279,8 @@ final class SocketClient {
     /// ```
     func events<T: Decodable & Sendable>(
         named event: String,
-        as _: T.Type = T.self
+        as _: T.Type = T.self,
+        keyDecodingStrategy: JSONDecoder.KeyDecodingStrategy = .convertFromSnakeCase
     ) -> AsyncStream<T> {
         AsyncStream { continuation in
             let subscriptionId = UUID()
@@ -288,7 +289,7 @@ final class SocketClient {
                 do {
                     let jsonData = try JSONSerialization.data(withJSONObject: first, options: [])
                     let decoder = JSONDecoder()
-                    decoder.keyDecodingStrategy = .convertFromSnakeCase
+                    decoder.keyDecodingStrategy = keyDecodingStrategy
                     decoder.dateDecodingStrategy = .iso8601
                     let decoded = try decoder.decode(T.self, from: jsonData)
                     continuation.yield(decoded)

@@ -130,9 +130,10 @@ final class APIClient: @unchecked Sendable {
     /// Perform a request and decode the response body as `Response`.
     func request<Response: Decodable>(
         _ endpoint: Endpoint,
-        as _: Response.Type = Response.self
+        as _: Response.Type = Response.self,
+        expectedSessionGeneration: Int? = nil
     ) async throws -> Response {
-        let data = try await executeWithRetry(endpoint).data
+        let data = try await executeWithRetry(endpoint, expectedSessionGeneration: expectedSessionGeneration).data
         if Response.self == EmptyResponse.self, data.isEmpty {
             // swiftlint:disable:next force_cast
             return EmptyResponse() as! Response
@@ -286,10 +287,14 @@ final class APIClient: @unchecked Sendable {
     @MainActor
     // swiftlint:disable:next cyclomatic_complexity
     private func executeWithRetry(
-        _ endpoint: Endpoint, includingForbidden: Bool = false, includingNotFound: Bool = false
+        _ endpoint: Endpoint,
+        includingForbidden: Bool = false,
+        includingNotFound: Bool = false,
+        expectedSessionGeneration: Int? = nil
     ) async throws -> DataResponse {
         let sessionOwner = auth
         let generation = sessionOwner.requestSessionGeneration
+        if let expectedSessionGeneration, generation != expectedSessionGeneration { throw CancellationError() }
         let checkSession: @MainActor () throws -> Void = { [self] in
             guard endpoint.authenticated else { return }
             guard auth === sessionOwner else { throw CancellationError() }
