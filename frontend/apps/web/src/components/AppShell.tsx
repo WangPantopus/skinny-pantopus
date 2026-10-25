@@ -56,6 +56,7 @@ import { prefetchHomeTiles } from '@/utils/tilePrefetch';
 import { FEED_COMPOSER_OPEN_EVENT, MAGIC_TASK_OPEN_EVENT, notifyFeedPostCreated } from '@/lib/feedComposerEvents';
 import { launchFeatures, webFeatureFlags } from '@/lib/featureFlags';
 import { useFeatureFlagState } from '@/hooks/useFeatureFlag';
+import { useShellReadsReleased } from '@/lib/shellReads';
 import type { CSSProperties } from 'react';
 import { Search, MessageCircle, Menu, X, ChevronsLeft, ChevronsRight, WifiOff, UserRound, type LucideIcon } from 'lucide-react';
 import { useOnlineStatus } from '@/components/map/OfflineIndicator';
@@ -226,8 +227,8 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   }, [mounted]);
 
   const { unreadMessages: chatUnread } = useBadges();
-  // Audience-zone gating for the top-bar split (P2.3 / unified-IA §6.1).
-  const audienceFlagState = useFeatureFlagState('audience_profile');
+  // Audience-zone gating for the top-bar split (P2.3 / unified-IA §6.1). Asked only while Beacon is on.
+  const audienceFlagState = useFeatureFlagState('audience_profile', { enabled: launchFeatures.beacon });
   // Launch cut #1 (Beacon): the Audience bell is hidden; one bell remains.
   const audienceProfileFlag = audienceFlagState.enabled && launchFeatures.beacon;
 
@@ -265,7 +266,9 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   }, [user?.id]);
 
   // ── Tile prefetch for home area ──────────────────────────────
-  const { viewerHome } = useViewerHome();
+  // A cold Messages inbox paints its rows first (lib/shellReads.ts).
+  const shellReadsReleased = useShellReadsReleased();
+  const { viewerHome } = useViewerHome({ enabled: shellReadsReleased });
   // Promo cards wait while the one-time name prompt is open.
   const [namePromptOpen, setNamePromptOpen] = useState(false);
   usePromoTriggers(namePromptOpen ? null : user);
@@ -791,8 +794,8 @@ export function PersonalSidebarContent({ currentPath, showLabels, chatUnread, on
   }, [router]);
 
   // Audience destination — unified-IA §3.1 + §3.6. Gated per-user behind
-  // audience_profile (P0.8) so users without access don't see a 6th tab.
-  const audienceFlag = useFeatureFlagState('audience_profile');
+  // audience_profile (P0.8) so users without access don't see a 6th tab. Asked only while Beacon is on.
+  const audienceFlag = useFeatureFlagState('audience_profile', { enabled: launchFeatures.beacon });
   const prefetchAudience = useCallback(() => {
     router.prefetch('/app/audience');
     queryClient.prefetchQuery({
