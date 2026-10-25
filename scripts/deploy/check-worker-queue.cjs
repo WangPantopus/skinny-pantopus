@@ -4,8 +4,27 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const { setTimeout: delay } = require('node:timers/promises');
 const { randomUUID } = require('node:crypto');
+const { createRequire } = require('node:module');
 const { Client } = require('/app/node_modules/pg');
 const { initPgBoss, getBoss, stopPgBoss } = require('/app/jobs/pgBossManager');
+
+// Supavisor's session pooler drops these startup parameters. Exercise the
+// deployed connection hook with that behavior, including reconnects below.
+const bossRequire = createRequire(require.resolve('/app/node_modules/pg-boss'));
+const { Client: QueueClient } = bossRequire('pg');
+const startupConf = QueueClient.prototype.getStartupConf;
+let strippedStartups = 0;
+QueueClient.prototype.getStartupConf = function () {
+  const config = startupConf.call(this);
+  if (config.application_name === 'pantopus-queue') {
+    strippedStartups += 1;
+    delete config.application_name;
+    delete config.statement_timeout;
+    delete config.lock_timeout;
+    delete config.idle_in_transaction_session_timeout;
+  }
+  return config;
+};
 
 async function until(check, message, timeout = 120000) {
   const deadline = Date.now() + timeout;
@@ -51,6 +70,9 @@ const { registerPgBossJobs } = moduleStub.exports;
     assert.equal(db.pool.options.max, 2);
     assert.equal((await sql('SHOW statement_timeout')).rows[0].statement_timeout, '5s');
     assert.equal((await sql('SHOW lock_timeout')).rows[0].lock_timeout, '1s');
+    assert.equal((await sql('SHOW idle_in_transaction_session_timeout')).rows[0].idle_in_transaction_session_timeout, '8s');
+    assert.equal((await sql('SHOW application_name')).rows[0].application_name, 'pantopus-queue');
+    assert.ok(strippedStartups > 0, 'Pooler startup simulation did not reach the queue client');
     assert.equal(db.pool.options.query_timeout, 8000);
     // Simulate an installation with the previous seven-day queue defaults.
     await boss.createQueue(appQueue, { policy: 'singleton', deleteAfterSeconds: 604800 });
@@ -193,6 +215,8 @@ const { registerPgBossJobs } = moduleStub.exports;
         try { await guarded.executeSql('SELECT 1'); return true; }
         catch (error) { if (error.code !== 'PGBOSS_DB_BACKOFF') throw error; return false; }
       }, 'Queue did not recover after database outage', 45000);
+      assert.equal((await guarded.executeSql('SHOW statement_timeout')).rows[0].statement_timeout, '5s');
+      assert.equal((await guarded.executeSql('SHOW lock_timeout')).rows[0].lock_timeout, '1s');
       await registerPgBossJobs(boss);
       const definitions = rows => rows.map(({ updated_on, ...definition }) => definition);
       assert.deepEqual(definitions(await boss.getSchedules()), definitions(schedules));

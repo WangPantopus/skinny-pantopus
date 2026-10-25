@@ -75,6 +75,17 @@ async function initPgBoss() {
     lock_timeout: 1000,
     query_timeout: 8000,
     idle_in_transaction_session_timeout: 8000,
+    // Supavisor session pooling ignores these PostgreSQL startup parameters.
+    // Await explicit session settings before lending each new connection to
+    // pg-boss. This hook also runs when the pool replaces a lost connection.
+    onConnect: async (client) => {
+      await client.query(`
+        SET statement_timeout = '5s';
+        SET lock_timeout = '1s';
+        SET idle_in_transaction_session_timeout = '8s';
+        SET application_name = 'pantopus-queue';
+      `);
+    },
     // Supervision wakes every minute. Keep the eligibility threshold below
     // that interval so timing jitter cannot skip an expired-job recovery pass.
     monitorIntervalSeconds: 30,

@@ -54,8 +54,11 @@ duplicating successful enqueues, and the shared queue circuit must recover.
 errors; keep it until an upstream version passes the same integration check.
 
 Queue SQL has a 5-second server limit, a 1-second lock limit and an 8-second
-client limit; obtaining a pooled connection is bounded at 3 seconds. These
-limits apply to queue bookkeeping, not the business handler's one-hour job
+client limit; obtaining a pooled connection is bounded at 3 seconds. The
+server limits are applied with awaited session `SET` commands on every new
+connection because Supavisor ignores the corresponding startup parameters.
+The integration check simulates that behavior and checks limits after recovery.
+These limits apply to queue bookkeeping, not the business handler's one-hour job
 expiry. Database failures back off all queue callers together for 30, 60, then
 120 seconds, allowing one recovery attempt after each delay. No ambiguous
 write is blindly replayed. Application retry settings and cron expressions stay
