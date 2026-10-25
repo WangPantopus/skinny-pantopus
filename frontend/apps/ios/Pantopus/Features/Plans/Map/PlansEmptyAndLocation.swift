@@ -71,7 +71,13 @@ struct PlansEmptyCard: View {
     /// "Seahawks play Sunday at 1:25 · Host a watch party", from the next
     /// game on the checked list; without one, the plain invitation.
     private var watchNudge: some View {
-        let game = viewModel.games.first
+        TimelineView(.periodic(from: .now, by: 30)) { context in
+            watchNudge(at: context.date)
+        }
+    }
+
+    private func watchNudge(at now: Date) -> some View {
+        let game = viewModel.games.first { $0.isAvailable(at: now) }
         return Button {
             actions.host(PlansHostStart(kind: .watchParty, game: game))
         } label: {
@@ -103,7 +109,8 @@ struct PlansEmptyCard: View {
         let day = PlanFormat.dayHeading(start)
         let when = day == "Today" ? "today" : day == "Tomorrow" ? "tomorrow" : day
         let time = PlanFormat.time(start).replacingOccurrences(of: " PM", with: "").replacingOccurrences(of: " AM", with: "")
-        return "\(game.label) play \(when) at \(time)"
+        let matchup = game.opponent == nil ? "\(game.label) play" : game.matchupLabel
+        return "\(matchup) \(when) at \(time)"
     }
 
     private var otherKinds: some View {

@@ -215,22 +215,6 @@ public struct PlanViewerDTO: Codable, Sendable, Hashable {
     }
 }
 
-/// The game a watch party is for.
-public struct PlanGameDTO: Codable, Sendable, Hashable {
-    public let label: String
-    public let startsAt: String?
-
-    enum CodingKeys: String, CodingKey {
-        case label
-        case startsAt = "starts_at"
-    }
-
-    public init(label: String, startsAt: String?) {
-        self.label = label
-        self.startsAt = startsAt
-    }
-}
-
 /// The kind-specific details (`Plan.details`).
 public struct PlanDetailsDTO: Codable, Sendable, Hashable {
     public var game: PlanGameDTO?

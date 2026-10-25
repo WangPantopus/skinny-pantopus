@@ -133,14 +133,13 @@ final class PlanComposerModel {
     }
 
     private func loadGames() async {
-        guard let reply = try? await ScreenStore.shared.load(PlansEndpoints.games(), as: PlanGamesResponse.self, kind: .publicPlace)
-        else { return }
-        games = reply.value.games
+        let reply: PlanGamesResponse? = try? await api.request(
+            PlansEndpoints.games(from: PlansStoreReads.lastCenter, gps: PlansStoreReads.freshGPS)
+        )
+        games = reply?.games.filter { $0.isAvailable(at: Date()) } ?? []
         if kindChosen, kind == .watchParty, game == nil, title.isEmpty, let first = games.first { pick(first) }
     }
 
-    /// H1: the type the host picked. A watch party starts on the soonest game;
-    /// any other type drops a game and the title it filled in.
     func choose(_ newKind: PlanKind) {
         kind = newKind
         kindChosen = true
@@ -382,7 +381,7 @@ extension PlanComposerModel {
         var details = PlanDetailsDTO()
         switch kind {
         case .watchParty:
-            if let game { details.game = PlanGameDTO(label: game.label, startsAt: game.startsAt) }
+            if let game { details.game = game.reference }
         case .playdate:
             details.kidsAgeBands = PlanKidsAgeBand.allCases.filter(kidsAges.contains)
         case .pickupGame:
