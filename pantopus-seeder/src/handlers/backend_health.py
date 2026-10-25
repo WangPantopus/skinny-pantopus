@@ -17,6 +17,9 @@ from ..config.secrets import get_briefing_secrets
 
 _previous_sample = None
 _TIMEOUT = httpx.Timeout(4.0, connect=3.0)
+_client = httpx.Client(timeout=_TIMEOUT, follow_redirects=False, limits=httpx.Limits(
+    max_connections=3, max_keepalive_connections=3, keepalive_expiry=90,
+))
 _SAMPLE = re.compile(r'^([a-zA-Z_:][a-zA-Z0-9_:]*)(?:\{(.*)\})?\s+([^\s]+)')
 
 
@@ -24,9 +27,8 @@ def _probe_api(secrets):
     started = time.monotonic()
     healthy = False
     try:
-        response = httpx.get(
+        response = _client.get(
             secrets.pantopus_api_base_url.rstrip('/') + '/health',
-            timeout=_TIMEOUT, follow_redirects=False,
         )
         body = response.json() if response.status_code == 200 else {}
         healthy = body.get('status') == 'healthy' and body.get('database') == 'connected'
@@ -41,12 +43,11 @@ def _probe_database(secrets):
     try:
         # Same bounded connectivity query as /health, but bypasses the API host.
         # HEAD executes the query without returning user rows or an exact count.
-        response = httpx.head(
+        response = _client.head(
             secrets.supabase_url.rstrip('/') + '/rest/v1/User',
             params={'select': 'id', 'limit': '1'},
             headers={'apikey': secrets.supabase_service_role_key,
                      'Authorization': 'Bearer ' + secrets.supabase_service_role_key},
-            timeout=_TIMEOUT, follow_redirects=False,
         )
         healthy = response.status_code in (200, 206)
     except httpx.HTTPError:
@@ -57,10 +58,9 @@ def _probe_database(secrets):
 def _resource_metrics(secrets):
     global _previous_sample
     try:
-        response = httpx.get(
+        response = _client.get(
             secrets.supabase_url.rstrip('/') + '/customer/v1/privileged/metrics',
             auth=('service_role', secrets.supabase_service_role_key),
-            timeout=_TIMEOUT, follow_redirects=False,
         )
         response.raise_for_status()
         values = {}
