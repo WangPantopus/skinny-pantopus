@@ -7,7 +7,6 @@ extension ChatLocalStore {
         let retiredAt: Date
     }
 
-    static let inboxThread = "inbox"
     /// Read corrections are rare; past this many retired threads the account's history retires instead.
     private static let threadEpochLimit = 64
 
@@ -24,11 +23,11 @@ extension ChatLocalStore {
     }
 
     /// A Read correction retires only these threads' saved windows (every topic
-    /// or identity) and the inbox copy, not the account's. Their new epochs are
-    /// written and synced before any old file goes, and every read checks them,
-    /// so no old window can be read after this returns even if deletion stops.
-    /// Other threads and saved media stay. If the epochs can't be recorded, the
-    /// account's history retires as for ended access.
+    /// or identity), not the account's. Their new epochs are written and synced
+    /// before any old file goes, and every read checks them, so no old window can
+    /// be read after this returns even if deletion stops. The inbox (it holds no
+    /// Read stamps), other threads and saved media stay. If the epochs can't be
+    /// recorded, the account's history retires as for ended access.
     func retireThreads(scope: String, threads: [String]) {
         lock.withLock {
             let marker = root.appendingPathComponent("scope")
@@ -39,7 +38,7 @@ extension ChatLocalStore {
             do {
                 var epochs = try threadEpochs()
                 let retiredAt = Date()
-                for base in bases.union([Self.inboxThread]) {
+                for base in bases {
                     epochs[base] = ThreadEpoch(id: UUID().uuidString, retiredAt: retiredAt)
                 }
                 guard epochs.count <= Self.threadEpochLimit else { throw CocoaError(.fileWriteOutOfSpace) }
@@ -50,7 +49,7 @@ extension ChatLocalStore {
             }
             let directory = root.appendingPathComponent("history", isDirectory: true)
             let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
-            let retired = names.filter { name in name == "inbox.sealed" || bases.contains { name.hasPrefix($0 + "-") } }
+            let retired = names.filter { name in bases.contains { name.hasPrefix($0 + "-") } }
             for name in retired {
                 try? FileManager.default.removeItem(at: directory.appendingPathComponent(name))
             }

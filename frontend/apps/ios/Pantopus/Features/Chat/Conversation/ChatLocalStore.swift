@@ -15,7 +15,6 @@ final class ChatLocalStore: @unchecked Sendable {
         let schema: Int
         let memory: ChatInboxMemory
         var epoch: String?
-        var threadEpoch: String?
     }
 
     private struct SavedHistory: Codable {
@@ -155,8 +154,8 @@ final class ChatLocalStore: @unchecked Sendable {
                         authenticating: Data("\(scope)|inbox".utf8)
                     )
                     let saved = try JSONDecoder().decode(SavedInbox.self, from: bytes)
-                    guard try saved.epoch == historyEpoch()?.id, try saved.threadEpoch == threadEpoch(Self.inboxThread)?.id,
-                          saved.schema == 1, Date().timeIntervalSince(saved.memory.confirmedAt) <= Self.historyLifetime
+                    guard try saved.epoch == historyEpoch()?.id, saved.schema == 1,
+                          Date().timeIntervalSince(saved.memory.confirmedAt) <= Self.historyLifetime
                     else {
                         try? FileManager.default.removeItem(at: url)
                         return nil
@@ -181,12 +180,8 @@ final class ChatLocalStore: @unchecked Sendable {
                     // prefix paired with the loaded tail's cursor would skip rows.
                     // An over-budget response leaves the prior complete snapshot.
                     let epoch = try historyEpoch()
-                    let threadRetired = try threadEpoch(Self.inboxThread)
-                    let retiredAt = max(epoch?.retiredAt ?? .distantPast, threadRetired?.retiredAt ?? .distantPast)
-                    guard memory.confirmedAt >= retiredAt else { return }
-                    let bytes = try JSONEncoder().encode(
-                        SavedInbox(schema: 1, memory: memory, epoch: epoch?.id, threadEpoch: threadRetired?.id)
-                    )
+                    guard memory.confirmedAt >= (epoch?.retiredAt ?? .distantPast) else { return }
+                    let bytes = try JSONEncoder().encode(SavedInbox(schema: 1, memory: memory, epoch: epoch?.id))
                     guard bytes.count <= Self.historyLimit else { return }
                     let sealed = try AES.GCM.seal(bytes, using: key, authenticating: Data("\(scope)|inbox".utf8))
                     guard let combined = sealed.combined else { return }
@@ -429,7 +424,7 @@ extension ChatLocalStore {
                         authenticating: Data("\(scope)|inbox".utf8)
                     )
                     let saved = try JSONDecoder().decode(SavedInbox.self, from: bytes)
-                    guard try saved.epoch == historyEpoch()?.id, try saved.threadEpoch == threadEpoch(Self.inboxThread)?.id,
+                    guard try saved.epoch == historyEpoch()?.id,
                           saved.schema == 1, Date().timeIntervalSince(saved.memory.confirmedAt) <= Self.historyLifetime,
                           saved.memory.response.conversations.contains(where: { $0.kind == kind && $0.id == id }) else { return }
                     let old = saved.memory.response
@@ -445,9 +440,7 @@ extension ChatLocalStore {
                     // Scope-only unread cannot safely change global or mixed-mute
                     // totals. Preserve them and the snapshot's original lifetime.
                     let memory = ChatInboxMemory(response: response, stats: saved.memory.stats, confirmedAt: saved.memory.confirmedAt)
-                    let encoded = try JSONEncoder().encode(
-                        SavedInbox(schema: 1, memory: memory, epoch: saved.epoch, threadEpoch: saved.threadEpoch)
-                    )
+                    let encoded = try JSONEncoder().encode(SavedInbox(schema: 1, memory: memory, epoch: saved.epoch))
                     guard encoded.count <= Self.historyLimit else { return }
                     let sealed = try AES.GCM.seal(encoded, using: key, authenticating: Data("\(scope)|inbox".utf8))
                     guard let combined = sealed.combined else { return }

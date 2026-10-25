@@ -3951,9 +3951,9 @@ public final class ChatConversationViewModel {
     }
 
     /// Explicit server ineligibility overrides a legacy optimistic Read. When
-    /// this screen showed one, retire this thread's encrypted topic variants,
-    /// the room's own window and the inbox copy before canonical recovery can
-    /// fail offline; other threads and saved media stay. Saved history comes
+    /// this screen showed one, retire this thread's encrypted topic variants and
+    /// the room's own window before canonical recovery can fail offline; the
+    /// inbox, other threads and saved media stay. Saved history comes
     /// from the same canonical rows, which never carry a Read for such a room,
     /// so a refusal that changes nothing here (any read in a shared task room)
     /// leaves the cached threads and inbox in place.
@@ -4695,8 +4695,8 @@ extension ChatConversationViewModel {
     }
 
     /// Ended access retires the account's saved history. A Read correction in
-    /// `correctedRoomId` retires only this thread, that room's own window and
-    /// the inbox copy.
+    /// `correctedRoomId` retires only this thread and that room's own window;
+    /// the saved inbox holds no Read stamps and stays.
     private func invalidateSavedThreadCache(correctedRoomId: String? = nil) {
         historySaveTask?.cancel()
         historySaveTask = nil
@@ -4713,20 +4713,8 @@ extension ChatConversationViewModel {
         if let room {
             let threads = [key.description] + [store.key(for: room)?.description].compactMap { $0 }
             ChatLocalStore.shared.retireThreads(scope: scope, threads: threads)
-            refillSavedInbox(scope: scope)
         } else {
             ChatLocalStore.shared.removeHistory(scope: scope, thread: key.description)
-        }
-    }
-
-    /// The inbox copy retired with the thread: read it again now, while
-    /// online, so the Messages list still lists conversations offline.
-    private func refillSavedInbox(scope: String) {
-        let checkpoint = ChatLocalStore.shared.inboxCheckpoint
-        Task { [api] in
-            guard let response: UnifiedConversationsResponse = try? await api.request(ChatEndpoints.unifiedConversations()) else { return }
-            let memory = ChatInboxMemory(response: response, stats: nil, confirmedAt: Date())
-            await ChatLocalStore.shared.saveInbox(memory, scope: scope, checkpoint: checkpoint)
         }
     }
 }
