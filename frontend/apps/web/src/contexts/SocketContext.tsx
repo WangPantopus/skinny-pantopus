@@ -148,15 +148,28 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       tryAllTransports: true,
       withCredentials: true, // Send cookies for httpOnly cookie auth fallback
       reconnectionAttempts: Infinity,
-      reconnectionDelay: 2000,
-      reconnectionDelayMax: 30000,
+      // The first retry after a drop waits 0.25–0.75 s; connect_error below sets the later waits.
+      reconnectionDelay: 500,
+      reconnectionDelayMax: 1000,
     });
+
+    // While the server has been unreachable only briefly (a restart or a deploy),
+    // retry about once a second, so chat is live again within about a second of
+    // it answering. As an outage lasts, wait a twentieth of its length so far.
+    // Each wait is randomized (0.5–1.5×, at most 30 s) so clients spread out.
+    let unreachableSince = 0;
+    const nextRetryWait = () => {
+      unreachableSince ||= Date.now();
+      const wait = Math.min(20_000, Math.max(1_000, (Date.now() - unreachableSince) / 20));
+      return Math.round(wait * (0.5 + Math.random()));
+    };
 
     socketRef.current = nextSocket;
     socketTokenRef.current = authToken;
     setSocket(nextSocket);
 
     nextSocket.on('connect', () => {
+      unreachableSince = 0;
       if (socketRef.current !== nextSocket) return;
       console.log('[Socket] Connected:', nextSocket.id);
       setConnected(true);
@@ -172,6 +185,8 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       if (socketRef.current !== nextSocket) return;
       console.warn('[Socket] Connection retry:', err.message);
       setConnected(false);
+      // socket.io schedules the next attempt right after this event.
+      nextSocket.io.reconnectionDelayMax(nextRetryWait());
     });
 
     nextSocket.on('auth:session_revoked', (payload?: { reason?: string }) => {
@@ -193,8 +208,8 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     };
   }, [authToken, sessionRevision, replaceSession]);
 
-  // After an outage socket.io may be waiting out a reconnect back-off of up to
-  // 30 seconds. When the browser is online again or the tab returns to the
+  // After a long outage socket.io may be waiting out a reconnect back-off of up
+  // to 30 seconds. When the browser is online again or the tab returns to the
   // foreground, try at once (a manual reconnect also resets the back-off).
   useEffect(() => {
     if (!socket) return;

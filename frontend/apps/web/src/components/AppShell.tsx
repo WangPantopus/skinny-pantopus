@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import * as api from '@pantopus/api';
@@ -132,6 +132,14 @@ function sidebarReducer(s: SidebarState, a: SidebarAction): SidebarState {
   }
 }
 
+// ── Client render flag ─────────────────────────────────────────
+// False for the server's HTML and while hydrating it, true in any render that
+// starts in the browser (a page the server leaves to the client, a navigation).
+const subscribeNever = () => () => {};
+function useClientRender(): boolean {
+  return useSyncExternalStore(subscribeNever, () => true, () => false);
+}
+
 // ── App-shell reducer ──────────────────────────────────────────
 type AppShellState = {
   discoverQuery: string;
@@ -139,9 +147,8 @@ type AppShellState = {
   composerOpen: boolean;
   feedComposerOpen: boolean;
   feedPosting: boolean;
-  mounted: boolean;
 };
-type AppShellAction = { type: 'SET_DISCOVER_QUERY'; value: string } | { type: 'SET_ACTIVE_LISTINGS'; value: number } | { type: 'SET_COMPOSER_OPEN'; value: boolean } | { type: 'SET_FEED_COMPOSER_OPEN'; value: boolean } | { type: 'SET_FEED_POSTING'; value: boolean } | { type: 'SET_MOUNTED'; value: boolean };
+type AppShellAction = { type: 'SET_DISCOVER_QUERY'; value: string } | { type: 'SET_ACTIVE_LISTINGS'; value: number } | { type: 'SET_COMPOSER_OPEN'; value: boolean } | { type: 'SET_FEED_COMPOSER_OPEN'; value: boolean } | { type: 'SET_FEED_POSTING'; value: boolean };
 
 function appShellReducer(s: AppShellState, a: AppShellAction): AppShellState {
   switch (a.type) {
@@ -155,8 +162,6 @@ function appShellReducer(s: AppShellState, a: AppShellAction): AppShellState {
       return { ...s, feedComposerOpen: a.value };
     case 'SET_FEED_POSTING':
       return { ...s, feedPosting: a.value };
-    case 'SET_MOUNTED':
-      return { ...s, mounted: a.value };
     default:
       return s;
   }
@@ -168,7 +173,6 @@ const INITIAL_APP_STATE: AppShellState = {
   composerOpen: false,
   feedComposerOpen: false,
   feedPosting: false,
-  mounted: false,
 };
 
 // ────────────────────────────────────────────────────────────────
@@ -203,13 +207,10 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const { collapsed, mobileOpen, hoverExpanded } = sidebarState;
 
   // ── App state (useReducer: discoverQuery, activeListings,
-  //    composerOpen, feedComposerOpen, feedPosting, mounted) ──
+  //    composerOpen, feedComposerOpen, feedPosting) ──
   const [appState, appDispatch] = useReducer(appShellReducer, INITIAL_APP_STATE);
-  const { discoverQuery, composerOpen, feedComposerOpen, feedPosting, mounted } = appState;
-
-  useEffect(() => {
-    appDispatch({ type: 'SET_MOUNTED', value: true });
-  }, []);
+  const { discoverQuery, composerOpen, feedComposerOpen, feedPosting } = appState;
+  const mounted = useClientRender();
 
   const { unreadMessages: chatUnread } = useBadges();
   // Audience-zone gating for the top-bar split (P2.3 / unified-IA §6.1).
@@ -389,7 +390,10 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Before mount, render a simple fallback to avoid hydration mismatch
+  // Server HTML and its hydration render a simple fallback to avoid a hydration
+  // mismatch (the full shell depends on this browser's width and storage). A
+  // render that starts in the browser draws the full shell at once, so the page
+  // mounts once instead of a second time inside it, which started its loading over.
   if (!mounted) {
     return (
       <div className="min-h-screen bg-app text-app">
