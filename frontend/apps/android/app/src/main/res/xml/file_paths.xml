@@ -2,14 +2,17 @@
 <!-- The cache folders the app hands to other apps through FileProvider content:// URIs. Only these:
      the rest of the cache (the image cache, queued crash reports, documents being read) stays private. -->
 <paths>
-    <!-- Photos the camera app takes for a chat, a task post or a reading (ChatMediaUrl, GigCameraPhotos,
-         ReadingSources). -->
+    <!-- Photos the camera app takes for a chat, a task post, a post or a reading (ChatMediaUrl, GigCameraPhotos,
+         PostCameraPhotos, ReadingSources). -->
     <cache-path
         name="chat_camera"
         path="chat-camera/" />
     <cache-path
         name="gig_camera"
         path="gig-camera/" />
+    <cache-path
+        name="post_camera"
+        path="post-camera/" />
     <cache-path
         name="reading_camera"
         path="reading-camera/" />

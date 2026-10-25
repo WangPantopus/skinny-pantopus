@@ -12,9 +12,11 @@ package app.pantopus.android.ui.screens.compose.pulse
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.data.ai.readerMessage
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
 import app.pantopus.android.data.analytics.AnalyticsResult
+import app.pantopus.android.data.api.models.ai.AIPostSuggestionDto
 import app.pantopus.android.data.api.models.posts.EarlierPostDto
 import app.pantopus.android.data.api.models.posts.PostCreateRequest
 import app.pantopus.android.data.api.models.posts.PostDetailDto
@@ -31,6 +33,7 @@ import app.pantopus.android.data.posts.PostsRepository
 import app.pantopus.android.data.posts.PulsePostsRefreshNotifier
 import app.pantopus.android.data.upload.UploadFile
 import app.pantopus.android.data.upload.UploadRepository
+import app.pantopus.android.ui.screens.compose.listing.ListingPhotoProcessor
 import app.pantopus.android.ui.screens.compose.placepicker.MediaCaptureLocation
 import app.pantopus.android.ui.screens.compose.placepicker.PostPlaceTag
 import app.pantopus.android.ui.screens.feed.pulse.PulseIntent
@@ -42,12 +45,14 @@ import app.pantopus.android.ui.screens.shared.form.isoDateOrEmpty
 import app.pantopus.android.ui.screens.shared.form.maxLength
 import app.pantopus.android.ui.screens.shared.form.required
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -352,6 +357,37 @@ class PulseComposeViewModel
         /** The draft "Post anyway" was tapped for: that exact draft posts without another check. */
         private var postAnywayDraft: String? = null
 
+        // AI assist (`POST /api/ai/draft/post-suggestion`, PulseComposeAssist.kt).
+
+        /** The composer's AI assist: idle, writing, a suggestion in the form, or why it couldn't write one. */
+        private val _assist = MutableStateFlow<PulseComposeAssistState>(PulseComposeAssistState.Idle)
+        val assist: StateFlow<PulseComposeAssistState> = _assist.asStateFlow()
+
+        private val _canUndoSuggestion = MutableStateFlow(false)
+
+        /** Undo on the assist card, until the person edits the suggestion. */
+        val canUndoSuggestion: StateFlow<Boolean> = _canUndoSuggestion.asStateFlow()
+
+        /** The form as it was before the suggestion went in, for Undo. Dropped once the person edits a field. */
+        private var assistUndo: PulseComposeAssistSnapshot? = null
+            set(value) {
+                field = value
+                _canUndoSuggestion.value = value != null
+            }
+
+        /** True while a suggestion is being put into the form, so those edits keep Undo. */
+        private var isApplyingSuggestion = false
+
+        /** True when the post has words the AI suggested: Post asks the person to check it first. */
+        private var hasAISuggestion = false
+
+        /** Non-null asks "Post this?" before a post with AI-suggested words goes out. */
+        private val _aiPostConfirmation = MutableStateFlow<String?>(null)
+        val aiPostConfirmation: StateFlow<String?> = _aiPostConfirmation.asStateFlow()
+
+        /** The draft the person confirmed: that exact draft posts without asking again. */
+        private var aiConfirmedDraft: String? = null
+
         private val _announceAudience = MutableStateFlow(PulseAnnounceAudience.Neighbors)
         val announceAudience: StateFlow<PulseAnnounceAudience> = _announceAudience.asStateFlow()
 
@@ -617,6 +653,8 @@ class PulseComposeViewModel
                     error = validator(field).validate(value),
                 )
             _fields.value = map
+            // The person's own edit keeps the suggestion's words but ends its Undo.
+            if (changed && !isApplyingSuggestion) assistUndo = null
             // RN re-arms the precheck whenever the body text changes
             // (`PostComposerModal.tsx:789`).
             if (field == PulseComposeField.Body && changed) precheckDone = false
@@ -689,6 +727,11 @@ class PulseComposeViewModel
                     val lng = photo.capturedLongitude
                     if (lat != null && lng != null) MediaCaptureLocation(latitude = lat, longitude = lng) else null
                 }
+
+        /** The camera permission was refused, so "Take photo" did nothing: say where to allow it. */
+        fun cameraRefused() {
+            _toast.value = PulseComposeToast("Pantopus can't use the camera. You can allow it in Settings.", isError = true)
+        }
 
         fun attachmentReadFailed() {
             _toast.value =
@@ -937,20 +980,8 @@ class PulseComposeViewModel
                 )
                 return
             }
-            // The precheck runs on body blur (RN `PostComposerModal.tsx:801`).
-            // When it came back with a live posting restriction the draft is
-            // refused here instead of round-tripping into a server rejection.
-            val cooldown = _precheckCooldown.value
-            if (cooldown != null) {
-                _toast.value = PulseComposeToast(cooldown, isError = true)
-                Analytics.track(
-                    AnalyticsEvent.FormPulseComposeSubmit(
-                        intent = _activeIntent.value.key,
-                        result = AnalyticsResult.ERROR,
-                    ),
-                )
-                return
-            }
+            // A live posting restriction refuses the draft; words the AI suggested wait for "Post this?" once per draft.
+            if (isBlockedByPrecheck() || needsAIConfirmation()) return
             _state.value = PulseComposeUiState.Submitting
             // Earlier answers still on their way would only arrive behind the post.
             earlierAnswersJob?.cancel()
@@ -1059,6 +1090,205 @@ class PulseComposeViewModel
         /** "Edit": back to the composer, the words kept. */
         fun editAfterPostCheck() {
             _postCheckFindings.value = null
+        }
+
+        /**
+         * The precheck runs on body blur (RN `PostComposerModal.tsx:801`). When it came back with a live posting
+         * restriction the draft is refused here instead of round-tripping into a server rejection.
+         */
+        private fun isBlockedByPrecheck(): Boolean {
+            val cooldown = _precheckCooldown.value ?: return false
+            _toast.value = PulseComposeToast(cooldown, isError = true)
+            Analytics.track(
+                AnalyticsEvent.FormPulseComposeSubmit(
+                    intent = _activeIntent.value.key,
+                    result = AnalyticsResult.ERROR,
+                ),
+            )
+            return true
+        }
+
+        // MARK: - AI assist (`POST /api/ai/draft/post-suggestion`)
+
+        /** True while a suggestion is on its way. */
+        val isSuggesting: Boolean get() = _assist.value is PulseComposeAssistState.Writing
+
+        /** How many of the attachments a suggestion reads: pictures, not videos or PDFs. */
+        val assistPhotoCount: Int
+            get() = _photos.value.count { it.mimeType.startsWith("image/") }.coerceAtMost(ASSIST_MAX_PHOTOS)
+
+        /** True when there's something to write a post from: a photo, or words in the form. */
+        val assistHasMaterial: Boolean
+            get() {
+                if (assistPhotoCount > 0) return true
+                val active = activeIntentFields()
+                return ASSIST_WRITTEN_FIELDS.any { (field, _) -> field in active && trimmedValue(field).isNotEmpty() }
+            }
+
+        /**
+         * Asks for the whole post from the photos, the place and what's in the form, and puts it in the form. The
+         * person changes anything they like; Post asks them to check it first ("Post this?"). Mirrors iOS
+         * `PulseComposeViewModel.suggestPost`.
+         */
+        fun suggestPost() {
+            if (isEditing || isSuggesting) return
+            if (!networkMonitor.isOnline.value) {
+                _assist.value = PulseComposeAssistState.Failed("You're offline. Try again when you're back online.")
+                return
+            }
+            val request = suggestionRequest()
+            val stills = _photos.value.filter { it.mimeType.startsWith("image/") }.take(ASSIST_MAX_PHOTOS).map { it.data }
+            _assist.value = PulseComposeAssistState.Writing
+            viewModelScope.launch {
+                // Each photo goes as a JPEG of at most 1600px, re-encoded without its EXIF (where and when it was taken).
+                val files =
+                    withContext(Dispatchers.Default) {
+                        stills.mapIndexedNotNull { index, bytes ->
+                            ListingPhotoProcessor.uploadData(bytes)?.let { UploadFile("photo-$index.jpg", "image/jpeg", it) }
+                        }
+                    }
+                // Photos this phone couldn't read, and no words: there's nothing to send.
+                if (stills.isNotEmpty() && files.isEmpty() && ASSIST_WRITTEN_FIELDS.none { (_, name) -> name in request }) {
+                    _assist.value = PulseComposeAssistState.Failed("Couldn't read that photo. Try another one, or write a few words.")
+                    return@launch
+                }
+                when (val result = uploadRepo.suggestPost(files, request)) {
+                    is NetworkResult.Success -> {
+                        applySuggestion(result.data.suggestion)
+                        _assist.value = PulseComposeAssistState.Suggested(result.data.note?.trim()?.ifEmpty { null })
+                        runPrecheckSuspending()
+                    }
+                    is NetworkResult.Failure ->
+                        _assist.value = PulseComposeAssistState.Failed(result.error.readerMessage().ifBlank { ASSIST_FALLBACK })
+                }
+            }
+        }
+
+        /** Puts the form back as it was before the suggestion. */
+        fun undoSuggestion() {
+            val before = assistUndo ?: return
+            _fields.value = before.fields
+            _lostFoundKind.value = before.lostFoundKind
+            _safetyAlertKind.value = before.safetyAlertKind
+            _askCategory.value = before.askCategory
+            _dealExpiresAt.value = before.dealExpiresAt
+            assistUndo = null
+            hasAISuggestion = false
+            _assist.value = PulseComposeAssistState.Idle
+            precheckDone = false
+            scheduleEarlierAnswers()
+        }
+
+        /** The request's fields: the kind of post, who it goes to, what the person wrote and the place. */
+        private fun suggestionRequest(): Map<String, String> {
+            // "Try again" right after a suggestion starts over from what the person wrote, not from the suggestion.
+            val written = assistUndo?.fields ?: _fields.value
+            val active = activeIntentFields()
+            val request = mutableMapOf("postType" to effectivePostType(), "audience" to effectiveAudience())
+            for ((field, name) in ASSIST_WRITTEN_FIELDS) {
+                val value = written[field]?.value?.trim().orEmpty()
+                if (field in active && value.isNotEmpty()) request[name] = value
+            }
+            assistPlace()?.let { (name, address) ->
+                request["place"] = name
+                address?.let { request["placeAddress"] = it }
+            }
+            return request
+        }
+
+        /**
+         * The place the post is about, for the suggestion: a tagged venue with its address, or the area it's posted to
+         * ("Camas, WA"). A tagged street address or a home's address never goes: it could be someone's home.
+         */
+        private fun assistPlace(): Pair<String, String?>? {
+            val tag = _selectedPlaceTag.value
+            if (tag != null && tag.kind != "address") return tag.name to tag.address?.trim()?.ifEmpty { null }
+            val label = postingTarget?.takeIf { it.isPlaceTarget }?.displayLabel?.trim().orEmpty()
+            return if (label.isEmpty() || label.any { it.isDigit() }) null else label to null
+        }
+
+        /**
+         * Fills the form from a suggestion. The title and the text are replaced; a venue, business, place or date the
+         * person already filled in stays; the choices (lost or found, the kind of heads-up, the category, when a deal
+         * ends) follow the suggestion. Undo puts it all back.
+         */
+        @Suppress("CyclomaticComplexMethod")
+        private fun applySuggestion(suggestion: AIPostSuggestionDto) {
+            if (assistUndo == null) {
+                assistUndo =
+                    PulseComposeAssistSnapshot(
+                        fields = _fields.value,
+                        lostFoundKind = _lostFoundKind.value,
+                        safetyAlertKind = _safetyAlertKind.value,
+                        askCategory = _askCategory.value,
+                        dealExpiresAt = _dealExpiresAt.value,
+                    )
+            }
+            isApplyingSuggestion = true
+            val active = activeIntentFields()
+
+            fun fill(
+                field: PulseComposeField,
+                value: String?,
+                replacing: Boolean = false,
+            ) {
+                val text = value?.trim().orEmpty()
+                if (field !in active || text.isEmpty() || (!replacing && trimmedValue(field).isNotEmpty())) return
+                update(field, text)
+            }
+            fill(PulseComposeField.Title, suggestion.title, replacing = true)
+            fill(PulseComposeField.Body, suggestion.body, replacing = true)
+            fill(PulseComposeField.RecommendBusiness, suggestion.businessName)
+            fill(PulseComposeField.DealBusinessName, suggestion.businessName)
+            fill(PulseComposeField.EventLocation, suggestion.eventVenue)
+            // The event fields hold the pickers' local wall clock, `yyyy-MM-dd HH:mm`.
+            fill(PulseComposeField.EventDate, suggestion.eventDate?.replace('T', ' '))
+            fill(PulseComposeField.EventEndDate, suggestion.eventEndDate?.replace('T', ' '))
+            fill(PulseComposeField.LostLastSeenLocation, suggestion.lastSeenLocation)
+            fill(PulseComposeField.LostLastSeenDate, suggestion.lastSeenDate)
+            if (_activeIntent.value == PulseComposeIntent.Lost) {
+                PulseLostFoundKind.entries.firstOrNull { it.key == suggestion.lostFoundType }?.let { _lostFoundKind.value = it }
+            }
+            if (effectivePostType() == "alert") {
+                suggestion.safetyAlertKind?.let(PulseSafetyAlertKind::fromKey)?.let { _safetyAlertKind.value = it }
+            }
+            if (_activeIntent.value == PulseComposeIntent.Ask) {
+                PulseAskCategory.entries.firstOrNull { it.key == suggestion.askCategory }?.let { _askCategory.value = it }
+            }
+            if (effectivePostType() == "deal") {
+                suggestion.dealExpiresAt?.let { PulseComposeDraftFields.localEnd(it) }?.let { _dealExpiresAt.value = it }
+            }
+            isApplyingSuggestion = false
+            hasAISuggestion = true
+        }
+
+        /**
+         * A new post with words the AI suggested asks "Post this?" once per draft, so the person checks what goes out
+         * under their name. True when it is asking.
+         */
+        private fun needsAIConfirmation(): Boolean {
+            if (!hasAISuggestion || isEditing) return false
+            val draft = postCheckDraft(buildRequest())
+            if (draft == aiConfirmedDraft) return false
+            _aiPostConfirmation.value =
+                if (effectiveAudience() == "connections") {
+                    "Pantopus AI wrote parts of this post. Check that it's right before your connections see it."
+                } else {
+                    "Pantopus AI wrote parts of this post. Check that it's right before neighbors see it."
+                }
+            return true
+        }
+
+        /** "Post" on "Post this?": posts this draft as it is. */
+        fun confirmAIPost() {
+            aiConfirmedDraft = postCheckDraft(buildRequest())
+            _aiPostConfirmation.value = null
+            submit()
+        }
+
+        /** "Keep editing" on "Post this?": back to the composer. */
+        fun keepEditingAIPost() {
+            _aiPostConfirmation.value = null
         }
 
         /**
@@ -1672,6 +1902,21 @@ class PulseComposeViewModel
             private const val EARLIER_ANSWERS_MIN_WORDS = 3
             private const val EARLIER_ANSWERS_DEBOUNCE_MS = 600L
             private const val POST_CHECK_TIMEOUT_MS = 10_000L
+
+            /** How many photos a suggestion reads (`postSuggestion.MAX_PHOTOS` on the server). */
+            private const val ASSIST_MAX_PHOTOS = 4
+
+            /** The typed fields a suggestion reads, with the request's name for each. */
+            private val ASSIST_WRITTEN_FIELDS =
+                listOf(
+                    PulseComposeField.Title to "title",
+                    PulseComposeField.Body to "body",
+                    PulseComposeField.RecommendBusiness to "businessName",
+                    PulseComposeField.DealBusinessName to "businessName",
+                    PulseComposeField.EventLocation to "eventVenue",
+                    PulseComposeField.LostLastSeenLocation to "lastSeenLocation",
+                )
+            private const val ASSIST_FALLBACK = "Couldn't write a suggestion. Try again, or write the post yourself."
             private val WHITESPACE = Regex("\\s+")
             private const val LAST_SEEN_SEPARATOR = " · "
             private val PICKER_DATE_TIME_PATTERN = Regex("""^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$""")

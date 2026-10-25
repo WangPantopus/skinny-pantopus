@@ -12,6 +12,7 @@
  *   1. streamChat()        — Multi-turn chat agent with SSE streaming
  *   2. draftListing()      — Single-turn listing draft
  *   3. draftPost()         — Single-turn post draft
+ *      suggestPost()       — The composer's AI assist: the whole post from photos, place and notes
  *   4. summarizeMail()     — Mail summarization with action extraction
  *   5. generatePlaceBrief() — Place brief from external data
  */
@@ -30,6 +31,7 @@ const { buildChatContext, lastContextText, userTimeZone, CONTEXT_HEADER } = requ
 const { photoBlocks } = require('./photos');
 const { refreshPickupDraft, editorFields } = require('./pickupDraft');
 const radonReport = require('./radonReport');
+const postSuggestion = require('./postSuggestion');
 const { getAuthorizedMail } = require('./mailAccess');
 const { nameMailSender } = require('../../utils/mailSenderView');
 const noaa = require('../external/noaa');
@@ -221,6 +223,9 @@ const DRAFT_MAX_TOKENS = 4096;
 const MAX_TOOL_ROUNDS = 8;         // Maximum tool-call → response rounds (look up, then draft)
 const AGENT_TIMEOUT_MS = 45000;    // 45s for a whole turn: a few reads and a card
 const DRAFT_TIMEOUT_MS = 30000;    // 30s for single-turn drafts
+// The composer's AI assist answers inside the Android app's 30 s read timeout, so a slow
+// suggestion comes back as "took too long" rather than a dropped connection.
+const SUGGESTION_TIMEOUT_MS = 25000;
 
 // ─── Request Logging ────────────────────────────────────────────────────────
 
@@ -1052,13 +1057,89 @@ async function draftPost({ text, surface, coarseLocation, userId }) {
   }
 }
 
-// ─── Pickup Days from a Flyer (for the pickup editor) ────────────────────────
-
 /** A note from the model for people to read: trimmed, without a stray closing bracket ("…in the photo.}"). */
 function noteText(note) {
   const text = typeof note === 'string' ? note.trim() : '';
   return (/[{[]/.test(text) ? text : text.replace(/[}\]\s]+$/, '')) || null;
 }
+
+// ─── Post Suggestion (the composer's AI assist) ─────────────────────────────
+
+/**
+ * The whole post, suggested from the person's photos, the place they picked and what
+ * they've written so far, for the composer to fill in (services/ai/postSuggestion.js).
+ * The photos are read in memory and never stored, and nothing is posted: the person
+ * checks the fields, changes what they like and posts with the composer's own Post.
+ */
+async function suggestPost({ files = [], fields, userId }) {
+  const startTime = Date.now();
+  const client = getAnthropicClient();
+  if (!client) {
+    return { error: 'AI_UNAVAILABLE', message: 'AI is temporarily unavailable. You can still write the post yourself.', fallback: true };
+  }
+
+  const { blocks, unreadable } = await postSuggestion.photoBlocks(files);
+  if (!blocks.length && !postSuggestion.hasWords(fields)) {
+    return { error: 'IMAGE_UNREADABLE', message: "Couldn't open that photo. Try a JPEG or PNG, or write a few words." };
+  }
+  const timeZone = await userTimeZone(userId);
+  const content = [
+    ...blocks,
+    { type: 'text', text: postSuggestion.requestText({ ...fields, photoCount: blocks.length, now: describeNow(timeZone) }) },
+  ];
+  const log = (logFields) => logRequest({
+    userId, endpoint: 'draft/post-suggestion', model: DRAFT_MODEL,
+    promptVersion: prompts.VERSIONS.postSuggestion, latencyMs: Date.now() - startTime, ...logFields,
+  });
+
+  try {
+    const response = await complete({
+      client,
+      model: DRAFT_MODEL,
+      system: prompts.POST_SUGGESTION_SYSTEM,
+      messages: [{ role: 'user', content }],
+      schema: schemas.claudeSchemas.postSuggestion,
+      effort: DRAFT_EFFORT,
+      maxTokens: DRAFT_MAX_TOKENS,
+      timeoutMs: SUGGESTION_TIMEOUT_MS,
+    });
+    let reading = null;
+    try {
+      reading = JSON.parse(response.text);
+    } catch {
+      // Treated as invalid below.
+    }
+    const suggestion = reading && typeof reading === 'object' && typeof reading.body === 'string'
+      ? postSuggestion.composerFields(reading, { postType: fields.postType, timeZone })
+      : null;
+    const valid = Boolean(suggestion) && schemas.validatePostSuggestion(suggestion);
+    await log({
+      status: valid ? 'ok' : 'schema_error', schemaValid: valid,
+      inputTokens: response.inputTokens, outputTokens: response.outputTokens,
+    });
+    if (!valid) {
+      return { error: 'DRAFT_INVALID', message: "Couldn't write a suggestion. Try again, or write the post yourself.", fallback: true };
+    }
+    const note = postSuggestion.noteFor(noteText(reading.note), unreadable);
+    if (!suggestion.body) {
+      return {
+        error: 'NO_SUGGESTION',
+        message: note || "There wasn't enough to write a post from. Try another photo or add a few words.",
+        fallback: true,
+      };
+    }
+    return { suggestion, note };
+  } catch (err) {
+    logger.error('suggestPost error', { userId, error: err.message });
+    await log({ status: err instanceof AIRefusalError ? 'refusal' : 'error', errorMessage: err.message });
+    if (err instanceof AIRefusalError) return { ...DECLINED };
+    if (isImageError(err)) return { error: 'IMAGE_UNREADABLE', message: "Couldn't read that photo. Try a different one." };
+    if (isTimeoutError(err)) return { error: 'AI_TIMEOUT', message: 'Writing the suggestion took too long. Please try again.', fallback: true };
+    return { error: 'AI_UNAVAILABLE', message: 'AI is temporarily unavailable. You can still write the post yourself.', fallback: true };
+  }
+}
+
+// ─── Pickup Days from a Flyer (for the pickup editor) ────────────────────────
 
 /**
  * Read a household's pickup days from photos of their hauler's flyer, or from what they
@@ -1702,6 +1783,7 @@ module.exports = {
   draftListing,
   draftListingFromImages,
   draftPost,
+  suggestPost,
   readPickupSchedule,
   readRadonReport,
   summarizeMail,
