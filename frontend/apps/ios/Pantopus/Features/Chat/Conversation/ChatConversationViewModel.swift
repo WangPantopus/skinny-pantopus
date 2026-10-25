@@ -3951,11 +3951,12 @@ public final class ChatConversationViewModel {
     }
 
     /// Explicit server ineligibility overrides a legacy optimistic Read. When
-    /// this screen showed one, retire all encrypted topic variants before
-    /// canonical recovery can fail offline. Saved history comes from the same
-    /// canonical rows, which never carry a Read for such a room, so a refusal
-    /// that changes nothing here (any read in a shared task room) leaves the
-    /// account's cached threads and inbox in place.
+    /// this screen showed one, retire this thread's encrypted topic variants and
+    /// the room's own window before canonical recovery can fail offline; the
+    /// inbox, other threads and saved media stay. Saved history comes
+    /// from the same canonical rows, which never carry a Read for such a room,
+    /// so a refusal that changes nothing here (any read in a shared task room)
+    /// leaves the cached threads and inbox in place.
     private func retireIneligibleReceipts(roomId: String) {
         var changed = false
         for index in messages.indices {
@@ -3966,7 +3967,7 @@ public final class ChatConversationViewModel {
             changed = true
         }
         guard changed else { return }
-        invalidateSavedThreadCache()
+        invalidateSavedThreadCache(correctedRoomId: roomId)
         historyCacheVersion = nil
         rebuild()
         scheduleFallbackRefresh()
@@ -4693,18 +4694,27 @@ extension ChatConversationViewModel {
         invalidateSavedThreadCache()
     }
 
-    private func invalidateSavedThreadCache() {
+    /// Ended access retires the account's saved history. A Read correction in
+    /// `correctedRoomId` retires only this thread and that room's own window;
+    /// the saved inbox holds no Read stamps and stays.
+    private func invalidateSavedThreadCache(correctedRoomId: String? = nil) {
         historySaveTask?.cancel()
         historySaveTask = nil
         savedHistorySnapshot = nil
         savedHistoryKey = nil
         guard let endpoint = latestThreadMemoryEndpoint, let key = store.key(for: endpoint), key.account == currentUserId else { return }
+        let room = correctedRoomId.map { ChatEndpoints.roomMessages(roomId: $0) }
         store.removeSeeds(for: endpoint)
+        if let room { store.removeSeeds(for: room) }
         store.remove(ChatEndpoints.unifiedConversations())
         store.remove(ChatEndpoints.stats())
         guard api === APIClient.shared else { return }
-        ChatLocalStore.shared.removeHistory(
-            scope: ChatLocalStore.scope(server: key.server, account: key.account), thread: key.description
-        )
+        let scope = ChatLocalStore.scope(server: key.server, account: key.account)
+        if let room {
+            let threads = [key.description] + [store.key(for: room)?.description].compactMap { $0 }
+            ChatLocalStore.shared.retireThreads(scope: scope, threads: threads)
+        } else {
+            ChatLocalStore.shared.removeHistory(scope: scope, thread: key.description)
+        }
     }
 }
