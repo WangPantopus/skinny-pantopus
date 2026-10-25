@@ -17,7 +17,9 @@ async function initPgBoss() {
     schema: 'pgboss',               // Separate schema, won't interfere with app tables
     // Queue bookkeeping must fit alongside the API on the smallest database.
     max: 2,
-    monitorIntervalSeconds: 60,
+    // Supervision wakes every minute. Keep the eligibility threshold below
+    // that interval so timing jitter cannot skip an expired-job recovery pass.
+    monitorIntervalSeconds: 30,
     maintenanceIntervalSeconds: 60 * 60,
   });
 
