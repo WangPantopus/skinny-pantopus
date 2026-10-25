@@ -354,6 +354,56 @@ async function isSearchable(viewerId, targetUserId) {
 }
 
 /**
+ * Batched counterpart of isSearchable + isScopedBlocked(search_only), with the
+ * connection status needed by LocalProfile visibility. Reads only this request's
+ * candidates; never caches privacy decisions. A failed read refuses the search.
+ */
+async function loadUserSearchAccess(viewerId, userIds) {
+  if (!isIdShaped(viewerId)) throw privacyCheckUnavailable();
+  const ids = [...new Set(userIds)].filter((id) => isIdShaped(id) && id !== viewerId);
+  const access = new Map();
+  for (let offset = 0; offset < ids.length; offset += 100) {
+    const batch = ids.slice(offset, offset + 100);
+    const pages = await Promise.all([
+      supabaseAdmin.from('UserPrivacySettings').select('user_id, search_visibility').in('user_id', batch),
+      supabaseAdmin.from('Relationship').select('requester_id, addressee_id, status')
+        .eq('requester_id', viewerId).in('addressee_id', batch),
+      supabaseAdmin.from('Relationship').select('requester_id, addressee_id, status')
+        .eq('addressee_id', viewerId).in('requester_id', batch),
+      supabaseAdmin.from('UserProfileBlock').select('user_id, blocked_user_id')
+        .eq('user_id', viewerId).in('blocked_user_id', batch).in('block_scope', ['full', 'search_only']),
+      supabaseAdmin.from('UserProfileBlock').select('user_id, blocked_user_id')
+        .eq('blocked_user_id', viewerId).in('user_id', batch).in('block_scope', ['full', 'search_only']),
+      supabaseAdmin.from('UserBlock').select('blocker_user_id')
+        .eq('blocked_user_id', viewerId).in('blocker_user_id', batch),
+    ]);
+    for (const page of pages) {
+      if (page.error || !Array.isArray(page.data)) throw privacyCheckUnavailable(page.error);
+    }
+    const [settings, outgoing, incoming, blockedByViewer, blockedByTarget, personalBlocks] = pages.map((page) => page.data);
+    const connected = new Set();
+    const blocked = new Set(personalBlocks.map((row) => row.blocker_user_id));
+    for (const row of [...outgoing, ...incoming]) {
+      const peer = row.requester_id === viewerId ? row.addressee_id : row.requester_id;
+      if (row.status === 'accepted') connected.add(peer);
+      if (row.status === 'blocked') blocked.add(peer);
+    }
+    for (const row of [...blockedByViewer, ...blockedByTarget]) {
+      blocked.add(row.user_id === viewerId ? row.blocked_user_id : row.user_id);
+    }
+    const visibility = new Map(settings.map((row) => [row.user_id, row.search_visibility]));
+    for (const id of batch) {
+      const policy = visibility.get(id) || 'everyone';
+      access.set(id, {
+        connected: connected.has(id),
+        searchable: !blocked.has(id) && policy !== 'nobody' && (policy !== 'mutuals' || connected.has(id)),
+      });
+    }
+  }
+  return access;
+}
+
+/**
  * Check if a viewer can see a specific profile field based on privacy settings.
  *
  * @param {string} viewerId
@@ -499,6 +549,7 @@ module.exports = {
 
   // Identity Firewall — privacy settings
   isSearchable,
+  loadUserSearchAccess,
   canViewProfileField,
   isScopedBlocked,
 

@@ -68,6 +68,10 @@ import { establishVerifiedChatSession } from '@/components/chat/chatStorage';
 const SIDEBAR_EXPANDED = 240;
 const SIDEBAR_COLLAPSED = 64;
 const STORAGE_KEY = 'pantopus-sidebar-collapsed';
+// In the server's HTML, before the fallback's top bar and page are parsed: a
+// desktop sidebar this browser keeps collapsed narrows the width the fallback
+// reserves for it (--desktop-sidebar, read by its lg: classes).
+const COLLAPSED_SIDEBAR_SCRIPT = `try{if(localStorage.getItem('${STORAGE_KEY}')==='true')document.currentScript.parentNode.style.setProperty('--desktop-sidebar','${SIDEBAR_COLLAPSED}px')}catch(e){}`;
 
 /** One page of GET /notifications — shared shape with /app/notifications infinite query */
 type NotificationPageParam = { all: number; personal: number; platform: number; audience: number };
@@ -406,7 +410,9 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   // mismatch (the full shell depends on this browser's width and storage). A
   // render that starts in the browser draws the full shell at once. The page sits
   // in the same keyed <main>, with the same children, in both, so it mounts once:
-  // a second mount inside the full shell started its loading over.
+  // a second mount inside the full shell started its loading over. The fallback
+  // draws the sidebar's empty frame at the full shell's width (64 px on tablets,
+  // 240 px on desktops, 64 px if collapsed there), so nothing moves at the switch.
   const offlineNotice = !isOnline && (
     <div role="status" className="sticky top-14 z-40 flex items-center justify-center gap-2 bg-amber-500/95 px-3 py-1.5 text-xs font-semibold text-white">
       <WifiOff className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
@@ -415,9 +421,14 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   );
   if (!mounted) {
     return (
-      <div className="min-h-screen bg-app text-app">
-        <header className="fixed top-0 left-0 right-0 h-14 bg-surface border-b border-app z-50" />
-        <main key="content" className="pt-14">
+      // The script sets --desktop-sidebar on this element before React loads.
+      <div className="min-h-screen bg-app text-app" suppressHydrationWarning>
+        <script dangerouslySetInnerHTML={{ __html: COLLAPSED_SIDEBAR_SCRIPT }} />
+        <header className="fixed top-0 left-0 right-0 md:left-[64px] lg:left-[var(--desktop-sidebar,240px)] h-14 bg-surface border-b border-app z-50" />
+        <aside className="hidden md:block fixed top-0 left-0 bottom-0 md:w-[64px] lg:w-[var(--desktop-sidebar,240px)] bg-surface border-r border-app z-40">
+          <div className="h-14 border-b border-app" />
+        </aside>
+        <main key="content" className="pt-14 md:ml-[64px] lg:ml-[var(--desktop-sidebar,240px)]">
           {offlineNotice}
           {children}
         </main>

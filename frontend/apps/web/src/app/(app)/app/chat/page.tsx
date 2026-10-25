@@ -155,7 +155,7 @@ export default function ChatListPage() {
   });
 
   const newChatConnections = useMemo<NewChatPerson[]>(() => {
-    const q = newChatQuery.trim().toLowerCase();
+    const q = newChatQuery.trim().replace(/^@+/, '').toLowerCase();
     return (connectionsQuery.data || [])
       .map((rel) => rel.other_user)
       .filter((user): user is RelationshipUser => Boolean(user?.id))
@@ -217,18 +217,18 @@ export default function ChatListPage() {
 
   useEffect(() => {
     if (!newChatOpen) return;
-    const q = newChatQuery.trim();
-    if (!q) {
-      setNewChatResults([]);
-      setNewChatError(null);
+    const q = newChatQuery.trim().replace(/^@+/, '');
+    setNewChatResults([]);
+    setNewChatError(null);
+    if (q.length < 2) {
       setNewChatSearching(false);
       return;
     }
 
+    setNewChatSearching(true);
     let cancelled = false;
     const timer = setTimeout(async () => {
       try {
-        setNewChatSearching(true);
         setNewChatError(null);
         const resp = await api.users.searchUsers(q, { type: 'people', limit: 8 });
         if (!cancelled) setNewChatResults(resp?.users || []);
@@ -540,11 +540,13 @@ export default function ChatListPage() {
               <SearchInput
                 value={newChatQuery}
                 onChange={(value) => {
-                  setNewChatQuery(value);
+                  setNewChatQuery(value.slice(0, 100));
                   // "Searching…" from the first keystroke, so "No users found." only follows an answer.
-                  setNewChatSearching(value.trim().length > 0);
+                  setNewChatResults([]);
+                  setNewChatError(null);
+                  setNewChatSearching(value.trim().replace(/^@+/, '').length >= 2);
                 }}
-                placeholder="Type a person's name…"
+                placeholder="Search by name or username…"
               />
 
               {newChatError && (
@@ -570,6 +572,8 @@ export default function ChatListPage() {
                   newChatConnections.length === 0 && (
                     <div className="p-4 text-sm text-app-muted">Start typing to find people.</div>
                   )
+                ) : newChatQuery.trim().replace(/^@+/, '').length < 2 ? (
+                  <div className="p-4 text-sm text-app-muted">Enter at least 2 characters to search.</div>
                 ) : newChatSearching ? (
                   <div className="p-4 text-sm text-app-muted">Searching…</div>
                 ) : newChatPeople.length > 0 ? (
@@ -583,7 +587,7 @@ export default function ChatListPage() {
                       />
                     ))}
                   </NewChatSection>
-                ) : newChatConnections.length === 0 ? (
+                ) : !newChatError && newChatConnections.length === 0 ? (
                   <div className="p-4 text-sm text-app-muted">No users found.</div>
                 ) : null}
               </div>
