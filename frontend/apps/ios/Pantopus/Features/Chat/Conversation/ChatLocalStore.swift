@@ -15,6 +15,7 @@ final class ChatLocalStore: @unchecked Sendable {
         let schema: Int
         let memory: ChatInboxMemory
         var epoch: String?
+        var threadEpoch: String?
     }
 
     private struct SavedHistory: Codable {
@@ -22,6 +23,7 @@ final class ChatLocalStore: @unchecked Sendable {
         let savedAt: Date
         let thread: ChatThreadMemory
         var epoch: String?
+        var threadEpoch: String?
     }
 
     private struct HistoryEpoch: Codable {
@@ -87,8 +89,8 @@ final class ChatLocalStore: @unchecked Sendable {
                         authenticating: Data("\(scope)|\(thread)".utf8)
                     )
                     let saved = try JSONDecoder().decode(SavedHistory.self, from: bytes)
-                    guard try saved.epoch == historyEpoch()?.id, saved.schema == 1,
-                          Date().timeIntervalSince(saved.savedAt) <= Self.historyLifetime else {
+                    guard try saved.epoch == historyEpoch()?.id, try saved.threadEpoch == threadEpoch(Self.threadBase(thread))?.id,
+                          saved.schema == 1, Date().timeIntervalSince(saved.savedAt) <= Self.historyLifetime else {
                         try? FileManager.default.removeItem(at: url)
                         return nil
                     }
@@ -118,9 +120,12 @@ final class ChatLocalStore: @unchecked Sendable {
                         attributes: [.protectionKey: FileProtectionType.complete]
                     )
                     let epoch = try historyEpoch()
-                    guard memory.confirmedAt.map({ $0 >= (epoch?.retiredAt ?? .distantPast) }) == true else { return }
+                    let threadRetired = try threadEpoch(Self.threadBase(thread))
+                    // A window confirmed before its thread or the account retired can't come back.
+                    let retiredAt = max(epoch?.retiredAt ?? .distantPast, threadRetired?.retiredAt ?? .distantPast)
+                    guard memory.confirmedAt.map({ $0 >= retiredAt }) == true else { return }
                     let bytes = try JSONEncoder().encode(SavedHistory(
-                        schema: 1, savedAt: memory.confirmedAt ?? Date(), thread: memory, epoch: epoch?.id
+                        schema: 1, savedAt: memory.confirmedAt ?? Date(), thread: memory, epoch: epoch?.id, threadEpoch: threadRetired?.id
                     ))
                     guard bytes.count <= Self.historyLimit else { return }
                     let encrypted = try AES.GCM.seal(bytes, using: key, authenticating: Data("\(scope)|\(thread)".utf8))
@@ -150,8 +155,8 @@ final class ChatLocalStore: @unchecked Sendable {
                         authenticating: Data("\(scope)|inbox".utf8)
                     )
                     let saved = try JSONDecoder().decode(SavedInbox.self, from: bytes)
-                    guard try saved.epoch == historyEpoch()?.id, saved.schema == 1,
-                          Date().timeIntervalSince(saved.memory.confirmedAt) <= Self.historyLifetime
+                    guard try saved.epoch == historyEpoch()?.id, try saved.threadEpoch == threadEpoch(Self.inboxThread)?.id,
+                          saved.schema == 1, Date().timeIntervalSince(saved.memory.confirmedAt) <= Self.historyLifetime
                     else {
                         try? FileManager.default.removeItem(at: url)
                         return nil
@@ -176,8 +181,12 @@ final class ChatLocalStore: @unchecked Sendable {
                     // prefix paired with the loaded tail's cursor would skip rows.
                     // An over-budget response leaves the prior complete snapshot.
                     let epoch = try historyEpoch()
-                    guard memory.confirmedAt >= (epoch?.retiredAt ?? .distantPast) else { return }
-                    let bytes = try JSONEncoder().encode(SavedInbox(schema: 1, memory: memory, epoch: epoch?.id))
+                    let threadRetired = try threadEpoch(Self.inboxThread)
+                    let retiredAt = max(epoch?.retiredAt ?? .distantPast, threadRetired?.retiredAt ?? .distantPast)
+                    guard memory.confirmedAt >= retiredAt else { return }
+                    let bytes = try JSONEncoder().encode(
+                        SavedInbox(schema: 1, memory: memory, epoch: epoch?.id, threadEpoch: threadRetired?.id)
+                    )
                     guard bytes.count <= Self.historyLimit else { return }
                     let sealed = try AES.GCM.seal(bytes, using: key, authenticating: Data("\(scope)|inbox".utf8))
                     guard let combined = sealed.combined else { return }
@@ -245,9 +254,8 @@ final class ChatLocalStore: @unchecked Sendable {
     }
 
     private func historyURL(_ thread: String) -> URL {
-        let base = thread.components(separatedBy: "?")[0]
-        return root.appendingPathComponent("history")
-            .appendingPathComponent(ScreenStoreDisk.hashed(base) + "-" + ScreenStoreDisk.hashed(thread) + ".sealed")
+        root.appendingPathComponent("history")
+            .appendingPathComponent(Self.threadBase(thread) + "-" + ScreenStoreDisk.hashed(thread) + ".sealed")
     }
 
     /// Retiring a conversation conservatively retires this account's bounded
@@ -327,7 +335,7 @@ final class ChatLocalStore: @unchecked Sendable {
 extension ChatLocalStore {
     /// Called with the lock held. A failed epoch write blocks history reads and
     /// writes in this process; a directory rename is the durable fallback.
-    private func retireHistory() {
+    func retireHistory() {
         Task { @MainActor in
             ChatMediaURL.removeOpenedFiles()
             NotificationCenter.default.post(name: Self.historyRetired, object: nil)
@@ -341,6 +349,8 @@ extension ChatLocalStore {
             )
             try secure.delete("history-retirement")
             historyRetirementFailed = false
+            // The new account epoch already hides every older thread epoch's windows.
+            try? FileManager.default.removeItem(at: root.appendingPathComponent("history-thread-epochs"))
             // Interrupted deletion is harmless: every prior envelope fails its
             // epoch check, including inbox previews and all topic query keys.
             try? FileManager.default.removeItem(at: directory)
@@ -419,7 +429,7 @@ extension ChatLocalStore {
                         authenticating: Data("\(scope)|inbox".utf8)
                     )
                     let saved = try JSONDecoder().decode(SavedInbox.self, from: bytes)
-                    guard try saved.epoch == historyEpoch()?.id,
+                    guard try saved.epoch == historyEpoch()?.id, try saved.threadEpoch == threadEpoch(Self.inboxThread)?.id,
                           saved.schema == 1, Date().timeIntervalSince(saved.memory.confirmedAt) <= Self.historyLifetime,
                           saved.memory.response.conversations.contains(where: { $0.kind == kind && $0.id == id }) else { return }
                     let old = saved.memory.response
@@ -435,7 +445,9 @@ extension ChatLocalStore {
                     // Scope-only unread cannot safely change global or mixed-mute
                     // totals. Preserve them and the snapshot's original lifetime.
                     let memory = ChatInboxMemory(response: response, stats: saved.memory.stats, confirmedAt: saved.memory.confirmedAt)
-                    let encoded = try JSONEncoder().encode(SavedInbox(schema: 1, memory: memory, epoch: saved.epoch))
+                    let encoded = try JSONEncoder().encode(
+                        SavedInbox(schema: 1, memory: memory, epoch: saved.epoch, threadEpoch: saved.threadEpoch)
+                    )
                     guard encoded.count <= Self.historyLimit else { return }
                     let sealed = try AES.GCM.seal(encoded, using: key, authenticating: Data("\(scope)|inbox".utf8))
                     guard let combined = sealed.combined else { return }
