@@ -1,7 +1,11 @@
+const crypto = require('crypto');
 const express = require('express');
 const router = express.Router();
 const supabaseAdmin = require('../config/supabaseAdmin');
 const geo = require('../services/geo');
+const signedOutBudget = require('../services/geo/signedOutBudget');
+const optionalAuth = require('../middleware/optionalAuth');
+const { placeLookupKey, placeLookupLimiter, shareCardRenderLimiter } = require('../middleware/rateLimiter');
 const { bucketForCount } = require('../services/place/densityReader');
 const {
   geocodeToTractCached,
@@ -160,8 +164,13 @@ router.get('/listings/:id', async (req, res) => {
 // the stateless fetchers directly (not getProfile) so the preview neither
 // writes the shared profile cache nor triggers the Walk Score dependency.
 //
-// Statuses: ready | partial | unsupported_region | rate_limited
-//   • rate_limited is surfaced by previewLimiter as HTTP 429.
+// Statuses: ready | partial | unsupported_region | could_not_place, and
+// HTTP 429 when a limit says no:
+//   • PLACE_LOOKUP_LIMIT — five lookups a day per account, else per network
+//     (placeLookupLimiter); a person's own repeat within ten minutes is free;
+//   • GEO_BUSY — the hourly Mapbox budget for everyone signed out is spent
+//     (services/geo/signedOutBudget.js);
+//   • the mount-level previewLimiter (60 a minute per IP) as before.
 // ============================================================
 
 // Density buckets are floored server-side from the raw verified-home count so
@@ -234,10 +243,14 @@ const geoKey = (address) => `geo:${address.toLowerCase().replace(/\s+/g, ' ')}`;
 //   'unplaceable'   → no result, or nonsense coordinates
 //   'lookup_failed' → the geocoder could not answer (down, no key, rate limit)
 //   'outside_us'    → we placed it, and it is genuinely not in the US
-async function geocodeUsAddress(address) {
+//   'busy'          → a signed-out lookup the hourly Mapbox budget refused
+//                     (only when `signedOut`; nothing was sent to Mapbox)
+async function geocodeUsAddress(address, { signedOut = false } = {}) {
   const key = geoKey(address);
   const cached = previewCache.get(key);
   if (cached) return cached;
+
+  if (signedOut && !signedOutBudget.take()) return { ok: false, reason: 'busy' };
 
   let result;
   try {
@@ -664,7 +677,35 @@ async function placePreviewWithBallot(place) {
   return ballotTeaser !== undefined ? { ...preview, ballot_teaser: ballotTeaser } : preview;
 }
 
-router.get('/place', async (req, res) => {
+// A person's own repeat of an address they looked up in the last ten minutes
+// doesn't spend their daily lookups: its geocode is still cached here, so it
+// costs nothing (going back and forth, the confirmation after sign-up). Kept
+// in memory for the geocode's own lifetime under a hash of the caller and the
+// address, never a record of who looked up what. Only the caller's OWN lookups
+// count, so the allowance can't tell anyone that someone else looked an
+// address up.
+const ownRecentLookups = new GeoCache(5000);
+const ownLookupKey = (req, address) => crypto.createHash('sha256')
+  .update(`${placeLookupKey(req)}\n${geoKey(address)}`)
+  .digest('hex');
+
+// Which allowance this lookup spends (middleware/rateLimiter.js). A share-card
+// render is marked by the web's own server (app/api/og/place), trusted only
+// with the edge secret (req.viaWebEdge); the web strips the marker from
+// visitors' requests.
+function classifyPlaceLookup(req, _res, next) {
+  const address = typeof req.query.address === 'string' ? req.query.address.trim() : '';
+  const shareCard = req.viaWebEdge === true && req.get('x-pantopus-share-card') === '1';
+  const ownRepeat = Boolean(address) && ownRecentLookups.get(ownLookupKey(req, address)) === true;
+  req.placeLookup = { shareCard, free: shareCard || ownRepeat };
+  next();
+}
+
+router.get('/place', optionalAuth, classifyPlaceLookup, placeLookupLimiter, shareCardRenderLimiter, async (req, res) => {
+  // A counted lookup that cost nothing goes back to the caller.
+  const refund = () => {
+    if (!req.placeLookup.free) placeLookupLimiter.refund(req);
+  };
   try {
     // Same reason as /unlisted: a 200 with an ETag and no Cache-Control is
     // storable, and the cache key is the full URL — which on this route
@@ -673,9 +714,11 @@ router.get('/place', async (req, res) => {
 
     const rawAddress = typeof req.query.address === 'string' ? req.query.address.trim() : '';
     if (!rawAddress) {
+      refund();
       return res.status(400).json({ error: 'An address query parameter is required.' });
     }
     if (rawAddress.length > 200) {
+      refund();
       return res.status(400).json({ error: 'That address is too long.' });
     }
 
@@ -688,13 +731,21 @@ router.get('/place', async (req, res) => {
     // anonymous surface in the product, was left collapsing them, so a
     // geocoder outage still tells every US visitor at once that the
     // product is not for them.
-    const place = await geocodeUsAddress(rawAddress);
+    const place = await geocodeUsAddress(rawAddress, { signedOut: !req.user });
     if (!place.ok) {
+      // Nothing went to Mapbox: the hourly budget for everyone signed out is spent.
+      if (place.reason === 'busy') {
+        refund();
+        return signedOutBudget.refuse(res, 'Address lookups are busy right now. Please try again in a few minutes.');
+      }
       // A lookup outage is not "we could not find that address": answer it as
       // a failed read so every client offers Try again instead of blaming the input.
       if (place.reason === 'lookup_failed') {
+        refund();
         return res.status(503).json({ error: 'We couldn\u2019t look up that address right now. Please try again.' });
       }
+      // "Could not place" and "outside the US" still count: Mapbox answered,
+      // and charged for it.
       const unplaceable = place.reason !== 'outside_us';
       return res.json({
         status: unplaceable ? 'could_not_place' : 'unsupported_region',
@@ -706,6 +757,7 @@ router.get('/place', async (req, res) => {
       });
     }
 
+    if (!req.placeLookup.shareCard) ownRecentLookups.set(ownLookupKey(req, rawAddress), true, GEO_TTL_MS);
     return res.json(await placePreviewWithBallot(place));
   } catch (err) {
     console.error('[public/place] Error:', err.message);
@@ -922,5 +974,10 @@ module.exports = router;
 module.exports.geocodeUsAddress = geocodeUsAddress;
 // A saved address's preview (routes/savedPlaces.js) is the same preview.
 module.exports.placePreviewWithBallot = placePreviewWithBallot;
-// Test-only hook: reset the in-memory preview caches between cases.
-module.exports.__clearPreviewCaches = () => previewCache.clear();
+// Test-only hook: reset the in-memory preview caches between cases, and the
+// daily lookup allowances, which are per process like them.
+module.exports.__clearPreviewCaches = () => {
+  previewCache.clear();
+  ownRecentLookups.clear();
+  placeLookupLimiter.resetAll();
+};

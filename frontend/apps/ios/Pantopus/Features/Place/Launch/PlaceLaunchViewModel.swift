@@ -74,8 +74,19 @@ final class PlaceLaunchViewModel {
         } catch {
             guard !Task.isCancelled, q == query.trimmingCharacters(in: .whitespaces) else { return }
             suggestions = []
-            errorMessage = "We couldn’t look up addresses right now. Try again or enter the full address."
+            // Out of suggestions for today (or everyone's are busy): a typed
+            // address still works through See your place.
+            errorMessage = Self.isLimit(error)
+                ? "Address suggestions aren’t available right now. Type the full address, then tap See your place."
+                : "We couldn’t look up addresses right now. Try again or enter the full address."
         }
+    }
+
+    /// A 429: the server's own sentence (today's lookups are used, or
+    /// lookups are busy) is what the screen should say.
+    private static func isLimit(_ error: Error) -> Bool {
+        guard case let .clientError(status, _) = error as? APIError else { return false }
+        return status == 429
     }
 
     // MARK: - Selection → preview
@@ -112,7 +123,9 @@ final class PlaceLaunchViewModel {
                 }
             } catch {
                 guard !Task.isCancelled else { return }
-                errorMessage = "We couldn’t load this address. Please try again."
+                errorMessage = Self.isLimit(error)
+                    ? error.localizedDescription
+                    : "We couldn’t load this address. Please try again."
             }
         }
     }

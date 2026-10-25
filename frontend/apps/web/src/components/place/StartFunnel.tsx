@@ -58,6 +58,7 @@ import { authPageHref } from '@/lib/auth-utils';
 import { launchFeatures } from '@/lib/featureFlags';
 import PrivacyPromise from './PrivacyPromise';
 import AddressAutocomplete, { type SelectedAddress } from './AddressAutocomplete';
+import { isDailyLookupLimit, lookupLimitMessage } from './lookupLimit';
 import BallotTeaser from '@/components/ballot/BallotTeaser';
 import { ballotTeaserData } from '@/components/ballot/BallotCard';
 
@@ -777,9 +778,15 @@ export default function StartFunnel() {
           <PreviewSkeleton />
         ) : previewQuery.isError ? (
           <div className="mt-10 text-center">
-            <p className="text-sm text-app-text-secondary">We couldn&apos;t look up that address. Try again.</p>
+            <p className="text-sm text-app-text-secondary">
+              {lookupLimitMessage(previewQuery.error) ?? "We couldn't look up that address. Try again."}
+            </p>
             <div className="mt-3 flex justify-center">
-              <TextButton arrow={false} onClick={() => previewQuery.refetch()}>Try again</TextButton>
+              {isDailyLookupLimit(previewQuery.error) ? (
+                <TextButton onClick={goWall}>Create a free account</TextButton>
+              ) : (
+                <TextButton arrow={false} onClick={() => previewQuery.refetch()}>Try again</TextButton>
+              )}
             </div>
           </div>
         ) : preview && preview.status === 'could_not_place' ? (

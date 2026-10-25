@@ -51,8 +51,10 @@ interface PlaceApi {
      * The anonymous, address-only T0 preview — no account required,
      * non-persistent (no DB writes). Returns the free Band-A subset
      * live (flood, density bucket, area teaser) with everything
-     * recurring or exact as a locked descriptor. Rate-limited
-     * server-side (`previewLimiter`). Route `backend/routes/public.js:377`.
+     * recurring or exact as a locked descriptor. Five lookups a day
+     * (`placeLookupLimiter`): per account when signed in (the auth
+     * interceptor sends the token), else per network; a 429 carries the
+     * sentence to show. Route `backend/routes/public.js:704`.
      */
     @GET("api/public/place")
     suspend fun publicPreview(

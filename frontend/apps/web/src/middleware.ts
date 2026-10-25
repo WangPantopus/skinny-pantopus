@@ -74,6 +74,9 @@ export function middleware(req: NextRequest) {
     if (!edgeSecret) return NextResponse.next();
     const headers = new Headers(req.headers);
     headers.set('x-pantopus-edge', edgeSecret);
+    // Only the share-card renderer (app/api/og/place) may mark a preview as a share card,
+    // which spends the cards' budget instead of the visitor's daily lookups.
+    headers.delete('x-pantopus-share-card');
     return NextResponse.next({ request: { headers } });
   }
 

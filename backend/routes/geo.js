@@ -10,14 +10,16 @@
 // public landing page — and on web the 401 triggers the client's
 // refresh-then-redirect, throwing anonymous visitors to /login. The
 // denial-of-wallet control is the meter, so anonymous callers keep access at a
-// tighter per-IP budget. /reverse has no signed-out caller and still requires
-// a session, and so do the place-tag routes (/places/nearby, /places/search):
-// only the signed-in composers call them.
+// tighter per-IP daily budget, and their Mapbox calls together share an hourly
+// one (services/geo/signedOutBudget.js). /reverse has no signed-out caller and
+// still requires a session, and so do the place-tag routes (/places/nearby,
+// /places/search): only the signed-in composers call them.
 const express = require('express');
 const crypto = require('crypto');
 const logger = require('../utils/logger');
 const { geoCache } = require('../utils/geoCache');
 const geoProvider = require('../services/geo');
+const signedOutBudget = require('../services/geo/signedOutBudget');
 const verifyToken = require('../middleware/verifyToken');
 const optionalAuth = require('../middleware/optionalAuth');
 const { geocodeLimiter } = require('../middleware/rateLimiter');
@@ -90,6 +92,17 @@ router.get('/autocomplete', optionalAuth, geocodeLimiter, async (req, res) => {
         cache_hit: true,
       });
       return res.json(cached);
+    }
+
+    if (!req.user && !signedOutBudget.take()) {
+      logResponse(startTime, {
+        endpoint: '/geo/autocomplete',
+        status: 429,
+        result_count: 0,
+        provider: 'none',
+        cache_hit: false,
+      });
+      return signedOutBudget.refuse(res, 'Address suggestions are busy right now. Please try again in a few minutes.');
     }
 
     const result = await geoProvider.autocomplete(q, { limit: 6, country: 'us' });
@@ -173,6 +186,20 @@ router.post('/resolve', optionalAuth, geocodeLimiter, async (req, res) => {
         cache_hit: true,
       });
       return res.json(cached);
+    }
+
+    // Counted whenever this route's cache misses, though the provider usually
+    // answers from its own copy of the suggestion: only signed-in screens call
+    // /resolve, so a signed-out caller here is a script.
+    if (!req.user && !signedOutBudget.take()) {
+      logResponse(startTime, {
+        endpoint: '/geo/resolve',
+        status: 429,
+        result_count: 0,
+        provider: 'none',
+        cache_hit: false,
+      });
+      return signedOutBudget.refuse(res, 'Address lookups are busy right now. Please try again in a few minutes.');
     }
 
     const normalized = await geoProvider.resolve(suggestionId);

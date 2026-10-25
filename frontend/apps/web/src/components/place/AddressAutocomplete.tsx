@@ -13,6 +13,7 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { MapPin, CornerDownLeft, Loader2 } from 'lucide-react';
 import * as api from '@pantopus/api';
 import type { GeoSuggestion } from '@pantopus/api';
+import { lookupLimitMessage } from './lookupLimit';
 
 export interface SelectedAddress {
   label: string;
@@ -50,6 +51,8 @@ export default function AddressAutocomplete({
   const [selected, setSelected] = useState(false);
   // A failed suggestions read must not look like "no matches" (the submit stays disabled without one).
   const [lookupFailed, setLookupFailed] = useState(false);
+  // Out of today's suggestions, or suggestions are busy: the server's sentence, no Try again.
+  const [limitMessage, setLimitMessage] = useState<string | null>(null);
 
   const listId = useId();
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -63,6 +66,7 @@ export default function AddressAutocomplete({
     abortRef.current = controller;
     setLoading(true);
     setLookupFailed(false);
+    setLimitMessage(null);
     api.geo
       .autocompleteWithAbort(q, controller.signal)
       .then((res) => {
@@ -70,9 +74,12 @@ export default function AddressAutocomplete({
         setOpen(true);
         setActiveIndex(-1);
       })
-      .catch(() => {
+      .catch((err) => {
         // Aborted: a newer search replaced this one. Failed: keep the field usable and say so.
-        if (!controller.signal.aborted) setLookupFailed(true);
+        if (controller.signal.aborted) return;
+        const limit = lookupLimitMessage(err);
+        if (limit) setLimitMessage(limit);
+        else setLookupFailed(true);
       })
       .finally(() => {
         if (abortRef.current === controller) setLoading(false);
@@ -100,6 +107,7 @@ export default function AddressAutocomplete({
       setOpen(false);
       setLoading(false);
       setLookupFailed(false);
+      setLimitMessage(null);
       if (abortRef.current) abortRef.current.abort();
       return;
     }
@@ -204,7 +212,9 @@ export default function AddressAutocomplete({
         </ul>
       ) : null}
 
-      {lookupFailed ? (
+      {limitMessage ? (
+        <p role="alert" className="mt-2 text-[13.5px] text-app-text-secondary">{limitMessage}</p>
+      ) : lookupFailed ? (
         <p role="alert" className="mt-2 flex flex-wrap items-center gap-x-2 text-[13.5px] text-app-text-secondary">
           We couldn&apos;t look up addresses right now.
           <button

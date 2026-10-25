@@ -18,6 +18,7 @@ import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import AddressAutocomplete, { type SelectedAddress } from '@/components/place/AddressAutocomplete';
+import { lookupLimitMessage } from '@/components/place/lookupLimit';
 import { PantopusMark } from '@/components/brand/PantopusMark';
 import LivingSky from './LivingSky';
 import AppDownload from './AppDownload';
@@ -160,8 +161,12 @@ export default function HomeHero() {
             <p className={styles.heroStatus} role="status">Reading public records, the sky and civic boundaries for this address…</p>
           ) : preview.isError ? (
             <p className={styles.heroNote} role="alert">
-              We couldn’t load this address just now.{' '}
-              <button type="button" className={styles.textBtn} onClick={() => preview.refetch()}>Try again</button>
+              {lookupLimitMessage(preview.error) ?? (
+                <>
+                  We couldn’t load this address just now.{' '}
+                  <button type="button" className={styles.textBtn} onClick={() => preview.refetch()}>Try again</button>
+                </>
+              )}
             </p>
           ) : data?.status === 'could_not_place' ? (
             <p className={styles.heroNote} role="alert">We couldn’t find that address. Adding the city and state usually does it.</p>
