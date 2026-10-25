@@ -76,18 +76,21 @@ struct PlansEmptyCard: View {
     /// game on the checked list; without one, the plain invitation.
     private var watchNudge: some View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
-            if viewModel.sports?.canChoose == true {
-                if viewModel.sports?.state == "unset", !sportsAskDismissed {
-                    sportsAsk
-                } else if viewModel.sports?.state == "on", viewModel.games.contains(where: { $0.isAvailable(at: context.date) }) {
+            VStack(alignment: .leading, spacing: Spacing.s2) {
+                if viewModel.sports?.canChoose == true {
+                    if viewModel.sports?.state == "unset", !sportsAskDismissed {
+                        sportsAsk
+                    } else if viewModel.sports?.state == "on", viewModel.games.contains(where: { $0.isAvailable(at: context.date) }) {
+                        watchNudge(at: context.date)
+                    }
+                    if let attribution = viewModel.sports?.attribution,
+                       viewModel.games.contains(where: { $0.isAvailable(at: context.date) }) {
+                        Text(attribution).planFont(.caption).foregroundStyle(Theme.Color.appTextSecondary)
+                    }
+                    if let error = teams.error { Text(error).planFont(.small).foregroundStyle(Theme.Color.warning) }
+                } else {
                     watchNudge(at: context.date)
                 }
-                if let attribution = viewModel.sports?.attribution, !viewModel.games.isEmpty {
-                    Text(attribution).planFont(.caption).foregroundStyle(Theme.Color.appTextSecondary)
-                }
-                if let error = teams.error { Text(error).planFont(.small).foregroundStyle(Theme.Color.warning) }
-            } else {
-                watchNudge(at: context.date)
             }
         }
     }
