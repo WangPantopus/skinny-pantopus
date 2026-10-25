@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Copy, MoreHorizontal, Reply, Pencil, Trash2 } from 'lucide-react';
 import type { ChatMessage } from '@pantopus/types';
 import { chatPersonAvatar, chatPersonHandle, chatPersonName, extractAttachments, resolveMessageType } from '../../hooks/useChatMessages';
@@ -70,6 +70,32 @@ function ChatImage({ url, accountId, roomId, messageId, alt }: { url: string; ac
   if (!media.url) return <span role="status" className="block p-3 text-xs">{media.loading ? 'Loading photo…' : 'Photo unavailable. Open to retry.'}</span>;
   return <img src={media.url} onError={media.rejectMedia} alt={alt} className="rounded-lg transition-opacity hover:opacity-90"
     loading="lazy" decoding="async" style={{ width: 'auto', height: 'auto', maxWidth: '100%', maxHeight: 'min(180px, 48vw)', objectFit: 'contain' }} />;
+}
+
+/** Videos play from the server and are never saved on this device. One that
+ * can't load (offline, or its file is gone) says so over the player, at the
+ * player's size, instead of looking playable; reconnecting loads it again. */
+function ChatVideo({ url, label }: { url: string; label: string }) {
+  const video = useRef<HTMLVideoElement>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    if (!failed) return;
+    const retry = () => { setFailed(false); video.current?.load(); };
+    window.addEventListener('online', retry);
+    return () => window.removeEventListener('online', retry);
+  }, [failed]);
+  return (
+    <div className="relative" style={{ width: 'min(100%, 280px)' }}>
+      <video ref={video} src={url} controls playsInline preload="metadata" aria-label={label} onError={() => setFailed(true)}
+        className="block w-full rounded-lg bg-black" style={{ maxHeight: 'min(220px, 56vw)' }} />
+      {failed && (
+        <span role="status" className="absolute inset-0 flex flex-col items-center justify-center gap-1 rounded-lg bg-black/70 p-3 text-center text-xs text-white">
+          {navigator.onLine ? 'Video unavailable.' : 'Video unavailable offline.'}
+          <button type="button" className="underline" onClick={() => { setFailed(false); video.current?.load(); }}>Retry</button>
+        </span>
+      )}
+    </div>
+  );
 }
 
 function ChatMessageBubble({ msg, currentUserId, isMine, showSender = false, reply, onImageClick, onReact, onRetry, onRemovePending, onReply, onEdit, onDelete }: ChatMessageBubbleProps) {
@@ -351,18 +377,7 @@ function ChatMessageBubble({ msg, currentUserId, isMine, showSender = false, rep
                     );
                   }
                   if (mime.startsWith('video/') && url) {
-                    return (
-                      <video
-                        key={`${msg.id}-att-${i}`}
-                        src={url}
-                        controls
-                        playsInline
-                        preload="metadata"
-                        aria-label={a.original_filename ? `Video: ${a.original_filename}` : 'Video'}
-                        className="block rounded-lg bg-black"
-                        style={{ width: 'min(100%, 280px)', maxHeight: 'min(220px, 56vw)' }}
-                      />
-                    );
+                    return <ChatVideo key={`${msg.id}-att-${i}`} url={url} label={a.original_filename ? `Video: ${a.original_filename}` : 'Video'} />;
                   }
                   return (
                     <a
