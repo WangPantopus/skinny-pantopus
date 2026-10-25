@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { useVirtualizer } from '@tanstack/react-virtual';
+import { defaultRangeExtractor, useVirtualizer } from '@tanstack/react-virtual';
+import type { Virtualizer } from '@tanstack/react-virtual';
 import { chatPersonName, getDateKey, formatDateLabel } from '../../hooks/useChatMessages';
 import type { ChatReplyTarget } from '../../hooks/useChatMessages';
 import { chatReplyRoomHref } from './chatOutbox';
@@ -102,7 +103,7 @@ export default function ChatMessageList({
     [onReply, isOwnMessage],
   );
 
-  const virtualizer = useVirtualizer({
+  const virtualizer: Virtualizer<HTMLElement, Element> = useVirtualizer({
     count: messages.length,
     getScrollElement: () => scrollRef.current,
     getItemKey: (index) => String(messages[index].id),
@@ -115,6 +116,21 @@ export default function ChatMessageList({
     // A conversation opens at its newest message: lay out the last rows first
     // instead of mounting the oldest page and then replacing it after the scroll.
     initialOffset: () => (anchorMessageId ? 0 : Number.MAX_SAFE_INTEGER),
+    // Lay out the rows for where the list is now. The virtualizer reads the
+    // offset from the scroll event after it scrolls to hold the view around a
+    // resized row, and lays out rows for the old offset until then: a photo
+    // swapping "Loading photo…" for its image dropped the rows just shown,
+    // they mounted again still loading, and offline, where saved photos load
+    // at once, the list never settled. Following the newest message, the list
+    // keeps its end in view.
+    rangeExtractor: (range) => {
+      const el = scrollRef.current;
+      if (!el) return defaultRangeExtractor(range);
+      const top = followingRef.current ? virtualizer.getTotalSize() + scrollMargin - el.clientHeight : el.scrollTop;
+      return defaultRangeExtractor({ ...range,
+        startIndex: virtualizer.getVirtualItemForOffset(top)?.index ?? range.startIndex,
+        endIndex: virtualizer.getVirtualItemForOffset(top + el.clientHeight)?.index ?? range.endIndex });
+    },
   });
   const virtualRows = virtualizer.getVirtualItems();
   const renderedIds = virtualRows.map((row) => row.key).join(',');
