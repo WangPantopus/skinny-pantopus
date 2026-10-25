@@ -145,7 +145,7 @@ export default function ChatListPage() {
   });
 
   const newChatConnections = useMemo<NewChatPerson[]>(() => {
-    const q = newChatQuery.trim().toLowerCase();
+    const q = newChatQuery.trim().replace(/^@+/, '').toLowerCase();
     return (connectionsQuery.data || [])
       .map((rel) => rel.other_user)
       .filter((user): user is RelationshipUser => Boolean(user?.id))
@@ -211,8 +211,6 @@ export default function ChatListPage() {
     setNewChatResults([]);
     setNewChatError(null);
     if (q.length < 2) {
-      setNewChatResults([]);
-      setNewChatError(null);
       setNewChatSearching(false);
       return;
     }

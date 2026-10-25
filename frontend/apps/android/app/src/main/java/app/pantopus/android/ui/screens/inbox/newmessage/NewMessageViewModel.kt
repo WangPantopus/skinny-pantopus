@@ -175,8 +175,9 @@ class NewMessageViewModel
                         false
                     }
                 }
-            val nothingToShow = accepted.isEmpty() && recents.isEmpty()
-            if (!connectionsOk && !recentsOk && nothingToShow && normalizedSearch().isEmpty()) {
+            // An active search still has People results to show.
+            val nothingToShow = accepted.isEmpty() && recents.isEmpty() && normalizedSearch().isEmpty()
+            if (!connectionsOk && !recentsOk && nothingToShow) {
                 _state.value = NewMessageUiState.Error("Couldn't load contacts. Try again.")
                 return
             }

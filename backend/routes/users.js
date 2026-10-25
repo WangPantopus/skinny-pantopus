@@ -3411,7 +3411,10 @@ router.get('/search', verifyToken, async (req, res) => {
       if (unpublishedBusinesses.has(String(profile.user_id))) continue;
       if (normalizedType === 'people' && accountType === 'business') continue;
       if (normalizedType === 'business' && accountType !== 'business') continue;
-      if (!(await canDiscoverLocalProfileForUserSearch(profile, userId, account, accessById.get(profile.user_id)))) continue;
+      // The batched read covers every candidate's blocks and settings; one it didn't cover is left out.
+      const access = accessById.get(profile.user_id);
+      if (!access) continue;
+      if (!(await canDiscoverLocalProfileForUserSearch(profile, userId, account, access))) continue;
       visibleCandidates.push({ profile, account, nameSearchText: candidate.nameSearchText || '' });
     }
 
