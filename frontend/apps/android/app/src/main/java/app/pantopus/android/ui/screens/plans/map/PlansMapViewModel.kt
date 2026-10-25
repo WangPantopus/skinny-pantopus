@@ -9,6 +9,7 @@ import app.pantopus.android.data.api.models.plans.PlanDto
 import app.pantopus.android.data.api.models.plans.PlanGameDto
 import app.pantopus.android.data.api.models.plans.PlanPinDto
 import app.pantopus.android.data.api.models.plans.PlansElsewhereDto
+import app.pantopus.android.data.api.models.plans.PlansSportsDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.plans.PlanFormat
@@ -71,6 +72,7 @@ data class PlansMapUiState(
     val selected: PlanDto? = null,
     val selectedMissing: Boolean = false,
     val games: List<PlanGameDto> = emptyList(),
+    val sports: PlansSportsDto? = null,
     val refreshing: Boolean = false,
     /** A plan the person just posted (board H8): its pin drops in and the sheet says it's on the map. */
     val postedId: String? = null,
@@ -231,12 +233,12 @@ class PlansMapViewModel
             refreshAll(force = false)
         }
 
-        private fun loadGames() {
+        fun loadGames() {
             gamesJob?.cancel()
             gamesJob =
                 viewModelScope.launch {
-                    val games = (repository.games() as? NetworkResult.Success)?.data.orEmpty()
-                    _state.update { it.copy(games = games) }
+                    val reply = (repository.games() as? NetworkResult.Success)?.data
+                    _state.update { it.copy(games = reply?.games.orEmpty(), sports = if (reply == null) it.sports else reply.sports) }
                 }
         }
 

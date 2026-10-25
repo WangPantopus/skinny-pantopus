@@ -1,5 +1,6 @@
 package app.pantopus.android.data.api.models.feed
 
+import app.pantopus.android.data.api.models.plans.SportsPreferencesDto
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
@@ -112,6 +113,7 @@ data class FeedPreferencesDto(
     @Json(name = "hide_alerts_place") val hideAlertsPlace: Boolean = false,
     @Json(name = "show_politics_connections") val showPoliticsConnections: Boolean = false,
     @Json(name = "show_politics_place") val showPoliticsPlace: Boolean = false,
+    val sports: SportsPreferencesDto? = null,
 )
 
 /** `GET` + `PUT /api/posts/feed-preferences` response envelope. */
@@ -130,4 +132,5 @@ data class FeedPreferencesUpdateRequest(
     val hideAlertsPlace: Boolean? = null,
     val showPoliticsConnections: Boolean? = null,
     val showPoliticsPlace: Boolean? = null,
+    val sports: SportsPreferencesDto? = null,
 )

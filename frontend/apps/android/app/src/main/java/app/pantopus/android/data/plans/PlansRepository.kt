@@ -10,7 +10,7 @@ import app.pantopus.android.data.api.models.plans.CreatePlanBody
 import app.pantopus.android.data.api.models.plans.MyPlansResponse
 import app.pantopus.android.data.api.models.plans.PlanDto
 import app.pantopus.android.data.api.models.plans.PlanFeedbackBody
-import app.pantopus.android.data.api.models.plans.PlanGameDto
+import app.pantopus.android.data.api.models.plans.PlanGamesResponse
 import app.pantopus.android.data.api.models.plans.PlanGpsInput
 import app.pantopus.android.data.api.models.plans.PlanNearbyPlacesResponse
 import app.pantopus.android.data.api.models.plans.PlanPinsResponse
@@ -18,6 +18,7 @@ import app.pantopus.android.data.api.models.plans.PlanPlaceSuggestBody
 import app.pantopus.android.data.api.models.plans.PlanPlaceSuggestionsResponse
 import app.pantopus.android.data.api.models.plans.PlanReportBody
 import app.pantopus.android.data.api.models.plans.PlanRequestsResponse
+import app.pantopus.android.data.api.models.plans.PlanTeamsResponse
 import app.pantopus.android.data.api.models.plans.PlansListResponse
 import app.pantopus.android.data.api.models.plans.PublicPlanDto
 import app.pantopus.android.data.api.models.plans.StillComingBody
@@ -304,7 +305,10 @@ class PlansRepository
             note: String?,
         ): NetworkResult<Unit> = write(id) { api.feedback(id, PlanFeedbackBody(answer, note?.takeIf(String::isNotBlank))) }
 
-        suspend fun games(): NetworkResult<List<PlanGameDto>> {
+        suspend fun teams(query: String = ""): NetworkResult<PlanTeamsResponse> =
+            safeApiCall { api.teams(query, origin?.latitude, origin?.longitude) }
+
+        suspend fun games(purpose: String = "sheet"): NetworkResult<PlanGamesResponse> {
             val from = origin
             val gps =
                 from?.gps?.takeIf {
@@ -319,10 +323,11 @@ class PlansRepository
                             gpsLatitude = gps?.let { from.latitude },
                             gpsLongitude = gps?.let { from.longitude },
                             gpsTimestamp = gps?.toString(),
+                            purpose = purpose,
                         )
                     }
             ) {
-                is NetworkResult.Success -> NetworkResult.Success(result.data.games.filter { it.isAvailable() })
+                is NetworkResult.Success -> NetworkResult.Success(result.data.copy(games = result.data.games.filter { it.isAvailable() }))
                 is NetworkResult.Failure -> result
             }
         }
