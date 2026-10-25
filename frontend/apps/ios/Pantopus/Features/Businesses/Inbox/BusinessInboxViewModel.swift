@@ -56,6 +56,7 @@ public final class BusinessInboxViewModel {
 
     public func load() async {
         subscribeToChanges()
+        await showSavedRooms()
         await fetch(section)
     }
 
@@ -88,6 +89,7 @@ public final class BusinessInboxViewModel {
         roomsGeneration += 1
         let generation = roomsGeneration
         let session = AuthManager.shared.requestSessionGeneration
+        let storeVersion = ChatLocalStore.shared.version
         let minimumCount = roomsResponse?.rooms.count ?? 0
         isRefreshingRooms = true
         defer { if generation == roomsGeneration { isRefreshingRooms = false } }
@@ -105,6 +107,7 @@ public final class BusinessInboxViewModel {
             }
             guard current(generation, session: session) else { return }
             applyRooms(response)
+            await saveRooms(response, version: storeVersion)
         } catch {
             guard current(generation, session: session) else { return }
             handleRoomsFailure(error, fallback: "Couldn't refresh messages. Try again.")
@@ -117,6 +120,7 @@ public final class BusinessInboxViewModel {
               current.hasMore == true, let cursor = current.nextCursor else { return }
         let generation = roomsGeneration
         let session = AuthManager.shared.requestSessionGeneration
+        let storeVersion = ChatLocalStore.shared.version
         let request = UUID()
         pageRequest = request
         isLoadingMore = true
@@ -131,7 +135,9 @@ public final class BusinessInboxViewModel {
                 BusinessInboxEndpoints.rooms(businessId: businessId, before: cursor)
             )
             guard self.current(generation, session: session) else { return }
-            try applyRooms(Self.appending(page, to: current, after: cursor))
+            let rooms = try Self.appending(page, to: current, after: cursor)
+            applyRooms(rooms)
+            await saveRooms(rooms, version: storeVersion)
         } catch {
             guard self.current(generation, session: session) else { return }
             handleRoomsFailure(error, fallback: "Couldn't load more messages. Try again.")
@@ -157,6 +163,9 @@ public final class BusinessInboxViewModel {
             totalUnread = 0
             refreshFailure = nil
             apply(.error(message: Self.message(for: error, fallback: "Couldn't load messages.")), for: .messages)
+            if let scope = savedScope {
+                Task { await ChatLocalStore.shared.removeBusinessInbox(scope: scope, businessId: businessId) }
+            }
         } else if roomsResponse != nil {
             refreshFailure = fallback
         } else {
@@ -332,5 +341,32 @@ public final class BusinessInboxViewModel {
         case ..<604_800: return "\(Int(elapsed / 86400))d ago"
         default: return "\(Int(elapsed / 604_800))w ago"
         }
+    }
+}
+
+// MARK: - Saved inbox
+
+extension BusinessInboxViewModel {
+    /// The last confirmed inbox (kept encrypted with the chat history) shows at
+    /// once; the fetch that follows re-reads the same depth and replaces it.
+    private func showSavedRooms() async {
+        guard section == .messages, messagesState == nil, let scope = savedScope else { return }
+        let session = AuthManager.shared.requestSessionGeneration
+        let saved = await ChatLocalStore.shared.businessInbox(
+            scope: scope, businessId: businessId, version: ChatLocalStore.shared.version
+        )
+        guard let saved, session == AuthManager.shared.requestSessionGeneration, messagesState == nil,
+              !Task.isCancelled else { return }
+        applyRooms(saved)
+    }
+
+    private func saveRooms(_ response: BusinessInboxRoomsResponse, version: Int) async {
+        guard let scope = savedScope else { return }
+        await ChatLocalStore.shared.saveBusinessInbox(response, scope: scope, businessId: businessId, version: version)
+    }
+
+    private var savedScope: String? {
+        guard client === APIClient.shared, case let .signedIn(user) = AuthManager.shared.state else { return nil }
+        return ChatLocalStore.scope(server: client.apiBaseURL.absoluteString, account: user.id)
     }
 }
