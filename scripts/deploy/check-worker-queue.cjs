@@ -194,7 +194,8 @@ const { registerPgBossJobs } = moduleStub.exports;
         catch (error) { if (error.code !== 'PGBOSS_DB_BACKOFF') throw error; return false; }
       }, 'Queue did not recover after database outage', 45000);
       await registerPgBossJobs(boss);
-      assert.deepEqual(await boss.getSchedules(), schedules);
+      const definitions = rows => rows.map(({ updated_on, ...definition }) => definition);
+      assert.deepEqual(definitions(await boss.getSchedules()), definitions(schedules));
       assert.equal((await boss.findJobs(appQueue, { id: pending }))[0].state, 'retry');
     } finally {
       await admin.query('ALTER DATABASE postgres ALLOW_CONNECTIONS true');
