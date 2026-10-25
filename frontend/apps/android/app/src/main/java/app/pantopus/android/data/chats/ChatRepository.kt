@@ -250,6 +250,15 @@ class ChatRepository
 
         fun historyAccessRetirer(): suspend (Set<String>) -> Unit = store.chatAccessRetirer()
 
+        /** A Read correction retires the person's and these rooms' saved windows and the inbox copy, not the account's. */
+        fun historyReceiptRetirer(): suspend (String?, Set<String>) -> Unit {
+            val retire = store.chatThreadRetirer()
+            return { otherUserId, roomIds ->
+                val person = otherUserId?.let { StoreKeys.conversationMessages(it, null, HISTORY_LIMIT).path }
+                retire(setOfNotNull(person) + roomIds.map { StoreKeys.roomMessages(it, HISTORY_LIMIT).path })
+            }
+        }
+
         private fun historyUpdater(key: StoreKey<ChatMessagesResponse>): (ChatMessagesResponse) -> Unit {
             val update = store.memoryUpdater(key)
             return { response -> update(boundedHistory(response)) }

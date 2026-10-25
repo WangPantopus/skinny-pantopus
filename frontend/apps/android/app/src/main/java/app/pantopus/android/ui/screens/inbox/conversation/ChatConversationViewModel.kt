@@ -309,6 +309,9 @@ class ChatConversationViewModel
         // A confirmed removal blocks delayed pages and socket backfill for this open conversation.
         private val retiredRoomIds = mutableSetOf<String>()
         private val ineligibleReceiptRooms = mutableSetOf<String>()
+
+        /** Read stamps a correction cleared, still drawn until their saved copies are retired on disk. */
+        private val retiringReadIds = mutableSetOf<String>()
         private var receiptRevision = 0L
         private val joinedRoomIds = mutableSetOf<String>()
         private val roomJoinJobs = mutableMapOf<String, Job>()
@@ -493,6 +496,7 @@ class ChatConversationViewModel
                 activeRoomIds = emptySet()
                 retiredRoomIds.clear()
                 ineligibleReceiptRooms.clear()
+                retiringReadIds.clear()
                 receiptRevision++
                 visibleReadThroughId = null
                 visibleReadThroughByRoom.clear()
@@ -3847,6 +3851,7 @@ class ChatConversationViewModel
         ) {
             val known = receipts.associateBy { it.messageId }
             val correctedRooms = mutableSetOf<String>()
+            val corrected = mutableListOf<String>()
             messages.replaceAll { message ->
                 val receipt = known[message.id]
                 if (receipt != null && message.userId == messageIdentityId && canMerge(message)) {
@@ -3859,13 +3864,16 @@ class ChatConversationViewModel
                             clearCanonicalNull -> null
                             else -> message.readAt
                         }
-                    if (message.readAt != null && readAt == null) correctedRooms.add(message.roomId)
+                    if (message.readAt != null && readAt == null) {
+                        correctedRooms.add(message.roomId)
+                        corrected.add(message.id)
+                    }
                     message.copy(readAt = readAt)
                 } else {
                     message
                 }
             }
-            if (correctedRooms.isNotEmpty()) retireReceiptCopies(correctedRooms)
+            if (correctedRooms.isNotEmpty()) retireReceiptCopies(correctedRooms, corrected)
         }
 
         /**
@@ -3885,27 +3893,41 @@ class ChatConversationViewModel
                 return roomId !in ineligibleReceiptRooms
             }
             ineligibleReceiptRooms.add(roomId)
-            val changed = messages.any { it.roomId == roomId && it.userId == messageIdentityId && it.readAt != null }
-            if (changed) {
+            val shown = messages.filter { it.roomId == roomId && it.userId == messageIdentityId && it.readAt != null }.map { it.id }
+            if (shown.isNotEmpty()) {
                 messages.replaceAll { if (it.roomId == roomId && it.userId == messageIdentityId) it.copy(readAt = null) else it }
-                retireReceiptCopies(setOf(roomId))
+                retireReceiptCopies(setOf(roomId), shown)
             }
             return false
         }
 
-        /** Fence older requests immediately, then retire every encrypted variant before a canonical recheck. */
-        private fun retireReceiptCopies(roomIds: Set<String>) {
+        /**
+         * Fence older requests immediately, then retire this thread's and the rooms' saved windows (every topic) and the
+         * inbox copy before a canonical recheck; other conversations keep theirs. The cleared stamps stay drawn until that
+         * is on disk, so being killed at any point can't bring one back.
+         */
+        private fun retireReceiptCopies(
+            roomIds: Set<String>,
+            readIds: List<String>,
+        ) {
             receiptRevision++
             historyGeneration++
             catchUpJob?.cancel()
             catchUpJob = null
             historyCopyContext = null
             updateHistoryCopy = null
+            retiringReadIds.addAll(readIds)
             val context = historyContext()
-            val retire = repo.historyAccessRetirer()
+            val retire = repo.historyReceiptRetirer()
+            val person = (mode as? ChatThreadMode.Person)?.otherUserId
+            val rooms = roomIds + listOfNotNull((mode as? ChatThreadMode.Room)?.id)
             rebuild()
             viewModelScope.launch {
-                retire(roomIds)
+                retire(person, rooms)
+                retiringReadIds.removeAll(readIds.toSet())
+                rebuild()
+                // Refill the retired inbox copy now, so the Messages list still lists conversations offline.
+                launch { repo.conversationsStored() }
                 if (context != historyContext()) return@launch
                 // The retired slot has no ETag/data; this authorized store read can seed a new encrypted copy.
                 fetch(initial = false, quiet = true)
@@ -4074,7 +4096,7 @@ class ChatConversationViewModel
                         }
                     } else if (message.id.startsWith("client_")) {
                         ChatDeliveryState.Sending
-                    } else if (message.readAt != null) {
+                    } else if (message.readAt != null || message.id in retiringReadIds) {
                         ChatDeliveryState.Read
                     } else {
                         ChatDeliveryState.Sent
