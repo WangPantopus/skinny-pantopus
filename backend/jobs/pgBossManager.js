@@ -15,7 +15,10 @@ async function initPgBoss() {
   boss = new PgBoss({
     connectionString,
     schema: 'pgboss',               // Separate schema, won't interfere with app tables
-    monitorIntervalSeconds: 30,
+    // Queue bookkeeping must fit alongside the API on the smallest database.
+    max: 2,
+    monitorIntervalSeconds: 60,
+    maintenanceIntervalSeconds: 60 * 60,
   });
 
   boss.on('error', (error) => {
@@ -27,6 +30,10 @@ async function initPgBoss() {
   });
 
   await boss.start();
+  // pg-boss creates this queue during start(). These are scheduler handoffs,
+  // not application jobs; retain a short diagnostic window after completion.
+  // updateQueue is required because createQueue leaves existing queues alone.
+  await boss.updateQueue('__pgboss__send-it', { deleteAfterSeconds: 60 * 60 });
   logger.info('[pg-boss] Started successfully');
 
   return boss;

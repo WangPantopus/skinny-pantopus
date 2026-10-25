@@ -37,7 +37,7 @@ test('pg-boss ownership suppresses both duplicate fallback schedulers without su
 });
 test('pg-boss registers independent singleton queues and preserves retryable delivery failure', async () => {
  const { api, jobs }=load('pgBossJobs.js');const workers=new Map();
- const boss={createQueue:jest.fn(),schedule:jest.fn(),work:jest.fn(async(name,options,fn)=>workers.set(name,fn))};
+ const boss={createQueue:jest.fn(),updateQueue:jest.fn(),schedule:jest.fn(),work:jest.fn(async(name,options,fn)=>workers.set(name,fn))};
  await api.registerPgBossJobs(boss);
  expect(boss.schedule).toHaveBeenCalledWith('reconcile-gig-authorization-expiry','*/15 * * * *',null,expect.objectContaining({singletonKey:'reconcile-gig-authorization-expiry'}));
  expect(boss.schedule).toHaveBeenCalledWith('deliver-gig-authorization-expiry','* * * * *',null,expect.objectContaining({singletonKey:'deliver-gig-authorization-expiry'}));
