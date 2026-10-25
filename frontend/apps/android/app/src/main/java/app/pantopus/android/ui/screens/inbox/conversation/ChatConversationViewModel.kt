@@ -3902,9 +3902,9 @@ class ChatConversationViewModel
         }
 
         /**
-         * Fence older requests immediately, then retire this thread's and the rooms' saved windows (every topic) and the
-         * inbox copy before a canonical recheck; other conversations keep theirs. The cleared stamps stay drawn until that
-         * is on disk, so being killed at any point can't bring one back.
+         * Fence older requests immediately, then retire this thread's and the rooms' saved windows (every topic) before a
+         * canonical recheck; the inbox and other conversations keep theirs. The cleared stamps stay drawn until that is on
+         * disk, so being killed at any point can't bring one back.
          */
         private fun retireReceiptCopies(
             roomIds: Set<String>,
@@ -3926,8 +3926,6 @@ class ChatConversationViewModel
                 retire(person, rooms)
                 retiringReadIds.removeAll(readIds.toSet())
                 rebuild()
-                // Refill the retired inbox copy now, so the Messages list still lists conversations offline.
-                launch { repo.conversationsStored() }
                 if (context != historyContext()) return@launch
                 // The retired slot has no ETag/data; this authorized store read can seed a new encrypted copy.
                 fetch(initial = false, quiet = true)

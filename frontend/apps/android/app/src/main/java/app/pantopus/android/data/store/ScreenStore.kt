@@ -626,9 +626,9 @@ class ScreenStore
 
         /**
          * Capture before a Read correction. Only the saved windows of [paths] (every query: a person's All window and each
-         * topic, a room for each identity) and the inbox retire, durably before this returns; other conversations and
-         * received files stay readable offline. If that can't be recorded, the account's chat copies retire as for ended
-         * access.
+         * topic, a room for each identity) retire, durably before this returns; the inbox (it holds no Read stamps), other
+         * conversations and received files stay readable offline. If that can't be recorded, the account's chat copies
+         * retire as for ended access.
          */
         fun chatThreadRetirer(): suspend (Set<String>) -> Unit {
             val account = accountId() ?: return {}
@@ -639,7 +639,7 @@ class ScreenStore
                     withContext(Dispatchers.IO + NonCancellable) {
                         synchronized(slots) retire@{
                             if (gen != generation || session != identity()) return@retire
-                            retireThreadsLocked(account, paths + StoreKeys.conversations.path)
+                            retireThreadsLocked(account, paths)
                         }
                     }
                     _changes.update { it + 1 }
