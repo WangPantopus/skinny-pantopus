@@ -12,6 +12,8 @@
 import AVFoundation
 import SwiftUI
 
+// swiftlint:disable file_length
+
 // MARK: - Still image
 
 /// AsyncImage with the standard Pulse loading / failure placeholders.
@@ -103,6 +105,9 @@ struct LivePhotoTileView: View {
     var onTap: (() -> Void)?
 
     @State private var player: AVPlayer?
+    /// A chat clip's protected local copy, kept while this tile holds its player.
+    @State private var clipFile: URL?
+    @State private var clipLoad: Task<Void, Never>?
     @State private var isShowingVideo = false
     /// True while a tap-triggered play-once run is in flight.
     @State private var isPlayingOnce = false
@@ -141,10 +146,9 @@ struct LivePhotoTileView: View {
         .onChange(of: isActive) { _, active in
             if !active { stopPlayback() }
         }
-        .onDisappear {
-            stopPlayback()
-            player?.replaceCurrentItem(with: nil)
-            player = nil
+        .onDisappear(perform: releasePlayer)
+        .onReceive(NotificationCenter.default.publisher(for: ChatLocalStore.historyRetired)) { _ in
+            if ChatMediaURL.isChatFile(videoURL) { releasePlayer() }
         }
         .onReceive(
             NotificationCenter.default.publisher(
@@ -220,12 +224,41 @@ struct LivePhotoTileView: View {
     private func startPlayback() {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         if player == nil {
-            player = AVPlayer(url: videoURL)
+            if ChatMediaURL.isChatFile(videoURL) { loadChatClip() } else { player = AVPlayer(url: videoURL) }
         }
         player?.seek(to: .zero)
         player?.isMuted = false
         player?.play()
         isShowingVideo = true
+    }
+
+    /// A chat clip takes the account-fenced download and encrypted media cache that
+    /// chat photos and videos take, so it plays offline once seen and goes with the
+    /// account. The player reads a protected local copy, removed with the tile.
+    private func loadChatClip() {
+        guard clipLoad == nil else { return }
+        clipLoad = Task {
+            let file = try? await ChatMediaURL.download(raw: videoURL.absoluteString, filename: "live.mp4", mimeType: "video/mp4")
+            guard !Task.isCancelled else {
+                if let file { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
+                return
+            }
+            clipLoad = nil
+            guard let file else { return }
+            clipFile = file
+            player = AVPlayer(url: file)
+            if isShowingVideo { player?.play() }
+        }
+    }
+
+    private func releasePlayer() {
+        stopPlayback()
+        player?.replaceCurrentItem(with: nil)
+        player = nil
+        clipLoad?.cancel()
+        clipLoad = nil
+        if let clipFile { try? FileManager.default.removeItem(at: clipFile.deletingLastPathComponent()) }
+        clipFile = nil
     }
 
     private func playOnce() {
