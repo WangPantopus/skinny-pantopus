@@ -11,14 +11,12 @@
 import Foundation
 import Observation
 
-/// How people get in (decision D7).
 enum PlanApproval: Hashable {
     case approveEach
     case verifiedAuto
     case anyoneNearby
 }
 
-/// The host's home as a place for the plan.
 struct PlanHomeChoice: Hashable {
     let id: String
     let street: String?
@@ -42,14 +40,11 @@ final class PlanComposerModel {
     var about = ""
     var start = Date()
     var end = Date()
-    /// Pickup games: "Now" or "Later".
     var startsNow = true
     var whereKind: Where = .publicPlace
     var place: PlanPlaceOptionDTO?
-    /// The place came from H6's "You're here now": H4 says so under its name.
     var placeIsHereNow = false
     private(set) var home: PlanHomeChoice?
-    /// Every home of the host's with a point: "You're here now" never picks a place right at one.
     private(set) var homePoints: [(latitude: Double, longitude: Double)] = []
     var spots = 8
     var approval: PlanApproval = .approveEach
@@ -57,6 +52,7 @@ final class PlanComposerModel {
     var guestNote = ""
     var game: PlanGameOptionDTO?
     private(set) var games: [PlanGameOptionDTO] = []
+    private(set) var sports: PlansSportsDTO?
     var kidsAges: Set<PlanKidsAgeBand> = []
     var sport = "pickleball"
     var level = "any"
@@ -64,24 +60,17 @@ final class PlanComposerModel {
     var walkKind = "walk"
     var pace = "easy"
     var dogsWelcome = false
-    /// Study groups: what they study, and how (`quiet` or `together`).
     var subject = ""
     var studyStyle = "quiet"
 
     private(set) var isPosting = false
     var postError: String?
     private(set) var posted: PlanDetailDTO?
-    /// "Near Prune Hill"-style words for the preview, from the place's locality.
     private(set) var previewArea: String?
     private(set) var hostName = "You"
-    /// A5 "Host again": the plan this one repeats.
     var hostedAgainFrom: String?
-    /// Playdates need a verified address; without one H1's playdate card leads there.
     private(set) var verifiedAddress: Bool
-    /// The title the app filled in (a game's, or the type's starting title),
-    /// cleared when the type changes; a title the host typed stays.
     @ObservationIgnored private var autoTitle: String?
-    /// A type was chosen (H1) or given: only then may a watch party pick the first game.
     @ObservationIgnored private var kindChosen: Bool
 
     private let api: APIClient
@@ -99,8 +88,6 @@ final class PlanComposerModel {
         if let game = start?.game { pick(game) }
         if let again = start?.again { repeatPlan(again) }
     }
-
-    // MARK: - Loading
 
     func load() async {
         if case let .signedIn(user) = AuthManager.shared.state {
@@ -132,12 +119,22 @@ final class PlanComposerModel {
         )
     }
 
-    private func loadGames() async {
+    func loadGames() async {
         let reply: PlanGamesResponse? = try? await api.request(
-            PlansEndpoints.games(from: PlansStoreReads.lastCenter, gps: PlansStoreReads.freshGPS)
+            PlansEndpoints.games(from: PlansStoreReads.lastCenter, gps: PlansStoreReads.freshGPS, purpose: "composer")
         )
         games = reply?.games.filter { $0.isAvailable(at: Date()) } ?? []
-        if kindChosen, kind == .watchParty, game == nil, title.isEmpty, let first = games.first { pick(first) }
+        if let reply { sports = reply.sports }
+        if let selected = game, !games.contains(where: { $0.id == selected.id }) {
+            game = nil
+            dropAutoTitle()
+        }
+        if kindChosen, kind == .watchParty, game == nil, title.isEmpty, let first = automaticGame { pick(first) }
+    }
+
+    private var automaticGame: PlanGameOptionDTO? {
+        if sports?.canChoose == true { return games.first { $0.followed == true } }
+        return games.first
     }
 
     func choose(_ newKind: PlanKind) {
@@ -146,7 +143,7 @@ final class PlanComposerModel {
         if newKind == .watchParty {
             guard game == nil else { return }
             dropAutoTitle()
-            if title.isEmpty, let first = games.first { pick(first) }
+            if title.isEmpty, let first = automaticGame { pick(first) }
         } else {
             game = nil
             dropAutoTitle()
@@ -154,13 +151,9 @@ final class PlanComposerModel {
         }
     }
 
-    // MARK: - Choices
-
-    /// Picking a game fills in the title and the time (H2).
     func pick(_ newGame: PlanGameOptionDTO?) {
         game = newGame
         guard let newGame else { return }
-        // Board H2: "Seahawks game on the big screen"; a title the host typed stays (as on Android).
         if title.isEmpty || title == autoTitle {
             title = "\(newGame.label) game on the big screen"
             autoTitle = title
@@ -169,8 +162,6 @@ final class PlanComposerModel {
             start = gameStart
             end = newGame.endsAtDate ?? gameStart.addingTimeInterval(3 * 3600 + 20 * 60)
         } else if let gameEnd = newGame.endsAtDate, gameEnd > Date() {
-            // A plan can't start in the past: a game already on starts at the next quarter hour at least
-            // 5 minutes away (time to choose the place), until the game ends (as on Android).
             let quarter: TimeInterval = 15 * 60
             let soon = (Date().addingTimeInterval(5 * 60).timeIntervalSinceReferenceDate / 60).rounded(.down) * 60
             start = Date(timeIntervalSinceReferenceDate: (soon / quarter).rounded(.up) * quarter)
@@ -178,7 +169,6 @@ final class PlanComposerModel {
         }
     }
 
-    /// Playdates and plans at home: the host approves each person (D6, D7).
     var approvalIsLocked: Bool {
         kind == .playdate || whereKind == .home
     }
@@ -189,7 +179,6 @@ final class PlanComposerModel {
         case .pickupGame: [.anyoneNearby, .approveEach]
         case .walkCoffee: whereKind == .home ? [.approveEach] : [.verifiedAuto, .approveEach]
         case .watchParty: whereKind == .home ? [.approveEach] : [.approveEach, .verifiedAuto]
-        // Study groups meet in public places; never "anyone nearby".
         case .studyGroup: [.approveEach, .verifiedAuto]
         }
     }
@@ -207,9 +196,6 @@ final class PlanComposerModel {
         }
     }
 
-    // MARK: - Checks
-
-    /// What's still missing, in a sentence; nil when the draft can be previewed.
     var problem: String? {
         if kind == .playdate, kidsAges.isEmpty { return "Pick the kids' ages." }
         if kind == .studyGroup, trimmedSubject.isEmpty { return "Add what you're studying." }
@@ -224,7 +210,6 @@ final class PlanComposerModel {
         return nil
     }
 
-    /// Pickup games have no title field: "Pickleball, need 2".
     var effectiveTitle: String {
         if kind == .pickupGame { return "\(PlanComposerOptions.sportLabel(sport)), need \(spots)" }
         return title
@@ -233,8 +218,6 @@ final class PlanComposerModel {
     var effectiveStart: Date {
         kind == .pickupGame && startsNow ? Date() : start
     }
-
-    // MARK: - Preview
 
     func loadPreviewArea() async {
         guard let point = placePoint else { return }
@@ -254,9 +237,6 @@ final class PlanComposerModel {
         }
     }
 
-    // MARK: - Posting
-
-    /// H7 "Post plan". True when it went through (`posted` holds the plan).
     func post() async -> Bool {
         guard problem == nil, let body = await makeBody() else {
             postError = problem ?? "Choose a place."
@@ -301,7 +281,6 @@ final class PlanComposerModel {
                 homeId: home.id
             )
         }
-        // A fresh fix, only when location is already allowed: it proves the host is nearby.
         var gps: PlanGPSBody?
         if location.canLocateWithoutAsking, let fix = await location.requestCurrent(timeoutSeconds: 4) {
             gps = PlanGPSBody(latitude: fix.latitude, longitude: fix.longitude, timestamp: Date())
@@ -339,8 +318,6 @@ final class PlanComposerModel {
         return rules
     }
 
-    // MARK: - Defaults
-
     private func applyDefaults() {
         let calendar = Calendar.current
         let nextHour = calendar.nextDate(after: Date(), matching: DateComponents(minute: 0), matchingPolicy: .nextTime) ?? Date()
@@ -362,7 +339,6 @@ final class PlanComposerModel {
             whereKind = .publicPlace
             startsNow = true
             start = nextHour
-            // About two hours from now, on a quarter hour ("Until 5:15 AM").
             let quarter: TimeInterval = 15 * 60
             end = Date(timeIntervalSinceReferenceDate: (Date().addingTimeInterval(2 * 3600).timeIntervalSinceReferenceDate / quarter)
                 .rounded(.up) * quarter)
@@ -399,14 +375,10 @@ extension PlanComposerModel {
         return details
     }
 
-    /// A study group's subject as it is sent (1 to 60 characters once trimmed).
     var trimmedSubject: String {
         subject.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// Two hours from now on the hour, unless that falls at night (or, for a
-    /// playdate, outside the daytime): then the next sensible time, a playdate
-    /// at 10 AM, a walk at 8 AM, a watch party at 7 PM (as on Android).
     static func sensibleStart(for kind: PlanKind, now: Date = Date(), calendar: Calendar = .current) -> Date {
         let later = now.addingTimeInterval(2 * 3600)
         let soon = calendar.dateInterval(of: .hour, for: later)?.start ?? later
@@ -421,7 +393,6 @@ extension PlanComposerModel {
         return calendar.date(bySettingHour: preferred, minute: 0, second: 0, of: day) ?? soon
     }
 
-    /// A5 "Host again": the same plan, same time next week.
     func repeatPlan(_ plan: PlanDetailDTO) {
         let card = plan.card
         hostedAgainFrom = card.id
@@ -470,21 +441,14 @@ extension PlanComposerModel {
     }
 }
 
-/// H11 presents the place picker over a draft.
 extension PlanComposerModel: Identifiable {}
 
-// MARK: - Starting titles
-
 private extension PlanComposerModel {
-    /// Drops a title the app filled in; one the host typed stays.
     func dropAutoTitle() {
         if let autoTitle, title == autoTitle { title = "" }
         autoTitle = nil
     }
 
-    /// The boards' starting titles, as on Android: "Playground morning" (H3),
-    /// "Coffee walk" (H5). A watch party starts from its game; a pickup game
-    /// has no title field; a study group starts empty.
     func startTitle() {
         guard title.isEmpty else { return }
         let starting: String? = switch kind {

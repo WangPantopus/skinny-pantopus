@@ -139,14 +139,23 @@ public enum PlansEndpoints {
 
     /// `GET /api/plans/games` — games in the next 14 days from the checked
     /// list kept in the backend. Route `backend/routes/plans.js`.
-    public static func games(from center: UserCoordinate? = nil, gps: PlansGPS? = nil) -> Endpoint {
-        var query: [String: String] = [:]
+    public static func games(from center: UserCoordinate? = nil, gps: PlansGPS? = nil, purpose: String = "sheet") -> Endpoint {
+        var query = ["v": "2", "for": purpose]
         if let center {
             query["latitude"] = String(center.latitude)
             query["longitude"] = String(center.longitude)
         }
         if let gps { query.merge(gps.query) { $1 } }
         return Endpoint(method: .get, path: "\(base)/games", query: query)
+    }
+
+    public static func teams(query text: String = "", from center: UserCoordinate? = nil) -> Endpoint {
+        var query = ["q": text]
+        if let center {
+            query["latitude"] = String(center.latitude)
+            query["longitude"] = String(center.longitude)
+        }
+        return Endpoint(method: .get, path: "\(base)/teams", query: query)
     }
 
     /// `GET /api/plans/places/nearby` — public places for H6, cached per
