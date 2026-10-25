@@ -48,10 +48,11 @@ private final class ChatScrollMetrics {
     /// Rows that joined below, oldest pass first: each pass's old last bubble
     /// and the height the pass added below it, measured from the bottom edge.
     var joinedBelow: [(rowId: String, height: CGFloat)] = []
-    /// The timeline is being dragged, flung or animated (iOS 18 and later
-    /// report it). A place restore made while a fling decelerates can be
-    /// swallowed, so rows above that stop rendering meanwhile leave their
-    /// space behind (`heightAbove`) until the scroll is idle.
+    /// The timeline is being dragged, flung or animated (the scroll phase on
+    /// iOS 18 and later, `ChatScrollMotion` before it). A place restore made
+    /// while a fling decelerates can be swallowed, so rows above that stop
+    /// rendering meanwhile leave their space behind (`heightAbove`) until the
+    /// scroll is idle.
     var isScrolling = false
 }
 
@@ -84,9 +85,84 @@ private struct ChatWindowCut {
     let joinedAbove: Bool
 }
 
+/// Below iOS 18, which has no scroll phase: the timeline scrolls while a
+/// finger is on it or a fling decelerates (its UIKit scroll view's own state)
+/// and while its content moves (an animated scroll), until a few frames are
+/// drawn with none of these. A place restore made under a resting finger is
+/// undone by its next move, so the finger counts even when still.
+@MainActor
+private final class ChatScrollMotion: NSObject {
+    /// The timeline's scroll view, once `ChatScrollViewProbe` has found it.
+    weak var scrollView: UIScrollView?
+    private var link: CADisplayLink?
+    private var stillFrames = 0
+    private var onIdle: (() -> Void)?
+
+    /// A finger is on the timeline, or a fling decelerates.
+    var isHeld: Bool {
+        guard let scrollView else { return false }
+        return scrollView.isTracking || scrollView.isDecelerating
+    }
+
+    /// The content moved, or a finger is on it. Returns whether the scroll
+    /// just started; `onIdle` runs once it is idle.
+    func moved(onIdle: @escaping () -> Void) -> Bool {
+        stillFrames = 0
+        self.onIdle = onIdle
+        guard link == nil else { return false }
+        let link = CADisplayLink(target: self, selector: #selector(tick(_:)))
+        link.add(to: .main, forMode: .common)
+        self.link = link
+        return true
+    }
+
+    func stop() {
+        link?.invalidate()
+        link = nil
+        onIdle = nil
+    }
+
+    @objc private func tick(_: CADisplayLink) {
+        stillFrames = isHeld ? 0 : stillFrames + 1
+        guard stillFrames > 3 else { return }
+        let onIdle = onIdle
+        stop()
+        onIdle?()
+    }
+}
+
+/// Below iOS 18: hands the timeline's UIKit scroll view to `ChatScrollMotion`.
+/// It sits in the scroll content, so the scroll view is its nearest ancestor
+/// of that kind.
+private struct ChatScrollViewProbe: UIViewRepresentable {
+    let motion: ChatScrollMotion
+
+    func makeUIView(context _: Context) -> ProbeView {
+        let view = ProbeView()
+        view.motion = motion
+        view.isUserInteractionEnabled = false
+        return view
+    }
+
+    func updateUIView(_: ProbeView, context _: Context) {}
+
+    final class ProbeView: UIView {
+        weak var motion: ChatScrollMotion?
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            var ancestor = superview
+            while let view = ancestor, !(view is UIScrollView) {
+                ancestor = view.superview
+            }
+            motion?.scrollView = ancestor as? UIScrollView
+        }
+    }
+}
+
 private extension View {
     /// Reports whether the scroll is anything but idle (dragged, flung,
-    /// animated). iOS 18 and later; on iOS 17 it never reports it.
+    /// animated). iOS 18 and later; below it `ChatScrollMotion` stands in.
     @ViewBuilder
     func onChatScrollActivity(_ action: @escaping (Bool) -> Void) -> some View {
         if #available(iOS 18.0, *) {
@@ -95,6 +171,19 @@ private extension View {
             }
         } else {
             self
+        }
+    }
+
+    /// Below iOS 18, lets `motion` read the timeline's scroll view (applied
+    /// to the scroll content).
+    @ViewBuilder
+    func chatScrollViewProbe(_ motion: ChatScrollMotion) -> some View {
+        if #available(iOS 18.0, *) {
+            self
+        } else {
+            background(alignment: .topLeading) {
+                ChatScrollViewProbe(motion: motion).frame(width: 0, height: 0)
+            }
         }
     }
 }
@@ -172,6 +261,8 @@ public struct ChatConversationView: View {
     @State private var openingWindowDecided = false
     /// Debug builds note missed frames while the thread is on screen.
     @State private var frameGapMonitor = ChatFrameGapMonitor()
+    /// Whether the timeline scrolls, below iOS 18.
+    @State private var scrollMotion = ChatScrollMotion()
     @Environment(\.openURL) private var openURL
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -371,6 +462,7 @@ public struct ChatConversationView: View {
         .onAppear { frameGapMonitor.start() }
         .onDisappear {
             frameGapMonitor.stop()
+            scrollMotion.stop()
             viewModel.teardown()
         }
         .onChange(of: scenePhase) { _, phase in
@@ -1257,6 +1349,7 @@ extension ChatConversationView {
                     }
                     .padding(.horizontal, 12)
                     .padding(.top, Spacing.s3)
+                    .chatScrollViewProbe(scrollMotion)
                     .background(
                         // Scroll tracking. `onAppear`/`onDisappear` row
                         // sentinels only work in lazy stacks, so the
@@ -1339,6 +1432,10 @@ extension ChatConversationView {
         proxy: ScrollViewProxy
     ) {
         let previous = (maxY: scrollMetrics.contentMaxY, height: scrollMetrics.contentHeight)
+        // No scroll phase below iOS 18: the content moving stands in for it.
+        if #unavailable(iOS 18.0), abs(frame.minY - (previous.maxY - previous.height)) > 0.01 {
+            noteScrolling(proxy)
+        }
         scrollMetrics.viewportHeight = viewportHeight
         scrollMetrics.distanceFromTop = -frame.minY - heightAbove
         scrollMetrics.contentMaxY = frame.maxY
@@ -1540,6 +1637,13 @@ extension ChatConversationView {
         if !scrolling { dropHeightAbove(proxy: proxy) }
     }
 
+    /// Below iOS 18: the timeline scrolls until `scrollMotion` finds it idle.
+    private func noteScrolling(_ proxy: ScrollViewProxy) {
+        if scrollMotion.moved(onIdle: { scrollActivityChanged(false, proxy: proxy) }) {
+            scrollActivityChanged(true, proxy: proxy)
+        }
+    }
+
     /// The space left by rows above goes, and the place restore keeps the rows
     /// on screen where they are: when the scroll is idle, or when the reader
     /// comes back up to it (rows above then join again as usual).
@@ -1567,7 +1671,13 @@ extension ChatConversationView {
     private func finishJoining(_ proxy: ScrollViewProxy) {
         isLoadingOlder = false
         guard scrollMetrics.pinsBottomAfterJoin else {
-            if !scrollMetrics.isScrolling { dropHeightAbove(proxy: proxy) }
+            if scrollMotion.isHeld {
+                // Below iOS 18 a finger on the timeline counts as scrolling,
+                // still or not: the space above goes once it lifts.
+                noteScrolling(proxy)
+            } else if !scrollMetrics.isScrolling {
+                dropHeightAbove(proxy: proxy)
+            }
             return
         }
         scrollMetrics.pinsBottomAfterJoin = false
@@ -1746,7 +1856,7 @@ extension ChatConversationView {
             metrics.joinedBelow.removeFirst(cut.pass + 1)
             metrics.joinedAbove = []
         }
-        let space = metrics.isScrolling ? cut.y - firstRowY : 0
+        let space = metrics.isScrolling || scrollMotion.isHeld ? cut.y - firstRowY : 0
         await trim(to: cut.rowId, ceiling: renderCeilingId, leavingSpace: space, rows: rows)
     }
 
