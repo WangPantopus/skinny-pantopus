@@ -96,7 +96,7 @@ test('HTTP current-row recovery returns 200 and no second write outside the tran
   const r = await request(app).post(`/homes/${home}/claim`).set('x-test-user-id', actor).send({});
   expect(r.status).toBe(200); expect(r.body.claim.claimed_role).toBe('tenant'); expect(r.body.postcard_requested).toBe(false);
 });
-test('a changed saved admission rechecks current reviewers and queues a generic notice after commit', async () => {
+test('a changed saved admission rechecks current reviewers and queues a reviewer notice after commit', async () => {
   const saved = result({ created: true });
   const rpc = jest.fn(async name => ({ error: null, data: name === 'submit_legacy_home_residency' ? saved
     : { ok: true, home_id: home, actor_id: actor, claim_id: claimId, reviewer_ids: [id(9)] } }));
@@ -105,10 +105,11 @@ test('a changed saved admission rechecks current reviewers and queues a generic 
   expect(rpc.mock.calls.map(call => call[0])).toEqual(['submit_legacy_home_residency', 'get_legacy_home_residency_reviewers']);
   expect(rpc.mock.calls[1][1]).toEqual({ p_home_id: home, p_actor_id: actor, p_claim_id: claimId,
     p_claim_updated_at: saved.claim.updated_at });
-  const [notice] = notifications.createBulkNotifications.mock.calls[0][0];
-  expect(notice.userId).toBe(id(9)); expect(notice.type).toBe('residency_claim');
-  expect(notice.body).not.toContain('Caller assertion');
-  expect(notice.metadata).toEqual({ home_id: home, claimant_id: actor, claim_id: claimId });
+  expect(notifications.notifyResidencyClaim).toHaveBeenCalledTimes(1);
+  const [notice] = notifications.notifyResidencyClaim.mock.calls[0];
+  expect(notice).toMatchObject({ authorityUserId: id(9), homeId: home, claimantId: actor, claimId, claimedRole: 'household',
+    idempotencyKey: `residency-claim:${claimId}:${saved.claim.updated_at}:${id(9)}` });
+  expect(JSON.stringify(notice)).not.toContain('Caller assertion');
 });
 test.each(['read failure', 'malformed recipients', 'authority revoked', 'notice failure'])(
   '%s cannot turn committed admission into a failed submission', async mode => {
@@ -117,12 +118,12 @@ test.each(['read failure', 'malformed recipients', 'authority revoked', 'notice 
       : mode === 'read failure' ? { data: null, error: { code: '55P03' } }
         : { data: { ok: true, home_id: home, actor_id: actor, claim_id: claimId,
           reviewer_ids: mode === 'malformed recipients' ? [[id(9)]] : mode === 'authority revoked' ? [] : [id(9)] }, error: null });
-    if (mode === 'notice failure') notifications.createBulkNotifications.mockRejectedValueOnce(new Error('Controlled notification failure'));
+    if (mode === 'notice failure') notifications.notifyResidencyClaim.mockRejectedValueOnce(new Error('Controlled notification failure'));
     await expect(service.submit(input({}))).resolves.toMatchObject({ claim: { id: claimId }, created: true });
-    if (mode !== 'notice failure') expect(notifications.createBulkNotifications).not.toHaveBeenCalled();
+    if (mode !== 'notice failure') expect(notifications.notifyResidencyClaim).not.toHaveBeenCalled();
   });
 test('unchanged legacy recovery does not duplicate a reviewer notice or query its recipients', async () => {
   const rpc = jest.fn(async () => ({ data: result(), error: null })); db.setRpcMock(rpc);
   await service.submit(input({}));
-  expect(rpc).toHaveBeenCalledTimes(1); expect(notifications.createBulkNotifications).not.toHaveBeenCalled();
+  expect(rpc).toHaveBeenCalledTimes(1); expect(notifications.notifyResidencyClaim).not.toHaveBeenCalled();
 });

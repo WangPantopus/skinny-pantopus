@@ -95,6 +95,11 @@ async function resolve({actorId,requestId,intent,cancel=false}) {
   const args={...identity(actorId,requestId),p_intent:intentValue(intent,true),p_cancel:cancel};
   const raw=await rpc('resolve_home_member_removal',args);
   const result=validateResult(raw,args);
+  // A first completed removal of someone else tells that person once; history, retries and cancels tell nobody.
+  if (!cancel && result.state==='completed' && result.replayed===false && result.target_user_id!==args.p_actor_id) {
+    await require('./homeAuthorityService').notifyRemovedMember({homeId:result.home_id,targetId:result.target_user_id,
+      occupancyId:result.occupancy_id,completedAt:result.completed_at});
+  }
   if (!cancel && result.state==='completed' && result.replayed===false && result.target_user_id===args.p_actor_id
     && Array.isArray(raw._notify_user_ids) && raw._notify_user_ids.every(uuid)) {
     // Notification transport is intentionally best effort. A saved command is
