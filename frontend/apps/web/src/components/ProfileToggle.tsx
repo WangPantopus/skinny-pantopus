@@ -12,6 +12,7 @@ import { IdentityIcons } from '@/lib/icons';
 import { Check, ChevronDown, Shield } from 'lucide-react';
 import type { MySeat } from '@pantopus/types';
 import { launchFeatures } from '@/lib/featureFlags';
+import { afterInboxRows, useShellReadsReleased } from '@/lib/shellReads';
 
 type HomeOption = {
   id: string;
@@ -68,9 +69,11 @@ export default function ProfileToggle({
   const router = useRouter();
   const pathname = usePathname();
   // Your homes: the entry Place reads too (lib/myHomes.ts), so the switcher shows them at once and
-  // follows changes (a rename, the `homes` signal) without its own reads.
+  // follows changes (a rename, the `homes` signal) without its own reads. A cold Messages inbox
+  // paints its rows first (lib/shellReads.ts).
   const queryClient = useQueryClient();
-  const homesQuery = useQuery(myHomesQuery());
+  const shellReadsReleased = useShellReadsReleased();
+  const homesQuery = useQuery({ ...myHomesQuery(), enabled: shellReadsReleased });
   const [homeOpenedAt, setHomeOpenedAt] = useState(() => Date.now());
   const { data: checkedHomes } = useAfterRecheck(homesQuery, showsMyHomesCopy);
   const homesReply = checkedHomes && (showsMyHomesCopy(checkedHomes) || homesQuery.dataUpdatedAt >= homeOpenedAt)
@@ -95,7 +98,7 @@ export default function ProfileToggle({
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [dropdownStyle, setDropdownStyle] = useState<{ top: number; left: number } | null>(null);
 
-  useEffect(() => {
+  useEffect(() => afterInboxRows(() => {
     (async () => {
       try {
         const [bizRes, proRes, seatsRes] = await Promise.allSettled([
@@ -154,7 +157,7 @@ export default function ProfileToggle({
         setLoading(false);
       }
     })();
-  }, []);
+  }), []);
 
   // A rename saved elsewhere in the app reads the Homes again; a failed read keeps the last list.
   useEffect(() => {

@@ -19,6 +19,7 @@ import { launchFeatures } from '@/lib/featureFlags';
 import { chosenUsername, usernameHandle } from '@pantopus/utils';
 import { fetchMe } from '@/lib/me';
 import { useConversationPages, conversationKey } from '@/lib/conversations';
+import { releaseShellReads } from '@/lib/shellReads';
 import { useOnlineStatus } from '@/components/map/OfflineIndicator';
 import { navigateChatPath, useChatOfflineShell } from '@/hooks/useChatOfflineShell';
 
@@ -131,6 +132,15 @@ export default function ChatListPage() {
   const error = offlineUnavailable ? 'No saved inbox is available on this browser. Reconnect to load Messages.' : conversationsQuery.error
     ? (conversationsQuery.error instanceof Error ? conversationsQuery.error.message : 'Failed to load conversations')
     : null;
+  // On a cold load the app shell's own reads wait until the frame showing the
+  // rows (or the empty or error state) has painted, or until this page closes.
+  useEffect(() => {
+    if (loading) return;
+    let timer: number | undefined;
+    const frame = requestAnimationFrame(() => { timer = window.setTimeout(releaseShellReads, 0); });
+    return () => { cancelAnimationFrame(frame); window.clearTimeout(timer); };
+  }, [loading]);
+  useEffect(() => releaseShellReads, []);
 
   // "Start new chat" lists your connections, as the iOS and Android pickers do. Search finds only
   // neighbor profiles, so a connection without one couldn't be reached from here.
