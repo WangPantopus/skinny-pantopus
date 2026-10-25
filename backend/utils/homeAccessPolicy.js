@@ -14,6 +14,10 @@ const LEGACY_ROLES = Object.freeze({
 // guest access (visitors; the airbnb_guest / cleaner_vendor presets) and
 // service providers. Residency attestations (letters, passes) exclude them.
 const NON_RESIDENT_ROLES = Object.freeze(new Set(['guest', 'service_provider']));
+// Verified household access that is not address proof: household consent (an invitation or a reviewer's approval,
+// F3b) and a claim (an instant claim at an address with no household, or an invitation from someone whose own
+// access is a claim). Address-proof gates (letters, Real Rent, neighbor messages, mail) refuse both.
+const UNPROVEN_SOURCES = Object.freeze(new Set(['household', 'claim']));
 const OLD_TO_NEW_PERM = Object.freeze({
   can_manage_home: ['home.edit'], can_manage_finance: ['finance.manage'],
   can_manage_access: ['access.manage', 'members.manage'],
@@ -84,4 +88,4 @@ function effectiveRole(role, age) {
 }
 
 module.exports = { ROLE_RANK, OLD_TO_NEW_PERM, HOME_PERMISSIONS, resolveHomeRole,
-  currentOccupancy, homeAccessExpiresAt, ageAllows, effectiveRole, NON_RESIDENT_ROLES };
+  currentOccupancy, homeAccessExpiresAt, ageAllows, effectiveRole, NON_RESIDENT_ROLES, UNPROVEN_SOURCES };

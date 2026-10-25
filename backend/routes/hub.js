@@ -22,6 +22,7 @@ const validate = require('../middleware/validate');
 const logger = require('../utils/logger');
 const { getHubToday, clearHubTodayCache } = require('../services/context/providerOrchestrator');
 const { excludeHiddenLaunchNotifications, isLaunchFeatureEnabled } = require('../utils/featureFlags');
+const { UNPROVEN_SOURCES } = require('../utils/homeAccessPolicy');
 const { stableEtag } = require('../utils/stableEtag');
 const { recordFunnelEvent, APP_POSTABLE_EVENT_TYPES } = require('../services/funnelEvents');
 const { validTimezone } = require('../utils/timezone');
@@ -75,7 +76,7 @@ router.get('/', verifyToken, async (req, res) => {
         ).catch(() => null),
         supabaseAdmin
           .from('HomeOccupancy')
-          .select('home_id, role, is_active, verification_status, home:home_id(id, name, address, city, state, zipcode, map_center_lat, map_center_lng)')
+          .select('home_id, role, is_active, verification_status, verification_source, home:home_id(id, name, address, city, state, zipcode, map_center_lat, map_center_lng)')
           .eq('user_id', userId)
           .eq('is_active', true),
         // Seat-based business memberships (with fallback to BusinessTeam format)
@@ -159,7 +160,8 @@ router.get('/', verifyToken, async (req, res) => {
         longitude: o.home.map_center_lng ?? null,
         isPrimary: false,
         roleBase: o.role || 'member',
-        verified: o.verification_status === 'verified',
+        // Address proof only: household consent and a claim are verified access, not a verified address.
+        verified: o.verification_status === 'verified' && !UNPROVEN_SOURCES.has(o.verification_source),
       }));
 
     // Include homes where user is a verified owner (in case occupancy is missing or out of sync after claim approval)

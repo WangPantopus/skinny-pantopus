@@ -131,3 +131,13 @@ Tests run with every feature on (`backend/jest.config.js`, `frontend/apps/web/te
 - Mail that arrives while `mailbox` is off is stored as before; nobody is told about it until the mailbox returns.
 - The Pulse redesign's tables and columns stay in the database (its migrations are additive). Resuming the build
   and switching it back on is in `docs/product/pulse-build/README.md`.
+
+## Database switches for new rules (not launch cuts)
+
+Some newer rules are switched in the database instead, so they can be turned off in about a minute without a
+deploy or an app build. Each is a `FeatureFlag` row; an admin flips it with
+`POST /api/admin/feature-flags/<name>` and a body such as `{"enabled_globally": true}`.
+
+| Flag | Default | What it turns on |
+|---|---|---|
+| `home_instant_claim` | off | Instant Claimed status (home claims plan, PR 3; founder decision 2026-10-25). Someone who adds a home where nobody else is on Pantopus, saying "I live here" or "I own it", gets it as a claimed home at once: household tools, the Home's own sections and invitations. Verifying the address is still what opens letters, neighbors' real rent, neighbor messages, mail and owner powers. The address watch holds high-risk claims for review (they stay a private setup), and a claim counts on the Neighborhood meter after 14 days. Turning it off stops new claims at once; homes already claimed keep their access. |

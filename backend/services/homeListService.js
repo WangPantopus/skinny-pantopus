@@ -10,7 +10,7 @@ const parsePoint = require('../utils/parsePostGISPoint');
 // List entries never include access instructions, provider payloads, account
 // identity, household rosters or another person's ownership records.
 const CARD_COLUMNS = 'id, name, address, address2, city, state, zipcode, location, home_type, primary_photo_url, cover_photo_url, visibility, home_status, created_at, updated_at';
-const OWN_OCCUPANCY_COLUMNS = ['id', 'role', 'role_base', 'is_active', 'verification_status',
+const OWN_OCCUPANCY_COLUMNS = ['id', 'role', 'role_base', 'is_active', 'verification_status', 'verification_source',
   'start_at', 'end_at', 'access_start_at', 'access_end_at'];
 const OWNER_STATUSES = ['pending', 'verified', 'disputed', 'revoked'];
 const uuid = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);

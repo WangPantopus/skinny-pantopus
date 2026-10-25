@@ -14,6 +14,7 @@ const { escapeIlike } = require('../utils/escapeIlike');
 // Who lives in a Home, for compose, is the household mail rule's: an active occupancy in a trusted
 // verification state. A pending claim (anyone can file one on any Home) is not a household member.
 const { getAccessibleHomeIds, MAIL_TRUSTED_VERIFICATION_STATUSES } = require('../utils/homeMailAccess');
+const { UNPROVEN_SOURCES } = require('../utils/homeAccessPolicy');
 const { unpublishedBusinessIds, isSearchable, isScopedBlocked, isConnected } = require('../utils/visibilityPolicy');
 const { localProfileVisibilityFor, localDisplayNames } = require('../utils/identityProfiles');
 const { hasBlocked } = require('../services/blockService');
@@ -48,11 +49,11 @@ async function hasVerifiedSenderHome(userId) {
     || occupancyRes.value.data.some(row => !row || typeof row.home_id !== 'string')) return false;
   const occupancies = occupancyRes.value.data;
   const householdHomes = new Set(occupancies
-    .filter(row => row.verification_source === 'household').map(row => row.home_id));
+    .filter(row => UNPROVEN_SOURCES.has(row.verification_source)).map(row => row.home_id));
   const verifiedOwnerRows = ownerRes.status === 'fulfilled' && !ownerRes.value?.error
     && Array.isArray(ownerRes.value?.data) ? ownerRes.value.data : [];
   if (occupancies.some(row => row.is_active === true && row.verification_status === 'verified'
-    && row.verification_source !== 'household')) return true;
+    && !UNPROVEN_SOURCES.has(row.verification_source))) return true;
   for (const row of verifiedOwnerRows) {
     if (!row || typeof row.home_id !== 'string' || householdHomes.has(row.home_id)) continue;
     // The collection can be truncated by PostgREST's max_rows. Only an exact
@@ -62,7 +63,7 @@ async function hasVerifiedSenderHome(userId) {
         .eq('user_id', userId).eq('home_id', row.home_id).maybeSingle();
       if (!result || result.error || (result.data !== null
         && (!result.data || Array.isArray(result.data) || result.data.home_id !== row.home_id))) return false;
-      if (result.data === null || result.data.verification_source !== 'household') return true;
+      if (result.data === null || !UNPROVEN_SOURCES.has(result.data.verification_source)) return true;
     } catch (_) { return false; }
   }
   return false;

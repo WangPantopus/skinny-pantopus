@@ -86,9 +86,10 @@ public struct OccupantDTO: Decodable, Sendable, Hashable, Identifiable {
     }
 
     /// Household members joined by invitation haven't proved the address (F3b),
-    /// so only address-verified (or pre-F3b) members carry the verified badge.
+    /// and neither has a claim (an instant claim, or an invitation from one), so
+    /// only address-verified (or pre-F3b) members carry the verified badge.
     var hasAddressVerification: Bool {
-        verificationSource != "household"
+        verificationSource != "household" && verificationSource != "claim"
     }
 
     private enum CodingKeys: String, CodingKey {

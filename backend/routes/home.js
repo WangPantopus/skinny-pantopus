@@ -16,6 +16,7 @@ const { computeAddressHash } = require('../utils/normalizeAddress');
 const homeAuthorityService = require('../services/homeAuthorityService');
 const homeListService = require('../services/homeListService');
 const homeCreateService = require('../services/homeCreateService');
+const homeInstantClaimService = require('../services/homeInstantClaimService');
 const { ensureRegionCoverage } = require('../services/seederProvisioningService');
 const homeDetailService = require('../services/homeDetailService');
 const homeResidencyService = require('../services/homeResidencyService');
@@ -1323,10 +1324,33 @@ router.post('/', verifyToken, (req, res, next) => {
         }
       }
     }
+    // Instant Claimed status (home_instant_claim, off by default): the new private setup becomes a claimed home
+    // at once unless the address watch holds it. A retry of the same request tries again; a claim is idempotent.
+    if (result.state === 'completed' && result.role !== 'property_manager') {
+      const claim = await homeInstantClaimService.claimPrivateSetup({ homeId: result.home_id, user: req.user,
+        source: 'home_create' });
+      if (claim.reason !== 'off') {
+        result.instant_claim = { claimed: claim.claimed, held: claim.reason === 'held', settles_at: claim.settlesAt || null };
+      }
+    }
     return homeCreateService.send(res, result, error);
   } catch (error) {
     return homeCreateService.sendError(res, error);
   }
+});
+
+/**
+ * POST /api/homes/:id/instant-claim
+ * Claims the caller's own private setup at once (home_instant_claim). A held claim stays a private setup.
+ */
+router.post('/:id/instant-claim', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  if (Joi.string().uuid().validate(req.params.id).error) return res.status(400).json({ error: 'Invalid home.' });
+  const claim = await homeInstantClaimService.claimPrivateSetup({ homeId: req.params.id.toLowerCase(), user: req.user,
+    source: 'home_claim' });
+  if (claim.claimed) return res.json({ claimed: true, home_id: claim.homeId, settles_at: claim.settlesAt });
+  if (claim.reason === 'held') return res.json({ claimed: false, held: true, message: claim.message });
+  return res.status(claim.status).json({ error: claim.message, code: claim.reason === 'off' ? 'HOME_CLAIM_OFF' : claim.reason });
 });
 
 

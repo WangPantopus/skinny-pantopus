@@ -15,8 +15,7 @@ const { userFacing } = require('./userFacingError');
 
 const {
   HOME_PERMISSIONS, OLD_TO_NEW_PERM, ROLE_RANK, resolveHomeRole,
-  currentOccupancy, ageAllows, effectiveRole,
-} = require('./homeAccessPolicy');
+  currentOccupancy, ageAllows, effectiveRole, UNPROVEN_SOURCES } = require('./homeAccessPolicy');
 
 function accessUnavailable() {
   return userFacing(Object.assign(new Error('Could not check Home access. Please retry.'), {
@@ -432,7 +431,7 @@ async function applyOccupancyTemplate(homeId, userId, roleBase, verificationStat
  */
 function isVerifiedResident(access) {
   if (!access || !access.occupancy || access.occupancy.verification_status !== 'verified'
-    || access.occupancy.verification_source === 'household') {
+    || UNPROVEN_SOURCES.has(access.occupancy.verification_source)) {
     return false;
   }
   // Attestations (residency letters, live residency claims, fridge cards)

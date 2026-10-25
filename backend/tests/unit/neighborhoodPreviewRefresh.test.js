@@ -17,7 +17,9 @@ const CELL = encodeGeohash6(CAMAS.lat, CAMAS.lng);
 function seedCell(households) {
   const homes = Array.from({ length: households }, (_, i) => ({ id: `h${i}`, map_center_lat: CAMAS.lat + i * 0.00001, map_center_lng: CAMAS.lng }));
   seedTable('Home', homes);
-  seedTable('HomeOccupancy', homes.map((h, i) => ({ home_id: h.id, user_id: `u${i}`, is_active: true })));
+  // The meter counts verified residents (a claim only once it is 14 days old).
+  seedTable('HomeOccupancy', homes.map((h, i) => ({ home_id: h.id, user_id: `u${i}`, is_active: true,
+    verification_status: 'verified', verification_source: 'address', verified_at: '2026-01-01T00:00:00.000Z' })));
 }
 
 beforeEach(() => { resetTables(); jest.clearAllMocks(); delete process.env.NEIGHBORHOOD_UNLOCK_THRESHOLD; });
