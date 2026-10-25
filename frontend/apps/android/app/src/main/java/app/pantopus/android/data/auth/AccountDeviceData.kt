@@ -8,6 +8,7 @@ import app.pantopus.android.data.chats.ChatConversationPreferences
 import app.pantopus.android.data.chats.ChatOutbox
 import app.pantopus.android.data.gigs.GigCameraPhotos
 import app.pantopus.android.data.gigs.GigDraftQueue
+import app.pantopus.android.data.posts.PostCameraPhotos
 import app.pantopus.android.data.store.ScreenStore
 import app.pantopus.android.data.support_trains.SupportTrainReservationsStore
 import app.pantopus.android.data.widget.TodayWidgetStore
@@ -73,9 +74,11 @@ class AccountDeviceData
                 // And the files opened from its chats, with the photos taken for them.
                 runCatching { ChatMediaUrl.removeLocalFiles(context.cacheDir) }
                     .onFailure { Timber.w(it, "Sign-out could not remove the chat files") }
-                // And the photos taken with the camera for its task posts.
+                // And the photos taken with the camera for its task posts and its posts.
                 runCatching { GigCameraPhotos.remove(context.cacheDir) }
                     .onFailure { Timber.w(it, "Sign-out could not remove the task camera photos") }
+                runCatching { PostCameraPhotos.remove(context.cacheDir) }
+                    .onFailure { Timber.w(it, "Sign-out could not remove the post camera photos") }
                 // And its exported Home documents, emergency card and residency letters.
                 runCatching { HomeDocumentTemporaryFiles.clearPreviousLaunch(context.cacheDir) }
                     .onFailure { Timber.w(it, "Sign-out could not remove the exported documents") }

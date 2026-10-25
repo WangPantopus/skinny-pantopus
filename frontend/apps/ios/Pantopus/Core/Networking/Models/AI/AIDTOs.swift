@@ -361,3 +361,37 @@ public struct AIRadonReportResponse: Decodable, Sendable, Hashable {
     /// One sentence on how the report was read (which of several results, a missing date).
     public let note: String?
 }
+
+/// `POST /api/ai/draft/post-suggestion`: the whole post, suggested from the
+/// person's photos, the place they picked and what they've written so far, for
+/// the composer to fill in. The photos aren't kept, and nothing is posted until
+/// the person taps Post.
+public struct AIPostSuggestionResponse: Decodable, Sendable, Hashable {
+    /// Every field the composer's forms take. A field the kind of post doesn't use is nil.
+    public struct Suggestion: Decodable, Sendable, Hashable {
+        public let title: String?
+        public let body: String
+        /// Local wall-clock time, `YYYY-MM-DDTHH:MM`.
+        public let eventDate: String?
+        public let eventEndDate: String?
+        public let eventVenue: String?
+        /// `YYYY-MM-DD`: the deal's last day.
+        public let dealExpiresAt: String?
+        /// The business recommended, or the one offering a deal.
+        public let businessName: String?
+        /// `lost` or `found`.
+        public let lostFoundType: String?
+        public let lastSeenLocation: String?
+        /// `YYYY-MM-DD`.
+        public let lastSeenDate: String?
+        /// A heads-up's kind (`road_hazard`, `power_outage`, `weather_damage`, `missing_pet`, `hazard`, `other`).
+        public let safetyAlertKind: String?
+        /// The Ask form's category (`handyman`, `cleaning`, `advice`, `other`).
+        public let askCategory: String?
+        public let tags: [String]?
+    }
+
+    public let suggestion: Suggestion
+    /// One sentence for the person: what to add, or a kind of post that fits the photo better.
+    public let note: String?
+}

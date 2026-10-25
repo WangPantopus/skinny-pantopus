@@ -1,5 +1,6 @@
 package app.pantopus.android.data.api.services
 
+import app.pantopus.android.data.api.models.ai.AIPostSuggestionResponse
 import app.pantopus.android.data.api.models.ai.AIRadonReportResponse
 import app.pantopus.android.data.api.models.audience.PersonaMediaUploadResponse
 import app.pantopus.android.data.api.models.businesses.BusinessMediaUploadResponse
@@ -14,6 +15,7 @@ import okhttp3.RequestBody
 import retrofit2.http.Multipart
 import retrofit2.http.POST
 import retrofit2.http.Part
+import retrofit2.http.PartMap
 import retrofit2.http.Path
 import retrofit2.http.Query
 
@@ -57,6 +59,18 @@ interface UploadApi {
     suspend fun readRadonReport(
         @Part file: MultipartBody.Part,
     ): AIRadonReportResponse
+
+    /**
+     * The composer's AI assist: the whole post suggested from the person's photos (parts `photos`, JPEGs, up to 4)
+     * and the composer's fields (`postType`, what they've written, the place). The server reads the photos in memory
+     * and doesn't keep them; nothing is posted. Route `backend/routes/ai.js:333`.
+     */
+    @Multipart
+    @POST("api/ai/draft/post-suggestion")
+    suspend fun suggestPost(
+        @Part photos: @JvmSuppressWildcards List<MultipartBody.Part>,
+        @PartMap fields: @JvmSuppressWildcards Map<String, RequestBody>,
+    ): AIPostSuggestionResponse
 
     /**
      * Replace the signed-in user's avatar. Single part named `file`; the

@@ -718,6 +718,27 @@ public final class MultipartUploader: @unchecked Sendable {
         }
     }
 
+    /// The whole post suggested from the person's photos (JPEGs, field `photos`,
+    /// up to 4) and the composer's fields (`postType`, what they've written, the
+    /// place) (`POST /api/ai/draft/post-suggestion`; route `backend/routes/ai.js:333`).
+    /// The server reads the photos in memory and doesn't keep them; nothing is posted.
+    public func suggestPost(photos: [MultipartFile], fields: [String: String]) async throws -> AIPostSuggestionResponse {
+        let boundary = "PantopusBoundary-\(UUID().uuidString)"
+        let url = environment.apiBaseURL.appendingPathComponent("/api/ai/draft/post-suggestion")
+        let body = Self.buildBody(boundary: boundary, files: photos, fields: fields)
+        let (data, http) = try await performUpload(to: url, boundary: boundary, body: body)
+        switch http.statusCode {
+        case 200..<300:
+            return try JSONDecoder().decode(AIPostSuggestionResponse.self, from: data)
+        case 401:
+            throw APIError.unauthorized
+        case 400..<500:
+            throw APIError.clientError(status: http.statusCode, message: String(data: data, encoding: .utf8))
+        default:
+            throw APIError.server(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
+        }
+    }
+
     /// Assemble a `multipart/form-data` body. Internal so tests can
     /// assert the exact byte layout without making a network call.
     static func buildBody(

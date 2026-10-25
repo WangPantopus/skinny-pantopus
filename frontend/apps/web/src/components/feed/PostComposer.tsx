@@ -27,7 +27,7 @@ import ServiceOfferFields from './composer/ServiceOfferFields';
 import VisibilityPicker from './composer/VisibilityPicker';
 import PostPrecheck from './composer/PostPrecheck';
 import MediaUpload from './composer/MediaUpload';
-import { InlineDraftHelper } from '@/components/ai-assistant';
+import PostAssist, { usePostAssist } from './composer/PostAssist';
 import { PURPOSE_TO_POST_TYPE, getPostTypeConfig } from '@pantopus/ui-utils';
 
 const POST_TYPE_TO_API_PURPOSE: Record<PostType, string> = {
@@ -365,6 +365,19 @@ export default function PostComposer({
     : (networkVisibility || f.visibility) === 'connections' ? 'connections' : 'nearby';
   const dealExpiryRequired = isEdit ? Boolean(editSeed?.dealExpires) : LOCAL_PUBLIC_AUDIENCES.has(createAudience);
 
+  // The AI assist card: the whole post from the photos, the place and the words. The place goes only as its area
+  // name ("Camas"): a picked or current address could be someone's home.
+  const assistPostType: PostType = isNetworkSurface ? 'general' : (f.selectedIntent ?? 'general');
+  const assistPlace = f.location?.locationName?.trim();
+  const postAssist = usePostAssist(f, setField, {
+    postType: assistPostType,
+    audience: createAudience === 'connections' ? 'connections' : 'nearby',
+    place: assistPlace && !/\d/.test(assistPlace) && !/^(your|selected) location$/i.test(assistPlace) ? assistPlace : undefined,
+    showsTitle: TITLE_POST_TYPES.includes(assistPostType),
+  });
+  // "Post this?": a post with words the AI suggested waits for the person to check it.
+  const [confirmingAIPost, setConfirmingAIPost] = useState(false);
+
   // A searched place (no GPS fix) takes posts only from someone with a verified home or business
   // near it. Ask when it's picked instead of refusing the finished post.
   const [searchedPlaceRefused, setSearchedPlaceRefused] = useState(false);
@@ -394,9 +407,12 @@ export default function PostComposer({
     ? 'Share something with your home neighborhood…'
     : activeIntent?.placeholder || 'Share something with your neighborhood…';
 
+  const resetPostAssist = postAssist.reset;
   const resetComposer = useCallback(() => {
     createCommand.current = null;
     reset();
+    resetPostAssist();
+    setConfirmingAIPost(false);
     setSubmitError(null);
     setShowPurposePicker(false);
     setShowTargetPicker(false);
@@ -406,7 +422,7 @@ export default function PostComposer({
     if (fallbackIdentity) {
       setSelectedAudience(defaultAudienceForIdentity(fallbackIdentity));
     }
-  }, [identities, isGlobalComposer, reset]);
+  }, [identities, isGlobalComposer, reset, resetPostAssist]);
 
   useEffect(() => {
     if (!isGlobalComposer) return;
@@ -568,8 +584,8 @@ export default function PostComposer({
     user?.username?.[0]?.toUpperCase() ||
     '?';
 
-  const handlePost = async () => {
-    if (!onPost || !f.content.trim() || !f.selectedIntent) return;
+  const handlePost = async (aiConfirmed = false) => {
+    if (!onPost || !f.content.trim() || !f.selectedIntent || postAssist.assist.kind === 'writing') return;
 
     setSubmitError(null);
 
@@ -651,6 +667,13 @@ export default function PostComposer({
         return;
       }
     }
+
+    // Words the AI suggested are checked before they go out under the person's name.
+    if (postAssist.hasAISuggestion && !aiConfirmed) {
+      setConfirmingAIPost(true);
+      return;
+    }
+    setConfirmingAIPost(false);
 
     const shouldIncludeLocation = Boolean(f.location && showLocationControl(targetPostAs, targetAudience));
     const parsedTags = f.tags.split(',').map((t) => t.trim()).filter(Boolean);
@@ -964,16 +987,22 @@ export default function PostComposer({
           </div>
 
           {!isEdit && (
-            <div className="px-4 pb-1">
-              <InlineDraftHelper
-                mode="post"
-                compact
-                seed={f.content}
-                context={{ postType: f.selectedIntent || undefined, existingContent: f.content || undefined }}
-                onDraft={(fields) => {
-                  if (fields.content) setField('content', fields.content);
-                  if (fields.title) setField('title', fields.title);
+            <div className="px-4 pb-2">
+              <PostAssist
+                assist={postAssist.assist}
+                hasMaterial={postAssist.hasMaterial}
+                photoCount={postAssist.photoCount}
+                canUndo={postAssist.canUndo}
+                remainingAttachments={Math.max(0, 9 - f.mediaFiles.length)}
+                onSuggest={(added) => {
+                  setConfirmingAIPost(false);
+                  void postAssist.suggest(added);
                 }}
+                onUndo={() => {
+                  setConfirmingAIPost(false);
+                  postAssist.undo();
+                }}
+                onAddPhotos={addMedia}
               />
             </div>
           )}
@@ -1159,6 +1188,41 @@ export default function PostComposer({
               </div>
             )}
 
+            {confirmingAIPost && !isEdit && (
+              <div
+                role="alertdialog"
+                aria-labelledby="composer-ai-confirm-title"
+                aria-describedby="composer-ai-confirm-message"
+                className="space-y-2 rounded-xl border border-primary-200 bg-primary-50 px-3 py-2 text-xs text-app dark:border-primary-700/40 dark:bg-primary-500/10"
+                data-testid="composer-ai-confirm"
+              >
+                <p id="composer-ai-confirm-title" className="text-sm font-semibold">Post this?</p>
+                <p id="composer-ai-confirm-message" className="text-app-secondary">
+                  {createAudience === 'connections'
+                    ? 'Pantopus AI wrote parts of this post. Check that it’s right before your connections see it.'
+                    : 'Pantopus AI wrote parts of this post. Check that it’s right before neighbors see it.'}
+                </p>
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingAIPost(false)}
+                    className="rounded-lg px-3 py-1.5 text-xs font-medium text-app-muted transition hover:text-app"
+                  >
+                    Keep editing
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handlePost(true)}
+                    disabled={isPosting}
+                    className="rounded-lg px-4 py-1.5 text-xs font-semibold text-white transition-all hover:shadow-md active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+                    style={{ background: activeIntent.color }}
+                  >
+                    {isPosting ? 'Posting…' : 'Post'}
+                  </button>
+                </div>
+              </div>
+            )}
+
             {showGlobalLocation && f.location && (
               <div className="flex items-center">
                 <PostLocationPicker
@@ -1246,8 +1310,8 @@ export default function PostComposer({
                   </button>
                 ) : (
                   <button
-                    onClick={handlePost}
-                    disabled={!f.content.trim() || isPosting || searchedPlaceRefused}
+                    onClick={() => void handlePost()}
+                    disabled={!f.content.trim() || isPosting || searchedPlaceRefused || postAssist.assist.kind === 'writing'}
                     className="rounded-lg px-4 py-1.5 text-xs font-semibold text-white transition-all hover:shadow-md active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
                     style={{ background: activeIntent.color }}
                   >

@@ -45,7 +45,7 @@
 		<true/>
 	</dict>
 	<key>NSCameraUsageDescription</key>
-	<string>Pantopus uses the camera for profile photos, photos of your mail and home, and photos you send in chat.</string>
+	<string>Pantopus uses the camera for profile photos, photos of your mail and home, photos you post, and photos you send in chat.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Pantopus uses Face ID to continue signed in after a reinstall, to unlock the app, and to confirm sensitive actions like payments and removing devices.</string>
 	<key>NSLocalNetworkUsageDescription</key>
