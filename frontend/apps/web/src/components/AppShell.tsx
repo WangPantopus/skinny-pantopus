@@ -211,6 +211,15 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const [appState, appDispatch] = useReducer(appShellReducer, INITIAL_APP_STATE);
   const { discoverQuery, composerOpen, feedComposerOpen, feedPosting } = appState;
   const mounted = useClientRender();
+  // The full shell replaces the server's fallback in place, so the top bar and
+  // the page would slide in from the left edge to the sidebar's width. They take
+  // it at once; from the next frame on, sidebar changes slide.
+  const [offsetSlides, setOffsetSlides] = useState(false);
+  useEffect(() => {
+    if (!mounted) return;
+    const frame = requestAnimationFrame(() => setOffsetSlides(true));
+    return () => cancelAnimationFrame(frame);
+  }, [mounted]);
 
   const { unreadMessages: chatUnread } = useBadges();
   // Audience-zone gating for the top-bar split (P2.3 / unified-IA §6.1).
@@ -392,13 +401,23 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
 
   // Server HTML and its hydration render a simple fallback to avoid a hydration
   // mismatch (the full shell depends on this browser's width and storage). A
-  // render that starts in the browser draws the full shell at once, so the page
-  // mounts once instead of a second time inside it, which started its loading over.
+  // render that starts in the browser draws the full shell at once. The page sits
+  // in the same keyed <main>, with the same children, in both, so it mounts once:
+  // a second mount inside the full shell started its loading over.
+  const offlineNotice = !isOnline && (
+    <div role="status" className="sticky top-14 z-40 flex items-center justify-center gap-2 bg-amber-500/95 px-3 py-1.5 text-xs font-semibold text-white">
+      <WifiOff className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+      <span>You&apos;re offline. Pantopus will refresh when you reconnect.</span>
+    </div>
+  );
   if (!mounted) {
     return (
       <div className="min-h-screen bg-app text-app">
         <header className="fixed top-0 left-0 right-0 h-14 bg-surface border-b border-app z-50" />
-        <div className="pt-14">{children}</div>
+        <main key="content" className="pt-14">
+          {offlineNotice}
+          {children}
+        </main>
       </div>
     );
   }
@@ -410,7 +429,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       {/* ═══════════════════════════════════════════════════════
        *  HEADER
        * ═══════════════════════════════════════════════════════ */}
-      <header className="fixed top-0 right-0 h-14 bg-surface border-b border-app z-50 flex items-center px-4 transition-[left] duration-200 ease-in-out" style={topBarStyle}>
+      <header className={`fixed top-0 right-0 h-14 bg-surface border-b border-app z-50 flex items-center px-4${offsetSlides ? ' transition-[left] duration-200 ease-in-out' : ''}`} style={topBarStyle}>
         {/* Mobile: hamburger + brand */}
         {isMobile && (
           <>
@@ -627,13 +646,8 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
        * ═══════════════════════════════════════════════════════ */}
       {/* Phones: pb-20 clears the tab bar; where the quick-actions button floats
           above it (its top edge 144 px up), pb-40 lets the last row scroll clear. */}
-      <main className={`pt-14 min-h-screen transition-[margin-left] duration-200 ease-in-out relative z-0${showMobileTabs ? (routeHasFab(pathname) ? ' pb-40' : ' pb-20') : ''}`} style={contentStyle}>
-        {!isOnline && (
-          <div role="status" className="sticky top-14 z-40 flex items-center justify-center gap-2 bg-amber-500/95 px-3 py-1.5 text-xs font-semibold text-white">
-            <WifiOff className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            <span>You&apos;re offline. Pantopus will refresh when you reconnect.</span>
-          </div>
-        )}
+      <main key="content" className={`pt-14 min-h-screen${offsetSlides ? ' transition-[margin-left] duration-200 ease-in-out' : ''} relative z-0${showMobileTabs ? (routeHasFab(pathname) ? ' pb-40' : ' pb-20') : ''}`} style={contentStyle}>
+        {offlineNotice}
         {children}
       </main>
 
