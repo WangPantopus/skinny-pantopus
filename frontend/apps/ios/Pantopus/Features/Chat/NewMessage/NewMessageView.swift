@@ -283,7 +283,7 @@ public struct NewMessageView: View {
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(Theme.Color.appText)
             Text(viewModel.isSearching ? "Finding people on Pantopus." : viewModel.normalizedSearch.count < 2
-                 ? "Enter at least 2 characters to search." : "Try a different name, username or area.")
+                ? "Enter at least 2 characters to search." : "Try a different name, username or area.")
                 .font(.system(size: 12.5))
                 .foregroundStyle(Theme.Color.appTextSecondary)
         }
