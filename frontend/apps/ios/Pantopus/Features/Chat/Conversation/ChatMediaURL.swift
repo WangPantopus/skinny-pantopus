@@ -32,13 +32,20 @@ enum ChatMediaURL {
         isSameOrigin(url, AppEnvironment.current.apiBaseURL) && url.path.hasPrefix("/api/chat/files/")
     }
 
-    /// Files opened from chats, copies of photos sent to the assistant and picked Live Photos go at the
-    /// next launch and with the account's data (sign-out, a switch), so nothing of one person's chats
-    /// stays for the next.
+    /// Files opened from chats, copies of photos sent to the assistant, picked Live Photos and partial
+    /// downloads go at the next launch and with the account's data (sign-out, a switch), so nothing of
+    /// one person's chats stays for the next.
     static func removeLocalFiles() {
         removeOpenedFiles()
         try? FileManager.default.removeItem(at: sentPhotosRoot)
         try? FileManager.default.removeItem(at: pickedLivePhotos)
+        // A download cancelled midway (a tile or viewer that went away) leaves its partial bytes
+        // in the system's temporary file, kept for a resume that never comes.
+        let temporary = FileManager.default.temporaryDirectory
+        for name in (try? FileManager.default.contentsOfDirectory(atPath: temporary.path)) ?? []
+            where name.hasPrefix("CFNetworkDownload_") {
+            try? FileManager.default.removeItem(at: temporary.appendingPathComponent(name))
+        }
     }
 
     static func removeOpenedFiles() {
