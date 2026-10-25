@@ -46,6 +46,11 @@ Parameters:
     Default: 'false'
     AllowedValues: ['true', 'false']
     Description: Enable payment authorization, transfer, capture retry, expiry and stuck-payment checks. Review payment mode before activation.
+  HealthMonitoringEnabled:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: Independently probe API and database health every minute; does not enable any business jobs.
   SecretName:
     Type: String
     Default: ''
@@ -61,6 +66,7 @@ Parameters:
       after the backfill is complete.
 
 Conditions:
+  RunHealthMonitoring: !Equals [!Ref HealthMonitoringEnabled, 'true']
   RunSchedules: !Equals [!Ref SchedulesEnabled, 'true']
   RunBriefings: !Or
     - !Equals [!Ref SchedulesEnabled, 'true']
@@ -102,6 +108,133 @@ Globals:
         ENVIRONMENT: !Ref Environment
 
 Resources:
+  BackendHealthFunction:
+    Type: AWS::Serverless::Function
+    Condition: RunHealthMonitoring
+    DependsOn: BackendHealthLogGroup
+    Properties:
+      FunctionName: !Sub pantopus-backend-health-${Environment}
+      Handler: src.handlers.backend_health.handler
+      Description: Read-only API/database readiness probes and resource metrics
+      CodeUri: ../build/
+      Timeout: 20
+      MemorySize: 128
+      ReservedConcurrentExecutions: 1
+      EventInvokeConfig:
+        MaximumRetryAttempts: 0
+        MaximumEventAgeInSeconds: 60
+      Events:
+        HealthSchedule:
+          Type: Schedule
+          Properties:
+            Name: !Sub pantopus-backend-health-${Environment}
+            Schedule: rate(1 minute)
+            State: ENABLED
+            RetryPolicy:
+              MaximumRetryAttempts: 0
+              MaximumEventAgeInSeconds: 60
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: secretsmanager:GetSecretValue
+              Resource: !Ref SeederSecret
+
+  BackendHealthLogGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: RunHealthMonitoring
+    Properties:
+      LogGroupName: !Sub /aws/lambda/pantopus-backend-health-${Environment}
+      RetentionInDays: 30
+
+  ApiHealthAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: RunHealthMonitoring
+    Properties:
+      AlarmName: !Sub pantopus-api-health-${Environment}
+      AlarmDescription: 'Public API /health failed or monitoring stopped for two of three minutes. Check the direct database alarm to distinguish API-host and database failures.'
+      Namespace: !Sub Pantopus/Backend/${Environment}
+      MetricName: ApiHealthy
+      Statistic: Minimum
+      Period: 60
+      EvaluationPeriods: 3
+      DatapointsToAlarm: 2
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+      AlarmActions: [!Ref JobAlarmTopic]
+      OKActions: [!Ref JobAlarmTopic]
+
+  DatabaseHealthAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: RunHealthMonitoring
+    Properties:
+      AlarmName: !Sub pantopus-database-health-${Environment}
+      AlarmDescription: 'Direct Supabase database HEAD query failed or monitoring stopped for two of three minutes. Independent of the backend host; no user rows returned.'
+      Namespace: !Sub Pantopus/Backend/${Environment}
+      MetricName: DatabaseHealthy
+      Statistic: Minimum
+      Period: 60
+      EvaluationPeriods: 3
+      DatapointsToAlarm: 2
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+      AlarmActions: [!Ref JobAlarmTopic]
+      OKActions: [!Ref JobAlarmTopic]
+
+  DatabaseTelemetryAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: RunHealthMonitoring
+    Properties:
+      AlarmName: !Sub pantopus-database-telemetry-${Environment}
+      AlarmDescription: 'Database resource telemetry failed or the monitor stopped for three minutes. Do not interpret missing resource samples as healthy.'
+      Namespace: !Sub Pantopus/Backend/${Environment}
+      MetricName: TelemetryHealthy
+      Statistic: Minimum
+      Period: 60
+      EvaluationPeriods: 3
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+      AlarmActions: [!Ref JobAlarmTopic]
+      OKActions: [!Ref JobAlarmTopic]
+
+  DatabaseMemoryAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: RunHealthMonitoring
+    Properties:
+      AlarmName: !Sub pantopus-database-memory-${Environment}
+      AlarmDescription: 'Available database VM memory below 10 percent in three of five minutes. Review swap rates, I/O wait and queue load before sizing compute.'
+      Namespace: !Sub Pantopus/Backend/${Environment}
+      MetricName: MemoryAvailablePercent
+      Statistic: Minimum
+      Period: 60
+      EvaluationPeriods: 5
+      DatapointsToAlarm: 3
+      Threshold: 10
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref JobAlarmTopic]
+      OKActions: [!Ref JobAlarmTopic]
+
+  DatabaseIoWaitAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: RunHealthMonitoring
+    Properties:
+      AlarmName: !Sub pantopus-database-io-wait-${Environment}
+      AlarmDescription: 'Database CPU spent over 25 percent waiting for I/O in three of five minutes. Rates are absent on cold start or exporter counter reset; telemetry availability has its own alarm.'
+      Namespace: !Sub Pantopus/Backend/${Environment}
+      MetricName: IoWaitPercent
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 5
+      DatapointsToAlarm: 3
+      Threshold: 25
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref JobAlarmTopic]
+      OKActions: [!Ref JobAlarmTopic]
+
   # ---------------------------------------------------------------------------
   # Fetcher Lambda — pulls content from RSS feeds and sources into the queue
   # ---------------------------------------------------------------------------
