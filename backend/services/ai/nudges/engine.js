@@ -54,7 +54,7 @@ const NUDGE_KINDS = [
   'plan_weather', 'plan_requests_waiting', 'plan_after', 'lost_found_match', 'question_answered',
   'home_overdue', 'home_paperwork', 'radon_follow_up',
   // Phase 3 (docs/product/ai-assistant-phase3-contract-2026-10-22.md §10.1): "Plans you'd like".
-  'plan_you_like', 'plan_game_day',
+  'plan_you_like', 'plan_game_day', 'plan_game_moved',
   // Phase 3 §7: a check-back the person asked for (sent with `requested`).
   'follow_up',
 ];
