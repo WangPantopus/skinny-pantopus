@@ -81,8 +81,8 @@ async function chatSyncSnapshot(roomIds) {
   };
 }
 
-async function chatChanges({ roomIds, identityUserId, cursor, until, limit }) {
-  const snapshot = await chatSyncSnapshot(roomIds);
+async function chatChanges({ roomIds, identityUserId, cursor, until, limit, snapshot: scopeSnapshot }) {
+  const snapshot = scopeSnapshot || await chatSyncSnapshot(roomIds);
   const roomSet = new Set(roomIds);
   const removedRoomIds = Object.keys(cursor).filter((roomId) => !roomSet.has(roomId));
   const target = until || snapshot.cursors;
@@ -90,10 +90,14 @@ async function chatChanges({ roomIds, identityUserId, cursor, until, limit }) {
     || cursor[roomId] < snapshot.resets[roomId] || cursor[roomId] > target[roomId]
     || target[roomId] > snapshot.cursors[roomId]);
   const base = { roomIds, removedRoomIds, resetRequired };
-  if (resetRequired) return { ...base, messages: [], hasMore: false, syncCursors: {}, untilCursors: {} };
+  if (resetRequired) return { ...base, messages: [], hasMore: false, syncCursors: {}, untilCursors: {}, changedRoomIds: [] };
 
-  const { data, error } = roomIds.length ? await supabaseAdmin.rpc('get_chat_message_changes', {
-    p_user_id: identityUserId, p_room_ids: roomIds, p_after: cursor, p_until: target, p_limit: limit + 1,
+  // Only rooms whose revision moved past the cursor can hold changes, so a quiet scope reads no messages.
+  const changedRoomIds = roomIds.filter((id) => target[id] > cursor[id]);
+  const changedOnly = (cursors) => Object.fromEntries(changedRoomIds.map((id) => [id, cursors[id]]));
+  const { data, error } = changedRoomIds.length ? await supabaseAdmin.rpc('get_chat_message_changes', {
+    p_user_id: identityUserId, p_room_ids: changedRoomIds, p_after: changedOnly(cursor), p_until: changedOnly(target),
+    p_limit: limit + 1,
   }) : { data: [] };
   if (error) throw error;
   const messages = (data || []).slice(0, limit);
@@ -101,8 +105,9 @@ async function chatChanges({ roomIds, identityUserId, cursor, until, limit }) {
   const syncCursors = Object.fromEntries(roomIds.map((id) => [id, hasMore ? cursor[id] : target[id]]));
   if (hasMore) for (const message of messages) syncCursors[message.room_id] = message.sync_version;
 
-  return { ...base, messages, hasMore, syncCursors,
-    untilCursors: Object.fromEntries(roomIds.map((id) => [id, target[id]])) };
+  // untilCursors pins the later pages of one snapshot; a complete, unpinned page has nothing to pin.
+  return { ...base, messages, hasMore, syncCursors, changedRoomIds,
+    untilCursors: until || hasMore ? Object.fromEntries(roomIds.map((id) => [id, target[id]])) : {} };
 }
 
 async function chatReadReceipts(roomIds) {
