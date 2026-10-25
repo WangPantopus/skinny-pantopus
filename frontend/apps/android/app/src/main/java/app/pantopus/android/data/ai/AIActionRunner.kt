@@ -47,6 +47,7 @@ internal object AIActionAllowlist {
             "POST" to "/api/homes/:id/tasks",
             "POST" to "/api/homes/:id/tasks/:id/recurrence",
             "PUT" to "/api/hub/preferences",
+            "PUT" to "/api/posts/feed-preferences",
             // Phase 2: a system's installed year, a task's update, a nudge's "Fewer like this", and an appliance for
             // the home's records (the home_asset card, once the assets route was hardened: contract §7.1).
             "PUT" to "/api/homes/:id/systems/:system",
