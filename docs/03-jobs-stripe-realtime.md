@@ -158,13 +158,16 @@ Rule: No paid_boost or sponsored flag (must be separate module)
 #### `processClaimWindows` (Every 10m)
 
 ```
-Purpose: Promote provisional occupancies past challenge window
+Purpose: Promote provisional occupancies past challenge window; admit unanswered join requests on probation
 Flow:
-  1. Query: occupancies past challenge_window_end
-  2. Apply occupancy template
-  3. Reset home security_state
-  4. Write audit log
-  5. Notify user of verified status
+  1. Query: provisional occupancies past challenge_window_ends_at, except probation
+  2. promote_home_postcard_review (needs a postcard proved in the window), audit row
+  3. Notify the person ("Residency review recorded")
+  4. Probation (home claims PR 4, flag home_residency_probation): household-review requests
+     unanswered for 7 days whose membership is still pending_approval. Address watch first:
+     high holds the request (admin address review case), medium gets a 14-day window, low 7.
+  5. admit_home_residency_probation: provisional, verification_source 'probation', audit row
+     RESIDENCY_PROBATION_STARTED; notify the person and the household's reviewers
 ```
 
 #### `expireInitiatedHomeClaims` (Hourly :11)

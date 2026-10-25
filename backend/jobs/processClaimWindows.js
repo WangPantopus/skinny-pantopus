@@ -5,6 +5,103 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const { validityDays } = require('../utils/verificationAge');
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+const PROBATION_WAIT_DAYS = 7;
+const sameIds = (rows, cursor) => rows.some((row, index) => ![row?.id, row?.home_id, row?.user_id]
+  .every(v => typeof v === 'string' && UUID.test(v)) || (index > 0 ? row.id <= rows[index - 1].id : cursor && row.id <= cursor));
+
+// Home claims plan, PR 4 (founder approval 2026-10-25): a household-review request nobody has answered for 7 days
+// is admitted on probation (admit_home_residency_probation), for residents only; ownership claims never come here.
+// The address watch is read again first: a high level holds the request (a case in the admin queue) and a medium
+// level gets a 14-day window instead of 7. Probation opens no household records. The newcomer and the household's
+// reviewers are told; a failed notice can't undo the admission.
+async function admitUnansweredRequests() {
+  const cutoff = new Date(Date.now() - PROBATION_WAIT_DAYS * 86400000).toISOString();
+  let cursor = null, admitted = 0, held = 0, unavailable = 0;
+  for (;;) {
+    let query = supabaseAdmin.from('HomeOccupancy').select('id, home_id, user_id')
+      .eq('verification_status', 'pending_approval').eq('is_active', true)
+      .order('id', { ascending: true }).limit(200);
+    if (cursor) query = query.gt('id', cursor);
+    let response;
+    try { response = await query; } catch (_) { response = null; }
+    const rows = response?.data;
+    if (response?.error || !Array.isArray(rows) || rows.length > 200 || sameIds(rows, cursor)) {
+      logger.error('[processClaimWindows] Probation candidate read unavailable'); return;
+    }
+    if (!rows.length) break;
+    cursor = rows.at(-1).id;
+    let claims;
+    try {
+      claims = await supabaseAdmin.from('HomeResidencyClaim').select('id, home_id, user_id')
+        .in('home_id', [...new Set(rows.map(row => row.home_id))]).in('user_id', [...new Set(rows.map(row => row.user_id))])
+        .eq('status', 'pending').is('cold_start_mode', null).is('reviewed_by', null).lt('updated_at', cutoff);
+    } catch (_) { claims = null; }
+    if (claims?.error || !Array.isArray(claims?.data)) { logger.error('[processClaimWindows] Probation request read unavailable'); return; }
+    const members = new Set(rows.map(row => `${row.home_id}:${row.user_id}`));
+    for (const claim of claims.data) {
+      if (![claim?.id, claim?.home_id, claim?.user_id].every(v => typeof v === 'string' && UUID.test(v))
+        || !members.has(`${claim.home_id}:${claim.user_id}`)) continue;
+      const watch = await admitOnProbation(claim);
+      if (watch === 'admitted') admitted++; else if (watch === 'held') held++; else if (watch === 'unavailable') unavailable++;
+    }
+    if (rows.length < 200) break;
+  }
+  if (admitted || held || unavailable) logger.info('[processClaimWindows] Probation', { admitted, held, unavailable });
+}
+
+async function admitOnProbation(claim) {
+  const policy = require('../utils/homeSecurityPolicy');
+  const reviewCases = require('../services/addressValidation/addressReviewService');
+  let assessment;
+  try { assessment = await policy.assessAddressWatch({ homeId: claim.home_id, userId: claim.user_id }); }
+  catch (_) { return 'unavailable'; }
+  if (assessment?.level === 'high') {
+    // Hold it until it's proven. Open the admin queue case once; an open case is left as it is.
+    try {
+      const open = await supabaseAdmin.from('AddressReviewCase').select('id').eq('trigger', 'address_watch')
+        .eq('home_id', claim.home_id).eq('user_id', claim.user_id).in('status', reviewCases.OPEN_STATUSES).limit(1);
+      if (!open.error && Array.isArray(open.data) && !open.data.length) {
+        await reviewCases.flagAddressWatch({ homeId: claim.home_id, userId: claim.user_id,
+          signals: assessment.signals, source: 'residency_probation' });
+      }
+    } catch (_) { /* The request stays held either way. */ }
+    return 'held';
+  }
+  if (!['low', 'medium'].includes(assessment?.level)) return 'unavailable';
+  let result;
+  try {
+    const response = await supabaseAdmin.rpc('admit_home_residency_probation', { p_home_id: claim.home_id,
+      p_actor_id: claim.user_id, p_claim_id: claim.id, p_wait_days: PROBATION_WAIT_DAYS,
+      p_window_days: assessment.level === 'medium' ? 14 : 7 });
+    if (response?.error || !response?.data) return 'unavailable';
+    result = response.data;
+  } catch (_) { return 'unavailable'; }
+  if (result.ok === true && result.admitted === false) return result.held === true ? 'held' : 'skipped';
+  const reviewers = result.reviewer_ids;
+  if (result.ok !== true || result.admitted !== true || result.home_id !== claim.home_id || result.user_id !== claim.user_id
+    || !Array.isArray(reviewers) || reviewers.some(id => typeof id !== 'string' || !UUID.test(id) || id === claim.user_id)) {
+    return 'unavailable';
+  }
+  try {
+    const notifications = require('../services/notificationService');
+    const [people, home] = await Promise.all([require('../services/chatPeople').loadChatPeople([claim.user_id]),
+      supabaseAdmin.from('Home').select('name, address').eq('id', claim.home_id).maybeSingle()]);
+    const name = people.get(String(claim.user_id))?.displayName || 'Someone';
+    const homeName = home?.data?.name || home?.data?.address || 'your home';
+    await notifications.createNotification({ userId: claim.user_id, type: 'residency_probation_started',
+      title: 'Your request is on probation',
+      body: 'Nobody in the household has answered in 7 days. Household records stay private until someone there says yes or you verify your address by mail.',
+      link: `/homes/${claim.home_id}/residency`, metadata: { home_id: claim.home_id, claim_id: claim.id } });
+    for (const userId of reviewers) {
+      await notifications.createNotification({ userId, type: 'residency_probation_household',
+        title: 'A request to join is on probation',
+        body: `${name} asked to join ${homeName} 7 days ago and nobody answered, so they're on probation. They can't see household records. Approve or deny their request.`,
+        link: `/homes/${claim.home_id}/owners/review-claim?tab=residency`,
+        metadata: { home_id: claim.home_id, claim_id: claim.id, claimant_id: claim.user_id } });
+    }
+  } catch (_) { logger.warn('[processClaimWindows] Probation notification unavailable'); }
+  return 'admitted';
+}
 
 async function processExpiredClaimWindows() {
   const cutoff = new Date().toISOString();
@@ -12,15 +109,15 @@ async function processExpiredClaimWindows() {
   for (;;) {
     let query = supabaseAdmin.from('HomeOccupancy').select('id, home_id, user_id')
       .eq('verification_status', 'provisional').eq('is_active', true)
+      // Time never promotes probation (PR 4): only a reviewer's yes or a proved address ends it.
+      .neq('verification_source', 'probation')
       .not('challenge_window_ends_at', 'is', null).lt('challenge_window_ends_at', cutoff)
       .order('id', { ascending: true }).limit(200);
     if (cursor) query = query.gt('id', cursor);
     let response;
     try { response = await query; } catch (_) { response = null; }
     const rows = response?.data;
-    if (response?.error || !Array.isArray(rows) || rows.length > 200
-      || rows.some((row, index) => ![row?.id, row?.home_id, row?.user_id].every(v => typeof v === 'string' && UUID.test(v))
-        || (index > 0 ? row.id <= rows[index - 1].id : cursor && row.id <= cursor))) {
+    if (response?.error || !Array.isArray(rows) || rows.length > 200 || sameIds(rows, cursor)) {
       logger.error('[processClaimWindows] Candidate read unavailable'); return;
     }
     if (!rows.length) break;
@@ -50,5 +147,6 @@ async function processExpiredClaimWindows() {
     if (rows.length < 200) break;
   }
   if (checked) logger.info('[processClaimWindows] Completed', { promoted, checked, unavailable });
+  await admitUnansweredRequests();
 }
 module.exports = processExpiredClaimWindows;

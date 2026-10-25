@@ -194,6 +194,12 @@ Reason:
 
 - queue delay is an operations problem, not evidence of claim correctness
 
+Amended 2026-10-25 for residents only (founder decision; home claims plan, PR 4): a household-review
+request to live at a home that nobody answers for 7 days becomes probation. Probation is not approval:
+the person stays provisional with no household records, mail or Plans trust until a reviewer says yes or
+they prove the address, and a reviewer's no or a challenge suspends them. Ownership claims are unchanged:
+D13 still holds for them.
+
 ### D14. Explicit terminal reasons are required
 
 Decision:
