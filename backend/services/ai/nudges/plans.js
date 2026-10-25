@@ -690,6 +690,9 @@ async function checkGameMoved(plan, now = Date.now()) {
       starts_local: local(planService.startsAt(plan)), ends_local: local(planService.endsAt(plan)),
       note: 'The game time changed. This keeps your planned time before or after the game. Guests hear only after you save.' }, expiresAt);
     if (draft) {
+      // Preserve the provider's seconds; the display-only local labels round to minutes.
+      draft.actions[0].request.body.starts_at = new Date(Date.parse(planService.startsAt(plan)) + delta).toISOString();
+      draft.actions[0].request.body.ends_at = new Date(Date.parse(planService.endsAt(plan)) + delta).toISOString();
       // The edit endpoint resolves this ID again; only its canonical game facts are saved.
       draft.actions[0].request.body.details = { ...plan.details, game: { id: current.id, team: current.team } };
     }
