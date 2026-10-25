@@ -6,7 +6,7 @@
 // ============================================================
 
 import * as api from '@pantopus/api';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient, type QueryClient, type QueryFunctionContext } from '@tanstack/react-query';
 import type { UnifiedConversationItem } from '@pantopus/types';
 import { queryKeys } from '@/lib/query-keys';
@@ -208,7 +208,11 @@ export function useConversationPages(search = '') {
       if (marker === api.authSessionMarker()) await deleteChatRecords(scope, [{ kind: 'history', key: INBOX_KEY }]);
     })().catch(() => {});
   }, [q, status]);
-  useEffect(() => {
+  // Start the inbox read and the saved-inbox restore at commit. From effects
+  // they would wait for the first paint, which on a cold load is the whole app
+  // shell's, and each begins with a storage read.
+  useLayoutEffect(() => { void client.prefetchQuery(conversationsQuery(q)); }, [client, q]);
+  useLayoutEffect(() => {
     if (q) { setRestored(true); return; }
     let cancelled = false;
     const marker = api.authSessionMarker();
