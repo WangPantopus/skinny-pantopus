@@ -62,11 +62,12 @@ const PLAYDATE_TOOLS = new Map([...playdateReadToolDefinitions, ...playdateCardD
 // The read tools answer in words, so every app gets them.
 function launchScopedChatTools({
   pickupSchedule = false, actionCards = false, links = false, plans = false, playdates = false, remembers = false, checksBack = false,
-  standingRules = false,
+  standingRules = false, sports = false,
 } = {}) {
   const giftFunds = isLaunchFeatureEnabled('gift_funds');
   return toolDefinitions
     .filter((tool) => {
+      if (tool.name === 'find_games') return plans && sports;
       if (tool.name === 'draft_pickup_schedule') return pickupSchedule;
       // Phase 3 memory (`cards` lists "memory"): its cards also need "action", and plan alerts Plans.
       if (memory.MEMORY_TOOL_NAMES.has(tool.name)) {
@@ -105,7 +106,7 @@ function withoutGiftFunds(tool) {
 
 function launchScopedChatInstructions({
   pickupSchedule = false, actionCards = false, links = false, plans = false, playdates = false, remembers = false, checksBack = false,
-  standingRules = false,
+  standingRules = false, sports = false,
 } = {}) {
   return prompts.chatAgentSystem({
     openGigs: isLaunchFeatureEnabled('open_gigs'),
@@ -115,11 +116,12 @@ function launchScopedChatInstructions({
     actionCards,
     links,
     plans,
+    sports: plans && sports,
     remembers: remembers && actionCards,
     checksBack: checksBack && actionCards,
     standingRules: standingRules && actionCards,
     guide: appGuide({
-      plans, playdates, suggestions: actionCards, actionCards, links, pickupSchedule, remembers: remembers && actionCards, standingRules: standingRules && actionCards,
+      plans, playdates, sports: plans && sports, suggestions: actionCards, actionCards, links, pickupSchedule, remembers: remembers && actionCards, standingRules: standingRules && actionCards,
     }),
   });
 }
@@ -412,6 +414,7 @@ async function streamChat({
   const shown = new Set(Array.isArray(cards) ? cards : []);
   const viewer = { id: userId, role: user?.role || null };
   const plansRead = isFeatureEnabled('plans', viewer).catch(() => false);
+  const sportsRead = isFeatureEnabled('plans_sports', viewer).catch(() => false);
   // The tools list playdates only for people with the flag; planViewer reads it again for the plan rules.
   const playdatesRead = isFeatureEnabled('plans_playdates', viewer).catch(() => false);
 
@@ -457,17 +460,22 @@ async function streamChat({
     ...fields,
   });
 
-  const [homeContext, photoResults, plansEnabled, playdatesEnabled, screenText, memoryText] = await Promise.all([
-    contextRead, photosRead, plansRead, playdatesRead, screenRead, memoryRead,
+  const [homeContext, photoResults, plansEnabled, playdatesEnabled, screenText, memoryText, sportsEnabled] = await Promise.all([
+    contextRead, photosRead, plansRead, playdatesRead, screenRead, memoryRead, sportsRead,
   ]);
   const photos = photoResults.filter(Boolean);
   // One context message: the home facts (remembered for a minute), whether they have
   // Plans, and the screen they asked from. Added again only when it changes.
   const plansLine = `- Plans: ${plansEnabled ? 'they have Plans (the Plans tab).' : "not available to them yet; don't offer plans."}`;
+  const sportsPrefs = plansEnabled && sportsEnabled
+    ? (await require('../feedService').getMuteAndHideFilters(userId).catch(() => ({ sports: { watch: 'off' } }))).sports : null;
+  const sportsLine = sportsPrefs ? `- Sports suggestions: ${sportsPrefs.watch === 'off'
+    ? 'off. Answer direct game questions, but never volunteer games or watch parties.'
+    : 'available. Use find_games for listed times; never guess a fixture.'}` : null;
   const context = {
     timeZone: homeContext.timeZone,
-    text: homeContext.text || screenText || memoryText
-      ? [homeContext.text || `${CONTEXT_HEADER}:`, plansLine, screenText, memoryText].filter(Boolean).join('\n')
+    text: homeContext.text || screenText || memoryText || sportsLine
+      ? [homeContext.text || `${CONTEXT_HEADER}:`, plansLine, sportsLine, screenText, memoryText].filter(Boolean).join('\n')
       : null,
   };
   const toolContext = {
@@ -526,6 +534,7 @@ async function streamChat({
     actionCards: shown.has('action'),
     links: shown.has('link'),
     plans: plansEnabled,
+    sports: plansEnabled && sportsEnabled,
     playdates: plansEnabled && playdatesEnabled,
     remembers: shown.has('memory'),
     checksBack: shown.has('follow_up'),

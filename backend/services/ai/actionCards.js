@@ -71,14 +71,16 @@ const kidsAges = (description) => ({ type: ['array', 'null'], items: { type: 'st
 function draftPlanDefinition({ playdates = false } = {}) {
   return {
     name: 'draft_plan',
-    description: `Draft a new plan (a small meetup on the Plans map) for the person to post with one tap. Kinds: watch_party (a game or show to watch together), ${playdates ? 'playdate (kids play while their parents meet; only for people with a verified address), ' : ''}pickup_game (a sport), walk_coffee (a walk, dog walk, stroller walk or coffee), study_group (studying together; public places only). Plans start within the next 14 days and last 15 minutes to 8 hours. Pickup games, ${playdates ? 'playdates, ' : ''}study groups and walks in public need a public place: give its name and the server finds it near them. Watch parties and walks may be at their own home. Neighbors read the title and about before they get in, while the place shows only to people who get in, so keep the place's name and any address out of them; where exactly to meet goes in guest_note. ${playdates ? "A playdate needs the ages of the kids it's for (details.kids_age_bands): use what they said, or ask in one short question. Its host approves each family, and its spots count families. Others see only its neighborhood until the host accepts them. " : ''}Make sensible assumptions (an hour and a half for games, 8 spots${playdates ? '; for a playdate, an hour and a half and 4 families' : ''}) and name the main one in the note.`,
+    description: `Draft a new plan (a small meetup on the Plans map) for the person to post with one tap. Kinds: watch_party (a game or show to watch together), ${playdates ? 'playdate (kids play while their parents meet; only for people with a verified address), ' : ''}pickup_game (a sport), walk_coffee (a walk, dog walk, stroller walk or coffee), study_group (studying together; public places only). Plans start within the next 14 days and last 15 minutes to 8 hours. Pickup games, ${playdates ? 'playdates, ' : ''}study groups and walks in public need a public place: give its name and the server finds it near them. Watch parties and walks may be at their own home. Neighbors read the title and about before they get in, while the place shows only to people who get in, so keep the place's name and any address out of them; where exactly to meet goes in guest_note. ${playdates ? "A playdate needs the ages of the kids it's for (details.kids_age_bands): use what they said, or ask in one short question. Its host approves each family, and its spots count families. Others see only its neighborhood until the host accepts them. " : ''}For listed sports games, use the game's start and end from find_games. Make sensible assumptions (8 spots${playdates ? '; for a playdate, an hour and a half and 4 families' : ''}) and name the main one in the note.`,
     input_schema: {
       type: 'object',
       properties: {
         kind: { type: 'string', enum: planKinds(playdates) },
         title: { type: 'string', description: 'Short title, up to 80 characters, e.g. "Pickleball, need 3". Public: never the place or an address.' },
-        starts_local: { type: 'string', description: 'Start in their local time, YYYY-MM-DDTHH:MM.' },
-        ends_local: { type: 'string', description: 'End in their local time, YYYY-MM-DDTHH:MM.' },
+        starts_local: nullable({ type: 'string', description: 'Start in their local time, YYYY-MM-DDTHH:MM. Null to use game_id time.' }),
+        ends_local: nullable({ type: 'string', description: 'End in their local time, YYYY-MM-DDTHH:MM. Null to use game_id time.' }),
+        game_id: nullable({ type: 'string', description: 'A listed watch-party game id returned by find_games.' }),
+        override_game_times: nullable({ type: 'boolean', description: 'True only if the person explicitly asked for different times from the game.' }),
         spots: { type: 'integer', minimum: 1, maximum: 30, description: `How many people can join, not counting the host${playdates ? ' (for a playdate, how many families besides theirs)' : ''}.` },
         place_name: nullable({ type: 'string', description: 'A public place near them (a park, court, library, café), or null when at_home.' }),
         at_home: nullable({ type: 'boolean', description: 'True to host at their own home (watch parties and walks only).' }),
@@ -573,8 +575,18 @@ async function draftPlan(args, ctx) {
   if (playdate && !args.details?.kids_age_bands?.length) {
     return { error: "A playdate needs the ages of the kids it's for. Ask how old the kids are, in one short question." };
   }
-  const startsAt = localToUtc(args.starts_local, ctx.timeZone);
-  const endsAt = localToUtc(args.ends_local, ctx.timeZone);
+  let game = null;
+  if (args.game_id) {
+    if (args.kind !== 'watch_party' || !viewer.sportsFlag) return { error: 'Game identity is available only for sports watch parties.' };
+    const source = require('../plans/planGames');
+    const listed = ctx.sportsGames?.get(args.game_id) || (await source.gamesForViewer(
+      { ...viewer, sports: { ...viewer.sports, watch: 'on' } }, 'composer'
+    )).games.find((candidate) => candidate.id === args.game_id);
+    game = await source.resolveGame(args.game_id, listed?.team);
+    if (!game || Date.parse(game.ends_at) - 30 * 60000 <= Date.now()) return { error: 'That game is no longer listed. Use find_games again.' };
+  }
+  const startsAt = game && args.override_game_times !== true ? game.starts_at : localToUtc(args.starts_local, ctx.timeZone);
+  const endsAt = game && args.override_game_times !== true ? game.ends_at : localToUtc(args.ends_local, ctx.timeZone);
   if (!startsAt || !endsAt) return { error: 'Give the start and end as local times, YYYY-MM-DDTHH:MM.' };
 
   let place;
@@ -602,7 +614,7 @@ async function draftPlan(args, ctx) {
     place,
     auto_rules: who.rules,
     join_requirement: 'located',
-    details: detailsInput(args.kind, args.details),
+    details: game ? { game } : detailsInput(args.kind, args.details),
   };
 
   let checked;
@@ -666,7 +678,7 @@ async function draftPlan(args, ctx) {
 
 // ─── Plans from events ─────────────────────────────────────────────────────
 
-// An event that gives only its start becomes a plan this long, as draft_plan assumes for games.
+// An event with no end uses this duration; listed sports games use their schedule instead.
 const EVENT_PLAN_MINUTES = 90;
 const MAX_PLAN_MS = rules.LIMITS.maxDurationMinutes * 60 * 1000;
 
