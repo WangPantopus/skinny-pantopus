@@ -30,6 +30,15 @@ async function checked(query) {
   return result.data;
 }
 
+/** Is a household vote about removing this person open at this Home (SQL home_removal_vote_open)? */
+async function removalVoteOpen(homeId, userId) {
+  const rows = await checked(supabaseAdmin.from('HomeQuorumAction').select('id').eq('home_id', homeId)
+    .eq('action_type', 'REMOVE_MEMBER').in('state', ['proposed', 'collecting_votes'])
+    .gt('expires_at', new Date().toISOString()).eq('metadata->>target_user_id', userId).limit(1));
+  if (!Array.isArray(rows)) throw accessUnavailable();
+  return rows.length > 0;
+}
+
 /**
  * Resolve one current effective policy. Unknown verification does not attest
  * membership; missing age is preserved as historical adult-compatible data.
@@ -79,7 +88,12 @@ async function getUserAccess(homeId, userId) {
     else allowed.delete(row.permission);
   }
   const age = occupancy?.age_band;
-  const permissions = HOME_PERMISSIONS.filter(permission => allowed.has(permission) && ageAllows(age, permission));
+  let permissions = HOME_PERMISSIONS.filter(permission => allowed.has(permission) && ageAllows(age, permission));
+  // Home claims PR 5: someone a household vote may remove keeps their access while the vote is open, but not the
+  // power to bring people in or decide about them (home_effective_access drops it the same way in SQL).
+  if (!ownerEntitlement && permissions.includes('members.manage') && await removalVoteOpen(homeId, userId)) {
+    permissions = permissions.filter(permission => permission !== 'members.manage');
+  }
   return {
     permissions, role_base: role || 'owner',
     effective_role_base: effectiveRole(ownerEntitlement ? 'owner' : role, age),

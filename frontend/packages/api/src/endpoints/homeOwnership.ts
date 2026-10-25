@@ -440,6 +440,47 @@ export async function voteOnQuorumAction(homeId: string, actionId: string, data:
 }
 
 // ============================================================
+// HOUSEHOLD REMOVAL VOTES
+// Settled residents vote to remove a member who doesn't belong. A voter sees only their own vote; the member it's
+// about sees that it's open and can contest it once they've proved the address.
+// ============================================================
+
+export interface HouseholdRemovalVote {
+  id: string;
+  about_you: boolean;
+  opened_at: string;
+  closes_at: string;
+  contested: boolean;
+  my_vote: 'remove' | 'keep' | null;
+  can_vote: boolean;
+  can_contest: boolean;
+  /** The member it's about, by the name they show neighbors; null when it's about you. */
+  member: { user_id: string; name: string | null } | null;
+}
+
+export async function getRemovalVotes(homeId: string): Promise<{ votes: HouseholdRemovalVote[]; can_start_for: string[] }> {
+  return get(`/api/homes/${homeId}/removal-votes`);
+}
+
+export async function startRemovalVote(homeId: string, targetUserId: string): Promise<{
+  vote: { id: string; closes_at: string; replayed: boolean };
+}> {
+  return post(`/api/homes/${homeId}/removal-votes`, { target_user_id: targetUserId });
+}
+
+export async function castRemovalVote(homeId: string, voteId: string, vote: 'remove' | 'keep'): Promise<{
+  my_vote: 'remove' | 'keep';
+  ended: boolean;
+  outcome: 'removed' | 'kept' | 'review' | 'not_applied' | null;
+}> {
+  return post(`/api/homes/${homeId}/removal-votes/${voteId}/vote`, { vote });
+}
+
+export async function contestRemovalVote(homeId: string, voteId: string): Promise<{ contested: boolean; contested_at: string | null }> {
+  return post(`/api/homes/${homeId}/removal-votes/${voteId}/contest`, {});
+}
+
+// ============================================================
 // DISPUTE
 // ============================================================
 

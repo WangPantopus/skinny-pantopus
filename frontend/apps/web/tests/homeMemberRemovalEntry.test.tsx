@@ -13,7 +13,7 @@ jest.mock('../src/hooks/useHomeAccess', () => ({ useHomeAccess: () => ({ loading
 jest.mock('@pantopus/api', () => ({ getApiBaseUrl: jest.fn(() => 'http://127.0.0.1:18080'), getAuthToken: jest.fn(() => 'synthetic'),
   AUTH_SESSION_CHANGE_KEY: 'session-marker', onTokenChange: jest.fn(() => () => {}),
   homeIam: { getHomeMembers: jest.fn(), getMyHomeAccess: jest.fn(), getAuditLog: jest.fn(), removeMember: jest.fn() },
-  getHouseholdAccessRequests: jest.fn(), post: jest.fn() }));
+  homeOwnership: { getRemovalVotes: jest.fn() }, getHouseholdAccessRequests: jest.fn(), post: jest.fn() }));
 const home = '10000000-0000-4000-8000-000000000001';
 const target = '10000000-0000-4000-8000-000000000002';
 const row = (role: string, id = target, username = 'fixture_member') => ({ id: '10000000-0000-4000-8000-000000000003',
@@ -25,6 +25,7 @@ beforeEach(() => {
   jest.mocked(api.homeIam.getMyHomeAccess).mockResolvedValue({ hasAccess: true, isOwner: true, role_base: 'owner', permissions: ['members.view', 'members.manage'] } as never);
   jest.mocked(api.homeIam.getAuditLog).mockResolvedValue({ entries: [] } as never);
   jest.mocked(api.getHouseholdAccessRequests).mockResolvedValue({ requests: [] } as never);
+  jest.mocked(api.homeOwnership.getRemovalVotes).mockResolvedValue({ votes: [], can_start_for: [] } as never);
 });
 test('all supported household roles remain visible and named Remove opens review without DELETE', async () => {
   jest.mocked(api.homeIam.getHomeMembers).mockResolvedValue({ occupants: [row('lease_resident'),

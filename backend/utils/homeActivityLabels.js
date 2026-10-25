@@ -43,17 +43,28 @@ const HOME_ACTIVITY_LABELS = {
   QUORUM_ACTION_EXECUTED: 'Owner vote carried out',
   QUORUM_ACTION_EXPIRED: 'Owner vote expired',
   QUORUM_ACTION_AUTO_APPROVED: 'Owner vote approved automatically',
+  REMOVAL_VOTE_OPENED: 'Household vote opened about a member',
+  REMOVAL_VOTE_CONTESTED: 'Member contested a household vote',
   AUTHORITY_REQUESTED: 'Landlord verification requested',
   AUTHORITY_VERIFIED: 'Landlord verified',
   AUTHORITY_REVOKED: 'Landlord verification revoked',
   TENANT_MOVE_OUT: 'Tenant moved out',
 };
 const CHECKLIST_ACTIVITY_LABELS = { completed: 'Checklist item completed', skipped: 'Checklist item skipped' };
+// A household removal vote's outcome (cast_home_removal_vote); its rows name no voter.
+const REMOVAL_VOTE_OUTCOME_LABELS = {
+  removed: 'Household vote removed a member',
+  kept: 'Household vote ended: the member stays',
+  review: 'Household vote sent to Pantopus review',
+  not_applied: 'Household vote passed but couldn\'t be applied',
+};
 
 function describeHomeActivity(row) {
   const metadata = row.metadata && typeof row.metadata === 'object' ? row.metadata : {};
   if (row.action === 'home_checklist_updated' && CHECKLIST_ACTIVITY_LABELS[metadata.status]) return CHECKLIST_ACTIVITY_LABELS[metadata.status];
   if (row.action === 'member_remove' && metadata.user_id && metadata.user_id === row.actor_user_id) return 'Member left the home';
+  if (row.action === 'REMOVAL_VOTE_ENDED') return REMOVAL_VOTE_OUTCOME_LABELS[metadata.outcome] || 'Household vote ended';
+  if (row.action === 'QUORUM_ACTION_EXPIRED' && metadata.action_type === 'REMOVE_MEMBER') return 'Household vote closed: the member stays';
   if (Object.hasOwn(HOME_ACTIVITY_LABELS, row.action)) return HOME_ACTIVITY_LABELS[row.action];
   const words = String(row.action || '').replace(/[_.]+/g, ' ').trim().toLowerCase();
   return words ? words[0].toUpperCase() + words.slice(1) : 'Home activity';
