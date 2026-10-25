@@ -67,7 +67,7 @@ function launchScopedChatTools({
   const giftFunds = isLaunchFeatureEnabled('gift_funds');
   return toolDefinitions
     .filter((tool) => {
-      if (tool.name === 'find_games') return plans && sports;
+      if (['find_games', 'find_teams', 'draft_sports_teams'].includes(tool.name)) return plans && sports && (tool.name !== 'draft_sports_teams' || actionCards);
       if (tool.name === 'draft_pickup_schedule') return pickupSchedule;
       // Phase 3 memory (`cards` lists "memory"): its cards also need "action", and plan alerts Plans.
       if (memory.MEMORY_TOOL_NAMES.has(tool.name)) {

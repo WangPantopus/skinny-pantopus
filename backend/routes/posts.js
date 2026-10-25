@@ -2536,6 +2536,9 @@ router.get('/feed-preferences', verifyToken, async (req, res) => {
 router.put('/feed-preferences', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
+    if (req.body.expected_user_id && req.body.expected_user_id !== userId) {
+      return res.status(409).json({ error: 'This card belongs to another signed-in account.' });
+    }
     const {
       hideDealsPlace, hideAlertsPlace,
       showPoliticsConnections, showPoliticsPlace,

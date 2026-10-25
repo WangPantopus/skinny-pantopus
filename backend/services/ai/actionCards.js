@@ -170,6 +170,15 @@ function draftPlanFromEventDefinition() {
 }
 
 const actionCardDefinitions = [
+  {
+    name: 'draft_sports_teams',
+    description: 'Draft following or hiding teams the person chose. Only ids returned by find_teams in this turn are allowed. Follow and hide are additions to their existing choices, not replacement lists. Saving happens only when they tap Save teams.',
+    input_schema: { type: 'object', properties: {
+      follow: { type: 'array', items: { type: 'string' }, maxItems: 40 },
+      hide: { type: 'array', items: { type: 'string' }, maxItems: 40 },
+      note: { type: ['string', 'null'], description: NOTE },
+    }, required: ['follow', 'hide', 'note'], additionalProperties: false },
+  },
   draftPlanDefinition(),
   draftPlanFromEventDefinition(),
   {
@@ -413,7 +422,7 @@ const actionCardDefinitions = [
 // The card tools that differ for people with plans_playdates.
 const playdateCardDefinitions = [draftPlanDefinition({ playdates: true }), draftPlanAskDefinition({ playdates: true })];
 
-const PLAN_CARD_TOOLS = new Set(['draft_plan', 'draft_plan_from_event', 'draft_plan_change', 'draft_plan_cancel', 'show_plan_requests', 'draft_plan_ask', 'draft_plan_message']);
+const PLAN_CARD_TOOLS = new Set(['draft_sports_teams', 'draft_plan', 'draft_plan_from_event', 'draft_plan_change', 'draft_plan_cancel', 'show_plan_requests', 'draft_plan_ask', 'draft_plan_message']);
 
 // ─── Envelope ──────────────────────────────────────────────────────────────
 
@@ -1651,9 +1660,36 @@ async function draftNotificationSettings(args, ctx) {
   return finished(draft, args.note, 'Tap Save to change your settings.');
 }
 
+async function draftSportsTeams(args, ctx) {
+  const user = userFor(ctx);
+  if (!(await plansOn(ctx)) || !(await isFeatureEnabled('plans_sports', user))) return { error: 'Sports teams are not available yet.' };
+  const { teamById, mergeSports } = require('../plans/planTeams');
+  const follow = args.follow || [], hide = args.hide || [];
+  if (![follow, hide].every((ids) => Array.isArray(ids) && ids.length <= 40
+    && ids.every((id) => typeof id === 'string' && teamById(id)?.id === id && ctx.sportsTeamIds?.has(id)))) {
+    return { error: 'Use only team ids returned by find_teams in this turn.' };
+  }
+  if (!follow.length && !hide.length) return { error: 'Choose a team to follow or hide.' };
+  if (follow.some((id) => hide.includes(id))) return { error: 'A team cannot be followed and hidden at the same time.' };
+  const viewer = await loadViewer(user);
+  const current = viewer.sports || {};
+  const teams = [...new Set([...(current.teams || []).filter((id) => !hide.includes(id)), ...follow])];
+  const hidden = [...new Set([...(current.hidden || []).filter((id) => !follow.includes(id)), ...hide])];
+  const sports = mergeSports(current, { ...(follow.length ? { watch: 'on' } : {}), teams, hidden });
+  const labels = (ids) => ids.map((id) => teamById(id).label).join(', ');
+  const title = [follow.length && `Follow ${labels(follow)}`, hide.length && `Hide ${labels(hide)}`].filter(Boolean).join(' · ');
+  return finished(card('sports_teams', {
+    title,
+    lines: [follow.length ? line('Follow', labels(follow)) : null, hide.length ? line('Hide', labels(hide)) : null],
+    actions: [action('confirm', 'Save teams', { method: 'PUT', path: '/api/posts/feed-preferences',
+      body: { sports, expected_user_id: ctx.userId } }, { label: 'Teams saved', link: linkFor('notification_settings') })],
+  }), args.note, 'Tap Save teams to confirm your choices.');
+}
+
 // ─── Dispatch ──────────────────────────────────────────────────────────────
 
 const CARD_EXECUTORS = {
+  draft_sports_teams: draftSportsTeams,
   draft_plan: draftPlan,
   draft_plan_from_event: draftPlanFromEvent,
   draft_plan_change: draftPlanChange,

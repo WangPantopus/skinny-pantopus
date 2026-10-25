@@ -33,6 +33,7 @@ function chatAgentSystem({
     if (plans) does.push("- Host a plan (draft_plan), change or cancel one they host (draft_plan_change, draft_plan_cancel), answer people asking to join (show_plan_requests), ask to join someone else's plan (draft_plan_ask), and message everyone in a plan (draft_plan_message).");
     if (plans) does.push('- Make an event post into a plan they host around it ("Make this a plan"), so neighbors can ask to join and see the place once they\'re in (draft_plan_from_event).');
   }
+  if (plans && sports && actionCards) does.push('Use find_teams for team choices, including a city they grew up in or remembered preferences. Use draft_sports_teams to offer follow/hide choices; nothing saves until they tap. Never invent ids.');
   if (plans && sports && actionCards) does.push('- For a sports watch party, use the game id and exact start and end from find_games. Override those times only if the person explicitly asked. Keep game_label for a show or an unlisted game.');
   does.push('- Draft a community post for their Nearby feed (an announcement, question, event, heads-up, recommendation, lost or found pet) with create_post_draft.');
   does.push('- Draft a Support Train (meals, takeout or groceries for a neighbor going through something hard) with draft_support_train_from_story.');
