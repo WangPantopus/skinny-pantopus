@@ -963,14 +963,18 @@ async function respondWithChatChanges(req, res, roomIds, identityUserId) {
     receiptIds = [...new Set(receiptIds)];
   }
   const cursor = parseSyncCursor(params.cursor);
+  // An unpinned complete page answers untilCursors {}; sent back, an empty map pins nothing.
   const until = parseSyncCursor(params.until, { optional: true });
   const limit = Math.min(Math.max(parseInt(params.limit, 10) || 200, 1), 200);
-  const changes = await chatChanges({ roomIds, identityUserId, cursor, until, limit });
+  const { changedRoomIds, ...changes } = await chatChanges({ roomIds, identityUserId, cursor,
+    until: until && Object.keys(until).length ? until : null, limit });
   const visible = changes.messages.filter((message) => !message.deleted);
+  // Read boundaries come with the rooms that changed since the cursor. A read alone moves no room revision:
+  // the apps recover reads of their own unconfirmed messages through readMessageIds (messageReadReceipts).
   const [reactions, people, readReceipts] = await Promise.all([
     buildReactionSummary(visible.map((message) => message.id), req.user.id),
     loadMessageSenders(visible),
-    chatReadReceipts(roomIds),
+    chatReadReceipts(changedRoomIds),
     applyDirectReadReceipts(visible, req.user.id, { identityUserId }),
   ]);
   const messageReadReceipts = [];
