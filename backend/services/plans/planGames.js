@@ -105,7 +105,7 @@ async function upcomingGamesForTeams(teamIds, now = Date.now()) {
   const fallback = upcomingGames(now).flatMap((game) => {
     const team = teamById(game.team);
     return team && teams.includes(team.id) && unavailableLeagues.includes(team.league)
-      ? [{ ...game, team: team.id, league: team.league, neutral: false, time_tbd: false, status: 'scheduled', postseason: false }] : [];
+      ? [{ ...game, team: team.id, opponent_team: require('../../data/sportsTeams').TEAMS.find((other) => other.league === team.league && other.label === game.opponent)?.id || null, league: team.league, neutral: false, time_tbd: false, status: 'scheduled', postseason: false }] : [];
   });
   const ranked = [...provider.filter((game) => schedule.isAvailable(game, now)), ...fallback]
     .sort((a, b) => teams.indexOf(a.team) - teams.indexOf(b.team) || Date.parse(a.starts_at) - Date.parse(b.starts_at));
@@ -115,4 +115,56 @@ async function upcomingGamesForTeams(teamIds, now = Date.now()) {
   return { games: ordered, attribution: ordered.some((game) => game.id.startsWith('tsdb:')) ? schedule.ATTRIBUTION : null };
 }
 
-module.exports = { upcomingGames, upcomingGamesForTeams, findGame, nextGameForTeam, repeatDetails, FAN_RADIUS_METERS };
+function suggestedForViewer(viewer) {
+  const { suggestedTeams } = require('./planTeams');
+  const near = viewer.origin ? [...viewer.locations, viewer.origin] : viewer.locations;
+  return suggestedTeams(near, (viewer.homes || []).map((home) => home.state));
+}
+
+/** Shared by the versioned route and opt-in AI surfaces. */
+async function gamesForViewer(viewer, purpose = 'sheet', now = Date.now()) {
+  const prefs = viewer.sports || {};
+  const state = prefs.watch === 'off' ? 'off' : prefs.watch === 'on' ? 'on' : 'unset';
+  const sports = { state, can_choose: true, attribution: null };
+  if (state === 'off' || (purpose === 'sheet' && state === 'unset')) return { games: [], sports };
+  const hidden = new Set(prefs.hidden || []);
+  const followed = (prefs.teams || []).filter((id) => !hidden.has(id));
+  const leagueTeams = purpose === 'sheet'
+    ? require('../../data/sportsTeams').TEAMS.filter((team) => (prefs.leagues || []).includes(team.league)).map((team) => team.id) : [];
+  const suggested = purpose === 'composer' ? suggestedForViewer(viewer).map((team) => team.id) : [];
+  const ids = [...new Set([...followed, ...suggested, ...leagueTeams])].filter((id) => !hidden.has(id));
+  const result = await upcomingGamesForTeams(ids, now);
+  const games = result.games.filter((game) => !hidden.has(game.opponent_team))
+    .filter((game) => purpose === 'composer' || followed.includes(game.team) || game.postseason)
+    .map((game) => ({ ...game, followed: followed.includes(game.team) }))
+    .sort((a, b) => Number(b.followed) - Number(a.followed) || Date.parse(a.starts_at) - Date.parse(b.starts_at));
+  sports.attribution = games.some((game) => game.id.startsWith('tsdb:')) ? require('../sports/schedule').ATTRIBUTION : null;
+  return { games, sports };
+}
+
+/** Resolve only server-held records. The caller has already checked the viewer's flag. */
+async function resolveGame(id, team) {
+  const manual = findGame(id);
+  const { teamById } = require('./planTeams');
+  if (manual) return { ...manual, team: teamById(manual.team)?.id || manual.team };
+  const game = await require('../sports/schedule').findCachedGame(id, team);
+  if (!game || game.time_tbd || game.status !== 'scheduled' || !game.starts_at || !game.ends_at) return null;
+  return gameDetails(game);
+}
+
+async function repeatDetailsForViewer(kind, details, startsAtMillis, user) {
+  if (!await require('../featureFlagService').isFeatureEnabled('plans_sports', user)) return repeatDetails(kind, details, startsAtMillis);
+  const out = { ...(details || {}) };
+  if (kind === 'watch_party' && out.game) {
+    const team = (await resolveGame(out.game.id, out.game.team))?.team || out.game.team;
+    const { games } = await upcomingGamesForTeams([team], startsAtMillis - REPEAT_WINDOW_MS);
+    const next = games.filter((game) => Math.abs(Date.parse(game.starts_at) - startsAtMillis) <= REPEAT_WINDOW_MS)
+      .sort((a, b) => Math.abs(Date.parse(a.starts_at) - startsAtMillis) - Math.abs(Date.parse(b.starts_at) - startsAtMillis))[0];
+    if (next) out.game = gameDetails(next);
+    else delete out.game;
+  }
+  return out;
+}
+
+module.exports = { upcomingGames, upcomingGamesForTeams, gamesForViewer, suggestedForViewer, resolveGame,
+  findGame, nextGameForTeam, repeatDetails, repeatDetailsForViewer, FAN_RADIUS_METERS };

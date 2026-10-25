@@ -2515,6 +2515,7 @@ router.get('/feed-preferences', verifyToken, async (req, res) => {
     res.json({
       preferences: data || {
         user_id: userId,
+        sports: {},
         hide_deals_place: false,
         hide_alerts_place: false,
         show_politics_connections: false,
@@ -2550,6 +2551,17 @@ router.put('/feed-preferences', verifyToken, async (req, res) => {
     if (hideAlertsPlace !== undefined) upsertData.hide_alerts_place = !!hideAlertsPlace;
     if (showPoliticsConnections !== undefined) upsertData.show_politics_connections = !!showPoliticsConnections;
     if (showPoliticsPlace !== undefined) upsertData.show_politics_place = !!showPoliticsPlace;
+
+    if (req.body.sports !== undefined) {
+      const { isFeatureEnabled } = require('../services/featureFlagService');
+      if (!await isFeatureEnabled('plans_sports', req.user)) return res.status(404).json({ error: 'Sports preferences are not available.' });
+      const { data: existing, error: readError } = await supabaseAdmin.from('UserFeedPreference')
+        .select('sports').eq('user_id', userId).maybeSingle();
+      if (readError) throw new Error('Could not read sports preferences.');
+      try {
+        upsertData.sports = require('../services/plans/planTeams').mergeSports(existing?.sports, req.body.sports);
+      } catch (err) { return res.status(400).json({ error: err.message }); }
+    }
 
     const { data, error } = await supabaseAdmin
       .from('UserFeedPreference')

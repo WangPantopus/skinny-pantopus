@@ -60,4 +60,32 @@ function suggestedTeams(places = [], states = []) {
   return TEAMS.filter((team) => selected.has(team.id));
 }
 
-module.exports = { suggestedTeams, searchTeams, teamById, LEAGUES, PRO_NEAREST_MAX_MILES, PRO_EXTRA_MIN_MILES, PRO_EXTRA_FACTOR, COLLEGE_MILES };
+/** Partial sports updates preserve unrelated choices. A changed list wins over the old opposite list. */
+function mergeSports(current, patch) {
+  if (!patch || typeof patch !== 'object' || Array.isArray(patch)) throw new Error('Sports preferences must be an object.');
+  const out = { ...(current || {}) };
+  for (const [key, value] of Object.entries(patch)) {
+    if (key === 'watch') {
+      if (!['on', 'off'].includes(value)) throw new Error('Choose on or off for sports.');
+      out.watch = value;
+    } else if (['teams', 'hidden', 'leagues'].includes(key)) {
+      const limit = key === 'leagues' ? LEAGUES.length : 40;
+      if (!Array.isArray(value) || value.length > limit || value.some((id) => typeof id !== 'string'
+        || (key === 'leagues' ? !LEAGUES.includes(id) : teamById(id)?.id !== id))) {
+        throw new Error(`Choose up to ${limit} known ${key === 'leagues' ? 'leagues' : 'teams'}.`);
+      }
+      out[key] = [...new Set(value)];
+      if (key === 'teams' || key === 'hidden') {
+        const opposite = key === 'teams' ? 'hidden' : 'teams';
+        out[opposite] = (out[opposite] || []).filter((id) => !out[key].includes(id));
+      }
+    } else throw new Error('Unknown sports preference.');
+  }
+  return out;
+}
+
+function publicTeam(team) {
+  return { id: team.id, name: team.name, label: team.label, league: team.league, city: team.city, state: team.state };
+}
+
+module.exports = { suggestedTeams, searchTeams, teamById, mergeSports, publicTeam, LEAGUES, PRO_NEAREST_MAX_MILES, PRO_EXTRA_MIN_MILES, PRO_EXTRA_FACTOR, COLLEGE_MILES };
