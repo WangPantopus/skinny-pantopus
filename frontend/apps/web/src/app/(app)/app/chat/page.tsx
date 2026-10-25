@@ -276,12 +276,16 @@ export default function ChatListPage() {
   const filteredConversations = conversations;
 
   // ── Virtualize conversation list ──────────────────────────
+  // The first rows render in the same commit as the list. Until the list can be
+  // measured, its height is taken as its max height (below), and a row without
+  // topics is 73 px with its border, so measuring rows rarely renders them again.
   const listScrollRef = useRef<HTMLDivElement>(null);
   const virtualizer = useVirtualizer({
     count: filteredConversations.length,
     getScrollElement: () => listScrollRef.current,
     getItemKey: (index) => conversationKey(filteredConversations[index]),
-    estimateSize: () => 72,
+    estimateSize: () => 73,
+    initialRect: { width: 0, height: typeof window === 'undefined' ? 0 : Math.max(0, window.innerHeight - 280) },
     overscan: 8,
   });
 

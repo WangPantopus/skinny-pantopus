@@ -46,6 +46,47 @@ not enforced yet. SwiftLint, SwiftFormat and the icon guard are enforced.
 
 ## Deployment sequence
 
+The queue integration check uses disposable PostgreSQL to verify all registered
+consumers, cron handoffs, retries and retention. It also injects a rejected
+handoff, slow SQL and a database connection outage: handoffs must retry without
+duplicating successful enqueues, and the shared queue circuit must recover.
+`patches/pg-boss@12.18.3.patch` fixes that pinned version's swallowed dispatch
+errors; keep it until an upstream version passes the same integration check.
+
+Queue SQL has a 5-second server limit, a 1-second lock limit and an 8-second
+client limit; obtaining a pooled connection is bounded at 3 seconds. The
+server limits are applied with awaited session `SET` commands on every new
+connection because Supavisor ignores the corresponding startup parameters.
+The integration check simulates that behavior and checks limits after recovery.
+These limits apply to queue bookkeeping, not the business handler's one-hour job
+expiry. Database failures back off all queue callers together for 30, 60, then
+120 seconds, allowing one recovery attempt after each delay. No ambiguous
+write is blindly replayed. Application retry settings and cron expressions stay
+unchanged; durable dispatcher handoffs use their UUID as the application job
+UUID, a one-minute expiry and bounded exponential retries. As before, a database
+outage can delay jobs, and pg-boss does not backfill cron ticks that could not be
+persisted while the database was unavailable.
+
+Production's independent `HealthMonitoringEnabled` switch creates
+`pantopus-backend-health-production` in the existing seeder stack. Once a minute,
+it checks public `/health`, performs the same one-row HEAD database query
+directly through Supabase, and reads the provider metrics endpoint. It writes
+only numeric CloudWatch metrics under `Pantopus/Backend/production`, with 30-day
+Lambda log retention. The direct database probe bypasses the API host but still
+depends on Supabase's REST gateway. Existing business schedule switches are
+independent and must be preserved on deployment.
+
+API/database alarms fire on two bad or missing minutes out of three; missing
+resource telemetry alarms after three minutes. Available RAM below 10% or I/O
+wait above 25% in three of five minutes also alarms. All use the existing job
+alarm SNS topic and report recovery. CPU and swap rates require consecutive
+samples from a warm monitor; cold starts and counter resets leave rates absent,
+not zero. Inspect `MemoryAvailablePercent`, `SwapInPagesPerSecond`,
+`SwapOutPagesPerSecond`, `IoWaitPercent`, `IoStallPercent`, latency and load
+together when deciding compute size. Swap occupancy alone does not establish
+memory exhaustion, and the provider's disk-credit balance is not exposed by
+this scrape endpoint.
+
 1. CI succeeds on the current `master` (production) or `dev` (staging) commit.
 2. Deploy Backend verifies the exact commit against the latest CI run and branch
    head. A manual dispatch has the same requirement; PR/fork runs cannot deploy.

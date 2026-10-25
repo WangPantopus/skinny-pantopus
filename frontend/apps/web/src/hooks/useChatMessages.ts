@@ -487,6 +487,10 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
 
   const refreshInFlightRef = useRef<{ scope: number; promise: Promise<void> } | null>(null);
   const canonicalRefreshRef = useRef<{ scope: number; requested: number; completed: number } | null>(null);
+  // The saved conversation being read for a history view. A refresh of that view
+  // waits for it, so it continues from the saved sync cursors instead of reading
+  // the whole history again before the saved messages are shown.
+  const savedReadRef = useRef<{ view: number; done: Promise<void> } | null>(null);
   // Socket edits/deletes/new sends that arrive during a history read win over its
   // older snapshot. Reset per scope; no message content is persisted here.
   const liveChangesRef = useRef(new Map<string, number>());
@@ -552,6 +556,8 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     const current = () => isCurrentScope() && historyViewRef.current === historyView
       && (historyGeneration === null || isChatHistoryGenerationCurrent(currentUserId, historyGeneration));
     const runRefresh = async (canonical: boolean) => {
+      const savedRead = savedReadRef.current;
+      if (savedRead?.view === historyView) await savedRead.done;
       // Disabled device storage must not prevent an otherwise authorized
       // network read. Such results cannot be retained on this device.
       historyGeneration = await activateChatStorage(currentUserId).then(readChatHistoryGeneration).catch(() => null);
@@ -859,16 +865,20 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     pendingReactionsRef.current.clear();
     visibleThroughRef.current.clear();
     readAcknowledgedRef.current.clear();
+    // A poll while realtime is down, or the socket connecting, can ask for a
+    // refresh before this read finishes; that refresh waits for it.
+    const savedRead = !kept && currentUserId && loadAttempt === 0 ? (async () => {
+      try {
+        await startChatOutbox(currentUserId);
+        const saved = await activateChatStorage(currentUserId);
+        const disk = await readChatRecord<ConversationSnapshot>(saved, 'history', cacheKeyId);
+        if (cancelled || !isCurrentScope()) return;
+        if (disk && Array.isArray(disk.messages) && completedRefreshRef.current === beforeRefresh) { kept = disk; showKept(disk); }
+      } catch { /* The network remains usable when device storage is disabled. */ }
+    })() : Promise.resolve();
+    savedReadRef.current = { view: historyViewRef.current, done: savedRead };
     void (async () => {
-      if (!kept && currentUserId && loadAttempt === 0) {
-        try {
-          await startChatOutbox(currentUserId);
-          const saved = await activateChatStorage(currentUserId);
-          const disk = await readChatRecord<ConversationSnapshot>(saved, 'history', cacheKeyId);
-          if (cancelled || !isCurrentScope()) return;
-          if (disk && Array.isArray(disk.messages) && completedRefreshRef.current === beforeRefresh) { kept = disk; showKept(disk); }
-        } catch { /* The network remains usable when device storage is disabled. */ }
-      }
+      await savedRead;
       if (!cancelled && isCurrentScope()) await refresh();
     })().catch((e: unknown) => {
       if (cancelled || !isCurrentScope()) return;

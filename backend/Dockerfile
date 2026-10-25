@@ -5,6 +5,7 @@ WORKDIR /workspace
 
 FROM base AS dependencies
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY patches ./patches
 COPY backend/package.json ./backend/package.json
 RUN --mount=type=cache,id=pantopus-pnpm,target=/pnpm/store \
     pnpm install --filter pantopus-backend --frozen-lockfile --store-dir /pnpm/store
