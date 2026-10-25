@@ -918,7 +918,8 @@ function loadMessageSenders(messages) {
   return loadChatPeople((messages || []).map((message) => message?.sender?.id || message?.user_id));
 }
 
-async function personChatRoomIds(userId, otherUserId, asBusinessUserId) {
+// The shared direct and task rooms, each with its sync revisions (chatSyncSnapshot).
+async function personChatRooms(userId, otherUserId, asBusinessUserId) {
   if (asBusinessUserId && !await canActAsBusiness(asBusinessUserId, userId)) {
     const error = new Error('Access denied');
     error.status = 403;
@@ -928,13 +929,14 @@ async function personChatRoomIds(userId, otherUserId, asBusinessUserId) {
   if (String(identityUserId) === String(otherUserId)) {
     throw Object.assign(new Error('Cannot open a conversation with yourself'), { status: 400 });
   }
-  const ids = [];
+  const shared = [];
   let after;
   // Filter both members in SQL before paging. Intersecting two capped lists of
   // unrelated rooms silently loses older conversations for long-lived accounts.
   for (;;) {
     let query = supabaseAdmin.from('ChatRoom')
-      .select('id, type, gig_id, mine:ChatParticipant!inner(user_id), other:ChatParticipant!inner(user_id)')
+      .select('id, type, gig_id, message_revision, history_reset_revision, '
+        + 'mine:ChatParticipant!inner(user_id), other:ChatParticipant!inner(user_id)')
       .in('type', ['direct', 'gig'])
       .eq('mine.user_id', identityUserId).eq('mine.is_active', true)
       .eq('other.user_id', otherUserId).eq('other.is_active', true)
@@ -944,13 +946,17 @@ async function personChatRoomIds(userId, otherUserId, asBusinessUserId) {
     if (error) throw chatAccessUnavailable();
     const rooms = data || [];
     const closed = await closedGigRoomIds(rooms, userId, [identityUserId]);
-    ids.push(...rooms.filter((room) => !closed.has(room.id)).map((room) => room.id));
-    if (rooms.length < 200) return ids;
+    shared.push(...rooms.filter((room) => !closed.has(room.id)));
+    if (rooms.length < 200) return shared;
     after = rooms[rooms.length - 1].id;
   }
 }
 
-async function respondWithChatChanges(req, res, roomIds, identityUserId) {
+async function personChatRoomIds(userId, otherUserId, asBusinessUserId) {
+  return (await personChatRooms(userId, otherUserId, asBusinessUserId)).map((room) => room.id);
+}
+
+async function respondWithChatChanges(req, res, roomIds, identityUserId, snapshot) {
   const params = req.method === 'POST' ? (req.body || {}) : req.query;
   let receiptIds = params.readMessageIds;
   if (receiptIds !== undefined) {
@@ -967,7 +973,7 @@ async function respondWithChatChanges(req, res, roomIds, identityUserId) {
   const until = parseSyncCursor(params.until, { optional: true });
   const limit = Math.min(Math.max(parseInt(params.limit, 10) || 200, 1), 200);
   const { changedRoomIds, ...changes } = await chatChanges({ roomIds, identityUserId, cursor,
-    until: until && Object.keys(until).length ? until : null, limit });
+    until: until && Object.keys(until).length ? until : null, limit, snapshot });
   const visible = changes.messages.filter((message) => !message.deleted);
   // Read boundaries come with the rooms that changed since the cursor. A read alone moves no room revision:
   // the apps recover reads of their own unconfirmed messages through readMessageIds (messageReadReceipts).
@@ -1893,8 +1899,12 @@ async function personChatChanges(req, res) {
   try {
     const params = req.method === 'POST' ? (req.body || {}) : req.query;
     const asBusinessUserId = params.asBusinessUserId ? String(params.asBusinessUserId) : null;
-    const roomIds = await personChatRoomIds(req.user.id, req.params.otherUserId, asBusinessUserId);
-    return await respondWithChatChanges(req, res, roomIds, asBusinessUserId || req.user.id);
+    // The scope read carries each room's revisions, so the catch-up needs no second snapshot read.
+    const rooms = await personChatRooms(req.user.id, req.params.otherUserId, asBusinessUserId);
+    return await respondWithChatChanges(req, res, rooms.map((room) => room.id), asBusinessUserId || req.user.id, {
+      cursors: Object.fromEntries(rooms.map((room) => [room.id, room.message_revision])),
+      resets: Object.fromEntries(rooms.map((room) => [room.id, room.history_reset_revision])),
+    });
   } catch (error) {
     return chatChangesFailure(req, res, error);
   }

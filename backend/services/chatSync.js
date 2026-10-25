@@ -81,8 +81,8 @@ async function chatSyncSnapshot(roomIds) {
   };
 }
 
-async function chatChanges({ roomIds, identityUserId, cursor, until, limit }) {
-  const snapshot = await chatSyncSnapshot(roomIds);
+async function chatChanges({ roomIds, identityUserId, cursor, until, limit, snapshot: scopeSnapshot }) {
+  const snapshot = scopeSnapshot || await chatSyncSnapshot(roomIds);
   const roomSet = new Set(roomIds);
   const removedRoomIds = Object.keys(cursor).filter((roomId) => !roomSet.has(roomId));
   const target = until || snapshot.cursors;
