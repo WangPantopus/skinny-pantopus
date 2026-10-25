@@ -76,6 +76,7 @@ import app.pantopus.android.ui.screens.plans.components.PlanSwatch
 import app.pantopus.android.ui.screens.plans.components.PlanTextButton
 import app.pantopus.android.ui.screens.plans.components.PlanTypeTag
 import app.pantopus.android.ui.screens.plans.components.planCard
+import app.pantopus.android.ui.screens.plans.components.rememberGameTime
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -629,7 +630,8 @@ internal fun PlansEmptyContent(
                 )
             }
             // The next game as a watch-party nudge; without one, the plain invitation (as on iOS).
-            val game = state.games.firstOrNull()
+            val now by rememberGameTime()
+            val game = state.games.firstOrNull { it.isAvailable(now) }
             GameSuggestion(game) { onHost(PlanKind.WATCH_PARTY, game) }
         }
         val others = state.kinds.filter { it != PlanKind.WATCH_PARTY }
@@ -722,7 +724,8 @@ internal fun gameLine(game: PlanGameDto): String {
             1L -> "tomorrow"
             else -> start.format(DateTimeFormatter.ofPattern("EEEE", Locale.US))
         }
-    return "${game.label} play $day at ${start.format(DateTimeFormatter.ofPattern("h:mm", Locale.US))}"
+    val matchup = if (game.opponent.isNullOrBlank()) "${game.label} play" else game.matchupLabel()
+    return "$matchup $day at ${start.format(DateTimeFormatter.ofPattern("h:mm", Locale.US))}"
 }
 
 /** No location yet (board F5); after a refusal it says location is off, with Settings when there's no home (as on iOS). */

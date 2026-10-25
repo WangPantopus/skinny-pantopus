@@ -2,6 +2,7 @@ package app.pantopus.android.data.api.models.plans
 
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
+import java.time.Instant
 
 /*
  * Nearby Plans: the wire shapes of `/api/plans` (the build brief's contract, section 5).
@@ -45,6 +46,11 @@ data class PlanHostDto(
 data class PlanGameRefDto(
     @Json(name = "label") val label: String? = null,
     @Json(name = "starts_at") val startsAt: String? = null,
+    @Json(name = "id") val id: String? = null,
+    @Json(name = "team") val team: String? = null,
+    @Json(name = "opponent") val opponent: String? = null,
+    @Json(name = "home") val home: Boolean? = null,
+    @Json(name = "ends_at") val endsAt: String? = null,
 )
 
 /** `details`: the per-type facts (brief section 4). Every field is optional. */
@@ -412,7 +418,25 @@ data class PlanGameDto(
     @Json(name = "starts_at") val startsAt: String? = null,
     @Json(name = "ends_at") val endsAt: String? = null,
     @Json(name = "source") val source: String? = null,
-)
+    @Json(name = "opponent") val opponent: String? = null,
+    @Json(name = "home") val home: Boolean? = null,
+    @Json(name = "preseason") val preseason: Boolean? = null,
+) {
+    fun matchupLabel(): String = if (opponent.isNullOrBlank()) label else "$label ${if (home == false) "at" else "vs"} $opponent"
+
+    fun isAvailable(at: Instant = Instant.now()): Boolean =
+        runCatching {
+            if (endsAt != null) {
+                Instant.parse(endsAt).minusSeconds(GAME_MIN_LEFT_SECONDS).isAfter(at)
+            } else {
+                startsAt?.let { Instant.parse(it).isAfter(at) } ?: false
+            }
+        }.getOrDefault(false)
+
+    fun reference(): PlanGameRefDto = PlanGameRefDto(label, startsAt, id, team, opponent, home, endsAt)
+}
+
+private const val GAME_MIN_LEFT_SECONDS = 30 * 60L
 
 /** `GET /api/plans/games`. Empty is fine: the composer then offers only "Another game". */
 @JsonClass(generateAdapter = true)

@@ -304,11 +304,28 @@ class PlansRepository
             note: String?,
         ): NetworkResult<Unit> = write(id) { api.feedback(id, PlanFeedbackBody(answer, note?.takeIf(String::isNotBlank))) }
 
-        suspend fun games(): NetworkResult<List<PlanGameDto>> =
-            when (val result = safeApiCall { api.games() }) {
-                is NetworkResult.Success -> NetworkResult.Success(result.data.games)
+        suspend fun games(): NetworkResult<List<PlanGameDto>> {
+            val from = origin
+            val gps =
+                from?.gps?.takeIf {
+                    java.time.Duration.between(it, java.time.Instant.now()).seconds in 0..GPS_MAX_AGE_SECONDS
+                }
+            return when (
+                val result =
+                    safeApiCall {
+                        api.games(
+                            latitude = from?.latitude,
+                            longitude = from?.longitude,
+                            gpsLatitude = gps?.let { from.latitude },
+                            gpsLongitude = gps?.let { from.longitude },
+                            gpsTimestamp = gps?.toString(),
+                        )
+                    }
+            ) {
+                is NetworkResult.Success -> NetworkResult.Success(result.data.games.filter { it.isAvailable() })
                 is NetworkResult.Failure -> result
             }
+        }
 
         /**
          * Public places for H6: nearest first, or for [plan] the ones that suit it first, each saying whether it's open
@@ -411,6 +428,7 @@ class PlansRepository
 
         private companion object {
             const val CARD_CACHE = 64
+            const val GPS_MAX_AGE_SECONDS = 300L
         }
     }
 

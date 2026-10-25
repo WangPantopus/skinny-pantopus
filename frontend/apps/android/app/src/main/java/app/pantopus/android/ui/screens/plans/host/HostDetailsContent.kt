@@ -13,6 +13,7 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -42,6 +43,7 @@ import app.pantopus.android.ui.screens.plans.components.PlanSwitchRow
 import app.pantopus.android.ui.screens.plans.components.PlanTextArea
 import app.pantopus.android.ui.screens.plans.components.PlanTile
 import app.pantopus.android.ui.screens.plans.components.PlanWhenCard
+import app.pantopus.android.ui.screens.plans.components.rememberGameTime
 import app.pantopus.android.ui.screens.plans.detail.extraGearWord
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -87,18 +89,20 @@ private fun ColumnScope.WatchFields(
     vm: HostFlowViewModel,
 ) {
     val draft = ui.draft
+    val now by rememberGameTime()
     PlanField(label = "Game") {
         // The three soonest games (and the one already picked), then "Another game" (as on iOS).
-        val shown = (ui.games.take(GAME_CHIPS) + ui.games.filter { it.id == draft.gameId }).distinctBy { it.id }
+        val available = ui.games.filter { it.isAvailable(now) }
+        val shown = (available.take(GAME_CHIPS) + available.filter { it.id == draft.gameId }).distinctBy { it.id }
         val choices =
             shown.map { game ->
                 val time = PlanFormat.instant(game.startsAt)?.let { PlanFormat.shortWhen(it, ui.zone) }
-                PlanChoice(game.id, listOfNotNull(game.label, time).joinToString(" · "))
+                PlanChoice(game.id, listOfNotNull(game.matchupLabel(), time).joinToString(" · "))
             } + PlanChoice(ANOTHER_GAME, "Another game")
         PlanChoiceGroup(
             choices = choices,
             isSelected = { it.id == (draft.gameId ?: ANOTHER_GAME) },
-            onSelect = { choice -> vm.pickGame(ui.games.firstOrNull { it.id == choice.id }) },
+            onSelect = { choice -> vm.pickGame(ui.games.firstOrNull { it.id == choice.id && it.isAvailable() }) },
         )
         Text(
             text = "Picking a game fills in the title and the time.",

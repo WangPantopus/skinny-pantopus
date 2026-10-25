@@ -709,7 +709,7 @@ private fun PlansTopChrome(
             }
             menu()
         }
-        if (!state.isEmpty) KindChips(state = state, onKind = onKind)
+        if (!state.isEmpty || state.kind != null) KindChips(state = state, onKind = onKind)
     }
 }
 

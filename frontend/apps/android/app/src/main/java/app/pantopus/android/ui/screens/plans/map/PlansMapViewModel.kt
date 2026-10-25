@@ -127,6 +127,7 @@ class PlansMapViewModel
         private var viewport: PlanViewport? = null
         private var pinsJob: Job? = null
         private var listJob: Job? = null
+        private var gamesJob: Job? = null
         private var started = false
 
         init {
@@ -157,7 +158,6 @@ class PlansMapViewModel
             if (!started) {
                 started = true
                 resolveLocation()
-                loadGames()
                 return
             }
             val location = _state.value.location ?: return
@@ -226,16 +226,18 @@ class PlansMapViewModel
                     gps = if (location.source == PlanLocation.Source.GPS) Instant.now() else null,
                 ),
             )
-            _state.update { it.copy(location = location, locationStatus = PlansLocationStatus.Ready) }
+            _state.update { it.copy(location = location, locationStatus = PlansLocationStatus.Ready, games = emptyList()) }
             showStoredList()
             refreshAll(force = false)
         }
 
         private fun loadGames() {
-            viewModelScope.launch {
-                val games = (repository.games() as? NetworkResult.Success)?.data.orEmpty()
-                _state.update { it.copy(games = games) }
-            }
+            gamesJob?.cancel()
+            gamesJob =
+                viewModelScope.launch {
+                    val games = (repository.games() as? NetworkResult.Success)?.data.orEmpty()
+                    _state.update { it.copy(games = games) }
+                }
         }
 
         /** A chip: null is "All". */
@@ -322,6 +324,7 @@ class PlansMapViewModel
         }
 
         private fun refreshAll(force: Boolean) {
+            loadGames()
             loadList(force)
             loadPins(force, debounce = false)
         }
