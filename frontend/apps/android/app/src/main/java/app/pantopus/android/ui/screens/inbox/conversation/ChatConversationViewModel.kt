@@ -3428,8 +3428,11 @@ class ChatConversationViewModel
         private fun resetRoomSubscriptions() {
             backfillProjectionJob?.cancel()
             backfillProjectionJob = null
-            roomJoinJobs.values.forEach { it.cancel() }
+            // Cancelling a join that holds a gate permit resumes a queued join at once on this thread, and that join
+            // removes (or, for a new context, adds) entries in this map. Cancel a detached copy.
+            val joins = roomJoinJobs.values.toList()
             roomJoinJobs.clear()
+            joins.forEach { it.cancel() }
             roomSubscriptionIds.forEach { (roomId, subscriptionId) -> leaveRoomSubscription(roomId, subscriptionId) }
             roomSubscriptionIds.clear()
             joinedRoomIds.clear()
