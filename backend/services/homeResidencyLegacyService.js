@@ -13,6 +13,7 @@ const MESSAGES = {
   MEMBERSHIP_RENEWAL_REQUIRED: 'You were removed from this household. Ask someone in the household to invite you again.',
   RESIDENCY_ALREADY_VERIFIED: 'Your residency was already verified. Open My Homes to check current access.',
   RESIDENCY_EXISTING_REQUEST: 'Your existing request has different details. Open My Homes to review it.',
+  RESIDENCY_HOME_LIMIT: 'This Home can’t take more requests to join right now. Ask someone who lives there to invite you, or try again later.',
 };
 const CLAIM_FIELDS = ['id', 'home_id', 'user_id', 'status', 'claimed_role', 'claimed_address',
   'claimed_latitude', 'claimed_longitude', 'reviewed_by', 'reviewed_at', 'review_note',
@@ -71,6 +72,11 @@ async function submit({ homeId, actorId, intent }) {
   // the legacy envelope, and no fabricated command or address proof is returned.
   const saved = { ...result, claim: Object.fromEntries(CLAIM_FIELDS.map(key => [key, claim[key]])) };
   await notifyReviewers(saved);
+  if (!saved.reused) {
+    // After the admission committed: it can only flag the request for the admin queue.
+    await require('../utils/homeSecurityPolicy').watchResidencyRequest({ homeId: saved.home_id, userId: saved.actor_id,
+      source: 'residency_request' });
+  }
   return saved;
 }
 

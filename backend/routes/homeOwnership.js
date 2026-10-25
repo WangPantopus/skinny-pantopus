@@ -422,6 +422,8 @@ router.post('/:id/ownership-claims', verifyToken, ownershipClaimLimiter, validat
       }
       // "Usually within hours" is only true if a person hears about it.
       adminAlerts.notifyClaimToReview({ claim, home, claimantUserId: userId }).catch(() => {});
+      // The address watch can flag the request for the admin address review queue; it never changes the claim.
+      await policy.watchResidencyRequest({ homeId, userId, source: 'residency_document' });
 
       return res.status(201).json({
         message: "We're verifying your residency at this address. A person reviews documents, usually within hours.",
@@ -2315,7 +2317,8 @@ async function checkAndExpireClaimWindow(homeId) {
 
 /**
  * Process constructive consent and expiration for pending quorum actions
- * (when someone reads the votes or the security settings; no job does):
+ * (when someone reads the votes or the security settings, and hourly for
+ * every home with a vote due, jobs/processQuorumActions.js, with no actor):
  * - All tiers: expire if expires_at is reached (an approved change that
  *   still isn't applied expires too)
  * - Tier 1-2: auto-approve if passive_approval_at is reached and no rejections
@@ -2602,3 +2605,5 @@ router.post('/:id/verify-postcard', postcardNoStore, verifyToken, verificationAt
 });
 
 module.exports = router;
+// The hourly job settles owner votes nobody opened (jobs/processQuorumActions.js).
+module.exports.processQuorumExpirations = processQuorumExpirations;

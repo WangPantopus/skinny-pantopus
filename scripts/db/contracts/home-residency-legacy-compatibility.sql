@@ -149,6 +149,9 @@ BEGIN
   ASSERT public.submit_home_residency(h,pg_temp.legacy_u(11),cancelled_id,input)->>'state'='cancelled';
   UPDATE public."Home" SET address2='Unit 2' WHERE id=h;
 
+  -- Seven more people new to this Home ask below. The earlier requests here move out of the 30-day window, so the
+  -- per-Home limit (10 new people in 30 days, 20261025090000) leaves this alias check alone.
+  UPDATE public."HomeResidencyClaim" SET created_at=created_at-interval '31 days' WHERE home_id=h;
   FOREACH alias IN ARRAY ARRAY['renter','tenant','lease_resident','household','member','family','roommate'] LOOP
     r:=public.submit_legacy_home_residency(h,pg_temp.legacy_u(n),jsonb_build_object('claimed_role',alias));
     ASSERT r->>'ok'='true' AND r->'claim'->>'claimed_role'=alias;

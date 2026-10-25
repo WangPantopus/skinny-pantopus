@@ -62,6 +62,60 @@ async function openCase({ addressId, homeId = null, userId, verdict, trigger = n
   return data.id;
 }
 
+/**
+ * The address watch (homeSecurityPolicy.watchResidencyRequest) found a high-risk request to live at a home: a
+ * person should look at it, the way trustAnomalyDetection flags providers. One open case per person and home; a
+ * later request refreshes its signals instead of adding a row. The case has no address_id, so it never takes the
+ * slot of the validation case the same person may have open for the address (idx_address_review_case_one_open).
+ *
+ * Never throws: the request it watches is already saved. Returns the case id, or null when nothing was written.
+ */
+async function flagAddressWatch({ homeId, userId, signals, source = null }) {
+  try {
+    const { data: open, error: readError } = await supabaseAdmin
+      .from('AddressReviewCase')
+      .select('id')
+      .eq('trigger', 'address_watch')
+      .eq('home_id', homeId)
+      .eq('user_id', userId)
+      .in('status', OPEN_STATUSES)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (readError) throw readError;
+
+    if (open) {
+      const { error } = await supabaseAdmin
+        .from('AddressReviewCase')
+        .update({ reasons: signals, updated_at: new Date().toISOString() })
+        .eq('id', open.id)
+        .in('status', OPEN_STATUSES);
+      if (error) throw error;
+      logger.info('addressReview: address watch case refreshed', { caseId: open.id, homeId, signals, source });
+      return open.id;
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('AddressReviewCase')
+      .insert({
+        home_id: homeId,
+        user_id: userId,
+        verdict_status: 'ADDRESS_WATCH',
+        reasons: signals,
+        trigger: 'address_watch',
+        status: 'open',
+      })
+      .select('id')
+      .single();
+    if (error) throw error;
+    logger.warn('addressReview: address watch case opened', { caseId: data.id, homeId, userId, signals, source });
+    return data.id;
+  } catch (error) {
+    logger.error('addressReview: address watch case not written', { homeId, userId, error: error.message });
+    return null;
+  }
+}
+
 /** Oldest-first page of cases awaiting a reviewer. */
 async function listOpenCases({ limit = 50, offset = 0, status = null } = {}) {
   let query = supabaseAdmin
@@ -119,4 +173,4 @@ async function resolveCase({ caseId, reviewerId, outcome, note = null }) {
   return { success: true };
 }
 
-module.exports = { needsReview, openCase, listOpenCases, resolveCase, OPEN_STATUSES };
+module.exports = { needsReview, openCase, flagAddressWatch, listOpenCases, resolveCase, OPEN_STATUSES };

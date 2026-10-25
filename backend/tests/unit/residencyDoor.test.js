@@ -34,6 +34,7 @@ jest.mock('../../utils/homeSecurityPolicy', () => {
     recalculateTier: jest.fn(async () => 'weak'),
     shouldTriggerDispute: jest.fn(() => false),
     getClaimWindowEndsAt: jest.fn(() => new Date('2026-04-30T00:00:00.000Z')),
+    watchResidencyRequest: jest.fn(async () => null),
   };
 });
 jest.mock('../../services/propertyDataService', () => ({ isAvailable: jest.fn(() => false), verifyPropertyOwnership: jest.fn() }));

@@ -39,6 +39,7 @@
              chatRedactionJob (:30)
              expirePopupBusinesses (:45)
              expireInitiatedHomeClaims (:11)
+             processQuorumActions (:33)
  Every 2h:  notifyClaimWindowExpiry (:20)
  Every 6h:  trustAnomalyDetection (:45)
              stampAwarder (:35)
@@ -174,6 +175,19 @@ Flow:
   1. Query: state=initiated, past evidence deadline
   2. Set state=revoked, phase=expired, reason=expired_no_evidence
   3. Recalculate household resolution
+```
+
+#### `processQuorumActions` (Hourly :33)
+
+```
+Purpose: Settle owner votes nobody opened (the votes and security pages
+         settle a home's votes when someone reads them)
+Flow:
+  1. Query: open votes past expires_at or passive_approval_at, and
+     approved votes whose change isn't applied yet
+  2. Per home: processQuorumExpirations (routes/homeOwnership.js), with no actor:
+     expire, approve a tier 1-2 change after 7 days without a rejection,
+     apply or retry an approved change
 ```
 
 #### `reconcileHomeHouseholdResolution` (Every 30m)
