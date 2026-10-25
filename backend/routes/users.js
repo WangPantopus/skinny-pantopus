@@ -15,7 +15,7 @@ const Joi = require('joi');
 const logger = require('../utils/logger');
 const { getPublicResidencySummary } = require('../utils/publicResidencyProfile');
 const { generateCsrfToken } = require('../utils/csrf');
-const { isConnected, isSearchable, isScopedBlocked, isUnpublishedBusiness, unpublishedBusinessIds, canViewProfileField } = require('../utils/visibilityPolicy');
+const { isConnected, isSearchable, loadUserSearchAccess, isScopedBlocked, isUnpublishedBusiness, unpublishedBusinessIds, canViewProfileField } = require('../utils/visibilityPolicy');
 const affinityService = require('../services/gig/affinityService');
 const inviteRewardService = require('../services/inviteRewardService');
 const emailService = require('../services/emailService');
@@ -85,7 +85,7 @@ const USER_NAME_SEARCH_FIELDS = [
   'middle_name',
   'last_name',
 ];
-const USER_NAME_SEARCH_SELECT = 'id, account_type, name, first_name, middle_name, last_name';
+const USER_NAME_SEARCH_SELECT = 'id, account_type, profile_visibility, name, first_name, middle_name, last_name';
 
 function localSearchFieldsForProfile(profile) {
   const fields = ['handle', 'handle_normalized', 'display_name', 'tagline'];
@@ -114,6 +114,19 @@ function searchableUserNameText(user) {
 function ilikePattern(value) {
   const escaped = String(value || '').trim().replace(/[\\%_]/g, (match) => `\\${match}`);
   return `%${escaped}%`;
+}
+
+// Every token must match a public field before the candidate cap is applied.
+// Otherwise a common first name can fill the page and hide a more specific match.
+function userSearchFilter(fields, tokens, { local = false } = {}) {
+  const groups = tokens.map((token) => {
+    const pattern = JSON.stringify(ilikePattern(token));
+    return `or(${fields.map((field) => {
+      const match = `${field}.ilike.${pattern}`;
+      return local && field.startsWith('public_') ? `and(show_neighborhood.eq.true,${match})` : match;
+    }).join(',')})`;
+  });
+  return `and(${groups.join(',')})`;
 }
 
 function normalizeLocalProfileHandle(value) {
@@ -198,39 +211,20 @@ function scoreLocalProfile(profile, fields, normalizedQuery, tokens) {
 }
 
 async function getNameDiscoverableLocalCandidates({
-  queryText,
-  primaryToken,
   tokens,
   viewerId,
   candidateLimit,
 }) {
-  const patterns = Array.from(new Set([queryText, primaryToken].filter(Boolean)));
-  const queries = [];
-  for (const pattern of patterns) {
-    for (const field of USER_NAME_SEARCH_FIELDS) {
-      queries.push(
-        supabaseAdmin
-          .from('User')
-          .select(USER_NAME_SEARCH_SELECT)
-          .ilike(field, ilikePattern(pattern))
-          .neq('id', viewerId)
-          .limit(candidateLimit),
-      );
-    }
-  }
-
-  const settled = await Promise.allSettled(queries);
-  const usersById = new Map();
-  for (const item of settled) {
-    if (item.status !== 'fulfilled') continue;
-    if (item.value?.error) {
-      logger.warn('User name search lookup error', { error: item.value.error.message });
-      continue;
-    }
-    for (const user of item.value?.data || []) {
-      if (user?.id && !usersById.has(user.id)) usersById.set(user.id, user);
-    }
-  }
+  // Quote the PostgREST filter value as well as escaping SQL wildcards. A
+  // comma, quote or parenthesis in a name must remain text, never filter syntax.
+  const { data: users, error } = await supabaseAdmin
+    .from('User')
+    .select(USER_NAME_SEARCH_SELECT)
+    .or(userSearchFilter(USER_NAME_SEARCH_FIELDS, tokens))
+    .neq('id', viewerId)
+    .limit(candidateLimit);
+  if (error) throw error;
+  const usersById = new Map((users || []).map((user) => [user.id, user]));
 
   const nameMatchedUsers = [...usersById.values()]
     .map((user) => ({ user, nameSearchText: searchableUserNameText(user) }))
@@ -246,8 +240,7 @@ async function getNameDiscoverableLocalCandidates({
     .eq('findable_by_name', true);
 
   if (privacyError) {
-    logger.warn('User name search privacy lookup error', { error: privacyError.message });
-    return [];
+    throw privacyError;
   }
 
   const nameFindableUserIds = new Set((privacyRows || []).map((row) => row.user_id));
@@ -262,8 +255,7 @@ async function getNameDiscoverableLocalCandidates({
     .limit(candidateLimit);
 
   if (profileError) {
-    logger.warn('User name search local profile lookup error', { error: profileError.message });
-    return [];
+    throw profileError;
   }
 
   return (profiles || [])
@@ -275,6 +267,7 @@ async function getNameDiscoverableLocalCandidates({
         account: {
           id: match.user.id,
           account_type: match.user.account_type,
+          profile_visibility: match.user.profile_visibility,
         },
         nameSearchText: match.nameSearchText,
       };
@@ -282,24 +275,29 @@ async function getNameDiscoverableLocalCandidates({
     .filter(Boolean);
 }
 
-async function canDiscoverLocalProfileForUserSearch(profile, viewerId, account = null) {
+async function canDiscoverLocalProfileForUserSearch(profile, viewerId, account = null, access = null) {
   if (!profile?.user_id || profile.user_id === viewerId) return false;
-  if (!(await isSearchable(viewerId, profile.user_id))) return false;
-  if (await isScopedBlocked(viewerId, profile.user_id, 'search_only')) return false;
+  if (access) {
+    if (!access.searchable) return false;
+  } else {
+    if (!(await isSearchable(viewerId, profile.user_id))) return false;
+    if (await isScopedBlocked(viewerId, profile.user_id, 'search_only')) return false;
+  }
+  const connected = () => access ? access.connected : isConnected(viewerId, profile.user_id);
 
   const searchVisibility = profile.search_visibility || 'everyone';
   if (searchVisibility === 'nobody') return false;
-  if (searchVisibility === 'mutuals' && !(await isConnected(viewerId, profile.user_id))) {
+  if (searchVisibility === 'mutuals' && !(await connected())) {
     return false;
   }
 
   const profileVisibility = await require('../utils/identityProfiles').localProfileVisibilityFor(profile, viewerId, account);
   if (profileVisibility === 'private') return false;
-  if (profileVisibility === 'connections' && !(await isConnected(viewerId, profile.user_id))) {
+  if (profileVisibility === 'connections' && !(await connected())) {
     return false;
   }
   // Legacy 'followers' value is treated as 'connections' after peer-follow removal.
-  if (profileVisibility === 'followers' && !(await isConnected(viewerId, profile.user_id))) {
+  if (profileVisibility === 'followers' && !(await connected())) {
     return false;
   }
 
@@ -3326,67 +3324,60 @@ router.get('/search', verifyToken, async (req, res) => {
   try {
     const { q, limit: rawLimit, type = 'all' } = req.query;
     const userId = req.user.id;
-    const limit = Math.min(parseInt(rawLimit) || 5, 20);
+    const limit = Math.min(Math.max(parseInt(rawLimit, 10) || 5, 1), 20);
     const normalizedType = String(type || 'all').toLowerCase();
-    const queryText = String(q || '').trim();
+    const queryText = String(q || '').trim().replace(/^@+/, '');
     const normalizedQuery = queryText.toLowerCase();
     const tokens = normalizedQuery.split(/\s+/).filter(Boolean).slice(0, 6);
-    const primaryToken = tokens[0] || normalizedQuery;
 
     if (!queryText || queryText.length < 2) {
       return res.status(400).json({ error: 'Query must be at least 2 characters' });
+    }
+    if (queryText.length > 100) {
+      return res.status(400).json({ error: 'Query must be at most 100 characters' });
     }
     if (!['all', 'people', 'business'].includes(normalizedType)) {
       return res.status(400).json({ error: 'type must be one of: all, people, business' });
     }
 
-    const fullSearchTerm = `%${queryText}%`;
-    const broadSearchTerm = `%${primaryToken}%`;
     const candidateLimit = Math.min(Math.max(limit * 8, 40), 200);
-    const searchFilters = LOCAL_SEARCH_FIELDS
-      .flatMap((field) => [`${field}.ilike.${fullSearchTerm}`, `${field}.ilike.${broadSearchTerm}`])
-      .join(',');
-
-    const query = supabaseAdmin
-      .from('LocalProfile')
-      .select(LOCAL_PROFILE_SEARCH_SELECT)
-      .or(searchFilters)
-      .neq('user_id', userId) // Exclude self
-      .limit(candidateLimit);
-
-    const { data, error } = await query;
+    const searchFilters = userSearchFilter(LOCAL_SEARCH_FIELDS, tokens, { local: true });
+    const baseQuery = () => supabaseAdmin.from('LocalProfile')
+      .select(LOCAL_PROFILE_SEARCH_SELECT).neq('user_id', userId);
+    const exact = JSON.stringify(queryText.toLowerCase());
+    const [broad, exactMatches, nameCandidates] = await Promise.all([
+      baseQuery().or(searchFilters).order('handle_normalized').limit(candidateLimit),
+      baseQuery().or(`handle_normalized.eq.${exact},display_name.ilike.${JSON.stringify(ilikePattern(queryText).slice(1, -1))}`)
+        .limit(candidateLimit),
+      getNameDiscoverableLocalCandidates({ tokens, viewerId: userId, candidateLimit }),
+    ]);
+    const error = broad.error || exactMatches.error;
+    const data = [...new Map([...(exactMatches.data || []), ...(broad.data || [])]
+      .map((profile) => [profile.id, profile])).values()];
 
     if (error) {
       logger.error('User search error', { error: error.message });
       return res.status(500).json({ error: 'Search failed' });
     }
 
-    const accountRows = (data || []).length
-      ? await supabaseAdmin
-        .from('User')
-        .select('id, account_type, profile_visibility')
-        .in('id', [...new Set((data || []).map((profile) => profile.user_id).filter(Boolean))])
-      : { data: [], error: null };
-    // The account type decides who is left out (curators, and businesses or people by `type`).
-    if (accountRows.error) throw accountRows.error;
-    const accountById = new Map((accountRows.data || []).map((user) => [user.id, user]));
+    const accountById = new Map();
+    const profileUserIds = [...new Set(data.map((profile) => profile.user_id))];
+    for (let offset = 0; offset < profileUserIds.length; offset += 100) {
+      const { data: accounts, error: accountError } = await supabaseAdmin.from('User')
+        .select('id, account_type, profile_visibility').in('id', profileUserIds.slice(offset, offset + 100));
+      if (accountError) throw accountError;
+      for (const account of accounts || []) accountById.set(account.id, account);
+    }
 
     const candidateByProfileId = new Map();
-    for (const profile of data || []) {
+    for (const profile of data) {
+      if (!accountById.has(profile.user_id)) continue;
       candidateByProfileId.set(profile.id, {
         profile,
         account: accountById.get(profile.user_id) || {},
         nameSearchText: '',
       });
     }
-
-    const nameCandidates = await getNameDiscoverableLocalCandidates({
-      queryText,
-      primaryToken,
-      tokens,
-      viewerId: userId,
-      candidateLimit,
-    });
 
     for (const candidate of nameCandidates) {
       const existing = candidateByProfileId.get(candidate.profile.id);
@@ -3400,21 +3391,27 @@ router.get('/search', verifyToken, async (req, res) => {
       }
     }
 
-    const blockers = await personalBlockersOf(userId);
-    const unpublishedBusinesses = await unpublishedBusinessIds(
-      [...candidateByProfileId.values()].map(({ profile }) => profile.user_id),
-    );
+    const candidateIds = [...candidateByProfileId.values()].map(({ profile }) => profile.user_id);
+    const [accessById, unpublishedBusinesses] = await Promise.all([
+      loadUserSearchAccess(userId, candidateIds),
+      (async () => {
+        const hidden = new Set();
+        for (let offset = 0; offset < candidateIds.length; offset += 100) {
+          for (const id of await unpublishedBusinessIds(candidateIds.slice(offset, offset + 100))) hidden.add(id);
+        }
+        return hidden;
+      })(),
+    ]);
     const visibleCandidates = [];
     for (const candidate of candidateByProfileId.values()) {
       const { profile } = candidate;
       const account = candidate.account || {};
       const accountType = account.account_type || 'individual';
       if (accountType === 'curator') continue;
-      if (blockers.has(String(profile.user_id))) continue;
       if (unpublishedBusinesses.has(String(profile.user_id))) continue;
       if (normalizedType === 'people' && accountType === 'business') continue;
       if (normalizedType === 'business' && accountType !== 'business') continue;
-      if (!(await canDiscoverLocalProfileForUserSearch(profile, userId, account))) continue;
+      if (!(await canDiscoverLocalProfileForUserSearch(profile, userId, account, accessById.get(profile.user_id)))) continue;
       visibleCandidates.push({ profile, account, nameSearchText: candidate.nameSearchText || '' });
     }
 

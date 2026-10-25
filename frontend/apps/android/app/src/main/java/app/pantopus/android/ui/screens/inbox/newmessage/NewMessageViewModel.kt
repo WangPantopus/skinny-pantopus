@@ -65,9 +65,9 @@ class NewMessageViewModel
 
         val emptyHeadline: String = "Search for someone to message"
         val emptyBody: String =
-            "You can message anyone on Pantopus. Search by name, " +
-                "or invite someone who isn't on the platform yet."
-        val emptySearchHints: List<String> = listOf("A neighbor's name", "Your block", "A local business")
+            "Find people by name or username, " +
+                "or invite someone who isn't on Pantopus yet."
+        val emptySearchHints: List<String> = listOf("A neighbor's name", "A username", "A local business")
 
         private var accepted: List<RelationshipDto> = emptyList()
         private var recents: List<UnifiedConversationDto> = emptyList()
@@ -77,6 +77,8 @@ class NewMessageViewModel
         private var searchJob: Job? = null
         private var searchSequence: Int = 0
         private var searchFailed: Boolean = false
+        private val _isSearching = MutableStateFlow(false)
+        val isSearching: StateFlow<Boolean> = _isSearching.asStateFlow()
 
         fun load() = read(force = false)
 
@@ -107,20 +109,19 @@ class NewMessageViewModel
         }
 
         fun updateSearch(value: String) {
-            if (_searchText.value == value) return
-            _searchText.value = value
-            searchFailed = false
-            rebuild()
-            scheduleSearch(value)
+            val text = value.take(100)
+            if (_searchText.value == text) return
+            val previous = normalizedSearch()
+            _searchText.value = text
+            if (normalizedSearch() == previous) return
+            scheduleSearch()
         }
 
         fun clearSearch() = updateSearch("")
 
         /** Runs the failed people search again for the same text. */
         fun retrySearch() {
-            searchFailed = false
-            rebuild()
-            scheduleSearch(_searchText.value)
+            scheduleSearch()
         }
 
         fun tapRow(row: NewMessageContactRow) {
@@ -175,7 +176,7 @@ class NewMessageViewModel
                     }
                 }
             val nothingToShow = accepted.isEmpty() && recents.isEmpty()
-            if (!connectionsOk && !recentsOk && nothingToShow) {
+            if (!connectionsOk && !recentsOk && nothingToShow && normalizedSearch().isEmpty()) {
                 _state.value = NewMessageUiState.Error("Couldn't load contacts. Try again.")
                 return
             }
@@ -188,15 +189,15 @@ class NewMessageViewModel
 
         // MARK: - Search
 
-        private fun scheduleSearch(query: String) {
-            searchJob?.cancel()
-            val trimmed = query.trim()
-            if (trimmed.length < 2) {
-                verifiedResults = emptyList()
-                rebuild()
-                return
-            }
+        private fun scheduleSearch() {
             searchSequence += 1
+            searchJob?.cancel()
+            val trimmed = normalizedSearch()
+            verifiedResults = emptyList()
+            searchFailed = false
+            _isSearching.value = trimmed.length >= 2
+            rebuild()
+            if (!_isSearching.value) return
             val seq = searchSequence
             searchJob =
                 viewModelScope.launch {
@@ -211,6 +212,7 @@ class NewMessageViewModel
         ) {
             val result = profileRepo.search(query = query, limit = 20)
             if (sequence != searchSequence) return
+            _isSearching.value = false
             when (result) {
                 is NetworkResult.Success -> {
                     verifiedResults = result.data.users
@@ -292,7 +294,7 @@ class NewMessageViewModel
             return NewMessageSection(id = NewMessageSectionId.AllVerified, label = "People", rows = rows)
         }
 
-        private fun normalizedSearch(): String = _searchText.value.trim().lowercase()
+        private fun normalizedSearch(): String = _searchText.value.trim().trimStart('@').lowercase()
 
         // MARK: - Row mapping (pure projections, internal for tests)
 

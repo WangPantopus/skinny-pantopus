@@ -41,6 +41,7 @@ public struct NewMessageView: View {
         .background(Theme.Color.appBg)
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .task { await viewModel.load() }
+        .onDisappear { viewModel.stopSearch() }
         .accessibilityIdentifier("newMessage")
     }
 
@@ -84,7 +85,7 @@ public struct NewMessageView: View {
         return HStack(spacing: Spacing.s2) {
             Icon(.search, size: 16, color: searchFocused ? Theme.Color.primary600 : Theme.Color.appTextSecondary)
             TextField(
-                "Search by name or neighborhood",
+                "Search by name, username or area",
                 text: Binding(
                     get: { viewModel.searchText },
                     set: { viewModel.updateSearch($0) }
@@ -97,6 +98,10 @@ public struct NewMessageView: View {
             .textInputAutocapitalization(.never)
             .autocorrectionDisabled()
             .accessibilityIdentifier("newMessageSearchField")
+            if viewModel.isSearching {
+                ProgressView().controlSize(.small)
+                    .accessibilityLabel("Searching")
+            }
             if hasText {
                 Button { viewModel.clearSearch() } label: {
                     Icon(.x, size: 14, color: Theme.Color.appTextMuted)
@@ -274,10 +279,11 @@ public struct NewMessageView: View {
                 .frame(width: 56, height: 56)
                 .background(Theme.Color.primary50)
                 .clipShape(Circle())
-            Text("No matches")
+            Text(viewModel.isSearching ? "Searching…" : viewModel.normalizedSearch.count < 2 ? "Keep typing" : "No matches")
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(Theme.Color.appText)
-            Text("Try a different name or neighborhood.")
+            Text(viewModel.isSearching ? "Finding people on Pantopus." : viewModel.normalizedSearch.count < 2
+                 ? "Enter at least 2 characters to search." : "Try a different name, username or area.")
                 .font(.system(size: 12.5))
                 .foregroundStyle(Theme.Color.appTextSecondary)
         }
