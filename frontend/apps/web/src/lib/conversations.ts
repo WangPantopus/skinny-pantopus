@@ -66,7 +66,7 @@ export function conversationsQuery(search = '') {
       };
       // Read the bounded fence before the request. Adopting a fence afterwards
       // could retain a response which raced a room/account access change.
-      const fence = q ? undefined : await captureChatHistoryFence().catch(() => undefined);
+      const fence = q ? undefined : await captureChatHistoryFence(marker).catch(() => undefined);
       current();
       const first = await api.chat.getUnifiedConversations({ limit: CONVERSATIONS_LIMIT, ...(q ? { q } : {}) });
       current();

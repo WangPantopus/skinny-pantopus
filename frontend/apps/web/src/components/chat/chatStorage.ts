@@ -34,6 +34,11 @@ let historyChannel: BroadcastChannel | null = null;
 let listeningForHistory = false;
 const HISTORY_FENCE = 'history-generation';
 type HistoryFence = { account: string; generation: number };
+// Retirements this tab has published or received, and clears.
+let retirementsSeen = 0;
+// The fence as read while the app booted, for the first inbox request only.
+let bootFence: { marker: string; retirements: number; at: number; read: Promise<HistoryFence | null | undefined> } | undefined;
+const BOOT_FENCE_MS = 10_000;
 
 /** All routes containing a room share its access decision, including topic views. */
 export function chatHistoryRooms(value: unknown): string[] {
@@ -48,12 +53,27 @@ export function chatHistoryMessageIds(value: unknown): string[] {
   return Array.isArray(messages) ? messages.map((message) => String(message.id || '')).filter(Boolean) : [];
 }
 
-/** Capture before an inbox request, even before its profile query completes. */
-export async function captureChatHistoryFence(): Promise<HistoryFence | null> {
+async function readHistoryFence(): Promise<HistoryFence | null> {
   return await readTaskRecoveryValue<HistoryFence>(await open(), 'metadata', HISTORY_FENCE) ?? null;
 }
 
+/** Capture before an inbox request, even before its profile query completes.
+ * The first request may take the read made while the app booted, if it is in
+ * the same session, soon after, and no retirement was seen since. Within a
+ * session the fence only advances, so an earlier read can stop a raced
+ * response from being retained, never let one through. */
+export async function captureChatHistoryFence(marker: string): Promise<HistoryFence | null> {
+  const boot = bootFence;
+  bootFence = undefined;
+  if (boot && boot.marker === marker && boot.retirements === retirementsSeen && performance.now() - boot.at < BOOT_FENCE_MS) {
+    const fence = await boot.read;
+    if (fence !== undefined && boot.retirements === retirementsSeen) return fence;
+  }
+  return await readHistoryFence();
+}
+
 function receiveHistoryRetirement(event: HistoryRetirement) {
+  retirementsSeen++;
   if (!event || event.marker !== sessionMarker() || !getAuthToken() || typeof event.account !== 'string'
     || !Number.isSafeInteger(event.generation) || !Array.isArray(event.rooms)) return;
   if ((receivedHistoryGenerations.get(event.account) ?? -1) >= event.generation) return;
@@ -143,8 +163,13 @@ function open(): Promise<IDBDatabase> {
 
 // Start opening the store while the app loads. A browser's first open of it
 // takes tens of milliseconds, and saved conversations, the inbox, the outbox
-// and the inbox request's access fence all wait for it. Opening reads nothing.
-if (typeof window !== 'undefined' && typeof indexedDB !== 'undefined') void open().catch(() => {});
+// and the inbox request's access fence all wait for it. With a session, read
+// that fence as soon as it opens, so a cold inbox request need not wait.
+if (typeof window !== 'undefined' && typeof indexedDB !== 'undefined') {
+  void open().catch(() => {});
+  if (getAuthToken()) bootFence = { marker: authSessionMarker(), retirements: retirementsSeen, at: performance.now(),
+    read: readHistoryFence().catch(() => undefined) };
+}
 
 export function isChatStorageCurrent(scope: ChatStorageScope): boolean {
   return active === scope && scope.generation === generation && getAuthToken() !== null && authSessionMarker() === scope.marker;
@@ -206,6 +231,7 @@ export async function activateChatStorage(accountId: string): Promise<ChatStorag
 }
 
 export async function clearChatStorage(historyOnly = false): Promise<void> {
+  retirementsSeen++;
   if (!historyOnly) { suspendChatStorage(); historyGenerations.clear(); receivedHistoryGenerations.clear(); }
   const db = await open();
   const scope = historyOnly ? active : null;
