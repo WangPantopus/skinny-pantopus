@@ -224,8 +224,10 @@ public final class BusinessInboxViewModel {
         refreshTask = Task { [weak self] in
             guard let self else { return }
             repeat {
-                needsRefresh = false
+                // One message arrives as message:new and as the chats store
+                // signal: both within the wait share the fetch after it.
                 do { try await Task.sleep(nanoseconds: 350_000_000) } catch { return }
+                needsRefresh = false
                 await fetchRooms()
             } while needsRefresh && !Task.isCancelled
             refreshTask = nil
