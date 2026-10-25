@@ -16,6 +16,46 @@ const WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
 const MIN_LEFT_MS = 30 * 60 * 1000;
 // About a regional fan market: Camas to Pullman is ~270 miles, Boise to Seattle ~400.
 const FAN_RADIUS_METERS = 300 * 1609.344;
+const REPEAT_WINDOW_MS = 3 * 60 * 60 * 1000;
+
+/** Public game facts persisted with a watch party, always taken from our schedule. */
+function gameDetails(game) {
+  return {
+    id: game.id,
+    label: game.label,
+    team: game.team,
+    opponent: game.opponent || null,
+    home: Boolean(game.home),
+    starts_at: new Date(game.starts_at).toISOString(),
+    ends_at: new Date(game.ends_at).toISOString(),
+  };
+}
+
+function findGame(id) {
+  if (typeof id !== 'string' || id.length > 80) return null;
+  const game = GAMES.find((candidate) => candidate.id === id);
+  return game ? gameDetails(game) : null;
+}
+
+function nextGameForTeam(team, aroundMillis, windowMillis = REPEAT_WINDOW_MS) {
+  if (!team || !Number.isFinite(aroundMillis) || !Number.isFinite(windowMillis) || windowMillis < 0) return null;
+  const game = GAMES.filter((candidate) => candidate.team === team
+    && Math.abs(Date.parse(candidate.starts_at) - aroundMillis) <= windowMillis)
+    .sort((a, b) => Math.abs(Date.parse(a.starts_at) - aroundMillis) - Math.abs(Date.parse(b.starts_at) - aroundMillis))[0];
+  return game ? gameDetails(game) : null;
+}
+
+/** Repeating a party never invents a fixture or carries last week's game forward. */
+function repeatDetails(kind, details, startsAtMillis) {
+  const out = { ...(details || {}) };
+  if (kind === 'watch_party' && out.game) {
+    const team = findGame(out.game.id)?.team || out.game.team;
+    const next = nextGameForTeam(team, startsAtMillis);
+    if (next) out.game = next;
+    else delete out.game;
+  }
+  return out;
+}
 
 function nearTeam(team, places) {
   const venue = TEAMS[team];
@@ -56,4 +96,4 @@ function upcomingGames(now = Date.now(), { near } = {}) {
     }));
 }
 
-module.exports = { upcomingGames, FAN_RADIUS_METERS };
+module.exports = { upcomingGames, findGame, nextGameForTeam, repeatDetails, FAN_RADIUS_METERS };

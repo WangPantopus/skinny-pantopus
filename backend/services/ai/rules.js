@@ -27,6 +27,7 @@ const { localDisplayNames } = require('../../utils/identityProfiles');
 const planService = require('../plans/planService');
 const planActions = require('../plans/planActions');
 const planRules = require('../plans/planRules');
+const { repeatDetails } = require('../plans/planGames');
 const homeRecordService = require('../homeRecordService');
 const homeDetailService = require('../homeDetailService');
 const { composeForHomeId } = require('../addressCalendarService');
@@ -138,12 +139,7 @@ const untilLabel = (config, endsMs) => `${lastBy(config, endsMs).toFormat('ccc, 
  * No hosted_again_from: the funnel's "hosted again" counts a host choosing to host again, not a rule's repost.
  */
 function repostInput(latest, start, end) {
-  const details = { ...(latest.details || {}) };
-  // A watch party's game moves with the party.
-  if (details.game?.starts_at) {
-    const shift = start.toMillis() - Date.parse(latest.post.event_date);
-    details.game = { ...details.game, starts_at: new Date(Date.parse(details.game.starts_at) + shift).toISOString() };
-  }
+  const details = repeatDetails(latest.kind, latest.details, start.toMillis());
   return {
     kind: latest.kind,
     title: latest.post.title,

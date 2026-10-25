@@ -22,6 +22,7 @@ const { loadViewer, verifiedUserIds } = require('./planViewer');
 const planPlace = require('./planPlace');
 const planChat = require('./planChat');
 const planNotify = require('./planNotifications');
+const { findGame } = require('./planGames');
 
 class PlanError extends Error {
   constructor(status, code, message, extra = {}) {
@@ -168,10 +169,16 @@ function normalizeDetails(kind, details) {
   const out = {};
   if (kind === 'watch_party') {
     if (input.game && typeof input.game === 'object') {
-      const label = String(input.game.label || '').trim().slice(0, 60);
-      if (label) out.game = { label };
-      const at = input.game.starts_at ? new Date(input.game.starts_at) : null;
-      if (out.game && at && !Number.isNaN(at.getTime())) out.game.starts_at = at.toISOString();
+      const known = findGame(input.game.id);
+      if (known) out.game = known;
+      else {
+        // Unknown ids and old clients keep the free-text game contract. Never trust
+        // client-supplied team identity or times as a verified schedule record.
+        const label = String(input.game.label || '').trim().slice(0, 60);
+        if (label) out.game = { label };
+        const at = input.game.starts_at ? new Date(input.game.starts_at) : null;
+        if (out.game && at && !Number.isNaN(at.getTime())) out.game.starts_at = at.toISOString();
+      }
     }
   } else if (kind === 'pickup_game') {
     out.sport = oneOf(input.sport, rules.SPORTS, 'sport') || 'other';
