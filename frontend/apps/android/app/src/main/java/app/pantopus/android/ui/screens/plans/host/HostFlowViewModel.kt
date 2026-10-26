@@ -263,9 +263,9 @@ class HostFlowViewModel
             // Hosting a playdate needs a verified address (`/mine` says where the person stands; unknown means yes).
             val verified = (repository.mineCopy() ?: repository.mine().data)?.viewer?.verifiedAddress ?: true
             _ui.update { it.copy(home = home, homePoints = homePoints, canHostPlaydates = verified) }
+            warmPlaces(home)
             if (generation != gamesGeneration) return
             _ui.update { it.copy(games = games, sports = reply?.sports) }
-            warmPlaces(home)
             val draft = _ui.value.draft
             when {
                 gameId != null -> games.firstOrNull { it.id == gameId }?.let(::pickGame)
