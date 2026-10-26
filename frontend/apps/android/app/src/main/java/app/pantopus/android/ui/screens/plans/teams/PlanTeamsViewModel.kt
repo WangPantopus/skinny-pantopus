@@ -6,6 +6,7 @@ import app.pantopus.android.data.api.models.feed.FeedPreferencesUpdateRequest
 import app.pantopus.android.data.api.models.plans.PlanTeamDto
 import app.pantopus.android.data.api.models.plans.SportsPreferencesDto
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.auth.AuthenticatedDispatchGuard
 import app.pantopus.android.data.feed.FeedActionsRepository
 import app.pantopus.android.data.plans.PlansRepository
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
@@ -42,14 +43,17 @@ class PlanTeamsViewModel
         private val _ui = MutableStateFlow(PlanTeamsUi())
         val ui = _ui.asStateFlow()
         private var searchJob: Job? = null
+        private var preferencesGeneration = 0
 
         fun load() {
+            if (_ui.value.saving) return
+            val generation = ++preferencesGeneration
             viewModelScope.launch {
                 _ui.update { it.copy(loaded = false) }
                 if (!scope.confirmCurrent()) return@launch
                 when (val reply = feed.feedPreferences(force = true)) {
                     is NetworkResult.Success ->
-                        if (scope.confirmCurrent()) {
+                        if (scope.confirmCurrent() && generation == preferencesGeneration) {
                             _ui.update {
                                 it.copy(
                                     preferences = reply.data.preferences.sports ?: SportsPreferencesDto(),
@@ -59,7 +63,8 @@ class PlanTeamsViewModel
                             }
                             search(_ui.value.query)
                         }
-                    is NetworkResult.Failure -> _ui.update { it.copy(error = "Couldn't load your teams. Try again.") }
+                    is NetworkResult.Failure ->
+                        if (generation == preferencesGeneration) _ui.update { it.copy(error = "Couldn't load your teams. Try again.") }
                 }
             }
         }
@@ -92,9 +97,12 @@ class PlanTeamsViewModel
             save(SportsPreferencesDto(watch = "on", teams = if (id in teams) teams - id else teams + id))
         }
 
-        fun unhide(id: String) = save(SportsPreferencesDto(hidden = _ui.value.preferences.hidden.orEmpty() - id))
+        fun unhide(id: String) {
+            if (_ui.value.loaded) save(SportsPreferencesDto(hidden = _ui.value.preferences.hidden.orEmpty() - id))
+        }
 
         fun toggleLeague(id: String) {
+            if (!_ui.value.loaded) return
             val leagues = _ui.value.preferences.leagues.orEmpty()
             save(SportsPreferencesDto(watch = "on", leagues = if (id in leagues) leagues - id else leagues + id))
         }
@@ -103,12 +111,16 @@ class PlanTeamsViewModel
 
         fun hide(id: String) {
             if (_ui.value.saving) return
+            preferencesGeneration++
             viewModelScope.launch {
                 _ui.update { it.copy(saving = true) }
                 if (!scope.confirmCurrent()) return@launch
                 val reply = feed.feedPreferences(force = true)
                 if (reply is NetworkResult.Success && scope.confirmCurrent()) {
-                    persist(SportsPreferencesDto(hidden = (reply.data.preferences.sports?.hidden.orEmpty() + id).distinct()))
+                    persist(
+                        SportsPreferencesDto(hidden = (reply.data.preferences.sports?.hidden.orEmpty() + id).distinct()),
+                        reply.data.preferences.sports ?: SportsPreferencesDto(),
+                    )
                 } else {
                     _ui.update { it.copy(saving = false, error = "Couldn't hide this team. Try again.") }
                 }
@@ -117,13 +129,23 @@ class PlanTeamsViewModel
 
         private fun save(patch: SportsPreferencesDto) {
             if (_ui.value.saving) return
+            preferencesGeneration++
             _ui.update { it.copy(saving = true) }
             viewModelScope.launch { persist(patch) }
         }
 
-        private suspend fun persist(patch: SportsPreferencesDto) {
+        private suspend fun persist(
+            patch: SportsPreferencesDto,
+            expected: SportsPreferencesDto? = _ui.value.preferences.takeIf { _ui.value.loaded },
+        ) {
             if (!scope.confirmCurrent()) return
-            when (val reply = feed.updateFeedPreferences(FeedPreferencesUpdateRequest(sports = patch))) {
+            when (
+                val reply =
+                    feed.updateFeedPreferences(
+                        FeedPreferencesUpdateRequest(sports = patch, expectedSports = expected),
+                        AuthenticatedDispatchGuard { credentials -> scope.requireDispatchCredentials(credentials) },
+                    )
+            ) {
                 is NetworkResult.Success ->
                     if (scope.confirmCurrent()) {
                         _ui.update {
