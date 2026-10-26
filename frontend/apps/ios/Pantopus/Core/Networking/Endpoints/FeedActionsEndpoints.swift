@@ -113,7 +113,10 @@ public enum FeedActionsEndpoints {
     /// `PUT /api/posts/feed-preferences` — partial update; only the keys
     /// present in the body are written. Route
     /// `backend/routes/posts.js:2286`.
-    public static func updateFeedPreferences(_ body: FeedPreferencesUpdateRequest) -> Endpoint {
-        Endpoint(method: .put, path: "/api/posts/feed-preferences", body: body)
+    public static func updateFeedPreferences(
+        _ body: FeedPreferencesUpdateRequest,
+        dispatchGuard: (@MainActor @Sendable () throws -> Void)? = nil
+    ) -> Endpoint {
+        Endpoint(method: .put, path: "/api/posts/feed-preferences", body: body, dispatchGuard: dispatchGuard)
     }
 }
