@@ -6,11 +6,14 @@ const cache = require('../placeSectionCache');
 const tsdb = require('./theSportsDb');
 const cfbd = require('./collegeFootballData');
 const logger = require('../../utils/logger');
+const { DateTime } = require('luxon');
 
 const TTL_MS = 6 * 60 * 60 * 1000;
 const WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
 const MINUTES = Object.freeze({ nfl: 195, nba: 150, wnba: 150, mlb: 180, nhl: 165, mls: 120, nwsl: 120, ncaaf: 210 });
 const ATTRIBUTION = 'Game times: TheSportsDB';
+// Do not reuse schedules normalized before provider status/TBD corrections.
+const CACHE_PREFIX = 'league:v2:';
 const inFlight = new Map();
 const unmatched = new Set();
 const normalizeName = (name) => String(name || '').normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -29,19 +32,22 @@ function matchTeam(league, providerId, name) {
 }
 
 function gameStatus(value, completed = false) {
-  const text = String(value || '').toLowerCase();
-  if (/cancel|abandon/.test(text)) return 'cancelled';
-  if (/postpon|suspend/.test(text)) return 'postponed';
-  if (completed || /^(ft|aet|ap|finished|final|completed)$/.test(text)) return 'completed';
+  const text = String(value || '').trim().toLowerCase();
+  // https://www.thesportsdb.com/docs_api_data lists the abbreviated statuses.
+  if (/^(canc|abd)$/.test(text) || /cancel|abandon/.test(text)) return 'cancelled';
+  if (/^(pst|post|susp|intr|int)$/.test(text) || /postpon|suspend|interrupt/.test(text)) return 'postponed';
+  if (completed || /^(ft|aet|aot|ap|pen|awd|wo|finished|final|completed)$/.test(text)) return 'completed';
   return 'scheduled';
 }
 
 // Provider dates without a timezone are UTC in TheSportsDB, never server-local time.
 function utcTime(value) {
-  if (typeof value !== 'string' || !value.trim()) return null;
-  const time = /(?:z|[+-]\d\d:\d\d)$/i.test(value) ? value : `${value}Z`;
-  const millis = Date.parse(time);
-  return Number.isFinite(millis) ? new Date(millis).toISOString() : null;
+  if (typeof value !== 'string') return null;
+  const text = value.trim();
+  // A date without a time is TBD, and invalid calendar dates must not roll over.
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(text)) return null;
+  const time = DateTime.fromISO(text, { zone: 'utc' });
+  return time.isValid ? time.toUTC().toISO() : null;
 }
 
 function perspectives(league, event) {
@@ -61,8 +67,10 @@ function perspectives(league, event) {
 
 function normalizeSportsDb(league, events) {
   return events.flatMap((event) => {
+    if (!event || typeof event !== 'object') return [];
     if (!/^\d+$/.test(String(event.idEvent || ''))) return [];
-    const explicitTbd = /^(yes|true|1)$/i.test(String(event.strTimeTBD || ''));
+    const explicitTbd = /^(yes|true|1)$/i.test(String(event.strTimeTBD || '').trim())
+      || /^tbd$/i.test(String(event.strStatus || '').trim());
     const start = utcTime(event.strTimestamp) || (event.dateEvent && event.strTime ? utcTime(`${event.dateEvent}T${event.strTime}`) : null);
     const round = [event.strSeasonType, event.strRound, event.strEvent].filter(Boolean).join(' ');
     return perspectives(league, {
@@ -77,12 +85,13 @@ function normalizeSportsDb(league, events) {
 
 function normalizeCollege(events) {
   return events.flatMap((event) => {
+    if (!event || typeof event !== 'object') return [];
     if (!/^\d+$/.test(String(event.id || ''))) return [];
     return perspectives('ncaaf', {
       id: `cfbd:${event.id}`, homeName: event.homeTeam, awayName: event.awayTeam,
       start: utcTime(event.startDate), tbd: event.startTimeTBD !== false, neutral: event.neutralSite === true,
       status: gameStatus(event.status || event.notes, event.completed),
-      postseason: event.seasonType === 'postseason' || event.playoff === true,
+      postseason: event.seasonType === 'postseason' || event.playoff === true || Boolean(event.playoff?.competition),
     });
   });
 }
@@ -103,7 +112,7 @@ function seasonsFor(league, now) {
 
 async function leagueSeason(league, season) {
   if (!MINUTES[league]) throw new Error('Unknown sports league');
-  const cacheKey = `league:${league}:${season}`;
+  const cacheKey = `${CACHE_PREFIX}${league}:${season}`;
   if (!inFlight.has(cacheKey)) {
     const request = cache.readThrough({ cacheKey, sectionId: 'sports_schedule', ttlMs: TTL_MS, fetch: async () => {
       const games = league === 'ncaaf'
@@ -142,12 +151,22 @@ async function gamesForTeams(teamIds, now = Date.now()) {
 
 async function findCachedGame(id, preferredTeam) {
   if (typeof id !== 'string' || !/^(tsdb|cfbd):\d{1,20}$/.test(id)) return null;
+  const team = preferredTeam ? teamById(preferredTeam) : null;
+  if (preferredTeam && !team) return null;
   const { data, error } = await require('../../config/supabaseAdmin').from('PlaceSectionCache')
-    .select('payload').eq('section_id', 'sports_schedule').order('fetched_at', { ascending: false }).limit(40);
+    .select('payload, cache_key, expires_at').eq('section_id', 'sports_schedule')
+    .like('cache_key', `${CACHE_PREFIX}${team ? `${team.league}:` : ''}%`)
+    .order('fetched_at', { ascending: false }).limit(40);
   if (error) throw new Error('Could not read game schedule.');
   for (const row of data || []) {
-    const games = (row.payload?.games || []).filter((game) => game.id === id);
-    if (games.length) return games.find((game) => game.team === preferredTeam) || games[0];
+    const matches = (games) => games.find((game) => game.id === id && (!team || game.team === team.id));
+    if (!matches(row.payload?.games || [])) continue;
+    // A composer can stay open beyond the TTL. Resolve against the refreshed
+    // schedule when it saves, retaining the existing stale-on-provider-error policy.
+    const [, , league, season] = row.cache_key.split(':');
+    const games = Date.parse(row.expires_at) > Date.now()
+      ? row.payload.games : await leagueSeason(league, season);
+    return matches(games) || null;
   }
   return null;
 }
