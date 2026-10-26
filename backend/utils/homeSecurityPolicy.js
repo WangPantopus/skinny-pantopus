@@ -76,9 +76,11 @@ const MAX_RESIDENCY_CLAIMS_PER_30D = 5;
  * rented address is exactly who this is for), no challenge routing (a
  * residency claim never contests ownership), no per-home owner-claim quota.
  * What remains: the home must be active and unrestricted, a per-user
- * 30-day cap, the residency cap per home below, the rejection cooldown, and
- * one active residency claim per user per home (an existing one is returned
- * so evidence can attach to it).
+ * 30-day cap, the rejection cooldown, and one active residency claim per
+ * user per home (an existing one is returned so evidence can attach to it).
+ * A person reviews every document, so the per-home residency cap
+ * (save_home_residency_admission) never stops one: a document is a proof,
+ * and the address watch flags the home past the cap (HOME_LIMIT).
  */
 async function canSubmitResidencyClaim(homeId, userId) {
   const errors = [];
@@ -107,23 +109,6 @@ async function canSubmitResidencyClaim(homeId, userId) {
   if (userCountError) throw claimCheckUnavailable();
   if ((userClaimCount || 0) >= MAX_RESIDENCY_CLAIMS_PER_30D) {
     errors.push('You have reached the maximum number of residency claims for this period');
-  }
-
-  // Address watch: at most MAX_CLAIMS_PER_HOME_PER_30D people new to a home ask to live there in 30 days, through
-  // either residency door (save_home_residency_admission refuses a join request the same way). Someone with a
-  // membership here, or who already asked in the window, isn't new.
-  const [requests, documents, membership] = await Promise.all([
-    supabaseAdmin.from('HomeResidencyClaim').select('user_id')
-      .eq('home_id', homeId).gte('created_at', thirtyDaysAgo.toISOString()),
-    supabaseAdmin.from('HomeOwnershipClaim').select('claimant_user_id')
-      .eq('home_id', homeId).eq('claim_type', 'resident').gte('created_at', thirtyDaysAgo.toISOString()),
-    supabaseAdmin.from('HomeOccupancy').select('id').eq('home_id', homeId).eq('user_id', userId).maybeSingle(),
-  ]);
-  if (requests.error || documents.error || membership.error) throw claimCheckUnavailable();
-  const askedHere = new Set([...(requests.data || []).map(row => row.user_id),
-    ...(documents.data || []).map(row => row.claimant_user_id)]);
-  if (!membership.data && !askedHere.has(userId) && askedHere.size >= MAX_CLAIMS_PER_HOME_PER_30D) {
-    errors.push('This home has reached the maximum number of claims for this period');
   }
 
   const cooldownDate = new Date(now.getTime() - REJECTION_COOLDOWN_DAYS * 24 * 60 * 60 * 1000);
@@ -525,22 +510,28 @@ async function getClaimRiskScore(claim, claimantUserId) {
 const ADDRESS_WATCH_DAYS = 30;
 const ADDRESS_WATCH_TURNED_AWAY_DAYS = 90;
 const ADDRESS_WATCH_NEW_ACCOUNT_DAYS = 7;
+const ADDRESS_WATCH_MANY_CLAIMANTS_HIGH = 5;
 const ADDRESS_WATCH_SIGNALS = Object.freeze({
   ACCOUNT_MANY_HOMES: 'high',       // this account said it lives at more than 2 homes in 30 days
   CMRA_MAILBOX: 'high',             // USPS lists the address as a mail drop (commercial mail receiving agency)
   PO_BOX: 'high',
-  MANY_CLAIMANTS: 'medium',         // 3 or more people added, claimed or asked to live at this home in 30 days
+  HOME_LIMIT: 'high',               // 10 or more other people asked to live here in 30 days: people new to the home
+                                    // prove the address instead of asking the household (save_home_residency_admission)
+  MANY_CLAIMANTS: 'medium',         // 3 or more people added, claimed or asked to live at this home in 30 days;
+                                    // high at 5 or more
   HOUSEHOLD_CHURN: 'medium',        // 3 or more people joined this home and left it again in 30 days
   TURNED_AWAY_ELSEWHERE: 'medium',  // another household turned down this account's request in 90 days
   USPS_VACANT: 'medium',
   BUSINESS_ADDRESS: 'medium',       // validation marked the address, building or parcel as a business
   NEW_ACCOUNT: 'medium',            // the account is under 7 days old
 });
+// Signals about the person rather than the address. A high level makes a case about the person when one of these is
+// a reason; otherwise the case is about the home, since the person may be the real resident.
+const ADDRESS_WATCH_PERSON_SIGNALS = new Set(['ACCOUNT_MANY_HOMES', 'TURNED_AWAY_ELSEWHERE', 'NEW_ACCOUNT']);
 // The address decision engine's PO box pattern (addressDecisionEngine.js), for homes saved without validation.
 const PO_BOX_LINE = /^\s*(?:p\.?\s*o\.?\s*b(?:ox)?|post\s+office\s+box)\b/i;
 
-function addressWatchLevel(signals) {
-  const levels = signals.map(signal => ADDRESS_WATCH_SIGNALS[signal]);
+function addressWatchLevel(levels) {
   if (levels.includes('high') || levels.length >= 3) return 'high';
   return levels.length ? 'medium' : 'low';
 }
@@ -565,7 +556,8 @@ async function assessAddressWatch({ homeId, userId }) {
     read(supabaseAdmin.from('User').select('created_at').eq('id', userId).maybeSingle()),
     // Everyone who asked to live at or claimed this home in the window.
     rows(supabaseAdmin.from('HomeResidencyClaim').select('user_id').eq('home_id', homeId).gte('created_at', since)),
-    rows(supabaseAdmin.from('HomeOwnershipClaim').select('claimant_user_id, method').eq('home_id', homeId).gte('created_at', since)),
+    rows(supabaseAdmin.from('HomeOwnershipClaim').select('claimant_user_id, method, claim_type').eq('home_id', homeId)
+      .gte('created_at', since)),
     // Every home this account said it lives at: requests, residency documents, and homes it added as a renter or
     // household member. Owners adding homes they rent out aren't saying they live there.
     rows(supabaseAdmin.from('HomeResidencyClaim').select('home_id').eq('user_id', userId).gte('created_at', since)),
@@ -595,6 +587,11 @@ async function assessAddressWatch({ homeId, userId }) {
     ...homeClaims.filter(row => row.method !== 'invite').map(row => row.claimant_user_id)]);
   if (home?.created_by_user_id && Date.parse(home.created_at) >= Date.parse(since)) claimants.add(home.created_by_user_id);
   if (claimants.size >= 3) signals.push('MANY_CLAIMANTS');
+  // The per-home residency cap: the people the admission counts (requests and residency documents), not this one.
+  const askers = new Set([...homeRequests.map(row => row.user_id),
+    ...homeClaims.filter(row => row.claim_type === 'resident').map(row => row.claimant_user_id)]);
+  askers.delete(userId);
+  if (askers.size >= MAX_CLAIMS_PER_HOME_PER_30D) signals.push('HOME_LIMIT');
   if (new Set(leavers.map(row => row.user_id)).size >= 3) signals.push('HOUSEHOLD_CHURN');
   if (turnedAway.length) signals.push('TURNED_AWAY_ELSEWHERE');
   if (address?.vacant_flag === true) signals.push('USPS_VACANT');
@@ -603,15 +600,18 @@ async function assessAddressWatch({ homeId, userId }) {
     || address.building_type === 'commercial' || address.parcel_type === 'commercial')) signals.push('BUSINESS_ADDRESS');
   if (user?.created_at && now - Date.parse(user.created_at) < ADDRESS_WATCH_NEW_ACCOUNT_DAYS * day) signals.push('NEW_ACCOUNT');
 
-  return { level: addressWatchLevel(signals), signals };
+  const levels = signals.map(signal => (signal === 'MANY_CLAIMANTS' && claimants.size >= ADDRESS_WATCH_MANY_CLAIMANTS_HIGH
+    ? 'high' : ADDRESS_WATCH_SIGNALS[signal]));
+  return { level: addressWatchLevel(levels), signals };
 }
 
 /**
  * The address watch after someone asked to live at a home: a join request (residency-submissions or the legacy
  * claim) or a residency document. It runs after the request is saved and can't change it; a failed read means no
- * flag. A high level opens a case for this person and home in the admin address review queue
- * (GET /api/admin/address-review/queue), the way trustAnomalyDetection flags providers; a later request refreshes
- * the case while it's open. Returns { level, signals }, or null when the watch couldn't read.
+ * flag. A high level opens a case in the admin address review queue (GET /api/admin/address-review/queue), the way
+ * trustAnomalyDetection flags providers, and a new case emails the admins: about this person when a signal about
+ * them is a reason, otherwise about the home. Past the per-home cap (HOME_LIMIT) the home always gets its case. A
+ * later request refreshes an open case. Returns { level, signals }, or null when the watch couldn't read.
  */
 async function watchResidencyRequest({ homeId, userId, source }) {
   try {
@@ -622,7 +622,13 @@ async function watchResidencyRequest({ homeId, userId, source }) {
         signals: assessment.signals });
     }
     if (assessment.level === 'high') {
-      await addressReviewService.flagAddressWatch({ homeId, userId, signals: assessment.signals, source });
+      const personal = assessment.signals.some(signal => ADDRESS_WATCH_PERSON_SIGNALS.has(signal));
+      if (personal) await addressReviewService.flagAddressWatch({ homeId, userId, signals: assessment.signals, source });
+      if (!personal || assessment.signals.includes('HOME_LIMIT')) {
+        // The home's case leaves the person out: they may be the one who lives there.
+        await addressReviewService.flagAddressWatch({ homeId, userId: null, source,
+          signals: assessment.signals.filter(signal => !ADDRESS_WATCH_PERSON_SIGNALS.has(signal)) });
+      }
     }
     return assessment;
   } catch (error) {

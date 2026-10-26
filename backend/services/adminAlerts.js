@@ -1,7 +1,8 @@
 // ============================================================
 // ADMIN ALERTS — "usually within hours" is a promise a person has to
 // be able to keep. When a residency (or ownership) claim lands, the
-// founder/admin inbox gets one email with a link to the review queue.
+// founder/admin inbox gets one email with a link to the review queue;
+// reports and address watch cases do the same.
 //
 // Delivery is best-effort and never affects the request: no address in
 // the subject, no document contents in the body — the queue has those.
@@ -159,4 +160,57 @@ async function notifyRemovalVoteToReview({ caseId, home }) {
   }
 }
 
-module.exports = { notifyClaimToReview, notifyReportToReview, notifyRemovalVoteToReview, recipients };
+/**
+ * The address watch opened a case in the address review queue: a request to live at a home, or a home many people
+ * are asking to live at, that a person should look at. One email per case addressReviewService.flagAddressWatch
+ * says to send. It carries the case, home and account ids, the signal codes and the city: never the street address,
+ * a name or a document. The queue has no screen yet, so the email names its admin API.
+ *
+ * @param {object} params
+ * @param {string} params.caseId
+ * @param {string} params.homeId
+ * @param {string|null} [params.userId]  null for a case about the home.
+ * @param {string[]} [params.signals]    Address watch signal codes (homeSecurityPolicy.ADDRESS_WATCH_SIGNALS).
+ * @param {object} [params.home]         The Home row (city, state) — city only is printed.
+ * @returns {Promise<boolean>} true when an email was handed to the mailer.
+ */
+async function notifyAddressWatchCase({ caseId, homeId, userId = null, signals = [], home = null }) {
+  const to = recipients();
+  if (!to.length || !caseId) return false;
+
+  const where = [home && home.city, home && home.state].filter(Boolean).join(', ') || 'unknown area';
+  const what = userId ? 'A request to live at a home' : 'A home';
+  const codes = (Array.isArray(signals) ? signals : []).filter((s) => /^[A-Z_]+$/.test(s)).join(', ') || 'none recorded';
+  const subject = `[Pantopus] Address watch case to review · ${where}`;
+  const lines = [
+    ['Case', caseId],
+    ['Home', homeId],
+    ...(userId ? [['Account', userId]] : []),
+    ['Signals', codes],
+    ['Area', where],
+  ];
+  const text = [
+    `${what} needs a look from the address watch.`,
+    '',
+    ...lines.map(([label, value]) => `${label}: ${value}`),
+    '',
+    'Read the queue (admin sign-in; no screen yet): GET /api/admin/address-review/queue',
+    'Close a case: POST /api/admin/address-review/<case id>/resolve',
+  ].join('\n');
+  const html = `<p>${what} needs a look from the address watch.</p>
+<ul>
+${lines.map(([label, value]) => `  <li>${label}: <code>${value}</code></li>`).join('\n')}
+</ul>
+<p>Read the queue (admin sign-in; no screen yet): <code>GET /api/admin/address-review/queue</code><br>
+Close a case: <code>POST /api/admin/address-review/&lt;case id&gt;/resolve</code></p>`;
+
+  try {
+    await emailService.sendEmail({ to: to.join(','), subject, text, html });
+    return true;
+  } catch (err) {
+    logger.warn('adminAlerts: address watch email failed (non-fatal)', { caseId, error: err.message });
+    return false;
+  }
+}
+
+module.exports = { notifyClaimToReview, notifyReportToReview, notifyRemovalVoteToReview, notifyAddressWatchCase, recipients };
