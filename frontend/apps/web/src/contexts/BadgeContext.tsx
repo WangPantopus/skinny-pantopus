@@ -15,6 +15,7 @@ import { getAuthToken } from '@pantopus/api';
 import * as api from '@pantopus/api';
 import { useSocket, useSocketConnected } from '@/contexts/SocketContext';
 import { launchFeatures } from '@/lib/featureFlags';
+import { afterInboxRows } from '@/lib/shellReads';
 
 // ── Types ────────────────────────────────────────────────────
 export interface BadgeCounts {
@@ -212,11 +213,12 @@ export function BadgeProvider({ children }: { children: ReactNode }) {
       if (navigator.onLine && document.visibilityState === 'visible') { delay = FALLBACK_POLL_MS; void poll(); }
       else stop();
     };
-    foreground();
+    // A cold Messages inbox paints its rows first (lib/shellReads.ts).
+    const cancelStart = afterInboxRows(foreground);
     document.addEventListener('visibilitychange', foreground);
     window.addEventListener('online', foreground);
     window.addEventListener('offline', foreground);
-    return () => { cancelled = true; stop(); document.removeEventListener('visibilitychange', foreground); window.removeEventListener('online', foreground); window.removeEventListener('offline', foreground); };
+    return () => { cancelled = true; cancelStart(); stop(); document.removeEventListener('visibilitychange', foreground); window.removeEventListener('online', foreground); window.removeEventListener('offline', foreground); };
   }, [connected, pollBadges]);
 
   const contextValue = useMemo(

@@ -35,6 +35,7 @@ public struct NotificationSettingsView: View {
     public var body: some View {
         GroupedListView(dataSource: viewModel, onBack: onBack)
             .accessibilityIdentifier("notificationSettings")
+            .sheet(isPresented: $viewModel.showsTeams) { PlanTeamsSheet() }
             .overlay(alignment: .bottom) {
                 if let toast = viewModel.toast {
                     ToastView(message: toast)

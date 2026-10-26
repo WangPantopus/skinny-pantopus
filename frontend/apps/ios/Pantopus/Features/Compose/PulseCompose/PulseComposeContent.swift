@@ -48,6 +48,16 @@ public struct PulseComposeContentState: Equatable {
     public var isNetworkTarget: Bool
     /// "Before you ask": earlier questions and recommendations nearby matching the question being written.
     public var earlierAnswers: [BeforeYouAskResponse.EarlierPost]
+    /// The AI assist card; nil hides it (editing a post).
+    public var assist: PulseComposeAssistState?
+    /// A photo or words in the form for the assist to write from.
+    public var assistHasMaterial: Bool
+    /// How many attachments the assist reads.
+    public var assistPhotoCount: Int
+    /// Undo on the assist card, until the person edits the suggestion.
+    public var assistCanUndo: Bool
+    /// The phone has a camera ("Take photo").
+    public var canTakePhoto: Bool
 
     public init(
         activeIntent: PulseComposeIntent,
@@ -72,7 +82,12 @@ public struct PulseComposeContentState: Equatable {
         composePurpose: PulseComposePurpose? = nil,
         postingTargetLabel: String? = nil,
         isNetworkTarget: Bool = false,
-        earlierAnswers: [BeforeYouAskResponse.EarlierPost] = []
+        earlierAnswers: [BeforeYouAskResponse.EarlierPost] = [],
+        assist: PulseComposeAssistState? = nil,
+        assistHasMaterial: Bool = false,
+        assistPhotoCount: Int = 0,
+        assistCanUndo: Bool = false,
+        canTakePhoto: Bool = false
     ) {
         self.activeIntent = activeIntent
         self.identity = identity
@@ -97,6 +112,11 @@ public struct PulseComposeContentState: Equatable {
         self.postingTargetLabel = postingTargetLabel
         self.isNetworkTarget = isNetworkTarget
         self.earlierAnswers = earlierAnswers
+        self.assist = assist
+        self.assistHasMaterial = assistHasMaterial
+        self.assistPhotoCount = assistPhotoCount
+        self.assistCanUndo = assistCanUndo
+        self.canTakePhoto = canTakePhoto
     }
 }
 
@@ -129,6 +149,15 @@ public struct PulseComposeContentActions {
     public var onClearLocation: () -> Void
     /// A "Before you ask" row: opens that earlier post.
     public var onOpenEarlierPost: (String) -> Void
+    /// The AI assist: suggest the whole post from the photos, the place and the words.
+    public var onSuggest: () -> Void
+    /// Undo on the assist card: the form as it was before the suggestion.
+    public var onUndoSuggestion: () -> Void
+    /// The assist card's "Take photo" and "Choose photos": a suggestion follows the new photos.
+    public var onAssistTakePhoto: () -> Void
+    public var onAssistChoosePhotos: () -> Void
+    /// "Take photo" in the attachments menu.
+    public var onTakePhoto: () -> Void
 
     public init(
         onSelectIntent: @escaping (PulseComposeIntent) -> Void = { _ in },
@@ -150,7 +179,12 @@ public struct PulseComposeContentActions {
         onDismissPrecheckNudge: @escaping () -> Void = {},
         onAddLocation: @escaping () -> Void = {},
         onClearLocation: @escaping () -> Void = {},
-        onOpenEarlierPost: @escaping (String) -> Void = { _ in }
+        onOpenEarlierPost: @escaping (String) -> Void = { _ in },
+        onSuggest: @escaping () -> Void = {},
+        onUndoSuggestion: @escaping () -> Void = {},
+        onAssistTakePhoto: @escaping () -> Void = {},
+        onAssistChoosePhotos: @escaping () -> Void = {},
+        onTakePhoto: @escaping () -> Void = {}
     ) {
         self.onSelectIntent = onSelectIntent
         self.onSelectIdentity = onSelectIdentity
@@ -172,6 +206,11 @@ public struct PulseComposeContentActions {
         self.onAddLocation = onAddLocation
         self.onClearLocation = onClearLocation
         self.onOpenEarlierPost = onOpenEarlierPost
+        self.onSuggest = onSuggest
+        self.onUndoSuggestion = onUndoSuggestion
+        self.onAssistTakePhoto = onAssistTakePhoto
+        self.onAssistChoosePhotos = onAssistChoosePhotos
+        self.onTakePhoto = onTakePhoto
     }
 }
 
@@ -200,6 +239,23 @@ public struct PulseComposeContent: View {
                 identitySection
             }
             precheckBanners
+            if let assist = state.assist {
+                PulseComposeAssistCard(
+                    assist: assist,
+                    hasMaterial: state.assistHasMaterial,
+                    photoCount: state.assistPhotoCount,
+                    canUndo: state.assistCanUndo,
+                    canTakePhoto: state.canTakePhoto,
+                    onSuggest: {
+                        // The suggestion replaces the text being typed, so the keyboard goes first.
+                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                        actions.onSuggest()
+                    },
+                    onUndo: actions.onUndoSuggestion,
+                    onTakePhoto: actions.onAssistTakePhoto,
+                    onChoosePhotos: actions.onAssistChoosePhotos
+                )
+            }
             intentSpecificSection
             beforeYouAskSection
             photosSection
@@ -940,6 +996,9 @@ public struct PulseComposeContent: View {
                     }
                     if state.photos.count < pulseComposeMaxPhotos {
                         Menu {
+                            if state.canTakePhoto {
+                                Button("Take photo", action: actions.onTakePhoto)
+                            }
                             Button("Photos and videos", action: actions.onPickPhotos)
                             Button("PDF document", action: actions.onPickDocuments)
                         } label: {

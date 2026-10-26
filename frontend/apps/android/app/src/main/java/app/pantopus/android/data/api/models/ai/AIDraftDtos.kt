@@ -147,3 +147,43 @@ data class AIRadonReportResponse(
     /** One sentence on how the report was read (which of several results, a missing date). */
     val note: String? = null,
 )
+
+/**
+ * The whole post, suggested from the person's photos, the place they picked and what they've written so far, for the
+ * composer to fill in. Every field the composer's forms take; a field the kind of post doesn't use is null. Mirror of
+ * iOS `AIPostSuggestionResponse.Suggestion`.
+ */
+@JsonClass(generateAdapter = true)
+data class AIPostSuggestionDto(
+    val title: String? = null,
+    val body: String = "",
+    /** Local wall-clock time, `YYYY-MM-DDTHH:MM`. */
+    val eventDate: String? = null,
+    val eventEndDate: String? = null,
+    val eventVenue: String? = null,
+    /** `YYYY-MM-DD`: the deal's last day. */
+    val dealExpiresAt: String? = null,
+    /** The business recommended, or the one offering a deal. */
+    val businessName: String? = null,
+    /** `lost` or `found`. */
+    val lostFoundType: String? = null,
+    val lastSeenLocation: String? = null,
+    /** `YYYY-MM-DD`. */
+    val lastSeenDate: String? = null,
+    /** A heads-up's kind (`road_hazard`, `power_outage`, `weather_damage`, `missing_pet`, `hazard`, `other`). */
+    val safetyAlertKind: String? = null,
+    /** The Ask form's category (`handyman`, `cleaning`, `advice`, `other`). */
+    val askCategory: String? = null,
+    val tags: List<String>? = null,
+)
+
+/**
+ * Envelope from `POST /api/ai/draft/post-suggestion` (`backend/routes/ai.js:333`). The photos aren't kept, and
+ * nothing is posted until the person taps Post.
+ */
+@JsonClass(generateAdapter = true)
+data class AIPostSuggestionResponse(
+    val suggestion: AIPostSuggestionDto,
+    /** One sentence for the person: what to add, or a kind of post that fits the photo better. */
+    val note: String? = null,
+)

@@ -22,80 +22,331 @@ import UniformTypeIdentifiers
 /// reference (via @State) so per-frame writes during scrolling don't
 /// invalidate the view tree.
 private final class ChatScrollMetrics {
-    /// How far the user has scrolled below the first rendered row, in
-    /// points. Drives the near-top pagination trigger.
+    /// How far the user has scrolled below the first row, in points. Drives
+    /// the near-top pagination trigger.
     var distanceFromTop: CGFloat = .greatestFiniteMagnitude
-    /// Where the content's bottom edge sits below the viewport's top, and how
-    /// tall the content is, as of the last layout.
+    /// Where the content's bottom edge sits below the viewport's top, as of
+    /// the last layout.
     var contentMaxY: CGFloat = 0
-    var contentHeight: CGFloat = 0
-    /// Rows about to join or leave the rendered window (held-back rows, an
-    /// older page once it is applied, rows far from the viewport): the layout
-    /// that adds or drops them restores the place.
-    var pendingPrepend: ChatPendingPrepend?
-    /// Counts place restores: only the latest one's check may re-apply it.
-    var placeSerial = 0
     var viewportHeight: CGFloat = 0
-    /// The reader sent a message while rows were joining above: the joining
-    /// stops and the timeline goes to the latest message after it.
-    var pinsBottomAfterJoin = false
-    /// Rows that joined above, oldest pass first: each pass's old top bubble
-    /// and the height the pass added above it. Summed from the newest pass,
-    /// the heights say exactly how far below the content's top edge each of
-    /// those bubbles sits, so rows far below the viewport can stop rendering
-    /// at a known place.
-    var joinedAbove: [(rowId: String, height: CGFloat)] = []
-    /// Rows that joined below, oldest pass first: each pass's old last bubble
-    /// and the height the pass added below it, measured from the bottom edge.
-    var joinedBelow: [(rowId: String, height: CGFloat)] = []
-    /// The timeline is being dragged, flung or animated (iOS 18 and later
-    /// report it). A place restore made while a fling decelerates can be
-    /// swallowed, so rows above that stop rendering meanwhile leave their
-    /// space behind (`heightAbove`) until the scroll is idle.
-    var isScrolling = false
+    /// The timeline landed on a search match or brief and the reader has not
+    /// scrolled since: older pages wait. The first page joining above after a
+    /// `ScrollViewProxy` scroll has its offset fix undone (the scroll view
+    /// goes back to where that scroll left it), and a match's context is
+    /// short, so the reader lands near its top.
+    var isLanding = false
 }
 
-/// What the timeline needs to keep the reader's place when rows join above.
-private struct ChatPendingPrepend {
-    /// The last rendered row: unchanged means the content below the viewport
-    /// is too, so its bottom edge marks the place exactly.
-    let lastRowId: String?
-    /// The old top bubble, re-pinned to the top edge when the rows below
-    /// changed as well.
-    let anchorId: String?
-    /// An older page counts once the view model has applied it.
-    let olderPagesApplied: Int?
-    /// Rows join or leave below the viewport, so the content's top edge marks
-    /// the place instead.
-    var keepsTopEdge = false
-}
-
-/// Where rows far from the viewport stop rendering: at the start of a pass
-/// that joined (above or below), whose distance from the viewport is known.
-private struct ChatWindowCut {
-    /// The window's new first row, or the row after its new last one.
-    let index: Int
-    /// The window's new floor or ceiling bubble.
-    let rowId: String
-    /// How far below the viewport's top the cut sits.
-    let y: CGFloat
-    /// The pass, in `ChatScrollMetrics.joinedAbove` or `joinedBelow`.
-    let pass: Int
-    let joinedAbove: Bool
-}
-
-private extension View {
-    /// Reports whether the scroll is anything but idle (dragged, flung,
-    /// animated). iOS 18 and later; on iOS 17 it never reports it.
-    @ViewBuilder
-    func onChatScrollActivity(_ action: @escaping (Bool) -> Void) -> some View {
-        if #available(iOS 18.0, *) {
-            onScrollPhaseChange { _, phase in
-                action(phase != .idle)
+/// Keeps the rows on screen where they are when rows change above them (an
+/// older page joins, the oldest rows leave): on the layout that changes the
+/// content's height, the timeline's UIKit scroll view moves its offset by as
+/// much, so the frame that shows the new rows shows the old place. A SwiftUI
+/// scroll restore lands a frame later, and a finger on the timeline, moving
+/// or resting, undoes it; an offset set here holds under a finger and in a
+/// fling. It also takes the reader at the latest message to the end of the
+/// content (`followEnd`, `holdEnd`), and tells how far that end is
+/// (`distanceToEnd`).
+@MainActor
+private final class ChatTimelinePlace: NSObject {
+    /// The timeline's scroll view, once `ChatScrollViewProbe` has found it.
+    weak var scrollView: UIScrollView? {
+        didSet {
+            guard scrollView !== oldValue else { return }
+            observation = scrollView?.observe(\.contentSize) { [weak self] view, _ in
+                MainActor.assumeIsolated { self?.contentSizeChanged(view) }
             }
-        } else {
-            self
         }
+    }
+
+    /// The bottom anchor's view while it is laid out (`ChatTimelineEndProbe`):
+    /// where the content really ends. The lazy stack sizes the rows it has not
+    /// laid out from estimates, and its height can lag the rows it has just
+    /// laid out, so the content height can run past the newest rows, or stop
+    /// short of them, for a while.
+    weak var endView: UIView?
+
+    private var observation: NSKeyValueObservation?
+    /// Where the content's bottom edge sat below the viewport's top before the
+    /// rows above changed. The rows below are the same, so it stays there.
+    private var bottomEdge: CGFloat?
+    /// For a moment after rows joined above, rows near the viewport that took
+    /// estimated heights on that layout take their measured ones on the next:
+    /// each of those changes moves the offset by as much, from the content
+    /// height the last one left.
+    private var settling: (until: CFTimeInterval, height: CGFloat)?
+    /// The scroll to the end in flight (`followEnd`, `holdEnd`), stepped once a frame.
+    private var endScroll: ChatEndScroll?
+    private var endScrollLink: CADisplayLink?
+
+    /// A finger is on the timeline.
+    var isTracking: Bool {
+        scrollView?.isTracking ?? false
+    }
+
+    /// Returns once the timeline is at rest: no finger on it, no fling or
+    /// bounce, the content not pulled past its top, and the viewport the same
+    /// height for 0.2 s; after a second at most. Cancelling the calling task
+    /// doesn't end it early.
+    func settled() async {
+        let start = CACurrentMediaTime()
+        var height = scrollView?.bounds.height ?? 0
+        var stableSince = start
+        while CACurrentMediaTime() - start < 1 {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { continuation.resume() }
+            }
+            guard let scrollView else { return }
+            let now = CACurrentMediaTime()
+            if abs(scrollView.bounds.height - height) > 0.5 {
+                height = scrollView.bounds.height
+                stableSince = now
+            }
+            let atRest = !scrollView.isDragging && !scrollView.isDecelerating
+                && scrollView.contentOffset.y >= -scrollView.adjustedContentInset.top - 0.5
+            if atRest, now - stableSince >= 0.2 { return }
+        }
+    }
+
+    /// The rows changed: what the next layouts change is that change, not
+    /// rows that joined above taking their measured heights.
+    func rowsChanged() {
+        settling = nil
+    }
+
+    /// Rows join below the reader at the latest message, the last row grows,
+    /// or the timeline lands on its latest message: once this update has laid
+    /// them out, the offset eases from where it is then to the end of the
+    /// content, read on every frame, and holds it a moment while the rows
+    /// settle. A `ScrollViewProxy` scroll to the bottom anchor resolves the end
+    /// from the lazy stack's height, which can lag the rows it has just laid
+    /// out. A finger dragging the timeline takes it over.
+    func followEnd(animated: Bool) {
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 16_000_000)
+            self?.startEndScroll(duration: animated ? 0.2 : 0, hold: 0.3)
+        }
+    }
+
+    /// The viewport changes height with the reader at the latest message (the
+    /// keyboard, a notice or the typing line takes room from below or gives it
+    /// back): the offset stays at the end of the content until the height has
+    /// stopped changing. On iOS 17 the viewport animates with the keyboard
+    /// frame by frame, and a `ScrollViewProxy` scroll resolves the end from the
+    /// height before it.
+    func holdEnd() {
+        startEndScroll(duration: 0, hold: 0.25)
+    }
+
+    private func startEndScroll(duration: CFTimeInterval, hold: CFTimeInterval) {
+        // A tap (one that dismisses the keyboard) holds on; a drag takes over.
+        guard let scrollView, !scrollView.isDragging else { return }
+        let now = CACurrentMediaTime()
+        let end = end(of: scrollView)
+        endScroll = ChatEndScroll(
+            distance: end - scrollView.contentOffset.y,
+            end: end,
+            start: now,
+            duration: duration,
+            hold: hold,
+            until: now + duration + hold,
+            deadline: now + duration + 2,
+            height: scrollView.bounds.height
+        )
+        if endScrollLink == nil {
+            let link = CADisplayLink(target: self, selector: #selector(step(_:)))
+            link.add(to: .main, forMode: .common)
+            endScrollLink = link
+        }
+        stepToEnd()
+    }
+
+    @objc private func step(_: CADisplayLink) {
+        stepToEnd()
+    }
+
+    /// One frame of the scroll to the end. A finger dragging the timeline takes it over.
+    private func stepToEnd() {
+        let now = CACurrentMediaTime()
+        guard let scrollView, let started = endScroll, now < started.until, now < started.deadline,
+              !scrollView.isDragging, !scrollView.isDecelerating else {
+            endScrollLink?.invalidate()
+            endScrollLink = nil
+            endScroll = nil
+            return
+        }
+        // While the viewport keeps changing height, the end holds on.
+        if abs(scrollView.bounds.height - started.height) > 0.5 {
+            endScroll?.height = scrollView.bounds.height
+            endScroll?.until = max(started.until, now + started.hold)
+        }
+        let end = end(of: scrollView)
+        if abs(end - started.end) > 0.5 {
+            spreadRest(to: end, in: scrollView)
+        }
+        guard let endScroll else { return }
+        let offset = end - endScroll.distance * endScroll.left
+        if abs(scrollView.contentOffset.y - offset) > 0.25 {
+            scrollView.contentOffset.y = offset
+        }
+    }
+
+    /// The end moved during the scroll to it (the newest rows took their
+    /// measured heights, or the viewport changed height): what is left to
+    /// scroll spreads over the rest of the scroll, so nothing on screen jumps.
+    private func spreadRest(to end: CGFloat, in scrollView: UIScrollView) {
+        guard let endScroll, endScroll.left > 0.0001 else { return }
+        self.endScroll?.distance = (end - scrollView.contentOffset.y) / endScroll.left
+        self.endScroll?.end = end
+    }
+
+    /// How far the end of the content sits below the bottom of a viewport of
+    /// this height at the current offset (negative: blank below the latest
+    /// row). Nil while the bottom anchor is not laid out: the reader is far
+    /// from the end.
+    func distanceToEnd(viewportHeight: CGFloat? = nil) -> CGFloat? {
+        guard let scrollView, let contentEnd = contentEnd(in: scrollView) else { return nil }
+        return contentEnd + scrollView.adjustedContentInset.bottom - scrollView.contentOffset.y
+            - (viewportHeight ?? scrollView.bounds.height)
+    }
+
+    private func contentEnd(in scrollView: UIScrollView) -> CGFloat? {
+        guard let endView, endView.window != nil else { return nil }
+        return endView.convert(endView.bounds, to: scrollView).maxY
+    }
+
+    private func end(of scrollView: UIScrollView) -> CGFloat {
+        max(
+            -scrollView.adjustedContentInset.top,
+            (contentEnd(in: scrollView) ?? scrollView.contentSize.height) + scrollView.adjustedContentInset.bottom
+                - scrollView.bounds.height
+        )
+    }
+
+    /// Rows above the viewport change on this update: its layout keeps the
+    /// rows below them in place.
+    func keepPlace() {
+        guard let scrollView else { return }
+        bottomEdge = scrollView.contentSize.height - scrollView.contentOffset.y
+        // This update's layout only: one that leaves the height as it was moves nothing.
+        Task { [weak self] in
+            self?.bottomEdge = nil
+        }
+    }
+
+    private func contentSizeChanged(_ scrollView: UIScrollView) {
+        if bottomEdge != nil {
+            keepRowsBelow(scrollView)
+        } else if let settling, CACurrentMediaTime() < settling.until {
+            let grew = scrollView.contentSize.height - settling.height
+            scrollView.contentOffset.y += grew
+            self.settling?.height = scrollView.contentSize.height
+            ChatPerformance.signposter.emitEvent("PlaceSettle", "grew=\(Int(grew)) tracking=\(scrollView.isTracking)")
+        }
+        if endScroll != nil {
+            spreadRest(to: end(of: scrollView), in: scrollView)
+        }
+    }
+
+    private func keepRowsBelow(_ scrollView: UIScrollView) {
+        guard let bottomEdge else { return }
+        self.bottomEdge = nil
+        let grew = scrollView.contentSize.height - bottomEdge - scrollView.contentOffset.y
+        scrollView.contentOffset.y += grew
+        settling = (CACurrentMediaTime() + 0.4, scrollView.contentSize.height)
+        let tracking = scrollView.isTracking
+        Task { [weak scrollView] in
+            // Where the place is a few frames on: off only by the reader's own motion.
+            try? await Task.sleep(nanoseconds: 60_000_000)
+            guard let scrollView else { return }
+            let shift = scrollView.contentSize.height - scrollView.contentOffset.y - bottomEdge
+            ChatPerformance.signposter.emitEvent("PrependPlace", "grew=\(Int(grew)) shift=\(Int(shift)) tracking=\(tracking)")
+        }
+    }
+}
+
+/// A scroll to the end of the timeline (`ChatTimelinePlace.followEnd`, `holdEnd`).
+private struct ChatEndScroll {
+    /// How far above the end the offset was when it started.
+    var distance: CGFloat
+    /// The end `distance` was measured to.
+    var end: CGFloat
+    let start: CFTimeInterval
+    let duration: CFTimeInterval
+    /// How long the end holds after the scroll, and after the viewport last
+    /// changed height.
+    let hold: CFTimeInterval
+    var until: CFTimeInterval
+    /// The latest it holds, however long the viewport keeps changing.
+    let deadline: CFTimeInterval
+    /// The viewport height last seen.
+    var height: CGFloat
+
+    /// The share of `distance` still to go: easing out, like the scroll it replaces.
+    var left: CGFloat {
+        let progress = duration > 0 ? min(1, (CACurrentMediaTime() - start) / duration) : 1
+        return (1 - progress) * (1 - progress)
+    }
+}
+
+/// How the view model's rows changed around the messages the old and the new
+/// rows share: above the first of them, and below the last.
+private struct ChatRowChange {
+    let above: Bool
+    let below: Bool
+    /// The old rows above with the new ones from that first message on: the
+    /// change below only.
+    let belowFirst: [ChatTimelineRow]
+}
+
+/// Hands the timeline's UIKit scroll view to `ChatTimelinePlace`. It sits in
+/// the scroll content, so the scroll view is its nearest ancestor of that kind.
+private struct ChatScrollViewProbe: UIViewRepresentable {
+    let place: ChatTimelinePlace
+
+    func makeUIView(context _: Context) -> ProbeView {
+        let view = ProbeView()
+        view.place = place
+        view.isUserInteractionEnabled = false
+        return view
+    }
+
+    func updateUIView(_ view: ProbeView, context _: Context) {
+        view.place = place
+    }
+
+    final class ProbeView: UIView {
+        weak var place: ChatTimelinePlace?
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            // A timeline on its way out (a topic switch puts up the new one
+            // first) hands nothing over: its scroll view is about to go.
+            guard window != nil else { return }
+            var ancestor = superview
+            while let view = ancestor, !(view is UIScrollView) {
+                ancestor = view.superview
+            }
+            if let scrollView = ancestor as? UIScrollView {
+                place?.scrollView = scrollView
+            }
+        }
+    }
+}
+
+/// Hands the bottom anchor's UIKit view to `ChatTimelinePlace`, which reads
+/// where the content ends from it.
+private struct ChatTimelineEndProbe: UIViewRepresentable {
+    let place: ChatTimelinePlace
+
+    func makeUIView(context _: Context) -> UIView {
+        let view = UIView()
+        view.isUserInteractionEnabled = false
+        place.endView = view
+        return view
+    }
+
+    func updateUIView(_ view: UIView, context _: Context) {
+        place.endView = view
     }
 }
 
@@ -138,9 +389,9 @@ public struct ChatConversationView: View {
     /// (which briefly report near-top geometry before the bottom anchor
     /// settles) can't fetch an older page unprompted.
     @State private var isLoadOlderArmed = false
-    /// True while an older-page fetch + scroll restore is in flight —
-    /// the near-top geometry check fires continuously during a scroll,
-    /// and must not stack requests.
+    /// True while an older-page fetch is in flight — the near-top
+    /// geometry check fires continuously during a scroll, and must not
+    /// stack requests.
     @State private var isLoadingOlder = false
     /// Scroll metrics held by reference: they update on every scrolled
     /// frame, and a per-frame @State write would re-render the whole
@@ -154,22 +405,19 @@ public struct ChatConversationView: View {
     /// The thread opened at its latest message once; coming back (a pushed
     /// profile, a tab switch) keeps the reading position (Instant Screens).
     @State private var hasLandedAtLatest = false
-    /// Newest rows first: a thread opens (and returns to its latest message)
-    /// rendering only its newest rows; the older loaded rows join when the
-    /// reader scrolls up to them or a scroll target needs them. Rendering
-    /// every loaded row made each open, send and incoming message pay a
-    /// SwiftUI pass over the whole non-lazy stack. `nil` renders all rows.
-    @State private var renderFloorId: String?
-    /// Reading far back, the newer rows far below the viewport stop rendering
-    /// too, from the row after this bubble on: every rendered row costs each
-    /// layout pass, so the window stays about the same size at any depth. They
-    /// join again as the reader comes back down. `nil` renders to the newest row.
-    @State private var renderCeilingId: String?
-    /// The space of rows above that stopped rendering while the timeline was
-    /// scrolling, kept until it is idle so that nothing on screen moves.
-    @State private var heightAbove: CGFloat = 0
-    /// The opening window is chosen once, from the first rows shown.
-    @State private var openingWindowDecided = false
+    /// For one pass after the view model's rows changed both above and below
+    /// the rows on screen, the rows the timeline shows instead: the change
+    /// below only (`takeRows`). Empty otherwise.
+    @State private var timelineRows: [ChatTimelineRow] = []
+    /// The first of the newest rows, which lay out together as one item of the
+    /// lazy stack (`timelineStack`, `keepTailSplit`).
+    @State private var tailFirstId: String?
+    /// The row a search match or brief lands on (`scrollToPendingTarget`): the
+    /// newest rows laid out together start below it.
+    @State private var landingTargetId: String?
+    /// Keeps the rows on screen in place when rows change above them, and the
+    /// latest message in view while the viewport changes height.
+    @State private var timelinePlace = ChatTimelinePlace()
     /// Debug builds note missed frames while the thread is on screen.
     @State private var frameGapMonitor = ChatFrameGapMonitor()
     @Environment(\.openURL) private var openURL
@@ -1217,78 +1465,54 @@ extension ChatConversationView {
     private func populatedFrame(_ rows: [ChatTimelineRow]) -> some View {
         // Resolve the accepted room tails once per rendered snapshot, not per row.
         let readBoundaryIds = viewModel.latestAcceptedMessageIds
-        let shown = renderedRows(rows)
+        // For one pass after rows changed on both sides of the reader, the rows
+        // below the change first (`takeRows`).
+        let shown = timelineRows.isEmpty ? rows : timelineRows
+        let tailStart = Self.tailStart(in: shown, firstId: tailFirstId, below: landingTargetId)
         // Gig context strip is loaded by `ChatConversationViewModel.loadGigContextIfNeeded`.
         return GeometryReader { geo in
             ScrollViewReader { proxy in
                 ScrollView {
-                    // A plain (non-lazy) VStack on purpose: pages are
-                    // bounded (60 rows/fetch) and exact row heights are
-                    // what make `.defaultScrollAnchor(.bottom)` land on
-                    // the newest message. LazyVStack positions by
-                    // *estimated* heights, which left the first frame in
-                    // blank space past the real content and made every
-                    // scrollTo land short.
-                    VStack(spacing: Spacing.s0) {
-                        // A15.5's "Auto-welcome · free" card is omitted:
-                        // no persona welcome-message exists on the wire,
-                        // and the design's copy is fixture identity.
-                        if heightAbove > 0 {
-                            Color.clear.frame(height: heightAbove)
+                    timelineStack(shown, tailStart: tailStart, geo: geo, readBoundaryIds: readBoundaryIds)
+                        .padding(.horizontal, 12)
+                        .padding(.top, Spacing.s3)
+                        .background(alignment: .topLeading) {
+                            ChatScrollViewProbe(place: timelinePlace)
+                                .frame(width: 0, height: 0)
                         }
-                        if mode == .aiAssistant {
-                            // A15.3 — the welcome card stays pinned at the top
-                            // of the populated AI thread.
-                            aiWelcomeCard
-                                .padding(.bottom, 10)
-                        }
-                        ForEach(shown) { row in
-                            // Row width is measured once at the list level
-                            // (viewport minus the 12pt side paddings) — a
-                            // per-row GeometryReader made every bubble lay
-                            // out twice and snap from the fallback width
-                            // while scrolling.
-                            timelineRowView(row, rowWidth: max(0, geo.size.width - 24))
-                                .background { readBoundaryTracker(row: row, acceptedIds: readBoundaryIds, viewportHeight: geo.size.height) }
-                        }
-                        Color.clear
-                            .frame(height: 4)
-                            .id(Self.bottomAnchorId)
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.top, Spacing.s3)
-                    .background(
-                        // Scroll tracking. `onAppear`/`onDisappear` row
-                        // sentinels only work in lazy stacks, so the
-                        // pagination trigger and at-bottom state read the
-                        // content frame instead.
-                        GeometryReader { contentGeo in
-                            let frame = contentGeo.frame(in: .named(Self.scrollSpaceName))
-                            Color.clear
-                                .onAppear {
-                                    handleScrollGeometry(
-                                        frame: frame, viewportHeight: geo.size.height, shown: shown, proxy: proxy
-                                    )
-                                }
-                                .onChange(of: frame) { _, newFrame in
-                                    handleScrollGeometry(
-                                        frame: newFrame, viewportHeight: geo.size.height, shown: shown, proxy: proxy
-                                    )
-                                }
-                        }
-                    )
+                        .background(
+                            // Scroll tracking: the pagination trigger and the
+                            // at-bottom state read the content frame.
+                            GeometryReader { contentGeo in
+                                let frame = contentGeo.frame(in: .named(Self.scrollSpaceName))
+                                Color.clear
+                                    .onAppear {
+                                        handleScrollGeometry(frame: frame, viewportHeight: geo.size.height)
+                                    }
+                                    .onChange(of: frame) { _, newFrame in
+                                        handleScrollGeometry(frame: newFrame, viewportHeight: geo.size.height)
+                                    }
+                            }
+                        )
                 }
                 .coordinateSpace(name: Self.scrollSpaceName)
                 .onAppear {
-                    ChatPerformance.mark("ThreadRows", rows: shown.count)
-                    decideOpeningWindow(rows)
+                    ChatPerformance.mark("ThreadRows", rows: rows.count)
                 }
                 // Threads open at the latest message (rows project
                 // oldest-first), and the bottom stays anchored when new
                 // rows land while the user is already at the bottom.
                 .defaultScrollAnchor(.bottom)
-                .onChatScrollActivity { scrolling in scrollActivityChanged(scrolling, proxy: proxy) }
-                .refreshable { await viewModel.refresh(retryRoomSubscriptions: true) }
+                // Dragged down in a short thread, the keyboard pulls the
+                // content as it goes and starts a refresh, and SwiftUI cancels
+                // the refresh as the keyboard resizes the timeline. Ended in
+                // mid-flight, the control leaves its spinner animating, hidden
+                // (iOS 26). The refresh runs on, and the control ends once the
+                // timeline is at rest.
+                .refreshable {
+                    await Task { await viewModel.refresh(retryRoomSubscriptions: true) }.value
+                    await timelinePlace.settled()
+                }
                 .accessibilityIdentifier("chatConversationContent")
                 .task {
                     guard !isLoadOlderArmed else { return }
@@ -1299,14 +1523,21 @@ extension ChatConversationView {
                     // re-fires — kick one fetch so backward pagination
                     // still works there.
                     if scrollMetrics.distanceFromTop < 200 {
-                        extendUpward(shown, proxy: proxy)
+                        loadOlderPreservingPosition()
                     }
                 }
                 .task { await landAtLatestMessage(proxy) }
+                .onChange(of: rows, initial: true) { oldRows, newRows in
+                    timelinePlace.rowsChanged()
+                    takeRows(from: oldRows, to: newRows)
+                    keepTailSplit(newRows)
+                }
+                // The second pass of a change on both sides: the rows above.
+                .onChange(of: timelineRows.isEmpty) { _, isEmpty in
+                    if isEmpty { timelinePlace.keepPlace() }
+                }
                 .onChange(of: rows.last) { oldLast, newLast in
-                    // Back to the newest rows at the bottom goes there by itself.
-                    guard !showLatestIfLongAtBottom(rows, proxy: proxy) else { return }
-                    pinToBottomIfNeeded(oldLast: oldLast, newLast: newLast, rows: rows, proxy: proxy)
+                    pinToBottomIfNeeded(oldLast: oldLast, newLast: newLast, proxy: proxy)
                 }
                 // A notice, the typing line or the keyboard takes room from
                 // below: the latest message stays in view when it was. When
@@ -1315,133 +1546,156 @@ extension ChatConversationView {
                 // by itself, but once rows have joined above it keeps its
                 // offset as it grows.
                 .onChange(of: geo.size.height) { oldHeight, newHeight in
-                    let pastEnd = scrollMetrics.contentMaxY < newHeight - 1
-                    guard newHeight < oldHeight ? isAtBottom : pastEnd, !isLoadingOlder else { return }
+                    // Where the content ended below the viewport before this
+                    // change, from the bottom anchor: on iOS 17 the at-bottom
+                    // state has been read with the new height by now.
+                    let toEnd = timelinePlace.distanceToEnd(viewportHeight: oldHeight)
+                        ?? scrollMetrics.contentMaxY - oldHeight
+                    // Given room back at the latest message, iOS 26 has moved
+                    // to the end by now, and puts the old offset back after
+                    // this layout (the lazy stack keeps its rows on screen in
+                    // place): the end holds all the same.
+                    let pastEnd = oldHeight + toEnd < newHeight - 1
+                        || timelinePlace.distanceToEnd().map { $0 < 1 } == true
+                    // A search match or brief on its way lands where it is: the
+                    // notice that opens with it takes room too, and a scroll to
+                    // the end under the landing left the first pages joining
+                    // above it thousands of points off on iOS 26.
+                    guard newHeight < oldHeight ? toEnd < 120 : pastEnd, !isLoadingOlder,
+                          !viewModel.hasPendingSearchTarget else { return }
                     proxy.scrollTo(Self.bottomAnchorId, anchor: .bottom)
+                    timelinePlace.holdEnd()
                 }
                 // `initial`: a target published before this frame appeared
                 // (a slow first layout) still scrolls.
                 .onChange(of: viewModel.pendingScrollTargetId, initial: true) { _, target in
                     guard let target else { return }
-                    scrollToPendingTarget(target, rows: rows, shown: shown, proxy: proxy)
+                    scrollToPendingTarget(target, proxy: proxy)
                 }
             }
         }
     }
 
     /// React to the content frame moving inside the scroll viewport:
-    /// update the at-bottom flag and fire backward pagination when the
+    /// update the at-bottom flag and fetch the next older page when the
     /// user nears the top of the loaded history.
-    private func handleScrollGeometry(
-        frame: CGRect,
-        viewportHeight: CGFloat,
-        shown: ArraySlice<ChatTimelineRow>,
-        proxy: ScrollViewProxy
-    ) {
-        let previous = (maxY: scrollMetrics.contentMaxY, height: scrollMetrics.contentHeight)
+    private func handleScrollGeometry(frame: CGRect, viewportHeight: CGFloat) {
+        // The end of the latest row where the bottom anchor is laid out: the
+        // lazy stack's own height counts rows not laid out at estimates.
+        let toEnd = timelinePlace.distanceToEnd() ?? frame.maxY - viewportHeight
         scrollMetrics.viewportHeight = viewportHeight
-        scrollMetrics.distanceFromTop = -frame.minY - heightAbove
-        scrollMetrics.contentMaxY = frame.maxY
-        scrollMetrics.contentHeight = frame.height
-        // Rows joined above (the content grew), or an older page landed and
-        // took the divider above the first message with it (it shrank).
-        if let pending = scrollMetrics.pendingPrepend, abs(frame.height - previous.height) > 1,
-           pending.olderPagesApplied.map({ viewModel.olderPagesApplied > $0 }) ?? true {
-            scrollMetrics.pendingPrepend = nil
-            if pending.keepsTopEdge {
-                keepTopEdge(
-                    change: (previousMinY: previous.maxY - previous.height, grew: frame.height - previous.height),
-                    frame: frame,
-                    viewportHeight: viewportHeight,
-                    proxy: proxy
-                )
-            } else {
-                keepPlace(
-                    pending,
-                    change: (previousMaxY: previous.maxY, grew: frame.height - previous.height),
-                    viewportHeight: viewportHeight,
-                    shown: shown,
-                    proxy: proxy
-                )
-            }
-            return
-        }
-        // With rows held below, the bottom of what is rendered is not the latest message.
-        let nearBottom = renderCeilingId == nil && (frame.maxY - viewportHeight) < 120
+        scrollMetrics.distanceFromTop = -frame.minY
+        scrollMetrics.contentMaxY = viewportHeight + toEnd
+        let nearBottom = toEnd < 120
         if isAtBottom != nearBottom {
             isAtBottom = nearBottom
         }
-        guard isLoadOlderArmed, !isLoadingOlder else { return }
-        if scrollMetrics.distanceFromTop < 200 {
-            extendUpward(shown, proxy: proxy)
-        } else if renderCeilingId != nil, frame.maxY - viewportHeight < viewportHeight * Self.screensBeforeJoiningBelow {
-            revealRowsBelowPreservingPosition(proxy: proxy)
+        if scrollMetrics.isLanding, timelinePlace.isTracking {
+            scrollMetrics.isLanding = false
         }
+        guard isLoadOlderArmed, !isLoadingOlder,
+              scrollMetrics.distanceFromTop < viewportHeight * Self.screensBeforeOlderPage else { return }
+        loadOlderPreservingPosition()
     }
 
-    // MARK: - Newest rows first
+    // MARK: - Rows joining
 
-    /// About two screens of rows: the first frame and a first scroll up.
-    private static let openingRowWindow = 40
-    /// Held rows join up to a page (60 messages) per trip to the top, a few
-    /// rows per layout pass so that no frame lays out a page of rows. A pass
-    /// aims at about 40 ms on this device; every pass also pays for all the
-    /// rows rendered, so with many of them passes take more rows at once
-    /// (one per 20 rendered) rather than repeat that cost.
-    private static let revealChunk = 60
-    private static let revealStepRows = 4...24
-    private static let revealStepTargetMs: Double = 40
-    private static let renderedRowsPerStepRow = 20
-    /// A join smaller than this is never re-applied by the place check: a
-    /// drag or fling can move that far on its own before the check runs.
-    private static let smallestReappliedJoin: CGFloat = 600
-    /// Past this many rendered rows, rows far from the viewport stop rendering
-    /// (at least `smallestTrim` at a time): below it after rows join above,
-    /// above it after rows join below.
-    private static let renderedRowLimit = 120
-    private static let smallestTrim = 20
-    /// Screens of rows kept rendered past the viewport when rows stop
-    /// rendering: below it, and above it (as many as the rows joining above
-    /// fill).
-    private static let screensKeptBelow: CGFloat = 3
-    private static let screensKeptAbove: CGFloat = 2
-    /// Rows held below join once fewer than this many screens of rows are
-    /// left below the viewport, and keep joining up to `screensFilledBelow`.
-    private static let screensBeforeJoiningBelow: CGFloat = 2
-    private static let screensFilledBelow: CGFloat = 4
+    /// The next older page is fetched this many screens before the top of the
+    /// loaded history, so that it has usually joined by the time the reader
+    /// gets there and a fling up runs on through it.
+    private static let screensBeforeOlderPage: CGFloat = 2
 
-    /// The rows this frame renders: every loaded row from the window's floor
-    /// (with the dividers just above its first message) to its ceiling.
-    private func renderedRows(_ rows: [ChatTimelineRow]) -> ArraySlice<ChatTimelineRow> {
-        let floor = openingWindowDecided ? renderFloorId : openingFloorId(in: rows)
-        return rows[Self.window(floor: floor, ceiling: renderCeilingId, in: rows)]
-    }
+    /// At least this many of the newest rows lay out together, as one item of
+    /// the lazy stack: more than a screen of them, so the timeline at its
+    /// latest message shows rows that have laid out.
+    private static let laidOutTailRows = 30
 
-    /// A window's rows: from its floor's row, with the dividers just above it,
-    /// through its ceiling's row. No floor starts at the oldest loaded row, no
-    /// ceiling (or one no longer loaded) ends at the newest.
-    private static func window(floor: String?, ceiling: String?, in rows: [ChatTimelineRow]) -> Range<Int> {
-        let start = renderedStart(floor: floor, in: rows)
-        let end = ceiling.flatMap { id in rows[start...].firstIndex { $0.id == id } }.map { $0 + 1 }
-        return start..<(end ?? rows.endIndex)
-    }
-
-    /// Where rendering starts for a floor: its row, with the dividers just above it.
-    private static func renderedStart(floor: String?, in rows: [ChatTimelineRow]) -> Int {
-        guard let floor, var start = rows.firstIndex(where: { $0.id == floor }) else { return rows.startIndex }
-        while start > rows.startIndex, !isBubble(rows[start - 1]) {
-            start -= 1
+    /// Where the newest rows laid out together start: at `firstId` while the
+    /// rows keep it, and never fewer than `laidOutTailRows` of them, except
+    /// below a landing's target.
+    private static func tailStart(in rows: [ChatTimelineRow], firstId: String?, below targetId: String?) -> Int {
+        let newest = max(0, rows.count - laidOutTailRows)
+        var start = newest
+        if let firstId, let index = rows.firstIndex(where: { $0.id == firstId }) {
+            start = min(index, newest)
+        }
+        // On iOS 17 a `ScrollViewProxy` scroll finds a row of the lazy stack,
+        // but not one among the newest rows laid out together.
+        if let targetId, let target = rows.firstIndex(where: { $0.id == targetId }) {
+            start = max(start, target + 1)
         }
         return start
     }
 
-    /// The first bubble among the newest rows, for a thread shown at its
-    /// latest message with well over a window of rows loaded.
-    private func openingFloorId(in rows: [ChatTimelineRow]) -> String? {
-        guard mode != .aiAssistant, rows.count > Self.openingRowWindow + 20,
-              !viewModel.hasPendingSearchTarget, !viewModel.isViewingEarlierHistory,
-              !viewModel.isViewingSearchContext else { return nil }
-        return rows[(rows.count - Self.openingRowWindow)...].first(where: Self.isBubble)?.id
+    /// The newest rows laid out together start at the same row while rows join
+    /// below them, so no row leaves them under the reader: as a row of its own,
+    /// the lazy stack would size it from an estimate, and the rows on screen
+    /// would move by the difference. A new window (its first row gone) starts
+    /// them afresh, and so do newest rows grown many while the reader is at the
+    /// latest message, where the end holds.
+    private func keepTailSplit(_ rows: [ChatTimelineRow]) {
+        if let tailFirstId, let index = rows.firstIndex(where: { $0.id == tailFirstId }),
+           !(isAtBottom && rows.count - index > Self.laidOutTailRows * 5) {
+            return
+        }
+        let newest = max(0, rows.count - Self.laidOutTailRows)
+        tailFirstId = rows.indices.contains(newest) ? rows[newest].id : nil
+    }
+
+    /// The timeline's rows, oldest first, and the bottom anchor.
+    private func timelineStack(
+        _ shown: [ChatTimelineRow],
+        tailStart: Int,
+        geo: GeometryProxy,
+        readBoundaryIds: Set<String>
+    ) -> some View {
+        // Lazy: only the rows near the viewport lay out, so a long thread
+        // scrolls, and an older page joins, without a pass over every loaded
+        // row. Rows far from the viewport sit at estimated heights until they
+        // come near, so the landings scroll again once their rows have laid
+        // out (`landAtLatestMessage`, `scrollToPendingTarget`), rows joining
+        // above keep the reader's place, and the end is read from the bottom
+        // anchor (`ChatTimelinePlace`). Nothing sits below the lazy stack: with
+        // content below it, a lazy stack above the viewport drew its last row
+        // at the top of the viewport when the keyboard changed the viewport's
+        // height, and grew by as much.
+        LazyVStack(spacing: Spacing.s0) {
+            // A15.5's "Auto-welcome · free" card is omitted: no persona
+            // welcome-message exists on the wire, and the design's copy is
+            // fixture identity.
+            if mode == .aiAssistant {
+                // A15.3 — the welcome card stays pinned at the top of the
+                // populated AI thread.
+                aiWelcomeCard
+                    .padding(.bottom, 10)
+            }
+            ForEach(shown[..<tailStart]) { row in
+                timelineEntry(row, geo: geo, readBoundaryIds: readBoundaryIds)
+            }
+            // The newest rows and the bottom anchor, one item of the lazy
+            // stack, lay out together: opened at its end, a lazy stack whose
+            // newest rows are taller than its estimate laid out no rows there
+            // on iOS 17, and the timeline stayed blank until the reader
+            // scrolled.
+            VStack(spacing: Spacing.s0) {
+                ForEach(shown[tailStart...]) { row in
+                    timelineEntry(row, geo: geo, readBoundaryIds: readBoundaryIds)
+                }
+                Color.clear
+                    .frame(height: 4)
+                    .background { ChatTimelineEndProbe(place: timelinePlace) }
+                    .id(Self.bottomAnchorId)
+            }
+        }
+    }
+
+    /// One timeline row and its read-boundary tracking.
+    private func timelineEntry(_ row: ChatTimelineRow, geo: GeometryProxy, readBoundaryIds: Set<String>) -> some View {
+        // Row width is measured once at the list level (viewport minus the
+        // 12pt side paddings) — a per-row GeometryReader made every bubble
+        // lay out twice and snap from the fallback width while scrolling.
+        timelineRowView(row, rowWidth: max(0, geo.size.width - 24))
+            .background { readBoundaryTracker(row: row, acceptedIds: readBoundaryIds, viewportHeight: geo.size.height) }
     }
 
     private static func isBubble(_ row: ChatTimelineRow) -> Bool {
@@ -1449,450 +1703,79 @@ extension ChatConversationView {
         return false
     }
 
-    private func decideOpeningWindow(_ rows: [ChatTimelineRow]) {
-        guard !openingWindowDecided else { return }
-        showWindow(floor: openingFloorId(in: rows), rows: rows)
+    /// The view model's rows changed. Rows that change above the rows on
+    /// screen (an older page joins, the oldest rows leave) move the offset
+    /// with them on the same layout, so nothing on screen moves. Rows that
+    /// change on both sides at once (an older page past the retained window
+    /// drops the newest rows, or new rows push out the oldest) take two
+    /// passes: the rows below first, then the rows above, so that the pass
+    /// that moves the offset changes nothing below the reader.
+    private func takeRows(from old: [ChatTimelineRow], to new: [ChatTimelineRow]) {
+        guard let change = Self.rowChange(from: old, to: new), change.above else { return }
+        guard change.below else {
+            timelinePlace.keepPlace()
+            return
+        }
+        timelineRows = change.belowFirst
+        // The rows above on the next pass, after this one has laid out.
+        Task { timelineRows = [] }
     }
 
-    private func setWindow(floor: String?, ceiling: String?, rows: [ChatTimelineRow]) {
-        renderFloorId = floor
-        renderCeilingId = ceiling
-        openingWindowDecided = true
-        ChatPerformance.mark("RenderWindow", rows: renderedRows(rows).count)
-    }
-
-    /// A fresh window from `floor` to the newest row (the newest rows, or every
-    /// loaded row): nothing held below, no joined passes to cut at.
-    private func showWindow(floor: String?, rows: [ChatTimelineRow]) {
-        scrollMetrics.joinedAbove = []
-        scrollMetrics.joinedBelow = []
-        heightAbove = 0
-        setWindow(floor: floor, ceiling: nil, rows: rows)
-    }
-
-    /// New rows at the bottom while the reader is there (a long gap filled on
-    /// open, or arrivals and sends after reading back): render only the newest
-    /// rows again, then go to the bottom. The rows leaving are far above the
-    /// viewport. Returns whether it did.
-    private func showLatestIfLongAtBottom(_ rows: [ChatTimelineRow], proxy: ScrollViewProxy) -> Bool {
-        guard openingWindowDecided, isAtBottom, !isLoadingOlder else { return false }
-        let start = renderFloorId.flatMap { floor in rows.firstIndex { $0.id == floor } } ?? rows.startIndex
-        guard rows.count - start > Self.openingRowWindow * 2, let floor = openingFloorId(in: rows) else { return false }
-        showWindow(floor: floor, rows: rows)
-        Task { await scrollToBottomAfterLayout(proxy) }
-        return true
+    /// How the rows changed around the messages both lists keep. Nil when they
+    /// share no message (a new window: the latest messages, a search match, a
+    /// topic).
+    private static func rowChange(from old: [ChatTimelineRow], to new: [ChatTimelineRow]) -> ChatRowChange? {
+        var newIndex: [String: Int] = [:]
+        for (index, row) in new.enumerated() where isBubble(row) {
+            newIndex[row.id] = index
+        }
+        guard let firstOld = old.firstIndex(where: { newIndex[$0.id] != nil }),
+              let lastOld = old.lastIndex(where: { newIndex[$0.id] != nil }),
+              let firstNew = newIndex[old[firstOld].id], let lastNew = newIndex[old[lastOld].id],
+              firstNew <= lastNew else { return nil }
+        return ChatRowChange(
+            above: !old[..<firstOld].map(\.id).elementsEqual(new[..<firstNew].map(\.id)),
+            below: !old[(lastOld + 1)...].map(\.id).elementsEqual(new[(lastNew + 1)...].map(\.id)),
+            belowFirst: Array(old[..<firstOld] + new[firstNew...])
+        )
     }
 
     /// The rendered rows just changed: go to the bottom once they have laid
-    /// out. Scrolling in the same pass resolves the bottom in the old (longer)
-    /// layout and leaves the viewport past the end of the new content, blank.
+    /// out. Scrolling in the same pass resolves the bottom in the old layout
+    /// and can leave the viewport short of the new end.
     private func scrollToBottomAfterLayout(_ proxy: ScrollViewProxy) async {
         for delayMs: UInt64 in [16, 120] {
             try? await Task.sleep(nanoseconds: delayMs * 1_000_000)
             proxy.scrollTo(Self.bottomAnchorId, anchor: .bottom)
         }
-    }
-
-    /// Up past the top of what is rendered: the loaded rows the window holds
-    /// back join first, then the next older page.
-    private func extendUpward(_ shown: ArraySlice<ChatTimelineRow>, proxy: ScrollViewProxy) {
-        if heightAbove > 0 {
-            dropHeightAbove(proxy: proxy)
-        } else if renderFloorId != nil {
-            revealHeldRowsPreservingPosition(proxy: proxy)
-        } else if viewModel.canLoadOlder {
-            loadOlderPreservingPosition(rows: shown, proxy: proxy)
-        }
-    }
-
-    /// Held-back rows join above the viewport, up to a page per trip to the
-    /// top, keeping the rows on screen where they are.
-    private func revealHeldRowsPreservingPosition(proxy: ScrollViewProxy) {
-        guard !isLoadingOlder else { return }
-        isLoadingOlder = true
-        Task {
-            let interval = ChatPerformance.signposter.beginInterval("RevealRows")
-            let joined = await joinHeldRows(upTo: Self.revealChunk)
-            ChatPerformance.end("RevealRows", interval, rows: joined)
-            await trimRowsBelow()
-            finishJoining(proxy)
-        }
-    }
-
-    /// Down near the bottom of what is rendered while newer rows are held
-    /// below: they join a few rows per pass, and rows far above stop rendering.
-    private func revealRowsBelowPreservingPosition(proxy: ScrollViewProxy) {
-        guard !isLoadingOlder else { return }
-        isLoadingOlder = true
-        Task {
-            let interval = ChatPerformance.signposter.beginInterval("RevealBelow")
-            let joined = await joinHeldRowsBelow()
-            ChatPerformance.end("RevealBelow", interval, rows: joined)
-            await trimRowsAbove()
-            finishJoining(proxy)
-        }
-    }
-
-    /// The scroll started or stopped. Once it is idle, the space left by rows
-    /// above goes.
-    private func scrollActivityChanged(_ scrolling: Bool, proxy: ScrollViewProxy) {
-        scrollMetrics.isScrolling = scrolling
-        if !scrolling { dropHeightAbove(proxy: proxy) }
-    }
-
-    /// The space left by rows above goes, and the place restore keeps the rows
-    /// on screen where they are: when the scroll is idle, or when the reader
-    /// comes back up to it (rows above then join again as usual).
-    private func dropHeightAbove(proxy: ScrollViewProxy) {
-        guard heightAbove > 0, !isLoadingOlder, case let .loaded(rows) = viewModel.state else { return }
-        isLoadingOlder = true
-        let shown = renderedRows(rows)
-        scrollMetrics.pendingPrepend = ChatPendingPrepend(
-            lastRowId: shown.last?.id, anchorId: shown.first(where: Self.isBubble)?.id, olderPagesApplied: nil
-        )
-        heightAbove = 0
-        Task {
-            var waits = 0
-            while scrollMetrics.pendingPrepend != nil, waits < 25 {
-                try? await Task.sleep(nanoseconds: 16_000_000)
-                waits += 1
-            }
-            scrollMetrics.pendingPrepend = nil
-            finishJoining(proxy)
-        }
-    }
-
-    /// Joining is over: a message sent meanwhile is shown now, with only the
-    /// newest rows rendered again.
-    private func finishJoining(_ proxy: ScrollViewProxy) {
-        isLoadingOlder = false
-        guard scrollMetrics.pinsBottomAfterJoin else {
-            if !scrollMetrics.isScrolling { dropHeightAbove(proxy: proxy) }
-            return
-        }
-        scrollMetrics.pinsBottomAfterJoin = false
-        if case let .loaded(rows) = viewModel.state {
-            showLatestRows(rows)
-        }
-        Task { await scrollToBottomAfterLayout(proxy) }
-    }
-
-    /// Back to the latest message: the newest rows, or, with too few rows to
-    /// choose them, every row from the floor on.
-    private func showLatestRows(_ rows: [ChatTimelineRow]) {
-        if let floor = openingFloorId(in: rows) {
-            showWindow(floor: floor, rows: rows)
-        } else if renderCeilingId != nil {
-            showWindow(floor: renderFloorId, rows: rows)
-        }
-    }
-
-    /// Lowers the window's floor a few rows per layout pass until `limit`
-    /// rows joined, none are held, or two screens of rows sit above the
-    /// viewport; each pass keeps the place. A pass's size follows how long
-    /// the last one took. Returns the rows that joined.
-    private func joinHeldRows(upTo limit: Int) async -> Int {
-        var joined = 0
-        var step = 0
-        while joined < limit, !scrollMetrics.pinsBottomAfterJoin,
-              scrollMetrics.distanceFromTop < scrollMetrics.viewportHeight * 2,
-              let floor = renderFloorId, case let .loaded(rows) = viewModel.state,
-              let floorIndex = rows.firstIndex(where: { $0.id == floor }) {
-            let byRendered = renderedRows(rows).count / Self.renderedRowsPerStepRow
-            step = min(max(step, byRendered, Self.revealStepRows.lowerBound), Self.revealStepRows.upperBound)
-            let next = Self.passFloor(target: floorIndex - min(step, limit - joined), below: floorIndex, in: rows)
-            let started = CACurrentMediaTime()
-            let grew = await moveWindow(floor: next, ceiling: renderCeilingId, rows: rows)
-            let moved = renderFloorId == next
-            if moved, grew > 0 { scrollMetrics.joinedAbove.append((rowId: floor, height: grew)) }
-            let tookMs = (CACurrentMediaTime() - started) * 1000
-            let count = floorIndex - (next.flatMap { id in rows.firstIndex { $0.id == id } } ?? rows.startIndex)
-            joined += count
-            ChatPerformance.signposter.emitEvent("RevealStep", "rows=\(count) ms=\(Int(tookMs))")
-            // Done once every held row joined, or when the window moved for something else.
-            guard let next, moved else { break }
-            step = Int(Double(step) * Self.revealStepTargetMs / max(tookMs, 1))
-            // Two frames' time between passes, so that at least one frame (with
-            // its scrolling and touches) is drawn before the next pass starts.
-            try? await Task.sleep(nanoseconds: 34_000_000)
-        }
-        return joined
-    }
-
-    /// A pass's new floor: the first message at or after `target`, else the
-    /// nearest one before it; nil when no message is left above.
-    private static func passFloor(target: Int, below floorIndex: Int, in rows: [ChatTimelineRow]) -> String? {
-        guard target > rows.startIndex else { return nil }
-        return (rows[target..<floorIndex].first(where: isBubble) ?? rows[..<target].last(where: isBubble))?.id
-    }
-
-    /// Lowers the window's ceiling a few rows per layout pass until
-    /// `screensFilledBelow` screens of rows sit below the viewport or none are
-    /// held; like `joinHeldRows`. Returns the rows that joined.
-    private func joinHeldRowsBelow() async -> Int {
-        var joined = 0
-        var step = 0
-        while !scrollMetrics.pinsBottomAfterJoin,
-              scrollMetrics.contentMaxY - scrollMetrics.viewportHeight < scrollMetrics.viewportHeight * Self.screensFilledBelow,
-              let ceiling = renderCeilingId, case let .loaded(rows) = viewModel.state,
-              let ceilingIndex = rows.firstIndex(where: { $0.id == ceiling }) {
-            let byRendered = renderedRows(rows).count / Self.renderedRowsPerStepRow
-            step = min(max(step, byRendered, Self.revealStepRows.lowerBound), Self.revealStepRows.upperBound)
-            let next = Self.passCeiling(target: ceilingIndex + step, above: ceilingIndex, in: rows)
-            let started = CACurrentMediaTime()
-            let grew = await moveWindow(floor: renderFloorId, ceiling: next, rows: rows)
-            let moved = renderCeilingId == next
-            if moved, grew > 0 { scrollMetrics.joinedBelow.append((rowId: ceiling, height: grew)) }
-            let tookMs = (CACurrentMediaTime() - started) * 1000
-            let count = (next.flatMap { id in rows.firstIndex { $0.id == id } } ?? rows.index(before: rows.endIndex)) - ceilingIndex
-            joined += count
-            ChatPerformance.signposter.emitEvent("RevealStep", "rows=\(count) ms=\(Int(tookMs))")
-            guard let next, moved else { break }
-            step = Int(Double(step) * Self.revealStepTargetMs / max(tookMs, 1))
-            try? await Task.sleep(nanoseconds: 34_000_000)
-        }
-        return joined
-    }
-
-    /// A pass's new ceiling: the last message at or before `target`, else the
-    /// nearest one after it; nil when no message is left below.
-    private static func passCeiling(target: Int, above ceilingIndex: Int, in rows: [ChatTimelineRow]) -> String? {
-        guard let last = rows.lastIndex(where: isBubble), target < last else { return nil }
-        return (rows[(ceilingIndex + 1)...target].last(where: isBubble) ?? rows[(target + 1)...].first(where: isBubble))?.id
-    }
-
-    /// After rows joined above: with many rows rendered, the rows more than
-    /// `screensKeptBelow` screens below the viewport stop rendering. The cut
-    /// falls where a joined pass starts (see `ChatScrollMetrics.joinedAbove`),
-    /// a known distance from the viewport; the rows on screen stay put.
-    private func trimRowsBelow() async {
-        guard let rows = await rowsToTrim() else { return }
-        let metrics = scrollMetrics
-        let shown = renderedRows(rows)
-        // Cuts at or below this line, the highest one first.
-        let line = metrics.viewportHeight * (1 + Self.screensKeptBelow)
-        var cut: ChatWindowCut?
-        // A pass that joined above starts at the dividers over its old top
-        // bubble: the newer passes below the first rendered row.
-        var top = firstRowY
-        for pass in metrics.joinedAbove.indices.reversed() {
-            top += metrics.joinedAbove[pass].height
-            guard top >= line else { continue }
-            let end = Self.renderedStart(floor: metrics.joinedAbove[pass].rowId, in: rows)
-            if end > shown.startIndex, end < shown.endIndex {
-                cut = ChatWindowCut(index: end, rowId: rows[end - 1].id, y: top, pass: pass, joinedAbove: true)
-            }
-            break
-        }
-        // A pass that joined below starts right after its old last bubble: it
-        // and the newer passes above the content's bottom edge (and its 4 pt sentinel).
-        top = metrics.contentMaxY - 4
-        for pass in metrics.joinedBelow.indices.reversed() {
-            top -= metrics.joinedBelow[pass].height
-            guard top >= line else { break }
-            let last = metrics.joinedBelow[pass].rowId
-            if let index = shown.firstIndex(where: { $0.id == last }), index + 1 < cut?.index ?? shown.endIndex {
-                cut = ChatWindowCut(index: index + 1, rowId: last, y: top, pass: pass, joinedAbove: false)
-            }
-        }
-        guard let cut, shown.endIndex - cut.index >= Self.smallestTrim else { return }
-        // The passes below the cut leave with their rows.
-        if cut.joinedAbove {
-            metrics.joinedAbove.removeFirst(cut.pass + 1)
-            metrics.joinedBelow = []
-        } else {
-            metrics.joinedBelow.removeSubrange(cut.pass...)
-        }
-        await trim(to: renderFloorId, ceiling: cut.rowId, rows: rows)
-    }
-
-    /// After rows joined below: with many rows rendered, the rows more than
-    /// `screensKeptAbove` screens above the viewport stop rendering, cut where
-    /// a joined pass starts. The place restore keeps the rows on screen where
-    /// they are; while the timeline scrolls, the rows leave their space behind
-    /// instead (`heightAbove`), so that nothing has to be restored.
-    private func trimRowsAbove() async {
-        guard let rows = await rowsToTrim() else { return }
-        let metrics = scrollMetrics
-        let shown = renderedRows(rows)
-        // Cuts at or above this line, the lowest one first.
-        let line = -metrics.viewportHeight * Self.screensKeptAbove
-        var cut: ChatWindowCut?
-        var top = firstRowY
-        for pass in metrics.joinedAbove.indices.reversed() {
-            top += metrics.joinedAbove[pass].height
-            guard top <= line else { break }
-            let floor = metrics.joinedAbove[pass].rowId
-            let start = Self.renderedStart(floor: floor, in: rows)
-            cut = ChatWindowCut(index: start, rowId: floor, y: top, pass: pass, joinedAbove: true)
-        }
-        top = metrics.contentMaxY - 4
-        for pass in metrics.joinedBelow.indices.reversed() {
-            top -= metrics.joinedBelow[pass].height
-            guard top <= line else { continue }
-            if let index = shown.firstIndex(where: { $0.id == metrics.joinedBelow[pass].rowId }),
-               let floor = shown[(index + 1)...].first(where: Self.isBubble)?.id,
-               Self.renderedStart(floor: floor, in: rows) > cut?.index ?? shown.startIndex {
-                let start = Self.renderedStart(floor: floor, in: rows)
-                cut = ChatWindowCut(index: start, rowId: floor, y: top, pass: pass, joinedAbove: false)
-            }
-            break
-        }
-        guard let cut, cut.index - shown.startIndex >= Self.smallestTrim else { return }
-        // The passes above the cut leave with their rows.
-        if cut.joinedAbove {
-            metrics.joinedAbove.removeSubrange(cut.pass...)
-        } else {
-            metrics.joinedBelow.removeFirst(cut.pass + 1)
-            metrics.joinedAbove = []
-        }
-        let space = metrics.isScrolling ? cut.y - firstRowY : 0
-        await trim(to: cut.rowId, ceiling: renderCeilingId, leavingSpace: space, rows: rows)
-    }
-
-    /// Where the first rendered row starts below the viewport's top: past the
-    /// content's 12 pt inset and the space left by rows above.
-    private var firstRowY: CGFloat {
-        scrollMetrics.contentMaxY - scrollMetrics.contentHeight + 12 + heightAbove
-    }
-
-    /// The loaded rows, when more than `renderedRowLimit` of them are
-    /// rendered, once the last pass's place check has run and a frame has
-    /// been drawn since that pass (a trim is a pass of its own).
-    private func rowsToTrim() async -> [ChatTimelineRow]? {
-        guard case let .loaded(rows) = viewModel.state, renderedRows(rows).count > Self.renderedRowLimit else { return nil }
-        try? await Task.sleep(nanoseconds: 70_000_000)
-        guard !scrollMetrics.pinsBottomAfterJoin, scrollMetrics.viewportHeight > 8,
-              case let .loaded(rows) = viewModel.state, renderedRows(rows).count > Self.renderedRowLimit else { return nil }
-        return rows
-    }
-
-    private func trim(to floor: String?, ceiling: String?, leavingSpace space: CGFloat = 0, rows: [ChatTimelineRow]) async {
-        let shown = renderedRows(rows).count
-        let started = CACurrentMediaTime()
-        await moveWindow(floor: floor, ceiling: ceiling, leavingSpace: space, rows: rows)
-        let tookMs = (CACurrentMediaTime() - started) * 1000
-        ChatPerformance.signposter.emitEvent(
-            "TrimRows", "rows=\(shown - renderedRows(rows).count) ms=\(Int(tookMs)) space=\(Int(space))"
-        )
-    }
-
-    /// One pass: the window's edges move, and the layout that adds or drops
-    /// the rows restores the place (rows changing above the viewport keep the
-    /// content's bottom edge where it was, rows changing below its top edge).
-    /// Rows above can leave `space` behind instead, so that nothing moves.
-    /// Returns how much the content grew; 0 when nothing laid out.
-    @discardableResult
-    private func moveWindow(
-        floor: String?,
-        ceiling: String?,
-        leavingSpace space: CGFloat = 0,
-        rows: [ChatTimelineRow]
-    ) async -> CGFloat {
-        let shown = renderedRows(rows)
-        let next = Self.window(floor: floor, ceiling: ceiling, in: rows)
-        let height = scrollMetrics.contentHeight
-        scrollMetrics.pendingPrepend = ChatPendingPrepend(
-            lastRowId: shown.last?.id, anchorId: shown.first(where: Self.isBubble)?.id, olderPagesApplied: nil,
-            keepsTopEdge: next.lowerBound == shown.startIndex
-        )
-        setWindow(floor: floor, ceiling: ceiling, rows: rows)
-        heightAbove += space
-        // Only dividers already shown were left: nothing lays out.
-        guard next != shown.indices else {
-            scrollMetrics.pendingPrepend = nil
-            return 0
-        }
-        // With the space left behind, the content keeps its height (a layout a
-        // point or two off is still restored).
-        var waits = 0
-        while scrollMetrics.pendingPrepend != nil, waits < (space > 0 ? 3 : 25) {
-            try? await Task.sleep(nanoseconds: 16_000_000)
-            waits += 1
-        }
-        let laidOut = scrollMetrics.pendingPrepend == nil
-        scrollMetrics.pendingPrepend = nil
-        return laidOut ? scrollMetrics.contentHeight - height : 0
-    }
-
-    /// Rows joined above the viewport on this layout. The scroll view keeps
-    /// its offset from the top, which would bring the new rows into view;
-    /// put the content's bottom edge back where it was instead, so the rows
-    /// on screen stay exactly in place. When the rows below changed too (an
-    /// older page that moved past the retained limit), re-pin the old top
-    /// bubble to the top edge.
-    private func keepPlace(
-        _ pending: ChatPendingPrepend,
-        change: (previousMaxY: CGFloat, grew: CGFloat),
-        viewportHeight: CGFloat,
-        shown: ArraySlice<ChatTimelineRow>,
-        proxy: ScrollViewProxy
-    ) {
-        guard shown.last?.id == pending.lastRowId, viewportHeight > 8 else {
-            if let anchorId = pending.anchorId { proxy.scrollTo(anchorId, anchor: .top) }
-            return
-        }
-        let place = Self.place(change.previousMaxY, viewportHeight: viewportHeight)
-        proxy.scrollTo(Self.bottomAnchorId, anchor: place)
-        scrollMetrics.placeSerial += 1
-        let serial = scrollMetrics.placeSerial
-        Task {
-            try? await Task.sleep(nanoseconds: 60_000_000)
-            let shift = scrollMetrics.contentMaxY - change.previousMaxY
-            // A fling still decelerating can swallow a restore, leaving the rows
-            // about the added (or dropped) height away. Only that is re-applied,
-            // only for the latest restore (a later pass's frames are not this
-            // one's), and never for a change small enough for the reader's own motion.
-            let latest = serial == scrollMetrics.placeSerial
-            let size = abs(change.grew)
-            let retried = latest && size >= Self.smallestReappliedJoin && abs(shift - change.grew) <= size / 4
-            if retried {
-                proxy.scrollTo(Self.bottomAnchorId, anchor: place)
-            }
-            ChatPerformance.signposter.emitEvent(
-                "PrependPlace", "grew=\(Int(change.grew)) shift=\(Int(shift)) retried=\(retried) latest=\(latest)"
-            )
-        }
-    }
-
-    /// Rows joined or left below the viewport on this layout. The scroll view
-    /// keeps its offset from the top, so the rows on screen stay where they
-    /// are. If it followed the content's bottom edge instead (as at the
-    /// bottom of the content), the top edge goes back where it was.
-    private func keepTopEdge(
-        change: (previousMinY: CGFloat, grew: CGFloat),
-        frame: CGRect,
-        viewportHeight: CGFloat,
-        proxy: ScrollViewProxy
-    ) {
-        let shift = frame.minY - change.previousMinY
-        let followedBottom = viewportHeight > 8 && abs(shift) > 1 && abs(shift + change.grew) <= abs(change.grew) / 4
-        if followedBottom {
-            let place = Self.place(change.previousMinY + frame.height, viewportHeight: viewportHeight)
-            proxy.scrollTo(Self.bottomAnchorId, anchor: place)
-        }
-        ChatPerformance.signposter.emitEvent(
-            "AppendPlace", "grew=\(Int(change.grew)) shift=\(Int(shift)) restored=\(followedBottom)"
-        )
-    }
-
-    /// Where the bottom sentinel goes for the content's bottom edge to sit
-    /// `maxY` below the viewport's top (the sentinel's top is 4 pt above it).
-    private static func place(_ maxY: CGFloat, viewportHeight: CGFloat) -> UnitPoint {
-        UnitPoint(x: 0.5, y: (maxY - 4) / (viewportHeight - 4))
+        // The lazy stack's height can still lag its newest rows: the end itself.
+        timelinePlace.followEnd(animated: false)
     }
 
     /// A search match, a brief, or the latest message after a jump back.
-    private func scrollToPendingTarget(
-        _ target: String,
-        rows: [ChatTimelineRow],
-        shown: ArraySlice<ChatTimelineRow>,
-        proxy: ScrollViewProxy
-    ) {
+    private func scrollToPendingTarget(_ target: String, proxy: ScrollViewProxy) {
+        if target == Self.bottomAnchorId {
+            // Back at the latest message: the bottom, once its rows have laid out.
+            landingTargetId = nil
+            Task {
+                await scrollToBottomAfterLayout(proxy)
+                viewModel.consumePendingScroll()
+            }
+            return
+        }
         // A brief or nudge opens at its start, its cards below it;
         // a searched message sits in the middle.
         let anchor: UnitPoint = mode == .aiAssistant ? .top : .center
-        let scroll: @MainActor () -> Void = {
+        // The target joins the lazy stack on the next layout (`tailStart`).
+        // The rows between here and the target sit at estimated heights until
+        // they come near: the first scroll brings the target's rows in, and the
+        // second, once they have laid out, lands on it exactly.
+        landingTargetId = target
+        scrollMetrics.isLanding = true
+        Task {
+            try? await Task.sleep(nanoseconds: 16_000_000)
+            proxy.scrollTo(target, anchor: anchor)
+            try? await Task.sleep(nanoseconds: 32_000_000)
             if reduceMotion {
                 proxy.scrollTo(target, anchor: anchor)
             } else {
@@ -1902,25 +1785,6 @@ extension ChatConversationView {
             }
             viewModel.consumePendingScroll()
         }
-        if target == Self.bottomAnchorId {
-            // Back at the latest message: its newest rows again, then the bottom.
-            showWindow(floor: openingFloorId(in: rows), rows: rows)
-            Task {
-                await scrollToBottomAfterLayout(proxy)
-                viewModel.consumePendingScroll()
-            }
-            return
-        } else if renderFloorId != nil || renderCeilingId != nil, !shown.contains(where: { $0.id == target }) {
-            // The target is among the held-back rows: show them, then scroll
-            // once they have laid out.
-            showWindow(floor: nil, rows: rows)
-            Task {
-                try? await Task.sleep(nanoseconds: 32_000_000)
-                scroll()
-            }
-            return
-        }
-        scroll()
     }
 
     @ViewBuilder
@@ -1976,83 +1840,41 @@ extension ChatConversationView {
             guard !Task.isCancelled else { return }
             proxy.scrollTo(Self.bottomAnchorId, anchor: .bottom)
         }
+        timelinePlace.followEnd(animated: false)
         hasLandedAtLatest = true
     }
 
     /// Keep the viewport pinned to the newest message: always follow the
     /// user's own outgoing send; otherwise only when they're already
     /// reading the latest messages (never yank them out of history).
-    private func pinToBottomIfNeeded(
-        oldLast: ChatTimelineRow?,
-        newLast: ChatTimelineRow?,
-        rows: [ChatTimelineRow],
-        proxy: ScrollViewProxy
-    ) {
+    private func pinToBottomIfNeeded(oldLast: ChatTimelineRow?, newLast: ChatTimelineRow?, proxy: ScrollViewProxy) {
         guard let newLast, !viewModel.isViewingEarlierHistory else { return }
         let isNewRow = oldLast?.id != newLast.id
         let isOwnSend: Bool = {
             guard isNewRow, case let .bubble(bubble) = newLast else { return false }
             return bubble.side == .outgoing
         }()
-        // Rows are joining (an older page, held rows): a scroll now would
-        // fight their place restores, so an own send waits for them to stop.
-        guard !isLoadingOlder else {
-            if isOwnSend { scrollMetrics.pinsBottomAfterJoin = true }
-            return
-        }
         guard isAtBottom || isOwnSend else { return }
-        // Reading far back, the newest rows are not rendered: they come back
-        // first, and the bottom once they have laid out.
-        if renderCeilingId != nil {
-            showLatestRows(rows)
+        // Reading far back, an animated scroll would lay out every row on the
+        // way: go straight to the bottom, and again once its rows have laid out.
+        if scrollMetrics.contentMaxY - scrollMetrics.viewportHeight > scrollMetrics.viewportHeight * 2 {
+            proxy.scrollTo(Self.bottomAnchorId, anchor: .bottom)
             Task { await scrollToBottomAfterLayout(proxy) }
             return
         }
-        if isNewRow, !reduceMotion {
-            withAnimation(.easeOut(duration: 0.2)) {
-                proxy.scrollTo(Self.bottomAnchorId, anchor: .bottom)
-            }
-        } else {
-            // Same row growing in place (streamed AI reply) — track the
-            // bottom without animating every delta.
-            proxy.scrollTo(Self.bottomAnchorId, anchor: .bottom)
-        }
+        // Same row growing in place (streamed AI reply): track the bottom
+        // without animating every delta.
+        timelinePlace.followEnd(animated: isNewRow && !reduceMotion)
     }
 
-    /// Fetch the next older page and keep the reader's place. The page is
-    /// held above the rows on screen (the window's floor stays on their first
-    /// bubble, a bubble id staying glued to its message while divider ids
-    /// move up a merged day) and then joins a few rows per pass, like rows
-    /// the window held back, so no frame lays out a whole page.
-    private func loadOlderPreservingPosition(rows: ArraySlice<ChatTimelineRow>, proxy: ScrollViewProxy) {
-        guard !isLoadingOlder else { return }
+    /// Fetch the next older page. It joins above the rows on screen in one
+    /// layout, and the reader's place stays (`takeRows`).
+    private func loadOlderPreservingPosition() {
+        guard !isLoadingOlder, !scrollMetrics.isLanding, viewModel.canLoadOlder else { return }
         isLoadingOlder = true
-        let pagesApplied = viewModel.olderPagesApplied
-        let holdsPage = mode != .aiAssistant
-        if holdsPage, let top = rows.first(where: Self.isBubble)?.id {
-            renderFloorId = top
-            openingWindowDecided = true
-        }
-        scrollMetrics.pendingPrepend = ChatPendingPrepend(
-            lastRowId: rows.last?.id, anchorId: rows.first(where: Self.isBubble)?.id,
-            olderPagesApplied: pagesApplied
-        )
         Task {
             await viewModel.loadOlder()
-            // The page's own pass restores the place (a held page only moves the
-            // divider above the first message up with it); then it is dropped.
-            try? await Task.sleep(nanoseconds: holdsPage ? 64_000_000 : 300_000_000)
-            scrollMetrics.pendingPrepend = nil
-            if holdsPage, viewModel.olderPagesApplied > pagesApplied {
-                let interval = ChatPerformance.signposter.beginInterval("RevealRows")
-                let joined = await joinHeldRows(upTo: .max)
-                ChatPerformance.end("RevealRows", interval, rows: joined)
-                await trimRowsBelow()
-            } else if holdsPage {
-                // Nothing arrived: the rows on screen are all there is.
-                renderFloorId = nil
-            }
-            finishJoining(proxy)
+            isLoadingOlder = false
         }
     }
 

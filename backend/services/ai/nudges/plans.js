@@ -25,6 +25,7 @@ const planService = require('../../plans/planService');
 const planActions = require('../../plans/planActions');
 const planNotify = require('../../plans/planNotifications');
 const rules = require('../../plans/planRules');
+const { repeatDetailsForViewer } = require('../../plans/planGames');
 const { fetchWeather } = require('../../context/weatherProvider');
 const { fetchAQI } = require('../../context/aqiProvider');
 const { fetchHeatRisk, HEAT_RISK_LEVELS } = require('../../external/heatRisk');
@@ -458,7 +459,7 @@ async function sameNextWeekCard(plan) {
     place,
     auto_rules: Array.isArray(plan.auto_rules) ? plan.auto_rules : [],
     join_requirement: plan.join_requirement || 'located',
-    details: plan.details || {},
+    details: await repeatDetailsForViewer(plan.kind, plan.details, start.toMillis(), { id: hostOf(plan) }),
   };
   let checked;
   try {

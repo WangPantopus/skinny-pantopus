@@ -624,6 +624,51 @@ class ScreenStore
             }
         }
 
+        /**
+         * Capture before a Read correction. Only the saved windows of [paths] (every query: a person's All window and each
+         * topic, a room for each identity) retire, durably before this returns; the inbox (it holds no Read stamps), other
+         * conversations and received files stay readable offline. If that can't be recorded, the account's chat copies
+         * retire as for ended access.
+         */
+        fun chatThreadRetirer(): suspend (Set<String>) -> Unit {
+            val account = accountId() ?: return {}
+            val gen = generation
+            val session = identity(account)
+            return { paths ->
+                if (paths.isNotEmpty()) {
+                    withContext(Dispatchers.IO + NonCancellable) {
+                        synchronized(slots) retire@{
+                            if (gen != generation || session != identity()) return@retire
+                            retireThreadsLocked(account, paths)
+                        }
+                    }
+                    _changes.update { it + 1 }
+                }
+            }
+        }
+
+        private fun retireThreadsLocked(
+            account: String,
+            paths: Set<String>,
+        ) {
+            val retiring = slots.entries.filter { (id, slot) -> id.startsWith("$account|") && slot.key.path in paths }
+            // Fence first: a queued write or a read in flight from before the correction can't land in the new epoch.
+            retiring.forEach { it.value.retire() }
+            try {
+                synchronized(diskLock) { saved.retireChatThreads(account, paths, retiring.map { it.value.key.id }) }
+            } catch (
+                @Suppress("TooGenericExceptionCaught") error: Exception,
+            ) {
+                Timber.w(error, "chat thread retirement failed; retiring the account's chat copies")
+                retireChatLocked(account)
+                return
+            }
+            retiring.forEach { (id, slot) ->
+                slot.state.value = Stored()
+                slots.remove(id)
+            }
+        }
+
         /** All encrypted topic variants retire atomically; drafts and queued uploads use a separate store. */
         private fun retireChatLocked(account: String) {
             val iterator = slots.values.iterator()

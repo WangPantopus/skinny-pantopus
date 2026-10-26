@@ -42,7 +42,7 @@ const CATEGORY_WORDS = {
   bar: 'bar', restaurant: 'restaurant', cafe: 'café', community_center: 'community center', playground: 'playground',
   park: 'park', court: 'court or field', trail: 'trail', library: 'library',
 };
-const DETAIL_KEYS = ['sport', 'level', 'walk_kind', 'pace', 'dogs_welcome', 'study_style', 'subject', 'kids_age_bands'];
+const DETAIL_KEYS = ['sport', 'level', 'walk_kind', 'pace', 'dogs_welcome', 'study_style', 'subject', 'kids_age_bands', 'game'];
 
 /** "0.4 mi", as the apps write a place's distance. */
 function milesWords(meters) {
@@ -87,7 +87,9 @@ function planFacts(plan, timezone) {
   for (const key of DETAIL_KEYS) {
     const value = plan.details?.[key];
     // Only short words, yes/no and short lists of words ("kids_age_bands") reach the model.
-    if (typeof value === 'string' && value.trim()) details[key] = clip(value, 60);
+    if (key === 'game' && value && typeof value === 'object' && !Array.isArray(value)) {
+      details.game = { label: clip(value.label, 80), opponent: clip(value.opponent, 80) };
+    } else if (typeof value === 'string' && value.trim()) details[key] = clip(value, 60);
     else if (typeof value === 'boolean') details[key] = value;
     else if (Array.isArray(value) && value.length) {
       const words = value.filter((item) => typeof item === 'string').slice(0, 6).map((item) => clip(item, 20)).filter(Boolean);

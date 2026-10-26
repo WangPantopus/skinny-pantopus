@@ -1,0 +1,19 @@
+diff --git a/dist/timekeeper.js b/dist/timekeeper.js
+index 016d9e0dabebf52be884a7ecd86b5712cc809856..ff0721bdbab6e89e09d0537c0af95b5213a774f0 100644
+--- a/dist/timekeeper.js
++++ b/dist/timekeeper.js
+@@ -149,7 +149,13 @@ class Timekeeper extends EventEmitter {
+         return prevDiff < 60;
+     }
+     async onSendIt(jobs) {
+-        await Promise.allSettled(jobs.map(({ data }) => this.manager.send(data)));
++        // A failed enqueue must fail the handoff so pg-boss retries it. Reuse
++        // the handoff ID: a partial batch or an uncertain commit can then be
++        // retried without publishing a second application job.
++        await Promise.all(jobs.map(({ id, data }) => this.manager.send({
++            ...data,
++            options: { ...data.options, id: data.options?.id || id }
++        })));
+     }
+     async getSchedules(name, key = '') {
+         let sql = plans.getSchedules(this.config.schema);

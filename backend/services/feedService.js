@@ -444,6 +444,7 @@ async function getMuteAndHideFilters(userId) {
     globalMutedTopics,
     mutedTopicsBySurface,
     mutedTopicAreas,
+    sports: feedPrefs?.sports || {},
     feedPreferences: feedPrefs || {
       hide_deals_place: false, hide_alerts_place: false,
       show_politics_connections: false, show_politics_place: false,

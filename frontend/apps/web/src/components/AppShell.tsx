@@ -56,6 +56,7 @@ import { prefetchHomeTiles } from '@/utils/tilePrefetch';
 import { FEED_COMPOSER_OPEN_EVENT, MAGIC_TASK_OPEN_EVENT, notifyFeedPostCreated } from '@/lib/feedComposerEvents';
 import { launchFeatures, webFeatureFlags } from '@/lib/featureFlags';
 import { useFeatureFlagState } from '@/hooks/useFeatureFlag';
+import { useShellReadsReleased } from '@/lib/shellReads';
 import type { CSSProperties } from 'react';
 import { Search, MessageCircle, Menu, X, ChevronsLeft, ChevronsRight, WifiOff, UserRound, type LucideIcon } from 'lucide-react';
 import { useOnlineStatus } from '@/components/map/OfflineIndicator';
@@ -67,6 +68,10 @@ import { establishVerifiedChatSession } from '@/components/chat/chatStorage';
 const SIDEBAR_EXPANDED = 240;
 const SIDEBAR_COLLAPSED = 64;
 const STORAGE_KEY = 'pantopus-sidebar-collapsed';
+// In the server's HTML, before the fallback's top bar and page are parsed: a
+// desktop sidebar this browser keeps collapsed narrows the width the fallback
+// reserves for it (--desktop-sidebar, read by its lg: classes).
+const COLLAPSED_SIDEBAR_SCRIPT = `try{if(localStorage.getItem('${STORAGE_KEY}')==='true')document.currentScript.parentNode.style.setProperty('--desktop-sidebar','${SIDEBAR_COLLAPSED}px')}catch(e){}`;
 
 /** One page of GET /notifications — shared shape with /app/notifications infinite query */
 type NotificationPageParam = { all: number; personal: number; platform: number; audience: number };
@@ -211,10 +216,19 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const [appState, appDispatch] = useReducer(appShellReducer, INITIAL_APP_STATE);
   const { discoverQuery, composerOpen, feedComposerOpen, feedPosting } = appState;
   const mounted = useClientRender();
+  // The full shell replaces the server's fallback in place, so the top bar and
+  // the page would slide in from the left edge to the sidebar's width. They take
+  // it at once; from the next frame on, sidebar changes slide.
+  const [offsetSlides, setOffsetSlides] = useState(false);
+  useEffect(() => {
+    if (!mounted) return;
+    const frame = requestAnimationFrame(() => setOffsetSlides(true));
+    return () => cancelAnimationFrame(frame);
+  }, [mounted]);
 
   const { unreadMessages: chatUnread } = useBadges();
-  // Audience-zone gating for the top-bar split (P2.3 / unified-IA §6.1).
-  const audienceFlagState = useFeatureFlagState('audience_profile');
+  // Audience-zone gating for the top-bar split (P2.3 / unified-IA §6.1). Asked only while Beacon is on.
+  const audienceFlagState = useFeatureFlagState('audience_profile', { enabled: launchFeatures.beacon });
   // Launch cut #1 (Beacon): the Audience bell is hidden; one bell remains.
   const audienceProfileFlag = audienceFlagState.enabled && launchFeatures.beacon;
 
@@ -252,7 +266,9 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   }, [user?.id]);
 
   // ── Tile prefetch for home area ──────────────────────────────
-  const { viewerHome } = useViewerHome();
+  // A cold Messages inbox paints its rows first (lib/shellReads.ts).
+  const shellReadsReleased = useShellReadsReleased();
+  const { viewerHome } = useViewerHome({ enabled: shellReadsReleased });
   // Promo cards wait while the one-time name prompt is open.
   const [namePromptOpen, setNamePromptOpen] = useState(false);
   usePromoTriggers(namePromptOpen ? null : user);
@@ -392,13 +408,30 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
 
   // Server HTML and its hydration render a simple fallback to avoid a hydration
   // mismatch (the full shell depends on this browser's width and storage). A
-  // render that starts in the browser draws the full shell at once, so the page
-  // mounts once instead of a second time inside it, which started its loading over.
+  // render that starts in the browser draws the full shell at once. The page sits
+  // in the same keyed <main>, with the same children, in both, so it mounts once:
+  // a second mount inside the full shell started its loading over. The fallback
+  // draws the sidebar's empty frame at the full shell's width (64 px on tablets,
+  // 240 px on desktops, 64 px if collapsed there), so nothing moves at the switch.
+  const offlineNotice = !isOnline && (
+    <div role="status" className="sticky top-14 z-40 flex items-center justify-center gap-2 bg-amber-500/95 px-3 py-1.5 text-xs font-semibold text-white">
+      <WifiOff className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+      <span>You&apos;re offline. Pantopus will refresh when you reconnect.</span>
+    </div>
+  );
   if (!mounted) {
     return (
-      <div className="min-h-screen bg-app text-app">
-        <header className="fixed top-0 left-0 right-0 h-14 bg-surface border-b border-app z-50" />
-        <div className="pt-14">{children}</div>
+      // The script sets --desktop-sidebar on this element before React loads.
+      <div className="min-h-screen bg-app text-app" suppressHydrationWarning>
+        <script dangerouslySetInnerHTML={{ __html: COLLAPSED_SIDEBAR_SCRIPT }} />
+        <header className="fixed top-0 left-0 right-0 md:left-[64px] lg:left-[var(--desktop-sidebar,240px)] h-14 bg-surface border-b border-app z-50" />
+        <aside className="hidden md:block fixed top-0 left-0 bottom-0 md:w-[64px] lg:w-[var(--desktop-sidebar,240px)] bg-surface border-r border-app z-40">
+          <div className="h-14 border-b border-app" />
+        </aside>
+        <main key="content" className="pt-14 md:ml-[64px] lg:ml-[var(--desktop-sidebar,240px)]">
+          {offlineNotice}
+          {children}
+        </main>
       </div>
     );
   }
@@ -410,7 +443,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       {/* ═══════════════════════════════════════════════════════
        *  HEADER
        * ═══════════════════════════════════════════════════════ */}
-      <header className="fixed top-0 right-0 h-14 bg-surface border-b border-app z-50 flex items-center px-4 transition-[left] duration-200 ease-in-out" style={topBarStyle}>
+      <header className={`fixed top-0 right-0 h-14 bg-surface border-b border-app z-50 flex items-center px-4${offsetSlides ? ' transition-[left] duration-200 ease-in-out' : ''}`} style={topBarStyle}>
         {/* Mobile: hamburger + brand */}
         {isMobile && (
           <>
@@ -627,13 +660,8 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
        * ═══════════════════════════════════════════════════════ */}
       {/* Phones: pb-20 clears the tab bar; where the quick-actions button floats
           above it (its top edge 144 px up), pb-40 lets the last row scroll clear. */}
-      <main className={`pt-14 min-h-screen transition-[margin-left] duration-200 ease-in-out relative z-0${showMobileTabs ? (routeHasFab(pathname) ? ' pb-40' : ' pb-20') : ''}`} style={contentStyle}>
-        {!isOnline && (
-          <div role="status" className="sticky top-14 z-40 flex items-center justify-center gap-2 bg-amber-500/95 px-3 py-1.5 text-xs font-semibold text-white">
-            <WifiOff className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            <span>You&apos;re offline. Pantopus will refresh when you reconnect.</span>
-          </div>
-        )}
+      <main key="content" className={`pt-14 min-h-screen${offsetSlides ? ' transition-[margin-left] duration-200 ease-in-out' : ''} relative z-0${showMobileTabs ? (routeHasFab(pathname) ? ' pb-40' : ' pb-20') : ''}`} style={contentStyle}>
+        {offlineNotice}
         {children}
       </main>
 
@@ -766,8 +794,8 @@ export function PersonalSidebarContent({ currentPath, showLabels, chatUnread, on
   }, [router]);
 
   // Audience destination — unified-IA §3.1 + §3.6. Gated per-user behind
-  // audience_profile (P0.8) so users without access don't see a 6th tab.
-  const audienceFlag = useFeatureFlagState('audience_profile');
+  // audience_profile (P0.8) so users without access don't see a 6th tab. Asked only while Beacon is on.
+  const audienceFlag = useFeatureFlagState('audience_profile', { enabled: launchFeatures.beacon });
   const prefetchAudience = useCallback(() => {
     router.prefetch('/app/audience');
     queryClient.prefetchQuery({

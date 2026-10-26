@@ -2,9 +2,10 @@
 
 package app.pantopus.android.ui.screens.plans.components
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -22,6 +23,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -54,6 +57,8 @@ import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
 import app.pantopus.android.ui.theme.pantopusShadow
+import kotlinx.coroutines.delay
+import java.time.Instant
 
 /** Font scale at which chip groups turn into full-width rows (board P2: "at large text"). */
 internal const val LARGE_TEXT_SCALE = 1.3f
@@ -197,6 +202,7 @@ data class PlanChoice(
  * A choice chip (board P2): 34 dp pill, outline when off, sky fill with a check when on. Selection shows as check
  * plus fill, never by color alone.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PlanChoiceChip(
     label: String,
@@ -205,6 +211,7 @@ fun PlanChoiceChip(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     role: Role = Role.RadioButton,
+    onLongClick: (() -> Unit)? = null,
 ) {
     val border = if (selected) PantopusColors.primary700 else PantopusColors.appTextSecondary
     val fg = if (selected) PantopusColors.primary700 else PantopusColors.appText
@@ -216,7 +223,7 @@ fun PlanChoiceChip(
                 .clip(RoundedCornerShape(Radii.pill))
                 .background(if (selected) PantopusColors.primary50 else Color.Transparent)
                 .border(1.dp, border, RoundedCornerShape(Radii.pill))
-                .clickable(enabled = enabled, role = role, onClick = onClick)
+                .combinedClickable(enabled = enabled, role = role, onClick = onClick, onLongClick = onLongClick)
                 .padding(horizontal = 13.dp)
                 .semantics { this.selected = selected },
         verticalAlignment = Alignment.CenterVertically,
@@ -244,6 +251,7 @@ fun PlanChoiceGroup(
     onSelect: (PlanChoice) -> Unit,
     modifier: Modifier = Modifier,
     multiSelect: Boolean = false,
+    onLongClick: ((PlanChoice) -> Unit)? = null,
 ) {
     val fontScale = LocalDensity.current.fontScale
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
@@ -260,7 +268,7 @@ fun PlanChoiceGroup(
             ) {
                 choices.forEachIndexed { index, choice ->
                     if (index > 0) HorizontalDivider(color = PantopusColors.appBorder)
-                    PlanChoiceRow(choice, isSelected(choice), role) { onSelect(choice) }
+                    PlanChoiceRow(choice, isSelected(choice), role, { onSelect(choice) }, onLongClick?.let { { it(choice) } })
                 }
             }
         } else {
@@ -275,6 +283,7 @@ fun PlanChoiceGroup(
                         enabled = choice.enabled,
                         role = role,
                         onClick = { onSelect(choice) },
+                        onLongClick = onLongClick?.let { { it(choice) } },
                     )
                 }
             }
@@ -282,12 +291,14 @@ fun PlanChoiceGroup(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun PlanChoiceRow(
     choice: PlanChoice,
     selected: Boolean,
     role: Role,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)?,
 ) {
     Row(
         modifier =
@@ -295,7 +306,7 @@ private fun PlanChoiceRow(
                 .fillMaxWidth()
                 .heightIn(min = 52.dp)
                 .alpha(if (choice.enabled) 1f else 0.5f)
-                .clickable(enabled = choice.enabled, role = role, onClick = onClick)
+                .combinedClickable(enabled = choice.enabled, role = role, onClick = onClick, onLongClick = onLongClick)
                 .padding(horizontal = 14.dp, vertical = 10.dp)
                 .semantics { this.selected = selected },
         verticalAlignment = Alignment.CenterVertically,
@@ -437,3 +448,13 @@ fun PlanDivider(modifier: Modifier = Modifier) {
 
 /** Keeps a control at least [TOUCH_TARGET] wide. */
 fun Modifier.planTouchTarget(): Modifier = this.heightIn(min = TOUCH_TARGET).widthIn(min = TOUCH_TARGET)
+
+/** Refreshes game availability while the chips or suggestion remain on screen. */
+@Composable
+internal fun rememberGameTime(): State<Instant> =
+    produceState(Instant.now()) {
+        while (true) {
+            delay(30_000L)
+            value = Instant.now()
+        }
+    }

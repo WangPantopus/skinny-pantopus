@@ -6,6 +6,7 @@
  *   POST /chat                   — Streaming chat agent (SSE)
  *   POST /draft/listing          — Single-turn listing draft
  *   POST /draft/post             — Single-turn post draft
+ *   POST /draft/post-suggestion  — The composer's AI assist: the whole post from photos, place and notes
  *   POST /draft/pickup-schedule  — Pickup days from a flyer photo, for the Today editor
  *   POST /draft/radon-result     — Radon result from a lab report photo or PDF, for the Today radon sheet
  *   POST /draft/mail-opening    — Mail opening line suggestion
@@ -42,6 +43,7 @@ const followUps = require('../services/ai/followUps');
 const { glance, GlanceError } = require('../services/ai/glance');
 const rules = require('../services/ai/rules');
 const radonReport = require('../services/ai/radonReport');
+const postSuggestion = require('../services/ai/postSuggestion');
 const { CHAT_MODEL, DRAFT_MODEL } = require('../config/anthropic');
 const propertyIntelligenceService = require('../services/ai/propertyIntelligenceService');
 const neighborhoodPulseComposer = require('../services/ai/neighborhoodPulseComposer');
@@ -285,6 +287,58 @@ router.post('/draft/post', verifyToken, aiDraftLimiter, validate(draftPostSchema
     return res.status(aiErrorStatus(result.error)).json(result);
   }
 
+  res.json(result);
+}));
+
+// ─── Post Suggestion (the composer's AI assist) ─────────────────────────────
+// Fills the composer's fields from the person's photos (`photos`, up to 4), the place
+// they picked and what they've written so far; the composer's own Post publishes. The
+// photos are read in memory and never stored.
+
+const receivePostPhotos = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fieldNameSize: 100, fieldSize: 24 * 1024, fields: 16, parts: 24,
+    files: postSuggestion.MAX_PHOTOS, fileSize: postSuggestion.MAX_PHOTO_BYTES,
+  },
+}).array('photos', postSuggestion.MAX_PHOTOS);
+
+function postPhotosUpload(req, res, next) {
+  receivePostPhotos(req, res, (err) => {
+    if (!err) return next();
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({ error: 'FILE_TOO_LARGE', message: 'One of those photos is over 10 MB. Try a smaller one.' });
+    }
+    if (err.code === 'LIMIT_FILE_COUNT' || err.code === 'LIMIT_UNEXPECTED_FILE') {
+      return res.status(400).json({ error: 'TOO_MANY_PHOTOS', message: `Choose up to ${postSuggestion.MAX_PHOTOS} photos.` });
+    }
+    return res.status(400).json({ error: 'FILE_UNREADABLE', message: "Couldn't read those photos. Please try again." });
+  });
+}
+
+const draftPostSuggestionSchema = Joi.object({
+  postType: Joi.string().valid(...postSuggestion.POST_TYPES).required(),
+  audience: Joi.string().valid('nearby', 'connections').optional(),
+  // What the person has filled in so far.
+  title: Joi.string().max(255).allow('').optional(),
+  body: Joi.string().max(5000).allow('').optional(),
+  businessName: Joi.string().max(255).allow('').optional(),
+  eventVenue: Joi.string().max(255).allow('').optional(),
+  lastSeenLocation: Joi.string().max(255).allow('').optional(),
+  // The place they tagged (its name and address), or the area they're posting to ("Camas, WA").
+  place: Joi.string().max(255).allow('').optional(),
+  placeAddress: Joi.string().max(500).allow('').optional(),
+});
+
+router.post('/draft/post-suggestion', verifyToken, aiDraftLimiter, postPhotosUpload, validate(draftPostSuggestionSchema), asyncHandler(async (req, res) => {
+  const files = req.files || [];
+  if (!files.length && !postSuggestion.hasWords(req.body)) {
+    return res.status(400).json({ error: 'NOTHING_TO_GO_ON', message: 'Add a photo or a few words first.' });
+  }
+  const result = await agentService.suggestPost({ files, fields: req.body, userId: req.user.id });
+  if (result.error) {
+    return res.status(aiErrorStatus(result.error)).json(result);
+  }
   res.json(result);
 }));
 

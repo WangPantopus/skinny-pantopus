@@ -68,17 +68,23 @@ const nullable = (schema) => ({ ...schema, type: [schema.type, 'null'] });
 const kidsAges = (description) => ({ type: ['array', 'null'], items: { type: 'string', enum: rules.KIDS_AGE_BANDS }, description });
 
 /** draft_plan; with `playdates`, for people who have plans_playdates (the kind, its kids' ages and its rules). */
-function draftPlanDefinition({ playdates = false } = {}) {
+function draftPlanDefinition({ playdates = false, sports = false } = {}) {
   return {
     name: 'draft_plan',
-    description: `Draft a new plan (a small meetup on the Plans map) for the person to post with one tap. Kinds: watch_party (a game or show to watch together), ${playdates ? 'playdate (kids play while their parents meet; only for people with a verified address), ' : ''}pickup_game (a sport), walk_coffee (a walk, dog walk, stroller walk or coffee), study_group (studying together; public places only). Plans start within the next 14 days and last 15 minutes to 8 hours. Pickup games, ${playdates ? 'playdates, ' : ''}study groups and walks in public need a public place: give its name and the server finds it near them. Watch parties and walks may be at their own home. Neighbors read the title and about before they get in, while the place shows only to people who get in, so keep the place's name and any address out of them; where exactly to meet goes in guest_note. ${playdates ? "A playdate needs the ages of the kids it's for (details.kids_age_bands): use what they said, or ask in one short question. Its host approves each family, and its spots count families. Others see only its neighborhood until the host accepts them. " : ''}Make sensible assumptions (an hour and a half for games, 8 spots${playdates ? '; for a playdate, an hour and a half and 4 families' : ''}) and name the main one in the note.`,
+    description: `Draft a new plan (a small meetup on the Plans map) for the person to post with one tap. Kinds: watch_party (a game or show to watch together), ${playdates ? 'playdate (kids play while their parents meet; only for people with a verified address), ' : ''}pickup_game (a sport), walk_coffee (a walk, dog walk, stroller walk or coffee), study_group (studying together; public places only). Plans start within the next 14 days and last 15 minutes to 8 hours. Pickup games, ${playdates ? 'playdates, ' : ''}study groups and walks in public need a public place: give its name and the server finds it near them. Watch parties and walks may be at their own home. Neighbors read the title and about before they get in, while the place shows only to people who get in, so keep the place's name and any address out of them; where exactly to meet goes in guest_note. ${playdates ? "A playdate needs the ages of the kids it's for (details.kids_age_bands): use what they said, or ask in one short question. Its host approves each family, and its spots count families. Others see only its neighborhood until the host accepts them. " : ''}${sports ? "For listed sports games, use the game's start and end from find_games. " : ''}Make sensible assumptions (${sports ? '' : 'an hour and a half for games, '}8 spots${playdates ? '; for a playdate, an hour and a half and 4 families' : ''}) and name the main one in the note.`,
     input_schema: {
       type: 'object',
       properties: {
         kind: { type: 'string', enum: planKinds(playdates) },
         title: { type: 'string', description: 'Short title, up to 80 characters, e.g. "Pickleball, need 3". Public: never the place or an address.' },
-        starts_local: { type: 'string', description: 'Start in their local time, YYYY-MM-DDTHH:MM.' },
-        ends_local: { type: 'string', description: 'End in their local time, YYYY-MM-DDTHH:MM.' },
+        starts_local: sports ? nullable({ type: 'string', description: 'Start in their local time, YYYY-MM-DDTHH:MM. Null to use game_id time.' })
+          : { type: 'string', description: 'Start in their local time, YYYY-MM-DDTHH:MM.' },
+        ends_local: sports ? nullable({ type: 'string', description: 'End in their local time, YYYY-MM-DDTHH:MM. Null to use game_id time.' })
+          : { type: 'string', description: 'End in their local time, YYYY-MM-DDTHH:MM.' },
+        ...(sports ? {
+          game_id: nullable({ type: 'string', description: 'A listed watch-party game id returned by find_games.' }),
+          override_game_times: nullable({ type: 'boolean', description: 'True only if the person explicitly asked for different times from the game.' }),
+        } : {}),
         spots: { type: 'integer', minimum: 1, maximum: 30, description: `How many people can join, not counting the host${playdates ? ' (for a playdate, how many families besides theirs)' : ''}.` },
         place_name: nullable({ type: 'string', description: 'A public place near them (a park, court, library, café), or null when at_home.' }),
         at_home: nullable({ type: 'boolean', description: 'True to host at their own home (watch parties and walks only).' }),
@@ -168,6 +174,15 @@ function draftPlanFromEventDefinition() {
 }
 
 const actionCardDefinitions = [
+  {
+    name: 'draft_sports_teams',
+    description: 'Draft following or hiding teams the person chose. Only ids returned by find_teams in this turn are allowed. Follow and hide are additions to their existing choices, not replacement lists. Saving happens only when they tap Save teams.',
+    input_schema: { type: 'object', properties: {
+      follow: { type: 'array', items: { type: 'string' }, maxItems: 40 },
+      hide: { type: 'array', items: { type: 'string' }, maxItems: 40 },
+      note: { type: ['string', 'null'], description: NOTE },
+    }, required: ['follow', 'hide', 'note'], additionalProperties: false },
+  },
   draftPlanDefinition(),
   draftPlanFromEventDefinition(),
   {
@@ -411,7 +426,7 @@ const actionCardDefinitions = [
 // The card tools that differ for people with plans_playdates.
 const playdateCardDefinitions = [draftPlanDefinition({ playdates: true }), draftPlanAskDefinition({ playdates: true })];
 
-const PLAN_CARD_TOOLS = new Set(['draft_plan', 'draft_plan_from_event', 'draft_plan_change', 'draft_plan_cancel', 'show_plan_requests', 'draft_plan_ask', 'draft_plan_message']);
+const PLAN_CARD_TOOLS = new Set(['draft_sports_teams', 'draft_plan', 'draft_plan_from_event', 'draft_plan_change', 'draft_plan_cancel', 'show_plan_requests', 'draft_plan_ask', 'draft_plan_message']);
 
 // ─── Envelope ──────────────────────────────────────────────────────────────
 
@@ -573,8 +588,18 @@ async function draftPlan(args, ctx) {
   if (playdate && !args.details?.kids_age_bands?.length) {
     return { error: "A playdate needs the ages of the kids it's for. Ask how old the kids are, in one short question." };
   }
-  const startsAt = localToUtc(args.starts_local, ctx.timeZone);
-  const endsAt = localToUtc(args.ends_local, ctx.timeZone);
+  let game = null;
+  if (args.game_id) {
+    if (args.kind !== 'watch_party' || !viewer.sportsFlag) return { error: 'Game identity is available only for sports watch parties.' };
+    const source = require('../plans/planGames');
+    const listed = ctx.sportsGames?.get(args.game_id) || (await source.gamesForViewer(
+      { ...viewer, sports: { ...viewer.sports, watch: 'on' } }, 'composer'
+    )).games.find((candidate) => candidate.id === args.game_id);
+    game = await source.resolveGame(args.game_id, listed?.team);
+    if (!game || Date.parse(game.ends_at) - 30 * 60000 <= Date.now()) return { error: 'That game is no longer listed. Use find_games again.' };
+  }
+  const startsAt = game && args.override_game_times !== true ? game.starts_at : localToUtc(args.starts_local, ctx.timeZone);
+  const endsAt = game && args.override_game_times !== true ? game.ends_at : localToUtc(args.ends_local, ctx.timeZone);
   if (!startsAt || !endsAt) return { error: 'Give the start and end as local times, YYYY-MM-DDTHH:MM.' };
 
   let place;
@@ -602,7 +627,7 @@ async function draftPlan(args, ctx) {
     place,
     auto_rules: who.rules,
     join_requirement: 'located',
-    details: detailsInput(args.kind, args.details),
+    details: game ? { game } : detailsInput(args.kind, args.details),
   };
 
   let checked;
@@ -666,7 +691,7 @@ async function draftPlan(args, ctx) {
 
 // ─── Plans from events ─────────────────────────────────────────────────────
 
-// An event that gives only its start becomes a plan this long, as draft_plan assumes for games.
+// An event with no end uses this duration; listed sports games use their schedule instead.
 const EVENT_PLAN_MINUTES = 90;
 const MAX_PLAN_MS = rules.LIMITS.maxDurationMinutes * 60 * 1000;
 
@@ -1639,9 +1664,36 @@ async function draftNotificationSettings(args, ctx) {
   return finished(draft, args.note, 'Tap Save to change your settings.');
 }
 
+async function draftSportsTeams(args, ctx) {
+  const user = userFor(ctx);
+  if (!(await plansOn(ctx)) || !(await isFeatureEnabled('plans_sports', user))) return { error: 'Sports teams are not available yet.' };
+  const { teamById, mergeSports } = require('../plans/planTeams');
+  const follow = args.follow || [], hide = args.hide || [];
+  if (![follow, hide].every((ids) => Array.isArray(ids) && ids.length <= 40
+    && ids.every((id) => typeof id === 'string' && teamById(id)?.id === id && ctx.sportsTeamIds?.has(id)))) {
+    return { error: 'Use only team ids returned by find_teams in this turn.' };
+  }
+  if (!follow.length && !hide.length) return { error: 'Choose a team to follow or hide.' };
+  if (follow.some((id) => hide.includes(id))) return { error: 'A team cannot be followed and hidden at the same time.' };
+  const viewer = await loadViewer(user);
+  const current = viewer.sports || {};
+  const teams = [...new Set([...(current.teams || []).filter((id) => !hide.includes(id)), ...follow])];
+  const hidden = [...new Set([...(current.hidden || []).filter((id) => !follow.includes(id)), ...hide])];
+  const sports = mergeSports(current, { ...(follow.length ? { watch: 'on' } : {}), teams, hidden });
+  const labels = (ids) => ids.map((id) => teamById(id).label).join(', ');
+  const title = [follow.length && `Follow ${labels(follow)}`, hide.length && `Hide ${labels(hide)}`].filter(Boolean).join(' · ');
+  return finished(card('sports_teams', {
+    title,
+    lines: [follow.length ? line('Follow', labels(follow)) : null, hide.length ? line('Hide', labels(hide)) : null],
+    actions: [action('confirm', 'Save teams', { method: 'PUT', path: '/api/posts/feed-preferences',
+      body: { sports, expected_sports: current, expected_user_id: ctx.userId } }, { label: 'Teams saved', link: linkFor('notification_settings') })],
+  }), args.note, 'Tap Save teams to confirm your choices.');
+}
+
 // ─── Dispatch ──────────────────────────────────────────────────────────────
 
 const CARD_EXECUTORS = {
+  draft_sports_teams: draftSportsTeams,
   draft_plan: draftPlan,
   draft_plan_from_event: draftPlanFromEvent,
   draft_plan_change: draftPlanChange,
@@ -1672,6 +1724,7 @@ async function runCardTool(name, args, ctx) {
 }
 
 module.exports = {
+  draftPlanDefinition,
   actionCardDefinitions,
   playdateCardDefinitions,
   runCardTool,

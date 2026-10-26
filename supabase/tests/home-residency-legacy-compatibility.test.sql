@@ -157,7 +157,7 @@ BEGIN
 
   -- Seven more people new to this Home ask below, and one of them is reviewed. The earlier requests here move out of
   -- the 30-day window, so the per-Home limit (past 10 new people in 30 days a request goes to proof by mail instead
-  -- of the household, 20261025090000) leaves them on household review.
+  -- of the household, 20261026090000) leaves them on household review.
   UPDATE public."HomeResidencyClaim" SET created_at=created_at-interval '31 days' WHERE home_id=h;
   FOREACH alias IN ARRAY ARRAY['renter','tenant','lease_resident','household','member','family','roommate'] LOOP
     r:=public.submit_legacy_home_residency(h,pg_temp.legacy_u(n),jsonb_build_object('claimed_role',alias));

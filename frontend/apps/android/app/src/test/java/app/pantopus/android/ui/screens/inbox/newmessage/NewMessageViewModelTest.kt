@@ -206,7 +206,7 @@ class NewMessageViewModelTest {
             // directory fetch fires synchronously. Stub it with no
             // matches so the All-verified section stays hidden and the
             // assertion focuses on Connections filtering.
-            coEvery { profileRepo.search(query = "Maria", limit = 20) } returns
+            coEvery { profileRepo.search(query = "maria", limit = 20) } returns
                 NetworkResult.Success(UserSearchResponse(users = emptyList()))
             val viewModel = makeVM()
             viewModel.load()
@@ -229,7 +229,7 @@ class NewMessageViewModelTest {
                 NetworkResult.Success(RelationshipsListResponse(relationships = emptyList()))
             coEvery { chatRepo.unifiedConversations(limit = 50, force = any()) } returns
                 NetworkResult.Success(UnifiedConversationsResponse(conversations = emptyList()))
-            coEvery { profileRepo.search(query = "Reyes", limit = 20) } returns NetworkResult.Success(searchFixture)
+            coEvery { profileRepo.search(query = "reyes", limit = 20) } returns NetworkResult.Success(searchFixture)
             val viewModel = makeVM()
             viewModel.load()
             runCurrent()
