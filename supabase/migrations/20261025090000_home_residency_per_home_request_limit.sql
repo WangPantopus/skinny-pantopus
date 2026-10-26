@@ -1,17 +1,24 @@
 -- Backwards compatible: yes. Redefines one internal admission function with the same
--- signature and grants; no table, column or data change.
--- Address watch (home claims plan, PR 2): at most 10 people new to a Home can ask to live
--- there in 30 days.
+-- signature and grants, and adds one partial unique index; no table, column or data change.
+-- Address watch (home claims plan, PR 2): at most 10 people new to a Home in 30 days go to its
+-- household's reviewers. Anyone past that can still prove the address.
 --
 -- Ownership claims are capped per Home (10 in 30 days), but the residency requests the apps send
--- had no per-Home limit, so any number of accounts could ask to join one address. A request from
--- someone with no earlier request or membership at the Home is now refused with
--- RESIDENCY_HOME_LIMIT (409) once 10 other people asked to live there in the last 30 days, through
--- either residency door: requests saved here (HomeResidencyClaim) and residency document claims
--- (HomeOwnershipClaim, claim_type 'resident', which homeSecurityPolicy.canSubmitResidencyClaim caps
--- the same way). Members asking to be verified, people renewing a turned-down request and people
--- returning after they left aren't new to the Home and aren't limited here. Invitations are
--- unaffected. 409 is one of the statuses the command record and the apps already accept.
+-- had no per-Home limit, so any number of accounts could ask the household to let them in. Once 10
+-- other people asked to live at a Home in the last 30 days, a request from someone with no earlier
+-- request or membership there is saved for proof by mail instead of household review: it takes the
+-- existing postcard route ('stale_authority_postcard', the route a request takes when the reviewers
+-- are away) and no reviewer is notified. The cap never refuses anyone, so throwaway accounts can't
+-- lock a real resident out; a proof always beats a claim. People counted: requests saved here
+-- (HomeResidencyClaim) and residency document claims (HomeOwnershipClaim, claim_type 'resident'),
+-- which a person reviews and the cap doesn't stop. Members asking to be verified, people renewing a
+-- turned-down request and people returning after they left aren't new to the Home. Invitations are
+-- unaffected. The audit row marks a request the cap sent to the postcard ("home_limit": true); the
+-- backend's address watch opens one admin review case for the Home when that happens.
+--
+-- The index keeps one open address-watch case per person and Home, and one per Home (user_id NULL),
+-- when requests arrive at once (addressReviewService.flagAddressWatch). Cases with that trigger are
+-- new in this PR, so no existing row can conflict.
 --
 -- Copied from 20261006222928 with only the limit added. Same signature and service-only grants;
 -- grants are restated below.
@@ -25,7 +32,7 @@ DECLARE h public."Home"%ROWTYPE; r public."HomeResidencyClaim"%ROWTYPE;
   v_role text; v_save_role text; v_claim_address text; v_route text; v_age public.home_age_band; v_now timestamptz;
   v_error text; v_status integer; v_candidates uuid[]; v_authorities uuid[];
   v_existing boolean; v_claimed text; v_created boolean; v_changed boolean:=false; v_returning boolean:=false;
-  v_recent_others integer; v_recently_counted boolean;
+  v_recent_others integer; v_recently_counted boolean; v_home_limit boolean:=false;
 BEGIN
   IF p_home_id IS NULL OR p_actor_id IS NULL OR length(p_claimed_address)>1000
     OR (p_request_id IS NULL AND p_expected_address IS NOT NULL)
@@ -94,10 +101,10 @@ BEGIN
       OR (r.status='pending' AND v_claimed<>v_role)) THEN
       v_error:='RESIDENCY_EXISTING_REQUEST'; v_status:=409; EXIT validate_admission; END IF;
 
-    -- Address watch: a person new to this Home (no request or membership here yet) can't ask to live here once 10
-    -- other people asked in the last 30 days, by a request saved here or a residency document claim. Ownership
-    -- claims have the same per-Home cap (homeSecurityPolicy MAX_CLAIMS_PER_HOME_PER_30D); the household's
-    -- invitation is the way in past it. The Home row lock above serializes requests for this Home.
+    -- Address watch: once 10 other people asked to live here in the last 30 days, by a request saved here or a
+    -- residency document claim, a person new to this Home (no request or membership here yet) is sent to proof by
+    -- mail below instead of the household's reviewers. Ownership claims have the same per-Home cap
+    -- (homeSecurityPolicy MAX_CLAIMS_PER_HOME_PER_30D). The Home row lock above serializes requests for this Home.
     IF r.id IS NULL AND NOT v_existing THEN
       SELECT count(DISTINCT person) FILTER (WHERE person<>p_actor_id),coalesce(bool_or(person=p_actor_id),false)
         INTO v_recent_others,v_recently_counted FROM (
@@ -106,8 +113,7 @@ BEGIN
           UNION ALL SELECT claimant_user_id FROM public."HomeOwnershipClaim"
             WHERE home_id=p_home_id AND claim_type='resident' AND created_at>v_now-interval '30 days'
         ) recent;
-      IF v_recent_others>=10 AND NOT v_recently_counted THEN
-        v_error:='RESIDENCY_HOME_LIMIT'; v_status:=409; EXIT validate_admission; END IF;
+      v_home_limit:=v_recent_others>=10 AND NOT v_recently_counted;
     END IF;
     -- The same current policy used by prepared review includes owner records
     -- without occupancy, age ceilings, explicit denies and scheduled access.
@@ -127,6 +133,9 @@ BEGIN
         LEFT JOIN auth.users au ON au.id=a WHERE au.last_sign_in_at IS NULL OR au.last_sign_in_at>v_now-interval '30 days')
         THEN 'stale_authority_postcard' ELSE 'household_review' END;
     END IF;
+    -- Past the per-Home cap the household isn't asked: the person proves the address by mail, the way a request
+    -- does when the reviewers are away. A Home with no reviewers keeps its own postcard route.
+    IF v_home_limit AND v_route='household_review' THEN v_route:='stale_authority_postcard'; ELSE v_home_limit:=false; END IF;
   END validate_admission;
   IF v_error IS NOT NULL THEN
     RETURN jsonb_build_object('ok',false,'code',v_error,'status',v_status);
@@ -201,7 +210,8 @@ BEGIN
         ELSE 'residency_submission_saved' END,'HomeResidencyClaim',r.id,
         jsonb_build_object('claimed_role',v_role,'routing',v_route,'occupancy_id',o.id)
           ||CASE WHEN p_request_id IS NULL THEN '{"legacy_request":true}'::jsonb
-            ELSE jsonb_build_object('request_id',p_request_id) END);
+            ELSE jsonb_build_object('request_id',p_request_id) END
+          ||CASE WHEN v_home_limit THEN '{"home_limit":true}'::jsonb ELSE '{}'::jsonb END);
   END IF;
   RETURN jsonb_build_object('ok',true,'home_id',p_home_id,'actor_id',p_actor_id,'claim',to_jsonb(r),
     'occupancy_id',o.id,'claimed_role',v_role,'routing',v_route,'created',v_created,'reused',NOT v_changed);
@@ -209,3 +219,7 @@ END $$;
 
 REVOKE ALL ON FUNCTION public.save_home_residency_admission(uuid,uuid,text,text,jsonb,uuid) FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION public.save_home_residency_admission(uuid,uuid,text,text,jsonb,uuid) TO service_role;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_address_review_case_one_open_watch ON public."AddressReviewCase"
+  (home_id,(coalesce(user_id,'00000000-0000-0000-0000-000000000000'::uuid)))
+  WHERE trigger='address_watch' AND status IN ('open','in_review');
