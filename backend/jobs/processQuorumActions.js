@@ -13,6 +13,12 @@
 // Every state change there is a compare-and-set, so a page read,
 // another run or a second process can't settle a vote twice. There is
 // no actor: the audit rows it writes have none.
+//
+// Household removal votes (REMOVE_MEMBER, the residents' vote) are
+// settled first, by their own SQL (homeRemovalVoteService.settleDue):
+// a vote to remove takes effect only when it closes after 7 days, so
+// the person can contest; then it removes them or goes to Pantopus
+// review.
 // ============================================================
 
 const supabaseAdmin = require('../config/supabaseAdmin');
@@ -38,22 +44,29 @@ async function homesWithVotes(filter) {
 }
 
 async function processQuorumActions() {
+  // A failure here never holds up the owner votes below; the next run tries again.
+  const household = await require('../services/homeRemovalVoteService').settleDue().catch((err) => {
+    logger.warn('[processQuorumActions] Household votes could not be settled', { error: err.message });
+    return { due: 0, settled: 0 };
+  });
+  if (household.settled) logger.info('[processQuorumActions] Settled household votes', household);
+
   const now = new Date().toISOString();
   const homes = new Set([
     // Open votes past their deadline or their waiting period.
-    ...await homesWithVotes(query => query.in('state', ['proposed', 'collecting_votes'])
+    ...await homesWithVotes(query => query.neq('action_type', 'REMOVE_MEMBER').in('state', ['proposed', 'collecting_votes'])
       .or(`expires_at.lte."${now}",passive_approval_at.lte."${now}"`)),
     // Approved changes not applied yet. An applied change keeps state 'approved'.
-    ...await homesWithVotes(query => query.eq('state', 'approved')
+    ...await homesWithVotes(query => query.neq('action_type', 'REMOVE_MEMBER').eq('state', 'approved')
       .in('metadata->execution->>status', ['pending', 'applying'])),
   ]);
-  if (!homes.size) return { homes: 0 };
+  if (!homes.size) return { homes: 0, household };
 
   const { processQuorumExpirations } = require('../routes/homeOwnership');
   // It logs and leaves a vote as it is when a step fails; the next run tries again.
   for (const homeId of homes) await processQuorumExpirations(homeId, null);
   logger.info('[processQuorumActions] Settled due owner votes', { homes: homes.size });
-  return { homes: homes.size };
+  return { homes: homes.size, household };
 }
 
 module.exports = processQuorumActions;

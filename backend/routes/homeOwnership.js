@@ -1411,6 +1411,7 @@ router.get('/:id/quorum-actions', verifyToken, async (req, res) => {
     // Check and process constructive consent + expired quorum actions, and retry approved ones not applied yet
     await processQuorumExpirations(homeId, userId);
 
+    // A household removal vote is the residents' (GET /:id/removal-votes): its proposer and voters stay private.
     const { data: actions, error } = await supabaseAdmin
       .from('HomeQuorumAction')
       .select(`
@@ -1419,6 +1420,7 @@ router.get('/:id/quorum-actions', verifyToken, async (req, res) => {
         votes:HomeQuorumVote (id, voter_user_id, vote, voted_at)
       `)
       .eq('home_id', homeId)
+      .neq('action_type', 'REMOVE_MEMBER')
       .in('state', ['proposed', 'collecting_votes', 'approved'])
       .order('created_at', { ascending: false });
 
@@ -1537,11 +1539,13 @@ router.post('/:id/quorum-actions/:actionId/vote', verifyToken, validate(voteSche
       return res.status(403).json({ error: 'Only verified owners can vote' });
     }
 
+    // Owners don't decide a household removal vote here; its voters are the settled residents.
     const { data: action, error: actionError } = await supabaseAdmin
       .from('HomeQuorumAction')
       .select('*')
       .eq('id', actionId)
       .eq('home_id', homeId)
+      .neq('action_type', 'REMOVE_MEMBER')
       .maybeSingle();
 
     if (actionError) return res.status(503).json({ error: 'Couldn\'t load this vote. Your vote wasn\'t recorded. Please try again.' });
@@ -1644,6 +1648,42 @@ router.post('/:id/quorum-actions/:actionId/vote', verifyToken, validate(voteSche
     logger.error('Failed to vote on quorum action', { error: err.message });
     res.status(500).json({ error: 'Failed to vote' });
   }
+});
+
+
+// ============================================================
+// HOUSEHOLD REMOVAL VOTES (home claims plan, PR 5)
+// ============================================================
+// Settled residents vote to remove a member who doesn't belong (services/homeRemovalVoteService.js). Anyone signed
+// in may ask: the answer lists only the votes they were asked to decide or that are about them.
+
+const homeRemovalVotes = require('../services/homeRemovalVoteService');
+const removalVoteNoStore = (_req, res, next) => { res.set('Cache-Control', 'private, no-store'); next(); };
+const startRemovalVoteSchema = Joi.object({ target_user_id: Joi.string().uuid().required() });
+const castRemovalVoteSchema = Joi.object({ vote: Joi.string().valid('remove', 'keep').required() });
+
+router.get('/:id/removal-votes', removalVoteNoStore, verifyToken, async (req, res) => {
+  try { res.json(await homeRemovalVotes.list({ homeId: req.params.id, actorId: req.user.id })); }
+  catch (err) { homeRemovalVotes.sendError(res, err); }
+});
+
+router.post('/:id/removal-votes', removalVoteNoStore, verifyToken, validate(startRemovalVoteSchema), async (req, res) => {
+  try {
+    const vote = await homeRemovalVotes.open({ homeId: req.params.id, actorId: req.user.id, targetId: req.body.target_user_id });
+    res.status(vote.replayed ? 200 : 201).json({ vote });
+  } catch (err) { homeRemovalVotes.sendError(res, err); }
+});
+
+router.post('/:id/removal-votes/:voteId/vote', removalVoteNoStore, verifyToken, validate(castRemovalVoteSchema), async (req, res) => {
+  try {
+    res.json(await homeRemovalVotes.vote({ homeId: req.params.id, actorId: req.user.id, voteId: req.params.voteId,
+      choice: req.body.vote }));
+  } catch (err) { homeRemovalVotes.sendError(res, err); }
+});
+
+router.post('/:id/removal-votes/:voteId/contest', removalVoteNoStore, verifyToken, async (req, res) => {
+  try { res.json(await homeRemovalVotes.contest({ homeId: req.params.id, actorId: req.user.id, voteId: req.params.voteId })); }
+  catch (err) { homeRemovalVotes.sendError(res, err); }
 });
 
 
@@ -2329,10 +2369,12 @@ async function checkAndExpireClaimWindow(homeId) {
  */
 async function processQuorumExpirations(homeId, actorUserId) {
   try {
+    // A household removal vote settles by its own rules (homeRemovalVoteService.settleDue, from the hourly job).
     const { data: pendingActions, error } = await supabaseAdmin
       .from('HomeQuorumAction')
       .select('*, votes:HomeQuorumVote(vote)')
       .eq('home_id', homeId)
+      .neq('action_type', 'REMOVE_MEMBER')
       .in('state', ['proposed', 'collecting_votes', 'approved']);
 
     if (error) {

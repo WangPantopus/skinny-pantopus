@@ -7,12 +7,13 @@ import { useSavedRemoval } from '@/components/home/member-removals/useSavedRemov
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, UserPlus, ShieldCheck, Shield, Key, User, Lock, Clock, ArrowLeftRight, UserMinus, Users, Mail } from 'lucide-react';
 import * as api from '@pantopus/api';
-import type { HouseholdAccessRequestRow } from '@pantopus/api';
+import type { HouseholdAccessRequestRow, HouseholdRemovalVote } from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
 import ErrorState from '@/components/ui/ErrorState';
 import InviteMemberModal from '@/components/home/InviteMemberModal';
+import HouseholdVotes from '@/components/home/members/HouseholdVotes';
 import { failureMessage } from '@/components/home/share/shareFailure';
 import { chosenUsername, usernameHandle } from '@pantopus/utils';
 import { RETURN_REFRESH_MS, transientFailure } from '@/components/home/returnRefresh';
@@ -81,6 +82,10 @@ function MembersContent() {
   const [auditLog, setAuditLog] = useState<any[]>([]);
   const [myAccess, setMyAccess] = useState<any>(null);
   const [accessRequests, setAccessRequests] = useState<HouseholdAccessRequestRow[]>([]);
+  // Household removal votes (GET /:id/removal-votes): open votes this person decides or is the subject of, and the
+  // members they could ask the household about now.
+  const [removalVotes, setRemovalVotes] = useState<HouseholdRemovalVote[]>([]);
+  const [canStartVoteFor, setCanStartVoteFor] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<MemberTab>('members');
   const [busyRequestId, setBusyRequestId] = useState<string | null>(null);
@@ -108,6 +113,7 @@ function MembersContent() {
     pageConfirmation.current = null;
     if (dialog && confirmStore.getSnapshot() === dialog) confirmStore.close(false);
     setRoleMenuFor(null); setMembers([]); setMyAccess(null); setAuditLog([]); setAuditError(''); setAccessRequests([]); setRequestsError(''); setMembersError(''); setBusyRequestId(null);
+    setRemovalVotes([]); setCanStartVoteFor([]);
   }, []);
   // A full load clears the page first. A background re-check (coming back to the page) keeps it and applies
   // only complete, verified answers; a refusal or an answer that doesn't verify reloads in full instead.
@@ -121,9 +127,10 @@ function MembersContent() {
     lastAttempt.current = Date.now();
     if (!background) setLoading(true);
     inFlight.current++;
-    const [membersRes, accessRes, auditRes, reqRes] = await Promise.allSettled([
+    const [membersRes, accessRes, auditRes, reqRes, votesRes] = await Promise.allSettled([
       api.homeIam.getHomeMembers(homeId), api.homeIam.getMyHomeAccess(homeId),
       api.homeIam.getAuditLog(homeId), api.getHouseholdAccessRequests(homeId, { status: 'pending' }),
+      api.homeOwnership.getRemovalVotes(homeId),
     ]).finally(() => { inFlight.current--; });
     if (!current()) return;
     const memberRows = (value: any) => {
@@ -151,6 +158,10 @@ function MembersContent() {
     else setAuditError(failureMessage(auditRes.reason, 'The audit log could not be loaded. Please try again.'));
     if (reqRes.status === 'fulfilled') setAccessRequests(reqRes.value.requests || []);
     else setRequestsError(failureMessage(reqRes.reason, 'Requests could not be loaded. Please try again.'));
+    // Votes are extra: an answer that can't be read leaves them out rather than blocking the member list.
+    if (votesRes.status === 'fulfilled' && Array.isArray(votesRes.value?.votes) && Array.isArray(votesRes.value?.can_start_for)) {
+      setRemovalVotes(votesRes.value.votes); setCanStartVoteFor(votesRes.value.can_start_for);
+    }
     setLoading(false);
   }, [homeId, retire]);
 
@@ -260,6 +271,33 @@ function MembersContent() {
     }
   }, [homeId, fetchData]);
 
+  // Ask the household: a private vote on whether this member lives here (home claims plan, PR 5).
+  const handleStartVote = useCallback(async (member: any) => {
+    if (!homeId || typeof member.user_id !== 'string' || !canStartVoteFor.includes(member.user_id)) return;
+    const name = member.display_name || chosenUsername(member.user?.username || member.username) || 'this member';
+    const revision = generation.current, token = api.getAuthToken(), origin = api.getApiBaseUrl();
+    const marker = localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
+    const current = () => generation.current === revision && api.getAuthToken() === token && api.getApiBaseUrl() === origin
+      && localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY) === marker && document.visibilityState !== 'hidden';
+    const confirmation = confirmStore.open({
+      title: 'Ask the household?',
+      description: `This starts a private vote on whether ${name} lives here. Residents who have been here at least 7 days vote for 7 days; it needs most of them, and at least 2, to remove ${name}, and a removal takes effect only when the vote closes, so ${name} has time to contest it. ${name} keeps access while it’s open and is told a vote is open, but never who started it or how anyone voted. The household holds one vote at a time.`,
+      confirmLabel: 'Start the vote',
+      variant: 'destructive',
+    });
+    const dialog = confirmStore.getSnapshot();
+    pageConfirmation.current = dialog;
+    const yes = await confirmation;
+    if (pageConfirmation.current === dialog) pageConfirmation.current = null;
+    if (!yes || !current()) return;
+    try {
+      await api.homeOwnership.startRemovalVote(homeId, member.user_id);
+      if (!current()) return;
+      toast.success('The vote is open. Your vote to remove them is counted.');
+      await fetchData();
+    } catch (err: any) { if (current()) toast.error(err?.message || 'The vote couldn’t start. Please try again.'); }
+  }, [homeId, canStartVoteFor, fetchData]);
+
   const handleApproveAccessRequest = useCallback(async (requestId: string) => {
     if (!canManage || !homeId) return;
     const revision = generation.current, token = api.getAuthToken(), origin = api.getApiBaseUrl();
@@ -343,6 +381,8 @@ function MembersContent() {
         <button type="button" onClick={() => void fetchData()} className="rounded-lg border border-app-border px-3 py-2 text-sm">Refresh members</button>
         {membersError && <p role="alert" className="text-sm text-amber-800">{membersError}</p>}
       </div>
+      <HouseholdVotes homeId={homeId} votes={removalVotes} onChanged={() => void fetchData()} />
+
       {/* Tabs */}
       <div className="flex border-b border-app-border mb-4 overflow-x-auto">
         <button type="button" onClick={() => setTab('members')} className={`px-4 py-2.5 text-sm font-medium transition whitespace-nowrap ${tab === 'members' ? 'text-emerald-600 border-b-2 border-emerald-600' : 'text-app-text-secondary hover:text-app-text'}`}>
@@ -392,6 +432,13 @@ function MembersContent() {
                           </p>
                         )}
                       </div>
+                      {canStartVoteFor.includes(member.user_id) && (
+                        <button type="button" onClick={() => void handleStartVote(member)}
+                          aria-label={`Ask the household whether ${member.display_name || chosenUsername(member.user?.username || member.username) || 'this member'} lives here`}
+                          className="px-2 py-1 text-xs font-medium text-app-text-secondary border border-app-border rounded-lg hover:bg-app-hover transition flex-shrink-0">
+                          Ask household
+                        </button>
+                      )}
                       {(canManage || member.claim_review) && role !== 'owner' && (
                         <div className="flex items-center gap-1 flex-shrink-0">
                           {member.claim_review?.can_confirm && (

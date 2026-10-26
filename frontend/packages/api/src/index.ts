@@ -216,6 +216,7 @@ export type {
   ClaimPhaseV2,
   ClaimRoutingClassification,
   HouseholdResolutionState,
+  HouseholdRemovalVote,
 } from './endpoints/homeOwnership';
 
 // Types from homes

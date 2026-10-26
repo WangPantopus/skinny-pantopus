@@ -16,6 +16,7 @@ const { requireAdmin } = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const logger = require('../utils/logger');
 const addressReviewService = require('../services/addressValidation/addressReviewService');
+const homeRemovalVotes = require('../services/homeRemovalVoteService');
 const postcardReview = require('../services/homePostcardVerificationService');
 const { writeAuditLog } = require('../utils/homePermissions');
 
@@ -54,7 +55,9 @@ router.post('/:caseId/resolve', validate(resolveSchema), async (req, res) => {
     const reviewerId = req.user.id;
 
     // Home claims PR 4: a probation dispute's case decides the dispute too; approving restores the membership.
+    // Home claims PR 5: a contested household removal vote's case decides the vote too (homeRemovalVoteService).
     const result = await postcardReview.resolveDisputeCase({ caseId, reviewerId, outcome, note: note || null })
+      || await homeRemovalVotes.resolveReviewCase({ caseId, reviewerId, outcome, note: note || null })
       || await addressReviewService.resolveCase({
         caseId, reviewerId, outcome, note: note || null,
       });

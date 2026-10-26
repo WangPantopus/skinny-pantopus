@@ -30,6 +30,15 @@ async function checked(query) {
   return result.data;
 }
 
+/** Is a household vote about removing this person open at this Home (SQL home_removal_vote_open)? */
+async function removalVoteOpen(homeId, userId) {
+  const rows = await checked(supabaseAdmin.from('HomeQuorumAction').select('id').eq('home_id', homeId)
+    .eq('action_type', 'REMOVE_MEMBER').in('state', ['proposed', 'collecting_votes'])
+    .gt('expires_at', new Date().toISOString()).eq('metadata->>target_user_id', userId).limit(1));
+  if (!Array.isArray(rows)) throw accessUnavailable();
+  return rows.length > 0;
+}
+
 // Home claims PR 3: a proof always beats a claim (home_proof_holder, home_claim_set_aside and home_effective_access in
 // SQL; keep these aligned). Someone who proved the address: source address or legacy, an adult, living there as a member.
 const PROOF_SOURCES = new Set(['address', 'legacy']);
@@ -109,6 +118,11 @@ async function getUserAccess(homeId, userId) {
     && !overrides.some(row => row.permission === 'members.view' && row.allowed === false)
     && await homeHasClaim(homeId, userId)) {
     permissions = HOME_PERMISSIONS.filter(permission => permission === 'members.view' || permissions.includes(permission));
+  }
+  // Home claims PR 5: someone a household vote may remove keeps their access while the vote is open, but not the
+  // power to bring people in or decide about them (home_effective_access drops it the same way in SQL).
+  if (!ownerEntitlement && permissions.includes('members.manage') && await removalVoteOpen(homeId, userId)) {
+    permissions = permissions.filter(permission => permission !== 'members.manage');
   }
   return {
     permissions, role_base: role || 'owner',

@@ -233,6 +233,7 @@ const HOME_TYPES = new Set([
   'home_invite', 'home_invite_accepted',
   'member_moved_out', 'access_challenged', 'member_challenged', 'residency_probation_started', 'residency_probation_household',
   'home_access_request', 'home_access_request_rejected', 'home_member_removed',
+  'home_removal_vote_opened', 'home_removal_vote_about_you', 'home_removal_vote_ended',
   // Tasks
   'task_assigned', 'task_completed',
   'bill_reminder', 'home_update',
