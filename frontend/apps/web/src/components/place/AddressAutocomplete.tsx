@@ -23,8 +23,10 @@ export interface SelectedAddress {
 
 export interface AddressAutocompleteProps {
   onSelect: (place: SelectedAddress) => void;
-  /** Cleared when the user edits after selecting (coords no longer match). */
+  /** Editing invalidates a selected suggestion or a submitted typed address. */
   onClear?: () => void;
+  /** A typed address can still be previewed when suggestions are unavailable. */
+  onFallbackChange?: (address: string | null) => void;
   onSubmit?: () => void;
   placeholder?: string;
   autoFocus?: boolean;
@@ -38,6 +40,7 @@ const MIN_CHARS = 3;
 export default function AddressAutocomplete({
   onSelect,
   onClear,
+  onFallbackChange,
   onSubmit,
   placeholder = 'Enter your address',
   autoFocus = false,
@@ -49,7 +52,7 @@ export default function AddressAutocomplete({
   const [loading, setLoading] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const [selected, setSelected] = useState(false);
-  // A failed suggestions read must not look like "no matches" (the submit stays disabled without one).
+  // A failed suggestions read must not look like "no matches".
   const [lookupFailed, setLookupFailed] = useState(false);
   // Out of today's suggestions, or suggestions are busy: the server's sentence, no Try again.
   const [limitMessage, setLimitMessage] = useState<string | null>(null);
@@ -70,6 +73,7 @@ export default function AddressAutocomplete({
     api.geo
       .autocompleteWithAbort(q, controller.signal)
       .then((res) => {
+        if (controller.signal.aborted) return;
         setSuggestions(res.suggestions ?? []);
         setOpen(true);
         setActiveIndex(-1);
@@ -77,14 +81,18 @@ export default function AddressAutocomplete({
       .catch((err) => {
         // Aborted: a newer search replaced this one. Failed: keep the field usable and say so.
         if (controller.signal.aborted) return;
+        setSuggestions([]);
+        setOpen(false);
+        setActiveIndex(-1);
         const limit = lookupLimitMessage(err);
         if (limit) setLimitMessage(limit);
         else setLookupFailed(true);
+        onFallbackChange?.(q);
       })
       .finally(() => {
         if (abortRef.current === controller) setLoading(false);
       });
-  }, []);
+  }, [onFallbackChange]);
 
   useEffect(() => {
     return () => {
@@ -96,10 +104,19 @@ export default function AddressAutocomplete({
 
   const onChange = (value: string) => {
     setQuery(value);
+    // Invalidate results as soon as the text changes, including during debounce.
+    abortRef.current?.abort();
+    setSuggestions([]);
+    setOpen(false);
+    setActiveIndex(-1);
+    setLoading(false);
+    setLookupFailed(false);
+    setLimitMessage(null);
+    onFallbackChange?.(null);
     if (selected) {
       setSelected(false);
-      onClear?.();
     }
+    onClear?.();
     if (timerRef.current) clearTimeout(timerRef.current);
     const trimmed = value.trim();
     if (trimmed.length < MIN_CHARS) {
@@ -115,6 +132,9 @@ export default function AddressAutocomplete({
   };
 
   const choose = (s: GeoSuggestion) => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    abortRef.current?.abort();
+    onFallbackChange?.(null);
     setQuery(s.label);
     setSelected(true);
     setOpen(false);
@@ -127,7 +147,7 @@ export default function AddressAutocomplete({
       if (open && activeIndex >= 0 && suggestions[activeIndex]) {
         e.preventDefault();
         choose(suggestions[activeIndex]);
-      } else if (selected) {
+      } else if (selected || (onFallbackChange && (limitMessage || lookupFailed) && query.trim().length >= MIN_CHARS)) {
         e.preventDefault();
         onSubmit?.();
       }
@@ -229,6 +249,11 @@ export default function AddressAutocomplete({
           >
             Try again
           </button>
+        </p>
+      ) : null}
+      {onFallbackChange && (limitMessage || lookupFailed) ? (
+        <p className="mt-1 text-[13.5px] text-app-text-secondary">
+          Type the full address, including city and state, then choose See your place.
         </p>
       ) : null}
     </div>

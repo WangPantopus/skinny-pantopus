@@ -37,6 +37,7 @@ export default function HomeHero() {
   const router = useRouter();
   const [hour, setHour] = useState<number | null>(null);
   const [selected, setSelected] = useState<SelectedAddress | null>(null);
+  const [fallbackAddress, setFallbackAddress] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState<string | null>(null);
 
   useEffect(() => {
@@ -83,12 +84,13 @@ export default function HomeHero() {
     setSubmitted(place.label);
   };
   const go = () => {
-    if (!selected) {
+    const address = selected?.label ?? fallbackAddress;
+    if (!address) {
       router.push('/start');
-    } else if (submitted === selected.label && preview.data) {
-      router.push(startHref(selected.label));
+    } else if (submitted === address && preview.data) {
+      router.push(startHref(address));
     } else {
-      setSubmitted(selected.label);
+      setSubmitted(address);
     }
   };
 
@@ -142,6 +144,7 @@ export default function HomeHero() {
                   ariaLabel="Your address"
                   placeholder="Start typing your address"
                   onSelect={choose}
+                  onFallbackChange={setFallbackAddress}
                   onClear={() => {
                     setSelected(null);
                     setSubmitted(null);

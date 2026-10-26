@@ -3,8 +3,9 @@
 // A separate tab opened by the verification email can recover the same draft.
 export interface PendingPlace {
   label: string;
-  latitude: number;
-  longitude: number;
+  // Typed previews have no coordinates until an authenticated save resolves them.
+  latitude: number | null;
+  longitude: number | null;
   city: string | null;
   state: string | null;
 }
@@ -36,8 +37,9 @@ export function readPendingPlace(id: string): PlaceDraft | null {
     const p = JSON.parse(localStorage.getItem(PREFIX + id) || 'null') as PlaceDraft | null;
     if (!p || p.id !== id || !Number.isFinite(p.expiresAt) || p.expiresAt <= Date.now() ||
       typeof p.label !== 'string' || !p.label.trim() || p.label.length > 500 ||
-      !Number.isFinite(p.latitude) || Math.abs(p.latitude) > 90 ||
-      !Number.isFinite(p.longitude) || Math.abs(p.longitude) > 180 ||
+      !((p.latitude === null && p.longitude === null) ||
+        (typeof p.latitude === 'number' && Number.isFinite(p.latitude) && Math.abs(p.latitude) <= 90 &&
+          typeof p.longitude === 'number' && Number.isFinite(p.longitude) && Math.abs(p.longitude) <= 180)) ||
       (p.userId !== null && typeof p.userId !== 'string')) {
       remove(id);
       return null;

@@ -36,8 +36,24 @@ export default function PendingPlaceSaver({ previewId, userId, onSaved }: {
     setSaving(true);
     setError('');
     try {
+      let { latitude, longitude } = draft;
+      if (latitude === null || longitude === null) {
+        // Suggestions may have run out before signup. Resolve only after the
+        // member explicitly saves, using their authenticated geo allowance.
+        const { suggestions } = await api.geo.autocomplete(draft.label);
+        const center = suggestions[0]?.center;
+        if (!center || !Number.isFinite(center.lat) || !Number.isFinite(center.lng)) {
+          throw new Error('We could not locate this address. Start a new preview with the full address, city and state.');
+        }
+        latitude = center.lat;
+        longitude = center.lng;
+        if (!bindPendingPlace(previewId, userId)) {
+          setDraft(null);
+          return;
+        }
+      }
       const { savedPlace } = await api.savedPlaces.create({
-        label: draft.label, latitude: draft.latitude, longitude: draft.longitude,
+        label: draft.label, latitude, longitude,
         city: draft.city, state: draft.state, expectedUserId: userId,
       });
       if (!savedPlace?.id || savedPlace.user_id !== userId) {

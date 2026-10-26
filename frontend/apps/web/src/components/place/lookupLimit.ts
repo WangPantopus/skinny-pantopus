@@ -10,7 +10,7 @@ export function lookupLimitMessage(error: unknown): string | null {
   return typeof failure.message === 'string' && failure.message ? failure.message : null;
 }
 
-/** Signed out and out of today's five lookups: an account gets five of its own. */
+/** The caller used today's five lookups; the UI must check session state separately. */
 export function isDailyLookupLimit(error: unknown): boolean {
   return (error as { code?: unknown } | null | undefined)?.code === 'PLACE_LOOKUP_LIMIT';
 }
