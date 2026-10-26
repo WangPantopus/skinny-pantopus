@@ -46,16 +46,23 @@ async function newPlans(now) {
 }
 
 /** The alerts for this kind of plan, one per person (the widest distance they asked for). */
-async function alertsFor(kind) {
+async function alertsFor(kind, team = null) {
+  // Filter team subscriptions before the recipient cap; unrelated teams must
+  // not crowd a matching subscription out of the query. Only catalog ids enter
+  // the PostgREST expression; missing/empty lists retain generic kind alerts.
+  const canonicalTeam = require('../../plans/planTeams').teamById(team);
+  const teamFilter = canonicalTeam ? `,structured->teams.cs.${JSON.stringify([canonicalTeam.id])}` : '';
   const { data, error } = await supabaseAdmin.from('AgentMemoryItem')
     .select('id, user_id, home_id, structured')
     .eq('kind', 'plan_alert')
     .contains('structured', { plan_kinds: [kind] })
+    .or(`structured->teams.is.null,structured->teams.eq.[]${teamFilter}`)
     .order('created_at', { ascending: true })
     .limit(PEOPLE_PER_PLAN);
   if (error) throw new Error(`Plan alerts read failed: ${error.message}`);
   const byUser = new Map();
   for (const alert of data || []) {
+    if (alert.structured?.teams?.length && !alert.structured.teams.includes(canonicalTeam?.id)) continue;
     const miles = Number(alert.structured?.within_miles) || 3;
     const known = byUser.get(alert.user_id);
     if (!known || miles > known.miles) byUser.set(alert.user_id, { ...alert, miles });
@@ -102,6 +109,7 @@ async function alertOne(plan, alert, area) {
   const userId = String(alert.user_id);
   if (userId === String(plan.host_user_id)) return false;
   const viewer = await loadViewer({ id: userId, role: null });
+  if (alert.structured?.teams?.length && (!viewer.sportsFlag || !alert.structured.teams.includes(require('../../plans/planTeams').teamById(plan.details?.game?.team)?.id))) return false;
   const miles = milesFromHome(viewer, alert, area);
   if (miles == null || miles > alert.miles) return false;
   // As the viewer, through the plan service: visible to them, and theirs to ask (not in it, not blocked).
@@ -139,7 +147,7 @@ async function runPlanAlerts(now = Date.now()) {
     if (!area) continue;
     let alerts;
     try {
-      alerts = await alertsFor(plan.kind);
+      alerts = await alertsFor(plan.kind, plan.details?.game?.team);
     } catch (err) {
       logger.warn('plans.alert.read_failed', { planId: plan.post_id, error: err.message });
       continue;
