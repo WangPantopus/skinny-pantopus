@@ -190,6 +190,24 @@ export async function removeMember(homeId: string, userId: string): Promise<{ me
   return del(`/api/homes/${homeId}/members/${userId}`);
 }
 
+/**
+ * What a viewer who proved the address may do about a member whose access is a claim (home claims PR 3). It is on
+ * that member's row in getHomeMembers only for such a viewer: set_aside while the claim steps back for proof.
+ */
+export interface MemberClaimReview {
+  set_aside: boolean;
+  can_confirm: boolean;
+  can_remove: boolean;
+}
+
+/**
+ * "Yes, they live here": someone who proved the address confirms a member whose access is a claim, and the claim's
+ * grants come back to them. Removing them uses the member-removal review.
+ */
+export async function confirmClaimMember(homeId: string, userId: string): Promise<{ confirmed: boolean; replayed: boolean }> {
+  return post(`/api/homes/${homeId}/members/${userId}/confirm-claim`);
+}
+
 // ---- Audit Log ----
 
 /**

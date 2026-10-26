@@ -34,8 +34,8 @@
 --     rejoining without an invitation), called with no actor through a vote mode in home_member_removal_context.
 --
 -- Latest permitted sources (bodies copied unchanged except the lines commented below):
---   home_effective_access          supabase/migrations/20260910001500_home_effective_permissions.sql:20
---   home_member_removal_context    supabase/migrations/20261025120000_home_instant_claim.sql:445
+--   home_effective_access          supabase/migrations/20261025120000_home_instant_claim.sql:989
+--   home_member_removal_context    supabase/migrations/20261025120000_home_instant_claim.sql:515
 SET LOCAL lock_timeout='5s';
 
 ALTER TABLE public."HomeQuorumAction" DROP CONSTRAINT "HomeQuorumAction_action_type_chk";
@@ -529,6 +529,22 @@ BEGIN
       WHERE o.home_id = p_home_id AND o.user_id = p_user_id AND o.permission = p AND NOT o.allowed)
     AND (NOT coalesce(v_minor, false) OR p::text = ANY(v_age_ceiling));
 
+  -- Home claims PR 3: a proof always beats a claim. While someone who proved the address lives here and hasn't said
+  -- this person lives here too (home_claim_set_aside), a claim keeps only its role's defaults (and its own denies), not
+  -- the claim's grants. Someone who proved the address at a Home with a claim sees who lives there (members.view), so
+  -- they can decide about it.
+  IF NOT v_owner AND v_occ.verification_source = 'claim' AND public.home_claim_set_aside(p_home_id, p_user_id) THEN
+    v_permissions := ARRAY(SELECT p FROM unnest(v_permissions) p WHERE EXISTS (SELECT FROM public."HomeRolePermission" r
+      WHERE r.role_base = v_role AND r.permission::text = p AND r.allowed) ORDER BY p);
+  ELSIF v_occ.verification_source IN ('address', 'legacy') AND NOT 'members.view' = ANY(v_permissions)
+    AND public.home_proof_holder(p_home_id, p_user_id)
+    AND EXISTS (SELECT FROM public."HomeOccupancy" WHERE home_id = p_home_id AND user_id <> p_user_id
+      AND verification_source = 'claim')
+    AND NOT EXISTS (SELECT FROM public."HomePermissionOverride" o WHERE o.home_id = p_home_id
+      AND o.user_id = p_user_id AND o.permission = 'members.view' AND NOT o.allowed) THEN
+    v_permissions := ARRAY(SELECT p FROM unnest(v_permissions || 'members.view'::text) p ORDER BY p);
+  END IF;
+
   -- Home claims PR 5: someone a household vote may remove keeps their access while the vote is open, but not the
   -- power to bring people in or decide about them (invite, answer a request to join, remove, change a role).
   IF NOT v_owner AND 'members.manage' = ANY(v_permissions)
@@ -592,7 +608,11 @@ BEGIN
   END IF;
   v_actor_role := (v_actor->>'effective_role_base')::public.home_role_base;
   SELECT ARRAY(SELECT jsonb_array_elements_text(v_actor->'permissions')) INTO v_actor_perms;
-  IF NOT v_self AND NOT v_vote AND NOT ('members.manage'=ANY(v_actor_perms)) THEN
+  -- Proof beats a claim: someone who proved the address may remove a person whose access is a claim without
+  -- members.manage (up to lease_resident, home_member_rank_ceiling below).
+  IF NOT v_self AND NOT v_vote AND NOT ('members.manage'=ANY(v_actor_perms))
+    AND NOT (public.home_proof_holder(p_home_id,p_actor_id) AND EXISTS(SELECT FROM public."HomeOccupancy"
+      WHERE home_id=p_home_id AND user_id=p_target_id AND verification_source='claim')) THEN
     RETURN jsonb_build_object('ok',false,'code','MEMBERS_MANAGE_REQUIRED','status',403);
   END IF;
   SELECT * INTO v_target FROM public."HomeOccupancy" WHERE home_id=p_home_id AND user_id=p_target_id;

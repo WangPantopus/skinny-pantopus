@@ -89,6 +89,7 @@ function MembersContent() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<MemberTab>('members');
   const [busyRequestId, setBusyRequestId] = useState<string | null>(null);
+  const [busyConfirmId, setBusyConfirmId] = useState<string | null>(null);
   const [membersError, setMembersError] = useState('');
   const [requestsError, setRequestsError] = useState('');
   const [auditError, setAuditError] = useState('');
@@ -232,10 +233,43 @@ function MembersContent() {
     } catch (err: any) { if (current()) toast.error(err?.message || 'Failed to update role'); }
   }, [homeId, canManage, myAccess, fetchData]);
 
+  // Someone who proved the address may remove a member whose access is a claim without managing members (claim_review).
   const handleRemove = useCallback((member: any) => {
-    if (!canManage || typeof member.user_id !== 'string') return;
+    if ((!canManage && member.claim_review?.can_remove !== true) || typeof member.user_id !== 'string') return;
     router.push(removalLink(homeId, member.user_id));
   }, [homeId, canManage, router]);
+
+  // "Yes, they live here": a claim steps back once someone proves the address, until one of them confirms it.
+  const handleConfirmClaim = useCallback(async (member: any) => {
+    if (member.claim_review?.can_confirm !== true || typeof member.user_id !== 'string' || !homeId) return;
+    const revision = generation.current, token = api.getAuthToken(), origin = api.getApiBaseUrl();
+    const marker = localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
+    const current = () => generation.current === revision && api.getAuthToken() === token && api.getApiBaseUrl() === origin
+      && localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY) === marker && document.visibilityState !== 'hidden';
+    const name = member.display_name || chosenUsername(member.user?.username || member.username) || 'this member';
+    const confirmation = confirmStore.open({
+      title: 'Confirm they live here',
+      description: `Confirm that ${name} lives here? They'll see the home's codes, documents, bills and emergency info again. You can still remove them later.`,
+      confirmLabel: 'Yes, they live here',
+      variant: 'primary',
+    });
+    const dialog = confirmStore.getSnapshot();
+    pageConfirmation.current = dialog;
+    const yes = await confirmation;
+    if (pageConfirmation.current === dialog) pageConfirmation.current = null;
+    if (!yes || !current()) return;
+    setBusyConfirmId(member.user_id);
+    try {
+      await api.homeIam.confirmClaimMember(homeId, member.user_id);
+      if (!current()) return;
+      toast.success(`${name} is confirmed`);
+      await fetchData();
+    } catch (err: any) {
+      if (current()) toast.error(err?.message || 'Could not confirm this member');
+    } finally {
+      if (current()) setBusyConfirmId(null);
+    }
+  }, [homeId, fetchData]);
 
   // Ask the household: a private vote on whether this member lives here (home claims plan, PR 5).
   const handleStartVote = useCallback(async (member: any) => {
@@ -390,6 +424,13 @@ function MembersContent() {
                         <p className="text-sm font-medium text-app-text truncate">{member.display_name || member.user?.name || chosenUsername(member.user?.username || member.username) || 'Household member'}</p>
                         {usernameHandle(member.username || member.user?.username) && <p className="text-xs text-app-text-muted">{usernameHandle(member.username || member.user?.username)}</p>}
                         {member.joined_at && <p className="text-[11px] text-app-text-muted mt-0.5">Joined {new Date(member.joined_at).toLocaleDateString()}</p>}
+                        {member.claim_review && (
+                          <p className="text-xs text-amber-800 dark:text-amber-300 mt-1">
+                            {member.claim_review.set_aside
+                              ? 'Claimed this home before you verified your address. They can’t see the home’s codes, documents, bills or emergency info until you confirm they live here.'
+                              : 'Claimed this home. A verified resident confirmed they live here.'}
+                          </p>
+                        )}
                       </div>
                       {canStartVoteFor.includes(member.user_id) && (
                         <button type="button" onClick={() => void handleStartVote(member)}
@@ -398,9 +439,15 @@ function MembersContent() {
                           Ask household
                         </button>
                       )}
-                      {canManage && role !== 'owner' && (
+                      {(canManage || member.claim_review) && role !== 'owner' && (
                         <div className="flex items-center gap-1 flex-shrink-0">
-                          {assignableRolesFor(myAccess, member).length > 0 && (
+                          {member.claim_review?.can_confirm && (
+                            <button type="button" onClick={() => void handleConfirmClaim(member)} disabled={busyConfirmId === member.user_id}
+                              className="px-2.5 py-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400 border border-emerald-600 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-950 transition disabled:opacity-50">
+                              Yes, they live here
+                            </button>
+                          )}
+                          {canManage && assignableRolesFor(myAccess, member).length > 0 && (
                             <div className="relative" ref={roleMenuFor === member.user_id ? roleMenuRef : undefined}>
                               <button onClick={() => setRoleMenuFor(roleMenuFor === member.user_id ? null : member.user_id)} title="Change role"
                                 aria-haspopup="menu" aria-expanded={roleMenuFor === member.user_id} className="p-1.5 text-app-text-secondary hover:bg-app-hover rounded-lg transition">
@@ -422,9 +469,11 @@ function MembersContent() {
                               )}
                             </div>
                           )}
-                          <button onClick={() => handleRemove(member)} title="Remove" aria-label={`Review removal of ${member.display_name || chosenUsername(member.user?.username || member.username) || 'this member'}`} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition">
-                            <UserMinus className="w-4 h-4" />
-                          </button>
+                          {(canManage || member.claim_review?.can_remove) && (
+                            <button onClick={() => handleRemove(member)} title="Remove" aria-label={`Review removal of ${member.display_name || chosenUsername(member.user?.username || member.username) || 'this member'}`} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition">
+                              <UserMinus className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>

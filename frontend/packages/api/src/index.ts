@@ -237,7 +237,7 @@ export type { ActionItem, ActivityItem, DiscoveryItem, DiscoveryFilter, JumpBack
 export type { BusinessAuditEntry } from './endpoints/businessIam';
 
 // Types from homeIam
-export type { AuditEntry, GuestPass, ScopedGrant } from './endpoints/homeIam';
+export type { AuditEntry, GuestPass, ScopedGrant, MemberClaimReview } from './endpoints/homeIam';
 
 // Types from homeGuest
 export type { GuestPassView, SharedResourceView, PasscodeRequired } from './endpoints/homeGuest';

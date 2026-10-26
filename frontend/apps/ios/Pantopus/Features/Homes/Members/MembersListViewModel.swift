@@ -35,6 +35,9 @@ public struct MemberActionTarget: Sendable, Equatable, Identifiable {
     public let currentRole: String?
     public let assignableRoles: [HomeAssignableRole]
     public let canRemove: Bool
+    /// "Yes, they live here": the viewer proved the address and this member's
+    /// claim is stepping back for it (`claim_review.can_confirm`).
+    public let canConfirmClaim: Bool
 
     public var id: String {
         userId
@@ -45,13 +48,15 @@ public struct MemberActionTarget: Sendable, Equatable, Identifiable {
         name: String,
         currentRole: String?,
         assignableRoles: [HomeAssignableRole],
-        canRemove: Bool
+        canRemove: Bool,
+        canConfirmClaim: Bool = false
     ) {
         self.userId = userId
         self.name = name
         self.currentRole = currentRole
         self.assignableRoles = assignableRoles
         self.canRemove = canRemove
+        self.canConfirmClaim = canConfirmClaim
     }
 }
 
@@ -282,6 +287,25 @@ public final class MembersListViewModel: ListOfRowsDataSource {
         guard isCurrent, loadedOnce, fetchError == nil, let occupant = occupants.first(where: { $0.userId == userId }),
               actionTarget(for: occupant, name: Self.displayName(for: occupant)).canRemove else { return }
         pendingEvent = .openMemberRemoval(.init(homeId: homeId, userId: userId))
+    }
+
+    /// `POST /api/homes/:id/members/:userId/confirm-claim` — "Yes, they live
+    /// here" (`backend/routes/homeIam.js:314`). The roster refetches so the row
+    /// shows the confirmation; the server's message shows on failure.
+    public func confirmClaim(userId: String) async {
+        guard isCurrent, loadedOnce, fetchError == nil, let occupant = occupants.first(where: { $0.userId == userId }),
+              actionTarget(for: occupant, name: Self.displayName(for: occupant)).canConfirmClaim else { return }
+        actionError = nil
+        do {
+            let _: ConfirmClaimMemberResponse = try await api.request(
+                HomeAdminEndpoints.confirmClaimMember(homeId: homeId, userId: userId)
+            )
+            ScreenStore.store(for: api).markStale(topics: [ScreenTopic.home(homeId)])
+            await fetch()
+        } catch {
+            actionError = (error as? APIError)?.errorDescription
+                ?? "Could not confirm this member"
+        }
     }
 
     /// Withdrawal is an explicit invitation command. It never removes membership.
@@ -585,9 +609,11 @@ public final class MembersListViewModel: ListOfRowsDataSource {
     ///
     ///  - role change: `members.manage` + `assertCanMutateTarget`
     ///    (`backend/routes/homeIam.js:218`, `:224`)
-    ///  - removal: self may open a review; others require cached manage/rank.
-    ///    The prepared server review and command enforce current permission,
-    ///    target membership and ownership/transfer restrictions.
+    ///  - removal: self may open a review; others require cached manage/rank,
+    ///    or the server's `claim_review.can_remove` (someone who proved the
+    ///    address deciding about a claim). The prepared server review and
+    ///    command enforce current permission, target membership and
+    ///    ownership/transfer restrictions.
     public func actionTarget(for occ: OccupantDTO, name: String) -> MemberActionTarget {
         let isSelf = currentUserId != nil && occ.userId == currentUserId
         let assignable = canManageMembers
@@ -599,22 +625,25 @@ public final class MembersListViewModel: ListOfRowsDataSource {
             )
             : []
         let targetIsOwner = occ.role?.lowercased() == "owner"
+        let claimReview = isCurrent && !isSelf ? occ.claimReview : nil
         let canRemove: Bool = if isSelf {
             true
         } else {
-            canManageMembers
+            (canManageMembers
                 && !targetIsOwner
                 && HomeRoleAssignment.canMutate(
                     actorRole: (access?.isOwner ?? false) ? "owner" : access?.roleBase,
                     targetRole: occ.role
-                )
+                ))
+                || (claimReview?.canRemove == true && !targetIsOwner)
         }
         return MemberActionTarget(
             userId: occ.userId,
             name: name,
             currentRole: occ.role,
             assignableRoles: assignable,
-            canRemove: canRemove
+            canRemove: canRemove,
+            canConfirmClaim: claimReview?.canConfirm == true
         )
     }
 
@@ -628,9 +657,10 @@ public final class MembersListViewModel: ListOfRowsDataSource {
             background: palette.background,
             foreground: palette.foreground
         )
-        let bodyText = joinedText(for: occ)
+        let claimNote = Self.claimNote(for: occ.claimReview)
+        let bodyText = claimNote ?? joinedText(for: occ)
         let target = actionTarget(for: occ, name: name)
-        let hasActions = !target.assignableRoles.isEmpty || target.canRemove
+        let hasActions = !target.assignableRoles.isEmpty || target.canRemove || target.canConfirmClaim
         return RowModel(
             id: occ.userId,
             title: name,
@@ -654,9 +684,19 @@ public final class MembersListViewModel: ListOfRowsDataSource {
                 : nil,
             body: bodyText,
             subtitleIcon: role.icon,
-            bodyIcon: bodyText == nil ? nil : .clock,
+            bodyIcon: claimNote != nil ? .shieldAlert : (bodyText == nil ? nil : .clock),
             inlineChip: RowChip(text: role.label, icon: role.icon, tint: chipTint)
         )
+    }
+
+    /// The line a viewer who proved the address sees on a claim member's row
+    /// (same copy as the web Members page).
+    static func claimNote(for review: MemberClaimReviewDTO?) -> String? {
+        guard let review else { return nil }
+        return review.setAside
+            ? "Claimed this home before you verified your address. They can’t see the home’s codes, documents, "
+            + "bills or emergency info until you confirm they live here."
+            : "Claimed this home. A verified resident confirmed they live here."
     }
 
     public func row(forPending invite: PendingInviteDTO) -> RowModel {

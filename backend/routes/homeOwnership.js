@@ -28,6 +28,7 @@ const { listOwnClaims } = require('../services/homeOwnershipClaimListService');
 const { ownershipClaimLimiter, postcardLimiter, homePostcardRequestLimiter, verificationAttemptLimiter } = require('../middleware/rateLimiter');
 const logger = require('../utils/logger');
 const homePostcardService = require('../services/homePostcardService');
+const homeInstantClaimService = require('../services/homeInstantClaimService');
 const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
 const { userFacing, isUserFacing } = require('../utils/userFacingError');
 const { resolveHomeRole } = require('../utils/homeAccessPolicy');
@@ -2520,7 +2521,12 @@ router.post('/:id/postcards/:postcardId/verifications', postcardNoStore, verifyT
     if (!req.body || Object.keys(req.body).some(key => !['request_id', 'code'].includes(key))) {
       return res.status(400).json({ code: 'POSTCARD_VERIFICATION_INVALID', error: 'Enter the code from this postcard and try again.' });
     }
-    postcardVerification.send(res, await postcardVerification.submit({ ...postcardVerificationInput(req), code: req.body.code }));
+    const result = await postcardVerification.submit({ ...postcardVerificationInput(req), code: req.body.code });
+    // A proof beats a claim: anyone whose claim now steps back, and the person who proved it, are told.
+    if (result.state === 'completed' && result.verification_status === 'verified') {
+      void homeInstantClaimService.tellProofOverClaims({ homeId: result.home_id, provenUserId: req.user.id });
+    }
+    postcardVerification.send(res, result);
   } catch (error) { postcardVerification.sendError(res, error); }
 });
 router.get('/:id/postcards/:postcardId/verifications/:requestId', postcardNoStore, verifyToken, async (req, res) => {
@@ -2631,6 +2637,8 @@ router.post('/:id/verify-postcard', postcardNoStore, verifyToken, verificationAt
     } catch (_notificationError) {
       logger.warn('Postcard verified but notification delivery failed', { homeId, userId });
     }
+    // A proof beats a claim: anyone whose claim now steps back, and the person who proved it, are told.
+    if (verificationStatus === 'verified') void homeInstantClaimService.tellProofOverClaims({ homeId, provenUserId: userId });
 
     res.json({
       message: verificationStatus === 'verified'

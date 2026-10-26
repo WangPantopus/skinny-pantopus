@@ -29,6 +29,7 @@ const HOME_ACTIVITY_LABELS = {
   residency_submission_saved: 'Residency claim submitted',
   residency_legacy_submission_saved: 'Residency claim submitted',
   residency_claim_rejected: 'Residency claim declined',
+  HOME_CLAIM_CONFIRMED: 'Verified resident confirmed a member',
   MAIL_CODE_VERIFIED: 'Address verified by mail',
   POSTCARD_CODE_VERIFIED: 'Address verified by postcard',
   POSTCARD_REQUEST_SAVED: 'Verification postcard requested',

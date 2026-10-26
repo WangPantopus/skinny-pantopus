@@ -1,5 +1,5 @@
 -- Backwards compatible: yes. Adds one allowed value to HomeOccupancy.verification_source, one switched-off
--- FeatureFlag row, two new service-only functions, and forward replacements of seven existing functions with
+-- FeatureFlag row, five new service-only functions, and forward replacements of eight existing functions with
 -- the same signatures and grants. While home_instant_claim is off (its default) nothing creates a 'claim'
 -- occupancy, so every replaced function behaves exactly as before for existing rows; deployed apps and the
 -- current backend never send or read the new value.
@@ -10,8 +10,13 @@
 -- once: household access, the Home's own sections, and inviting their household. A claim is not proof:
 -- 'claim' joins 'household' (F3b) among the sources no address-proof gate accepts, a claim never reviews
 -- or challenges a newcomer, and a claimer has no authority over anyone who proved the address.
+-- A proof always beats a claim (the plan; the 2026-10-26 review found a claimer kept every grant after the real
+-- resident proved the address): once someone who proved the address lives at the Home, people whose access is a
+-- claim keep only their role's defaults until one of them says they live there (home_claim_set_aside), and anyone
+-- who proved it may remove or confirm them. Nothing is stored for the step back, so it lifts by itself.
 --
 -- Latest permitted sources (bodies copied unchanged except the lines commented below):
+--   home_effective_access            supabase/migrations/20260910001500_home_effective_permissions.sql:20
 --   home_residency_review_authority  supabase/migrations/20260910233000_home_residency_review_receipts.sql:40
 --   home_postcard_current_context    supabase/migrations/20261006190147_home_postcard_pending_owner.sql:20
 --   home_invite_target_policy        supabase/migrations/20261006212635_home_invitation_restores_ended_membership.sql:13
@@ -35,10 +40,41 @@ VALUES ('home_instant_claim', false, false, ARRAY[]::uuid[],
   'Instant Claimed status: a private setup at an address with no household becomes a claimed home at once (household tools, the Home''s own sections, invitations). Off by default; turn it off to stop new claims.')
 ON CONFLICT (flag_name) DO NOTHING;
 
+-- Someone who proved the address: their own current, verified, adult membership rests on proof (a postcard, document,
+-- landlord, or legacy verification: source address or legacy) and they live there as a member, not as a guest,
+-- service provider or restricted member.
+CREATE FUNCTION public.home_proof_holder(p_home_id uuid,p_user_id uuid) RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public,pg_temp AS $$
+  SELECT EXISTS(SELECT FROM public."HomeOccupancy" o WHERE o.home_id=p_home_id AND o.user_id=p_user_id
+    AND o.is_active IS TRUE AND o.verification_status='verified' AND o.verification_source IN ('address','legacy')
+    AND coalesce(o.age_band::text,'adult')='adult'
+    AND coalesce(o.role_base,public.home_invite_role(o.role))::text IN ('owner','admin','manager','lease_resident','member')
+    AND (o.start_at IS NULL OR o.start_at<=now()) AND (o.end_at IS NULL OR o.end_at>now())
+    AND (o.access_start_at IS NULL OR o.access_start_at<=now()) AND (o.access_end_at IS NULL OR o.access_end_at>now()))
+$$;
+
+-- Proof beats a claim. Someone whose access is a claim steps back while someone who proved the address lives at the
+-- Home and none of the people who proved it has said they live there too (a HOME_CLAIM_CONFIRMED row on their
+-- membership from a current proof holder, written since it was last verified): home_effective_access then leaves
+-- them only their role's defaults, not the claim's grants. Nothing is stored for the step back, so it lifts by itself
+-- when no proof holder remains or one confirms them.
+CREATE FUNCTION public.home_claim_set_aside(p_home_id uuid,p_user_id uuid) RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public,pg_temp AS $$
+  SELECT EXISTS(SELECT FROM public."HomeOccupancy" c WHERE c.home_id=p_home_id AND c.user_id=p_user_id
+    AND c.verification_source='claim' AND c.verification_status='verified'
+    AND EXISTS(SELECT FROM public."HomeOccupancy" p WHERE p.home_id=p_home_id AND p.user_id<>p_user_id
+      AND public.home_proof_holder(p_home_id,p.user_id))
+    AND NOT EXISTS(SELECT FROM public."HomeAuditLog" a WHERE a.home_id=p_home_id AND a.action='HOME_CLAIM_CONFIRMED'
+      AND a.target_type='HomeOccupancy' AND a.target_id=c.id AND a.created_at>=c.verified_at
+      AND a.actor_user_id<>p_user_id AND public.home_proof_holder(p_home_id,a.actor_user_id)))
+$$;
+
 -- The rank a non-owner's authority over another member is measured against (invitations, role and permission
--- changes, removals): the target's role must rank below it. Normally that is the actor's own role. Two rules:
+-- changes, removals): the target's role must rank below it. Normally that is the actor's own role. Three rules:
 --   * Proof beats a claim. Someone whose own access is only a claim has no authority over a member who isn't
 --     also unproven by claim (who proved the address, or whom an owner or a proven member let in).
+--   * And the other way: someone who proved the address (home_proof_holder) decides about people whose access is
+--     a claim, up to lease_resident, never a manager, admin or owner.
 --   * The person who set up the Home (its creator, with a current verified adult occupancy) brings in their
 --     household: they may invite, and manage people admitted by household consent or by their claim, up to
 --     lease_resident, never a manager, admin or owner, and never someone who proved the address themselves.
@@ -48,6 +84,8 @@ CREATE FUNCTION public.home_member_rank_ceiling(p_home_id uuid,p_actor_id uuid,p
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public,pg_temp AS $$
   SELECT CASE
     WHEN o.verification_source='claim' AND p_target_source IS NOT NULL AND p_target_source<>'claim' THEN 0
+    WHEN p_target_source='claim' AND public.home_proof_holder(p_home_id,p_actor_id)
+      THEN greatest(public.home_role_rank(p_actor_role),public.home_role_rank('lease_resident')+1)
     WHEN h.created_by_user_id=p_actor_id AND o.verification_status='verified' AND o.is_active IS TRUE
       AND coalesce(o.age_band::text,'adult')='adult' AND coalesce(p_target_source,'claim') IN ('claim','household')
       THEN greatest(public.home_role_rank(p_actor_role),public.home_role_rank('lease_resident')+1)
@@ -120,6 +158,38 @@ BEGIN
       'verification_source','claim','settles_at',v_now+make_interval(days=>p_settle_days),'address_watch',p_watch));
   RETURN jsonb_build_object('ok',true,'replayed',false,'home_id',p_home_id,'occupancy_id',o.id,
     'role_base',v_role,'settles_at',v_now+make_interval(days=>p_settle_days));
+END $$;
+
+-- Someone who proved the address says a person whose access is a claim lives here too ("Yes, they live here"), and
+-- the claim's grants come back to them (home_claim_set_aside). The confirmation is a HomeAuditLog row on that
+-- membership: it ends with the membership and counts only while its author still holds proof. The person stays a
+-- claim, with no authority over anyone who proved the address. An owner or manager doesn't need this: they can remove
+-- someone or change their permissions already, and only proof holders' confirmations count.
+CREATE FUNCTION public.confirm_home_claim_member(p_home_id uuid,p_actor_id uuid,p_target_id uuid) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp SET lock_timeout='5s' AS $$
+DECLARE v_home public."Home"%ROWTYPE; v_target public."HomeOccupancy"%ROWTYPE; v_label text;
+BEGIN
+  IF p_home_id IS NULL OR p_actor_id IS NULL OR p_target_id IS NULL THEN
+    RETURN jsonb_build_object('ok',false,'code','CLAIM_CONFIRM_INVALID','status',400); END IF;
+  IF p_actor_id=p_target_id THEN
+    RETURN jsonb_build_object('ok',false,'code','SELF_ADMISSION_FORBIDDEN','status',403); END IF;
+  -- The member-authority lock order (Home, then people): a confirmation can't race a removal, a role change or a proof.
+  SELECT * INTO v_home FROM public."Home" WHERE id=p_home_id FOR UPDATE;
+  IF NOT FOUND THEN RETURN jsonb_build_object('ok',false,'code','HOME_NOT_FOUND','status',404); END IF;
+  PERFORM id FROM public."HomeOccupancy" WHERE home_id=p_home_id ORDER BY id FOR UPDATE;
+  IF v_home.security_state IN ('frozen','frozen_silent') OR v_home.home_status IN ('merged','archived')
+    OR NOT public.home_proof_holder(p_home_id,p_actor_id) THEN
+    RETURN jsonb_build_object('ok',false,'code','CLAIM_CONFIRM_PROOF_REQUIRED','status',403); END IF;
+  SELECT * INTO v_target FROM public."HomeOccupancy" WHERE home_id=p_home_id AND user_id=p_target_id;
+  IF NOT FOUND OR v_target.is_active IS DISTINCT FROM true OR v_target.verification_status IS DISTINCT FROM 'verified'
+    OR v_target.verification_source IS DISTINCT FROM 'claim' THEN
+    RETURN jsonb_build_object('ok',false,'code','CLAIM_CONFIRM_NOT_CLAIM','status',409); END IF;
+  v_label:=coalesce(v_home.name,v_home.address,'your home');
+  IF NOT public.home_claim_set_aside(p_home_id,p_target_id) THEN
+    RETURN jsonb_build_object('ok',true,'replayed',true,'target_id',p_target_id,'home_label',v_label); END IF;
+  INSERT INTO public."HomeAuditLog"(home_id,actor_user_id,action,target_type,target_id,metadata)
+    VALUES(p_home_id,p_actor_id,'HOME_CLAIM_CONFIRMED','HomeOccupancy',v_target.id,jsonb_build_object('user_id',p_target_id));
+  RETURN jsonb_build_object('ok',true,'replayed',false,'target_id',p_target_id,'home_label',v_label);
 END $$;
 
 CREATE OR REPLACE FUNCTION public.home_residency_review_authority(p_home_id uuid,p_actor_id uuid) RETURNS boolean
@@ -484,7 +554,11 @@ BEGIN
   END IF;
   v_actor_role := (v_actor->>'effective_role_base')::public.home_role_base;
   SELECT ARRAY(SELECT jsonb_array_elements_text(v_actor->'permissions')) INTO v_actor_perms;
-  IF NOT v_self AND NOT ('members.manage'=ANY(v_actor_perms)) THEN
+  -- Proof beats a claim: someone who proved the address may remove a person whose access is a claim without
+  -- members.manage (up to lease_resident, home_member_rank_ceiling below).
+  IF NOT v_self AND NOT ('members.manage'=ANY(v_actor_perms))
+    AND NOT (public.home_proof_holder(p_home_id,p_actor_id) AND EXISTS(SELECT FROM public."HomeOccupancy"
+      WHERE home_id=p_home_id AND user_id=p_target_id AND verification_source='claim')) THEN
     RETURN jsonb_build_object('ok',false,'code','MEMBERS_MANAGE_REQUIRED','status',403);
   END IF;
   SELECT * INTO v_target FROM public."HomeOccupancy" WHERE home_id=p_home_id AND user_id=p_target_id;
@@ -912,8 +986,125 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.home_member_rank_ceiling(uuid,uuid,public.home_role_base,text),
+CREATE OR REPLACE FUNCTION public.home_effective_access(p_home_id uuid, p_user_id uuid)
+RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER
+SET search_path = public, pg_temp AS $$
+DECLARE
+  v_denied constant jsonb := '{"role_base":null,"effective_role_base":null,"age_band":null,"has_access":false,"is_owner":false,"permissions":[]}';
+  v_home public."Home"%ROWTYPE;
+  v_occ public."HomeOccupancy"%ROWTYPE;
+  v_has_occ boolean;
+  v_role public.home_role_base;
+  v_effective_role public.home_role_base;
+  v_owner boolean := false;
+  v_minor boolean := false;
+  v_permissions text[];
+  v_age_ceiling text[] := ARRAY[
+    'home.view', 'members.view', 'tasks.view', 'calendar.view', 'docs.view',
+    'packages.view', 'maintenance.view', 'assets.view', 'devices.view', 'vendors.view'];
+BEGIN
+  IF p_home_id IS NULL OR p_user_id IS NULL THEN RETURN v_denied; END IF;
+  IF p_user_id IS DISTINCT FROM auth.uid()
+    AND coalesce(current_setting('role', true), '') <> 'service_role'
+    AND NOT (coalesce(current_setting('role', true), 'none') = 'none'
+      AND session_user IN ('postgres', 'supabase_admin')) THEN
+    RETURN v_denied;
+  END IF;
+
+  SELECT * INTO v_home FROM public."Home" WHERE id = p_home_id;
+  IF NOT FOUND THEN RETURN v_denied; END IF;
+  SELECT * INTO v_occ FROM public."HomeOccupancy"
+    WHERE home_id = p_home_id AND user_id = p_user_id;
+  v_has_occ := FOUND;
+  IF v_has_occ THEN
+    v_role := v_occ.role_base;
+    IF v_role IS NULL THEN
+      v_role := CASE v_occ.role
+        WHEN 'owner' THEN 'owner' WHEN 'admin' THEN 'admin'
+        WHEN 'manager' THEN 'manager' WHEN 'property_manager' THEN 'manager'
+        WHEN 'tenant' THEN 'lease_resident' WHEN 'renter' THEN 'lease_resident'
+        WHEN 'lease_resident' THEN 'lease_resident'
+        WHEN 'member' THEN 'member' WHEN 'roommate' THEN 'member' WHEN 'family' THEN 'member'
+        WHEN 'restricted_member' THEN 'restricted_member' WHEN 'caregiver' THEN 'restricted_member'
+        WHEN 'guest' THEN 'guest' WHEN 'service_provider' THEN 'service_provider'
+        ELSE NULL END;
+    END IF;
+    -- An existing revoked/invalid occupancy fences even legacy/verified owners.
+    -- NULL verification status is historical unknown, not verified residency.
+    IF v_occ.is_active IS DISTINCT FROM true OR v_role IS NULL
+      OR v_occ.verification_status IS DISTINCT FROM 'verified'
+      OR (v_occ.start_at IS NOT NULL AND v_occ.start_at > now())
+      OR (v_occ.end_at IS NOT NULL AND v_occ.end_at <= now())
+      OR (v_occ.access_start_at IS NOT NULL AND v_occ.access_start_at > now())
+      OR (v_occ.access_end_at IS NOT NULL AND v_occ.access_end_at <= now()) THEN
+      RETURN v_denied;
+    END IF;
+    v_minor := v_occ.age_band IN ('child', 'teen');
+  END IF;
+
+  v_owner := v_home.owner_id = p_user_id OR EXISTS (
+    SELECT FROM public."HomeOwner" o WHERE o.home_id = p_home_id
+      AND o.subject_type = 'user' AND o.subject_id = p_user_id AND o.owner_status = 'verified')
+    OR (v_has_occ AND v_role = 'owner');
+  v_owner := coalesce(v_owner, false);
+  IF NOT v_has_occ AND NOT v_owner THEN RETURN v_denied; END IF;
+  v_role := coalesce(v_role, 'owner'::public.home_role_base);
+  v_effective_role := CASE WHEN v_owner THEN 'owner'::public.home_role_base ELSE v_role END;
+  IF coalesce(v_minor, false) THEN
+    IF v_occ.age_band = 'child' AND public.home_role_rank(v_effective_role) > 20 THEN
+      v_effective_role := 'restricted_member';
+    ELSIF v_occ.age_band = 'teen' AND public.home_role_rank(v_effective_role) > 30 THEN
+      v_effective_role := 'member';
+    END IF;
+    IF v_occ.age_band = 'teen' THEN
+      v_age_ceiling := v_age_ceiling || ARRAY[
+        'tasks.edit', 'calendar.edit', 'docs.upload', 'maintenance.edit', 'packages.edit'];
+    END IF;
+  END IF;
+
+  -- Preserve explicit user grants over role defaults. Owner entitlement uses
+  -- owner defaults; a recorded member default cannot demote verified ownership.
+  -- Explicit user denies win, then minor ceilings restrict every source.
+  SELECT coalesce(array_agg(p::text ORDER BY p::text), '{}'::text[])
+    INTO v_permissions
+    FROM unnest(enum_range(NULL::public.home_permission)) AS p
+    WHERE ((v_owner AND NOT EXISTS (
+      SELECT FROM public."HomeRolePermission" r WHERE r.role_base = 'owner'
+        AND r.permission = p AND NOT r.allowed)) OR (NOT v_owner AND EXISTS (
+      SELECT FROM public."HomeRolePermission" r WHERE r.role_base = v_role
+        AND r.permission = p AND r.allowed))
+      OR EXISTS (SELECT FROM public."HomePermissionOverride" o
+        WHERE o.home_id = p_home_id AND o.user_id = p_user_id AND o.permission = p AND o.allowed))
+    AND NOT EXISTS (SELECT FROM public."HomePermissionOverride" o
+      WHERE o.home_id = p_home_id AND o.user_id = p_user_id AND o.permission = p AND NOT o.allowed)
+    AND (NOT coalesce(v_minor, false) OR p::text = ANY(v_age_ceiling));
+
+  -- Home claims PR 3: a proof always beats a claim. While someone who proved the address lives here and hasn't said
+  -- this person lives here too (home_claim_set_aside), a claim keeps only its role's defaults (and its own denies), not
+  -- the claim's grants. Someone who proved the address at a Home with a claim sees who lives there (members.view), so
+  -- they can decide about it.
+  IF NOT v_owner AND v_occ.verification_source = 'claim' AND public.home_claim_set_aside(p_home_id, p_user_id) THEN
+    v_permissions := ARRAY(SELECT p FROM unnest(v_permissions) p WHERE EXISTS (SELECT FROM public."HomeRolePermission" r
+      WHERE r.role_base = v_role AND r.permission::text = p AND r.allowed) ORDER BY p);
+  ELSIF v_occ.verification_source IN ('address', 'legacy') AND NOT 'members.view' = ANY(v_permissions)
+    AND public.home_proof_holder(p_home_id, p_user_id)
+    AND EXISTS (SELECT FROM public."HomeOccupancy" WHERE home_id = p_home_id AND user_id <> p_user_id
+      AND verification_source = 'claim')
+    AND NOT EXISTS (SELECT FROM public."HomePermissionOverride" o WHERE o.home_id = p_home_id
+      AND o.user_id = p_user_id AND o.permission = 'members.view' AND NOT o.allowed) THEN
+    v_permissions := ARRAY(SELECT p FROM unnest(v_permissions || 'members.view'::text) p ORDER BY p);
+  END IF;
+
+  RETURN jsonb_build_object('role_base', v_role, 'effective_role_base', v_effective_role,
+    'age_band', v_occ.age_band, 'has_access', true,
+    'is_owner', v_owner AND NOT coalesce(v_minor, false), 'permissions', v_permissions);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.home_proof_holder(uuid,uuid),public.home_claim_set_aside(uuid,uuid),
+  public.home_member_rank_ceiling(uuid,uuid,public.home_role_base,text),
   public.claim_home_private_setup(uuid,uuid,integer,integer,jsonb),
+  public.confirm_home_claim_member(uuid,uuid,uuid),public.home_effective_access(uuid,uuid),
   public.home_residency_review_authority(uuid,uuid),
   public.home_postcard_current_context(uuid,uuid,boolean),
   public.home_invite_target_policy(uuid,uuid,uuid,jsonb,timestamptz,timestamptz),
@@ -921,8 +1112,10 @@ REVOKE ALL ON FUNCTION public.home_member_rank_ceiling(uuid,uuid,public.home_rol
   public.home_member_removal_context(uuid,uuid,uuid),
   public.mutate_home_member(uuid,uuid,uuid,text,jsonb),
   public.home_secret_context(uuid,uuid) FROM PUBLIC,anon,authenticated;
-GRANT EXECUTE ON FUNCTION public.home_member_rank_ceiling(uuid,uuid,public.home_role_base,text),
+GRANT EXECUTE ON FUNCTION public.home_proof_holder(uuid,uuid),public.home_claim_set_aside(uuid,uuid),
+  public.home_member_rank_ceiling(uuid,uuid,public.home_role_base,text),
   public.claim_home_private_setup(uuid,uuid,integer,integer,jsonb),
+  public.confirm_home_claim_member(uuid,uuid,uuid),public.home_effective_access(uuid,uuid),
   public.home_residency_review_authority(uuid,uuid),
   public.home_postcard_current_context(uuid,uuid,boolean),
   public.home_invite_target_policy(uuid,uuid,uuid,jsonb,timestamptz,timestamptz),

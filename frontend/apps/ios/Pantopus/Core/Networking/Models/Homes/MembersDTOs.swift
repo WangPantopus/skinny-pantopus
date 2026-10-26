@@ -46,8 +46,11 @@ public struct OccupantDTO: Decodable, Sendable, Hashable, Identifiable {
     public let canManageTasks: Bool?
     public let canViewSensitive: Bool?
     /// `address` (postcard, document, landlord, admin), `household` (joined by
-    /// invitation or household review) or `legacy`; nil from older servers.
+    /// invitation or household review), `claim` or `legacy`; nil from older servers.
     public let verificationSource: String?
+    /// What a viewer who proved the address may do about this member, whose
+    /// access is a claim (home claims PR 3). Only such a viewer gets it.
+    public let claimReview: MemberClaimReviewDTO?
 
     public init(
         id: String,
@@ -65,7 +68,8 @@ public struct OccupantDTO: Decodable, Sendable, Hashable, Identifiable {
         canManageAccess: Bool? = nil,
         canManageTasks: Bool? = nil,
         canViewSensitive: Bool? = nil,
-        verificationSource: String? = nil
+        verificationSource: String? = nil,
+        claimReview: MemberClaimReviewDTO? = nil
     ) {
         self.id = id
         self.userId = userId
@@ -83,6 +87,7 @@ public struct OccupantDTO: Decodable, Sendable, Hashable, Identifiable {
         self.canManageTasks = canManageTasks
         self.canViewSensitive = canViewSensitive
         self.verificationSource = verificationSource
+        self.claimReview = claimReview
     }
 
     /// Household members joined by invitation haven't proved the address (F3b),
@@ -109,6 +114,29 @@ public struct OccupantDTO: Decodable, Sendable, Hashable, Identifiable {
         case canManageTasks = "can_manage_tasks"
         case canViewSensitive = "can_view_sensitive"
         case verificationSource = "verification_source"
+        case claimReview = "claim_review"
+    }
+}
+
+/// A proof always beats a claim (`backend/services/homeDetailService.js`
+/// `withClaimReview`): once someone proves the address, a member whose access
+/// is a claim keeps only their role's defaults until a verified resident
+/// confirms them (`setAside`). That resident may confirm or remove them.
+public struct MemberClaimReviewDTO: Decodable, Sendable, Hashable {
+    public let setAside: Bool
+    public let canConfirm: Bool
+    public let canRemove: Bool
+
+    public init(setAside: Bool, canConfirm: Bool, canRemove: Bool) {
+        self.setAside = setAside
+        self.canConfirm = canConfirm
+        self.canRemove = canRemove
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case setAside = "set_aside"
+        case canConfirm = "can_confirm"
+        case canRemove = "can_remove"
     }
 }
 
