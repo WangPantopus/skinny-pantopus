@@ -96,4 +96,23 @@ function upcomingGames(now = Date.now(), { near } = {}) {
     }));
 }
 
-module.exports = { upcomingGames, findGame, nextGameForTeam, repeatDetails, FAN_RADIUS_METERS };
+/** Opt-in caller only. The legacy route and hand-list helpers above stay unchanged. */
+async function upcomingGamesForTeams(teamIds, now = Date.now()) {
+  const schedule = require('../sports/schedule');
+  const { teamById } = require('./planTeams');
+  const teams = [...new Set((Array.isArray(teamIds) ? teamIds : []).map((id) => teamById(id)?.id).filter(Boolean))];
+  const { games: provider, unavailableLeagues } = await schedule.gamesForTeams(teams, now);
+  const fallback = upcomingGames(now).flatMap((game) => {
+    const team = teamById(game.team);
+    return team && teams.includes(team.id) && unavailableLeagues.includes(team.league)
+      ? [{ ...game, team: team.id, league: team.league, neutral: false, time_tbd: false, status: 'scheduled', postseason: false }] : [];
+  });
+  const ranked = [...provider.filter((game) => schedule.isAvailable(game, now)), ...fallback]
+    .sort((a, b) => teams.indexOf(a.team) - teams.indexOf(b.team) || Date.parse(a.starts_at) - Date.parse(b.starts_at));
+  // A matchup between two selected teams appears once, in the preferred perspective.
+  const seen = new Set();
+  const ordered = ranked.filter((game) => !seen.has(game.id) && seen.add(game.id));
+  return { games: ordered, attribution: ordered.some((game) => game.id.startsWith('tsdb:')) ? schedule.ATTRIBUTION : null };
+}
+
+module.exports = { upcomingGames, upcomingGamesForTeams, findGame, nextGameForTeam, repeatDetails, FAN_RADIUS_METERS };
