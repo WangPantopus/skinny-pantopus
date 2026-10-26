@@ -27,11 +27,13 @@ struct MediaStillImage: View {
     /// `.fill` for grid cells, `.fit` for full-screen viewer slides.
     var contentMode: ContentMode = .fill
     var keepsOnDisk = true
+    var maxPixelSize: Int?
+    var fallbackURL: URL?
 
     var body: some View {
         Color.clear
             .overlay {
-                CachedAsyncImage(url: url, keepsOnDisk: keepsOnDisk) { phase in
+                CachedAsyncImage(url: url, keepsOnDisk: keepsOnDisk, maxPixelSize: maxPixelSize) { phase in
                     switch phase {
                     case let .success(image):
                         if contentMode == .fill {
@@ -40,8 +42,23 @@ struct MediaStillImage: View {
                             image.resizable().scaledToFit()
                         }
                     case .failure:
-                        Theme.Color.appSurfaceSunken
-                            .overlay(Icon(.alertCircle, size: 22, color: Theme.Color.appTextMuted))
+                        if let fallbackURL, fallbackURL != url {
+                            CachedAsyncImage(url: fallbackURL) { fallback in
+                                if let image = fallback.image {
+                                    if contentMode == .fill {
+                                        image.resizable().scaledToFill()
+                                    } else {
+                                        image.resizable().scaledToFit()
+                                    }
+                                } else {
+                                    Theme.Color.appSurfaceSunken
+                                        .overlay(Icon(.alertCircle, size: 22, color: Theme.Color.appTextMuted))
+                                }
+                            }
+                        } else {
+                            Theme.Color.appSurfaceSunken
+                                .overlay(Icon(.alertCircle, size: 22, color: Theme.Color.appTextMuted))
+                        }
                     case .empty:
                         Theme.Color.appSurfaceSunken.overlay(ProgressView())
                     @unknown default:
@@ -50,6 +67,40 @@ struct MediaStillImage: View {
                 }
             }
             .clipped()
+    }
+}
+
+/// Read one sharp frame without starting playback or saving a video to disk.
+/// The server poster remains visible if the asset cannot supply a frame.
+private struct PostVideoPoster: View {
+    let item: PostMediaItem
+    @State private var frame: UIImage?
+
+    var body: some View {
+        Color.clear
+            .overlay {
+                if let frame {
+                    Image(uiImage: frame).resizable().scaledToFill()
+                } else if let thumbnail = item.thumbnailURL {
+                    MediaStillImage(url: thumbnail)
+                } else {
+                    Theme.Color.appSurfaceSunken
+                }
+            }
+            .clipped()
+            .task(id: item.url) {
+                frame = nil
+                let generator = AVAssetImageGenerator(asset: AVURLAsset(url: item.url))
+                generator.appliesPreferredTrackTransform = true
+                generator.maximumSize = CGSize(width: 1600, height: 1600)
+                let result = await withTaskCancellationHandler {
+                    try? await generator.image(at: .zero)
+                } onCancel: {
+                    generator.cancelAllCGImageGeneration()
+                }
+                guard !Task.isCancelled, let result else { return }
+                frame = UIImage(cgImage: result.image)
+            }
     }
 }
 
@@ -92,9 +143,10 @@ struct PlayerLayerView: UIViewRepresentable {
 /// scrolling never pays video setup cost.
 struct LivePhotoTileView: View {
     let stillURL: URL
-    /// Smaller preview rendered in grid cells when available.
+    /// Fallback only: legacy thumbnails are too small for a feed-width still.
     let thumbnailURL: URL?
     let videoURL: URL
+    var usesSharpPreview = false
     /// `.fill` for grid cells, `.fit` for the full-screen viewer.
     let contentMode: ContentMode
     /// Yellow indicator dot (hidden in the viewer, which shows a pill).
@@ -167,9 +219,11 @@ struct LivePhotoTileView: View {
     private var mediaLayers: some View {
         ZStack {
             MediaStillImage(
-                url: contentMode == .fill ? (thumbnailURL ?? stillURL) : stillURL,
+                url: contentMode == .fill && !usesSharpPreview ? (thumbnailURL ?? stillURL) : stillURL,
                 contentMode: contentMode,
-                keepsOnDisk: !showsReplayButton
+                keepsOnDisk: !usesSharpPreview && !showsReplayButton,
+                maxPixelSize: usesSharpPreview && contentMode == .fill ? 2400 : nil,
+                fallbackURL: thumbnailURL
             )
             if let player {
                 PlayerLayerView(
@@ -278,17 +332,23 @@ struct LivePhotoTileView: View {
 /// One grid cell — dispatches on the item kind.
 struct PostMediaTileView: View {
     let item: PostMediaItem
+    var usesSharpPreview = false
     var onTap: (() -> Void)?
 
     var body: some View {
         switch item.kind {
         case .image:
-            MediaStillImage(url: item.thumbnailURL ?? item.url)
-                .contentShape(Rectangle())
-                .onTapGesture { onTap?() }
-                .accessibilityElement()
-                .accessibilityLabel("Photo")
-                .accessibilityAddTraits(.isImage)
+            MediaStillImage(
+                url: usesSharpPreview ? item.url : (item.thumbnailURL ?? item.url),
+                keepsOnDisk: !usesSharpPreview,
+                maxPixelSize: usesSharpPreview ? 2400 : nil,
+                fallbackURL: item.thumbnailURL
+            )
+            .contentShape(Rectangle())
+            .onTapGesture { onTap?() }
+            .accessibilityElement()
+            .accessibilityLabel("Photo")
+            .accessibilityAddTraits(.isImage)
         case .document:
             Button { onTap?() } label: {
                 VStack(spacing: Spacing.s2) {
@@ -304,8 +364,10 @@ struct PostMediaTileView: View {
             .accessibilityLabel("Open PDF")
         case .video:
             ZStack {
-                if item.thumbnailURL != nil {
-                    MediaStillImage(url: item.thumbnailURL)
+                if usesSharpPreview {
+                    PostVideoPoster(item: item)
+                } else if let thumbnail = item.thumbnailURL {
+                    MediaStillImage(url: thumbnail)
                 } else {
                     Theme.Color.appText.opacity(0.85)
                 }
@@ -323,6 +385,7 @@ struct PostMediaTileView: View {
                 stillURL: item.url,
                 thumbnailURL: item.thumbnailURL,
                 videoURL: item.liveVideoURL ?? item.url,
+                usesSharpPreview: usesSharpPreview,
                 contentMode: .fill,
                 showsDot: false,
                 onTap: onTap
@@ -373,6 +436,7 @@ public struct PostMediaGridView: View {
     private let accessibilityID: String
     /// Place label drawn on the last visible tile (A10.4 map-pin badge).
     private let locationBadge: String?
+    private let usesSharpPreviews: Bool
 
     @State private var viewerSelection: MediaViewerSelection?
 
@@ -380,12 +444,14 @@ public struct PostMediaGridView: View {
         items: [PostMediaItem],
         style: Style,
         accessibilityID: String = "postMediaGrid",
-        locationBadge: String? = nil
+        locationBadge: String? = nil,
+        usesSharpPreviews: Bool = false
     ) {
         self.items = items
         self.style = style
         self.accessibilityID = accessibilityID
         self.locationBadge = locationBadge
+        self.usesSharpPreviews = usesSharpPreviews
     }
 
     public var body: some View {
@@ -454,7 +520,7 @@ public struct PostMediaGridView: View {
     }
 
     private func tile(_ index: Int) -> some View {
-        PostMediaTileView(item: items[index]) {
+        PostMediaTileView(item: items[index], usesSharpPreview: usesSharpPreviews) {
             viewerSelection = MediaViewerSelection(index: index)
         }
     }

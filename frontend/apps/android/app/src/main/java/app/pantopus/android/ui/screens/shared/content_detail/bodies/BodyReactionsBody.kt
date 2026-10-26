@@ -207,6 +207,7 @@ fun BodyReactionsBody(
                 items = media,
                 style = PostMediaGridStyle.Regular,
                 testTag = "pulsePostDetail-media",
+                usesSharpPreviews = true,
                 locationBadge = mediaLocationBadge,
                 modifier = Modifier.padding(horizontal = Spacing.s4),
             )

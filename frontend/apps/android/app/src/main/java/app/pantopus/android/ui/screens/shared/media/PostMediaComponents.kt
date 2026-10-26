@@ -10,8 +10,12 @@
 
 package app.pantopus.android.ui.screens.shared.media
 
+import android.graphics.Bitmap
+import android.media.MediaMetadataRetriever
+import android.os.Build
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -34,6 +38,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -42,6 +47,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -67,6 +73,8 @@ import app.pantopus.android.ui.theme.Spacing
 import coil.compose.SubcomposeAsyncImage
 import coil.request.CachePolicy
 import coil.request.ImageRequest
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 /** Tile heights per surface — feed cards are compact, detail is regular. */
@@ -90,6 +98,7 @@ fun PostMediaGridWithViewer(
     testTag: String,
     modifier: Modifier = Modifier,
     locationBadge: String? = null,
+    usesSharpPreviews: Boolean = false,
 ) {
     var viewerIndex by remember { mutableStateOf<Int?>(null) }
     PostMediaGrid(
@@ -98,6 +107,7 @@ fun PostMediaGridWithViewer(
         testTag = testTag,
         modifier = modifier,
         locationBadge = locationBadge,
+        usesSharpPreviews = usesSharpPreviews,
         onTileTap = { index -> viewerIndex = index },
     )
     viewerIndex?.let { index ->
@@ -121,6 +131,7 @@ fun PostMediaGrid(
     testTag: String,
     modifier: Modifier = Modifier,
     locationBadge: String? = null,
+    usesSharpPreviews: Boolean = false,
     onTileTap: ((Int) -> Unit)? = null,
 ) {
     if (items.isEmpty()) return
@@ -135,6 +146,7 @@ fun PostMediaGrid(
         when (items.size) {
             1 ->
                 PostMediaTile(
+                    usesSharpPreview = usesSharpPreviews,
                     item = items[0],
                     onTap = onTileTap?.let { tap -> { tap(0) } },
                     badge = locationBadge,
@@ -154,11 +166,13 @@ fun PostMediaGrid(
                     horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
                 ) {
                     PostMediaTile(
+                        usesSharpPreview = usesSharpPreviews,
                         item = items[0],
                         onTap = onTileTap?.let { tap -> { tap(0) } },
                         modifier = Modifier.weight(1f).fillMaxSize(),
                     )
                     PostMediaTile(
+                        usesSharpPreview = usesSharpPreviews,
                         item = items[1],
                         onTap = onTileTap?.let { tap -> { tap(1) } },
                         badge = locationBadge,
@@ -175,6 +189,7 @@ fun PostMediaGrid(
                     horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
                 ) {
                     PostMediaTile(
+                        usesSharpPreview = usesSharpPreviews,
                         item = items[0],
                         onTap = onTileTap?.let { tap -> { tap(0) } },
                         modifier = Modifier.weight(1f).fillMaxSize(),
@@ -184,11 +199,13 @@ fun PostMediaGrid(
                         verticalArrangement = Arrangement.spacedBy(Spacing.s2),
                     ) {
                         PostMediaTile(
+                            usesSharpPreview = usesSharpPreviews,
                             item = items[1],
                             onTap = onTileTap?.let { tap -> { tap(1) } },
                             modifier = Modifier.weight(1f).fillMaxWidth(),
                         )
                         PostMediaTile(
+                            usesSharpPreview = usesSharpPreviews,
                             item = items[2],
                             onTap = onTileTap?.let { tap -> { tap(2) } },
                             badge = locationBadge,
@@ -203,11 +220,13 @@ fun PostMediaGrid(
                 ) {
                     Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
                         PostMediaTile(
+                            usesSharpPreview = usesSharpPreviews,
                             item = items[0],
                             onTap = onTileTap?.let { tap -> { tap(0) } },
                             modifier = Modifier.weight(1f).aspectRatio(1f),
                         )
                         PostMediaTile(
+                            usesSharpPreview = usesSharpPreviews,
                             item = items[1],
                             onTap = onTileTap?.let { tap -> { tap(1) } },
                             modifier = Modifier.weight(1f).aspectRatio(1f),
@@ -215,11 +234,13 @@ fun PostMediaGrid(
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
                         PostMediaTile(
+                            usesSharpPreview = usesSharpPreviews,
                             item = items[2],
                             onTap = onTileTap?.let { tap -> { tap(2) } },
                             modifier = Modifier.weight(1f).aspectRatio(1f),
                         )
                         PostMediaTile(
+                            usesSharpPreview = usesSharpPreviews,
                             item = items[3],
                             onTap = onTileTap?.let { tap -> { tap(3) } },
                             overflowCount = if (items.size > 4) items.size - 4 else null,
@@ -240,16 +261,18 @@ fun PostMediaTile(
     onTap: (() -> Unit)? = null,
     overflowCount: Int? = null,
     badge: String? = null,
+    usesSharpPreview: Boolean = false,
 ) {
     Box(modifier = modifier) {
         when (item.kind) {
             PostMediaKind.Image ->
                 MediaStillTile(
-                    url = item.thumbnailUrl ?: item.url,
+                    url = if (usesSharpPreview) item.url else item.thumbnailUrl ?: item.url,
                     onTap = onTap,
                     modifier = Modifier.fillMaxSize(),
                     // Coil stores source bytes: a small view does not make the original a thumbnail.
-                    cacheOnDisk = item.thumbnailUrl != null,
+                    cacheOnDisk = !usesSharpPreview && item.thumbnailUrl != null,
+                    fallbackUrl = item.thumbnailUrl,
                 )
             PostMediaKind.Document -> {
                 Box(
@@ -260,11 +283,11 @@ fun PostMediaTile(
                 }
             }
             PostMediaKind.Video -> {
-                MediaStillTile(
-                    url = item.thumbnailUrl ?: "",
-                    onTap = onTap,
-                    modifier = Modifier.fillMaxSize(),
-                )
+                if (usesSharpPreview) {
+                    PostVideoPoster(item, Modifier.fillMaxSize().clickable { onTap?.invoke() })
+                } else {
+                    MediaStillTile(url = item.thumbnailUrl.orEmpty(), onTap = onTap, modifier = Modifier.fillMaxSize())
+                }
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center,
@@ -275,6 +298,7 @@ fun PostMediaTile(
             PostMediaKind.LivePhoto -> {
                 LivePhotoTile(
                     item = item,
+                    usesSharpPreview = usesSharpPreview,
                     onTap = onTap,
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -347,6 +371,7 @@ fun MediaStillTile(
     contentScale: ContentScale = ContentScale.Crop,
     onTap: (() -> Unit)? = null,
     cacheOnDisk: Boolean = true,
+    fallbackUrl: String? = null,
 ) {
     val context = LocalContext.current
     val model =
@@ -373,16 +398,61 @@ fun MediaStillTile(
             }
         },
         error = {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                PantopusIconImage(
-                    icon = PantopusIcon.AlertCircle,
-                    contentDescription = null,
-                    size = 22.dp,
-                    tint = PantopusColors.appTextMuted,
+            if (!fallbackUrl.isNullOrBlank() && fallbackUrl != url) {
+                MediaStillTile(
+                    url = fallbackUrl,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = contentScale,
                 )
+            } else {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    PantopusIconImage(
+                        icon = PantopusIcon.AlertCircle,
+                        contentDescription = null,
+                        size = 22.dp,
+                        tint = PantopusColors.appTextMuted,
+                    )
+                }
             }
         },
     )
+}
+
+/** One sharp frame, decoded off the UI thread without playing or retaining the video file. */
+@Composable
+private fun PostVideoPoster(
+    item: PostMediaItem,
+    modifier: Modifier = Modifier,
+) {
+    val frame by produceState<Bitmap?>(null, item.url) {
+        value = null
+        value =
+            withContext(Dispatchers.IO) {
+                val retriever = MediaMetadataRetriever()
+                try {
+                    retriever.setDataSource(item.url, emptyMap())
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                        retriever.getScaledFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 1600, 1600)
+                    } else {
+                        retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                    }
+                } catch (_: Exception) {
+                    null
+                } finally {
+                    retriever.release()
+                }
+            }
+    }
+    Box(modifier) {
+        val bitmap = frame
+        if (bitmap != null) {
+            Image(bitmap.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        } else if (!item.thumbnailUrl.isNullOrBlank()) {
+            MediaStillTile(url = item.thumbnailUrl, modifier = Modifier.fillMaxSize())
+        } else {
+            Box(Modifier.fillMaxSize().background(PantopusColors.appSurfaceSunken))
+        }
+    }
 }
 
 /** Dark translucent play disc rendered over video posters. */
@@ -420,6 +490,7 @@ fun LivePhotoTile(
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop,
     showsReplayButton: Boolean = false,
+    usesSharpPreview: Boolean = false,
     isActive: Boolean = true,
     onTap: (() -> Unit)? = null,
 ) {
@@ -509,10 +580,11 @@ fun LivePhotoTile(
         // a sibling of the scaled `mediaLayers`.
         Box(modifier = Modifier.fillMaxSize().scale(stillScale)) {
             MediaStillTile(
-                url = if (showsReplayButton) item.url else item.thumbnailUrl ?: item.url,
+                url = if (showsReplayButton || usesSharpPreview) item.url else item.thumbnailUrl ?: item.url,
                 contentScale = contentScale,
                 modifier = Modifier.fillMaxSize(),
-                cacheOnDisk = !showsReplayButton && item.thumbnailUrl != null,
+                cacheOnDisk = !showsReplayButton && !usesSharpPreview && item.thumbnailUrl != null,
+                fallbackUrl = item.thumbnailUrl,
             )
             if (clipAlpha > 0f) {
                 AndroidView(
