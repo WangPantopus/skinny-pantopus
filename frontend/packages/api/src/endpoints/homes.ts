@@ -303,6 +303,11 @@ export interface MyHome extends Omit<Home, 'location' | 'address' | 'city' | 'st
   /** That claim's kind: 'resident' (a renter's residency document) or 'owner'; older servers omit it. */
   pending_claim_type?: string | null;
   can_delete_home?: boolean;
+  /**
+   * Your own private setup whose instant claim (home_instant_claim) is held: the address watch sent it to review,
+   * and it stays held until the address is verified by mail. Older servers omit it.
+   */
+  claim_held?: boolean;
 }
 
 /**
@@ -464,6 +469,12 @@ export interface PersonalResidencyProgress {
   request: PersonalResidencyRequest | null;
   current_access: 'shared' | 'private_setup' | 'none';
   next_step: 'home' | 'household_review' | 'address_verification' | 'resubmit' | 'access_review' | 'ownership_verification' | 'unavailable';
+  /**
+   * Probation (a request nobody in the household answered in 7 days, home_residency_probation): 'active' until
+   * someone there says yes or the address is verified by mail; 'ended' after a no, when proof by mail is the way
+   * back; 'review' while Pantopus reviews that proof. Older servers omit it.
+   */
+  probation?: 'active' | 'ended' | 'review' | null;
 }
 export async function getMyResidencyRequests(after?: string): Promise<{ requests: PersonalResidencyRequest[]; next_cursor: string | null }> {
   return get('/api/homes/my-residency', after ? { after } : undefined);
@@ -549,7 +560,9 @@ export interface ResidencyReview {
     created_at: string; updated_at: string; review_token: string };
   occupancy: { id: string; user_id: string; role: string | null; role_base: string | null; age_band: string | null;
     is_active: boolean; verification_status: string | null; start_at: string | null; end_at: string | null;
-    access_start_at: string | null; access_end_at: string | null; verified_at: string | null; verification_expires_at: string | null } | null;
+    access_start_at: string | null; access_end_at: string | null; verified_at: string | null; verification_expires_at: string | null;
+    /** Where their access came from ('probation': nobody answered their request in 7 days); older servers omit it. */
+    verification_source?: string | null } | null;
 }
 export interface ResidencyReviewResponse extends ResidencyReview {
   claim_id: string; target_id: string; action: ResidencyReviewAction; replayed: boolean;

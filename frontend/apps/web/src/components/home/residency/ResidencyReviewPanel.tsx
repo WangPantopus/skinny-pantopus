@@ -13,6 +13,7 @@ const joinedAs: Record<string, string> = { household: 'Household member', member
 const verification: Record<string, string> = {
   verified: 'Verified', pending_approval: 'Waiting for approval', pending_postcard: 'Waiting for a postcard',
   provisional_bootstrap: 'Provisional', provisional: 'Provisional', moved_out: 'Left this Home', inactive: 'Removed',
+  suspended_challenged: 'Suspended after a household no',
 };
 export function ResidencyReviewPanel({ homeId, claimId, initialAction, fromMembers = false }: {
   homeId: string; claimId: string | null; initialAction: ResidencyReviewAction; fromMembers?: boolean;
@@ -91,6 +92,9 @@ export function ResidencyReviewPanel({ homeId, claimId, initialAction, fromMembe
   const pending = controller?.pending;
   const claim = controller?.review?.claim;
   const occupancy = controller?.review?.occupancy;
+  // Nobody answered their request in 7 days (home claims PR 4): a rejection also ends their membership.
+  const onProbation = occupancy?.verification_source === 'probation' && occupancy.is_active
+    && occupancy.verification_status === 'provisional';
   const button = 'rounded-lg border border-app-border px-4 py-2 text-sm font-medium disabled:opacity-50';
   return <main aria-label="Residency review" className="mx-auto max-w-2xl space-y-5 px-4 py-8 text-app-text">
     <Link href={back} prefetch={false} className="text-sm underline">{fromMembers ? 'Back to household members' : 'Back to residency claims'}</Link>
@@ -115,7 +119,8 @@ export function ResidencyReviewPanel({ homeId, claimId, initialAction, fromMembe
       {occupancy ? <>
         <p>Membership: {occupancy.is_active ? 'Active' : 'Ended'}</p>
         <p className="text-sm">Role: {residencyRoles[(occupancy.role_base || occupancy.role) as ResidencyReviewRole] ?? words(occupancy.role_base || occupancy.role)} · Age group: {words(occupancy.age_band)}</p>
-        <p className="text-sm">Verification: {verification[occupancy.verification_status ?? ''] ?? words(occupancy.verification_status)}</p>
+        <p className="text-sm">Verification: {onProbation ? 'On probation (nobody answered their request in 7 days)'
+          : verification[occupancy.verification_status ?? ''] ?? words(occupancy.verification_status)}</p>
         <dl className="grid grid-cols-1 gap-1 text-sm sm:grid-cols-2">
           {([['Membership starts',occupancy.start_at],['Membership ends',occupancy.end_at],
             ['Access starts',occupancy.access_start_at],['Access ends',occupancy.access_end_at],
@@ -150,7 +155,9 @@ export function ResidencyReviewPanel({ homeId, claimId, initialAction, fromMembe
           </select></div>
         <p className="text-sm">{action === 'approve'
           ? 'Approving lets them into this Home with the role you choose. It doesn’t make them an owner.'
-          : 'Rejecting declines this request. It doesn’t change anyone’s current access.'}</p>
+          : onProbation
+            ? 'They’re on probation, so rejecting also ends their membership here, and they can’t ask again. If they prove the address by mail, Pantopus reviews it.'
+            : 'Rejecting declines this request. It doesn’t change anyone’s current access.'}</p>
         {action === 'approve' ? <div><label htmlFor="residency-role" className="mb-1 block font-medium">Their role</label>
           <select id="residency-role" value={role} onChange={e => { setRole(e.target.value as ResidencyReviewRole); setReviewed(false); }}
             className="w-full rounded-lg border border-app-border bg-app-surface px-3 py-2">

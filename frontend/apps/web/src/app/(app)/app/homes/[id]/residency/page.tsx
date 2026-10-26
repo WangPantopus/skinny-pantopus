@@ -14,15 +14,22 @@ const guidance = {
   ownership_verification: { title: 'Continue ownership verification', body: 'Ownership has its own review. Meanwhile, you can verify your address by mail to use this Home. That doesn’t make you an owner.' },
   unavailable: { title: 'This Home can’t be verified right now', body: 'This Home isn’t accepting changes right now. Your request is still saved.' },
 };
+// Probation (a request nobody answered in 7 days) has its own guidance; next_step stays what older apps know.
+const probationGuidance = {
+  active: { title: 'You’re on probation', body: 'Nobody in the household answered your request in 7 days, so you’re on probation. Household records stay private until someone there says yes or you verify your address by mail.' },
+  ended: { title: 'The household said no', body: 'Someone in the household said you don’t live here, so your probation ended. If you do live here, verify your address by mail. Pantopus will review your proof, and your access stays off until then.' },
+  review: { title: 'Pantopus is reviewing your proof', body: 'You verified this address by mail after the household said no. Pantopus is reviewing it, and your access stays off until then.' },
+};
 
 export default function ResidencyStatusPage() {
   const { id: homeId } = useParams<{ id: string }>();
   const { progress, loading, error, refresh } = useResidencyProgress(homeId);
   const needsRequest = progress?.next_step === 'address_verification' && progress.request === null;
-  const next = progress ? needsRequest ? {
+  const next = progress ? progress.probation ? probationGuidance[progress.probation] : needsRequest ? {
     title: 'Confirm your address',
     body: 'Check this Home’s address, apartment and how you live here, then send your request. We don’t mail anything until you ask for a postcard.',
   } : guidance[progress.next_step] : null;
+  const mailBack = progress?.probation === 'active' || progress?.probation === 'ended';
   return <main className="mx-auto max-w-lg px-4 py-6 pb-28">
     <Link href="/app/homes" className="inline-block rounded-lg py-2 text-sm font-semibold text-app-text-secondary">← My Homes</Link>
     <h1 className="mt-3 text-2xl font-semibold text-app-text">Residency status</h1>
@@ -44,7 +51,7 @@ export default function ResidencyStatusPage() {
             {progress.next_step === 'home' && <Link href={`/app/homes/${homeId}/dashboard`} className="rounded-lg bg-app-text px-4 py-2 font-semibold text-app-surface">Open Home</Link>}
             {progress.next_step === 'resubmit' && <Link href={`/app/homes/new?joinHome=${homeId}`} className="rounded-lg bg-app-text px-4 py-2 font-semibold text-app-surface">Check address and send again</Link>}
             {needsRequest && <Link href={`/app/homes/new?joinHome=${homeId}`} className="rounded-lg bg-app-text px-4 py-2 font-semibold text-app-surface">Check address</Link>}
-            {progress.next_step === 'address_verification' && !needsRequest && <Link href={`/app/homes/${homeId}/verify-postcard`} className="rounded-lg bg-app-text px-4 py-2 font-semibold text-app-surface">Verify by mail</Link>}
+            {((progress.next_step === 'address_verification' && !needsRequest) || mailBack) && <Link href={`/app/homes/${homeId}/verify-postcard`} className="rounded-lg bg-app-text px-4 py-2 font-semibold text-app-surface">Verify by mail</Link>}
             {progress.next_step === 'ownership_verification' && <Link href={`/app/homes/${homeId}/claim-owner/evidence`} className="rounded-lg bg-app-text px-4 py-2 font-semibold text-app-surface">Continue ownership verification</Link>}
             {/* While ownership waits, a pending owner can still prove the address by mail (founder decision, 2026-10-06). */}
             {progress.next_step === 'ownership_verification' && <Link href={`/app/homes/${homeId}/verify-postcard`} className="rounded-lg border border-app-border px-4 py-2 font-semibold text-app-text">Verify by mail</Link>}

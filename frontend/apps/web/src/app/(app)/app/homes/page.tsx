@@ -354,6 +354,8 @@ export default function HomesPage() {
                     const label = h.name || h.address || 'Home';
                     const cityLine = [h.city, h.state, h.zipcode].filter(Boolean).join(' ');
                     const privateSetup = h.access_kind === 'private_setup';
+                    // The address watch held this home's instant claim until the address is verified by mail.
+                    const claimHeld = privateSetup && instantClaim && h.claim_held === true;
                     const verification = h.access_kind === 'verification';
                     const unit = !verification ? h.address2?.trim() : undefined;
                     // A renter's residency document is a residency request with its own status page, not an ownership claim.
@@ -374,17 +376,23 @@ export default function HomesPage() {
                           {unit && <div className="text-sm text-app-text-secondary">{unitText(unit)}</div>}
                           <div className="text-sm text-app-text-secondary">{cityLine}</div>
                           <div className="mt-2 inline-flex items-center rounded-full border border-app-border px-2.5 py-1 text-xs font-semibold text-app-text-strong">{occ}</div>
-                          {privateSetup && <p className="mt-2 text-sm text-app-text-secondary">{instantClaim
-                            ? 'Claim it now to use your household tools and invite your household. Verifying by mail later gets you neighbor messages and your verified badge.'
-                            : 'Start with your own tasks while verification is pending.'}</p>}
+                          {privateSetup && <p className="mt-2 text-sm text-app-text-secondary">{claimHeld
+                            ? 'We need to check this address first. Verify it by mail to open your household tools.'
+                            : instantClaim
+                              ? 'Claim it now to use your household tools and invite your household. Verifying by mail later gets you neighbor messages and your verified badge.'
+                              : 'Start with your own tasks while verification is pending.'}</p>}
                           {verification && <p className="mt-2 text-sm text-app-text-secondary">Household access is awaiting verification. Continue your request to see its current status.</p>}
                         </Link>
                         <div className="flex flex-wrap items-center gap-2">
-                          {privateSetup && instantClaim && (
+                          {privateSetup && instantClaim && !claimHeld && (
                             <button type="button" onClick={() => claimNow(h.id)} disabled={claimingId === h.id}
                               className="px-3 py-2 rounded-lg bg-black text-white text-sm font-semibold hover:bg-gray-900 disabled:opacity-60">
                               {claimingId === h.id ? 'Claiming…' : 'Claim it now'}
                             </button>
+                          )}
+                          {claimHeld && (
+                            <Link href={`/app/homes/${h.id}/verify-postcard`}
+                              className="px-3 py-2 rounded-lg bg-black text-white text-sm font-semibold hover:bg-gray-900">Verify by mail</Link>
                           )}
                           <Link href={destination} className="px-3 py-2 rounded-lg border border-app-border text-sm font-semibold text-app-text hover:bg-app-hover">{action}</Link>
                           {!verification && (privateSetup || residencyRequests.some(r => r.home_id === h.id)) && <Link href={`/app/homes/${h.id}/residency`} className="px-3 py-2 rounded-lg border border-app-border text-sm font-semibold text-app-text hover:bg-app-hover">Residency status</Link>}
