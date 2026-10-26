@@ -72,9 +72,8 @@ final class PlanTeamsModel {
         do {
             let reply: FeedPreferencesResponse = try await api.request(
                 FeedActionsEndpoints.updateFeedPreferences(
-                    FeedPreferencesUpdateRequest(sports: patch, expectedSports: expected),
-                    dispatchGuard: { [scope] in try scope.requireCurrent() }
-                )
+                    FeedPreferencesUpdateRequest(sports: patch, expectedSports: expected)
+                ) { [scope] in try scope.requireCurrent() }
             )
             try scope.requireCurrent()
             preferences = reply.preferences.sports ?? SportsPreferencesDTO()

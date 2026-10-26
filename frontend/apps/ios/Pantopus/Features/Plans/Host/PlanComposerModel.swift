@@ -136,11 +136,6 @@ final class PlanComposerModel {
         if kindChosen, kind == .watchParty, game == nil, title.isEmpty, let first = automaticGame { pick(first) }
     }
 
-    private var automaticGame: PlanGameOptionDTO? {
-        if sports?.canChoose == true { return games.first { $0.followed == true } }
-        return games.first
-    }
-
     func choose(_ newKind: PlanKind) {
         kind = newKind
         kindChosen = true
@@ -448,6 +443,11 @@ extension PlanComposerModel {
 extension PlanComposerModel: Identifiable {}
 
 private extension PlanComposerModel {
+    var automaticGame: PlanGameOptionDTO? {
+        if sports?.canChoose == true { return games.first { $0.followed == true } }
+        return games.first
+    }
+
     func dropAutoTitle() {
         if let autoTitle, title == autoTitle { title = "" }
         autoTitle = nil
