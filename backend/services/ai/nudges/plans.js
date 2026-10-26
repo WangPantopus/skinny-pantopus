@@ -698,6 +698,11 @@ async function checkGameMoved(plan, now = Date.now()) {
     }
   }
   if (!draft) return false;
+  draft.actions[0].request.body.sports_revision = {
+    game: require('../../plans/planGames').scheduleRevision(current),
+    plan_starts_at: planService.startsAt(plan), plan_ends_at: planService.endsAt(plan),
+    plan_updated_at: plan.updated_at,
+  };
   const result = await sendForHost(plan, {
     kind: 'plan_game_moved', checkpoint, title: unavailable ? `Game ${current.status}` : 'The game time changed',
     body: `${current.label}${current.opponent ? ` vs ${current.opponent}` : ''}: ${unavailable ? current.status : whenLabel(current.starts_at, current.ends_at, rules.timezoneForPlan(plan))}. Review your watch party.`,
