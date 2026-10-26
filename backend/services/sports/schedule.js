@@ -50,7 +50,7 @@ function perspectives(league, event) {
   return [[home, away, event.awayName, true], [away, home, event.homeName, false]].flatMap(([team, opponent, otherName, isHome]) => {
     if (!team) return [];
     return [{
-      id: event.id, team: team.id, label: team.label, opponent: opponent?.label || String(otherName || '').slice(0, 100),
+      id: event.id, team: team.id, opponent_team: opponent?.id || null, label: team.label, opponent: opponent?.label || String(otherName || '').slice(0, 100),
       home: isHome, neutral: event.neutral, starts_at: event.start,
       ends_at: event.start ? new Date(Date.parse(event.start) + MINUTES[league] * 60000).toISOString() : null,
       time_tbd: event.tbd || !event.start, status: event.status, source: team.schedule_url,
@@ -140,4 +140,16 @@ async function gamesForTeams(teamIds, now = Date.now()) {
     unavailableLeagues: results.filter((result) => !result.available).map((result) => result.league) };
 }
 
-module.exports = { gamesForTeams, leagueSeason, seasonsFor, isAvailable, ATTRIBUTION };
+async function findCachedGame(id, preferredTeam) {
+  if (typeof id !== 'string' || !/^(tsdb|cfbd):\d{1,20}$/.test(id)) return null;
+  const { data, error } = await require('../../config/supabaseAdmin').from('PlaceSectionCache')
+    .select('payload').eq('section_id', 'sports_schedule').order('fetched_at', { ascending: false }).limit(40);
+  if (error) throw new Error('Could not read game schedule.');
+  for (const row of data || []) {
+    const games = (row.payload?.games || []).filter((game) => game.id === id);
+    if (games.length) return games.find((game) => game.team === preferredTeam) || games[0];
+  }
+  return null;
+}
+
+module.exports = { gamesForTeams, leagueSeason, seasonsFor, findCachedGame, isAvailable, ATTRIBUTION };

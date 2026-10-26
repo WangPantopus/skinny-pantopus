@@ -164,12 +164,12 @@ function bool(value, label) {
   return value;
 }
 
-function normalizeDetails(kind, details) {
+function normalizeDetails(kind, details, resolvedGame = null) {
   const input = details && typeof details === 'object' ? details : {};
   const out = {};
   if (kind === 'watch_party') {
     if (input.game && typeof input.game === 'object') {
-      const known = findGame(input.game.id);
+      const known = resolvedGame || findGame(input.game.id);
       if (known) out.game = known;
       else {
         // Unknown ids and old clients keep the free-text game contract. Never trust
@@ -341,7 +341,9 @@ async function checkedPlanInput(viewer, input) {
   const autoRules = normalizeAutoRules(kind, place.kind, input.auto_rules);
   const joinRequirement = kind === 'playdate' ? 'verified'
     : (oneOf(input.join_requirement, ['located', 'verified'], 'who can ask') || 'located');
-  const details = normalizeDetails(kind, input.details);
+  const resolvedGame = viewer.sportsFlag && kind === 'watch_party'
+    ? await require('./planGames').resolveGame(input.details?.game?.id, input.details?.game?.team) : null;
+  const details = normalizeDetails(kind, input.details, resolvedGame);
   await assertHostLimits(viewer.id);
   return { kind, title, about, guestNote, spots, place, autoRules, joinRequirement, details };
 }
@@ -538,7 +540,11 @@ async function editPlan(user, postId, patch, { io = null } = {}) {
   if (patch.join_requirement !== undefined && plan.kind !== 'playdate') {
     planUpdate.join_requirement = oneOf(patch.join_requirement, ['located', 'verified'], 'who can ask');
   }
-  if (patch.details !== undefined) planUpdate.details = normalizeDetails(plan.kind, patch.details);
+  if (patch.details !== undefined) {
+    const resolvedGame = viewer.sportsFlag && plan.kind === 'watch_party'
+      ? await require('./planGames').resolveGame(patch.details?.game?.id, patch.details?.game?.team) : null;
+    planUpdate.details = normalizeDetails(plan.kind, patch.details, resolvedGame);
+  }
 
   // A plan moved to another time is reminded again (when its new reminder time is still
   // ahead) and, moved to a later day, gets that day's morning summary.
