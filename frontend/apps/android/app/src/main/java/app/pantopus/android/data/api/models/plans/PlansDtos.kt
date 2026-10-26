@@ -421,6 +421,7 @@ data class PlanGameDto(
     @Json(name = "opponent") val opponent: String? = null,
     @Json(name = "home") val home: Boolean? = null,
     @Json(name = "preseason") val preseason: Boolean? = null,
+    @Json(name = "followed") val followed: Boolean = false,
 ) {
     fun matchupLabel(): String = if (opponent.isNullOrBlank()) label else "$label ${if (home == false) "at" else "vs"} $opponent"
 
@@ -442,6 +443,7 @@ private const val GAME_MIN_LEFT_SECONDS = 30 * 60L
 @JsonClass(generateAdapter = true)
 data class PlanGamesResponse(
     @Json(name = "games") val games: List<PlanGameDto> = emptyList(),
+    @Json(name = "sports") val sports: PlansSportsDto? = null,
 )
 
 /** `center` of a public place. */

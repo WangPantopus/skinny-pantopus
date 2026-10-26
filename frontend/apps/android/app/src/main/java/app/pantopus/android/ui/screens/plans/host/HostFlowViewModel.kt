@@ -12,6 +12,7 @@ import app.pantopus.android.data.api.models.plans.PlanGpsInput
 import app.pantopus.android.data.api.models.plans.PlanNearbyPlaceDto
 import app.pantopus.android.data.api.models.plans.PlanPlaceInput
 import app.pantopus.android.data.api.models.plans.PlanPlaceSuggestBody
+import app.pantopus.android.data.api.models.plans.PlansSportsDto
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.GeoApi
@@ -114,6 +115,7 @@ data class HostUi(
     val draft: HostDraft = HostDraft(),
     val zone: ZoneId = ZoneId.systemDefault(),
     val games: List<PlanGameDto> = emptyList(),
+    val sports: PlansSportsDto? = null,
     val home: HostHome? = null,
     val places: List<PlanNearbyPlaceDto> = emptyList(),
     val placesLoading: Boolean = false,
@@ -168,6 +170,7 @@ class HostFlowViewModel
         private var placesSearch: Job? = null
         private var placesRead: Job? = null
         private var suggestJob: Job? = null
+        private var gamesGeneration = 0
 
         private val _ui =
             MutableStateFlow(
@@ -251,24 +254,46 @@ class HostFlowViewModel
         }
 
         private suspend fun loadContext(gameId: String?) {
+            val generation = ++gamesGeneration
             val payload = (viewing.current() as? NetworkResult.Success)?.data ?: viewing.currentCopy()
             val home = payload?.homes?.firstOrNull()?.let { HostHome(it.id, it.name, it.city, it.latitude, it.longitude) }
             val homePoints = payload?.homes.orEmpty().mapNotNull { h -> h.latitude?.let { lat -> h.longitude?.let { lat to it } } }
-            val games = (repository.games() as? NetworkResult.Success)?.data.orEmpty()
+            val reply = (repository.games("composer") as? NetworkResult.Success)?.data
+            val games = reply?.games.orEmpty()
             // Hosting a playdate needs a verified address (`/mine` says where the person stands; unknown means yes).
             val verified = (repository.mineCopy() ?: repository.mine().data)?.viewer?.verifiedAddress ?: true
-            _ui.update { it.copy(home = home, homePoints = homePoints, games = games, canHostPlaydates = verified) }
+            _ui.update { it.copy(home = home, homePoints = homePoints, canHostPlaydates = verified) }
             warmPlaces(home)
+            if (generation != gamesGeneration) return
+            _ui.update { it.copy(games = games, sports = reply?.sports) }
             val draft = _ui.value.draft
             when {
                 gameId != null -> games.firstOrNull { it.id == gameId }?.let(::pickGame)
                 // A watch party chosen before the games came back starts on the soonest one (see choose).
-                draft.kind == PlanKind.WATCH_PARTY && draft.gameId == null && !draft.titleEdited -> games.firstOrNull()?.let(::pickGame)
+                draft.kind == PlanKind.WATCH_PARTY && draft.gameId == null && !draft.titleEdited -> automaticGame()?.let(::pickGame)
             }
         }
 
         /** "Verify your address" from H1's playdate card. */
         suspend fun verificationTarget(): HubVerificationTarget = plansVerificationTarget(homes)
+
+        private fun automaticGame(): PlanGameDto? =
+            _ui.value.games.firstOrNull {
+                it.isAvailable() && (_ui.value.sports?.canChoose != true || it.followed)
+            }
+
+        fun refreshGames() {
+            val generation = ++gamesGeneration
+            viewModelScope.launch {
+                val reply = (repository.games("composer") as? NetworkResult.Success)?.data ?: return@launch
+                if (generation != gamesGeneration) return@launch
+                _ui.update { it.copy(games = reply.games, sports = reply.sports) }
+                if (_ui.value.draft.gameId != null && reply.games.none { it.id == _ui.value.draft.gameId }) {
+                    pickGame(null)
+                    edit { if (it.titleEdited) it else it.copy(title = "") }
+                }
+            }
+        }
 
         // ---- H1 ----
 
@@ -301,7 +326,7 @@ class HostFlowViewModel
                 }
             _ui.update { it.copy(step = HostStep.Details, draft = timed, error = null) }
             // A watch party starts on the soonest game, its chip checked and its title and time filled in (board H2, as on iOS).
-            if (kind == PlanKind.WATCH_PARTY) _ui.value.games.firstOrNull()?.let(::pickGame)
+            if (kind == PlanKind.WATCH_PARTY) automaticGame()?.let(::pickGame)
         }
 
         /**
