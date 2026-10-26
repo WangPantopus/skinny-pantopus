@@ -46,7 +46,6 @@ export default function HomeCreationRecoveryView({ recovery, onContinue }: {
         RESIDENCY_EXISTING_REQUEST: 'An existing request has different details. Check its current status in My Homes.',
         HOME_NOT_FOUND: 'The selected Home is no longer available. Check the address again.',
         RESIDENCY_HOME_UNAVAILABLE: 'This Home cannot accept a residency request right now.',
-        RESIDENCY_HOME_LIMIT: 'This Home can’t take more requests to join right now. Ask someone who lives there to invite you, or try again later.',
       } as Record<string, string>)[pending.outcome.code] || 'Check the original details before continuing.'
     }</p>}
     {error && <p role="alert" className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-950">{error}</p>}

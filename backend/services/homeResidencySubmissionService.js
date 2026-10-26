@@ -14,7 +14,6 @@ const MESSAGES = {
   MEMBERSHIP_RENEWAL_REQUIRED: 'You were removed from this household. Ask someone in the household to invite you again.',
   RESIDENCY_ALREADY_VERIFIED: 'This residency was already verified. Open My Homes to check current access.',
   RESIDENCY_EXISTING_REQUEST: 'Review your existing residency request before changing its details.',
-  RESIDENCY_HOME_LIMIT: 'This Home can’t take more requests to join right now. Ask someone who lives there to invite you, or try again later.',
 };
 function failure(code = 'RESIDENCY_SUBMISSION_UNAVAILABLE', statusCode = 503) {
   return Object.assign(new Error(MESSAGES[code] || 'Could not confirm your residency request. Keep its original details and retry.'), { code, statusCode });
