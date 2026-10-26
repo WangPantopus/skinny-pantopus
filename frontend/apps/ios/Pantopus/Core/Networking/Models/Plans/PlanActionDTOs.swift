@@ -361,12 +361,13 @@ public struct PlanGameOptionDTO: Decodable, Sendable, Hashable, Identifiable {
     public let opponent: String?
     public let home: Bool?
     public let preseason: Bool?
+    public let followed: Bool?
     public let startsAt: String
     public let endsAt: String?
     public let source: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, label, team, opponent, home, preseason, source
+        case id, label, team, opponent, home, preseason, source, followed
         case startsAt = "starts_at"
         case endsAt = "ends_at"
     }
@@ -405,14 +406,16 @@ public struct PlanGameOptionDTO: Decodable, Sendable, Hashable, Identifiable {
 /// `GET /api/plans/games`. Empty is fine: the composer offers "Another game".
 public struct PlanGamesResponse: Decodable, Sendable, Hashable {
     public let games: [PlanGameOptionDTO]
+    public let sports: PlansSportsDTO?
 
     enum CodingKeys: String, CodingKey {
-        case games
+        case games, sports
     }
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         games = try container.decodeIfPresent(LossyList<PlanGameOptionDTO>.self, forKey: .games)?.items ?? []
+        sports = try container.decodeIfPresent(PlansSportsDTO.self, forKey: .sports)
     }
 }
 
