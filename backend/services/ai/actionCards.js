@@ -68,19 +68,23 @@ const nullable = (schema) => ({ ...schema, type: [schema.type, 'null'] });
 const kidsAges = (description) => ({ type: ['array', 'null'], items: { type: 'string', enum: rules.KIDS_AGE_BANDS }, description });
 
 /** draft_plan; with `playdates`, for people who have plans_playdates (the kind, its kids' ages and its rules). */
-function draftPlanDefinition({ playdates = false } = {}) {
+function draftPlanDefinition({ playdates = false, sports = false } = {}) {
   return {
     name: 'draft_plan',
-    description: `Draft a new plan (a small meetup on the Plans map) for the person to post with one tap. Kinds: watch_party (a game or show to watch together), ${playdates ? 'playdate (kids play while their parents meet; only for people with a verified address), ' : ''}pickup_game (a sport), walk_coffee (a walk, dog walk, stroller walk or coffee), study_group (studying together; public places only). Plans start within the next 14 days and last 15 minutes to 8 hours. Pickup games, ${playdates ? 'playdates, ' : ''}study groups and walks in public need a public place: give its name and the server finds it near them. Watch parties and walks may be at their own home. Neighbors read the title and about before they get in, while the place shows only to people who get in, so keep the place's name and any address out of them; where exactly to meet goes in guest_note. ${playdates ? "A playdate needs the ages of the kids it's for (details.kids_age_bands): use what they said, or ask in one short question. Its host approves each family, and its spots count families. Others see only its neighborhood until the host accepts them. " : ''}For listed sports games, use the game's start and end from find_games. Make sensible assumptions (8 spots${playdates ? '; for a playdate, an hour and a half and 4 families' : ''}) and name the main one in the note.`,
+    description: `Draft a new plan (a small meetup on the Plans map) for the person to post with one tap. Kinds: watch_party (a game or show to watch together), ${playdates ? 'playdate (kids play while their parents meet; only for people with a verified address), ' : ''}pickup_game (a sport), walk_coffee (a walk, dog walk, stroller walk or coffee), study_group (studying together; public places only). Plans start within the next 14 days and last 15 minutes to 8 hours. Pickup games, ${playdates ? 'playdates, ' : ''}study groups and walks in public need a public place: give its name and the server finds it near them. Watch parties and walks may be at their own home. Neighbors read the title and about before they get in, while the place shows only to people who get in, so keep the place's name and any address out of them; where exactly to meet goes in guest_note. ${playdates ? "A playdate needs the ages of the kids it's for (details.kids_age_bands): use what they said, or ask in one short question. Its host approves each family, and its spots count families. Others see only its neighborhood until the host accepts them. " : ''}${sports ? "For listed sports games, use the game's start and end from find_games. " : ''}Make sensible assumptions (${sports ? '' : 'an hour and a half for games, '}8 spots${playdates ? '; for a playdate, an hour and a half and 4 families' : ''}) and name the main one in the note.`,
     input_schema: {
       type: 'object',
       properties: {
         kind: { type: 'string', enum: planKinds(playdates) },
         title: { type: 'string', description: 'Short title, up to 80 characters, e.g. "Pickleball, need 3". Public: never the place or an address.' },
-        starts_local: nullable({ type: 'string', description: 'Start in their local time, YYYY-MM-DDTHH:MM. Null to use game_id time.' }),
-        ends_local: nullable({ type: 'string', description: 'End in their local time, YYYY-MM-DDTHH:MM. Null to use game_id time.' }),
-        game_id: nullable({ type: 'string', description: 'A listed watch-party game id returned by find_games.' }),
-        override_game_times: nullable({ type: 'boolean', description: 'True only if the person explicitly asked for different times from the game.' }),
+        starts_local: sports ? nullable({ type: 'string', description: 'Start in their local time, YYYY-MM-DDTHH:MM. Null to use game_id time.' })
+          : { type: 'string', description: 'Start in their local time, YYYY-MM-DDTHH:MM.' },
+        ends_local: sports ? nullable({ type: 'string', description: 'End in their local time, YYYY-MM-DDTHH:MM. Null to use game_id time.' })
+          : { type: 'string', description: 'End in their local time, YYYY-MM-DDTHH:MM.' },
+        ...(sports ? {
+          game_id: nullable({ type: 'string', description: 'A listed watch-party game id returned by find_games.' }),
+          override_game_times: nullable({ type: 'boolean', description: 'True only if the person explicitly asked for different times from the game.' }),
+        } : {}),
         spots: { type: 'integer', minimum: 1, maximum: 30, description: `How many people can join, not counting the host${playdates ? ' (for a playdate, how many families besides theirs)' : ''}.` },
         place_name: nullable({ type: 'string', description: 'A public place near them (a park, court, library, café), or null when at_home.' }),
         at_home: nullable({ type: 'boolean', description: 'True to host at their own home (watch parties and walks only).' }),
@@ -1684,6 +1688,7 @@ async function runCardTool(name, args, ctx) {
 }
 
 module.exports = {
+  draftPlanDefinition,
   actionCardDefinitions,
   playdateCardDefinitions,
   runCardTool,
