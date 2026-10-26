@@ -99,6 +99,7 @@ fun PostMediaGridWithViewer(
     modifier: Modifier = Modifier,
     locationBadge: String? = null,
     usesSharpPreviews: Boolean = false,
+    edgeToEdge: Boolean = false,
 ) {
     var viewerIndex by remember { mutableStateOf<Int?>(null) }
     PostMediaGrid(
@@ -108,6 +109,7 @@ fun PostMediaGridWithViewer(
         modifier = modifier,
         locationBadge = locationBadge,
         usesSharpPreviews = usesSharpPreviews,
+        edgeToEdge = edgeToEdge,
         onTileTap = { index -> viewerIndex = index },
     )
     viewerIndex?.let { index ->
@@ -132,6 +134,7 @@ fun PostMediaGrid(
     modifier: Modifier = Modifier,
     locationBadge: String? = null,
     usesSharpPreviews: Boolean = false,
+    edgeToEdge: Boolean = false,
     onTileTap: ((Int) -> Unit)? = null,
 ) {
     if (items.isEmpty()) return
@@ -154,7 +157,7 @@ fun PostMediaGrid(
                         Modifier
                             .fillMaxWidth()
                             .aspectRatio(16f / 9f)
-                            .clip(RoundedCornerShape(Radii.lg)),
+                            .clip(RoundedCornerShape(if (edgeToEdge) Spacing.s0 else Radii.lg)),
                 )
             2 ->
                 Row(
@@ -162,7 +165,7 @@ fun PostMediaGrid(
                         Modifier
                             .fillMaxWidth()
                             .height(style.twoUpHeight.dp)
-                            .clip(RoundedCornerShape(Radii.lg)),
+                            .clip(RoundedCornerShape(if (edgeToEdge) Spacing.s0 else Radii.lg)),
                     horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
                 ) {
                     PostMediaTile(
@@ -185,7 +188,7 @@ fun PostMediaGrid(
                         Modifier
                             .fillMaxWidth()
                             .height(style.threeUpHeight.dp)
-                            .clip(RoundedCornerShape(Radii.lg)),
+                            .clip(RoundedCornerShape(if (edgeToEdge) Spacing.s0 else Radii.lg)),
                     horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
                 ) {
                     PostMediaTile(
@@ -215,7 +218,7 @@ fun PostMediaGrid(
                 }
             else ->
                 Column(
-                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(Radii.lg)),
+                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(if (edgeToEdge) Spacing.s0 else Radii.lg)),
                     verticalArrangement = Arrangement.spacedBy(Spacing.s2),
                 ) {
                     Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {

@@ -437,6 +437,7 @@ public struct PostMediaGridView: View {
     /// Place label drawn on the last visible tile (A10.4 map-pin badge).
     private let locationBadge: String?
     private let usesSharpPreviews: Bool
+    private let edgeToEdge: Bool
 
     @State private var viewerSelection: MediaViewerSelection?
 
@@ -445,13 +446,15 @@ public struct PostMediaGridView: View {
         style: Style,
         accessibilityID: String = "postMediaGrid",
         locationBadge: String? = nil,
-        usesSharpPreviews: Bool = false
+        usesSharpPreviews: Bool = false,
+        edgeToEdge: Bool = false
     ) {
         self.items = items
         self.style = style
         self.accessibilityID = accessibilityID
         self.locationBadge = locationBadge
         self.usesSharpPreviews = usesSharpPreviews
+        self.edgeToEdge = edgeToEdge
     }
 
     public var body: some View {
@@ -473,13 +476,13 @@ public struct PostMediaGridView: View {
                 .aspectRatio(16.0 / 9.0, contentMode: .fit)
                 .clipped()
                 .overlay(alignment: .bottomLeading) { badgeView }
-                .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: edgeToEdge ? 0 : Radii.lg, style: .continuous))
         case 2:
             HStack(spacing: Spacing.s2) {
                 sizedTile(0, height: style.twoUpHeight)
                 sizedTile(1, height: style.twoUpHeight)
             }
-            .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: edgeToEdge ? 0 : Radii.lg, style: .continuous))
         case 3:
             let halfHeight = (style.threeUpHeight - Spacing.s2) / 2
             HStack(spacing: Spacing.s2) {
@@ -489,7 +492,7 @@ public struct PostMediaGridView: View {
                     sizedTile(2, height: halfHeight)
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: edgeToEdge ? 0 : Radii.lg, style: .continuous))
         default:
             let overflow = items.count - 4
             LazyVGrid(
@@ -515,7 +518,7 @@ public struct PostMediaGridView: View {
                     .clipped()
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: edgeToEdge ? 0 : Radii.lg, style: .continuous))
         }
     }
 

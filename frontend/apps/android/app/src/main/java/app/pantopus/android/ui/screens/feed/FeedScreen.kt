@@ -1238,13 +1238,16 @@ private fun PulseMenuItem(
 @Composable
 private fun LoadingFrame() {
     Column(
-        modifier = Modifier.fillMaxSize().padding(Spacing.s3).testTag("pulseFeedLoading"),
-        verticalArrangement = Arrangement.spacedBy(Spacing.s2),
+        modifier =
+            Modifier.fillMaxSize().padding(
+                vertical = Spacing.s3,
+            ).background(PantopusColors.appBorderSubtle).testTag("pulseFeedLoading"),
+        verticalArrangement = Arrangement.spacedBy(1.dp),
     ) {
-        FeedSkeletonCard()
-        FeedSkeletonCard(withTitle = true)
-        FeedSkeletonCard()
-        FeedSkeletonCard()
+        FeedSkeletonCard(edgeToEdge = true)
+        FeedSkeletonCard(withTitle = true, edgeToEdge = true)
+        FeedSkeletonCard(edgeToEdge = true)
+        FeedSkeletonCard(edgeToEdge = true)
     }
 }
 
@@ -1426,10 +1429,10 @@ private fun PopulatedFrame(
             state = listState,
             modifier = Modifier.fillMaxSize().testTag("pulseFeedList"),
             contentPadding =
-                PaddingValues(start = Spacing.s3, top = contentTop + Spacing.s3, end = Spacing.s3, bottom = Spacing.s3),
-            verticalArrangement = Arrangement.spacedBy(Spacing.s2),
+                PaddingValues(top = contentTop + Spacing.s3, bottom = Spacing.s3),
+            verticalArrangement = Arrangement.spacedBy(Spacing.s0),
         ) {
-            header?.let { card -> item(key = "quietStateCard") { card() } }
+            header?.let { card -> item(key = "quietStateCard") { Box(Modifier.padding(Spacing.s3)) { card() } } }
             if (state.rows.isEmpty() && searchActive) {
                 item(key = "searchEmpty") {
                     Text(

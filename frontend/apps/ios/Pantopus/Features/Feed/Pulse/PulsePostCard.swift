@@ -272,54 +272,6 @@ public struct PulsePostCard: View {
         }
     }
 
-    private var card: some View {
-        VStack(alignment: .leading, spacing: Spacing.s2) {
-            header
-            if let title = content.title, !title.isEmpty {
-                Text(title)
-                    .font(.system(size: 13.5, weight: .semibold))
-                    .foregroundStyle(Theme.Color.appText)
-                    .lineLimit(1)
-            }
-            if !content.body.isEmpty {
-                PostLinkText(content.body)
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(Theme.Color.appTextStrong)
-                    .lineLimit(content.title?.isEmpty == false ? 2 : 3)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            if let event = content.event {
-                eventRows(event)
-            }
-            if !content.media.isEmpty {
-                PostMediaGridView(
-                    items: content.media,
-                    style: .compact,
-                    accessibilityID: "pulsePostMedia_\(content.id)",
-                    usesSharpPreviews: true
-                )
-            }
-            if let attendees = content.attendees {
-                attendeeStrip(attendees)
-            }
-            // On its own line, so the words are never cut short (Pulse S7).
-            if let status = content.status {
-                PulsePostStatusPill(status: status, postId: content.id)
-                    .padding(.top, Spacing.s1)
-            }
-            if !content.actions.isSeeded {
-                reactionStrip
-            }
-        }
-        .padding(Spacing.s3)
-        .background(Theme.Color.appSurface)
-        .clipShape(RoundedRectangle(cornerRadius: Radii.xl, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: Radii.xl, style: .continuous)
-                .stroke(Theme.Color.appBorder, lineWidth: 1)
-        )
-    }
-
     private var header: some View {
         HStack(alignment: .center, spacing: 9) {
             FeedAvatar(
@@ -712,6 +664,62 @@ public struct PulseIntentChip: View {
         case .announce: Theme.Color.slateBg
         case .neighborhoodWin: Theme.Color.warningBg
         case .visitorGuide: Theme.Color.infoBg
+        }
+    }
+}
+
+private extension PulsePostCard {
+    var card: some View {
+        VStack(alignment: .leading, spacing: Spacing.s2) {
+            header
+                .padding(.horizontal, Spacing.s4)
+            if let title = content.title, !title.isEmpty {
+                Text(title)
+                    .font(.system(size: 13.5, weight: .semibold))
+                    .foregroundStyle(Theme.Color.appText)
+                    .lineLimit(1)
+                    .padding(.horizontal, Spacing.s4)
+            }
+            if !content.body.isEmpty {
+                PostLinkText(content.body)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Theme.Color.appTextStrong)
+                    .lineLimit(content.title?.isEmpty == false ? 2 : 3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, Spacing.s4)
+            }
+            if let event = content.event {
+                eventRows(event)
+                    .padding(.horizontal, Spacing.s4)
+            }
+            if !content.media.isEmpty {
+                PostMediaGridView(
+                    items: content.media,
+                    style: .compact,
+                    accessibilityID: "pulsePostMedia_\(content.id)",
+                    usesSharpPreviews: true,
+                    edgeToEdge: true
+                )
+            }
+            if let attendees = content.attendees {
+                attendeeStrip(attendees)
+                    .padding(.horizontal, Spacing.s4)
+            }
+            // On its own line, so the words are never cut short (Pulse S7).
+            if let status = content.status {
+                PulsePostStatusPill(status: status, postId: content.id)
+                    .padding(.top, Spacing.s1)
+                    .padding(.horizontal, Spacing.s4)
+            }
+            if !content.actions.isSeeded {
+                reactionStrip
+                    .padding(.horizontal, Spacing.s4)
+            }
+        }
+        .padding(.vertical, Spacing.s4)
+        .background(Theme.Color.appSurface)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(Theme.Color.appBorderSubtle).frame(height: 1)
         }
     }
 }
