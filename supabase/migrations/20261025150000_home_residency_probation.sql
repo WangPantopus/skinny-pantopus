@@ -25,11 +25,14 @@
 -- (AddressReviewCase, trigger probation_dispute) instead of restoring access; the no stands until Pantopus decides
 -- (resolve_home_probation_dispute): approving restores the membership; after a rejection or a dismissal they can
 -- send proof again, which opens a new case (founder decisions 2026-10-26).
+-- review_home_residency also refuses 'attach' (adding someone directly) to anyone without the authority to answer a
+-- request to join (home_residency_review_authority): a claim can't vouch for anyone (home claims PR 3, the
+-- 2026-10-26 review).
 --
 -- Latest permitted sources (bodies copied unchanged except the lines commented below):
 --   review_home_residency           supabase/migrations/20261004104000_home_verification_source.sql:222
 --   verify_home_postcard_current    supabase/migrations/20261004104000_home_verification_source.sql:603
---   home_postcard_current_context   supabase/migrations/20261025120000_home_instant_claim.sql:150
+--   home_postcard_current_context   supabase/migrations/20261025120000_home_instant_claim.sql:220
 --   home_residency_review_current   supabase/migrations/20260910233000_home_residency_review_receipts.sql:73
 SET LOCAL lock_timeout='5s';
 
@@ -164,6 +167,13 @@ BEGIN
       AND NOT EXISTS (SELECT FROM public."HomeOwner" WHERE home_id=p_home_id AND subject_type='user'
         AND subject_id=p_actor_id AND owner_status='verified')) THEN
     RETURN jsonb_build_object('ok',false,'code','MEMBERS_MANAGE_REQUIRED','status',403);
+  END IF;
+  -- Home claims PR 3 (2026-10-26 review): adding someone directly makes them a household-verified member at once, so
+  -- it takes the authority to answer a request to join (approve and reject check it in decide_home_residency_review).
+  -- A claim can't vouch for anyone: a claimer with members.manage could otherwise add any account, or admit a
+  -- pending newcomer the household never reviewed.
+  IF p_action='attach' AND NOT public.home_residency_review_authority(p_home_id,p_actor_id) THEN
+    RETURN jsonb_build_object('ok',false,'code','RESIDENCY_REVIEW_AUTHORITY_REQUIRED','status',403);
   END IF;
   IF v_target_id IS NULL OR v_target_id=p_actor_id THEN
     RETURN jsonb_build_object('ok',false,'code','SELF_ADMISSION_FORBIDDEN','status',403);
