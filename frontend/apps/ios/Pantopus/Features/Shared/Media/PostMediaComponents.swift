@@ -81,8 +81,10 @@ private struct PostVideoPoster: View {
             .overlay {
                 if let frame {
                     Image(uiImage: frame).resizable().scaledToFill()
+                } else if let thumbnail = item.thumbnailURL {
+                    MediaStillImage(url: thumbnail)
                 } else {
-                    MediaStillImage(url: item.thumbnailURL)
+                    Theme.Color.appSurfaceSunken
                 }
             }
             .clipped()
@@ -342,11 +344,11 @@ struct PostMediaTileView: View {
                 maxPixelSize: usesSharpPreview ? 2400 : nil,
                 fallbackURL: item.thumbnailURL
             )
-                .contentShape(Rectangle())
-                .onTapGesture { onTap?() }
-                .accessibilityElement()
-                .accessibilityLabel("Photo")
-                .accessibilityAddTraits(.isImage)
+            .contentShape(Rectangle())
+            .onTapGesture { onTap?() }
+            .accessibilityElement()
+            .accessibilityLabel("Photo")
+            .accessibilityAddTraits(.isImage)
         case .document:
             Button { onTap?() } label: {
                 VStack(spacing: Spacing.s2) {

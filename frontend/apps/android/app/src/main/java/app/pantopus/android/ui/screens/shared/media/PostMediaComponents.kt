@@ -15,8 +15,8 @@ import android.media.MediaMetadataRetriever
 import android.os.Build
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -38,8 +38,8 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -73,9 +73,9 @@ import app.pantopus.android.ui.theme.Spacing
 import coil.compose.SubcomposeAsyncImage
 import coil.request.CachePolicy
 import coil.request.ImageRequest
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** Tile heights per surface — feed cards are compact, detail is regular. */
 enum class PostMediaGridStyle(
@@ -146,7 +146,7 @@ fun PostMediaGrid(
         when (items.size) {
             1 ->
                 PostMediaTile(
-                        usesSharpPreview = usesSharpPreviews,
+                    usesSharpPreview = usesSharpPreviews,
                     item = items[0],
                     onTap = onTileTap?.let { tap -> { tap(0) } },
                     badge = locationBadge,
@@ -199,13 +199,13 @@ fun PostMediaGrid(
                         verticalArrangement = Arrangement.spacedBy(Spacing.s2),
                     ) {
                         PostMediaTile(
-                        usesSharpPreview = usesSharpPreviews,
+                            usesSharpPreview = usesSharpPreviews,
                             item = items[1],
                             onTap = onTileTap?.let { tap -> { tap(1) } },
                             modifier = Modifier.weight(1f).fillMaxWidth(),
                         )
                         PostMediaTile(
-                        usesSharpPreview = usesSharpPreviews,
+                            usesSharpPreview = usesSharpPreviews,
                             item = items[2],
                             onTap = onTileTap?.let { tap -> { tap(2) } },
                             badge = locationBadge,
@@ -220,13 +220,13 @@ fun PostMediaGrid(
                 ) {
                     Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
                         PostMediaTile(
-                        usesSharpPreview = usesSharpPreviews,
+                            usesSharpPreview = usesSharpPreviews,
                             item = items[0],
                             onTap = onTileTap?.let { tap -> { tap(0) } },
                             modifier = Modifier.weight(1f).aspectRatio(1f),
                         )
                         PostMediaTile(
-                        usesSharpPreview = usesSharpPreviews,
+                            usesSharpPreview = usesSharpPreviews,
                             item = items[1],
                             onTap = onTileTap?.let { tap -> { tap(1) } },
                             modifier = Modifier.weight(1f).aspectRatio(1f),
@@ -234,13 +234,13 @@ fun PostMediaGrid(
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
                         PostMediaTile(
-                        usesSharpPreview = usesSharpPreviews,
+                            usesSharpPreview = usesSharpPreviews,
                             item = items[2],
                             onTap = onTileTap?.let { tap -> { tap(2) } },
                             modifier = Modifier.weight(1f).aspectRatio(1f),
                         )
                         PostMediaTile(
-                        usesSharpPreview = usesSharpPreviews,
+                            usesSharpPreview = usesSharpPreviews,
                             item = items[3],
                             onTap = onTileTap?.let { tap -> { tap(3) } },
                             overflowCount = if (items.size > 4) items.size - 4 else null,
@@ -420,31 +420,37 @@ fun MediaStillTile(
 
 /** One sharp frame, decoded off the UI thread without playing or retaining the video file. */
 @Composable
-private fun PostVideoPoster(item: PostMediaItem, modifier: Modifier = Modifier) {
+private fun PostVideoPoster(
+    item: PostMediaItem,
+    modifier: Modifier = Modifier,
+) {
     val frame by produceState<Bitmap?>(null, item.url) {
         value = null
-        value = withContext(Dispatchers.IO) {
-            val retriever = MediaMetadataRetriever()
-            try {
-                retriever.setDataSource(item.url, emptyMap())
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-                    retriever.getScaledFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 1600, 1600)
-                } else {
-                    retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+        value =
+            withContext(Dispatchers.IO) {
+                val retriever = MediaMetadataRetriever()
+                try {
+                    retriever.setDataSource(item.url, emptyMap())
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                        retriever.getScaledFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 1600, 1600)
+                    } else {
+                        retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                    }
+                } catch (_: Exception) {
+                    null
+                } finally {
+                    retriever.release()
                 }
-            } catch (_: Exception) {
-                null
-            } finally {
-                retriever.release()
             }
-        }
     }
     Box(modifier) {
         val bitmap = frame
         if (bitmap != null) {
             Image(bitmap.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        } else if (!item.thumbnailUrl.isNullOrBlank()) {
+            MediaStillTile(url = item.thumbnailUrl, modifier = Modifier.fillMaxSize())
         } else {
-            MediaStillTile(url = item.thumbnailUrl.orEmpty(), modifier = Modifier.fillMaxSize())
+            Box(Modifier.fillMaxSize().background(PantopusColors.appSurfaceSunken))
         }
     }
 }
