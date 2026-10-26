@@ -10,9 +10,12 @@
 -- decision D13, "no approval because review is slow").
 -- A household-review request that nobody has answered for 7 days is admitted on probation: the existing
 -- provisional state, with source 'probation' and the existing challenge window (7 days, or 14 for a medium
--- address watch). A high address watch holds the request until it's proven. Waiting alone never opens the
--- household's records: home_effective_access and getUserAccess admit only verified rows, and the mail and Plans
--- trust lists leave 'probation' out. Probation ends only when a reviewer says yes (verified, household), when the
+-- address watch). A request already unanswered for more than 30 days stays pending instead (decided 2026-10-26
+-- for the backlog the flag would otherwise sweep on its first run: probation months later would surprise both the
+-- person and the household); the household can still answer it and the person can still verify by mail. A high
+-- address watch holds the request until it's proven. Waiting alone never opens the household's records:
+-- home_effective_access and getUserAccess admit only verified rows, and the mail and Plans trust lists leave
+-- 'probation' out. Probation ends only when a reviewer says yes (verified, household), when the
 -- person proves the address (the postcard review window, then the existing promotion), or with a no: a
 -- reviewer's denial or a challenge in the window suspends them ('suspended_challenged'). Time never promotes a
 -- probationer: promote_home_postcard_review still needs a postcard proved in the window.
@@ -44,18 +47,20 @@ ON CONFLICT (flag_name) DO NOTHING;
 
 -- Admits one unanswered household-review request on probation (backend/jobs/processClaimWindows.js). Residency
 -- requests are renter or household requests only, so this never touches ownership; anyone with an owner record is
--- refused. The request must still be pending and unreviewed, unchanged for p_wait_days, with the fresh pending
--- membership the request created and no challenge window. An open address-watch case for this person and Home
--- holds it. p_window_days (7, or 14 for a medium address watch) is the window in which a reviewer can challenge.
--- Returns the household's current reviewers, who are told.
+-- refused. The request must still be pending and unreviewed, unchanged for p_wait_days but saved less than
+-- p_max_age_days ago (an older one stays pending), with the fresh pending membership the request created and no
+-- challenge window. An open address-watch case for this person and Home holds it. p_window_days (7, or 14 for a
+-- medium address watch) is the window in which a reviewer can challenge. Returns when the request was saved and
+-- the household's current reviewers, who are told.
 CREATE FUNCTION public.admit_home_residency_probation(p_home_id uuid,p_actor_id uuid,p_claim_id uuid,
-  p_wait_days integer,p_window_days integer) RETURNS jsonb
+  p_wait_days integer,p_window_days integer,p_max_age_days integer) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp SET lock_timeout='5s' AS $$
 DECLARE h public."Home"%ROWTYPE; o public."HomeOccupancy"%ROWTYPE; r public."HomeResidencyClaim"%ROWTYPE;
   t timestamptz; v_reviewers uuid[];
 BEGIN
   IF p_home_id IS NULL OR p_actor_id IS NULL OR p_claim_id IS NULL OR p_wait_days IS NULL OR p_wait_days NOT BETWEEN 1 AND 90
-    OR p_window_days IS NULL OR p_window_days NOT BETWEEN 7 AND 90 THEN
+    OR p_window_days IS NULL OR p_window_days NOT BETWEEN 7 AND 90
+    OR p_max_age_days IS NULL OR p_max_age_days<=p_wait_days OR p_max_age_days>365 THEN
     RETURN '{"ok":false,"code":"PROBATION_INVALID","status":400}'::jsonb; END IF;
   IF NOT EXISTS(SELECT FROM public."FeatureFlag" f WHERE f.flag_name='home_residency_probation'
       AND (f.enabled_globally OR p_actor_id=ANY(coalesce(f.beta_user_ids,'{}'::uuid[])))) THEN
@@ -67,7 +72,8 @@ BEGIN
   SELECT * INTO r FROM public."HomeResidencyClaim" WHERE id=p_claim_id AND home_id=p_home_id AND user_id=p_actor_id;
   SELECT * INTO o FROM public."HomeOccupancy" WHERE home_id=p_home_id AND user_id=p_actor_id;
   IF r.id IS NULL OR r.status IS DISTINCT FROM 'pending' OR r.cold_start_mode IS NOT NULL OR r.reviewed_by IS NOT NULL
-    OR r.updated_at>t-make_interval(days=>p_wait_days) OR public.home_residency_role_family(r.claimed_role) IS NULL
+    OR r.updated_at>t-make_interval(days=>p_wait_days) OR r.updated_at<=t-make_interval(days=>p_max_age_days)
+    OR public.home_residency_role_family(r.claimed_role) IS NULL
     OR o.id IS NULL OR o.is_active IS DISTINCT FROM true OR o.verification_status IS DISTINCT FROM 'pending_approval'
     OR o.role_base IS DISTINCT FROM 'restricted_member' OR o.end_at IS NOT NULL OR o.start_at>t
     OR o.access_start_at>t OR o.access_end_at<=t OR o.verified_at IS NOT NULL OR o.verification_expires_at IS NOT NULL
@@ -91,10 +97,11 @@ BEGIN
     UNION SELECT h.owner_id
   ) c WHERE candidate IS NOT NULL AND candidate<>p_actor_id AND public.home_residency_review_authority(p_home_id,candidate);
   RETURN jsonb_build_object('ok',true,'admitted',true,'home_id',p_home_id,'user_id',p_actor_id,'occupancy_id',o.id,
-    'claim_id',r.id,'challenge_window_ends_at',o.challenge_window_ends_at,'reviewer_ids',to_jsonb(v_reviewers));
+    'claim_id',r.id,'request_saved_at',r.updated_at,'challenge_window_ends_at',o.challenge_window_ends_at,
+    'reviewer_ids',to_jsonb(v_reviewers));
 END $$;
-REVOKE ALL ON FUNCTION public.admit_home_residency_probation(uuid,uuid,uuid,integer,integer) FROM PUBLIC,anon,authenticated;
-GRANT EXECUTE ON FUNCTION public.admit_home_residency_probation(uuid,uuid,uuid,integer,integer) TO service_role;
+REVOKE ALL ON FUNCTION public.admit_home_residency_probation(uuid,uuid,uuid,integer,integer,integer) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.admit_home_residency_probation(uuid,uuid,uuid,integer,integer,integer) TO service_role;
 
 CREATE OR REPLACE FUNCTION public.review_home_residency(
   p_home_id uuid, p_actor_id uuid, p_action text, p_payload jsonb DEFAULT '{}',
