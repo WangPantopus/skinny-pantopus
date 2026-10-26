@@ -58,6 +58,7 @@ final class PlansMapViewModel {
     private(set) var mine: MyPlansResponse?
     private(set) var games: [PlanGameOptionDTO] = []
     private(set) var sports: PlansSportsDTO?
+    private var gamesGeneration = 0
     private(set) var selectedId: String?
     private(set) var selectedCard: PlanCardDTO?
     private(set) var selectedFailed = false
@@ -221,13 +222,16 @@ final class PlansMapViewModel {
     }
 
     func loadGames() async {
+        gamesGeneration += 1
+        let generation = gamesGeneration
         let requestedCenter = center
         let reply: PlanGamesResponse? = try? await api.request(
             PlansEndpoints.games(from: requestedCenter, gps: PlansStoreReads.freshGPS)
         )
         guard center == requestedCenter else { return }
-        games = reply?.games.filter { $0.isAvailable(at: Date()) } ?? []
-        if let reply { sports = reply.sports }
+        guard generation == gamesGeneration, let reply, !Task.isCancelled else { return }
+        games = reply.games.filter { $0.isAvailable(at: Date()) }
+        sports = reply.sports
     }
 
     private func loadAreaName(for coordinate: UserCoordinate) async {
