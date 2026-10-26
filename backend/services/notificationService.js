@@ -231,7 +231,7 @@ const GIG_TYPES = new Set([
 const HOME_TYPES = new Set([
   // Household
   'home_invite', 'home_invite_accepted',
-  'member_moved_out', 'access_challenged', 'member_challenged',
+  'member_moved_out', 'access_challenged', 'member_challenged', 'residency_probation_started', 'residency_probation_household',
   'home_access_request', 'home_access_request_rejected', 'home_member_removed',
   // Tasks
   'task_assigned', 'task_completed',

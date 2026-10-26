@@ -94,7 +94,7 @@ struct HomeResidencyReviewView: View {
                     .accessibilityIdentifier("homeResidencyReview.membershipStatus")
                 Text("Role: \(roleLabel(occupancy["role_base"] == .null ? occupancy["role"] : occupancy["role_base"]))")
                 Text("Age group: \(words(occupancy["age_band"]))")
-                Text("Verification: \(verification(occupancy["verification_status"]))")
+                Text("Verification: \(verification(review))")
                 ForEach(["start_at", "end_at", "access_start_at", "access_end_at", "verification_expires_at"], id: \.self) { key in
                     LabeledContent(dateTitle(key), value: dateLabel(occupancy[key]))
                 }
@@ -115,7 +115,10 @@ struct HomeResidencyReviewView: View {
                     ForEach(HomeResidencyReviewRole.allCases, id: \.self) { Text($0.label).tag($0) }
                 }.accessibilityIdentifier("homeResidencyReview.role")
             } else {
-                Text("Rejecting declines this request. It doesn’t change anyone’s current access.").font(.caption)
+                Text(model.review?.onProbation == true
+                    ? "They’re on probation, so rejecting also ends their membership here, and they can’t ask again. "
+                    + "If they prove the address by mail, Pantopus reviews it."
+                    : "Rejecting declines this request. It doesn’t change anyone’s current access.").font(.caption)
                 Text("Reason for rejection (optional)").font(.caption)
                 TextField("Reason for rejection (optional)", text: $model.reason, axis: .vertical)
                     .lineLimit(3...8).focused($reasonFocused).accessibilityIdentifier("homeResidencyReview.reason")
@@ -180,14 +183,17 @@ struct HomeResidencyReviewView: View {
         value?.stringValue.flatMap(HomeResidencyReviewRole.init(rawValue:))?.label ?? words(value)
     }
 
-    private func verification(_ value: JSONValue?) -> String {
-        switch value?.stringValue {
+    private func verification(_ review: HomeResidencyCurrentReview) -> String {
+        if review.onProbation { return "On probation (nobody answered their request in 7 days)" }
+        let value = review.occupancy?["verification_status"]
+        return switch value?.stringValue {
         case "verified": "Verified"
         case "pending_approval": "Waiting for approval"
         case "pending_postcard": "Waiting for a postcard"
         case "provisional_bootstrap", "provisional": "Provisional"
         case "moved_out": "Left this Home"
         case "inactive": "Removed"
+        case "suspended_challenged": "Suspended after a household no"
         default: words(value)
         }
     }

@@ -4610,11 +4610,17 @@ router.post('/:id/claim/:claimId/reject', verifyToken, validate(residencyRejecti
       action: 'reject', claimId: req.params.claimId, reason: req.body.reason,
       requestId: req.body.request_id, reviewToken: req.body.review_token });
     if (!result.replayed) {
+      // Home claims PR 4: a no ends probation (the membership is suspended), and asking again is refused. Their way
+      // back is proof by mail, which goes to Pantopus review; the residency page offers it.
+      const probationEnded = result.occupancy?.verification_source === 'probation'
+        && result.occupancy.is_active === false && result.occupancy.verification_status === 'suspended_challenged';
       try {
         await require('../services/notificationService').createNotification({
-          userId: result.target_id, type: 'residency_rejected', title: 'Verification update',
-          body: "We couldn't verify you for this home. You can try again or verify by mail.",
-          icon: '📬', link: `/homes/${req.params.id}/waiting-room`,
+          userId: result.target_id, type: 'residency_rejected', title: probationEnded ? 'Your probation ended' : 'Verification update',
+          body: probationEnded
+            ? "Someone in the household said you don't live there, so your probation ended. If you do live there, verify your address by mail and Pantopus will review it."
+            : "We couldn't verify you for this home. You can try again or verify by mail.",
+          icon: '📬', link: `/homes/${req.params.id}/${probationEnded ? 'residency' : 'waiting-room'}`,
           metadata: { home_id: req.params.id, claim_id: req.params.claimId },
         });
       } catch (err) { logger.error('Residency rejection notification failed', { errorCode: err.code }); }

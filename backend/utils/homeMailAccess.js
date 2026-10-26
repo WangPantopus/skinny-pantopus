@@ -82,7 +82,9 @@ async function trustedHomeIdsOrThrow(userId) {
     .select('home_id, verification_status, verified_at')
     .eq('user_id', userId)
     .eq('is_active', true)
-    .in('verification_status', MAIL_TRUSTED_VERIFICATION_STATUSES);
+    .in('verification_status', MAIL_TRUSTED_VERIFICATION_STATUSES)
+    // Probation (a request nobody answered, home claims PR 4) is provisional without proof: never mail.
+    .neq('verification_source', 'probation');
 
   if (error) throw new Error(error.message);
 

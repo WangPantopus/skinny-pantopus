@@ -29,7 +29,7 @@ async function rpc(name, args) {
       || (r.code === 'POSTCARD_WRONG_CODE' ? !Number.isInteger(r.attempts_remaining) || r.attempts_remaining < 0 || r.attempts_remaining > 4
         : r.attempts_remaining !== null)) throw failure();
   } else if (r.code !== null || r.status !== null || r.attempts_remaining !== null) throw failure();
-  return { state: r.state, home_id: r.home_id, postcard_id: r.postcard_id,
+  return { state: r.state, home_id: r.home_id, postcard_id: r.postcard_id, replayed: r.replayed,
     command: { actor_id: r.command.actor_id, request_id: r.command.request_id, created_at: r.command.created_at, updated_at: r.command.updated_at },
     ...(r.state === 'completed' ? { verification_status: r.verification_status, recorded_at: r.recorded_at,
       challenge_window_ends_at: r.challenge_window_ends_at, current_access: 'not_checked' } : {}),
@@ -40,10 +40,69 @@ async function rpc(name, args) {
 async function submit(input) {
   const args = identity(input);
   if (typeof input.code !== 'string' || !/^[a-z0-9]{6,8}$/i.test(input.code)) throw failure('POSTCARD_VERIFICATION_INVALID', 400);
-  return rpc('verify_home_postcard_current', { ...args, p_submitted_hash: hashPostcardCode(input.code), p_validity_days: validityDays() });
+  const result = await rpc('verify_home_postcard_current', { ...args, p_submitted_hash: hashPostcardCode(input.code), p_validity_days: validityDays() });
+  if (result.replayed === false && result.code === 'POSTCARD_DISPUTE_RECORDED') alertDispute(args.p_home_id, args.p_actor_id);
+  delete result.replayed;
+  return result;
 }
-async function read(input) { return rpc('get_home_postcard_verification', identity(input)); }
-async function cancel(input) { return rpc('cancel_home_postcard_verification', identity(input)); }
+async function read(input) { const result = await rpc('get_home_postcard_verification', identity(input)); delete result.replayed; return result; }
+async function cancel(input) { const result = await rpc('cancel_home_postcard_verification', identity(input)); delete result.replayed; return result; }
+
+// Home claims PR 4: a probationer the household said no to proved the address, so a dispute waits in the Pantopus
+// review queue (verify_home_postcard_current). The admins are emailed once per new dispute: the queue has no screen.
+function alertDispute(homeId, actorId) {
+  (async () => {
+    const { data, error } = await db.from('AddressReviewCase').select('id').eq('home_id', homeId).eq('user_id', actorId)
+      .eq('trigger', 'probation_dispute').in('status', ['open', 'in_review']).order('created_at', { ascending: false })
+      .limit(1).maybeSingle();
+    if (error || !data?.id) return;
+    const home = await db.from('Home').select('city, state').eq('id', homeId).maybeSingle();
+    await require('./adminAlerts').notifyProbationDisputeToReview({ caseId: data.id, home: home?.data || null });
+  })().catch(() => { /* The case is in the queue either way. */ });
+}
+
+// Pantopus decides a probation dispute from the review queue (routes/adminAddressReview.js; founder decision
+// 2026-10-26): approved restores the membership as a resident verified by mail, rejected keeps the household's no,
+// dismissed closes it without a decision (resolve_home_probation_dispute); after either they can send proof again.
+// The person is told a restore or a rejection, and the household's reviewers a restore. Returns null for any other case, which the generic resolver
+// handles; otherwise { success, status?, error? }.
+async function resolveDisputeCase({ caseId, reviewerId, outcome, note = null }) {
+  if (!UUID.test(String(caseId)) || !UUID.test(String(reviewerId))) return null;
+  const { data, error } = await db.rpc('resolve_home_probation_dispute', { p_case_id: caseId.toLowerCase(),
+    p_reviewer_id: reviewerId.toLowerCase(), p_outcome: outcome, p_note: note, p_validity_days: validityDays() });
+  if (error || !data || typeof data !== 'object') throw new Error('Probation dispute could not be resolved');
+  if (data.ok === true && data.handled === false) return null;
+  if (data.ok !== true) {
+    if (data.code === 'REVIEW_CASE_RESOLVED') return { success: false, error: 'Case not found or already resolved' };
+    if (data.code === 'PROBATION_DISPUTE_CHANGED') {
+      return { success: false, status: 409, error: 'Their membership, this Home or their proof changed, so it can\'t be restored. Reject or dismiss the case instead.' };
+    }
+    return { success: false, status: 400, error: 'Invalid outcome' };
+  }
+  if (!UUID.test(data.home_id || '') || !UUID.test(data.user_id || '')) return { success: true };
+  const notify = async (notice) => {
+    try { await require('./notificationService').createNotification(notice); } catch (_) { /* The decision stands. */ }
+  };
+  if (data.outcome === 'declined') {
+    await notify({ userId: data.user_id, type: 'residency_rejected', title: 'Pantopus reviewed your proof', icon: '📬',
+      body: `Pantopus kept the household's answer for ${data.home_label}. If you have new proof, you can verify your address by mail again.`,
+      link: `/homes/${data.home_id}/residency`, metadata: { home_id: data.home_id } });
+  } else if (data.outcome === 'restored') {
+    await notify({ userId: data.user_id, type: 'residency_approved', title: 'Welcome back', icon: '🏡',
+      body: `Pantopus reviewed your proof of address and restored your membership at ${data.home_label}.`,
+      link: `/homes/${data.home_id}/dashboard`, metadata: { home_id: data.home_id } });
+    let name = 'Someone';
+    try { name = (await require('./chatPeople').loadChatPeople([data.user_id])).get(String(data.user_id))?.displayName || name; }
+    catch (_) { /* The notice still goes out. */ }
+    for (const userId of Array.isArray(data.reviewer_ids) ? data.reviewer_ids : []) {
+      if (!UUID.test(String(userId)) || userId === data.user_id) continue;
+      await notify({ userId, type: 'residency_probation_household', title: 'A member was restored',
+        body: `Pantopus reviewed ${name}'s proof of address and restored their membership at ${data.home_label}.`,
+        link: `/homes/${data.home_id}/members`, metadata: { home_id: data.home_id, member_id: data.user_id } });
+    }
+  }
+  return { success: true };
+}
 function send(res, result) {
   res.set('Cache-Control', 'private, no-store');
   if (result.state === 'rejected') return res.status(result.status).json(result);
@@ -79,4 +138,4 @@ async function challenge({ homeId, actorId, occupancyId }) {
   }
   return { message: 'Member access has been suspended pending review' };
 }
-module.exports = { submit, read, cancel, send, challenge, sendError: require('./homePostcardRequestService').sendError };
+module.exports = { submit, read, cancel, send, challenge, resolveDisputeCase, sendError: require('./homePostcardRequestService').sendError };

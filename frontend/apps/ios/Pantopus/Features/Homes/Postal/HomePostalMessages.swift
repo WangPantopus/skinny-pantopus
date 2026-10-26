@@ -5,9 +5,15 @@ enum HomePostalMessages {
         switch outcome?.state {
         case "completed": kind == .code ? "Code accepted" : "Postcard requested"
         case "cancelled": "Attempt discarded"
-        case "rejected": "Couldn't finish this"
+        case "rejected": sentForReview(outcome) ? "Proof sent for review" : "Couldn't finish this"
         default: "Check your last attempt"
         }
+    }
+
+    /// A right code from someone the household said no to (home claims PR 4) isn't a failure: the proof goes to
+    /// Pantopus review, and their access stays off until then.
+    static func sentForReview(_ outcome: HomePostalOutcome?) -> Bool {
+        outcome?.state == "rejected" && outcome?.code == "POSTCARD_DISPUTE_RECORDED"
     }
 
     static func explanation(kind: PendingHomePostalCommand.Kind, outcome: HomePostalOutcome?) -> String {
@@ -69,6 +75,10 @@ enum HomePostalMessages {
         case "POSTCARD_LOCKED": "No tries left for this postcard. Request a new one."
         case "POSTCARD_ACCESS_REVIEW_REQUIRED":
             "A mail code can't restore access that was removed or has ended. Ask someone in the household to invite you again."
+        case "POSTCARD_DISPUTE_RECORDED":
+            "Your code is right. Because someone in the household said you don't live here, Pantopus will review your proof. "
+                + "Your access stays off until then."
+        case "POSTCARD_DISPUTE_IN_REVIEW": "Pantopus is reviewing your proof of this address. Your access stays off until then."
         case "POSTCARD_REVIEW_ALREADY_RECORDED": "You're already verified. Residency status shows your access."
         case "POSTCARD_HOME_UNAVAILABLE": "Mail verification is unavailable for this Home right now."
         case "POSTCARD_RESIDENCY_REQUEST_REQUIRED": "Submit your residency request before requesting a postcard."
