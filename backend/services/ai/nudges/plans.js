@@ -582,12 +582,91 @@ async function afterPlans(now) {
   return sent;
 }
 
+// Followed games only, shared by the morning brief and the game-day nudge.
+async function gameDayFacts(userId, timeZone, now = Date.now()) {
+  const { isFeatureEnabled } = require('../../featureFlagService');
+  if (!await isFeatureEnabled('plans', userId) || !await isFeatureEnabled('plans_sports', userId)) return [];
+  const { data: prefs, error } = await supabaseAdmin.from('UserNotificationPreferences')
+    .select('suggestions_enabled').eq('user_id', userId).maybeSingle();
+  if (error) throw new Error(error.message);
+  if (prefs?.suggestions_enabled !== true) return [];
+  const viewer = await require('../../plans/planViewer').loadViewer({ id: userId });
+  if (viewer.sports.watch !== 'on' || !viewer.sports.teams?.length) return [];
+  const today = DateTime.fromMillis(now).setZone(timeZone).toISODate();
+  const { games } = await require('../../plans/planGames').gamesForViewer(viewer, 'sheet', now);
+  const followed = games.filter((game) => viewer.sports.teams.includes(game.team)
+    && DateTime.fromISO(game.starts_at).setZone(timeZone).toISODate() === today);
+  if (!followed.length) return [];
+  const parties = [];
+  if (viewer.origin) {
+    let cursor = null;
+    do {
+      const page = await planService.listNearby(viewer, { point: viewer.origin, window: 'week', kinds: ['watch_party'], cursor });
+      parties.push(...page.items.filter((plan) => plan.area && rules.distanceMeters(viewer.origin, plan.area) <= 3 * rules.MILE_METERS));
+      cursor = page.next_cursor;
+    } while (cursor);
+  }
+  return followed.map((game) => ({
+    ...game, when: whenLabel(game.starts_at, game.ends_at, timeZone),
+    watch_parties: parties.filter((plan) => require('../../plans/planTeams').teamById(plan.details?.game?.team)?.id === game.team
+      && (plan.details.game.id === game.id || plan.details.game.starts_at === game.starts_at))
+      .map((plan) => ({ id: plan.id, can_ask: plan.viewer?.can_ask === true, title_text: plan.title })),
+    within_miles: 3,
+    can_host: viewer.homes.some((home) => home.trusted && home.point),
+  }));
+}
+
+function gameDayAction(game) {
+  const party = game.watch_parties.find((plan) => plan.can_ask);
+  if (party) return ['draft_plan_ask', { plan_id: party.id, party_size: 1, ask_note: null, note: null }];
+  if (!game.can_host) return null;
+  return ['draft_plan', { kind: 'watch_party', title: `${game.label} watch party`, game_id: game.id,
+    starts_local: null, ends_local: null, spots: 8, at_home: true, place_name: null,
+    who_gets_in: 'host_approves', details: null, about: null, guest_note: null,
+    note: 'At your home, with 8 spots. Review before posting.' }];
+}
+
+async function gameDayFor(userId, now = Date.now()) {
+  const timeZone = await require('../chatContext').userTimeZone(userId);
+  let sent = 0;
+  for (const game of await gameDayFacts(userId, timeZone, now)) {
+    const target = { userId, kind: 'plan_game_day', subject: { type: 'person', id: userId }, checkpoint: game.id };
+    if (!(await engine().canNudge(target)).ok) continue;
+    const expiresAt = new Date(game.ends_at);
+    const choice = gameDayAction(game);
+    const built = choice ? await engine().nudgeCard(...choice, { userId, expiresAt }) : {};
+    const count = game.watch_parties.length;
+    const result = await engine().sendNudge({ ...target,
+      title: `${game.label} today`,
+      body: `${game.label}${game.opponent ? ` vs ${game.opponent}` : ''} · ${game.when}${count ? ` · ${count} watch ${count === 1 ? 'party' : 'parties'} within 3 mi` : ''}`,
+      card: built.card || null, expiresAt,
+    });
+    if (result.sent) sent += 1;
+  }
+  return sent;
+}
+
+async function gameDays(now) {
+  let sent = 0;
+  for (let offset = 0; ; offset += 300) {
+    const { data, error } = await supabaseAdmin.from('UserNotificationPreferences').select('user_id')
+      .eq('suggestions_enabled', true).order('user_id').range(offset, offset + 299);
+    if (error) throw new Error(error.message);
+    for (const person of data || []) {
+      try { sent += await gameDayFor(person.user_id, now); }
+      catch (err) { logger.warn('plans.game_day.failed', { userId: person.user_id, error: err.message }); }
+    }
+    if (!data || data.length < 300) break;
+  }
+  return sent;
+}
+
 // ─── The tick ──────────────────────────────────────────────────────────────
 
 /** The three Plans nudges, each on its own: one failing never stops the others. */
 async function runPlanNudges(now = Date.now()) {
-  const counts = { weather: 0, requests: 0, after: 0 };
-  const steps = [['weather', weatherWatch], ['requests', requestsWaiting], ['after', afterPlans]];
+  const counts = { weather: 0, requests: 0, after: 0, games: 0 };
+  const steps = [['weather', weatherWatch], ['requests', requestsWaiting], ['after', afterPlans], ['games', gameDays]];
   for (const [name, step] of steps) {
     try {
       counts[name] = await step(now);
@@ -595,11 +674,14 @@ async function runPlanNudges(now = Date.now()) {
       logger.warn('plans.nudge.step_failed', { step: name, error: err.message });
     }
   }
-  return { ...counts, sent: counts.weather + counts.requests + counts.after };
+  return { ...counts, sent: counts.weather + counts.requests + counts.after + counts.games };
 }
 
 module.exports = {
   runPlanNudges,
+  gameDayFacts,
+  gameDayAction,
+  gameDayFor,
   weatherWatch,
   requestsWaiting,
   afterPlans,
