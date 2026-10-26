@@ -6,6 +6,7 @@ const { deleteEligibility } = require('./homeAuthorityService');
 const claimsConfig = require('../config/householdClaims');
 const claimsPolicy = require('./homeClaimRoutingService');
 const parsePoint = require('../utils/parsePostGISPoint');
+const { OPEN_STATUSES } = require('./addressValidation/addressReviewService');
 
 // List entries never include access instructions, provider payloads, account
 // identity, household rosters or another person's ownership records.
@@ -121,7 +122,24 @@ function materialize(opening, claims, homeCard) {
     // 'resident' is a renter's residency document, 'owner' an ownership claim: the apps name the review by it.
     pending_claim_type: pending?.claim_type || null,
     can_delete_home: null, // read() sets it from the final recheck
+    claim_held: false, // read() sets it for private setups
   };
+}
+
+// Private setups whose instant claim the address watch held (home claims PR 3): a high watch opens an address-watch
+// case about this person and Home in the admin queue, and the claim stays held until the address is proven, so the
+// apps offer mail verification instead of "Claim it now". A failed read never fails the list; the offer stays.
+async function heldClaims(actorId, homeIds) {
+  if (!homeIds.length) return new Set();
+  try {
+    const { data, error } = await db.from('AddressReviewCase').select('home_id').eq('user_id', actorId)
+      .eq('trigger', 'address_watch').in('status', OPEN_STATUSES).in('home_id', homeIds);
+    if (error) throw error;
+    return new Set((data || []).map(row => row.home_id));
+  } catch (err) {
+    logger.warn('Held home claims unavailable', causeOf(err));
+    return new Set();
+  }
 }
 
 // Runs `work` over `items` with at most `limit` in flight, keeping their order;
@@ -186,6 +204,9 @@ async function read(actorId, { primary = false, legacy = false } = {}) {
     if (JSON.stringify(claims) !== JSON.stringify(entry.claims)
       || JSON.stringify(current) !== JSON.stringify(entry.opening)) throw failure(true);
   });
+  const privateSetups = entries.filter(entry => entry.opening.mode === 'private_setup');
+  const held = await heldClaims(actorId, privateSetups.map(entry => entry.homeId));
+  for (const entry of privateSetups) entry.card.claim_held = held.has(entry.homeId);
   if (primary) {
     // Preserve the oldest-current-occupancy preference, then verified owners
     // and legacy pointers. Expired candidates cannot hide a later current Home.
