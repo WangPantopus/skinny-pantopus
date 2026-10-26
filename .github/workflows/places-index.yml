@@ -39,9 +39,11 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # The build needs no packages (no pnpm install, so no package cache).
       - uses: actions/setup-node@v5
         with:
           node-version: "22"
+          package-manager-cache: false
 
       - name: Install osmium
         run: |
