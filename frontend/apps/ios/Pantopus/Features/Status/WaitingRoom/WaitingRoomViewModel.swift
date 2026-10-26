@@ -212,8 +212,9 @@ public final class WaitingRoomViewModel {
         let joined = [home.address, home.city, home.state]
             .compactMap { $0 }
             .joined(separator: " · ")
-        // Household-verified members (an invitation) can still verify the address by mail.
-        let verified = detail.home.residencyStatus == "verified" && detail.home.residencySource != "household"
+        // Household-verified members (an invitation) and claims can still verify the address by mail.
+        let verified = detail.home.residencyStatus == "verified"
+            && !["household", "claim"].contains(detail.home.residencySource ?? "")
         return (joined.isEmpty ? "Your home" : joined, verified)
     }
 

@@ -28,6 +28,7 @@ const { listOwnClaims } = require('../services/homeOwnershipClaimListService');
 const { ownershipClaimLimiter, postcardLimiter, homePostcardRequestLimiter, verificationAttemptLimiter } = require('../middleware/rateLimiter');
 const logger = require('../utils/logger');
 const homePostcardService = require('../services/homePostcardService');
+const homeInstantClaimService = require('../services/homeInstantClaimService');
 const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
 const { userFacing, isUserFacing } = require('../utils/userFacingError');
 const { resolveHomeRole } = require('../utils/homeAccessPolicy');
@@ -165,6 +166,31 @@ async function recalculateHouseholdResolutionState(homeId) {
 /** Product: ownership dispute escalation disabled — keep stub so call sites remain valid. */
 async function markHomeSecurityDisputed(_homeId) {
   return;
+}
+
+/**
+ * Tell the people who can open this Home's ownership claims (GET /:id/ownership-claims) about one: its verified owners
+ * and a legacy owner pointer, each with ownership.manage now, never `exceptIds`. Runs after the change committed and
+ * never rejects; an unreadable owner or access check leaves that person out.
+ */
+async function notifyHomeOwners(homeId, exceptIds, send) {
+  try {
+    const [owners, home] = await Promise.all([
+      supabaseAdmin.from('HomeOwner').select('subject_id').eq('home_id', homeId)
+        .eq('subject_type', 'user').eq('owner_status', 'verified'),
+      supabaseAdmin.from('Home').select('owner_id, name, address').eq('id', homeId).maybeSingle(),
+    ]);
+    const candidates = new Set([...(owners.error ? [] : owners.data || []).map(row => row.subject_id),
+      home.error ? null : home.data?.owner_id].filter(id => id && !exceptIds.includes(id)));
+    const homeName = home.data?.name || home.data?.address || null;
+    for (const userId of candidates) {
+      let access;
+      try { access = await checkHomePermission(homeId, userId, 'ownership.manage'); } catch { continue; }
+      if (access.hasAccess) await send(userId, homeName);
+    }
+  } catch (err) {
+    logger.warn('Owner notice failed after commit', { homeId, error: err.message });
+  }
 }
 
 async function getVerifiedHouseholdAuthority(homeId, userId) {
@@ -397,6 +423,8 @@ router.post('/:id/ownership-claims', verifyToken, ownershipClaimLimiter, validat
       }
       // "Usually within hours" is only true if a person hears about it.
       adminAlerts.notifyClaimToReview({ claim, home, claimantUserId: userId }).catch(() => {});
+      // The address watch can flag the request for the admin address review queue; it never changes the claim.
+      await policy.watchResidencyRequest({ homeId, userId, source: 'residency_document' });
 
       return res.status(201).json({
         message: "We're verifying your residency at this address. A person reviews documents, usually within hours.",
@@ -410,6 +438,11 @@ router.post('/:id/ownership-claims', verifyToken, ownershipClaimLimiter, validat
         next_step: 'upload_evidence',
       });
     }
+
+    // Tell the current owners. Not awaited, so the claimant's opaque answer takes the same time whether or not
+    // the home has owners to tell.
+    notifyHomeOwners(claim.home_id, [userId], (ownerUserId, homeName) => require('../services/notificationService')
+      .notifyNewOwnershipClaim({ ownerUserId, homeName, homeId: claim.home_id, claimId: claim.id })).catch(() => {});
 
     // ── BUG 5A: Property data match — auto-verify against public records ──
     if (method === 'property_data_match' && propertyDataService.isAvailable()) {
@@ -627,6 +660,11 @@ router.post('/:id/ownership-claims/:claimId/resolve-relationship', verifyToken, 
       homeId, claimId, actorId: userId, action, note,
       requestId: req.body.request_id, reviewToken: req.body.review_token,
     });
+    // A flag that turned the claim into a dispute tells the other owners; the flagging owner already knows.
+    if (!result.replayed && result.receipt.result.qualifies_for_dispute === true) {
+      notifyHomeOwners(result.homeId, [userId, result.claimantId], (ownerUserId, homeName) => require('../services/notificationService')
+        .notifyOwnershipDispute({ userId: ownerUserId, homeName, homeId: result.homeId, claimId: result.claimId })).catch(() => {});
+    }
     const message = result.replayed
       ? 'Original relationship decision confirmed; current claim refreshed'
       : action === 'decline_relationship'
@@ -766,6 +804,9 @@ router.post('/:id/ownership-claims/:claimId/challenge', verifyToken, validate(ch
       note: note || null,
       claim_strength: challengeStrength,
     });
+
+    notifyHomeOwners(claim.home_id, [userId], (ownerUserId, homeName) => require('../services/notificationService')
+      .notifyOwnershipDispute({ userId: ownerUserId, homeName, homeId: claim.home_id, claimId: claim.id })).catch(() => {});
 
     res.json({
       message: 'Ownership challenge opened',
@@ -1370,6 +1411,7 @@ router.get('/:id/quorum-actions', verifyToken, async (req, res) => {
     // Check and process constructive consent + expired quorum actions, and retry approved ones not applied yet
     await processQuorumExpirations(homeId, userId);
 
+    // A household removal vote is the residents' (GET /:id/removal-votes): its proposer and voters stay private.
     const { data: actions, error } = await supabaseAdmin
       .from('HomeQuorumAction')
       .select(`
@@ -1378,6 +1420,7 @@ router.get('/:id/quorum-actions', verifyToken, async (req, res) => {
         votes:HomeQuorumVote (id, voter_user_id, vote, voted_at)
       `)
       .eq('home_id', homeId)
+      .neq('action_type', 'REMOVE_MEMBER')
       .in('state', ['proposed', 'collecting_votes', 'approved'])
       .order('created_at', { ascending: false });
 
@@ -1496,11 +1539,13 @@ router.post('/:id/quorum-actions/:actionId/vote', verifyToken, validate(voteSche
       return res.status(403).json({ error: 'Only verified owners can vote' });
     }
 
+    // Owners don't decide a household removal vote here; its voters are the settled residents.
     const { data: action, error: actionError } = await supabaseAdmin
       .from('HomeQuorumAction')
       .select('*')
       .eq('id', actionId)
       .eq('home_id', homeId)
+      .neq('action_type', 'REMOVE_MEMBER')
       .maybeSingle();
 
     if (actionError) return res.status(503).json({ error: 'Couldn\'t load this vote. Your vote wasn\'t recorded. Please try again.' });
@@ -1603,6 +1648,42 @@ router.post('/:id/quorum-actions/:actionId/vote', verifyToken, validate(voteSche
     logger.error('Failed to vote on quorum action', { error: err.message });
     res.status(500).json({ error: 'Failed to vote' });
   }
+});
+
+
+// ============================================================
+// HOUSEHOLD REMOVAL VOTES (home claims plan, PR 5)
+// ============================================================
+// Settled residents vote to remove a member who doesn't belong (services/homeRemovalVoteService.js). Anyone signed
+// in may ask: the answer lists only the votes they were asked to decide or that are about them.
+
+const homeRemovalVotes = require('../services/homeRemovalVoteService');
+const removalVoteNoStore = (_req, res, next) => { res.set('Cache-Control', 'private, no-store'); next(); };
+const startRemovalVoteSchema = Joi.object({ target_user_id: Joi.string().uuid().required() });
+const castRemovalVoteSchema = Joi.object({ vote: Joi.string().valid('remove', 'keep').required() });
+
+router.get('/:id/removal-votes', removalVoteNoStore, verifyToken, async (req, res) => {
+  try { res.json(await homeRemovalVotes.list({ homeId: req.params.id, actorId: req.user.id })); }
+  catch (err) { homeRemovalVotes.sendError(res, err); }
+});
+
+router.post('/:id/removal-votes', removalVoteNoStore, verifyToken, validate(startRemovalVoteSchema), async (req, res) => {
+  try {
+    const vote = await homeRemovalVotes.open({ homeId: req.params.id, actorId: req.user.id, targetId: req.body.target_user_id });
+    res.status(vote.replayed ? 200 : 201).json({ vote });
+  } catch (err) { homeRemovalVotes.sendError(res, err); }
+});
+
+router.post('/:id/removal-votes/:voteId/vote', removalVoteNoStore, verifyToken, validate(castRemovalVoteSchema), async (req, res) => {
+  try {
+    res.json(await homeRemovalVotes.vote({ homeId: req.params.id, actorId: req.user.id, voteId: req.params.voteId,
+      choice: req.body.vote }));
+  } catch (err) { homeRemovalVotes.sendError(res, err); }
+});
+
+router.post('/:id/removal-votes/:voteId/contest', removalVoteNoStore, verifyToken, async (req, res) => {
+  try { res.json(await homeRemovalVotes.contest({ homeId: req.params.id, actorId: req.user.id, voteId: req.params.voteId })); }
+  catch (err) { homeRemovalVotes.sendError(res, err); }
 });
 
 
@@ -2277,7 +2358,8 @@ async function checkAndExpireClaimWindow(homeId) {
 
 /**
  * Process constructive consent and expiration for pending quorum actions
- * (when someone reads the votes or the security settings; no job does):
+ * (when someone reads the votes or the security settings, and hourly for
+ * every home with a vote due, jobs/processQuorumActions.js, with no actor):
  * - All tiers: expire if expires_at is reached (an approved change that
  *   still isn't applied expires too)
  * - Tier 1-2: auto-approve if passive_approval_at is reached and no rejections
@@ -2287,10 +2369,12 @@ async function checkAndExpireClaimWindow(homeId) {
  */
 async function processQuorumExpirations(homeId, actorUserId) {
   try {
+    // A household removal vote settles by its own rules (homeRemovalVoteService.settleDue, from the hourly job).
     const { data: pendingActions, error } = await supabaseAdmin
       .from('HomeQuorumAction')
       .select('*, votes:HomeQuorumVote(vote)')
       .eq('home_id', homeId)
+      .neq('action_type', 'REMOVE_MEMBER')
       .in('state', ['proposed', 'collecting_votes', 'approved']);
 
     if (error) {
@@ -2437,7 +2521,12 @@ router.post('/:id/postcards/:postcardId/verifications', postcardNoStore, verifyT
     if (!req.body || Object.keys(req.body).some(key => !['request_id', 'code'].includes(key))) {
       return res.status(400).json({ code: 'POSTCARD_VERIFICATION_INVALID', error: 'Enter the code from this postcard and try again.' });
     }
-    postcardVerification.send(res, await postcardVerification.submit({ ...postcardVerificationInput(req), code: req.body.code }));
+    const result = await postcardVerification.submit({ ...postcardVerificationInput(req), code: req.body.code });
+    // A proof beats a claim: anyone whose claim now steps back, and the person who proved it, are told.
+    if (result.state === 'completed' && result.verification_status === 'verified') {
+      void homeInstantClaimService.tellProofOverClaims({ homeId: result.home_id, provenUserId: req.user.id });
+    }
+    postcardVerification.send(res, result);
   } catch (error) { postcardVerification.sendError(res, error); }
 });
 router.get('/:id/postcards/:postcardId/verifications/:requestId', postcardNoStore, verifyToken, async (req, res) => {
@@ -2548,6 +2637,8 @@ router.post('/:id/verify-postcard', postcardNoStore, verifyToken, verificationAt
     } catch (_notificationError) {
       logger.warn('Postcard verified but notification delivery failed', { homeId, userId });
     }
+    // A proof beats a claim: anyone whose claim now steps back, and the person who proved it, are told.
+    if (verificationStatus === 'verified') void homeInstantClaimService.tellProofOverClaims({ homeId, provenUserId: userId });
 
     res.json({
       message: verificationStatus === 'verified'
@@ -2564,3 +2655,5 @@ router.post('/:id/verify-postcard', postcardNoStore, verifyToken, verificationAt
 });
 
 module.exports = router;
+// The hourly job settles owner votes nobody opened (jobs/processQuorumActions.js).
+module.exports.processQuorumExpirations = processQuorumExpirations;

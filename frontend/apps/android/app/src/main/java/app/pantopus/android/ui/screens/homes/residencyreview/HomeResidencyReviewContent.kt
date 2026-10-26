@@ -45,7 +45,7 @@ internal fun HomeResidencyReviewCurrent(
         )
         Text("Role: ${roleLabel(occupancy["role_base"] ?: occupancy["role"])}")
         Text("Age group: ${words(occupancy["age_band"])}")
-        Text("Verification: ${verificationLabel(occupancy["verification_status"])}")
+        Text("Verification: ${verificationLabel(review)}")
         MEMBERSHIP_DATES.forEach { (key, title) -> Text("$title: ${residencyReviewDate(occupancy[key])}") }
         Text("What they can do also depends on these dates and their permissions.", style = MaterialTheme.typography.bodySmall)
     }
@@ -108,16 +108,20 @@ private fun joinedAs(value: Any?): String =
 
 private fun roleLabel(value: Any?): String = HomeResidencyReviewRole.entries.firstOrNull { it.wire == value }?.title ?: words(value)
 
-private fun verificationLabel(value: Any?): String =
-    when (value) {
+private fun verificationLabel(review: HomeResidencyCurrentReview): String {
+    if (review.onProbation) return "On probation (nobody answered their request in 7 days)"
+    val value = review.occupancy?.get("verification_status")
+    return when (value) {
         "verified" -> "Verified"
         "pending_approval" -> "Waiting for approval"
         "pending_postcard" -> "Waiting for a postcard"
         "provisional_bootstrap", "provisional" -> "Provisional"
         "moved_out" -> "Left this Home"
         "inactive" -> "Removed"
+        "suspended_challenged" -> "Suspended after a household no"
         else -> words(value)
     }
+}
 
 private fun residencyReviewDate(value: Any?): String =
     if (value == null) {

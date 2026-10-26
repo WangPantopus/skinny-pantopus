@@ -10,4 +10,8 @@ module.exports = {
   notifyPersonaFollow: jest.fn().mockResolvedValue(undefined),
   notifyPersonaFollowApproved: jest.fn().mockResolvedValue(undefined),
   notifyPersonaBroadcast: jest.fn().mockResolvedValue([]),
+  notifyResidencyClaim: jest.fn().mockResolvedValue(null),
+  notifyNewOwnershipClaim: jest.fn().mockResolvedValue(null),
+  notifyOwnershipDispute: jest.fn().mockResolvedValue(null),
+  notifyHomeMemberRemoved: jest.fn().mockResolvedValue(null),
 };

@@ -12,13 +12,26 @@ const MESSAGES = {
   RESIDENCY_ROLE_FORBIDDEN: 'Residency approval cannot grant ownership or management roles.',
   PROPOSED_ROLE_FORBIDDEN: 'That role exceeds the permitted authority or age limit.',
   PERMISSION_DELEGATION_FORBIDDEN: 'You cannot activate permissions that you do not hold.',
+  RESIDENCY_REVIEW_AUTHORITY_REQUIRED: 'You can\'t add someone to this home directly. Send them an invitation instead.',
 };
 function fail(code = 'HOME_ADMISSION_UNAVAILABLE', status = 503) {
   return Object.assign(new Error(MESSAGES[code] || 'Could not confirm this Home admission. Please retry.'), {
     code, status, statusCode: status,
   });
 }
+// Adding someone directly (attach) makes them a household-verified member at once, so it takes the same authority as
+// answering a request to join (home_residency_review_authority): never a claim, which can't vouch for anyone (home
+// claims PR 3). Approve and reject already check it in decide_home_residency_review.
+async function attachAuthority(homeId, actorId) {
+  let response;
+  try { response = await db.rpc('home_residency_review_authority', { p_home_id: homeId, p_actor_id: actorId }); }
+  catch (_) { throw fail(); }
+  if (response?.error?.code?.startsWith('22')) throw fail('INVALID_ADMISSION_REQUEST', 400);
+  if (!response || response.error || typeof response.data !== 'boolean') throw fail();
+  if (!response.data) throw fail('RESIDENCY_REVIEW_AUTHORITY_REQUIRED', 403);
+}
 async function review({ homeId, actorId, action, targetId, claimId, role, reason }) {
+  if (action === 'attach') await attachAuthority(homeId, actorId);
   const payload = action === 'attach' ? { target_id: targetId } : { claim_id: claimId };
   if (action === 'approve' && role !== undefined) payload.role = role;
   if (action === 'reject' && reason !== undefined) payload.reason = reason;

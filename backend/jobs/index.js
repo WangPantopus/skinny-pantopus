@@ -20,6 +20,7 @@
 //   - authRegistryPrune          → hourly at :50 (persistent login)
 //   - nearbyNudges               → hourly at :27 (AI assistant phase 2)
 //   - assistantPickupRules       → hourly at :12 (AI assistant phase 3 standing rules)
+//   - processQuorumActions       → hourly at :33 (owner votes nobody opened)
 // ============================================================
 
 const cron = require('node-cron');
@@ -61,6 +62,7 @@ const processClaimWindows = require('./processClaimWindows');
 const validateHomeCoordinates = require('./validateHomeCoordinates');
 const notifyClaimWindowExpiry = require('./notifyClaimWindowExpiry');
 const expireInitiatedHomeClaims = require('./expireInitiatedHomeClaims');
+const processQuorumActions = require('./processQuorumActions');
 const evidenceRetentionSweep = require('./evidenceRetentionSweep');
 const homeDocumentRecovery = require('./homeDocumentRecovery');
 const homeClaimEvidenceRecovery = require('./homeClaimEvidenceRecovery');
@@ -459,6 +461,15 @@ function startJobs(options = {}) {
     'expireInitiatedHomeClaims',
     () => expireInitiatedHomeClaims({ dryRun: householdClaimJobsDryRun }),
   ), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+
+  // ─── Process Quorum Actions (owner votes) ───
+  // Runs hourly at :33.
+  // Settles owner votes nobody opened: expiry, the 7-day waiting period
+  // for tier 1-2 changes, and approved changes not applied yet.
+  scheduleCron('33 * * * *', wrapJob('processQuorumActions', processQuorumActions), {
     scheduled: true,
     timezone: 'UTC',
   });

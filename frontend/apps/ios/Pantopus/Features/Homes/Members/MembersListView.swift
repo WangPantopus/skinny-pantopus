@@ -201,6 +201,13 @@ private struct MemberActionsDialogs: ViewModifier {
                     }
                     .accessibilityIdentifier("membersList_changeRole")
                 }
+                if target.canConfirmClaim {
+                    Button("Yes, they live here") {
+                        actionsTarget = nil
+                        Task { await viewModel.confirmClaim(userId: target.userId) }
+                    }
+                    .accessibilityIdentifier("membersList_confirmClaimAction")
+                }
                 if target.canRemove {
                     Button("Remove from home", role: .destructive) {
                         actionsTarget = nil

@@ -12,6 +12,7 @@ const validate = require('../middleware/validate');
 const Joi = require('joi');
 const logger = require('../utils/logger');
 const { checkHomePermission } = require('../utils/homePermissions');
+const { UNPROVEN_SOURCES } = require('../utils/homeAccessPolicy');
 const { getBusinessIdsWithPermissions } = require('../utils/businessPermissions');
 const { VERIFICATION_RANK } = require('../utils/businessConstants');
 const mailObjects = require('../services/mailObjectStorage');
@@ -769,11 +770,11 @@ const hasVerifiedSenderHome = async (userId) => {
     || occupancyRes.value.data.some(row => !row || typeof row.home_id !== 'string')) return false;
   const occupancies = occupancyRes.value.data;
   const householdHomes = new Set(occupancies
-    .filter(row => row.verification_source === 'household').map(row => row.home_id));
+    .filter(row => UNPROVEN_SOURCES.has(row.verification_source)).map(row => row.home_id));
   const verifiedOwnerRows = ownerRes.status === 'fulfilled' && !ownerRes.value?.error
     && Array.isArray(ownerRes.value?.data) ? ownerRes.value.data : [];
   if (occupancies.some(row => row.is_active === true && row.verification_status === 'verified'
-    && row.verification_source !== 'household')) return true;
+    && !UNPROVEN_SOURCES.has(row.verification_source))) return true;
   for (const row of verifiedOwnerRows) {
     if (!row || typeof row.home_id !== 'string' || householdHomes.has(row.home_id)) continue;
     // The collection can be truncated by PostgREST's max_rows. Only an exact
@@ -783,7 +784,7 @@ const hasVerifiedSenderHome = async (userId) => {
         .eq('user_id', userId).eq('home_id', row.home_id).maybeSingle();
       if (!result || result.error || (result.data !== null
         && (!result.data || Array.isArray(result.data) || result.data.home_id !== row.home_id))) return false;
-      if (result.data === null || result.data.verification_source !== 'household') return true;
+      if (result.data === null || !UNPROVEN_SOURCES.has(result.data.verification_source)) return true;
     } catch (_) { return false; }
   }
   return false;

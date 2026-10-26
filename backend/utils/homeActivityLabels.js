@@ -29,6 +29,7 @@ const HOME_ACTIVITY_LABELS = {
   residency_submission_saved: 'Residency claim submitted',
   residency_legacy_submission_saved: 'Residency claim submitted',
   residency_claim_rejected: 'Residency claim declined',
+  HOME_CLAIM_CONFIRMED: 'Verified resident confirmed a member',
   MAIL_CODE_VERIFIED: 'Address verified by mail',
   POSTCARD_CODE_VERIFIED: 'Address verified by postcard',
   POSTCARD_REQUEST_SAVED: 'Verification postcard requested',
@@ -43,17 +44,38 @@ const HOME_ACTIVITY_LABELS = {
   QUORUM_ACTION_EXECUTED: 'Owner vote carried out',
   QUORUM_ACTION_EXPIRED: 'Owner vote expired',
   QUORUM_ACTION_AUTO_APPROVED: 'Owner vote approved automatically',
+  REMOVAL_VOTE_OPENED: 'Household vote opened about a member',
+  REMOVAL_VOTE_CONTESTED: 'Member contested a household vote',
   AUTHORITY_REQUESTED: 'Landlord verification requested',
   AUTHORITY_VERIFIED: 'Landlord verified',
   AUTHORITY_REVOKED: 'Landlord verification revoked',
   TENANT_MOVE_OUT: 'Tenant moved out',
 };
 const CHECKLIST_ACTIVITY_LABELS = { completed: 'Checklist item completed', skipped: 'Checklist item skipped' };
+// A household removal vote's outcome (home_removal_vote_decide, or Pantopus's review of a contested one); its rows
+// name no voter.
+const REMOVAL_VOTE_OUTCOME_LABELS = {
+  removed: 'Household vote removed a member',
+  kept: 'Household vote ended: the member stays',
+  review: 'Household vote sent to Pantopus review',
+  not_applied: 'Household vote passed but couldn\'t be applied',
+  expired: 'Household vote closed: the member stays',
+  withdrawn: 'Household vote closed: the member had left',
+};
+const REMOVAL_VOTE_REVIEWED_LABELS = {
+  removed: 'Pantopus upheld a household vote: the member was removed',
+  kept: 'Pantopus reviewed a household vote: the member stays',
+  not_applied: 'Pantopus upheld a household vote, but it couldn\'t be applied',
+};
 
 function describeHomeActivity(row) {
   const metadata = row.metadata && typeof row.metadata === 'object' ? row.metadata : {};
   if (row.action === 'home_checklist_updated' && CHECKLIST_ACTIVITY_LABELS[metadata.status]) return CHECKLIST_ACTIVITY_LABELS[metadata.status];
   if (row.action === 'member_remove' && metadata.user_id && metadata.user_id === row.actor_user_id) return 'Member left the home';
+  if (row.action === 'REMOVAL_VOTE_ENDED') {
+    return (metadata.reviewed === true ? REMOVAL_VOTE_REVIEWED_LABELS : REMOVAL_VOTE_OUTCOME_LABELS)[metadata.outcome]
+      || 'Household vote ended';
+  }
   if (Object.hasOwn(HOME_ACTIVITY_LABELS, row.action)) return HOME_ACTIVITY_LABELS[row.action];
   const words = String(row.action || '').replace(/[_.]+/g, ' ').trim().toLowerCase();
   return words ? words[0].toUpperCase() + words.slice(1) : 'Home activity';

@@ -160,6 +160,14 @@ data class ChangeMemberRoleResponse(
     @Json(name = "role_base") val roleBase: String? = null,
 )
 
+/** `{ confirmed, replayed, message }` from the confirm-claim route. */
+@JsonClass(generateAdapter = true)
+data class ConfirmClaimMemberResponse(
+    val confirmed: Boolean? = null,
+    val replayed: Boolean? = null,
+    val message: String? = null,
+)
+
 /** Joined `User` record on a household-access request row. */
 @JsonClass(generateAdapter = true)
 data class HouseholdAccessRequesterDto(

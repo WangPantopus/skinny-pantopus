@@ -65,19 +65,20 @@ const PERSONAL_TEMPLATES = [
   { name: 'setup_failed', pushTitle: 'Setup failed for "{gig.title}"', pushBody: 'We could not finish setting up your gig.' },
   { name: 'connection_request', pushTitle: 'New connection request', pushBody: '{actor.displayName} wants to connect with you.' },
   { name: 'connection_accepted', pushTitle: 'Connection accepted', pushBody: '{actor.displayName} accepted your connection request.' },
-  { name: 'residency_claim', pushTitle: 'New residency claim', pushBody: '{actor.displayName} claims to live at {home.name}.' },
+  { name: 'residency_claim', pushTitle: '{actor.displayName} asked to join your home', pushBody: 'They say they live at {home.name}.' },
   { name: 'residency_approved', pushTitle: 'Residency approved at {home.name}', pushBody: 'Your residency claim was approved.' },
   { name: 'residency_rejected', pushTitle: 'Residency claim not approved', pushBody: '{reason}' },
   { name: 'ownership_verification_needed', pushTitle: 'Verify ownership of {home.name}', pushBody: 'Provide a proof document to continue.' },
   { name: 'ownership_claim_approved', pushTitle: 'Home verification approved', pushBody: 'Your home verification request was approved.' },
   { name: 'ownership_claim_rejected', pushTitle: 'Home verification not approved', pushBody: '{reason}' },
   { name: 'ownership_claim_needs_more_info', pushTitle: 'More info needed', pushBody: 'We need additional details for {home.name}.' },
-  { name: 'new_ownership_claim', pushTitle: 'New ownership claim', pushBody: '{actor.displayName} claims ownership of {home.name}.' },
-  { name: 'ownership_dispute', pushTitle: 'Ownership dispute at {home.name}', pushBody: 'A counter-claim was filed.' },
+  { name: 'new_ownership_claim', pushTitle: 'New ownership claim', pushBody: 'Someone submitted an ownership claim for {home.name}.' },
+  { name: 'ownership_dispute', pushTitle: 'Ownership dispute', pushBody: 'Someone filed ownership documents that dispute who owns {home.name}. Pantopus will review them.' },
   { name: 'mail_delivered', pushTitle: 'Mail delivered', pushBody: 'New mail at {mailbox.id}.' },
   { name: 'density_milestone', pushTitle: 'Neighborhood milestone reached', pushBody: '{message}' },
   { name: 'household_access_request', pushTitle: 'Household access request', pushBody: '{actor.displayName} requested access to your home.' },
   { name: 'household_access_request_rejected', pushTitle: 'Household request not approved', pushBody: 'Your request for {home.name} was not approved.' },
+  { name: 'home_member_removed', pushTitle: 'Removed from a household', pushBody: "You're no longer a member of {home.name} on Pantopus." },
 ];
 
 for (const tpl of PERSONAL_TEMPLATES) {
@@ -230,8 +231,9 @@ const GIG_TYPES = new Set([
 const HOME_TYPES = new Set([
   // Household
   'home_invite', 'home_invite_accepted',
-  'member_moved_out', 'access_challenged', 'member_challenged',
-  'home_access_request', 'home_access_request_rejected',
+  'member_moved_out', 'access_challenged', 'member_challenged', 'residency_probation_started', 'residency_probation_household',
+  'home_access_request', 'home_access_request_rejected', 'home_member_removed',
+  'home_removal_vote_opened', 'home_removal_vote_about_you', 'home_removal_vote_ended',
   // Tasks
   'task_assigned', 'task_completed',
   'bill_reminder', 'home_update',
@@ -242,6 +244,8 @@ const HOME_TYPES = new Set([
   'new_ownership_claim', 'ownership_dispute',
   'challenge_window_opened', 'ownership_transfer_received',
   'tenant_request',
+  // A proof beats a claim (home claims PR 3): someone proved the address, someone should confirm a claim, confirmed.
+  'home_claim_set_aside', 'home_claim_to_review', 'home_claim_confirmed',
   // Home Record Watch (Wave 2b) — governed by the home-reminders toggle.
   'rate_watch',
   // A household letter another member deleted or dismissed (with Restore).
@@ -973,18 +977,21 @@ async function notifyPersonaBroadcast({
 }
 
 /**
- * Notify home authorities about a new residency claim.
+ * Tell someone who can approve a household-review residency request that it is waiting. The claimant goes by the
+ * name they show neighbors (services/chatPeople.js). The link opens the review's Residency tab: the web reads ?tab=
+ * and the apps open that tab for this path.
  */
-async function notifyResidencyClaim({ authorityUserId, claimantName, homeName, homeId, claimantId, claimedRole }) {
-  const roleLabel = claimedRole ? ` as ${claimedRole}` : '';
+async function notifyResidencyClaim({ authorityUserId, claimantName, homeName, homeId, claimantId, claimedRole, claimId, idempotencyKey }) {
+  const roleLabel = { renter: 'a renter', household: 'a household member' }[claimedRole] || 'a resident';
   return createNotification({
     userId: authorityUserId,
     type: 'residency_claim',
-    title: 'New home access request',
-    body: `${claimantName} is requesting to join ${homeName || 'your home'}${roleLabel}.`,
+    title: `${claimantName || 'Someone'} asked to join your home`,
+    body: `They say they live at ${homeName || 'your home'} as ${roleLabel}. Open the request to approve it if they do or turn it down if they don't.`,
     icon: '📩',
-    link: `/homes/${homeId}/owners/review-claim`,
-    metadata: { home_id: homeId, claimant_id: claimantId, claimed_role: claimedRole },
+    link: `/homes/${homeId}/owners/review-claim?tab=residency`,
+    metadata: { home_id: homeId, claimant_id: claimantId, claimed_role: claimedRole || null, claim_id: claimId || null },
+    ...(idempotencyKey ? { idempotencyKey } : {}),
   });
 }
 
@@ -1085,32 +1092,56 @@ async function notifyOwnershipClaimNeedsMoreInfo({ userId, homeName, homeId }) {
 }
 
 /**
- * Notify existing owners about a new ownership claim on their home.
+ * Tell a current owner that someone filed an ownership claim for their home. Owners see claimants masked
+ * (GET /:id/ownership-claims), so the notice names nobody. The link opens the review's Ownership tab on the web;
+ * the apps open their claim review, whose Ownership tab lists it.
  */
-async function notifyNewOwnershipClaim({ ownerUserId, claimantName, homeName, homeId, claimId }) {
+async function notifyNewOwnershipClaim({ ownerUserId, homeName, homeId, claimId }) {
   return createNotification({
     userId: ownerUserId,
     type: 'new_ownership_claim',
     title: 'New ownership claim',
-    body: `${claimantName || 'Someone'} submitted an ownership claim for ${homeName || 'your home'}.`,
+    body: `Someone submitted an ownership claim for ${homeName || 'your home'}. Open Review claims to see it.`,
     icon: '⚠️',
-    link: `/homes/${homeId}/owners/review-claim`,
+    link: `/homes/${homeId}/owners/review-claim?tab=ownership`,
     metadata: { home_id: homeId, claim_id: claimId },
+    idempotencyKey: `new-ownership-claim:${claimId}:${ownerUserId}`,
   });
 }
 
 /**
- * Notify owners about a dispute being triggered on their home.
+ * Tell a current owner that someone filed documents disputing ownership; the documents still need review.
+ * Pantopus reviews it in the admin claims queue. Dispute escalation is off (routes/homeOwnership.js
+ * markHomeSecurityDisputed), so nothing at the home is restricted meanwhile; the dispute center page only redirects,
+ * so the link opens the claim review, which marks the claim as needing admin review.
  */
-async function notifyOwnershipDispute({ userId, homeName, homeId }) {
+async function notifyOwnershipDispute({ userId, homeName, homeId, claimId }) {
   return createNotification({
     userId,
     type: 'ownership_dispute',
-    title: 'Ownership dispute detected',
-    body: `A dispute has been detected for ${homeName || 'your home'}. Some actions may be restricted until resolved.`,
+    title: 'Ownership dispute',
+    body: `Someone filed ownership documents that dispute who owns ${homeName || 'your home'}. Pantopus will review them. Your access hasn't changed.`,
     icon: '⚖️',
-    link: `/homes/${homeId}/dispute`,
+    link: `/homes/${homeId}/owners/review-claim?tab=ownership`,
+    metadata: { home_id: homeId, claim_id: claimId },
+    idempotencyKey: `ownership-dispute:${claimId}:${userId}`,
+  });
+}
+
+/**
+ * Tell a person that someone else removed them from a household. It doesn't say who, and it has no link: they can no
+ * longer open the Home. The way back is the one a removed member's residency request is told
+ * (MEMBERSHIP_RENEWAL_REQUIRED): an invitation from the household.
+ */
+async function notifyHomeMemberRemoved({ userId, homeName, homeId, idempotencyKey }) {
+  return createNotification({
+    userId,
+    type: 'home_member_removed',
+    title: 'Removed from a household',
+    body: `You're no longer a member of ${homeName || 'a home'} on Pantopus. If you still live there, ask someone in the household to invite you again.`,
+    icon: '🏠',
     metadata: { home_id: homeId },
+    ...(idempotencyKey ? { idempotencyKey } : {}),
   });
 }
 
@@ -1477,6 +1508,7 @@ module.exports = {
   notifyOwnershipClaimNeedsMoreInfo,
   notifyNewOwnershipClaim,
   notifyOwnershipDispute,
+  notifyHomeMemberRemoved,
   // Mail delivery notifications
   notifyMailDelivered,
   notifyHomeMailRemoved,

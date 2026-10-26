@@ -34,9 +34,15 @@ object HomePostalMessages {
         when (outcome?.state) {
             "completed" -> if (kind == HomePostalKind.Code) "Code accepted" else "Postcard requested"
             "cancelled" -> "Attempt discarded"
-            "rejected" -> "Couldn't finish this"
+            "rejected" -> if (sentForReview(outcome)) "Proof sent for review" else "Couldn't finish this"
             else -> "Check your last attempt"
         }
+
+    /**
+     * A right code from someone the household said no to (home claims PR 4) isn't a failure: the proof goes to
+     * Pantopus review, and their access stays off until then.
+     */
+    fun sentForReview(outcome: HomePostalOutcome?): Boolean = outcome?.state == "rejected" && outcome.code == "POSTCARD_DISPUTE_RECORDED"
 
     fun explanation(
         kind: HomePostalKind,
@@ -85,6 +91,10 @@ object HomePostalMessages {
             "POSTCARD_LOCKED" -> "No tries left for this postcard. Request a new one."
             "POSTCARD_ACCESS_REVIEW_REQUIRED" ->
                 "A mail code can't restore access that was removed or has ended. Ask someone in the household to invite you again."
+            "POSTCARD_DISPUTE_RECORDED" ->
+                "Your code is right. Because someone in the household said you don't live here, Pantopus will review your proof. " +
+                    "Your access stays off until then."
+            "POSTCARD_DISPUTE_IN_REVIEW" -> "Pantopus is reviewing your proof of this address. Your access stays off until then."
             "POSTCARD_REVIEW_ALREADY_RECORDED" -> "You're already verified. Residency status shows your access."
             "POSTCARD_HOME_UNAVAILABLE" -> "Mail verification is unavailable for this Home right now."
             "POSTCARD_RESIDENCY_REQUEST_REQUIRED" -> "Submit your residency request before requesting a postcard."

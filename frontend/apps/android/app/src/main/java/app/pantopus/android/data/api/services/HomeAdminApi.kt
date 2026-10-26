@@ -2,6 +2,7 @@ package app.pantopus.android.data.api.services
 
 import app.pantopus.android.data.api.models.homes.ChangeMemberRoleRequest
 import app.pantopus.android.data.api.models.homes.ChangeMemberRoleResponse
+import app.pantopus.android.data.api.models.homes.ConfirmClaimMemberResponse
 import app.pantopus.android.data.api.models.homes.DeleteHomeResponse
 import app.pantopus.android.data.api.models.homes.HomeAccessDto
 import app.pantopus.android.data.api.models.homes.HomeAuditLogResponse
@@ -110,6 +111,18 @@ interface HomeAdminApi {
         @Path("userId") userId: String,
         @Body body: ChangeMemberRoleRequest,
     ): ChangeMemberRoleResponse
+
+    /**
+     * `POST /api/homes/:id/members/:userId/confirm-claim` — route
+     * `backend/routes/homeIam.js:314`. "Yes, they live here": someone who
+     * proved the address confirms a member whose access is a claim, and the
+     * claim's grants come back to them (home claims PR 3).
+     */
+    @POST("api/homes/{id}/members/{userId}/confirm-claim")
+    suspend fun confirmClaimMember(
+        @Path("id") homeId: String,
+        @Path("userId") userId: String,
+    ): ConfirmClaimMemberResponse
 
     /**
      * `GET /api/homes/:id/household-access-requests` — route

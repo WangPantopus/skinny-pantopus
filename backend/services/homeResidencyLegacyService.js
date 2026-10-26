@@ -27,28 +27,10 @@ function failure(code = 'RESIDENCY_LEGACY_UNAVAILABLE', statusCode = 503) {
 
 async function notifyReviewers(result) {
   if (result.reused || result.routing !== 'household_review') return;
-  try {
-    // This happens after admission committed. Recheck the exact current claim
-    // and real reviewer authority; no profile/address/name lookup is needed.
-    const { data, error } = await db.rpc('get_legacy_home_residency_reviewers', {
-      p_home_id: result.home_id, p_actor_id: result.actor_id, p_claim_id: result.claim.id,
-      p_claim_updated_at: result.claim.updated_at,
-    });
-    if (error || !object(data) || data.ok !== true || data.home_id !== result.home_id
-      || data.actor_id !== result.actor_id || data.claim_id !== result.claim.id
-      || !Array.isArray(data.reviewer_ids) || data.reviewer_ids.some(id => typeof id !== 'string'
-        || !UUID.test(id) || id === result.actor_id)
-      || new Set(data.reviewer_ids).size !== data.reviewer_ids.length || !data.reviewer_ids.length) return;
-    await require('./notificationService').createBulkNotifications(data.reviewer_ids.map(userId => ({
-      userId, type: 'residency_claim', title: 'New home access request',
-      body: 'A residency request is ready for review. Open the Home to review current details.',
-      icon: '📩', link: `/homes/${result.home_id}/owners/review-claim`,
-      metadata: { home_id: result.home_id, claimant_id: result.actor_id, claim_id: result.claim.id },
-    })));
-  } catch (_) {
-    // This optional notice cannot change the saved outcome. It is not proof
-    // of inbox/device delivery, and retries never duplicate the admission.
-  }
+  // After admission committed: the shared notice rechecks the exact saved claim and real reviewer authority. The
+  // caller's claimed address never reaches it; the claimant goes by the name they show neighbors.
+  await require('./homeResidencySubmissionService').notifyReviewers({ homeId: result.home_id, actorId: result.actor_id,
+    claimId: result.claim.id, claimUpdatedAt: result.claim.updated_at, claimedRole: result.claimed_role });
 }
 
 async function submit({ homeId, actorId, intent }) {
@@ -89,6 +71,11 @@ async function submit({ homeId, actorId, intent }) {
   // the legacy envelope, and no fabricated command or address proof is returned.
   const saved = { ...result, claim: Object.fromEntries(CLAIM_FIELDS.map(key => [key, claim[key]])) };
   await notifyReviewers(saved);
+  if (!saved.reused) {
+    // After the admission committed: it can only flag the request for the admin queue.
+    await require('../utils/homeSecurityPolicy').watchResidencyRequest({ homeId: saved.home_id, userId: saved.actor_id,
+      source: 'residency_request' });
+  }
   return saved;
 }
 

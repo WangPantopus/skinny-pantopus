@@ -55,8 +55,8 @@ final class DeepLinkRouter {
         /// `pantopus://homes/:id/owners` — the Owners list (`claim_window_expiring`).
         case homeOwners(id: String)
         /// `pantopus://homes/:id/owners/review-claim` — the owner's claim review
-        /// on its Residency tab (`residency_claim`).
-        case homeClaimReview(id: String)
+        /// on Ownership for `tab=ownership`, otherwise Residency.
+        case homeClaimReview(id: String, residency: Bool = true)
         /// `pantopus://homes/:id/owners/transfer` — A13.4 Transfer Ownership
         /// form. Lands on the populated state; the form owns the Face ID
         /// bottom sheet.
@@ -855,7 +855,7 @@ final class DeepLinkRouter {
         if trailing.first == "owners" {
             switch trailing.dropFirst().first {
             case "transfer": return .homeOwnersTransfer(id: id)
-            case "review-claim": return .homeClaimReview(id: id)
+            case "review-claim": return .homeClaimReview(id: id, residency: tabQuery != "ownership")
             case nil: return .homeOwners(id: id)
             default: break
             }
