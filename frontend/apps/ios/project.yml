@@ -19,7 +19,7 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.10"
-    MARKETING_VERSION: "1.0.0"
+    MARKETING_VERSION: "2.0.4"
     CURRENT_PROJECT_VERSION: "1"
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     SWIFT_STRICT_CONCURRENCY: complete
@@ -173,7 +173,7 @@ targets:
           - webcredentials:pantopus.app
           - webcredentials:www.pantopus.app
         # Native Sign in with Apple (AppleSignInCoordinator). The App ID
-        # app.pantopus.ios needs the Sign In with Apple capability before
+        # com.pantopus.app needs the Sign In with Apple capability before
         # its App Store profile is generated.
         com.apple.developer.applesignin:
           - Default
@@ -183,7 +183,7 @@ targets:
           - group.app.pantopus.ios
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: app.pantopus.ios
+        PRODUCT_BUNDLE_IDENTIFIER: com.pantopus.app
         PRODUCT_NAME: Pantopus
         # iPhone only: no screen has an iPad layout, and an iPad build needs its own
         # App Store screenshots. iPads still run the app in iPhone compatibility mode.
@@ -288,7 +288,7 @@ targets:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: app.pantopus.ios.widgets
+        PRODUCT_BUNDLE_IDENTIFIER: com.pantopus.app.widgets
         PRODUCT_NAME: PantopusWidgets
         TARGETED_DEVICE_FAMILY: "1" # matches the app
         SKIP_INSTALL: YES

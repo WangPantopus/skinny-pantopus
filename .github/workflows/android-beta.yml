@@ -53,20 +53,20 @@ jobs:
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > pantopus-release.jks
 
       # The committed app/google-services.json is a build placeholder. The
-      # release app needs the Firebase config for app.pantopus.android or push
+      # release app needs the Firebase config for com.pantopus.app or push
       # never arrives; the plugin prefers app/src/release/ over app/.
       - name: Write release Firebase config
         env:
           GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: |
-          : "${GOOGLE_SERVICES_JSON:?Missing secret GOOGLE_SERVICES_JSON (Firebase config for app.pantopus.android)}"
+          : "${GOOGLE_SERVICES_JSON:?Missing secret GOOGLE_SERVICES_JSON (Firebase config for com.pantopus.app)}"
           mkdir -p app/src/release
           printf '%s' "$GOOGLE_SERVICES_JSON" > app/src/release/google-services.json
           node -e '
             const c = JSON.parse(require("fs").readFileSync("app/src/release/google-services.json", "utf8"));
             const ok = c.project_info && !/^0+$/.test(c.project_info.project_number || "0")
-              && (c.client || []).some((x) => x.client_info?.android_client_info?.package_name === "app.pantopus.android");
-            if (!ok) { console.error("GOOGLE_SERVICES_JSON is not a real Firebase config for app.pantopus.android"); process.exit(1); }'
+              && (c.client || []).some((x) => x.client_info?.android_client_info?.package_name === "com.pantopus.app");
+            if (!ok) { console.error("GOOGLE_SERVICES_JSON is not a real Firebase config for com.pantopus.app"); process.exit(1); }'
 
       - name: Write .env + signing properties
         env:

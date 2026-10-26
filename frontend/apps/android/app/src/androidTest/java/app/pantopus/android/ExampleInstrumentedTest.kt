@@ -16,6 +16,6 @@ class ExampleInstrumentedTest {
     @Test
     fun useAppContext() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        assertEquals("app.pantopus.android.debug", context.packageName)
+        assertEquals("com.pantopus.app.debug", context.packageName)
     }
 }

@@ -17,7 +17,7 @@ import time
 import urllib.request
 import xml.etree.ElementTree as ET
 
-PACKAGE = 'app.pantopus.android.debug'
+PACKAGE = 'com.pantopus.app.debug'
 ACTIVITY = PACKAGE + '/app.pantopus.android.MainActivity'
 AVD = 'Pantopus_Home_Recurrence_Acceptance'
 ORIGIN = 'http://127.0.0.1:18083'
