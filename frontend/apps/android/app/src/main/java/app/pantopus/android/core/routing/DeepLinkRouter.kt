@@ -118,9 +118,9 @@ object DeepLinkRouter {
 
         /**
          * `pantopus://homes/:id/owners/review-claim` — the owner's claim
-         * review on its Residency tab (`residency_claim`).
+         * review on Ownership for `tab=ownership`, otherwise Residency.
          */
-        data class HomeClaimReview(val id: String) : Destination
+        data class HomeClaimReview(val id: String, val residency: Boolean = true) : Destination
 
         /**
          * `pantopus://homes/:id/owners/transfer` — A13.4 Transfer
@@ -908,7 +908,7 @@ object DeepLinkRouter {
                     "owners" ->
                         when (trailing.getOrNull(1)) {
                             "transfer" -> Destination.HomeOwnersTransfer(id)
-                            "review-claim" -> Destination.HomeClaimReview(id)
+                            "review-claim" -> Destination.HomeClaimReview(id, residency = tabQuery != "ownership")
                             null -> Destination.HomeOwners(id)
                             else -> Destination.HomeDetail(id)
                         }
