@@ -19,6 +19,7 @@ const probationGuidance = {
   active: { title: 'You’re on probation', body: 'Nobody in the household answered your request in 7 days, so you’re on probation. Household records stay private until someone there says yes or you verify your address by mail.' },
   ended: { title: 'The household said no', body: 'Someone in the household said you don’t live here, so your probation ended. If you do live here, verify your address by mail. Pantopus will review your proof, and your access stays off until then.' },
   review: { title: 'Pantopus is reviewing your proof', body: 'You verified this address by mail after the household said no. Pantopus is reviewing it, and your access stays off until then.' },
+  declined: { title: 'Pantopus kept the household’s answer', body: 'Pantopus reviewed your proof of this address and kept the household’s no. To join this household, ask someone there to invite you.' },
 };
 
 export default function ResidencyStatusPage() {

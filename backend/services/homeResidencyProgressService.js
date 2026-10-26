@@ -67,25 +67,29 @@ async function references(homeId, actorId) {
     checked(db.from('HomeOwner').select('id, home_id, subject_id, subject_type')
       .eq('home_id', homeId).eq('subject_id', actorId).eq('subject_type', 'user').maybeSingle()),
     checked(db.from('Home').select('id, created_by_user_id').eq('id', homeId).eq('created_by_user_id', actorId).maybeSingle()),
-    // The person's own open dispute after a no ended their probation (home claims PR 4).
-    checked(db.from('AddressReviewCase').select('id').eq('home_id', homeId).eq('user_id', actorId)
-      .eq('trigger', 'probation_dispute').in('status', ['open', 'in_review']).limit(1)),
+    // The person's own latest dispute after a no ended their probation (home claims PR 4).
+    checked(db.from('AddressReviewCase').select('status, created_at').eq('home_id', homeId).eq('user_id', actorId)
+      .eq('trigger', 'probation_dispute').order('created_at', { ascending: false }).limit(1)),
   ]);
   if (request !== null) claim(request, actorId, homeId);
   if (occupancy !== null && (!occupancy || !uuid(occupancy.id) || occupancy.home_id !== homeId || occupancy.user_id !== actorId)) throw failure();
   if (owner !== null && (!owner || !uuid(owner.id) || owner.home_id !== homeId || owner.subject_id !== actorId || owner.subject_type !== 'user')) throw failure();
   if (created !== null && (!created || created.id !== homeId || created.created_by_user_id !== actorId)) throw failure();
-  if (!Array.isArray(disputes)) throw failure();
-  return { request, occupancy, owner, created, dispute: disputes.length > 0 };
+  if (!Array.isArray(disputes) || (disputes[0] && (typeof disputes[0].status !== 'string' || !date(disputes[0].created_at)))) throw failure();
+  return { request, occupancy, owner, created, dispute: disputes[0] || null };
 }
 // Home claims PR 4: probation (a household-review request nobody answered in 7 days) is 'active' until someone in
 // the household says yes or the address is proven; a no or a challenge ends it, and the person's way back is proof
-// by mail, which opens a Pantopus review ('review'). next_step stays what older apps know.
+// by mail, which opens a Pantopus review ('review'). Pantopus restores the membership, keeps the no ('declined',
+// final for this probation) or closes the review without a decision ('ended' again). Only a dispute from this
+// probation counts: its challenge window started when it began. next_step stays what older apps know.
 function probation(occupancy, dispute) {
   if (occupancy?.verification_source !== 'probation') return null;
   if (occupancy.is_active === true && occupancy.verification_status === 'provisional') return 'active';
-  if (occupancy.is_active === false && occupancy.verification_status === 'suspended_challenged') return dispute ? 'review' : 'ended';
-  return null;
+  if (occupancy.is_active !== false || occupancy.verification_status !== 'suspended_challenged') return null;
+  const current = dispute && !(Date.parse(dispute.created_at) < Date.parse(occupancy.challenge_window_started_at));
+  if (current && ['open', 'in_review'].includes(dispute.status)) return 'review';
+  return current && dispute.status === 'rejected' ? 'declined' : 'ended';
 }
 function nextStep(refs, state, actorId) {
   const { home, access, owners, mode } = state;
