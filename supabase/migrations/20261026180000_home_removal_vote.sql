@@ -34,8 +34,8 @@
 --     rejoining without an invitation), called with no actor through a vote mode in home_member_removal_context.
 --
 -- Latest permitted sources (bodies copied unchanged except the lines commented below):
---   home_effective_access          supabase/migrations/20261025120000_home_instant_claim.sql:989
---   home_member_removal_context    supabase/migrations/20261025120000_home_instant_claim.sql:515
+--   home_effective_access          supabase/migrations/20261026120000_home_instant_claim.sql:989
+--   home_member_removal_context    supabase/migrations/20261026120000_home_instant_claim.sql:515
 SET LOCAL lock_timeout='5s';
 
 ALTER TABLE public."HomeQuorumAction" DROP CONSTRAINT "HomeQuorumAction_action_type_chk";

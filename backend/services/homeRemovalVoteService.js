@@ -1,6 +1,6 @@
 // Resident removal vote (home claims plan, PR 5; founder approved 2026-10-25). Settled residents can remove someone
 // who doesn't belong without an owner or manager: a majority of the other settled residents, and at least 2 of them,
-// within 7 days (supabase/migrations/20261025180000_home_removal_vote.sql), one vote per Home at a time. Owners stay
+// within 7 days (supabase/migrations/20261026180000_home_removal_vote.sql), one vote per Home at a time. Owners stay
 // under the owners' vote. The person keeps access while the vote is open and is told it's open and the result, never
 // who started it or how anyone voted. A vote to remove takes effect only when it closes, the full 7 days, so they have
 // time to prove the address by mail and contest; a proven member who contests goes to Pantopus review, which decides
