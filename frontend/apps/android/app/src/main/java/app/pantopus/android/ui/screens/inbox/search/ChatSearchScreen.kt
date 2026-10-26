@@ -15,8 +15,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -57,6 +59,8 @@ fun ChatSearchScreen(
     val query by viewModel.query.collectAsStateWithLifecycle()
     val results by viewModel.results.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val hasMore by viewModel.hasMore.collectAsStateWithLifecycle()
+    val error by viewModel.error.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) { viewModel.load() }
 
@@ -65,14 +69,39 @@ fun ChatSearchScreen(
         query = query,
         onQueryChange = viewModel::setQuery,
         results = results,
-        isLoading = isLoading,
+        isLoading = isLoading && results.isEmpty(),
         emptyState =
             EmptyStateContent(
                 icon = PantopusIcon.Search,
                 headline = "No matches",
                 subcopy = "Try a name or a word from a message.",
             ),
-        row = { result -> ChatSearchResultRow(result = result, onClick = { onOpenResult(result) }) },
+        row = { result ->
+            ChatSearchResultRow(result = result, onClick = { onOpenResult(result) })
+            if (result == results.lastOrNull() && hasMore) {
+                LaunchedEffect(results.size, isLoading, error) {
+                    if (!isLoading && error == null) viewModel.loadMore()
+                }
+                Box(Modifier.fillMaxWidth().padding(Spacing.s3), contentAlignment = Alignment.Center) {
+                    if (error != null) {
+                        TextButton(onClick = viewModel::loadMore) { Text("Couldn't load more. Try again") }
+                    } else {
+                        CircularProgressIndicator(Modifier.size(24.dp))
+                    }
+                }
+            }
+        },
+        errorContent =
+            if (error != null && results.isEmpty()) {
+                {
+                    Column(Modifier.fillMaxWidth().padding(Spacing.s4), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Couldn't search messages", color = PantopusColors.appText)
+                        TextButton(onClick = viewModel::loadMore) { Text("Try again") }
+                    }
+                }
+            } else {
+                null
+            },
         onCancel = onCancel,
     )
 }

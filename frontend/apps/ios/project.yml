@@ -127,7 +127,7 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         NSLocationWhenInUseUsageDescription: "Pantopus uses your location to help find your address and show nearby activity."
         NSLocationAlwaysAndWhenInUseUsageDescription: "Pantopus uses your location to help find your address and show nearby activity."
-        NSCameraUsageDescription: "Pantopus uses the camera for profile photos, photos of your mail and home, and photos you send in chat."
+        NSCameraUsageDescription: "Pantopus uses the camera for profile photos, photos of your mail and home, photos you post, and photos you send in chat."
         NSPhotoLibraryUsageDescription: "Pantopus uses photos you choose for your profile, posts, home records and mail."
         NSPhotoLibraryAddUsageDescription: "Pantopus saves images you choose to export, like a QR code, to your photo library."
         NSMicrophoneUsageDescription: "Pantopus uses the microphone for voice messages in chat."

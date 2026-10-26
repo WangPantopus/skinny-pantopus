@@ -109,10 +109,23 @@ router.get('/games', async (req, res) => {
     const viewer = await loadViewer(req.user, { point: pointFromQuery(req.query), gps: gpsFromQuery(req.query) });
     warmPlaces(viewer);
     const near = viewer.origin ? [...viewer.locations, viewer.origin] : viewer.locations;
+    if (req.query.v === '2' && viewer.sportsFlag) {
+      return res.json(await planGames.gamesForViewer(viewer, req.query.for === 'composer' ? 'composer' : 'sheet'));
+    }
     return res.json({ games: planGames.upcomingGames(Date.now(), { near }) });
   } catch (err) {
     return serverError(res, err, 'games', req);
   }
+});
+
+router.get('/teams', requireFeatureFlag('plans_sports'), async (req, res) => {
+  try {
+    const viewer = await loadViewer(req.user, { point: pointFromQuery(req.query), gps: gpsFromQuery(req.query) });
+    const { searchTeams, teamById, publicTeam } = require('../services/plans/planTeams');
+    const q = typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 100) : '';
+    const chosen = [...new Set([...(viewer.sports.teams || []), ...(viewer.sports.hidden || [])])].map(teamById).filter(Boolean);
+    return res.json({ suggested: planGames.suggestedForViewer(viewer).map(publicTeam), results: (q ? searchTeams(q) : chosen).map(publicTeam) });
+  } catch (err) { return serverError(res, err, 'teams', req); }
 });
 
 /** The plan's start or end from a query or body value (ISO 8601), or null. */

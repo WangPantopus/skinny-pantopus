@@ -14,29 +14,34 @@ import SwiftUI
 struct CachedAsyncImage<Content: View>: View {
     private let url: URL?
     private let keepsOnDisk: Bool
+    private let maxPixelSize: Int?
     private let transaction: Transaction
     private let content: (AsyncImagePhase) -> Content
     @State private var phase: AsyncImagePhase
     @State private var loadedURL: URL?
+    @State private var loadedMaxPixelSize: Int?
 
     init(
         url: URL?,
         keepsOnDisk: Bool = true,
+        maxPixelSize: Int? = nil,
         transaction: Transaction = Transaction(),
         @ViewBuilder content: @escaping (AsyncImagePhase) -> Content
     ) {
         self.url = url
         self.keepsOnDisk = keepsOnDisk
+        self.maxPixelSize = maxPixelSize
         self.transaction = transaction
         self.content = content
-        let cached = url.flatMap { PantopusImagePipeline.shared.cachedImage(for: $0) }
+        let cached = url.flatMap { PantopusImagePipeline.shared.cachedImage(for: $0, maxPixelSize: maxPixelSize) }
         _phase = State(initialValue: cached.map { .success(Image(uiImage: $0)) } ?? .empty)
         _loadedURL = State(initialValue: cached == nil ? nil : url)
+        _loadedMaxPixelSize = State(initialValue: maxPixelSize)
     }
 
     var body: some View {
         content(phase)
-            .task(id: url) { await load() }
+            .task(id: "\(url?.absoluteString ?? "")#\(maxPixelSize ?? 0)") { await load() }
     }
 
     private func load() async {
@@ -45,19 +50,21 @@ struct CachedAsyncImage<Content: View>: View {
             loadedURL = nil
             return
         }
-        guard loadedURL != url else { return }
-        if let cached = PantopusImagePipeline.shared.cachedImage(for: url) {
+        guard loadedURL != url || loadedMaxPixelSize != maxPixelSize else { return }
+        if let cached = PantopusImagePipeline.shared.cachedImage(for: url, maxPixelSize: maxPixelSize) {
             phase = .success(Image(uiImage: cached))
             loadedURL = url
+            loadedMaxPixelSize = maxPixelSize
             return
         }
         if loadedURL != nil { phase = .empty }
-        let image = await PantopusImagePipeline.shared.image(for: url, keepsOnDisk: keepsOnDisk)
+        let image = await PantopusImagePipeline.shared.image(for: url, keepsOnDisk: keepsOnDisk, maxPixelSize: maxPixelSize)
         guard !Task.isCancelled else { return }
         withTransaction(transaction) {
             phase = image.map { .success(Image(uiImage: $0)) } ?? .failure(URLError(.cannotDecodeContentData))
         }
         loadedURL = url
+        loadedMaxPixelSize = maxPixelSize
     }
 }
 

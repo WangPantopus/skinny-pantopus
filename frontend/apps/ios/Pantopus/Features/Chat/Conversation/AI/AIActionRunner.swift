@@ -41,6 +41,7 @@ enum AIActionAllowlist {
         (.post, "/api/homes/:id/assets"),
         (.post, "/api/homes/:id/tasks/:id/recurrence"),
         (.put, "/api/hub/preferences"),
+        (.put, "/api/posts/feed-preferences"),
         // Phase 2: a nudge's "Fewer like this".
         (.post, "/api/ai/nudges/:id/fewer")
     ]

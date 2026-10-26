@@ -71,15 +71,19 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -115,11 +119,13 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.core.routing.DeepLinkRouter
@@ -149,9 +155,12 @@ import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
 import coil.compose.AsyncImage
+import coil.imageLoader
 import coil.request.CachePolicy
 import coil.request.ImageRequest
+import coil.size.Scale
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.UUID
@@ -202,6 +211,8 @@ fun ChatConversationScreen(
     val isCounterpartyTyping by viewModel.isCounterpartyTyping.collectAsStateWithLifecycle()
     val queuedAttachments by viewModel.queuedAttachments.collectAsStateWithLifecycle()
     val pendingScroll by viewModel.pendingScrollTarget.collectAsStateWithLifecycle()
+    val showLatestMessages by viewModel.showLatestMessages.collectAsStateWithLifecycle()
+    val olderPageFailed by viewModel.olderPageFailed.collectAsStateWithLifecycle()
     val sendLimitNotice by viewModel.sendLimitNotice.collectAsStateWithLifecycle()
     val composerClosedNote by viewModel.composerClosedNote.collectAsStateWithLifecycle()
     val isSelectionMode by viewModel.isSelectionMode.collectAsStateWithLifecycle()
@@ -379,6 +390,10 @@ fun ChatConversationScreen(
         )
         viewModel.load()
     }
+    LifecycleStartEffect(viewModel) {
+        viewModel.setForeground(true)
+        onStopOrDispose { viewModel.setForeground(false) }
+    }
     DisposableEffect(Unit) {
         onDispose { viewModel.teardown() }
     }
@@ -503,49 +518,60 @@ fun ChatConversationScreen(
                             aiStarters = aiStarters,
                         )
                     is ChatConversationUiState.Loaded ->
-                        PopulatedFrame(
-                            rows = s.rows,
-                            onRetry = viewModel::retry,
-                            onLoadOlder = viewModel::loadOlder,
-                            scrollToRowId = pendingScroll,
-                            onScrollConsumed = viewModel::consumePendingScroll,
-                            conversationMode = conversationMode,
-                            incomingInitials = incomingInitialsFor(conversationMode, activeCounterparty),
-                            aiPrompts = viewModel.aiPrompts,
-                            onCapabilityTap = viewModel::sendCapabilityPrompt,
-                            onLockedAction = { showFanUpgradePrompt = true },
-                            onBubbleLongPress = {
-                                if (isSelectionMode) viewModel.toggleSelection(it.id) else actionTarget = it
-                            },
-                            selectedMessageIds = if (isSelectionMode) selectedMessageIds else emptySet(),
-                            // A message takes the tap itself, so it puts the keyboard away too.
-                            onBubbleTap = { if (isSelectionMode) viewModel.toggleSelection(it.id) else focusManager.clearFocus() },
-                            // A pickup-days card saves here; once saved it opens Today. Other drafts open composers.
-                            onUseAIDraft = { draft ->
-                                when {
-                                    draft.pickup == null -> onUseAIDraft(draft)
-                                    draft.pickup.save == ChatAIPickupSave.Saved -> onOpenToday()
-                                    else -> viewModel.savePickupSchedule(draft)
-                                }
-                            },
-                            aiReplyActions = aiReplyActions,
-                            onOpenGig = onOpenGig,
-                            onOpenListing = onOpenListing,
-                            onOpenLocation = { lat, lng ->
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("geo:$lat,$lng?q=$lat,$lng"))
-                                runCatching { context.startActivity(intent) }
-                            },
-                            onReact = viewModel::react,
-                            linkPreviews = linkPreviews,
-                            onResolveLink = viewModel::resolveLinkPreview,
-                            onOpenUrl = { url ->
-                                runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
-                            },
-                            onOpenPhotos = { urls, index -> viewerPhotos = urls to index },
-                            onOpenAttachment = { attachment ->
-                                viewModel.openAttachment(attachment, ChatMediaUrl.openedFilesFolder(context.cacheDir).apply { mkdirs() })
-                            },
-                        )
+                        // A topic switch is a new timeline: it opens at that topic's newest message, never at the
+                        // previous topic's scroll anchor.
+                        key(selectedTopicId) {
+                            PopulatedFrame(
+                                rows = s.rows,
+                                onRetry = viewModel::retry,
+                                onLoadOlder = viewModel::loadOlder,
+                                olderPageFailed = olderPageFailed,
+                                onVisibleMessage = viewModel::markVisibleMessageRead,
+                                onViewport = viewModel::observeTimelineViewport,
+                                scrollToRowId = pendingScroll,
+                                onScrollConsumed = viewModel::consumePendingScroll,
+                                showLatestMessages = showLatestMessages,
+                                onLatestMessages = viewModel::returnToLatestMessages,
+                                conversationMode = conversationMode,
+                                incomingInitials = incomingInitialsFor(conversationMode, activeCounterparty),
+                                aiPrompts = viewModel.aiPrompts,
+                                onCapabilityTap = viewModel::sendCapabilityPrompt,
+                                onLockedAction = { showFanUpgradePrompt = true },
+                                onBubbleLongPress = {
+                                    if (isSelectionMode) viewModel.toggleSelection(it.id) else actionTarget = it
+                                },
+                                selectedMessageIds = if (isSelectionMode) selectedMessageIds else emptySet(),
+                                // A message takes the tap itself, so it puts the keyboard away too.
+                                onBubbleTap = { if (isSelectionMode) viewModel.toggleSelection(it.id) else focusManager.clearFocus() },
+                                // A pickup-days card saves here; once saved it opens Today. Other drafts open composers.
+                                onUseAIDraft = { draft ->
+                                    when {
+                                        draft.pickup == null -> onUseAIDraft(draft)
+                                        draft.pickup.save == ChatAIPickupSave.Saved -> onOpenToday()
+                                        else -> viewModel.savePickupSchedule(draft)
+                                    }
+                                },
+                                aiReplyActions = aiReplyActions,
+                                onOpenGig = onOpenGig,
+                                onOpenListing = onOpenListing,
+                                onOpenLocation = { lat, lng ->
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("geo:$lat,$lng?q=$lat,$lng"))
+                                    runCatching { context.startActivity(intent) }
+                                },
+                                onReact = viewModel::react,
+                                linkPreviews = linkPreviews,
+                                onResolveLink = viewModel::resolveLinkPreview,
+                                onOpenUrl = { url ->
+                                    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+                                },
+                                onOpenPhotos = { urls, index -> viewerPhotos = urls to index },
+                                onOpenAttachment = { attachment ->
+                                    val folder = ChatMediaUrl.openedFilesFolder(context.cacheDir).apply { mkdirs() }
+                                    viewModel.openAttachment(attachment, folder)
+                                },
+                                timelineSession = viewModel.timelineSession,
+                            )
+                        }
                     is ChatConversationUiState.Error -> ErrorFrame(message = s.message, onRetry = viewModel::refresh)
                 }
             }
@@ -556,6 +582,7 @@ fun ChatConversationScreen(
                 TypingIndicator(initials = typingInitials)
             }
             if (queuedAttachments.isNotEmpty()) {
+                PrefetchLocalPhotos(queuedAttachments)
                 AttachmentStripView(
                     attachments = queuedAttachments,
                     onRemove = viewModel::removeQueuedAttachment,
@@ -714,6 +741,11 @@ fun ChatConversationScreen(
                 MessageActionSheet(
                     content = target,
                     canManageMessages = viewModel.canManageMessage(target.id),
+                    canDiscardMessage = viewModel.canDiscardMessage(target.id),
+                    onDiscard = {
+                        viewModel.discardMessage(target.id)
+                        actionTarget = null
+                    },
                     onCopy = { actionTarget = null },
                     onReply = {
                         viewModel.beginReply(target.id)
@@ -2723,13 +2755,26 @@ private fun AiWelcomeCard(
  */
 private const val NEAR_BOTTOM_ROW_SLACK = 2
 
+private val PHOTO_BUBBLE_WIDTH = 200.dp
+private val PHOTO_BUBBLE_HEIGHT = 130.dp
+
+/** A send that is accepted sooner shows "Sending..." and then its check, without a spinner flashing in between. */
+private const val SENDING_INDICATOR_DELAY_MS = 600L
+
+private data class ChatPrependAnchor(val rowId: String, val scrollOffset: Int, val oldestMessageId: String)
+
 @Composable
 internal fun PopulatedFrame(
     rows: List<ChatTimelineRow>,
     onRetry: (String) -> Unit,
     onLoadOlder: () -> Unit,
+    olderPageFailed: Boolean = false,
+    onVisibleMessage: (String) -> Unit = {},
+    onViewport: (String?, Boolean) -> Unit = { _, _ -> },
     scrollToRowId: String? = null,
     onScrollConsumed: () -> Unit = {},
+    showLatestMessages: Boolean = false,
+    onLatestMessages: () -> Unit = {},
     conversationMode: ChatConversationMode = ChatConversationMode.Dm,
     incomingInitials: String? = null,
     aiPrompts: List<ChatPromptChip> = emptyList(),
@@ -2749,11 +2794,16 @@ internal fun PopulatedFrame(
     onOpenUrl: (String) -> Unit = {},
     onOpenPhotos: ((List<String>, Int) -> Unit)? = null,
     onOpenAttachment: ((ChatBubbleBody.Attachment) -> Unit)? = null,
+    timelineSession: String? = null,
 ) {
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     var newMessageCount by rememberSaveable { mutableIntStateOf(0) }
     var previousNewestId by rememberSaveable { mutableStateOf<String?>(null) }
+    var previousTailKeys by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var previousRowCount by remember { mutableIntStateOf(0) }
+    var prependAnchor by remember { mutableStateOf<ChatPrependAnchor?>(null) }
+    val oldestMessageId = rows.firstOrNull { it is ChatTimelineRow.Bubble }?.rowId
     // Leading non-row items (pagination spacer + any pinned welcome card)
     // offset row indices inside the LazyColumn.
     val headerCount =
@@ -2761,19 +2811,43 @@ internal fun PopulatedFrame(
     // Set once the first non-empty projection has been positioned — gates
     // the load-older trigger so it can't fire while the list still sits at
     // the top pre-scroll.
-    var initialScrollDone by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(rows.size, rows.lastOrNull()?.rowId) {
+    // A saved position belongs to the view model whose rows it indexed. After the process was stopped, the new one's
+    // rows open at their newest message instead of at that unrelated saved row index.
+    var initialScrollDone by rememberSaveable(key = timelineSession?.let { "chatTimelinePositioned-$it" }) {
+        mutableStateOf(false)
+    }
+    // The first non-empty timeline is measured at its newest message in this same frame, so opening a thread never
+    // flashes its oldest loaded rows or lays them out twice. The effect below then marks the initial scroll done.
+    if (!initialScrollDone && rows.isNotEmpty() && scrollToRowId == null) {
+        SideEffect { listState.requestScrollToItem(headerCount + rows.lastIndex) }
+    }
+    LaunchedEffect(rows.size, rows.lastOrNull()?.rowId, oldestMessageId) {
         if (rows.isEmpty()) return@LaunchedEffect
         val lastIndex = headerCount + rows.lastIndex
         val previousIndex = rows.indexOfLast { it.rowId == previousNewestId }
         val appended = if (previousIndex >= 0) rows.drop(previousIndex + 1).count { it is ChatTimelineRow.Bubble } else 0
+        val oldTailKeys = previousTailKeys
+        val addedRows = rows.size - previousRowCount
+        previousRowCount = rows.size
+        previousTailKeys = rows.takeLast(NEAR_BOTTOM_ROW_SLACK + 1).map { it.rowId }.toSet()
         previousNewestId = rows.lastOrNull { it is ChatTimelineRow.Bubble }?.rowId
         if (!initialScrollDone) {
             // Open at the latest message. A Chat Search deep-link owns the
             // first scroll instead (the effect below lands on the match).
             if (scrollToRowId == null) listState.scrollToItem(lastIndex)
+            newMessageCount = 0
             initialScrollDone = true
             return@LaunchedEffect
+        }
+        // A day divider can keep the same key when older bubbles are inserted below it. Restore the
+        // visible bubble explicitly so that keeping that divider at the top cannot jump a whole page.
+        prependAnchor?.takeIf { it.oldestMessageId != oldestMessageId }?.let { anchor ->
+            prependAnchor = null
+            val anchorIndex = rows.indexOfFirst { it.rowId == anchor.rowId }
+            if (anchorIndex >= 0) {
+                listState.scrollToItem(anchorIndex + headerCount, anchor.scrollOffset)
+                return@LaunchedEffect
+            }
         }
         // Follow appended rows (own sends, incoming messages) only when the
         // user is already reading near the bottom — never yank them out of
@@ -2781,12 +2855,33 @@ internal fun PopulatedFrame(
         // stable keys, so they fail this check and preserve position.
         val layoutInfo = listState.layoutInfo
         val lastVisible = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: return@LaunchedEffect
-        if (lastVisible >= layoutInfo.totalItemsCount - 1 - NEAR_BOTTOM_ROW_SLACK) {
+        // A recovered batch can grow the measured list before this effect runs, including before a pending bubble.
+        // Visible keys from the previous tail retain the reader's position relative to the old bottom.
+        val wasNearBottom = layoutInfo.visibleItemsInfo.any { it.key in oldTailKeys }
+        if (wasNearBottom || lastVisible >= layoutInfo.totalItemsCount - 1 - NEAR_BOTTOM_ROW_SLACK) {
             newMessageCount = 0
-            listState.animateScrollToItem(lastIndex)
+            if (addedRows > NEAR_BOTTOM_ROW_SLACK) {
+                listState.scrollToItem(lastIndex)
+            } else {
+                listState.animateScrollToItem(lastIndex)
+            }
         } else {
             newMessageCount += appended
         }
+    }
+    val rowsByKey = remember(rows) { rows.associateBy { it.rowId } }
+    LaunchedEffect(listState, rowsByKey) {
+        snapshotFlow { listState.layoutInfo.visibleItemsInfo.map { it.key } to !listState.canScrollForward }
+            .collect { (visibleKeys, atBottom) ->
+                val visibleMessages =
+                    visibleKeys.mapNotNull { key ->
+                        (rowsByKey[key] as? ChatTimelineRow.Bubble)?.content?.id?.takeUnless { it.startsWith("client_") }
+                    }
+                if (initialScrollDone) onViewport(visibleMessages.firstOrNull(), atBottom)
+                // A person thread can interleave several rooms. Report every visible room's messages so
+                // reading its newest bubble cannot acknowledge a different room's unseen history.
+                visibleMessages.forEach(onVisibleMessage)
+            }
     }
     LaunchedEffect(listState) {
         snapshotFlow { !listState.canScrollForward }.collect { atBottom ->
@@ -2816,8 +2911,24 @@ internal fun PopulatedFrame(
     val shouldLoadOlder by remember {
         derivedStateOf { initialScrollDone && listState.firstVisibleItemIndex <= 1 }
     }
-    LaunchedEffect(shouldLoadOlder, rows.firstOrNull()?.rowId) {
-        if (shouldLoadOlder) onLoadOlder()
+    val loadOlderAnchored: () -> Unit = {
+        val visibleBubbles = listState.layoutInfo.visibleItemsInfo.filter { rowsByKey[it.key] is ChatTimelineRow.Bubble }
+        // The oldest bubble can lose its sender heading when its preceding bubble arrives. Anchor a
+        // following visible bubble, whose contents keep the same height, whenever one is available.
+        val firstBubble = visibleBubbles.firstOrNull { it.key != oldestMessageId } ?: visibleBubbles.firstOrNull()
+        prependAnchor =
+            firstBubble?.let { bubble ->
+                oldestMessageId?.let { ChatPrependAnchor(bubble.key.toString(), -bubble.offset, it) }
+            }
+        onLoadOlder()
+    }
+    LaunchedEffect(shouldLoadOlder, oldestMessageId) {
+        if (shouldLoadOlder) {
+            // A gesture can reach the top while the prior cursor is still in flight. Reconsider after
+            // its page changes, but let the prepend anchor settle before deciding whether to fetch again.
+            withFrameNanos { }
+            if (initialScrollDone && listState.firstVisibleItemIndex <= 1 && !olderPageFailed) loadOlderAnchored()
+        }
     }
     // Chat Search deep-link: animate to the matched row once it lands in
     // the list, then clear the target. The [headerCount] offset skips the
@@ -2839,7 +2950,13 @@ internal fun PopulatedFrame(
             contentPadding = PaddingValues(horizontal = Spacing.s3, vertical = Spacing.s3),
         ) {
             item(key = "chat_pagination_top_spacer") {
-                Spacer(modifier = Modifier.size(1.dp))
+                if (olderPageFailed) {
+                    TextButton(onClick = loadOlderAnchored, modifier = Modifier.fillMaxWidth()) {
+                        Text("Couldn't load earlier messages. Retry")
+                    }
+                } else {
+                    Spacer(modifier = Modifier.size(1.dp))
+                }
             }
             // A15.5's "Auto-welcome · free" card is omitted: no persona
             // welcome-message exists on the wire, and the design's copy is
@@ -2855,7 +2972,7 @@ internal fun PopulatedFrame(
                     )
                 }
             }
-            items(items = rows, key = { it.rowId }) { row ->
+            items(items = rows, key = { it.rowId }, contentType = { it.javaClass }) { row ->
                 when (row) {
                     is ChatTimelineRow.DayDivider -> DayDividerRow(label = row.divider.label)
                     is ChatTimelineRow.TopicDivider -> TopicDividerRow(label = row.label)
@@ -2887,11 +3004,15 @@ internal fun PopulatedFrame(
                 }
             }
         }
-        if (newMessageCount > 0) {
+        if (newMessageCount > 0 || showLatestMessages) {
             TextButton(
                 onClick = {
                     newMessageCount = 0
-                    scope.launch { listState.animateScrollToItem((listState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0)) }
+                    if (showLatestMessages) {
+                        onLatestMessages()
+                    } else {
+                        scope.launch { listState.animateScrollToItem((listState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0)) }
+                    }
                 },
                 modifier =
                     Modifier.align(Alignment.BottomCenter).padding(bottom = Spacing.s2)
@@ -2899,7 +3020,16 @@ internal fun PopulatedFrame(
                         .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.pill))
                         .testTag("chatNewMessages"),
             ) {
-                Text(if (newMessageCount == 1) "1 new message ↓" else "$newMessageCount new messages ↓", color = PantopusColors.appText)
+                Text(
+                    if (showLatestMessages) {
+                        "Latest messages ↓"
+                    } else if (newMessageCount == 1) {
+                        "1 new message ↓"
+                    } else {
+                        "$newMessageCount new messages ↓"
+                    },
+                    color = PantopusColors.appText,
+                )
             }
         }
     }
@@ -3109,6 +3239,20 @@ private fun BubbleRow(
                     Text(text = name, fontSize = 12.sp, color = PantopusColors.appTextSecondary)
                 }
             }
+            val canViewAttachments = content.lockedTier == null || isOut
+            if (content.body !is ChatBubbleBody.Text && content.replyPreview != null && canViewAttachments) {
+                BubbleContainer(
+                    isOut = isOut,
+                    hasTail = false,
+                    isContinuation = content.isContinuation,
+                    bubbleColor = bubbleColor,
+                    contentId = content.id,
+                ) {
+                    Column(modifier = Modifier.widthIn(max = bubbleMaxWidth)) {
+                        ReplyPreview(preview = content.replyPreview, isOut = isOut)
+                    }
+                }
+            }
             // Reactions float as pills overlapping the bubble's bottom
             // corner (design `.reaction { bottom: -10; left/right: 8 }`).
             Box {
@@ -3116,7 +3260,6 @@ private fun BubbleRow(
                     content.attachments.any {
                         !it.mimeType.orEmpty().startsWith("image/") || it.liveVideoFileId != null
                     }
-                val canViewAttachments = content.lockedTier == null || isOut
                 if (hasInlineAttachments && canViewAttachments) {
                     BubbleContainer(
                         isOut = isOut,
@@ -3132,7 +3275,7 @@ private fun BubbleRow(
                 } else {
                     when (val body = content.body) {
                         is ChatBubbleBody.Text ->
-                            if (isEmojiOnly(body.text)) {
+                            if (isEmojiOnly(body.text) && content.replyPreview == null) {
                                 // Emoji-only messages render large with no bubble (RN).
                                 Text(
                                     text = body.text,
@@ -3211,13 +3354,14 @@ private fun BubbleRow(
                             ) {
                                 PhotoBubble(
                                     url = body.url,
+                                    local = body.local.firstOrNull(),
                                     isOut = isOut,
                                     hasTail = content.hasTail && body.caption == null,
                                     isContinuation = content.isContinuation,
                                     lockedTier = lockedTier,
                                     onLockedAction = onLockedAction,
                                     contentId = content.id,
-                                    moreCount = body.moreUrls.size,
+                                    moreCount = maxOf(body.moreUrls.size, body.local.size - 1),
                                     onOpen =
                                         onOpenPhotos
                                             ?.takeIf { photos.isNotEmpty() && lockedTier == null }
@@ -3762,6 +3906,8 @@ private val ChatBubbleBody.copyableText: String?
 private fun MessageActionSheet(
     content: ChatBubbleContent,
     canManageMessages: Boolean,
+    canDiscardMessage: Boolean,
+    onDiscard: () -> Unit,
     // Invoked after the text has landed on the clipboard — dismisses the sheet.
     onCopy: () -> Unit,
     onReply: () -> Unit,
@@ -3806,6 +3952,9 @@ private fun MessageActionSheet(
         // for rows with no server id: in-flight optimistic sends
         // (`client_`) and AI-thread local rows (`ai_user_` /
         // `ai_assistant_`), whose edits/deletes can only ever 404.
+        if (canDiscardMessage) {
+            MessageActionRow(label = "Stop retrying", icon = PantopusIcon.Trash2, destructive = true, onClick = onDiscard)
+        }
         val isPersistedMessage = !content.id.startsWith("client_") && !content.id.startsWith("ai_")
         if (canManageMessages && content.side == ChatMessageSide.Outgoing && isPersistedMessage) {
             MessageActionRow(label = "Select", icon = PantopusIcon.CheckCircle, onClick = onSelect)
@@ -4502,6 +4651,8 @@ private fun MiniAvatar(
 private fun PhotoBubble(
     url: String?,
     isOut: Boolean,
+    // The same photo as picked on this phone: shown at once while it sends, and kept once it is sent.
+    local: ChatLocalPhoto? = null,
     hasTail: Boolean,
     isContinuation: Boolean = false,
     lockedTier: String? = null,
@@ -4523,7 +4674,7 @@ private fun PhotoBubble(
     Box(
         modifier =
             Modifier
-                .size(200.dp, 130.dp)
+                .size(PHOTO_BUBBLE_WIDTH, PHOTO_BUBBLE_HEIGHT)
                 .clip(shape)
                 .background(PantopusColors.appSurfaceSunken)
                 .border(1.dp, if (isOut) Color.Transparent else PantopusColors.appBorder, shape)
@@ -4535,7 +4686,14 @@ private fun PhotoBubble(
                     },
                 ).testTag("chatPhotoBubble"),
     ) {
-        if (url != null) {
+        if (local != null) {
+            AsyncImage(
+                model = localPhotoRequest(local),
+                contentDescription = "Photo attachment",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else if (url != null) {
             AsyncImage(
                 model = inlinePhotoRequest(url),
                 contentDescription = "Photo attachment",
@@ -4581,6 +4739,52 @@ private fun inlinePhotoRequest(url: String): ImageRequest {
             .data(thumbnail ?: url)
             .diskCachePolicy(if (thumbnail != null) CachePolicy.ENABLED else CachePolicy.READ_ONLY)
             .build()
+    }
+}
+
+/**
+ * A picked photo decodes from its bytes in this process; nothing is written to disk. Its decoded thumbnail is kept in
+ * memory under the attachment id at the bubble's size, so the sending bubble (decoded ahead while the message is being
+ * written) and the sent bubble that replaces it show it without decoding again.
+ */
+@Composable
+private fun localPhotoRequest(photo: ChatLocalPhoto): ImageRequest {
+    val context = LocalContext.current
+    val size = photoBubbleSize()
+    return remember(context, photo.id, size) { localPhotoRequest(context, photo, size) }
+}
+
+private fun localPhotoRequest(
+    context: Context,
+    photo: ChatLocalPhoto,
+    size: IntSize,
+): ImageRequest =
+    ImageRequest.Builder(context)
+        .data(photo.bytes)
+        .memoryCacheKey("chat-local-photo:${photo.id}")
+        .diskCachePolicy(CachePolicy.DISABLED)
+        .size(size.width, size.height)
+        .scale(Scale.FILL)
+        .crossfade(false)
+        .build()
+
+@Composable
+private fun photoBubbleSize(): IntSize {
+    val density = LocalDensity.current
+    return with(density) { IntSize(PHOTO_BUBBLE_WIDTH.roundToPx(), PHOTO_BUBBLE_HEIGHT.roundToPx()) }
+}
+
+/** Photos queued in the composer are decoded for their bubble while the message is still being written. */
+@Composable
+private fun PrefetchLocalPhotos(attachments: List<ChatQueuedAttachment>) {
+    val context = LocalContext.current
+    val size = photoBubbleSize()
+    val photos =
+        attachments.mapNotNull { queued ->
+            queued.bytes?.takeIf { queued.mimeType.startsWith("image/") }?.let { ChatLocalPhoto(queued.id, it) }
+        }
+    LaunchedEffect(photos, size) {
+        photos.forEach { photo -> context.imageLoader.enqueue(localPhotoRequest(context, photo, size)) }
     }
 }
 
@@ -4925,6 +5129,27 @@ private fun SystemLinkPill(body: ChatBubbleBody.SystemLink) {
     }
 }
 
+/**
+ * The sending spinner, in its place from the start, turns only once a send takes noticeably long: a spinning frame on
+ * every display refresh would also compete with the save and the request it is waiting for.
+ */
+@Composable
+private fun SendingIndicator(id: String) {
+    val spinning by produceState(initialValue = false, id) {
+        delay(SENDING_INDICATOR_DELAY_MS)
+        value = true
+    }
+    Box(modifier = Modifier.padding(start = Spacing.s1).size(10.dp)) {
+        if (spinning) {
+            CircularProgressIndicator(
+                modifier = Modifier.fillMaxSize(),
+                strokeWidth = 1.5.dp,
+                color = PantopusColors.appTextSecondary,
+            )
+        }
+    }
+}
+
 @Composable
 private fun StampRow(
     content: ChatBubbleContent,
@@ -4935,8 +5160,9 @@ private fun StampRow(
         when (content.deliveryState) {
             ChatDeliveryState.Read -> "Read $stamp"
             // Delivered is conveyed by the small check icon, not a loud word (RN).
-            ChatDeliveryState.Delivered -> stamp
+            ChatDeliveryState.Sent, ChatDeliveryState.Delivered -> stamp
             ChatDeliveryState.Sending -> "Sending..."
+            ChatDeliveryState.Queued -> "Queued · retrying"
             ChatDeliveryState.Failed -> "Failed to send"
             ChatDeliveryState.Refused -> "Not sent"
             null -> stamp
@@ -4959,21 +5185,16 @@ private fun StampRow(
         }
         if (content.side == ChatMessageSide.Outgoing && content.deliveryState != ChatDeliveryState.Read) {
             when (content.deliveryState) {
-                ChatDeliveryState.Read -> Unit
-                ChatDeliveryState.Delivered ->
+                ChatDeliveryState.Read, ChatDeliveryState.Queued -> Unit
+                ChatDeliveryState.Sent, ChatDeliveryState.Delivered ->
                     PantopusIconImage(
                         icon = PantopusIcon.Check,
-                        contentDescription = null,
+                        contentDescription = if (content.deliveryState == ChatDeliveryState.Sent) "Sent" else "Delivered",
                         size = 10.dp,
                         tint = PantopusColors.appTextMuted,
                         modifier = Modifier.padding(start = Spacing.s1),
                     )
-                ChatDeliveryState.Sending ->
-                    CircularProgressIndicator(
-                        modifier = Modifier.padding(start = Spacing.s1).size(10.dp),
-                        strokeWidth = 1.5.dp,
-                        color = PantopusColors.appTextSecondary,
-                    )
+                ChatDeliveryState.Sending -> SendingIndicator(content.id)
                 ChatDeliveryState.Failed ->
                     Row(
                         modifier =

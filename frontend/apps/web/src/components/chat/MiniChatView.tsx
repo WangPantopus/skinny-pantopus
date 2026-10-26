@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import * as api from '@pantopus/api';
 import { useChatMessages } from '../../hooks/useChatMessages';
 import ChatMessageList from './ChatMessageList';
 import ChatInput from './ChatInput';
@@ -10,6 +9,7 @@ import GigPickerModal from './GigPickerModal';
 import ListingPickerModal from './ListingPickerModal';
 import type { ChatMessage } from './ChatMessageBubble';
 import { fetchMe } from '@/lib/me';
+import { readCachedChatAccountId, type ChatDraftCommit } from './chatStorage';
 
 interface MiniChatViewProps {
   roomId?: string;
@@ -27,12 +27,16 @@ export default function MiniChatView({ roomId, otherUserId, name, avatar, onBack
   const [showListingPicker, setShowListingPicker] = useState(false);
 
   useEffect(() => {
-    (async () => {
-      try {
-        const userData = await fetchMe() as { id?: string };
-        setCurrentUserId(userData?.id || null);
-      } catch {}
-    })();
+    let cancelled = false;
+    let confirmed = false;
+    void readCachedChatAccountId().then((id) => {
+      if (!cancelled && !confirmed && id) setCurrentUserId(id);
+    }).catch(() => {});
+    void fetchMe().then((user) => {
+      confirmed = true;
+      if (!cancelled) setCurrentUserId(user?.id || null);
+    }).catch(() => {});
+    return () => { cancelled = true; };
   }, []);
 
   const chat = useChatMessages({
@@ -55,9 +59,9 @@ export default function MiniChatView({ roomId, otherUserId, name, avatar, onBack
     await chat.reactToMessage(messageId, emoji);
   }, [chat.reactToMessage]);
 
-  const handleSend = useCallback(async (text: string, files?: File[]) => {
+  const handleSend = useCallback(async (text: string, files?: File[], draft?: ChatDraftCommit) => {
     try {
-      await chat.sendMessage(text, files);
+      await chat.sendMessage(text, files, draft);
     } catch (e: unknown) {
       chat.setError(e instanceof Error ? e.message : 'Failed to send');
       throw e;
@@ -71,17 +75,12 @@ export default function MiniChatView({ roomId, otherUserId, name, avatar, onBack
 
   const gigSendMutation = useMutation({
     mutationFn: async (gig: { id: string; title: string; category: string | null; price: number | null; status: string }) => {
-      return api.chat.sendMessage({
-        roomId: targetRoomId as string,
-        messageText: gig.title,
+      return chat.sendSharedMessage({
+        text: gig.title,
         messageType: 'gig_offer',
         metadata: { gigId: gig.id, title: gig.title, category: gig.category, price: gig.price, status: gig.status },
       });
     },
-    onSuccess: async () => {
-      if (!chat.connected) await chat.refresh();
-    },
-    onError: () => {},
   });
 
   const handleGigSelected = useCallback((gig: { id: string; title: string; category: string | null; price: number | null; status: string }) => {
@@ -92,17 +91,12 @@ export default function MiniChatView({ roomId, otherUserId, name, avatar, onBack
 
   const listingSendMutation = useMutation({
     mutationFn: async (listing: { id: string; title: string; category: string | null; price: number | null; condition: string | null; status: string; imageUrl: string | null; isFree: boolean }) => {
-      return api.chat.sendMessage({
-        roomId: targetRoomId as string,
-        messageText: listing.title,
+      return chat.sendSharedMessage({
+        text: listing.title,
         messageType: 'listing_offer',
         metadata: { listingId: listing.id, title: listing.title, category: listing.category, price: listing.price, condition: listing.condition, status: listing.status, imageUrl: listing.imageUrl, isFree: listing.isFree },
       });
     },
-    onSuccess: async () => {
-      if (!chat.connected) await chat.refresh();
-    },
-    onError: () => {},
   });
 
   const handleListingSelected = useCallback((listing: { id: string; title: string; category: string | null; price: number | null; condition: string | null; status: string; imageUrl: string | null; isFree: boolean }) => {
@@ -160,6 +154,7 @@ export default function MiniChatView({ roomId, otherUserId, name, avatar, onBack
       {/* Messages — override max-w-3xl from ChatMessageList/ChatMessageBubble */}
       <div className="flex-1 overflow-hidden flex flex-col [&_.max-w-3xl]:max-w-none">
         <ChatMessageList
+          currentUserId={currentUserId}
           messages={chat.messages}
           loading={chat.loading}
           // A conversation that takes no messages says why in place of the composer instead.
@@ -167,21 +162,34 @@ export default function MiniChatView({ roomId, otherUserId, name, avatar, onBack
           hasMore={chat.hasMore}
           loadingOlder={chat.loadingOlder}
           onLoadOlder={chat.loadOlder}
+          onVisibleMessage={chat.onVisibleMessage}
           isOwnMessage={isOwnMessage}
           onReact={handleReact}
+          onRetry={chat.retryMessage}
+          onRemovePending={chat.removePendingMessage}
+          onEdit={chat.sendRefusal ? undefined : chat.beginEdit}
+          onDelete={chat.deleteMessage}
+          canChangeMessage={chat.canChangeMessage}
           onReply={chat.sendRefusal ? undefined : chat.beginReply}
         />
       </div>
 
       {/* Input */}
       <ChatInput
+        key={chat.composerDraft.key}
+        draft={chat.composerDraft}
         onSend={handleSend}
         sending={chat.sending}
+        typingPeerCount={chat.typingPeerCount}
+        onTypingChange={chat.onTypingChange}
         placeholder="Type a message…"
         onAttachAction={handleAttachAction}
         compact
         replyingTo={chat.replyingTo}
         onCancelReply={chat.cancelReply}
+        editingMessage={chat.editingMessage}
+        onCancelEdit={chat.cancelEdit}
+        onSaveEdit={chat.saveEdit}
         lockedNote={chat.sendRefusal}
       />
 

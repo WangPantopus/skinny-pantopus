@@ -1,57 +1,36 @@
-//
-//  ChatSearchViewModel.swift
-//  Pantopus
-//
-//  P4.3 — Backs the Chat Search surface. The backend exposes no
-//  message-search endpoint, so search runs client-side: on first
-//  appearance we fetch the unified conversation list and, in parallel,
-//  the most-recent page of messages for each conversation, then build an
-//  in-memory index. Every keystroke filters that index locally — instant,
-//  no per-keystroke network.
-//
-//  Indexing the same most-recent page the conversation screen loads on
-//  open is deliberate: it guarantees any matched message id is present in
-//  the conversation's first page, so "scroll to the matching message"
-//  always resolves without extra pagination.
-//
-
 import Foundation
-import Logging
 import Observation
 
-/// View-model for the Chat Search screen.
+/// The existing search screen reads authorized server results without downloading
+/// every conversation's history. Query and account generations reject late pages.
 @Observable
 @MainActor
 public final class ChatSearchViewModel {
-    /// Live query — the view binds the search field to this through
-    /// `setQuery(_:)` so each edit re-filters the index synchronously.
-    public private(set) var query: String = ""
-
-    /// Filtered results for the current query. Empty while the query is
-    /// blank or while the index is still loading.
+    public private(set) var query = ""
     public private(set) var results: [ChatSearchResult] = []
+    public private(set) var isLoading = false
+    public private(set) var isLoadingMore = false
+    public var failureMessage: String?
+    public private(set) var searchFailed = false
+    public var hasMore: Bool {
+        namesCursor != nil || messagesCursor != nil
+    }
 
-    /// True until the index finishes building. Drives the shell's
-    /// typing-shimmer when the user types before indexing completes.
-    public private(set) var isLoading: Bool = true
+    var emptyState: EmptyStateContent {
+        EmptyStateContent(
+            icon: .search,
+            headline: searchFailed ? "Search unavailable" : "No matches",
+            subcopy: searchFailed ? "Try again when your connection is available." : "Try a name or a word from a message."
+        )
+    }
 
-    /// No-results payload for the shell's empty phase.
-    let emptyState = EmptyStateContent(
-        icon: .search,
-        headline: "No matches",
-        subcopy: "Try a name or a word from a message."
-    )
-
-    /// Open a tapped result — wired by `InboxTabRoot` to push the
-    /// conversation (scrolled to the matched message when present).
     let onOpenResult: @Sendable (ChatSearchResult) -> Void
-    /// Pop the search surface — wired to the shell's back control.
     let onCancel: @Sendable () -> Void
-
     private let api: APIClient
-    private let logger = Logger(label: "app.pantopus.ios.ChatSearch")
-    private var index: [IndexedConversation] = []
-    private var didLoad = false
+    private var queryTask: Task<Void, Never>?
+    private var generation = 0
+    private var namesCursor: String?
+    private var messagesCursor: String?
 
     init(
         api: APIClient = .shared,
@@ -63,186 +42,131 @@ public final class ChatSearchViewModel {
         self.onCancel = onCancel
     }
 
-    // MARK: - Public API
-
-    /// Build the search index once, then filter for whatever the user has
-    /// already typed.
     public func load() async {
-        guard !didLoad else { return }
-        didLoad = true
-        await buildIndex()
-        isLoading = false
-        recompute()
+        if !query.isEmpty, results.isEmpty, queryTask == nil { setQuery(query) }
     }
 
-    /// Update the query and re-filter. Wired to the shell's field binding
-    /// and clear button.
     public func setQuery(_ value: String) {
-        query = value
-        recompute()
-    }
-
-    // MARK: - Filtering
-
-    private func recompute() {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            results = []
+        query = String(value.prefix(200))
+        queryTask?.cancel()
+        generation += 1
+        results = []
+        namesCursor = nil
+        messagesCursor = nil
+        failureMessage = nil
+        searchFailed = false
+        isLoadingMore = false
+        let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        isLoading = !text.isEmpty
+        guard !text.isEmpty else { queryTask = nil
             return
         }
-        // Index not ready yet — leave results empty so the shell keeps
-        // shimmering instead of flashing "no matches".
-        guard !isLoading else { return }
-        results = search(trimmed)
-    }
-
-    private func search(_ query: String) -> [ChatSearchResult] {
-        var out: [ChatSearchResult] = []
-        for entry in index {
-            let nameMatches = ChatSearchText.matches(entry.displayName, query: query)
-            // Messages arrive newest-first, so the first match is the most
-            // recent one — the message we scroll to.
-            let bodyMatch = entry.messages.first { message in
-                guard let text = message.messageText, !text.isEmpty else { return false }
-                return ChatSearchText.matches(text, query: query)
-            }
-
-            let snippet: String
-            let matchedMessageId: String?
-            if let bodyMatch, let text = bodyMatch.messageText {
-                snippet = ChatSearchText.snippet(from: text, matching: query)
-                matchedMessageId = bodyMatch.id
-            } else if nameMatches {
-                snippet = entry.lastPreview
-                matchedMessageId = nil
-            } else {
-                continue
-            }
-
-            out.append(ChatSearchResult(
-                conversationId: entry.id,
-                kind: entry.kind,
-                displayName: entry.displayName,
-                initials: entry.initials,
-                identityChip: entry.identityChip,
-                verified: entry.verified,
-                snippet: snippet,
-                matchedMessageId: matchedMessageId,
-                query: query
-            ))
-        }
-        return out
-    }
-
-    // MARK: - Index
-
-    private func buildIndex() async {
-        guard let response: UnifiedConversationsResponse =
-            try? await api.request(ChatEndpoints.unifiedConversations())
-        else {
-            logger.warning("Chat-search index: conversation list fetch failed")
-            index = []
-            return
-        }
-
-        let conversations = response.conversations.map(Self.meta(from:))
-        let api = api
-        var messagesById: [String: [ChatMessageDTO]] = [:]
-
-        await withTaskGroup(of: (String, [ChatMessageDTO]).self) { group in
-            for conversation in conversations {
-                let id = conversation.id
-                let isRoom = conversation.kind == .group
-                group.addTask {
-                    let endpoint = isRoom
-                        ? ChatEndpoints.roomMessages(roomId: id)
-                        : ChatEndpoints.conversationMessages(otherUserId: id)
-                    let response: ChatMessagesResponse? = try? await api.request(endpoint)
-                    return (id, response?.messages ?? [])
-                }
-            }
-            for await (id, messages) in group {
-                messagesById[id] = messages
-            }
-        }
-
-        index = conversations.map { conversation in
-            IndexedConversation(
-                id: conversation.id,
-                kind: conversation.kind,
-                displayName: conversation.displayName,
-                initials: conversation.initials,
-                identityChip: conversation.identityChip,
-                verified: conversation.verified,
-                lastPreview: conversation.lastPreview,
-                messages: messagesById[conversation.id] ?? []
-            )
+        let expected = generation
+        queryTask = Task { [weak self] in
+            do { try await Task.sleep(nanoseconds: 250_000_000) } catch { return }
+            await self?.fetch(query: text, generation: expected, append: false)
         }
     }
 
-    // MARK: - Projection
+    public func loadMore() async {
+        guard hasMore, !isLoading, !isLoadingMore else { return }
+        await fetch(query: query.trimmingCharacters(in: .whitespacesAndNewlines), generation: generation, append: true)
+    }
 
-    private static func meta(from dto: UnifiedConversation) -> IndexedConversation {
-        let kind: ChatSearchResult.Kind = dto.kind == .room ? .group : .dm
-        let displayName = dto.name?.nilIfEmpty ?? defaultName(for: dto)
-        let lastPreview = dto.lastMessagePreview?.nilIfEmpty ?? defaultPreview(for: dto)
-        return IndexedConversation(
-            id: dto.id,
-            kind: kind,
-            displayName: displayName,
-            initials: initials(from: displayName),
-            identityChip: identityChip(for: dto),
-            verified: dto.isVerified ?? false,
-            lastPreview: lastPreview,
-            messages: []
+    public func teardown() {
+        queryTask?.cancel()
+        queryTask = nil
+        generation += 1
+        isLoading = false
+        isLoadingMore = false
+    }
+
+    private func fetch(query text: String, generation expected: Int, append: Bool) async {
+        let session = AuthManager.shared.requestSessionGeneration
+        if append { isLoadingMore = true }
+        defer {
+            if expected == generation {
+                isLoading = false
+                isLoadingMore = false
+                queryTask = nil
+            }
+        }
+        do {
+            let fetchNamesEnabled = !append || namesCursor != nil
+            let fetchMessagesEnabled = !append || messagesCursor != nil
+            async let names = fetchNames(query: text, enabled: fetchNamesEnabled)
+            async let bodies = fetchMessages(query: text, enabled: fetchMessagesEnabled)
+            let (namePage, messagePage) = try await (names, bodies)
+            guard expected == generation, session == AuthManager.shared.requestSessionGeneration, !Task.isCancelled else { return }
+            if let page = namePage, page.hasMore == true,
+               page.nextCursor == nil || page.nextCursor == namesCursor { throw APIError.invalidResponse }
+            if let page = messagePage, page.hasMore,
+               page.nextCursor == nil || page.nextCursor == messagesCursor { throw APIError.invalidResponse }
+            searchFailed = false
+            var additions = (namePage?.conversations ?? []).map { Self.nameResult($0, query: text) }
+            if let page = messagePage {
+                additions.append(contentsOf: page.messages.compactMap { message in
+                    guard let context = page.roomContexts[message.roomId] else { return nil }
+                    return ChatSearchResult(
+                        conversationId: context.conversationId,
+                        kind: context.kind == "room" ? .group : .dm,
+                        displayName: context.name,
+                        initials: Self.initials(context.name),
+                        identityChip: Self.identityChip(context.identity?.identityKind),
+                        verified: context.identity?.verified ?? context.identity?.badges?.contains("verified_resident") ?? false,
+                        snippet: ChatSearchText.snippet(from: message.messageText ?? "Attachment", matching: text),
+                        matchedMessageId: message.id,
+                        query: text
+                    )
+                })
+            }
+            var seen = Set(append ? results.map(\.id) : [])
+            let unique = additions.filter { seen.insert($0.id).inserted }
+            results = append ? results + unique : unique
+            namesCursor = namePage?.hasMore == true ? namePage?.nextCursor : nil
+            messagesCursor = messagePage?.hasMore == true ? messagePage?.nextCursor : nil
+        } catch {
+            guard expected == generation, session == AuthManager.shared.requestSessionGeneration, !Task.isCancelled else { return }
+            failureMessage = "Couldn't search messages. Try again."
+            searchFailed = true
+        }
+    }
+
+    private func fetchNames(query: String, enabled: Bool) async throws -> UnifiedConversationsResponse? {
+        guard enabled, query.count <= 160 else { return nil }
+        return try await api.request(ChatEndpoints.unifiedConversations(before: namesCursor, query: query))
+    }
+
+    private func fetchMessages(query: String, enabled: Bool) async throws -> ChatSearchResponse? {
+        guard enabled else { return nil }
+        return try await api.request(ChatEndpoints.search(query: query, before: messagesCursor))
+    }
+
+    private static func nameResult(_ dto: UnifiedConversation, query: String) -> ChatSearchResult {
+        let row = ChatListViewModel.project(dto, mutedKeys: [])
+        return ChatSearchResult(
+            conversationId: dto.id,
+            kind: dto.kind == .room ? .group : .dm,
+            displayName: row.displayName,
+            initials: row.initials,
+            identityChip: row.identityChip,
+            verified: row.verified,
+            snippet: row.preview,
+            matchedMessageId: nil,
+            query: query
         )
     }
 
-    private static func identityChip(for dto: UnifiedConversation) -> ConversationIdentityChip? {
-        switch (dto.kind, dto.identityKind, dto.roomType) {
-        case (.conversation, "business"?, _): .business
-        case (.conversation, "home"?, _): .home
-        case (.room, _, "home"?): .home
+    private static func initials(_ name: String) -> String {
+        let value = name.split(separator: " ").prefix(2).compactMap { $0.first.map(String.init) }.joined().uppercased()
+        return value.isEmpty ? "?" : value
+    }
+
+    private static func identityChip(_ kind: String?) -> ConversationIdentityChip? {
+        switch kind {
+        case "business": .business
+        case "home": .home
         default: nil
         }
-    }
-
-    private static func defaultName(for dto: UnifiedConversation) -> String {
-        switch dto.kind {
-        case .room: "Group"
-        case .conversation: "Pantopus user"
-        }
-    }
-
-    private static func defaultPreview(for dto: UnifiedConversation) -> String {
-        switch dto.kind {
-        case .room: "No messages yet"
-        case .conversation: "Start the conversation"
-        }
-    }
-
-    private static func initials(from name: String) -> String {
-        let parts = name.split(separator: " ").prefix(2)
-        let result = parts.compactMap { $0.first.map(String.init) }.joined().uppercased()
-        return result.isEmpty ? "?" : result
-    }
-}
-
-/// One conversation's searchable record — identity metadata plus the
-/// most-recent page of messages.
-private struct IndexedConversation {
-    let id: String
-    let kind: ChatSearchResult.Kind
-    let displayName: String
-    let initials: String
-    let identityChip: ConversationIdentityChip?
-    let verified: Bool
-    let lastPreview: String
-    let messages: [ChatMessageDTO]
-}
-
-private extension String {
-    var nilIfEmpty: String? {
-        isEmpty ? nil : self
     }
 }

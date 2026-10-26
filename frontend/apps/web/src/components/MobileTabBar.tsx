@@ -9,6 +9,7 @@ import { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { NavIcons } from '@/lib/icons';
 import { launchFeatures } from '@/lib/featureFlags';
+import { afterInboxRows } from '@/lib/shellReads';
 
 type Tab = {
   key: 'place' | 'today' | 'nearby' | 'mail';
@@ -43,10 +44,10 @@ export default function MobileTabBar({ unread = 0 }: { unread?: number }) {
 
   // The sidebar prefetches each tab on hover; phones have no hover, so
   // warm all four once instead of giving the slowest connections the
-  // coldest navigation.
-  useEffect(() => {
+  // coldest navigation. A cold Messages inbox paints its rows first (lib/shellReads.ts).
+  useEffect(() => afterInboxRows(() => {
     MOBILE_TABS.forEach((tab) => router.prefetch(tab.href));
-  }, [router]);
+  }), [router]);
 
   return (
     <nav

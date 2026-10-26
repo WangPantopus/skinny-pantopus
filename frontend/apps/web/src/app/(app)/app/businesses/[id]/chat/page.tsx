@@ -1,59 +1,21 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import * as api from '@pantopus/api';
-import type { ChatRoomWithDetails } from '@pantopus/types';
+import { useBusinessChatRooms, type BusinessChatRoom } from '@/hooks/useBusinessChatRooms';
 import { formatTimeAgo, getInitials } from '@pantopus/ui-utils';
 import { MessageCircle, Search } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import SearchInput from '@/components/SearchInput';
 import { chosenUsername } from '@pantopus/utils';
 
-type BusinessChatRoom = ChatRoomWithDetails & {
-  other_participant_name?: string | null;
-  other_participant_username?: string | null;
-  last_message_preview?: string | null;
-  last_message_at?: string | null;
-};
-
 export default function BusinessChatListPage() {
   const router = useRouter();
   const params = useParams();
   const businessId = String(params.id || '');
 
-  const [loading, setLoading] = useState(true);
-  // A failed read is not "No business messages yet": a role that can't act for the business gets a 403.
-  const [loadFailure, setLoadFailure] = useState<'forbidden' | 'failed' | null>(null);
-  const [rooms, setRooms] = useState<BusinessChatRoom[]>([]);
+  const { loading, failure: loadFailure, error, rooms, total, totalUnread, hasMore, loadingMore, refresh: load, loadMore } = useBusinessChatRooms(businessId);
   const [search, setSearch] = useState('');
-
-  const load = async () => {
-    try {
-      setLoadFailure(null);
-      setLoading(true);
-      const resp = await api.chat.getBusinessChatRooms(businessId, { limit: 100 });
-      const list = Array.isArray(resp?.rooms) ? (resp.rooms as BusinessChatRoom[]) : [];
-      setRooms(
-        list.sort((a, b) => {
-          const ta = a?.last_message_at || a?.last_message?.created_at;
-          const tb = b?.last_message_at || b?.last_message?.created_at;
-          const at = ta ? new Date(ta).getTime() : 0;
-          const bt = tb ? new Date(tb).getTime() : 0;
-          return bt - at;
-        })
-      );
-    } catch (e: unknown) {
-      if ((e as { statusCode?: number } | null)?.statusCode === 403) {
-        setLoadFailure('forbidden');
-      } else {
-        console.error('Failed to load business chats', e);
-        setLoadFailure('failed');
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const getRoomName = (room: BusinessChatRoom) =>
     room.other_participant_name || chosenUsername(room.other_participant_username) || room.room_name || 'Chat';
@@ -63,11 +25,6 @@ export default function BusinessChatListPage() {
 
   const getRoomTimestamp = (room: BusinessChatRoom) =>
     room.last_message_at || room.last_message?.created_at || null;
-
-  useEffect(() => {
-    if (!businessId) return;
-    void load();
-  }, [businessId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filteredRooms = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -79,8 +36,6 @@ export default function BusinessChatListPage() {
     });
   }, [rooms, search]);
 
-  const totalUnread = rooms.reduce((sum, r) => sum + (Number(r?.unread_count) || 0), 0);
-
   const openRoom = (roomId: string) => {
     router.push(`/app/businesses/${businessId}/chat/${roomId}`);
   };
@@ -91,20 +46,21 @@ export default function BusinessChatListPage() {
         <PageHeader
           title="Business Messages"
           subtitle={loading || loadFailure ? undefined : totalUnread > 0 ? `${totalUnread} unread`
-            : `${rooms.length} ${rooms.length === 1 ? 'conversation' : 'conversations'}`}
+            : `${total} ${total === 1 ? 'conversation' : 'conversations'}`}
           ctaLabel="Refresh"
           ctaOnClick={load}
         >
           <SearchInput
             value={search}
             onChange={setSearch}
-            placeholder="Search business conversations..."
+            placeholder={hasMore ? "Search loaded conversations..." : "Search business conversations..."}
             className="max-w-sm"
           />
         </PageHeader>
       </div>
 
       <main className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pb-6">
+        {error && rooms.length > 0 && <p role="alert" className="mb-3 text-sm text-red-600">{error}</p>}
         {loading ? (
           <div className="space-y-3">
             {[1, 2, 3].map((i) => (
@@ -142,7 +98,7 @@ export default function BusinessChatListPage() {
           <div className="bg-surface rounded-2xl border border-app shadow-sm p-10 text-center mt-4">
             <div className="mb-3 flex justify-center"><Search className="w-8 h-8 text-app-muted" /></div>
             <div className="text-app font-semibold text-lg">No matches</div>
-            <div className="text-sm text-app-text-secondary mt-1">No conversations match &quot;{search}&quot;</div>
+            <div className="text-sm text-app-text-secondary mt-1">No {hasMore ? 'loaded ' : ''}conversations match &quot;{search}&quot;</div>
           </div>
         ) : (
           <div className="bg-surface rounded-xl border border-app shadow-sm overflow-hidden divide-y divide-app">
@@ -191,6 +147,11 @@ export default function BusinessChatListPage() {
             })}
           </div>
         )}
+        {!loading && !loadFailure && hasMore && <div className="pt-4 text-center">
+          <button onClick={() => void loadMore()} disabled={loadingMore} className="text-sm text-violet-600 hover:underline disabled:opacity-50">
+            {loadingMore ? 'Loading…' : 'Load more conversations'}
+          </button>
+        </div>}
       </main>
     </div>
   );

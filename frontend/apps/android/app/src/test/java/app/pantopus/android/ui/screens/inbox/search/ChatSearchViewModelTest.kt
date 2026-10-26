@@ -5,22 +5,31 @@ package app.pantopus.android.ui.screens.inbox.search
 import app.pantopus.android.data.api.models.chats.ChatMessageDto
 import app.pantopus.android.data.api.models.chats.ChatMessagesResponse
 import app.pantopus.android.data.api.models.chats.ChatOtherIdentity
+import app.pantopus.android.data.api.models.chats.ChatSearchResponse
+import app.pantopus.android.data.api.models.chats.ChatSearchRoomContext
 import app.pantopus.android.data.api.models.chats.UnifiedConversationDto
 import app.pantopus.android.data.api.models.chats.UnifiedConversationsResponse
+import app.pantopus.android.data.api.models.chats.resolvedText
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.chats.ChatRepository
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -95,15 +104,52 @@ class ChatSearchViewModelTest {
             hasMore = false,
         )
 
-    private fun stubIndex() {
-        coEvery { repo.unifiedConversations() } returns NetworkResult.Success(listResponse())
-        coEvery { repo.conversationMessages("u1") } returns NetworkResult.Success(u1Messages())
-        coEvery { repo.roomMessages("g1") } returns NetworkResult.Success(g1Messages())
+    /**
+     * The server's search, which matches case-insensitively: the first page of conversations whose name matches, and
+     * the first page of messages whose text matches, each with its conversation.
+     */
+    private fun stubServerSearch() {
+        coEvery { repo.conversationsPage(null, any()) } coAnswers {
+            val text = secondArg<String?>().orEmpty()
+            val all = listResponse()
+            NetworkResult.Success(
+                all.copy(
+                    conversations =
+                        all.conversations.filter { (it.otherParticipantName ?: it.roomName).orEmpty().contains(text, ignoreCase = true) },
+                ),
+            )
+        }
+        coEvery { repo.searchMessages(any(), null) } coAnswers {
+            val text = firstArg<String>()
+            NetworkResult.Success(
+                ChatSearchResponse(
+                    messages = (u1Messages().messages + g1Messages().messages).filter { it.resolvedText.contains(text, ignoreCase = true) },
+                    roomContexts =
+                        mapOf(
+                            "r1" to ChatSearchRoomContext(conversationId = "u1", kind = "conversation", name = "Marcus R."),
+                            "g1" to ChatSearchRoomContext(conversationId = "g1", kind = "room", name = "Rose Court Block"),
+                        ),
+                ),
+            )
+        }
+    }
+
+    /** Types [text], then lets the 250 ms debounce pass: nothing is asked of the server before it ends. */
+    private fun TestScope.search(
+        vm: ChatSearchViewModel,
+        text: String,
+    ) {
+        vm.setQuery(text)
+        advanceTimeBy(249)
+        coVerify(exactly = 0) { repo.conversationsPage(any(), text) }
+        coVerify(exactly = 0) { repo.searchMessages(text, any()) }
+        advanceTimeBy(1)
+        runCurrent()
     }
 
     @Test fun load_clears_loading() =
         runTest {
-            stubIndex()
+            stubServerSearch()
             val vm = ChatSearchViewModel(repo)
             vm.load()
             assertFalse(vm.isLoading.value)
@@ -112,10 +158,13 @@ class ChatSearchViewModelTest {
 
     @Test fun name_match_has_no_scroll_target_and_preview_snippet() =
         runTest {
-            stubIndex()
+            stubServerSearch()
             val vm = ChatSearchViewModel(repo)
             vm.load()
-            vm.setQuery("marcus")
+            search(vm, "marcus")
+            coVerify(exactly = 1) { repo.conversationsPage(null, "marcus") }
+            coVerify(exactly = 1) { repo.searchMessages("marcus", null) }
+            assertFalse(vm.isLoading.value)
             assertEquals(1, vm.results.value.size)
             val result = vm.results.value.first()
             assertEquals("u1", result.conversationId)
@@ -126,10 +175,12 @@ class ChatSearchViewModelTest {
 
     @Test fun body_match_carries_message_id_and_snippet() =
         runTest {
-            stubIndex()
+            stubServerSearch()
             val vm = ChatSearchViewModel(repo)
             vm.load()
-            vm.setQuery("chairs")
+            search(vm, "chairs")
+            coVerify(exactly = 1) { repo.conversationsPage(null, "chairs") }
+            coVerify(exactly = 1) { repo.searchMessages("chairs", null) }
             assertEquals(1, vm.results.value.size)
             val result = vm.results.value.first()
             assertEquals("g1", result.conversationId)
@@ -140,42 +191,54 @@ class ChatSearchViewModelTest {
 
     @Test fun case_insensitive_match() =
         runTest {
-            stubIndex()
+            stubServerSearch()
             val vm = ChatSearchViewModel(repo)
             vm.load()
-            vm.setQuery("MARCUS")
+            search(vm, "MARCUS")
+            // The query goes to the server as typed; the server matches it regardless of case.
+            coVerify(exactly = 1) { repo.conversationsPage(null, "MARCUS") }
+            assertEquals(1, vm.results.value.size)
             assertEquals("u1", vm.results.value.first().conversationId)
         }
 
     @Test fun no_match_yields_empty() =
         runTest {
-            stubIndex()
+            stubServerSearch()
             val vm = ChatSearchViewModel(repo)
             vm.load()
-            vm.setQuery("zzzzz")
+            search(vm, "zzzzz")
+            coVerify(exactly = 1) { repo.searchMessages("zzzzz", null) }
+            assertFalse(vm.isLoading.value)
             assertTrue(vm.results.value.isEmpty())
         }
 
     @Test fun clearing_query_resets_results() =
         runTest {
-            stubIndex()
+            stubServerSearch()
             val vm = ChatSearchViewModel(repo)
             vm.load()
-            vm.setQuery("marcus")
+            search(vm, "marcus")
             assertFalse(vm.results.value.isEmpty())
             vm.setQuery("")
             assertTrue(vm.results.value.isEmpty())
+            assertFalse(vm.isLoading.value)
+            // An empty query asks the server nothing.
+            advanceUntilIdle()
+            coVerify(exactly = 0) { repo.searchMessages("", any()) }
         }
 
     @Test fun conversation_list_failure_degrades_to_empty() =
         runTest {
-            coEvery { repo.unifiedConversations() } returns
+            coEvery { repo.conversationsPage(null, "marcus") } returns
                 NetworkResult.Failure(NetworkError.Server(500, null))
+            coEvery { repo.searchMessages("marcus", null) } returns NetworkResult.Success(ChatSearchResponse())
             val vm = ChatSearchViewModel(repo)
             vm.load()
-            vm.setQuery("marcus")
+            search(vm, "marcus")
             assertFalse(vm.isLoading.value)
             assertTrue(vm.results.value.isEmpty())
+            // The failed name search is reported, not shown as "no results".
+            assertNotNull(vm.error.value)
         }
 
     // ─── Text helpers ───────────────────────────────────────

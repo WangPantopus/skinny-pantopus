@@ -167,12 +167,14 @@ public struct FeedSeededDismissResponse: Decodable, Sendable, Hashable {
 
 /// One row of `UserFeedPreference` — `backend/routes/posts.js:2257`.
 public struct FeedPreferencesDTO: Decodable, Sendable, Hashable {
+    public let sports: SportsPreferencesDTO?
     public let hideDealsPlace: Bool
     public let hideAlertsPlace: Bool
     public let showPoliticsConnections: Bool
     public let showPoliticsPlace: Bool
 
     private enum CodingKeys: String, CodingKey {
+        case sports
         case hideDealsPlace = "hide_deals_place"
         case hideAlertsPlace = "hide_alerts_place"
         case showPoliticsConnections = "show_politics_connections"
@@ -183,8 +185,10 @@ public struct FeedPreferencesDTO: Decodable, Sendable, Hashable {
         hideDealsPlace: Bool,
         hideAlertsPlace: Bool,
         showPoliticsConnections: Bool,
-        showPoliticsPlace: Bool
+        showPoliticsPlace: Bool,
+        sports: SportsPreferencesDTO? = nil
     ) {
+        self.sports = sports
         self.hideDealsPlace = hideDealsPlace
         self.hideAlertsPlace = hideAlertsPlace
         self.showPoliticsConnections = showPoliticsConnections
@@ -193,6 +197,7 @@ public struct FeedPreferencesDTO: Decodable, Sendable, Hashable {
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        sports = try c.decodeIfPresent(SportsPreferencesDTO.self, forKey: .sports)
         hideDealsPlace = try c.decodeIfPresent(Bool.self, forKey: .hideDealsPlace) ?? false
         hideAlertsPlace = try c.decodeIfPresent(Bool.self, forKey: .hideAlertsPlace) ?? false
         showPoliticsConnections = try c.decodeIfPresent(Bool.self, forKey: .showPoliticsConnections) ?? false
@@ -208,6 +213,8 @@ public struct FeedPreferencesResponse: Decodable, Sendable, Hashable {
 /// Body for `PUT /api/posts/feed-preferences`. Every field is optional —
 /// the handler only writes the keys that are present.
 public struct FeedPreferencesUpdateRequest: Encodable, Sendable, Hashable {
+    public let expectedSports: SportsPreferencesDTO?
+    public let sports: SportsPreferencesDTO?
     public let hideDealsPlace: Bool?
     public let hideAlertsPlace: Bool?
     public let showPoliticsConnections: Bool?
@@ -217,11 +224,20 @@ public struct FeedPreferencesUpdateRequest: Encodable, Sendable, Hashable {
         hideDealsPlace: Bool? = nil,
         hideAlertsPlace: Bool? = nil,
         showPoliticsConnections: Bool? = nil,
-        showPoliticsPlace: Bool? = nil
+        showPoliticsPlace: Bool? = nil,
+        sports: SportsPreferencesDTO? = nil,
+        expectedSports: SportsPreferencesDTO? = nil
     ) {
+        self.expectedSports = expectedSports
+        self.sports = sports
         self.hideDealsPlace = hideDealsPlace
         self.hideAlertsPlace = hideAlertsPlace
         self.showPoliticsConnections = showPoliticsConnections
         self.showPoliticsPlace = showPoliticsPlace
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case sports, hideDealsPlace, hideAlertsPlace, showPoliticsConnections, showPoliticsPlace
+        case expectedSports = "expected_sports"
     }
 }

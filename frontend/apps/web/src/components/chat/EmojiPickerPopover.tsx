@@ -1,8 +1,27 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
-import data from '@emoji-mart/data';
-import Picker from '@emoji-mart/react';
+import { useEffect, useRef, useState } from 'react';
+
+// The picker and its emoji table (about half a megabyte) are not part of every
+// page that shows a composer or message. A chat composer preloads them while
+// the page is idle; opening a picker earlier loads both at once. They are held
+// here rather than behind a Suspense boundary, whose reveal React throttles by
+// about 300 ms even when the module is already loaded.
+type PickerComponent = (typeof import('@emoji-mart/react'))['default'];
+let picker: PickerComponent | null = null;
+let pickerLoad: Promise<PickerComponent> | null = null;
+let emojiTable: unknown = null;
+let emojiTableLoad: Promise<unknown> | null = null;
+const loadPicker = () => (pickerLoad ??= import('@emoji-mart/react').then((module) => (picker = module.default))
+  .catch((error: unknown) => { pickerLoad = null; throw error; }));
+const loadEmojiData = () => (emojiTableLoad ??= import('@emoji-mart/data').then((module) => (emojiTable = module.default))
+  .catch((error: unknown) => { emojiTableLoad = null; throw error; }));
+
+/** Start loading the picker and its emoji table without showing anything. */
+export function preloadEmojiPicker(): void {
+  void loadPicker().catch(() => {});
+  void loadEmojiData().catch(() => {});
+}
 
 interface EmojiPickerPopoverProps {
   isOpen?: boolean;
@@ -13,6 +32,16 @@ interface EmojiPickerPopoverProps {
 
 export default function EmojiPickerPopover({ isOpen = true, onClose, onSelect, anchorRef }: EmojiPickerPopoverProps) {
   const popoverRef = useRef<HTMLDivElement>(null);
+  const [loaded, setLoaded] = useState<{ Picker: PickerComponent; data: unknown } | null>(null);
+  const ready = loaded ?? (isOpen && picker && emojiTable ? { Picker: picker, data: emojiTable } : null);
+  const isReady = ready !== null;
+  useEffect(() => {
+    if (!isOpen || isReady) return;
+    let live = true;
+    void Promise.all([loadPicker(), loadEmojiData()])
+      .then(([Picker, data]) => { if (live) setLoaded({ Picker, data }); }).catch(() => {});
+    return () => { live = false; };
+  }, [isOpen, isReady]);
 
   // Close on click outside
   useEffect(() => {
@@ -40,7 +69,8 @@ export default function EmojiPickerPopover({ isOpen = true, onClose, onSelect, a
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
-  if (!isOpen) return null;
+  if (!isOpen || !ready) return null;
+  const { Picker, data } = ready;
 
   return (
     <div ref={popoverRef} className="absolute bottom-full mb-2 z-50 shadow-xl rounded-xl overflow-hidden">

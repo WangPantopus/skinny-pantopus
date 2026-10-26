@@ -16,6 +16,7 @@
  */
 
 const supabaseAdmin = require('../config/supabaseAdmin');
+const { chatAccessUnavailable } = require('./chatBusinessAccess');
 const { hasPermission } = require('../utils/businessPermissions');
 
 async function getGigOwnerMessagingContext(gigOwnerUserId, actorUserId) {
@@ -23,18 +24,19 @@ async function getGigOwnerMessagingContext(gigOwnerUserId, actorUserId) {
     return { isOwnerActor: true, messageSenderUserId: actorUserId };
   }
 
-  const { data: owner } = await supabaseAdmin
+  const { data: owner, error } = await supabaseAdmin
     .from('User')
     .select('id, account_type')
     .eq('id', gigOwnerUserId)
     .maybeSingle();
 
+  if (error) throw chatAccessUnavailable();
   if (!owner || owner.account_type !== 'business') {
     return { isOwnerActor: false, messageSenderUserId: actorUserId };
   }
 
-  const canManage = await hasPermission(gigOwnerUserId, actorUserId, 'gigs.manage');
-  const canPost = canManage ? true : await hasPermission(gigOwnerUserId, actorUserId, 'gigs.post');
+  const canManage = await hasPermission(gigOwnerUserId, actorUserId, 'gigs.manage', { throwOnError: true });
+  const canPost = canManage ? true : await hasPermission(gigOwnerUserId, actorUserId, 'gigs.post', { throwOnError: true });
   if (!canPost) {
     return { isOwnerActor: false, messageSenderUserId: actorUserId };
   }

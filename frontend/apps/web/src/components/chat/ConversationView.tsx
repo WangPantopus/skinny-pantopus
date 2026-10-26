@@ -9,19 +9,24 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import { getInitials } from '@pantopus/ui-utils';
 import type { ConversationTopic } from '@pantopus/types';
-import { useChatMessages, shareFailureMessage, CONVERSATION_NOT_READY, chatPersonAvatar, chatPersonHandle, chatPersonHref, chatPersonName } from '../../hooks/useChatMessages';
+import { useChatMessages, CONVERSATION_NOT_READY, chatPersonAvatar, chatPersonHandle, chatPersonHref, chatPersonName } from '../../hooks/useChatMessages';
 import ChatMessageList from './ChatMessageList';
+import ChatSearch from './ChatSearch';
+import ChatNotificationPreference from './ChatNotificationPreference';
 import ChatInput from './ChatInput';
 import GigPickerModal from './GigPickerModal';
 import ListingPickerModal from './ListingPickerModal';
 import ImageLightbox from './ImageLightbox';
 import ListingShareAddressButton from './ListingShareAddressButton';
 import ReportModal from '../ui/ReportModal';
+import ErrorState from '@/components/ui/ErrorState';
 import { confirmStore } from '../ui/confirm-store';
 import { toast } from '../ui/toast-store';
 import { launchFeatures } from '@/lib/featureFlags';
 import { usernameHandle } from '@pantopus/utils';
-import { fetchMe } from '@/lib/me';
+import { fetchMe, peekMe } from '@/lib/me';
+import { navigateChatPath } from '@/hooks/useChatOfflineShell';
+import { readCachedChatAccountId, type ChatDraftCommit } from './chatStorage';
 import { queryKeys } from '@/lib/query-keys';
 
 // ============================================================
@@ -33,18 +38,28 @@ export default function ConversationView({
   otherUserId,
   initialTopicId,
   returnTo = '/app/chat',
+  initialMessageId,
 }: {
   otherUserId: string;
   initialTopicId?: string;
   returnTo?: string;
+  initialMessageId?: string;
 }) {
   const router = useRouter();
 
   // ── Conversation-specific state ───────────────────────
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  // This session's profile is usually loaded already (the shell shows it):
+  // start with it so the saved conversation is read on the first render.
+  const [currentUserId, setCurrentUserId] = useState<string | null>(() => (api.getAuthToken() ? peekMe()?.id ?? null : null));
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(initialTopicId || null);
   const [showDrawer, setShowDrawer] = useState(false);
   const drawerTitleId = useId();
+  const selectTopic = (topicId: string | null) => {
+    if (initialMessageId) {
+      const query = topicId ? `?topic=${encodeURIComponent(topicId)}` : '';
+      router.replace(`/app/chat/conversation/${otherUserId}${query}`);
+    } else setSelectedTopicId(topicId);
+  };
 
   // Escape closes the Chat details drawer, unless a confirmation (Block) is open over it: Escape dismisses that first.
   useEffect(() => {
@@ -59,13 +74,13 @@ export default function ConversationView({
   // ── Attachment modals ───────────────────────────────────
   const [showGigPicker, setShowGigPicker] = useState(false);
   const [showListingPicker, setShowListingPicker] = useState(false);
-  const [lightboxImage, setLightboxImage] = useState<{ url: string; title?: string } | null>(null);
+  const [lightboxImage, setLightboxImage] = useState<{ url: string; title?: string; roomId?: string; messageId?: string } | null>(null);
 
   // ── Listing topic owner tracking (for Share Address) ───
   const [listingOwnerMap, setListingOwnerMap] = useState<Record<string, string>>({});
 
   // ── Shared chat hook ──────────────────────────────────
-  const chat = useChatMessages({ otherUserId, topicId: selectedTopicId, currentUserId });
+  const chat = useChatMessages({ otherUserId, topicId: selectedTopicId, currentUserId, initialMessageId });
 
   // Safety actions belong to the account and conversation that opened them.
   const safetyScope = useRef(0);
@@ -96,15 +111,22 @@ export default function ConversationView({
       }
       ownedConfirmation.current = null;
     };
-    const changed = () => {
+    const changed = (opening = false) => {
       retire();
       setBlocking(false);
       setReportTarget(null);
       setShowDrawer(false);
-      setCurrentUserId(null);
+      // A session change clears the account; opening the view keeps the
+      // profile it started with, which the reads below confirm.
+      if (!opening) setCurrentUserId(null);
       const current = captureSafetyScope();
       if (api.getAuthToken()) {
+        let confirmed = false;
+        void readCachedChatAccountId().then((id) => {
+          if (current() && !confirmed && id) setCurrentUserId(id);
+        }).catch(() => {});
         void fetchMe().then(user => {
+          confirmed = true;
           if (current()) setCurrentUserId(user?.id || null);
         }).catch(() => {});
       }
@@ -112,9 +134,9 @@ export default function ConversationView({
     const storage = (event: StorageEvent) => {
       if (event.key === null || event.key === api.AUTH_SESSION_CHANGE_KEY) changed();
     };
-    const unsubscribe = api.onTokenChange(changed);
+    const unsubscribe = api.onTokenChange(() => changed());
     window.addEventListener('storage', storage);
-    changed();
+    changed(true);
     return () => { retire(); unsubscribe(); window.removeEventListener('storage', storage); };
   }, [captureSafetyScope]);
 
@@ -210,8 +232,8 @@ export default function ConversationView({
 
   // ── Send and refresh topics ───────────────────────────
   const handleSend = useCallback(
-    async (text: string, files?: File[]) => {
-      await chat.sendMessage(text, files);
+    async (text: string, files?: File[], draft?: ChatDraftCommit) => {
+      await chat.sendMessage(text, files, draft);
       fetchTopics();
     },
     [chat, fetchTopics],
@@ -225,28 +247,13 @@ export default function ConversationView({
 
   const gigSendMutation = useMutation({
     mutationFn: async (gig: { id: string; title: string; category: string | null; price: number | null; status: string }) => {
-      // Create/find a topic for this gig
-      const topicResult = await api.chat.findOrCreateTopic(otherUserId, {
-        topicType: 'task',
-        topicRefId: gig.id,
-        title: gig.title,
-      });
-      const topicId = topicResult?.topic?.id;
-
-      return api.chat.sendMessage({
-        roomId: chat.resolvedRoomId as string,
-        messageText: gig.title,
+      return chat.sendSharedMessage({
+        text: gig.title,
         messageType: 'gig_offer',
         metadata: { gigId: gig.id, title: gig.title, category: gig.category, price: gig.price, status: gig.status },
-        ...(topicId ? { topicId } : {}),
+        topicRequest: { topicType: 'task', topicRefId: gig.id, title: gig.title },
       });
     },
-    onSuccess: async () => {
-      if (!chat.connected) await chat.refresh();
-      fetchTopics();
-    },
-    // Say why instead of closing the picker with nothing sent.
-    onError: (err: unknown) => chat.setError(shareFailureMessage(err)),
   });
 
   const handleGigSelected = useCallback((gig: { id: string; title: string; category: string | null; price: number | null; status: string }) => {
@@ -261,28 +268,13 @@ export default function ConversationView({
 
   const listingSendMutation = useMutation({
     mutationFn: async (listing: { id: string; title: string; category: string | null; price: number | null; condition: string | null; status: string; imageUrl: string | null; isFree: boolean }) => {
-      // Create/find a topic for this listing
-      const topicResult = await api.chat.findOrCreateTopic(otherUserId, {
-        topicType: 'listing',
-        topicRefId: listing.id,
-        title: listing.title,
-      });
-      const topicId = topicResult?.topic?.id;
-
-      return api.chat.sendMessage({
-        roomId: chat.resolvedRoomId as string,
-        messageText: listing.title,
+      return chat.sendSharedMessage({
+        text: listing.title,
         messageType: 'listing_offer',
         metadata: { listingId: listing.id, title: listing.title, category: listing.category, price: listing.price, condition: listing.condition, status: listing.status, imageUrl: listing.imageUrl, isFree: listing.isFree },
-        ...(topicId ? { topicId } : {}),
+        topicRequest: { topicType: 'listing', topicRefId: listing.id, title: listing.title },
       });
     },
-    onSuccess: async () => {
-      if (!chat.connected) await chat.refresh();
-      fetchTopics();
-    },
-    // Say why instead of closing the picker with nothing sent.
-    onError: (err: unknown) => chat.setError(shareFailureMessage(err)),
   });
 
   const handleListingSelected = useCallback((listing: { id: string; title: string; category: string | null; price: number | null; condition: string | null; status: string; imageUrl: string | null; isFree: boolean }) => {
@@ -295,8 +287,8 @@ export default function ConversationView({
     listingSendMutation.mutate(listing);
   }, [chat, listingSendMutation]);
 
-  const handleImageClick = useCallback((url: string, title?: string) => {
-    setLightboxImage({ url, title });
+  const handleImageClick = useCallback((url: string, title?: string, roomId?: string, messageId?: string) => {
+    setLightboxImage({ url, title, roomId, messageId });
   }, []);
 
   // ── Reaction handler ────────────────────────────────
@@ -345,13 +337,23 @@ export default function ConversationView({
     archived: 'bg-surface-muted text-app-text-secondary',
   };
 
+  // The conversation could not be opened: say why instead of "No messages yet",
+  // as the room view does, and offer no composer.
+  const loadFailureMessage = chat.loadFailure && chat.messages.length === 0
+    ? chat.loadFailure === 'forbidden'
+      ? "You don't have access to this conversation."
+      : chat.loadFailure === 'notFound'
+        ? "This conversation isn't available."
+        : "We couldn't load this conversation. Check your connection and try again."
+    : null;
+
   return (
     <div className="bg-app-surface-sunken flex flex-col h-full min-h-0 overflow-hidden pb-[var(--fab-lift,0px)]">
       {/* Header */}
       <div className="bg-surface border-b border-app flex-shrink-0 z-10">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center h-14 gap-3">
-            <button onClick={() => router.push(returnTo)} className="text-app-text-secondary hover:text-app p-1" aria-label="Back">
+            <button onClick={() => navigateChatPath(returnTo, router.push)} className="text-app-text-secondary hover:text-app p-1" aria-label="Back">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
@@ -374,6 +376,8 @@ export default function ConversationView({
                 )}
               </div>
             </div>
+            <ChatSearch target={{ otherUserId, currentUserId }} />
+            <ChatNotificationPreference target={{ otherUserId, currentUserId }} />
             <button
               onClick={() => setShowDrawer(!showDrawer)}
               className="text-app-muted hover:text-app-text-strong p-1"
@@ -393,7 +397,7 @@ export default function ConversationView({
           <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
             <div className="flex items-center gap-2 overflow-x-auto">
               <button
-                onClick={() => setSelectedTopicId(null)}
+                onClick={() => selectTopic(null)}
                 className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
                   !selectedTopicId
                     ? 'bg-primary-100 text-primary-700 ring-1 ring-primary-300'
@@ -405,7 +409,7 @@ export default function ConversationView({
               {topics.map(topic => (
                 <button
                   key={topic.id}
-                  onClick={() => setSelectedTopicId(selectedTopicId === topic.id ? null : topic.id)}
+                  onClick={() => selectTopic(selectedTopicId === topic.id ? null : topic.id)}
                   className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-medium transition-colors flex items-center gap-1 ${
                     selectedTopicId === topic.id
                       ? 'bg-primary-100 text-primary-700 ring-1 ring-primary-300'
@@ -421,9 +425,19 @@ export default function ConversationView({
         </div>
       )}
 
+      {loadFailureMessage ? (
+        <div className="flex-1 min-h-0 flex flex-col justify-center">
+          <ErrorState
+            message={loadFailureMessage}
+            onRetry={chat.loadFailure === 'unavailable' ? chat.retryLoad : undefined}
+          />
+        </div>
+      ) : (
+      <>
       {/* Messages — flex-1 min-h-0 so this area gets a bounded height and can scroll */}
       <div className="flex-1 min-h-0 flex flex-col">
         <ChatMessageList
+          currentUserId={currentUserId}
           messages={chat.messages}
           loading={chat.loading}
           // A conversation that takes no messages says why in place of the composer instead.
@@ -431,11 +445,18 @@ export default function ConversationView({
           hasMore={chat.hasMore}
           loadingOlder={chat.loadingOlder}
           onLoadOlder={chat.loadOlder}
+          onVisibleMessage={chat.onVisibleMessage}
+          anchorMessageId={chat.contextAnchorId}
+          onReturnToLatest={initialMessageId ? () => router.replace(`/app/chat/conversation/${otherUserId}`) : undefined}
           isOwnMessage={isOwnMessage}
           renderTopicDivider={renderTopicDivider}
           onImageClick={handleImageClick}
           onReact={handleReact}
           onRetry={chat.retryMessage}
+          onRemovePending={chat.removePendingMessage}
+          onEdit={chat.sendRefusal ? undefined : chat.beginEdit}
+          onDelete={chat.deleteMessage}
+          canChangeMessage={chat.canChangeMessage}
           onReply={chat.directChatError || chat.sendRefusal ? undefined : chat.beginReply}
         />
       </div>
@@ -456,15 +477,24 @@ export default function ConversationView({
 
       {/* Input */}
       <ChatInput
+        key={chat.composerDraft.key}
+        draft={chat.composerDraft}
         onSend={handleSend}
         sending={chat.sending}
+        typingPeerCount={chat.typingPeerCount}
+        onTypingChange={chat.onTypingChange}
         disabled={!!chat.directChatError}
         placeholder={chat.directChatError ? "You can't send messages in this conversation." : 'Message'}
         onAttachAction={handleAttachAction}
         replyingTo={chat.replyingTo}
         onCancelReply={chat.cancelReply}
+        editingMessage={chat.editingMessage}
+        onCancelEdit={chat.cancelEdit}
+        onSaveEdit={chat.saveEdit}
         lockedNote={chat.sendRefusal}
       />
+      </>
+      )}
 
       {/* Gig Picker Modal */}
       <GigPickerModal
@@ -483,6 +513,9 @@ export default function ConversationView({
 
       {/* Image Lightbox */}
       <ImageLightbox
+        currentUserId={currentUserId}
+        roomId={lightboxImage?.roomId}
+        messageId={lightboxImage?.messageId}
         imageUrl={lightboxImage?.url || null}
         title={lightboxImage?.title}
         onClose={() => setLightboxImage(null)}

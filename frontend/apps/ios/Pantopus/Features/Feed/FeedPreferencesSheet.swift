@@ -153,7 +153,8 @@ public final class FeedPreferencesViewModel {
             hideDealsPlace: patch.hideDealsPlace ?? current.hideDealsPlace,
             hideAlertsPlace: patch.hideAlertsPlace ?? current.hideAlertsPlace,
             showPoliticsConnections: patch.showPoliticsConnections ?? current.showPoliticsConnections,
-            showPoliticsPlace: patch.showPoliticsPlace ?? current.showPoliticsPlace
+            showPoliticsPlace: patch.showPoliticsPlace ?? current.showPoliticsPlace,
+            sports: current.sports
         )
     }
 }

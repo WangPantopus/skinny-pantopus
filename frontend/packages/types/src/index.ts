@@ -85,6 +85,9 @@ export type {
   AIDraftListingResponse,
   AIDraftPostRequest,
   AIDraftPostResponse,
+  AIPostSuggestionRequest,
+  AIPostSuggestion,
+  AIPostSuggestionResponse,
   AISummarizeMailRequest,
 } from './ai';
 

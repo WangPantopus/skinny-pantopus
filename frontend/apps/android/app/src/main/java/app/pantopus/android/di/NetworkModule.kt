@@ -130,6 +130,7 @@ import app.pantopus.android.data.auth.DPoPReplayGuard
 import app.pantopus.android.data.auth.DeviceIdentityInterceptor
 import app.pantopus.android.data.auth.StepUpInterceptor
 import app.pantopus.android.data.auth.TokenAuthenticator
+import app.pantopus.android.data.chats.ChatMediaInterceptor
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.adapters.Rfc3339DateJsonAdapter
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
@@ -226,12 +227,14 @@ object NetworkModule {
         tokenAuthenticator: TokenAuthenticator,
         retryInterceptor: RetryInterceptor,
         dpopReplayGuard: DPoPReplayGuard,
+        chatMediaInterceptor: ChatMediaInterceptor,
     ): OkHttpClient {
         val logging = SafeHttpLoggingInterceptor(enabled = BuildConfig.DEBUG)
         // No HTTP cache: replies carry door codes, medical cards, the wallet and the profile, and OkHttp's disk
         // cache kept them while signed in. Coil keeps images in its own cache (PantopusApplication).
         return OkHttpClient
             .Builder()
+            .addInterceptor(chatMediaInterceptor)
             // Outermost: UTC timestamps reach Moshi as "Z", which Android 8–13 can parse.
             .addInterceptor(UtcTimestampInterceptor())
             // X-Client-Platform + X-Device-Id on every API request (both clients).

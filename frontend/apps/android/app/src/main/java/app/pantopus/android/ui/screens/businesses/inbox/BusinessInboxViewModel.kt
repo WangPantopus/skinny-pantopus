@@ -7,15 +7,21 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.identity.MadeUpUsername
 import app.pantopus.android.data.api.models.businessinbox.BusinessInboxRoomDto
+import app.pantopus.android.data.api.models.businessinbox.BusinessInboxRoomsResponse
 import app.pantopus.android.data.api.models.businessinbox.BusinessMatchedPostDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.businessinbox.BusinessInboxRepository
+import app.pantopus.android.data.realtime.SocketManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.net.HttpURLConnection.HTTP_BAD_REQUEST
 import java.time.Duration
 import java.time.Instant
 import javax.inject.Inject
@@ -35,6 +41,7 @@ class BusinessInboxViewModel
     @Inject
     constructor(
         private val repository: BusinessInboxRepository,
+        private val socket: SocketManager,
         savedStateHandle: SavedStateHandle,
     ) : ViewModel() {
         private val businessId: String =
@@ -55,27 +62,78 @@ class BusinessInboxViewModel
         /** Per-section cache so flipping back doesn't re-blank the list. */
         private var messagesState: BusinessInboxUiState? = null
         private var mentionsState: BusinessInboxUiState? = null
+        private var roomsGeneration = 0L
+        private var nextRoomCursor: String? = null
+        private var roomPageJob: Job? = null
 
-        fun load() {
-            viewModelScope.launch { fetch(_section.value) }
+        private var isForeground = false
+        private var realtimeJob: Job? = null
+        private var liveRefreshJob: Job? = null
+        private var refreshJob: Job? = null
+        private var refreshRequested = false
+
+        fun setForeground(foreground: Boolean) {
+            if (isForeground == foreground) return
+            isForeground = foreground
+            if (!foreground) {
+                realtimeJob?.cancel()
+                liveRefreshJob?.cancel()
+                refreshJob?.cancel()
+                roomPageJob?.cancel()
+                roomsGeneration++
+                return
+            }
+            realtimeJob =
+                viewModelScope.launch {
+                    launch {
+                        socket.eventsOf("sync:changed").collect { payload ->
+                            val topics = payload.optJSONArray("topics")
+                            if (topics != null && (0 until topics.length()).any { topics.optString(it) == "chats" }) requestLiveRefresh()
+                        }
+                    }
+                    launch {
+                        var observedState = false
+                        socket.connectionState.collect { state ->
+                            if (state == SocketManager.ConnectionState.Connected && observedState) requestLiveRefresh()
+                            observedState = true
+                        }
+                    }
+                }
+            refresh()
         }
 
+        private fun requestLiveRefresh() {
+            if (!isForeground || liveRefreshJob?.isActive == true) return
+            liveRefreshJob =
+                viewModelScope.launch {
+                    delay(300)
+                    if (isForeground && _section.value == BusinessInboxSection.Messages) refresh()
+                }
+        }
+
+        fun load() = refresh()
+
         fun refresh() {
-            cache(null, _section.value)
-            // Returning to the inbox re-reads it behind the rows already shown; only a first load or Retry shows the skeleton.
-            val showLoading = _state.value is BusinessInboxUiState.Loading || _state.value is BusinessInboxUiState.Error
-            viewModelScope.launch { fetch(_section.value, showLoading) }
+            refreshRequested = true
+            if (refreshJob?.isActive == true) return
+            refreshJob =
+                viewModelScope.launch {
+                    do {
+                        refreshRequested = false
+                        val target = _section.value
+                        if (target == BusinessInboxSection.Mentions) cache(null, target)
+                        val showLoading = _state.value is BusinessInboxUiState.Loading || _state.value is BusinessInboxUiState.Error
+                        fetch(target, showLoading)
+                    } while (refreshRequested && isForeground)
+                }
         }
 
         fun selectSection(next: BusinessInboxSection) {
             if (_section.value == next) return
+            refreshJob?.cancel()
             _section.value = next
-            val cached = cached(next)
-            if (cached != null) {
-                _state.value = cached
-                return
-            }
-            viewModelScope.launch { fetch(next) }
+            _state.value = cached(next) ?: BusinessInboxUiState.Loading
+            refresh()
         }
 
         private suspend fun fetch(
@@ -90,25 +148,117 @@ class BusinessInboxViewModel
         }
 
         private suspend fun fetchRooms() {
-            when (val result = repository.rooms(businessId)) {
+            val generation = ++roomsGeneration
+            roomPageJob?.cancel()
+            val previous = messagesState as? BusinessInboxUiState.LoadedRooms
+            when (val result = readLoadedRooms(previous?.rooms?.size ?: 0)) {
                 is NetworkResult.Success -> {
+                    if (generation != roomsGeneration) return
                     _totalUnread.value = result.data.totalUnread ?: 0
+                    nextRoomCursor = result.data.nextCursor
                     val rooms = result.data.rooms.map { projectRoom(it) }
                     apply(
                         if (rooms.isEmpty()) {
                             BusinessInboxUiState.Empty
                         } else {
-                            BusinessInboxUiState.LoadedRooms(rooms)
+                            BusinessInboxUiState.LoadedRooms(rooms, hasMore = result.data.hasMore && nextRoomCursor != null)
                         },
                         BusinessInboxSection.Messages,
                     )
                 }
-                is NetworkResult.Failure ->
+                is NetworkResult.Failure -> {
+                    if (generation != roomsGeneration) return
+                    if (result.error.refusesStoredCopy) {
+                        nextRoomCursor = null
+                        _totalUnread.value = 0
+                    }
                     apply(
-                        BusinessInboxUiState.Error(message(result.error, "Couldn't load messages.")),
+                        if (previous != null && !result.error.refusesStoredCopy) {
+                            previous.copy(
+                                loadingMore = false,
+                                loadError = message(result.error, "Couldn't refresh messages."),
+                                retryFromStart = true,
+                            )
+                        } else {
+                            BusinessInboxUiState.Error(message(result.error, "Couldn't load messages."))
+                        },
                         BusinessInboxSection.Messages,
                     )
+                }
             }
+        }
+
+        /** Revalidate the loaded depth atomically so live updates do not collapse a paged inbox. */
+        @Suppress("ReturnCount") // Failure, completed depth, and an invalid cursor each end the bounded read.
+        private suspend fun readLoadedRooms(targetCount: Int): NetworkResult<BusinessInboxRoomsResponse> {
+            val rooms = linkedMapOf<String, BusinessInboxRoomDto>()
+            val seenCursors = mutableSetOf<String>()
+            var cursor: String? = null
+            do {
+                when (val result = repository.rooms(businessId, before = cursor)) {
+                    is NetworkResult.Failure -> return result
+                    is NetworkResult.Success -> {
+                        val page = result.data
+                        page.rooms.forEach { rooms[it.id] = it }
+                        cursor = page.nextCursor
+                        if (rooms.size >= targetCount || !page.hasMore || cursor == null) {
+                            return NetworkResult.Success(page.copy(rooms = rooms.values.toList()))
+                        }
+                        if (!seenCursors.add(cursor) || page.rooms.isEmpty()) return NetworkResult.Failure(NetworkError.RetriesExhausted)
+                    }
+                }
+            } while (seenCursors.size <= (targetCount + 49) / 50)
+            return NetworkResult.Failure(NetworkError.RetriesExhausted)
+        }
+
+        fun loadMoreRooms() {
+            val previous = (messagesState as? BusinessInboxUiState.LoadedRooms)?.takeUnless { refreshJob?.isActive == true } ?: return
+            if (previous.retryFromStart) {
+                refresh()
+                return
+            }
+            val cursor = nextRoomCursor ?: return
+            if (!previous.hasMore || previous.loadingMore) return
+            val generation = roomsGeneration
+            apply(previous.copy(loadingMore = true, loadError = null), BusinessInboxSection.Messages)
+            roomPageJob =
+                viewModelScope.launch {
+                    val result = repository.rooms(businessId, before = cursor)
+                    if (generation != roomsGeneration || nextRoomCursor != cursor) return@launch
+                    when (result) {
+                        is NetworkResult.Success -> {
+                            _totalUnread.value = result.data.totalUnread ?: _totalUnread.value
+                            nextRoomCursor = result.data.nextCursor
+                            val rows = (previous.rooms + result.data.rooms.map(::projectRoom)).associateBy { it.id }.values.toList()
+                            apply(
+                                BusinessInboxUiState.LoadedRooms(
+                                    rows,
+                                    hasMore = result.data.hasMore && nextRoomCursor != null && nextRoomCursor != cursor,
+                                ),
+                                BusinessInboxSection.Messages,
+                            )
+                        }
+                        is NetworkResult.Failure -> {
+                            if (result.error.refusesStoredCopy) {
+                                nextRoomCursor = null
+                                _totalUnread.value = 0
+                                apply(
+                                    BusinessInboxUiState.Error(message(result.error, "Couldn't load messages.")),
+                                    BusinessInboxSection.Messages,
+                                )
+                            } else {
+                                apply(
+                                    previous.copy(
+                                        loadingMore = false,
+                                        loadError = message(result.error, "Couldn't load more messages."),
+                                        retryFromStart = result.error.code == HTTP_BAD_REQUEST,
+                                    ),
+                                    BusinessInboxSection.Messages,
+                                )
+                            }
+                        }
+                    }
+                }
         }
 
         private suspend fun fetchMentions() {

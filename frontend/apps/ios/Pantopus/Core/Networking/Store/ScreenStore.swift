@@ -491,6 +491,16 @@ extension ScreenStore {
     func seeded<Value: Sendable>(_ endpoint: Endpoint, as _: Value.Type = Value.self) -> Value? {
         key(for: endpoint).flatMap { seeds[$0] as? Value }
     }
+
+    /// Permission loss invalidates all topic variants of the same thread.
+    func removeSeeds(for endpoint: Endpoint) {
+        guard let target = key(for: endpoint) else { return }
+        let removed = Set(seeds.keys.filter { $0.server == target.server && $0.account == target.account && $0.path == target.path })
+        for key in removed {
+            seeds[key] = nil
+        }
+        seedOrder.removeAll { removed.contains($0) }
+    }
 }
 
 // MARK: - Answers kept outside the store

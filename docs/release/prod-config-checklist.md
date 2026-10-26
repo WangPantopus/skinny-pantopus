@@ -440,6 +440,31 @@ from the repository: every line passes except Android app links, which wait for 
 
 ### S8. Staging scheduled jobs (founder runs, L4 prepared)
 
+The pg-boss worker uses two database connections and checks each application
+queue every 30 seconds (up to 30 seconds of pickup latency after enqueue).
+The existing cron expressions, singleton keys, three retries with backoff,
+one-hour execution timeout and seven-day pending-job retention are unchanged.
+Finished application history (completed, cancelled or retries exhausted) is
+retained for one day. The internal `__pgboss__send-it` queue records scheduler
+handoffs to application queues; those terminal receipts are retained for one
+hour. Hourly maintenance means actual history can extend one hour past these
+limits. Queue monitoring and expired-job recovery still run every minute.
+
+Startup updates existing queue settings as well as creating missing queues.
+Already-enqueued jobs retain their copied settings: a code deploy alone does
+not shorten old history. For an authorized backlog cleanup, inspect aggregate
+counts and preserve the schedule definitions and every created, retrying or
+active job. Restrict deletion to terminal jobs in the registered application
+queues older than one day and internal handoffs older than one hour; use
+bounded batches with statement/lock timeouts. Never truncate the job table.
+Afterward check table size, queue completion/retry progress, pool connections,
+API health and database query/read deltas. Any table compaction requires a
+brief graceful worker stop and a bounded lock timeout; restart and verify the
+worker even if compaction fails. Keep operator evidence outside this public
+repository. The existing production-image queue check exercises all 21
+consumers, a real cron handoff, retry, maintenance and worker restart against
+disposable PostgreSQL; business side effects are replaced in that check.
+
 The worker container already runs cron and pg-boss. The Lambda stack sends the
 reminders:
 

@@ -2,9 +2,11 @@
 
 package app.pantopus.android.ui.screens.plans.map
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -76,6 +78,7 @@ import app.pantopus.android.ui.screens.plans.components.PlanSwatch
 import app.pantopus.android.ui.screens.plans.components.PlanTextButton
 import app.pantopus.android.ui.screens.plans.components.PlanTypeTag
 import app.pantopus.android.ui.screens.plans.components.planCard
+import app.pantopus.android.ui.screens.plans.teams.PlansSportsEmpty
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -602,6 +605,7 @@ internal fun PlansEmptyContent(
     onHost: (PlanKind, PlanGameDto?) -> Unit,
     onInvite: () -> Unit,
     onShowElsewhere: () -> Unit,
+    onGamesChanged: () -> Unit,
 ) {
     val scroll = rememberScrollState()
     val sheet = LocalPlanSheet.current
@@ -629,8 +633,9 @@ internal fun PlansEmptyContent(
                 )
             }
             // The next game as a watch-party nudge; without one, the plain invitation (as on iOS).
-            val game = state.games.firstOrNull()
-            GameSuggestion(game) { onHost(PlanKind.WATCH_PARTY, game) }
+            PlansSportsEmpty(state.games, state.sports, onGamesChanged) { game, onLongClick ->
+                GameSuggestion(game, onLongClick) { onHost(PlanKind.WATCH_PARTY, game) }
+            }
         }
         val others = state.kinds.filter { it != PlanKind.WATCH_PARTY }
         Text(
@@ -684,9 +689,11 @@ internal fun PlansEmptyContent(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun GameSuggestion(
     game: PlanGameDto?,
+    onLongClick: (() -> Unit)?,
     onClick: () -> Unit,
 ) {
     val colors = PlanKind.WATCH_PARTY.colors
@@ -698,7 +705,7 @@ private fun GameSuggestion(
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(Radii.xl))
                 .background(colors.tint)
-                .clickable(role = Role.Button, onClick = onClick)
+                .combinedClickable(role = Role.Button, onClick = onClick, onLongClick = onLongClick)
                 .padding(14.dp)
                 .semantics(mergeDescendants = true) { role = Role.Button },
         verticalAlignment = Alignment.CenterVertically,
@@ -722,7 +729,8 @@ internal fun gameLine(game: PlanGameDto): String {
             1L -> "tomorrow"
             else -> start.format(DateTimeFormatter.ofPattern("EEEE", Locale.US))
         }
-    return "${game.label} play $day at ${start.format(DateTimeFormatter.ofPattern("h:mm", Locale.US))}"
+    val matchup = if (game.opponent.isNullOrBlank()) "${game.label} play" else game.matchupLabel()
+    return "$matchup $day at ${start.format(DateTimeFormatter.ofPattern("h:mm", Locale.US))}"
 }
 
 /** No location yet (board F5); after a refusal it says location is off, with Settings when there's no home (as on iOS). */

@@ -780,13 +780,14 @@ public struct FeedView: View {
 
     private var loadingFrame: some View {
         ScrollView(.vertical, showsIndicators: true) {
-            VStack(spacing: Spacing.s2) {
-                FeedSkeletonCard()
-                FeedSkeletonCard(withTitle: true)
-                FeedSkeletonCard()
-                FeedSkeletonCard()
+            VStack(spacing: 1) {
+                FeedSkeletonCard(edgeToEdge: true)
+                FeedSkeletonCard(withTitle: true, edgeToEdge: true)
+                FeedSkeletonCard(edgeToEdge: true)
+                FeedSkeletonCard(edgeToEdge: true)
             }
-            .padding(Spacing.s3)
+            .background(Theme.Color.appBorderSubtle)
+            .padding(.vertical, Spacing.s3)
         }
         .accessibilityIdentifier("pulseFeedLoading")
     }
@@ -955,8 +956,7 @@ public struct FeedView: View {
     }
 
     private func postList(_ rows: [PulsePostCardContent]) -> some View {
-        // Card gap is 10 per the A03 frame (off-scale by design).
-        LazyVStack(spacing: 10) {
+        LazyVStack(spacing: Spacing.s0) {
             // Whether the reader is at the top decides if new posts slide in or
             // wait behind the pill: where this marker is in the scroll view, not
             // whether it appeared (a pushed post coming back re-appears it).
@@ -972,6 +972,7 @@ public struct FeedView: View {
                 .accessibilityHidden(true)
             if let card = nearbyTopCard {
                 card
+                    .padding(Spacing.s3)
             }
             if rows.isEmpty, !viewModel.searchText.isEmpty {
                 Text("No posts match your search")
@@ -1009,7 +1010,7 @@ public struct FeedView: View {
             }
             Spacer(minLength: 80)
         }
-        .padding(Spacing.s3)
+        .padding(.vertical, Spacing.s3)
     }
 
     private func postCard(_ row: PulsePostCardContent) -> some View {

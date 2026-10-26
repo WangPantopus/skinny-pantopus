@@ -82,6 +82,7 @@ data class ConversationRowContent(
     val topics: List<ConversationRowTopic> = emptyList(),
     /** Backing gig for gig-room rows — plumbs the A15 pinned context strip. */
     val gigId: String? = null,
+    val lastMessageAt: String? = null,
 )
 
 /** Filter-tab entry the view renders. */
@@ -108,3 +109,10 @@ sealed interface ChatListUiState {
 
     data class Error(val message: String) : ChatListUiState
 }
+
+@Immutable
+data class ChatListPaging(
+    val hasMore: Boolean = false,
+    val loading: Boolean = false,
+    val error: String? = null,
+)
