@@ -27,11 +27,13 @@ struct MediaStillImage: View {
     /// `.fill` for grid cells, `.fit` for full-screen viewer slides.
     var contentMode: ContentMode = .fill
     var keepsOnDisk = true
+    var maxPixelSize: Int?
+    var fallbackURL: URL?
 
     var body: some View {
         Color.clear
             .overlay {
-                CachedAsyncImage(url: url, keepsOnDisk: keepsOnDisk) { phase in
+                CachedAsyncImage(url: url, keepsOnDisk: keepsOnDisk, maxPixelSize: maxPixelSize) { phase in
                     switch phase {
                     case let .success(image):
                         if contentMode == .fill {
@@ -40,8 +42,23 @@ struct MediaStillImage: View {
                             image.resizable().scaledToFit()
                         }
                     case .failure:
-                        Theme.Color.appSurfaceSunken
-                            .overlay(Icon(.alertCircle, size: 22, color: Theme.Color.appTextMuted))
+                        if let fallbackURL, fallbackURL != url {
+                            CachedAsyncImage(url: fallbackURL) { fallback in
+                                if let image = fallback.image {
+                                    if contentMode == .fill {
+                                        image.resizable().scaledToFill()
+                                    } else {
+                                        image.resizable().scaledToFit()
+                                    }
+                                } else {
+                                    Theme.Color.appSurfaceSunken
+                                        .overlay(Icon(.alertCircle, size: 22, color: Theme.Color.appTextMuted))
+                                }
+                            }
+                        } else {
+                            Theme.Color.appSurfaceSunken
+                                .overlay(Icon(.alertCircle, size: 22, color: Theme.Color.appTextMuted))
+                        }
                     case .empty:
                         Theme.Color.appSurfaceSunken.overlay(ProgressView())
                     @unknown default:
@@ -50,6 +67,38 @@ struct MediaStillImage: View {
                 }
             }
             .clipped()
+    }
+}
+
+/// Read one sharp frame without starting playback or saving a video to disk.
+/// The server poster remains visible if the asset cannot supply a frame.
+private struct PostVideoPoster: View {
+    let item: PostMediaItem
+    @State private var frame: UIImage?
+
+    var body: some View {
+        Color.clear
+            .overlay {
+                if let frame {
+                    Image(uiImage: frame).resizable().scaledToFill()
+                } else {
+                    MediaStillImage(url: item.thumbnailURL)
+                }
+            }
+            .clipped()
+            .task(id: item.url) {
+                frame = nil
+                let generator = AVAssetImageGenerator(asset: AVURLAsset(url: item.url))
+                generator.appliesPreferredTrackTransform = true
+                generator.maximumSize = CGSize(width: 1600, height: 1600)
+                let result = await withTaskCancellationHandler {
+                    try? await generator.image(at: .zero)
+                } onCancel: {
+                    generator.cancelAllCGImageGeneration()
+                }
+                guard !Task.isCancelled, let result else { return }
+                frame = UIImage(cgImage: result.image)
+            }
     }
 }
 
@@ -92,7 +141,7 @@ struct PlayerLayerView: UIViewRepresentable {
 /// scrolling never pays video setup cost.
 struct LivePhotoTileView: View {
     let stillURL: URL
-    /// Smaller preview rendered in grid cells when available.
+    /// Fallback only: legacy thumbnails are too small for a feed-width still.
     let thumbnailURL: URL?
     let videoURL: URL
     /// `.fill` for grid cells, `.fit` for the full-screen viewer.
@@ -167,9 +216,11 @@ struct LivePhotoTileView: View {
     private var mediaLayers: some View {
         ZStack {
             MediaStillImage(
-                url: contentMode == .fill ? (thumbnailURL ?? stillURL) : stillURL,
+                url: stillURL,
                 contentMode: contentMode,
-                keepsOnDisk: !showsReplayButton
+                keepsOnDisk: false,
+                maxPixelSize: contentMode == .fill ? 2400 : nil,
+                fallbackURL: thumbnailURL
             )
             if let player {
                 PlayerLayerView(
@@ -283,7 +334,7 @@ struct PostMediaTileView: View {
     var body: some View {
         switch item.kind {
         case .image:
-            MediaStillImage(url: item.thumbnailURL ?? item.url)
+            MediaStillImage(url: item.url, keepsOnDisk: false, maxPixelSize: 2400, fallbackURL: item.thumbnailURL)
                 .contentShape(Rectangle())
                 .onTapGesture { onTap?() }
                 .accessibilityElement()
@@ -304,11 +355,7 @@ struct PostMediaTileView: View {
             .accessibilityLabel("Open PDF")
         case .video:
             ZStack {
-                if item.thumbnailURL != nil {
-                    MediaStillImage(url: item.thumbnailURL)
-                } else {
-                    Theme.Color.appText.opacity(0.85)
-                }
+                PostVideoPoster(item: item)
                 playDisc
             }
             .contentShape(Rectangle())

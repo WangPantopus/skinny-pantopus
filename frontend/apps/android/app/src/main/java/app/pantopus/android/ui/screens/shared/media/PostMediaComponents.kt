@@ -10,9 +10,13 @@
 
 package app.pantopus.android.ui.screens.shared.media
 
+import android.graphics.Bitmap
+import android.media.MediaMetadataRetriever
+import android.os.Build
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -35,6 +39,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,6 +47,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -68,6 +74,8 @@ import coil.compose.SubcomposeAsyncImage
 import coil.request.CachePolicy
 import coil.request.ImageRequest
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /** Tile heights per surface — feed cards are compact, detail is regular. */
 enum class PostMediaGridStyle(
@@ -245,11 +253,12 @@ fun PostMediaTile(
         when (item.kind) {
             PostMediaKind.Image ->
                 MediaStillTile(
-                    url = item.thumbnailUrl ?: item.url,
+                    url = item.url,
                     onTap = onTap,
                     modifier = Modifier.fillMaxSize(),
                     // Coil stores source bytes: a small view does not make the original a thumbnail.
-                    cacheOnDisk = item.thumbnailUrl != null,
+                    cacheOnDisk = false,
+                    fallbackUrl = item.thumbnailUrl,
                 )
             PostMediaKind.Document -> {
                 Box(
@@ -260,11 +269,7 @@ fun PostMediaTile(
                 }
             }
             PostMediaKind.Video -> {
-                MediaStillTile(
-                    url = item.thumbnailUrl ?: "",
-                    onTap = onTap,
-                    modifier = Modifier.fillMaxSize(),
-                )
+                PostVideoPoster(item, Modifier.fillMaxSize().clickable { onTap?.invoke() })
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center,
@@ -347,6 +352,7 @@ fun MediaStillTile(
     contentScale: ContentScale = ContentScale.Crop,
     onTap: (() -> Unit)? = null,
     cacheOnDisk: Boolean = true,
+    fallbackUrl: String? = null,
 ) {
     val context = LocalContext.current
     val model =
@@ -373,16 +379,55 @@ fun MediaStillTile(
             }
         },
         error = {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                PantopusIconImage(
-                    icon = PantopusIcon.AlertCircle,
-                    contentDescription = null,
-                    size = 22.dp,
-                    tint = PantopusColors.appTextMuted,
+            if (!fallbackUrl.isNullOrBlank() && fallbackUrl != url) {
+                MediaStillTile(
+                    url = fallbackUrl,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = contentScale,
                 )
+            } else {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    PantopusIconImage(
+                        icon = PantopusIcon.AlertCircle,
+                        contentDescription = null,
+                        size = 22.dp,
+                        tint = PantopusColors.appTextMuted,
+                    )
+                }
             }
         },
     )
+}
+
+/** One sharp frame, decoded off the UI thread without playing or retaining the video file. */
+@Composable
+private fun PostVideoPoster(item: PostMediaItem, modifier: Modifier = Modifier) {
+    val frame by produceState<Bitmap?>(null, item.url) {
+        value = null
+        value = withContext(Dispatchers.IO) {
+            val retriever = MediaMetadataRetriever()
+            try {
+                retriever.setDataSource(item.url, emptyMap())
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                    retriever.getScaledFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 1600, 1600)
+                } else {
+                    retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                }
+            } catch (_: Exception) {
+                null
+            } finally {
+                retriever.release()
+            }
+        }
+    }
+    Box(modifier) {
+        val bitmap = frame
+        if (bitmap != null) {
+            Image(bitmap.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        } else {
+            MediaStillTile(url = item.thumbnailUrl.orEmpty(), modifier = Modifier.fillMaxSize())
+        }
+    }
 }
 
 /** Dark translucent play disc rendered over video posters. */
@@ -509,10 +554,11 @@ fun LivePhotoTile(
         // a sibling of the scaled `mediaLayers`.
         Box(modifier = Modifier.fillMaxSize().scale(stillScale)) {
             MediaStillTile(
-                url = if (showsReplayButton) item.url else item.thumbnailUrl ?: item.url,
+                url = item.url,
                 contentScale = contentScale,
                 modifier = Modifier.fillMaxSize(),
-                cacheOnDisk = !showsReplayButton && item.thumbnailUrl != null,
+                cacheOnDisk = false,
+                fallbackUrl = item.thumbnailUrl,
             )
             if (clipAlpha > 0f) {
                 AndroidView(

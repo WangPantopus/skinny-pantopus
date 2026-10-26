@@ -14,6 +14,7 @@ import SwiftUI
 struct CachedAsyncImage<Content: View>: View {
     private let url: URL?
     private let keepsOnDisk: Bool
+    private let maxPixelSize: Int?
     private let transaction: Transaction
     private let content: (AsyncImagePhase) -> Content
     @State private var phase: AsyncImagePhase
@@ -22,14 +23,16 @@ struct CachedAsyncImage<Content: View>: View {
     init(
         url: URL?,
         keepsOnDisk: Bool = true,
+        maxPixelSize: Int? = nil,
         transaction: Transaction = Transaction(),
         @ViewBuilder content: @escaping (AsyncImagePhase) -> Content
     ) {
         self.url = url
         self.keepsOnDisk = keepsOnDisk
+        self.maxPixelSize = maxPixelSize
         self.transaction = transaction
         self.content = content
-        let cached = url.flatMap { PantopusImagePipeline.shared.cachedImage(for: $0) }
+        let cached = url.flatMap { PantopusImagePipeline.shared.cachedImage(for: $0, maxPixelSize: maxPixelSize) }
         _phase = State(initialValue: cached.map { .success(Image(uiImage: $0)) } ?? .empty)
         _loadedURL = State(initialValue: cached == nil ? nil : url)
     }
@@ -46,13 +49,13 @@ struct CachedAsyncImage<Content: View>: View {
             return
         }
         guard loadedURL != url else { return }
-        if let cached = PantopusImagePipeline.shared.cachedImage(for: url) {
+        if let cached = PantopusImagePipeline.shared.cachedImage(for: url, maxPixelSize: maxPixelSize) {
             phase = .success(Image(uiImage: cached))
             loadedURL = url
             return
         }
         if loadedURL != nil { phase = .empty }
-        let image = await PantopusImagePipeline.shared.image(for: url, keepsOnDisk: keepsOnDisk)
+        let image = await PantopusImagePipeline.shared.image(for: url, keepsOnDisk: keepsOnDisk, maxPixelSize: maxPixelSize)
         guard !Task.isCancelled else { return }
         withTransaction(transaction) {
             phase = image.map { .success(Image(uiImage: $0)) } ?? .failure(URLError(.cannotDecodeContentData))
