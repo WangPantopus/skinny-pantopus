@@ -213,4 +213,49 @@ Close a case: <code>POST /api/admin/address-review/&lt;case id&gt;/resolve</code
   }
 }
 
-module.exports = { notifyClaimToReview, notifyReportToReview, notifyRemovalVoteToReview, notifyAddressWatchCase, recipients };
+/**
+ * Someone a household turned down while on probation proved the address by mail, so an AddressReviewCase (trigger
+ * probation_dispute) waits for Pantopus and their access stays off until it's decided (homePostcardVerificationService).
+ * One email per case with the case id and how to decide it; never names or the address. No admin screen lists these
+ * cases yet, so the email says which API calls do.
+ *
+ * @param {object} params
+ * @param {string} params.caseId
+ * @param {object} [params.home] The Home row (city, state): city only is printed.
+ * @returns {Promise<boolean>} true when an email was handed to the mailer.
+ */
+async function notifyProbationDisputeToReview({ caseId, home }) {
+  const to = recipients();
+  if (!to.length || !caseId) return false;
+
+  const where = [home && home.city, home && home.state].filter(Boolean).join(', ') || 'unknown area';
+  const subject = `[Pantopus] Probation dispute to review · ${where}`;
+  const resolve = `POST /api/admin/address-review/${caseId}/resolve`;
+  const text = [
+    'A household said no to someone on probation, and they proved the address by mail. Their access stays off until it\'s decided.',
+    '',
+    `Case: ${caseId}`,
+    `Area: ${where}`,
+    '',
+    `Decide it: ${resolve} with {"outcome": "approved"} to restore their membership, "rejected" to keep the household's no (final), or "dismissed" to close it without a decision (they can send proof again).`,
+    'Open cases: GET /api/admin/address-review/queue',
+  ].join('\n');
+  const html = `<p>A household said no to someone on probation, and they <strong>proved the address by mail</strong>. Their access stays off until it’s decided.</p>
+<ul>
+  <li>Case: <code>${caseId}</code></li>
+  <li>Area: ${where}</li>
+</ul>
+<p>Decide it: <code>${resolve}</code> with <code>{"outcome": "approved"}</code> to restore their membership, <code>"rejected"</code> to keep the household’s no (final), or <code>"dismissed"</code> to close it without a decision (they can send proof again).</p>
+<p>Open cases: <code>GET /api/admin/address-review/queue</code></p>`;
+
+  try {
+    await emailService.sendEmail({ to: to.join(','), subject, text, html });
+    return true;
+  } catch (err) {
+    logger.warn('adminAlerts: probation-dispute email failed (non-fatal)', { caseId, error: err.message });
+    return false;
+  }
+}
+
+module.exports = { notifyClaimToReview, notifyReportToReview, notifyRemovalVoteToReview, notifyAddressWatchCase,
+  notifyProbationDisputeToReview, recipients };

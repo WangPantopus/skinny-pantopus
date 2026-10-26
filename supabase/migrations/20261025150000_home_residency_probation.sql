@@ -1,8 +1,9 @@
 -- Backwards compatible: yes. Adds one allowed value to HomeOccupancy.verification_source, one switched-off
--- FeatureFlag row, one new service-only function, and forward replacements of four existing functions with the
--- same signatures and grants. Only the new function creates a 'probation' occupancy, only the backend job calls it,
--- and it creates none while home_residency_probation is off (its default), so the replaced functions behave exactly
--- as before for every existing row (the reviewer's projection only gains the verification_source field).
+-- FeatureFlag row, two new service-only functions, and forward replacements of four existing functions with the
+-- same signatures and grants. Only admit_home_residency_probation creates a 'probation' occupancy, only the backend
+-- job calls it, and it creates none while home_residency_probation is off (its default), so the replaced functions
+-- behave exactly as before for every existing row (the reviewer's projection only gains the verification_source
+-- field), and resolve_home_probation_dispute only acts on the review cases probation disputes open.
 --
 -- Home claims plan, PR 4: probation join (plan "when-users-claim-an-streamed-willow", approved by the founder on
 -- 2026-10-25 together with 7-day probation for unanswered join requests, for residents only and never for
@@ -21,7 +22,9 @@
 -- probationer: promote_home_postcard_review still needs a postcard proved in the window.
 -- After a no, asking again is refused (MEMBERSHIP_RENEWAL_REQUIRED). The way back is proof: a suspended
 -- probationer may still request a postcard, and proving it opens a dispute in the Pantopus review queue
--- (AddressReviewCase, trigger probation_dispute) instead of restoring access; the no stands until Pantopus decides.
+-- (AddressReviewCase, trigger probation_dispute) instead of restoring access; the no stands until Pantopus decides
+-- (resolve_home_probation_dispute): approving restores the membership (founder decision 2026-10-26), rejecting is
+-- final for this probation, and dismissing lets them send proof again.
 --
 -- Latest permitted sources (bodies copied unchanged except the lines commented below):
 --   review_home_residency           supabase/migrations/20261004104000_home_verification_source.sql:222
@@ -49,9 +52,9 @@ ON CONFLICT (flag_name) DO NOTHING;
 -- requests are renter or household requests only, so this never touches ownership; anyone with an owner record is
 -- refused. The request must still be pending and unreviewed, unchanged for p_wait_days but saved less than
 -- p_max_age_days ago (an older one stays pending), with the fresh pending membership the request created and no
--- challenge window. An open address-watch case for this person and Home holds it. p_window_days (7, or 14 for a
--- medium address watch) is the window in which a reviewer can challenge. Returns when the request was saved and
--- the household's current reviewers, who are told.
+-- challenge window. An open address-watch case about this person at this Home, or about the Home itself, holds it.
+-- p_window_days (7, or 14 for a medium address watch) is the window in which a reviewer can challenge. Returns when
+-- the request was saved and the household's current reviewers, who are told.
 CREATE FUNCTION public.admit_home_residency_probation(p_home_id uuid,p_actor_id uuid,p_claim_id uuid,
   p_wait_days integer,p_window_days integer,p_max_age_days integer) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp SET lock_timeout='5s' AS $$
@@ -81,7 +84,7 @@ BEGIN
     OR h.owner_id=p_actor_id OR h.security_state IN ('frozen','frozen_silent','disputed') OR h.home_status IN ('archived','merged')
     OR EXISTS(SELECT FROM public."HomeOwner" WHERE home_id=p_home_id AND subject_type='user' AND subject_id=p_actor_id) THEN
     RETURN '{"ok":true,"admitted":false}'::jsonb; END IF;
-  IF EXISTS(SELECT FROM public."AddressReviewCase" WHERE home_id=p_home_id AND user_id=p_actor_id
+  IF EXISTS(SELECT FROM public."AddressReviewCase" WHERE home_id=p_home_id AND (user_id=p_actor_id OR user_id IS NULL)
       AND trigger='address_watch' AND status IN ('open','in_review')) THEN
     RETURN '{"ok":true,"admitted":false,"held":true}'::jsonb; END IF;
   UPDATE public."HomeOccupancy" SET verification_status='provisional',verification_source='probation',
@@ -510,9 +513,14 @@ BEGIN
       AND NOT v_dispute)
     OR (r.status='rejected' AND NOT v_dispute) THEN
     RETURN jsonb_build_object('ok',false,'code','POSTCARD_ACCESS_REVIEW_REQUIRED','status',409); END IF;
+  -- Only this probation's disputes count (its challenge window started when it began). Pantopus's rejection is final.
   IF v_dispute AND EXISTS(SELECT FROM public."AddressReviewCase" WHERE home_id=p_home_id AND user_id=p_actor_id
-      AND trigger='probation_dispute' AND status IN ('open','in_review')) THEN
+      AND trigger='probation_dispute' AND status IN ('open','in_review')
+      AND created_at>=coalesce(o.challenge_window_started_at,'-infinity')) THEN
     RETURN jsonb_build_object('ok',false,'code','POSTCARD_DISPUTE_IN_REVIEW','status',409); END IF;
+  IF v_dispute AND EXISTS(SELECT FROM public."AddressReviewCase" WHERE home_id=p_home_id AND user_id=p_actor_id
+      AND trigger='probation_dispute' AND status='rejected' AND created_at>=coalesce(o.challenge_window_started_at,'-infinity')) THEN
+    RETURN jsonb_build_object('ok',false,'code','POSTCARD_DISPUTE_DECLINED','status',409); END IF;
   -- Household consent (an accepted invitation or a household-reviewed claim)
   -- is not address proof (F3b), so it must not block the postcard that adds it.
   -- Neither is an instant claim at an address with no household ('claim'), nor probation (home claims PR 4):
@@ -538,6 +546,92 @@ BEGIN
     'already_verified',o.verification_status='verified','occupancy_id',o.id,'claim_id',r.id,'dispute',v_dispute);
 END;
 $$;
+
+-- Pantopus decides a probation dispute (backend/routes/adminAddressReview.js -> homeProbationDisputeService; founder
+-- decision 2026-10-26: approving restores the membership). Approved: the person proved the address and Pantopus
+-- sides with them, so they come back as a resident verified by mail (source 'address', the role and permissions a
+-- postcard proof gives: home_postcard_verified_policy) and their request is marked verified; if their membership or
+-- the Home changed meanwhile, or the proof no longer matches the address, nothing changes
+-- (PROBATION_DISPUTE_CHANGED) and the case stays open to reject or dismiss. Rejected: the household's no stands
+-- and is final (home_postcard_current_context refuses another dispute postcard in this probation). Dismissed:
+-- closed without a decision; they can send proof again. Returns who to tell; audit rows have no actor.
+CREATE FUNCTION public.resolve_home_probation_dispute(p_case_id uuid,p_reviewer_id uuid,p_outcome text,p_note text,
+  p_validity_days integer) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp SET lock_timeout='5s' AS $$
+DECLARE c public."AddressReviewCase"%ROWTYPE; h public."Home"%ROWTYPE; o public."HomeOccupancy"%ROWTYPE;
+  p public."HomePostcardCode"%ROWTYPE; u public."User"%ROWTYPE; t timestamptz; v_disputed boolean;
+  v_postcard uuid; v_age public.home_age_band; policy jsonb; v_reviewers uuid[];
+BEGIN
+  IF p_case_id IS NULL OR p_reviewer_id IS NULL OR p_outcome IS NULL OR p_outcome NOT IN ('approved','rejected','dismissed')
+    OR p_validity_days IS NULL OR p_validity_days NOT BETWEEN 1 AND 3650 THEN
+    RETURN '{"ok":false,"code":"PROBATION_DISPUTE_INVALID","status":400}'::jsonb; END IF;
+  SELECT * INTO c FROM public."AddressReviewCase" WHERE id=p_case_id;
+  IF NOT FOUND OR c.trigger IS DISTINCT FROM 'probation_dispute' OR c.home_id IS NULL OR c.user_id IS NULL THEN
+    RETURN '{"ok":true,"handled":false}'::jsonb; END IF;
+  -- The membership lock order every residency decision takes, then the case.
+  IF NOT public.lock_home_residency_review_scope(c.home_id) THEN
+    RETURN '{"ok":false,"code":"PROBATION_DISPUTE_CHANGED","status":409}'::jsonb; END IF;
+  SELECT * INTO c FROM public."AddressReviewCase" WHERE id=p_case_id FOR UPDATE;
+  IF c.status NOT IN ('open','in_review') THEN
+    RETURN '{"ok":false,"code":"REVIEW_CASE_RESOLVED","status":409}'::jsonb; END IF;
+  t:=clock_timestamp();
+  SELECT * INTO h FROM public."Home" WHERE id=c.home_id;
+  SELECT * INTO o FROM public."HomeOccupancy" WHERE home_id=c.home_id AND user_id=c.user_id;
+  SELECT * INTO u FROM public."User" WHERE id=c.user_id;
+  v_disputed:=coalesce(o.is_active IS FALSE AND o.verification_status='suspended_challenged'
+    AND o.verification_source='probation' AND o.end_at IS NULL,false);
+  IF p_outcome='approved' THEN
+    SELECT (e->>'postcard_id')::uuid INTO v_postcard FROM jsonb_array_elements(CASE WHEN jsonb_typeof(c.reasons)='array'
+      THEN c.reasons ELSE '[]'::jsonb END) e WHERE e->>'code'='PROBATION_DISPUTED' AND e->>'postcard_id' ~ '^[0-9a-f-]{36}$' LIMIT 1;
+    SELECT * INTO p FROM public."HomePostcardCode" WHERE id=v_postcard AND home_id=c.home_id AND user_id=c.user_id;
+    IF NOT v_disputed OR u.id IS NULL OR o.start_at>t OR o.access_start_at>t OR o.access_end_at<=t
+      OR coalesce(o.role_base::text,'') NOT IN ('member','lease_resident','restricted_member')
+      OR h.security_state IN ('frozen','frozen_silent','disputed') OR h.home_status IN ('archived','merged')
+      OR h.owner_id=c.user_id OR EXISTS(SELECT FROM public."HomeOwner" WHERE home_id=c.home_id AND subject_type='user'
+        AND subject_id=c.user_id)
+      OR p.id IS NULL OR p.status IS DISTINCT FROM 'verified' OR coalesce(h.country,'US')<>'US'
+      OR p.destination IS DISTINCT FROM jsonb_build_object('address',h.address,'address2',h.address2,'city',h.city,
+        'state',h.state,'zipcode',h.zipcode) THEN
+      RETURN '{"ok":false,"code":"PROBATION_DISPUTE_CHANGED","status":409}'::jsonb; END IF;
+    -- The age band a postcard proof would set (home_postcard_current_context): a stricter saved band stays.
+    v_age:=o.age_band;
+    IF u.date_of_birth>(t AT TIME ZONE 'UTC')::date-interval '13 years' THEN v_age:='child';
+    ELSIF u.date_of_birth>(t AT TIME ZONE 'UTC')::date-interval '18 years' AND v_age IS DISTINCT FROM 'child' THEN v_age:='teen'; END IF;
+    policy:=public.home_postcard_verified_policy(c.home_id,c.user_id,v_age);
+    IF policy->>'ok' IS DISTINCT FROM 'true' THEN
+      RETURN '{"ok":false,"code":"PROBATION_DISPUTE_CHANGED","status":409}'::jsonb; END IF;
+  END IF;
+  UPDATE public."AddressReviewCase" SET status=p_outcome,resolved_by=p_reviewer_id,resolved_at=t,resolution_note=p_note,
+    updated_at=t WHERE id=c.id;
+  IF p_outcome='approved' THEN
+    UPDATE public."HomeOccupancy" SET is_active=true,role=policy->>'role_base',role_base=(policy->>'role_base')::public.home_role_base,
+      age_band=v_age,verification_status='verified',verification_source='address',verified_at=t,
+      verification_expires_at=t+make_interval(days=>p_validity_days),
+      can_manage_home=policy->'permissions' ? 'home.edit',can_manage_access=policy->'permissions' ?| ARRAY['access.manage','members.manage'],
+      can_manage_finance=policy->'permissions' ? 'finance.manage',can_manage_tasks=policy->'permissions' ?| ARRAY['tasks.edit','tasks.manage'],
+      can_view_sensitive=policy->'permissions' ? 'sensitive.view',updated_at=t WHERE id=o.id;
+    UPDATE public."HomeResidencyClaim" SET status='verified',reviewed_by=NULL,reviewed_at=t,
+      review_note='Verified by mail; Pantopus review restored this membership',updated_at=t
+      WHERE home_id=c.home_id AND user_id=c.user_id;
+    UPDATE public."Home" SET vacancy_at=NULL,updated_at=t WHERE id=c.home_id AND vacancy_at IS NOT NULL;
+    SELECT coalesce(array_agg(candidate ORDER BY candidate),'{}'::uuid[]) INTO v_reviewers FROM (
+      SELECT user_id AS candidate FROM public."HomeOccupancy" WHERE home_id=c.home_id
+      UNION SELECT subject_id FROM public."HomeOwner" WHERE home_id=c.home_id AND subject_type='user'
+      UNION SELECT h.owner_id
+    ) x WHERE candidate IS NOT NULL AND candidate<>c.user_id AND public.home_residency_review_authority(c.home_id,candidate);
+  END IF;
+  INSERT INTO public."HomeAuditLog"(home_id,actor_user_id,action,target_type,target_id,metadata)
+    VALUES(c.home_id,NULL,CASE p_outcome WHEN 'approved' THEN 'RESIDENCY_PROBATION_DISPUTE_UPHELD'
+      WHEN 'rejected' THEN 'RESIDENCY_PROBATION_DISPUTE_DECLINED' ELSE 'RESIDENCY_PROBATION_DISPUTE_DISMISSED' END,
+      'AddressReviewCase',c.id,jsonb_build_object('user_id',c.user_id,'reviewed',true,
+        'role_base',CASE WHEN p_outcome='approved' THEN policy->>'role_base' END));
+  RETURN jsonb_build_object('ok',true,'handled',true,'home_id',c.home_id,'user_id',c.user_id,
+    'outcome',CASE WHEN p_outcome='approved' THEN 'restored' WHEN p_outcome='rejected' AND v_disputed THEN 'declined'
+      WHEN p_outcome='rejected' THEN 'moot' ELSE 'dismissed' END,
+    'home_label',coalesce(h.name,h.address,'your home'),'reviewer_ids',to_jsonb(coalesce(v_reviewers,'{}'::uuid[])));
+END $$;
+REVOKE ALL ON FUNCTION public.resolve_home_probation_dispute(uuid,uuid,text,text,integer) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.resolve_home_probation_dispute(uuid,uuid,text,text,integer) TO service_role;
 
 -- Home claims PR 4: the reviewer's view of the requester's access now says where it came from, so a review of
 -- someone on probation can say that a no ends their membership.

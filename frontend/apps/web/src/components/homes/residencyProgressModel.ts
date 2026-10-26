@@ -25,7 +25,7 @@ export function validateResidencyProgress(value: unknown, homeId: string): asser
     || !['shared', 'private_setup', 'none'].includes(p.current_access)
     || !['home', 'household_review', 'address_verification', 'resubmit', 'access_review', 'ownership_verification', 'unavailable'].includes(p.next_step)
     || (p.next_step === 'home') !== (p.current_access === 'shared')
-    || !(p.probation == null || ['active', 'ended', 'review'].includes(p.probation))) throw new Error('Your current residency status could not be checked. Please retry.');
+    || !(p.probation == null || ['active', 'ended', 'review', 'declined'].includes(p.probation))) throw new Error('Your current residency status could not be checked. Please retry.');
   if (p.request !== null) {
     validateResidencyRequest(p.request);
     if (p.request.home_id !== p.home_id) throw new Error('This request belongs to a different Home. Please refresh.');
