@@ -103,7 +103,7 @@ function runShowLink(args, ctx) {
 // tools and link screens are named only to apps that show them: the web and the 2.0.1 and 2.0.2
 // builds have neither, and hear where in the app the person does it instead.
 function appGuide({
-  plans = true, playdates = false, suggestions = false, actionCards = true, links = true, pickupSchedule = true, remembers = false, standingRules = false,
+  plans = true, playdates = false, sports = false, suggestions = false, actionCards = true, links = true, pickupSchedule = true, remembers = false, standingRules = false,
 } = {}) {
   const marketplace = isLaunchFeatureEnabled('marketplace');
   const openGigs = isLaunchFeatureEnabled('open_gigs');
@@ -156,7 +156,7 @@ ACCOUNT AND PRIVACY
   // Playdates are described only to people with plans_playdates, whose tools offer them.
   if (plans) parts.push(`PLANS
 - A plan is a small meetup on the Plans map: a watch party, ${playdates ? 'a playdate, ' : ''}a pickup game, a walk and coffee, or a study group. Plans start within 14 days and last 15 minutes to 8 hours. A host may have 3 upcoming plans and post 5 a day.
-- Pickup games and study groups meet in public places; watch parties and walks may also be at the host's home. Everyone else sees only the plan's area until they get in; then they see the exact place, the host's note and who's going. At home, only people the host accepts see the address.
+${sports ? '- Your teams: Settings → Notifications → Games and teams opens the Your teams sheet to search, follow, hide, follow leagues or turn sports off. Link notification_settings and tell them to tap Games and teams. The Plans composer also has Edit teams. Use find_teams and draft_sports_teams for choices they want to confirm in chat.\n- Sports schedules: use find_games for the listed game’s exact start and end. A sports preference of off stops suggestions, but direct game questions can still be answered.\n' : ''}- Pickup games and study groups meet in public places; watch parties and walks may also be at the host's home. Everyone else sees only the plan's area until they get in; then they see the exact place, the host's note and who's going. At home, only people the host accepts see the address.
 - Who gets in: the host approves each person, or verified neighbors and people the host has hosted before get in right away; for pickup games and walks, anyone nearby can be let in automatically.
 - Asking to join: people within about 5 miles can ask, with a note and up to 3 others. Asking closes when the plan starts (for pickup games and walks, 30 minutes before the end).${playdates ? `
 - Playdates (kids play while their parents meet) are for verified neighbors: only people with a verified address see them, host them or ask to join. They meet in public places such as a playground, park or library; the host approves each family; parents stay with their kids the whole time; and only kids' ages are shared, never names. Until a family gets in, it sees only the neighborhood and the part of the day ("Saturday morning"). Families within about 3 miles can ask, with how many kids are coming and their ages.` : ''}

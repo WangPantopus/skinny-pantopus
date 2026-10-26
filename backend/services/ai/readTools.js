@@ -79,6 +79,20 @@ function findPlansDefinition({ playdates = false } = {}) {
 const readToolDefinitions = [
   findPlansDefinition(),
   {
+    name: 'find_teams',
+    description: 'Find teams by name, nickname, city or state; null query returns local suggestions. Use the person’s words and remembered preferences when geography is unhelpful. Return ids for draft_sports_teams; never invent a team or follow one automatically.',
+    input_schema: { type: 'object', properties: { query: { type: ['string', 'null'], maxLength: 100 } }, additionalProperties: false },
+  },
+  {
+    name: 'find_games',
+    description: "Read listed sports games for a direct question or a watch party the person asked for. Optional team name/id or league; otherwise use their followed and local teams. Never volunteer sports when their sports preference is off. Empty means no game listed, not proof there is no game. Use its id and exact start/end in draft_plan.",
+    input_schema: { type: 'object', properties: {
+      team: { type: ['string', 'null'], maxLength: 100 },
+      league: { type: ['string', 'null'], enum: ['nfl', 'nba', 'wnba', 'mlb', 'nhl', 'mls', 'nwsl', 'ncaaf', null] },
+      days: { type: ['integer', 'null'], minimum: 1, maximum: 14 },
+    }, additionalProperties: false },
+  },
+  {
     name: 'get_plan',
     description: 'One plan as the person sees it. For the host it includes the people who asked to join and their signals (verified address, distance, plans joined, mutual connections, hosted before, new to Pantopus, note).',
     input_schema: {
@@ -214,6 +228,53 @@ function planForModel(card, zone) {
     out.place_kind = card.place_kind;
   }
   return out;
+}
+
+async function findTeams(args, ctx) {
+  const user = { id: ctx.userId, role: ctx.user?.role || null };
+  if (!(await plansOn(ctx)) || !(await isFeatureEnabled('plans_sports', user))) return { error: 'Sports teams are not available yet.' };
+  const { searchTeams, publicTeam } = require('../plans/planTeams');
+  const viewer = await loadViewer(user);
+  const query = typeof args.query === 'string' ? args.query.trim().slice(0, 100) : '';
+  const teams = (query ? searchTeams(query) : require('../plans/planGames').suggestedForViewer(viewer)).map(publicTeam);
+  ctx.sportsTeamIds ||= new Set();
+  for (const team of teams) ctx.sportsTeamIds.add(team.id);
+  return { teams, suggested: !query, preferences: viewer.sports || {},
+    note: teams.length ? 'Offer choices, then draft changes for confirmation.' : 'No teams listed here. Ask which team, city or home state they care about; search works nationwide.' };
+}
+
+async function findGames(args, ctx) {
+  const user = { id: ctx.userId, role: ctx.user?.role || null };
+  if (!(await plansOn(ctx)) || !(await isFeatureEnabled('plans_sports', user))) {
+    return { error: "Sports games aren't available for this person yet." };
+  }
+  const { TEAMS } = require('../../data/sportsTeams');
+  const { teamById, searchTeams, LEAGUES } = require('../plans/planTeams');
+  const { gamesForViewer, upcomingGamesForTeams } = require('../plans/planGames');
+  const days = args.days ?? 14;
+  if (!Number.isInteger(days) || days < 1 || days > 14) return { error: 'Choose 1 to 14 days.' };
+  if (args.league && !LEAGUES.includes(args.league)) return { error: 'Choose a listed league.' };
+  const viewer = await loadViewer(user);
+  const prefs = viewer.sports || {};
+  const query = typeof args.team === 'string' ? args.team.trim().slice(0, 100) : '';
+  const matches = query ? (teamById(query) ? [teamById(query)] : searchTeams(query)) : null;
+  const teams = matches || (args.league ? TEAMS.filter((team) => team.league === args.league) : null);
+  // A direct read does not change any preference. The sheet and background nudges still honor off.
+  const result = teams
+    ? await upcomingGamesForTeams(teams.filter((team) => !args.league || team.league === args.league).map((team) => team.id))
+    : await gamesForViewer({ ...viewer, sports: { ...prefs, watch: 'on' } }, 'composer');
+  const until = Date.now() + days * 86400000;
+  const games = result.games.filter((game) => Date.parse(game.starts_at) <= until).map((game) => ({
+    ...game,
+    followed: (prefs.teams || []).includes(game.team),
+    starts_local: DateTime.fromISO(game.starts_at).setZone(zoneOr(ctx.timeZone)).toFormat("yyyy-MM-dd'T'HH:mm"),
+    ends_local: DateTime.fromISO(game.ends_at).setZone(zoneOr(ctx.timeZone)).toFormat("yyyy-MM-dd'T'HH:mm"),
+    when: whenLabel(game.starts_at, game.ends_at, ctx.timeZone),
+  }));
+  ctx.sportsGames ||= new Map();
+  for (const game of games) ctx.sportsGames.set(game.id, game);
+  return { games, time_zone: zoneOr(ctx.timeZone), attribution: result.attribution || result.sports?.attribution || null,
+    sports_off: prefs.watch === 'off', note: 'These are listed schedules. Answer this request only; never volunteer games when sports is off.' };
 }
 
 async function findPlans(args, ctx) {
@@ -747,6 +808,8 @@ async function getNotificationSettings(_args, ctx) {
 
 const READ_EXECUTORS = {
   find_plans: findPlans,
+  find_games: findGames,
+  find_teams: findTeams,
   get_plan: getPlan,
   find_posts: findPosts,
   get_post: getPost,
@@ -757,7 +820,7 @@ const READ_EXECUTORS = {
   get_notification_settings: getNotificationSettings,
 };
 
-const PLAN_TOOLS = new Set(['find_plans', 'get_plan']);
+const PLAN_TOOLS = new Set(['find_plans', 'get_plan', 'find_games', 'find_teams']);
 
 async function runReadTool(name, args, ctx) {
   const executor = READ_EXECUTORS[name];

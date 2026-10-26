@@ -233,16 +233,17 @@ fun FeedComposeFAB(
 @Composable
 fun FeedSkeletonCard(
     withTitle: Boolean = false,
+    edgeToEdge: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     Column(
         modifier =
             modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(Radii.xl))
-                .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.xl))
+                .clip(RoundedCornerShape(if (edgeToEdge) Spacing.s0 else Radii.xl))
+                .then(if (edgeToEdge) Modifier else Modifier.border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.xl)))
                 .background(PantopusColors.appSurface)
-                .padding(Spacing.s3),
+                .padding(if (edgeToEdge) Spacing.s4 else Spacing.s3),
         verticalArrangement = Arrangement.spacedBy(Spacing.s2),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {

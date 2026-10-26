@@ -27,6 +27,7 @@ const { localDisplayNames } = require('../../utils/identityProfiles');
 const planService = require('../plans/planService');
 const planActions = require('../plans/planActions');
 const planRules = require('../plans/planRules');
+const { repeatDetailsForViewer } = require('../plans/planGames');
 const homeRecordService = require('../homeRecordService');
 const homeDetailService = require('../homeDetailService');
 const { composeForHomeId } = require('../addressCalendarService');
@@ -137,13 +138,8 @@ const untilLabel = (config, endsMs) => `${lastBy(config, endsMs).toFormat('ccc, 
  * The next week's plan, copied from the latest occurrence with new times (the host's edits carry forward).
  * No hosted_again_from: the funnel's "hosted again" counts a host choosing to host again, not a rule's repost.
  */
-function repostInput(latest, start, end) {
-  const details = { ...(latest.details || {}) };
-  // A watch party's game moves with the party.
-  if (details.game?.starts_at) {
-    const shift = start.toMillis() - Date.parse(latest.post.event_date);
-    details.game = { ...details.game, starts_at: new Date(Date.parse(details.game.starts_at) + shift).toISOString() };
-  }
+async function repostInput(latest, start, end, user) {
+  const details = await repeatDetailsForViewer(latest.kind, latest.details, start.toMillis(), user);
   return {
     kind: latest.kind,
     title: latest.post.title,
@@ -171,7 +167,7 @@ function repostInput(latest, start, end) {
 async function checkRepost(user, plan, config) {
   const start = occurrenceAfter(config, Date.now() + HOUR_MS);
   try {
-    await planActions.previewPlan(user, repostInput(plan, start, start.plus({ minutes: config.duration_minutes })));
+    await planActions.previewPlan(user, await repostInput(plan, start, start.plus({ minutes: config.duration_minutes }), user));
     return {};
   } catch (err) {
     if (!(err instanceof planActions.PlanError)) throw err;
@@ -827,7 +823,7 @@ async function runPlanRepeat(rule, now) {
   let posted = await postedAt(rule.user_id, latest.kind, start);
   if (!posted) {
     try {
-      posted = await planActions.createPlan({ id: rule.user_id, role: null }, repostInput(latest, start, end));
+      posted = await planActions.createPlan({ id: rule.user_id, role: null }, await repostInput(latest, start, end, { id: rule.user_id }));
     } catch (err) {
       if (!(err instanceof planActions.PlanError)) throw err;
       await recordRun(rule, { ok: false, name: 'plan_create', summary: `Couldn't post ${day}`, error: err.code });

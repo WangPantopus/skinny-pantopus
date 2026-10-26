@@ -313,7 +313,7 @@ public final class PulseComposeViewModel {
 
     /// Guards the per-draft single run. Reset whenever the body changes,
     /// mirroring RN's `precheckDone` flag.
-    private var precheckDone = false
+    var precheckDone = false
 
     // MARK: - Before you ask, and the check before posting (AI phase 2 §6.5, §6.6)
 
@@ -330,6 +330,21 @@ public final class PulseComposeViewModel {
     public private(set) var isCheckingPost = false
     /// The draft "Post anyway" was tapped for: that exact draft posts without another check.
     private var postAnywayDraft: String?
+
+    // MARK: - AI assist (`POST /api/ai/draft/post-suggestion`, PulseComposeViewModel+Assist.swift)
+
+    /// The composer's AI assist: idle, writing, a suggestion in the form, or why it couldn't write one.
+    public internal(set) var assist: PulseComposeAssistState = .idle
+    /// The form as it was before the suggestion went in, for Undo. Dropped once the person edits a field.
+    var assistUndo: PulseComposeAssistSnapshot?
+    /// True while a suggestion is being put into the form, so those edits keep Undo.
+    var isApplyingSuggestion = false
+    /// True when the post has words the AI suggested: Post asks the person to check it first.
+    public internal(set) var hasAISuggestion = false
+    /// Non-nil asks "Post this?" before a post with AI-suggested words goes out.
+    public var aiPostConfirmation: String?
+    /// The draft the person confirmed: that exact draft posts without asking again.
+    private var aiConfirmedDraft: String?
 
     /// Announce audience chip selection.
     public var announceAudience: PulseAnnounceAudience = .neighbors
@@ -386,7 +401,7 @@ public final class PulseComposeViewModel {
 
     private let createCommandId = UUID().uuidString
     private let api: APIClient
-    private let multipartUploader: MultipartUploader
+    let multipartUploader: MultipartUploader
     private let locationProvider: any LocationProviding
 
     /// Fresh device fix captured at submit time so the backend's 5-minute
@@ -543,6 +558,8 @@ public final class PulseComposeViewModel {
         snapshot.touched = true
         snapshot.error = validator(for: field).validate(value)
         fields[field] = snapshot
+        // The person's own edit keeps the suggestion's words but ends its Undo.
+        if changed, !isApplyingSuggestion { assistUndo = nil }
         // RN re-arms the precheck whenever the body text changes
         // (`PostComposerModal.tsx:789`).
         if field == .body, changed { precheckDone = false }
@@ -806,8 +823,9 @@ public final class PulseComposeViewModel {
             Analytics.track(.formPulseComposeSubmit(intent: activeIntent.rawValue, result: .error))
             return false
         }
-        // A live posting restriction refuses the draft; the check before posting may hold it for Edit or Post anyway.
-        guard !isBlockedByPrecheck(), await !needsSecondLook() else { return false }
+        // A live posting restriction refuses the draft; AI-suggested words wait for "Post this?"; the check before
+        // posting may hold it for Edit or Post anyway.
+        guard !isBlockedByPrecheck(), !needsAIConfirmation(), await !needsSecondLook() else { return false }
         state = .submitting
         if editingPostId == nil {
             await refreshGPSFixIfNeeded()
@@ -1162,7 +1180,7 @@ public final class PulseComposeViewModel {
         return formatter.string(from: date)
     }
 
-    private var effectivePostType: String {
+    var effectivePostType: String {
         if let composePurpose { return composePurpose.postType }
         if postingTarget?.isNetworkTarget == true { return "general" }
         return activeIntent.postType
@@ -1179,7 +1197,7 @@ public final class PulseComposeViewModel {
         return visibility.rawValue
     }
 
-    private var effectiveAudience: String {
+    var effectiveAudience: String {
         if postingTarget?.isNetworkTarget == true { return "connections" }
         // Place target with the "Connections" radio selected — the post
         // should reach the network, not the neighborhood.
@@ -1314,7 +1332,7 @@ public final class PulseComposeViewModel {
     /// Looks for earlier answers once the question has 3 words, 600 ms
     /// after it stops changing; a shorter question or another kind of
     /// post clears them.
-    private func scheduleEarlierAnswers() {
+    func scheduleEarlierAnswers() {
         let query = isWritingQuestion
             ? "\(trimmedValue(.title)) \(trimmedValue(.body))".trimmingCharacters(in: .whitespacesAndNewlines)
             : ""
@@ -1397,6 +1415,30 @@ public final class PulseComposeViewModel {
     /// "Edit": back to the composer, the words kept.
     public func editAfterPostCheck() {
         postCheckFindings = nil
+    }
+
+    /// A new post with words the AI suggested asks "Post this?" once per draft, so the
+    /// person checks what goes out under their name. True when it is asking.
+    private func needsAIConfirmation() -> Bool {
+        guard hasAISuggestion, !isEditing else { return false }
+        let draft = postCheckDraft(buildRequest())
+        guard draft != aiConfirmedDraft else { return false }
+        aiPostConfirmation = effectiveAudience == "connections"
+            ? "Pantopus AI wrote parts of this post. Check that it's right before your connections see it."
+            : "Pantopus AI wrote parts of this post. Check that it's right before neighbors see it."
+        return true
+    }
+
+    /// "Post" on "Post this?": posts this draft as it is.
+    public func confirmAIPost() async {
+        aiConfirmedDraft = postCheckDraft(buildRequest())
+        aiPostConfirmation = nil
+        await submit()
+    }
+
+    /// "Keep editing" on "Post this?": back to the composer.
+    public func keepEditingAIPost() {
+        aiPostConfirmation = nil
     }
 
     /// The precheck runs on body blur (RN `PostComposerModal.tsx:801`).
@@ -1493,7 +1535,7 @@ public final class PulseComposeViewModel {
         }
     }
 
-    private func trimmedValue(_ field: PulseComposeField) -> String {
+    func trimmedValue(_ field: PulseComposeField) -> String {
         (fields[field]?.value ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 

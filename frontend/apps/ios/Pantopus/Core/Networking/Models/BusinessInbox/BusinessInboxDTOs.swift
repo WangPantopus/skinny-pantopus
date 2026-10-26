@@ -16,8 +16,9 @@ import Foundation
 
 // MARK: - Messages
 
-/// Envelope for the business chat inbox.
-public struct BusinessInboxRoomsResponse: Decodable, Sendable {
+/// Envelope for the business chat inbox. Encodable too: the last confirmed
+/// envelope is kept in the encrypted chat store (`ChatLocalStore`).
+public struct BusinessInboxRoomsResponse: Codable, Sendable {
     public let rooms: [BusinessInboxRoomDTO]
     public let total: Int?
     public let totalUnread: Int?
@@ -32,7 +33,7 @@ public struct BusinessInboxRoomsResponse: Decodable, Sendable {
 /// One room the business identity participates in. The serializer flattens
 /// the counterpart onto `other_participant_*` fields rather than nesting a
 /// participants array.
-public struct BusinessInboxRoomDTO: Decodable, Sendable, Hashable, Identifiable {
+public struct BusinessInboxRoomDTO: Codable, Sendable, Hashable, Identifiable {
     public let id: String
     public let roomType: String?
     public let roomName: String?

@@ -318,17 +318,56 @@ public struct PlanRequestsResponse: Decodable, Sendable, Hashable {
 
 // MARK: - Composer helpers
 
+/// The game a watch party is for.
+public struct PlanGameDTO: Codable, Sendable, Hashable {
+    public let label: String
+    public let startsAt: String?
+    public let id: String?
+    public let team: String?
+    public let opponent: String?
+    public let home: Bool?
+    public let endsAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case label, id, team, opponent, home
+        case startsAt = "starts_at"
+        case endsAt = "ends_at"
+    }
+
+    public init(
+        label: String,
+        startsAt: String?,
+        id: String? = nil,
+        team: String? = nil,
+        opponent: String? = nil,
+        home: Bool? = nil,
+        endsAt: String? = nil
+    ) {
+        self.label = label
+        self.startsAt = startsAt
+        self.id = id
+        self.team = team
+        self.opponent = opponent
+        self.home = home
+        self.endsAt = endsAt
+    }
+}
+
 /// An upcoming game for a watch party (`GET /api/plans/games`).
 public struct PlanGameOptionDTO: Decodable, Sendable, Hashable, Identifiable {
     public let id: String
     public let label: String
     public let team: String?
+    public let opponent: String?
+    public let home: Bool?
+    public let preseason: Bool?
+    public let followed: Bool?
     public let startsAt: String
     public let endsAt: String?
     public let source: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, label, team, source
+        case id, label, team, opponent, home, preseason, source, followed
         case startsAt = "starts_at"
         case endsAt = "ends_at"
     }
@@ -340,19 +379,43 @@ public struct PlanGameOptionDTO: Decodable, Sendable, Hashable, Identifiable {
     public var endsAtDate: Date? {
         PlanTime.parse(endsAt)
     }
+
+    public var matchupLabel: String {
+        guard let opponent, !opponent.isEmpty else { return label }
+        return "\(label) \(home == false ? "at" : "vs") \(opponent)"
+    }
+
+    public var reference: PlanGameDTO {
+        PlanGameDTO(
+            label: label,
+            startsAt: startsAt,
+            id: id,
+            team: team,
+            opponent: opponent,
+            home: home,
+            endsAt: endsAt
+        )
+    }
+
+    public func isAvailable(at now: Date) -> Bool {
+        guard let end = endsAtDate else { return startsAtDate.map { $0 > now } ?? false }
+        return end.addingTimeInterval(-30 * 60) > now
+    }
 }
 
 /// `GET /api/plans/games`. Empty is fine: the composer offers "Another game".
 public struct PlanGamesResponse: Decodable, Sendable, Hashable {
     public let games: [PlanGameOptionDTO]
+    public let sports: PlansSportsDTO?
 
     enum CodingKeys: String, CodingKey {
-        case games
+        case games, sports
     }
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         games = try container.decodeIfPresent(LossyList<PlanGameOptionDTO>.self, forKey: .games)?.items ?? []
+        sports = try container.decodeIfPresent(PlansSportsDTO.self, forKey: .sports)
     }
 }
 

@@ -85,7 +85,8 @@ const ALLOWLIST_LINE_KEYS = new Set([
   // a separate audit item. Line moved 305 → 306 with the authRedirect
   // import, then 306 → 313 with the personalUsername import, then 313 → 314
   // with the clientIpKey import; the compatibility mapping itself is unchanged.
-  'backend/routes/users.js:314',
+  // The search batching repair moves the same unchanged mapping to line 312.
+  'backend/routes/users.js:312',
 ]);
 
 const ALLOWLIST_LINE_PATTERNS = [

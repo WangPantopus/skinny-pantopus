@@ -21,14 +21,16 @@ export interface ViewerHome {
  *   viewerHome — the primary home with lat/lng & id, or null
  *   loading    — true while fetching
  *   hasHome    — shorthand: viewerHome !== null
+ *
+ * `enabled: false` holds the read (the app shell's warm-up on a cold Messages load).
  */
-export default function useViewerHome() {
+export default function useViewerHome({ enabled = true }: { enabled?: boolean } = {}) {
   // The session cookie is readable only in the browser, so the server render
   // and the first client render agree on "loading" until mount.
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   const signedIn = mounted && !!getAuthToken();
-  const query = usePrimaryHome({ enabled: signedIn });
+  const query = usePrimaryHome({ enabled: signedIn && enabled });
   const home = query.data?.home ?? null;
 
   const viewerHome = useMemo<ViewerHome | null>(() => {

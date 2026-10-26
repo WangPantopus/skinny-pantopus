@@ -130,6 +130,39 @@ const postDraftJsonSchema = {
   additionalProperties: false,
 };
 
+// ─── Post Suggestion Schema ────────────────────────────────────────────────
+// The composer's AI assist: every field the composer's forms take, from the
+// person's photos, place and notes. A field the kind of post doesn't use is null.
+
+// Posts to the nearby feed: the types and heads-up kinds that feed accepts from
+// residents (routes/posts.js), so a draft never offers a post the server refuses.
+const PLACE_POST_TYPES = ['ask_local', 'recommendation', 'event', 'lost_found', 'alert', 'deal', 'local_update', 'neighborhood_win', 'visitor_guide'];
+const RESIDENT_ALERT_KINDS = ['road_hazard', 'power_outage', 'weather_damage', 'missing_pet', 'hazard', 'other'];
+// The Ask form's category chips (service_category on the post).
+const ASK_CATEGORIES = ['handyman', 'cleaning', 'advice', 'other'];
+
+const postSuggestionJsonSchema = {
+  type: 'object',
+  properties: {
+    title:            { type: ['string', 'null'], maxLength: 255, description: 'A short headline, or null when the kind of post has none' },
+    body:             { type: 'string', maxLength: 5000, description: 'The post itself; empty only when there is nothing to write it from' },
+    eventDate:        { type: ['string', 'null'], description: 'Events: when it starts, local time YYYY-MM-DDTHH:MM' },
+    eventEndDate:     { type: ['string', 'null'], description: 'Events: when it ends, local time YYYY-MM-DDTHH:MM' },
+    eventVenue:       { type: ['string', 'null'], maxLength: 255, description: 'Events: where it happens' },
+    dealExpiresAt:    { type: ['string', 'null'], description: "Deals: the deal's last day, YYYY-MM-DD" },
+    businessName:     { type: ['string', 'null'], maxLength: 255, description: 'Recommendations and deals: the business' },
+    lostFoundType:    { type: ['string', 'null'], enum: ['lost', 'found', null] },
+    lastSeenLocation: { type: ['string', 'null'], maxLength: 255, description: 'Lost and found: where it was lost or found' },
+    lastSeenDate:     { type: ['string', 'null'], description: 'Lost and found: that day, YYYY-MM-DD' },
+    safetyAlertKind:  { type: ['string', 'null'], enum: [...RESIDENT_ALERT_KINDS, null] },
+    askCategory:      { type: ['string', 'null'], enum: [...ASK_CATEGORIES, null] },
+    tags:             { type: 'array', items: { type: 'string', maxLength: 50 }, maxItems: 3 },
+    note:             { type: ['string', 'null'], maxLength: 300, description: 'One short sentence for the person, or null' },
+  },
+  required: ['body'],
+  additionalProperties: false,
+};
+
 // ─── Mail Summary Schema ───────────────────────────────────────────────────
 
 const mailSummaryJsonSchema = {
@@ -285,10 +318,7 @@ const postDraftJsonSchemaStrict = {
   required: Object.keys(postDraftJsonSchema.properties),
 };
 
-// Posts to the nearby feed: only the types and heads-up kinds that feed accepts from
-// residents (routes/posts.js), so a draft never offers a post the server refuses.
-const PLACE_POST_TYPES = ['ask_local', 'recommendation', 'event', 'lost_found', 'alert', 'deal', 'local_update', 'neighborhood_win', 'visitor_guide'];
-const RESIDENT_ALERT_KINDS = ['road_hazard', 'power_outage', 'weather_damage', 'missing_pet', 'hazard', 'other'];
+// Posts to the nearby feed take only PLACE_POST_TYPES and RESIDENT_ALERT_KINDS (above).
 const postDraftPlaceJsonSchemaStrict = {
   ...postDraftJsonSchemaStrict,
   properties: {
@@ -296,6 +326,11 @@ const postDraftPlaceJsonSchemaStrict = {
     postType: { type: 'string', enum: PLACE_POST_TYPES },
     safetyAlertKind: { type: ['string', 'null'], enum: [...RESIDENT_ALERT_KINDS, null] },
   },
+};
+
+const postSuggestionJsonSchemaStrict = {
+  ...postSuggestionJsonSchema,
+  required: Object.keys(postSuggestionJsonSchema.properties),
 };
 
 const mailSummaryJsonSchemaStrict = {
@@ -384,6 +419,7 @@ const claudeSchemas = {
   listingDraft: toClaudeSchema(listingDraftJsonSchemaStrict),
   postDraft: toClaudeSchema(postDraftJsonSchemaStrict),
   postDraftPlace: toClaudeSchema(postDraftPlaceJsonSchemaStrict),
+  postSuggestion: toClaudeSchema(postSuggestionJsonSchemaStrict),
   mailSummary: toClaudeSchema(mailSummaryJsonSchemaStrict),
   placeBrief: toClaudeSchema(placeBriefJsonSchemaStrict),
   supportTrainDraft: toClaudeSchema(supportTrainDraftJsonSchemaStrict),
@@ -396,6 +432,7 @@ const claudeSchemas = {
 const validateGigDraft     = ajv.compile(gigDraftJsonSchema);
 const validateListingDraft = ajv.compile(listingDraftJsonSchema);
 const validatePostDraft    = ajv.compile(postDraftJsonSchema);
+const validatePostSuggestion = ajv.compile(postSuggestionJsonSchema);
 const validateMailSummary  = ajv.compile(mailSummaryJsonSchema);
 const validatePlaceBrief            = ajv.compile(placeBriefJsonSchema);
 const validateSupportTrainDraft    = ajv.compile(supportTrainDraftJsonSchema);
@@ -403,6 +440,10 @@ const validatePickupSchedule       = ajv.compile(pickupScheduleJsonSchema);
 const validateRadonResult          = ajv.compile(radonResultJsonSchema);
 
 module.exports = {
+  PLACE_POST_TYPES,
+  RESIDENT_ALERT_KINDS,
+  ASK_CATEGORIES,
+
   // Schemas sent to Claude as `output_config.format.schema`
   claudeSchemas,
   toClaudeSchema,
@@ -414,6 +455,8 @@ module.exports = {
   listingDraftJsonSchemaStrict,
   postDraftJsonSchema,
   postDraftJsonSchemaStrict,
+  postSuggestionJsonSchema,
+  postSuggestionJsonSchemaStrict,
   mailSummaryJsonSchema,
   mailSummaryJsonSchemaStrict,
   placeBriefJsonSchema,
@@ -429,6 +472,7 @@ module.exports = {
   validateGigDraft,
   validateListingDraft,
   validatePostDraft,
+  validatePostSuggestion,
   validateMailSummary,
   validatePlaceBrief,
   validateSupportTrainDraft,
