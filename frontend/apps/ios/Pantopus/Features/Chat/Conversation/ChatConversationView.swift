@@ -83,6 +83,30 @@ private final class ChatTimelinePlace: NSObject {
         scrollView?.isTracking ?? false
     }
 
+    /// Returns once the timeline is at rest: no finger on it, no fling or
+    /// bounce, the content not pulled past its top, and the viewport the same
+    /// height for 0.2 s; after a second at most. Cancelling the calling task
+    /// doesn't end it early.
+    func settled() async {
+        let start = CACurrentMediaTime()
+        var height = scrollView?.bounds.height ?? 0
+        var stableSince = start
+        while CACurrentMediaTime() - start < 1 {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { continuation.resume() }
+            }
+            guard let scrollView else { return }
+            let now = CACurrentMediaTime()
+            if abs(scrollView.bounds.height - height) > 0.5 {
+                height = scrollView.bounds.height
+                stableSince = now
+            }
+            let atRest = !scrollView.isDragging && !scrollView.isDecelerating
+                && scrollView.contentOffset.y >= -scrollView.adjustedContentInset.top - 0.5
+            if atRest, now - stableSince >= 0.2 { return }
+        }
+    }
+
     /// The rows changed: what the next layouts change is that change, not
     /// rows that joined above taking their measured heights.
     func rowsChanged() {
@@ -295,6 +319,9 @@ private struct ChatScrollViewProbe: UIViewRepresentable {
 
         override func didMoveToWindow() {
             super.didMoveToWindow()
+            // A timeline on its way out (a topic switch puts up the new one
+            // first) hands nothing over: its scroll view is about to go.
+            guard window != nil else { return }
             var ancestor = superview
             while let view = ancestor, !(view is UIScrollView) {
                 ancestor = view.superview
@@ -1476,7 +1503,16 @@ extension ChatConversationView {
                 // oldest-first), and the bottom stays anchored when new
                 // rows land while the user is already at the bottom.
                 .defaultScrollAnchor(.bottom)
-                .refreshable { await viewModel.refresh(retryRoomSubscriptions: true) }
+                // Dragged down in a short thread, the keyboard pulls the
+                // content as it goes and starts a refresh, and SwiftUI cancels
+                // the refresh as the keyboard resizes the timeline. Ended in
+                // mid-flight, the control leaves its spinner animating, hidden
+                // (iOS 26). The refresh runs on, and the control ends once the
+                // timeline is at rest.
+                .refreshable {
+                    await Task { await viewModel.refresh(retryRoomSubscriptions: true) }.value
+                    await timelinePlace.settled()
+                }
                 .accessibilityIdentifier("chatConversationContent")
                 .task {
                     guard !isLoadOlderArmed else { return }
