@@ -1,5 +1,6 @@
 package app.pantopus.android.data.upload
 
+import app.pantopus.android.data.api.models.ai.AIPostSuggestionResponse
 import app.pantopus.android.data.api.models.ai.AIRadonReportResponse
 import app.pantopus.android.data.api.models.audience.PersonaMediaUploadResponse
 import app.pantopus.android.data.api.models.businesses.BusinessMediaUploadResponse
@@ -81,6 +82,27 @@ class UploadRepository
                         filename = file.filename,
                         body = file.bytes.toRequestBody(file.mimeType.toMediaTypeOrNull()),
                     ),
+                )
+            }
+
+        /**
+         * The composer's AI assist: the photos (JPEGs) and the composer's fields for
+         * `POST /api/ai/draft/post-suggestion`. Route `backend/routes/ai.js:333`.
+         */
+        suspend fun suggestPost(
+            photos: List<UploadFile>,
+            fields: Map<String, String>,
+        ): NetworkResult<AIPostSuggestionResponse> =
+            safeApiCall {
+                uploadApi.suggestPost(
+                    photos.map { photo ->
+                        MultipartBody.Part.createFormData(
+                            name = "photos",
+                            filename = photo.filename,
+                            body = photo.bytes.toRequestBody(photo.mimeType.toMediaTypeOrNull()),
+                        )
+                    },
+                    fields.mapValues { (_, value) -> value.toRequestBody("text/plain; charset=utf-8".toMediaTypeOrNull()) },
                 )
             }
 

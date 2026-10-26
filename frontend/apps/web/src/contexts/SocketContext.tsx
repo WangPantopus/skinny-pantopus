@@ -5,6 +5,7 @@ import {
   useContext,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -225,8 +226,11 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     };
   }, [socket]);
 
+  // A token sync that leaves the socket as it was doesn't re-render every consumer (the whole app shell).
+  const value = useMemo(() => ({ socket, connected }), [socket, connected]);
+
   return (
-    <SocketContext.Provider value={{ socket, connected }}>
+    <SocketContext.Provider value={value}>
       {children}
     </SocketContext.Provider>
   );

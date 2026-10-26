@@ -19,6 +19,7 @@ import { launchFeatures } from '@/lib/featureFlags';
 import { chosenUsername, usernameHandle } from '@pantopus/utils';
 import { fetchMe } from '@/lib/me';
 import { useConversationPages, conversationKey } from '@/lib/conversations';
+import { releaseShellReads } from '@/lib/shellReads';
 import { useOnlineStatus } from '@/components/map/OfflineIndicator';
 import { navigateChatPath, useChatOfflineShell } from '@/hooks/useChatOfflineShell';
 
@@ -131,6 +132,15 @@ export default function ChatListPage() {
   const error = offlineUnavailable ? 'No saved inbox is available on this browser. Reconnect to load Messages.' : conversationsQuery.error
     ? (conversationsQuery.error instanceof Error ? conversationsQuery.error.message : 'Failed to load conversations')
     : null;
+  // On a cold load the app shell's own reads wait until the frame showing the
+  // rows (or the empty or error state) has painted, or until this page closes.
+  useEffect(() => {
+    if (loading) return;
+    let timer: number | undefined;
+    const frame = requestAnimationFrame(() => { timer = window.setTimeout(releaseShellReads, 0); });
+    return () => { cancelAnimationFrame(frame); window.clearTimeout(timer); };
+  }, [loading]);
+  useEffect(() => releaseShellReads, []);
 
   // "Start new chat" lists your connections, as the iOS and Android pickers do. Search finds only
   // neighbor profiles, so a connection without one couldn't be reached from here.
@@ -145,7 +155,7 @@ export default function ChatListPage() {
   });
 
   const newChatConnections = useMemo<NewChatPerson[]>(() => {
-    const q = newChatQuery.trim().toLowerCase();
+    const q = newChatQuery.trim().replace(/^@+/, '').toLowerCase();
     return (connectionsQuery.data || [])
       .map((rel) => rel.other_user)
       .filter((user): user is RelationshipUser => Boolean(user?.id))
@@ -207,18 +217,18 @@ export default function ChatListPage() {
 
   useEffect(() => {
     if (!newChatOpen) return;
-    const q = newChatQuery.trim();
-    if (!q) {
-      setNewChatResults([]);
-      setNewChatError(null);
+    const q = newChatQuery.trim().replace(/^@+/, '');
+    setNewChatResults([]);
+    setNewChatError(null);
+    if (q.length < 2) {
       setNewChatSearching(false);
       return;
     }
 
+    setNewChatSearching(true);
     let cancelled = false;
     const timer = setTimeout(async () => {
       try {
-        setNewChatSearching(true);
         setNewChatError(null);
         const resp = await api.users.searchUsers(q, { type: 'people', limit: 8 });
         if (!cancelled) setNewChatResults(resp?.users || []);
@@ -276,12 +286,16 @@ export default function ChatListPage() {
   const filteredConversations = conversations;
 
   // ── Virtualize conversation list ──────────────────────────
+  // The first rows render in the same commit as the list. Until the list can be
+  // measured, its height is taken as its max height (below), and a row without
+  // topics is 73 px with its border, so measuring rows rarely renders them again.
   const listScrollRef = useRef<HTMLDivElement>(null);
   const virtualizer = useVirtualizer({
     count: filteredConversations.length,
     getScrollElement: () => listScrollRef.current,
     getItemKey: (index) => conversationKey(filteredConversations[index]),
-    estimateSize: () => 72,
+    estimateSize: () => 73,
+    initialRect: { width: 0, height: typeof window === 'undefined' ? 0 : Math.max(0, window.innerHeight - 280) },
     overscan: 8,
   });
 
@@ -526,11 +540,13 @@ export default function ChatListPage() {
               <SearchInput
                 value={newChatQuery}
                 onChange={(value) => {
-                  setNewChatQuery(value);
+                  setNewChatQuery(value.slice(0, 100));
                   // "Searching…" from the first keystroke, so "No users found." only follows an answer.
-                  setNewChatSearching(value.trim().length > 0);
+                  setNewChatResults([]);
+                  setNewChatError(null);
+                  setNewChatSearching(value.trim().replace(/^@+/, '').length >= 2);
                 }}
-                placeholder="Type a person's name…"
+                placeholder="Search by name or username…"
               />
 
               {newChatError && (
@@ -556,6 +572,8 @@ export default function ChatListPage() {
                   newChatConnections.length === 0 && (
                     <div className="p-4 text-sm text-app-muted">Start typing to find people.</div>
                   )
+                ) : newChatQuery.trim().replace(/^@+/, '').length < 2 ? (
+                  <div className="p-4 text-sm text-app-muted">Enter at least 2 characters to search.</div>
                 ) : newChatSearching ? (
                   <div className="p-4 text-sm text-app-muted">Searching…</div>
                 ) : newChatPeople.length > 0 ? (
@@ -569,7 +587,7 @@ export default function ChatListPage() {
                       />
                     ))}
                   </NewChatSection>
-                ) : newChatConnections.length === 0 ? (
+                ) : !newChatError && newChatConnections.length === 0 ? (
                   <div className="p-4 text-sm text-app-muted">No users found.</div>
                 ) : null}
               </div>

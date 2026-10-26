@@ -57,6 +57,8 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
     /// (`notification-preferences.tsx:48`, `:69`, `:71`). The view
     /// renders it and clears it after the auto-dismiss delay.
     public var toast: ToastMessage?
+    var showsTeams = false
+    private var canChooseTeams = false
 
     /// Server truth, mutated optimistically ahead of the debounced PUT.
     public private(set) var preferences: NotificationPreferencesDTO?
@@ -122,6 +124,10 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
     public func load() async {
         if preferences == nil { state = .loading }
         await refreshSystemPermission()
+        if PlansFlags.shared.plans {
+            let games: PlanGamesResponse? = try? await api.request(PlansEndpoints.games())
+            if preferencesScopeIsCurrent { canChooseTeams = games?.sports?.canChoose == true }
+        }
         await fetch(force: false)
     }
 
@@ -139,6 +145,9 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
 
     /// "Reset 'Fewer like this'": every kind of suggestion comes back.
     public func tapRow(_ rowId: String) async {
+        if rowId == "plans.teams", canChooseTeams, preferencesScopeIsCurrent { showsTeams = true
+            return
+        }
         guard rowId == RowID.suggestionsReset, preferencesScopeIsCurrent, let prefs = preferences else { return }
         guard !prefs.activeSuggestionMutes().isEmpty else {
             toast = ToastMessage(text: "Nothing is muted", kind: .neutral)
@@ -334,6 +343,11 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
         groups.append(alertsGroup(prefs))
         groups.append(quietHoursGroup(prefs))
         groups.append(locationGroup(prefs))
+        if canChooseTeams {
+            groups.append(GroupedListGroup(id: "plans", overline: "Plans", rows: [
+                GroupedListRow(id: "plans.teams", label: "Games and teams", control: .chevron)
+            ]))
+        }
         return groups
     }
 

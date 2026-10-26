@@ -12,6 +12,7 @@ import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.hub.NotificationPreferencesRepository
 import app.pantopus.android.data.plans.PlansFeature
+import app.pantopus.android.data.plans.PlansRepository
 import app.pantopus.android.data.store.StoreKind
 import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.components.ToastKind
@@ -59,8 +60,10 @@ class NotificationSettingsViewModel
         private val repository: NotificationPreferencesRepository,
         /** Nearby Plans' flags, for the quiet-hours note (none in tests). */
         private val plansFeature: PlansFeature? = null,
+        private val plans: PlansRepository? = null,
     ) : ViewModel() {
         val title: String = "Notifications"
+        private var canChooseTeams = false
 
         private val _state = MutableStateFlow<GroupedListUiState>(GroupedListUiState.Loading)
         val state: StateFlow<GroupedListUiState> = _state.asStateFlow()
@@ -95,7 +98,13 @@ class NotificationSettingsViewModel
         /** Screen entry and every return: the store answers from a fresh copy (10 minutes) without a request. */
         fun load() {
             if (preferences == null) _state.value = GroupedListUiState.Loading
-            viewModelScope.launch { fetch(force = false) }
+            viewModelScope.launch {
+                if (plansFeature?.isOn == true) {
+                    val reply = plans?.games()
+                    if (reply is NetworkResult.Success) canChooseTeams = reply.data.sports?.canChoose == true
+                }
+                fetch(force = false)
+            }
         }
 
         /** Retry: read now. */
@@ -354,6 +363,14 @@ class NotificationSettingsViewModel
             listOfNotNull(
                 briefingsGroup(prefs),
                 suggestionsGroup(prefs),
+                GroupedListGroup(
+                    id = "plans",
+                    overline = "Plans",
+                    rows =
+                        listOf(
+                            GroupedListRow(id = "sportsTeams", label = "Games and teams", control = RowControl.Chevron),
+                        ),
+                ).takeIf { canChooseTeams },
                 alertsGroup(prefs),
                 quietHoursGroup(prefs),
                 locationGroup(prefs),
