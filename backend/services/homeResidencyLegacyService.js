@@ -71,6 +71,11 @@ async function submit({ homeId, actorId, intent }) {
   // the legacy envelope, and no fabricated command or address proof is returned.
   const saved = { ...result, claim: Object.fromEntries(CLAIM_FIELDS.map(key => [key, claim[key]])) };
   await notifyReviewers(saved);
+  if (!saved.reused) {
+    // After the admission committed: it can only flag the request for the admin queue.
+    await require('../utils/homeSecurityPolicy').watchResidencyRequest({ homeId: saved.home_id, userId: saved.actor_id,
+      source: 'residency_request' });
+  }
   return saved;
 }
 

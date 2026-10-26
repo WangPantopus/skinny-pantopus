@@ -46,6 +46,9 @@ DO $$ DECLARE n integer;r jsonb;c uuid;a uuid;token text;BEGIN
    r:=public.submit_home_residency(pg_temp.rh_id(100),pg_temp.rh_id(n),pg_temp.rh_id(500+n),
      '{"claimed_role":"household","address":{"line1":"History contract address","line2":"","city":"Test","state":"WA","postal_code":"98607","country":"US"}}');
    ASSERT r->>'state'='completed',r::text;c:=(r->>'claim_id')::uuid;a:=pg_temp.rh_id(CASE WHEN n=25 THEN 2 ELSE 1 END);
+   -- The history needs 23 people reviewed; past 10 new people in 30 days the per-Home limit (20261026090000) sends a
+   -- request to proof by mail instead of the household.
+   UPDATE public."HomeResidencyClaim" SET created_at=created_at-interval '31 days' WHERE id=c;
    token:=public.get_home_residency_review(pg_temp.rh_id(100),c,a)->'claim'->>'review_token';
    r:=public.decide_home_residency_review(pg_temp.rh_id(100),c,a,'reject',NULL,'PRIVATE_ORIGINAL_REASON_SENTINEL',pg_temp.rh_id(600+n),token);
    ASSERT r->>'ok'='true',r::text;

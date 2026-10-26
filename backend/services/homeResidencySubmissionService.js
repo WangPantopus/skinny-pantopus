@@ -83,9 +83,14 @@ async function submit(input) {
     || Object.entries(fields).some(([key, max]) => typeof address[key] !== 'string' || address[key].length > max
       || (key !== 'line2' && !address[key].trim()))) throw failure('RESIDENCY_SUBMISSION_INVALID', 400);
   const result = await rpc('submit_home_residency', { ...args, p_intent: intent });
-  if (result.state === 'completed' && result.replayed === false && result.routing === 'household_review') {
-    await notifyReviewers({ homeId: args.p_home_id, actorId: args.p_actor_id, claimId: result.claim_id,
-      claimedRole: result.claimed_role });
+  if (result.state === 'completed' && result.replayed === false) {
+    if (result.routing === 'household_review') {
+      await notifyReviewers({ homeId: args.p_home_id, actorId: args.p_actor_id, claimId: result.claim_id,
+        claimedRole: result.claimed_role });
+    }
+    // Like the notice, after the admission committed: it can only flag the request for the admin queue.
+    await require('../utils/homeSecurityPolicy').watchResidencyRequest({ homeId: args.p_home_id,
+      userId: args.p_actor_id, source: 'residency_request' });
   }
   return result;
 }

@@ -9,6 +9,7 @@
 
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const logger = require('../../utils/logger');
+const adminAlerts = require('../adminAlerts');
 
 const OPEN_STATUSES = ['open', 'in_review'];
 
@@ -60,6 +61,98 @@ async function openCase({ addressId, homeId = null, userId, verdict, trigger = n
   });
 
   return data.id;
+}
+
+/** The open address-watch case about this person at this home, or about the home itself (userId null). */
+async function openWatchCase(homeId, userId) {
+  let query = supabaseAdmin
+    .from('AddressReviewCase')
+    .select('id, reasons')
+    .eq('trigger', 'address_watch')
+    .eq('home_id', homeId)
+    .in('status', OPEN_STATUSES);
+  query = userId ? query.eq('user_id', userId) : query.is('user_id', null);
+  const { data, error } = await query.order('created_at', { ascending: false }).limit(1).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Email the admins about a new address-watch case (the queue has no screen yet). A case about the home always
+ * emails. A case about a person doesn't when their home or their account already had an open one, so a flood of
+ * accounts at one home is an email for the first of them and one for the home, not one per account.
+ */
+async function alertNewWatchCase({ caseId, createdAt, homeId, userId, signals }) {
+  try {
+    if (userId) {
+      const { data: others, error } = await supabaseAdmin
+        .from('AddressReviewCase')
+        .select('id')
+        .eq('trigger', 'address_watch')
+        .in('status', OPEN_STATUSES)
+        .or(`home_id.eq.${homeId},user_id.eq.${userId}`)
+        .lt('created_at', createdAt)
+        .limit(1);
+      if (error) throw error;
+      if (others.length) return;
+    }
+    const { data: home } = await supabaseAdmin.from('Home').select('city, state').eq('id', homeId).maybeSingle();
+    adminAlerts.notifyAddressWatchCase({ caseId, homeId, userId, signals, home }).catch(() => {});
+  } catch (error) {
+    logger.warn('addressReview: address watch alert not sent', { caseId, error: error.message });
+  }
+}
+
+/**
+ * The address watch (homeSecurityPolicy.watchResidencyRequest) found a high-risk request to live at a home: a
+ * person should look at it, the way trustAnomalyDetection flags providers. A case is about one person at the home,
+ * or, with no userId, about the home itself (many people asking to live there, a mail drop). There is one open case
+ * of each (idx_address_review_case_one_open_watch); a later request refreshes it, adding its signals, instead of
+ * adding a row. The case has no address_id, so it never takes the slot of the validation case the same person may
+ * have open for the address (idx_address_review_case_one_open). A new case emails the admins (alertNewWatchCase).
+ *
+ * Never throws: the request it watches is already saved. Returns the case id, or null when nothing was written.
+ */
+async function flagAddressWatch({ homeId, userId = null, signals, source = null }) {
+  const refresh = async (open) => {
+    const { error } = await supabaseAdmin
+      .from('AddressReviewCase')
+      .update({ reasons: [...new Set([...(open.reasons || []), ...signals])], updated_at: new Date().toISOString() })
+      .eq('id', open.id)
+      .in('status', OPEN_STATUSES);
+    if (error) throw error;
+    logger.info('addressReview: address watch case refreshed', { caseId: open.id, homeId, signals, source });
+    return open.id;
+  };
+  try {
+    const open = await openWatchCase(homeId, userId);
+    if (open) return await refresh(open);
+
+    const { data, error } = await supabaseAdmin
+      .from('AddressReviewCase')
+      .insert({
+        home_id: homeId,
+        user_id: userId,
+        verdict_status: 'ADDRESS_WATCH',
+        reasons: signals,
+        trigger: 'address_watch',
+        status: 'open',
+      })
+      .select('id, created_at')
+      .single();
+    if (error?.code === '23505') {
+      // A request at the same moment opened it first.
+      const winner = await openWatchCase(homeId, userId);
+      return winner ? await refresh(winner) : null;
+    }
+    if (error) throw error;
+    logger.warn('addressReview: address watch case opened', { caseId: data.id, homeId, userId, signals, source });
+    await alertNewWatchCase({ caseId: data.id, createdAt: data.created_at, homeId, userId, signals });
+    return data.id;
+  } catch (error) {
+    logger.error('addressReview: address watch case not written', { homeId, userId, error: error.message });
+    return null;
+  }
 }
 
 /** Oldest-first page of cases awaiting a reviewer. */
@@ -119,4 +212,4 @@ async function resolveCase({ caseId, reviewerId, outcome, note = null }) {
   return { success: true };
 }
 
-module.exports = { needsReview, openCase, listOpenCases, resolveCase, OPEN_STATUSES };
+module.exports = { needsReview, openCase, flagAddressWatch, listOpenCases, resolveCase, OPEN_STATUSES };
