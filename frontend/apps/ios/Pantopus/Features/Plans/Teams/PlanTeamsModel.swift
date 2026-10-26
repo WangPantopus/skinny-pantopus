@@ -38,6 +38,7 @@ final class PlanTeamsModel {
             guard generation == preferencesGeneration else { return }
             preferences = reply.preferences.sports ?? SportsPreferencesDTO()
             loaded = true
+            error = nil
             await search()
         } catch {
             guard generation == preferencesGeneration else { return }
