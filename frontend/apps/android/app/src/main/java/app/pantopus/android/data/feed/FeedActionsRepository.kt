@@ -15,6 +15,7 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.conditionalApiCall
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.FeedActionsApi
+import app.pantopus.android.data.auth.AuthenticatedDispatchGuard
 import app.pantopus.android.data.store.ScreenStore
 import app.pantopus.android.data.store.StoreKeys
 import app.pantopus.android.data.store.StoreTopics
@@ -113,8 +114,11 @@ class FeedActionsRepository
         fun feedPreferencesCopy(): Stored<FeedPreferencesResponse> = store.peek(StoreKeys.feedPreferences)
 
         /** `PUT /api/posts/feed-preferences`. */
-        suspend fun updateFeedPreferences(body: FeedPreferencesUpdateRequest): NetworkResult<FeedPreferencesResponse> =
-            safeApiCall { api.updateFeedPreferences(body) }.also { result ->
+        suspend fun updateFeedPreferences(
+            body: FeedPreferencesUpdateRequest,
+            dispatchGuard: AuthenticatedDispatchGuard? = null,
+        ): NetworkResult<FeedPreferencesResponse> =
+            safeApiCall { api.updateFeedPreferences(body, dispatchGuard) }.also { result ->
                 if (result is NetworkResult.Success) {
                     store.remove(StoreKeys.feedPreferences)
                     store.markEdited(StoreTopics.PROFILE_ME)

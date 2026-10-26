@@ -128,6 +128,7 @@ data class FeedPreferencesResponse(
  */
 @JsonClass(generateAdapter = true)
 data class FeedPreferencesUpdateRequest(
+    @Json(name = "expected_sports") val expectedSports: SportsPreferencesDto? = null,
     val hideDealsPlace: Boolean? = null,
     val hideAlertsPlace: Boolean? = null,
     val showPoliticsConnections: Boolean? = null,
