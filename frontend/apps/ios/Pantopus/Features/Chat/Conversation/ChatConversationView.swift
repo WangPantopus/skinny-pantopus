@@ -295,6 +295,9 @@ private struct ChatScrollViewProbe: UIViewRepresentable {
 
         override func didMoveToWindow() {
             super.didMoveToWindow()
+            // A timeline on its way out (a topic switch puts up the new one
+            // first) hands nothing over: its scroll view is about to go.
+            guard window != nil else { return }
             var ancestor = superview
             while let view = ancestor, !(view is UIScrollView) {
                 ancestor = view.superview
