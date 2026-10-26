@@ -2,9 +2,9 @@
 // who doesn't belong without an owner or manager: a majority of the other settled residents, and at least 2 of them,
 // within 7 days (supabase/migrations/20261025180000_home_removal_vote.sql), one vote per Home at a time. Owners stay
 // under the owners' vote. The person keeps access while the vote is open and is told it's open and the result, never
-// who started it or how anyone voted. A vote that passes takes effect no sooner than 72 hours after it opened, so they
-// have time to contest; contesting means proving the address, and a proven member who contests goes to Pantopus
-// review, which decides the vote (resolveReviewCase). The hourly job settles votes that are due (settleDue). Behind
+// who started it or how anyone voted. A vote to remove takes effect only when it closes, the full 7 days, so they have
+// time to prove the address by mail and contest; a proven member who contests goes to Pantopus review, which decides
+// the vote (resolveReviewCase). The hourly job settles votes that have closed (settleDue). Behind
 // the home_removal_vote flag, which ships off: the founder turns it on only after testing and after the iOS and
 // Android apps have voting screens. The SQL reads the flag row itself, so turning it off again stops new votes at once.
 const db = require('../config/supabaseAdmin');
@@ -55,12 +55,6 @@ async function homeName(homeId) {
   } catch { return null; }
 }
 
-/** "3 days" until a time the SQL set (a vote's contest_until), for the notices. */
-function daysUntil(iso) {
-  const days = Math.max(1, Math.round((Date.parse(iso) - Date.now()) / 86400000) || 1);
-  return `${days} day${days === 1 ? '' : 's'}`;
-}
-
 /** The name a person shows neighbors (services/chatPeople.js), never their account name. */
 async function personName(userId) {
   try {
@@ -75,20 +69,19 @@ async function tell(notice) {
   catch (err) { logger.warn('Household vote notice failed', { type: notice.type, error: err.message }); }
 }
 
-async function tellOpened({ homeId, voteId, targetId, voters, contestUntil, targetProven }) {
+async function tellOpened({ homeId, voteId, targetId, voters, targetProven }) {
   const [home, name] = await Promise.all([homeName(homeId), personName(targetId)]);
   const link = `/homes/${homeId}/members`;
-  const wait = daysUntil(contestUntil);
   for (const userId of new Set((voters || []).filter(id => UUID.test(String(id))))) {
     await tell({ userId, type: 'home_removal_vote_opened', title: 'A household vote is open',
-      body: `Should ${name || 'a household member'} stay in ${home || 'your home'}? Your vote is private. The vote is open for 7 days. If most of you vote to remove them, it takes effect no sooner than ${wait} from now, so they have time to contest it.`,
+      body: `Should ${name || 'a household member'} stay in ${home || 'your home'}? Your vote is private. The vote is open for 7 days. If most of you vote to remove them, they're removed when it closes, not before, so they have time to contest it.`,
       icon: '🗳️', link, metadata: { home_id: homeId, vote_id: voteId }, idempotencyKey: `removal-vote-opened:${voteId}:${userId}` });
   }
   const contest = targetProven
-    ? 'If you live there, contest it before then, and Pantopus reviews it instead of removing you.'
-    : 'If you live there, prove your address (by mail or a document) and contest it before then, and Pantopus reviews it instead.';
+    ? 'If you live there, contest it before it closes, and Pantopus reviews it instead of removing you.'
+    : 'If you live there, verify your address by mail and contest it before it closes, and Pantopus reviews it instead.';
   await tell({ userId: targetId, type: 'home_removal_vote_about_you', title: 'A household vote is open about you',
-    body: `Residents of ${home || 'your home'} started a vote on whether you live there. You keep your access while it's open, for up to 7 days, and if it passes you're removed no sooner than ${wait} from now. ${contest} Who voted is never shown.`,
+    body: `Residents of ${home || 'your home'} started a vote on whether you live there. It's open for 7 days, and you keep your access until it closes; if it passes, you're removed then. ${contest} Who voted is never shown.`,
     icon: '🗳️', link, metadata: { home_id: homeId, vote_id: voteId }, idempotencyKey: `removal-vote-about-you:${voteId}` });
 }
 
@@ -148,7 +141,7 @@ async function list({ homeId, actorId }) {
   return {
     votes: votes.map(vote => ({
       id: vote.id, about_you: vote.about_you === true, opened_at: vote.opened_at, closes_at: vote.closes_at,
-      contest_until: vote.contest_until || null, contested: vote.contested === true, my_vote: VOTE_OUT[vote.my_vote] || null,
+      contested: vote.contested === true, my_vote: VOTE_OUT[vote.my_vote] || null,
       can_vote: vote.can_vote === true, can_contest: vote.can_contest === true,
       member: vote.about_you === true ? null : {
         user_id: vote.target_user_id, name: people.get(String(vote.target_user_id))?.displayName || null },
@@ -164,10 +157,9 @@ async function open({ homeId, actorId, targetId }) {
   if (data.replayed !== true) {
     logger.info('home_removal_vote.opened', { home_id: home, vote_id: data.vote_id });
     await tellOpened({ homeId: home, voteId: data.vote_id, targetId: target, voters: data.notify_user_ids,
-      contestUntil: data.contest_until, targetProven: data.target_proven === true });
+      targetProven: data.target_proven === true });
   }
-  return { id: data.vote_id, closes_at: data.closes_at, contest_until: data.contest_until || null,
-    replayed: data.replayed === true };
+  return { id: data.vote_id, closes_at: data.closes_at, replayed: data.replayed === true };
 }
 
 async function vote({ homeId, actorId, voteId, choice }) {
@@ -186,9 +178,9 @@ async function contest({ homeId, actorId, voteId }) {
 }
 
 /**
- * The hourly job (jobs/processQuorumActions.js): decide the votes nobody is voting on any more (a majority reached
- * before contest_until, a vote past its end, or one whose subject left) and tell people. A vote that can't be
- * settled is left as it is; the next run tries again.
+ * The hourly job (jobs/processQuorumActions.js): decide the votes nobody can vote on any more (a vote that has
+ * closed, passed or not, or one whose subject left) and tell people. A vote that can't be settled is left as it is;
+ * the next run tries again.
  */
 async function settleDue() {
   const { votes } = await rpc('due_home_removal_votes', {});

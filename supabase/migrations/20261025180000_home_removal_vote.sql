@@ -19,13 +19,13 @@
 --     under the owners' vote; residents can never vote out an owner.
 --   * Threshold: a majority of the other settled residents when the vote opens, and at least 2 of them. With fewer
 --     than 2 others (a two-person household) there is no vote; the owner or manager can remove someone, as today.
---   * During the vote (up to 7 days): the person keeps access but can't invite, answer a request to join, remove
---     anyone or vote (home_effective_access drops members.manage; voters must be settled). They're told it's open
---     and the result, never who voted: ballots and proposers are readable only by the service role, and the audit
---     rows a vote writes have no actor.
---   * Time to contest: a vote that reaches its majority takes effect no sooner than 72 hours after it opened
---     (contest_until; chosen 2026-10-26 for the founder to confirm or change), so the person has read the notice
---     and can contest first. The hourly job (jobs/processQuorumActions.js) decides a vote that passed meanwhile.
+--   * During the vote (7 days): the person keeps access but can't invite, answer a request to join, remove anyone
+--     or vote (home_effective_access drops members.manage; voters must be settled). They're told it's open and the
+--     result, never who voted: ballots and proposers are readable only by the service role, and the audit rows a
+--     vote writes have no actor.
+--   * Time to contest: a vote to remove takes effect only when it closes, the full 7 days after it opened (founder,
+--     2026-10-26), so the person has time to prove the address by mail and contest first. The hourly job
+--     (jobs/processQuorumActions.js) decides it then. A vote that can no longer reach a majority ends at once.
 --   * Contesting means proving: someone whose own access is proof of the address (postcard, document, landlord or
 --     legacy verification) can contest, and a vote that passes then goes to Pantopus review (AddressReviewCase,
 --     trigger removal_vote) instead of removing them. Resolving that case decides the vote: approved removes them,
@@ -115,12 +115,12 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public,pg_temp AS $$
 $$;
 
 -- Opens a household vote to remove p_target_id, with the proposer's own vote to remove. The voters are the settled
--- residents other than the person, fixed when it opens; it passes with a majority of them and at least 2, no sooner
--- than contest_until (72 hours after it opens), and is decided against them once a majority can no longer be
--- reached. It closes after 7 days; silence never removes anyone. One vote is open per Home at a time. Asking again
--- about the same person waits 30 days from the last vote that didn't remove them, and none opens while Pantopus
--- reviews a contested one. The open vote about the person, asked again by one of its voters, is answered as it is
--- (replayed). Returns the voters to tell (everyone asked but the proposer).
+-- residents other than the person, fixed when it opens; it passes with a majority of them and at least 2 when it
+-- closes after 7 days, and is decided against them as soon as a majority can no longer be reached. Silence never
+-- removes anyone. One vote is open per Home at a time. Asking again about the same person waits 30 days from the
+-- last vote that didn't remove them, and none opens while Pantopus reviews a contested one. The open vote about the
+-- person, asked again by one of its voters, is answered as it is (replayed). Returns the voters to tell (everyone
+-- asked but the proposer).
 CREATE FUNCTION public.open_home_removal_vote(p_home_id uuid,p_actor_id uuid,p_target_id uuid) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp SET lock_timeout='5s' AS $$
 DECLARE h public."Home"%ROWTYPE; o public."HomeOccupancy"%ROWTYPE; a public."HomeQuorumAction"%ROWTYPE;
@@ -144,8 +144,7 @@ BEGIN
     AND state IN ('proposed','collecting_votes');
   IF FOUND AND a.metadata->>'target_user_id'=p_target_id::text AND a.expires_at>t
       AND (a.metadata->'electorate') ? p_actor_id::text THEN
-    RETURN jsonb_build_object('ok',true,'replayed',true,'vote_id',a.id,'closes_at',a.expires_at,
-      'contest_until',a.metadata->'contest_until'); END IF;
+    RETURN jsonb_build_object('ok',true,'replayed',true,'vote_id',a.id,'closes_at',a.expires_at); END IF;
   IF FOUND THEN RETURN '{"ok":false,"code":"REMOVAL_VOTE_BUSY","status":409}'::jsonb; END IF;
   IF NOT public.home_removal_vote_target(p_home_id,p_target_id) THEN
     RETURN '{"ok":false,"code":"REMOVAL_VOTE_TARGET_UNAVAILABLE","status":409}'::jsonb; END IF;
@@ -167,7 +166,7 @@ BEGIN
       min_rejects_to_block,expires_at,passive_approval_at,metadata)
     VALUES(p_home_id,p_actor_id,'REMOVE_MEMBER','collecting_votes',2,'majority',v_required,n-v_required+1,
       t+interval '7 days',NULL,jsonb_build_object('target_user_id',p_target_id,'target_occupancy_id',o.id,
-        'target_source',o.verification_source,'electorate',to_jsonb(v_voters),'contest_until',t+interval '72 hours'))
+        'target_source',o.verification_source,'electorate',to_jsonb(v_voters)))
     RETURNING * INTO a;
   INSERT INTO public."HomeQuorumVote"(quorum_action_id,voter_user_id,vote,voted_at) VALUES(a.id,p_actor_id,'approve',t);
   -- No actor: the Home's activity says a vote opened, never who asked.
@@ -175,7 +174,7 @@ BEGIN
     VALUES(p_home_id,NULL,'REMOVAL_VOTE_OPENED','HomeQuorumAction',a.id,
       jsonb_build_object('user_id',p_target_id,'closes_at',a.expires_at));
   RETURN jsonb_build_object('ok',true,'replayed',false,'vote_id',a.id,'closes_at',a.expires_at,
-    'contest_until',a.metadata->'contest_until','notify_user_ids',to_jsonb(array_remove(v_voters,p_actor_id)),
+    'notify_user_ids',to_jsonb(array_remove(v_voters,p_actor_id)),
     'target_proven',o.verification_source IN ('address','legacy'));
 END $$;
 
@@ -193,10 +192,11 @@ $$;
 --   * The person it's about can no longer be removed by a vote (they left, were removed or now manage the Home): it
 --     closes with nothing to decide ('withdrawn').
 --   * Kept ('kept') once a majority to remove can no longer be reached.
---   * Passed at the majority, but not before contest_until, so the person has had time to contest: it removes them
---     (apply_home_member_removal, in home_member_removal_context's vote mode), unless they proved the address and
---     contested: then Pantopus reviews it (AddressReviewCase, trigger removal_vote) and they keep access meanwhile.
---   * Otherwise it closes without a decision at expires_at ('expired'), and they stay.
+--   * Passed when it closes (expires_at, 7 days after it opened) with the majority, so the person has had the whole
+--     vote to contest: it removes them (apply_home_member_removal, in home_member_removal_context's vote mode),
+--     unless they proved the address and contested: then Pantopus reviews it (AddressReviewCase, trigger
+--     removal_vote) and they keep access meanwhile.
+--   * Otherwise it closes without a decision ('expired'), and they stay.
 -- Returns the vote's state, and the outcome once it's decided. Counts are never returned.
 CREATE FUNCTION public.home_removal_vote_decide(p_vote_id uuid,p_t timestamptz) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $$
@@ -211,7 +211,7 @@ BEGIN
     v_state:='expired'; v_outcome:='withdrawn';
   ELSIF v_rejections>=a.min_rejects_to_block THEN
     v_state:='rejected'; v_outcome:='kept';
-  ELSIF v_approvals>=a.required_approvals AND p_t>=(a.metadata->>'contest_until')::timestamptz THEN
+  ELSIF v_approvals>=a.required_approvals AND p_t>=a.expires_at THEN
     v_state:='approved';
     IF a.metadata ? 'contested_at' AND EXISTS(SELECT FROM public."HomeOccupancy" WHERE home_id=a.home_id
         AND user_id=v_target AND is_active IS TRUE AND verification_status='verified'
@@ -254,10 +254,9 @@ BEGIN
     'code',v_removal->>'code','review_case_id',v_case);
 END $$;
 
--- Records one voter's vote (they can change it while the vote is open) and decides the vote when it can be
--- (home_removal_vote_decide): kept once a majority can no longer be reached; passed at the majority once
--- contest_until has passed. A majority reached sooner waits for the hourly job (settle_home_removal_vote), and
--- voters can still change their votes meanwhile. Counts are never returned.
+-- Records one voter's vote (they can change it while the vote is open) and ends the vote at once if a majority can
+-- no longer be reached (home_removal_vote_decide). A majority to remove waits for the vote to close, when the hourly
+-- job decides it (settle_home_removal_vote); voters can change their votes until then. Counts are never returned.
 CREATE FUNCTION public.cast_home_removal_vote(p_home_id uuid,p_vote_id uuid,p_voter_id uuid,p_vote text) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp SET lock_timeout='5s' AS $$
 DECLARE a public."HomeQuorumAction"%ROWTYPE; t timestamptz; v_target uuid;
@@ -281,19 +280,17 @@ BEGIN
   RETURN jsonb_build_object('ok',true,'vote',p_vote)||public.home_removal_vote_decide(a.id,t);
 END $$;
 
--- The hourly job (jobs/processQuorumActions.js) settles household votes nobody is voting on any more: a majority
--- reached before contest_until, a vote past its end, or one whose subject has left. due_home_removal_votes lists
--- them (oldest first, a page at a time); settle_home_removal_vote decides one (home_removal_vote_decide), under the
--- Home's lock, and returns its outcome for the notices.
+-- The hourly job (jobs/processQuorumActions.js) settles household votes nobody can vote on any more: a vote past
+-- its end (passed or not), or one whose subject has left. due_home_removal_votes lists them (oldest first, a page at
+-- a time); settle_home_removal_vote decides one (home_removal_vote_decide), under the Home's lock, and returns its
+-- outcome for the notices.
 CREATE FUNCTION public.due_home_removal_votes() RETURNS jsonb
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public,pg_temp AS $$
   SELECT jsonb_build_object('ok',true,'votes',
     coalesce(jsonb_agg(jsonb_build_object('home_id',d.home_id,'vote_id',d.id) ORDER BY d.created_at),'[]'::jsonb))
   FROM (SELECT a.id,a.home_id,a.created_at FROM public."HomeQuorumAction" a
     WHERE a.action_type='REMOVE_MEMBER' AND a.state IN ('proposed','collecting_votes')
-      AND (a.expires_at<=now() OR NOT public.home_removal_vote_target(a.home_id,(a.metadata->>'target_user_id')::uuid)
-        OR ((a.metadata->>'contest_until')::timestamptz<=now()
-          AND (SELECT x.approvals FROM public.home_removal_vote_tally(a.id) x)>=a.required_approvals))
+      AND (a.expires_at<=now() OR NOT public.home_removal_vote_target(a.home_id,(a.metadata->>'target_user_id')::uuid))
     ORDER BY a.created_at LIMIT 200) d
 $$;
 
@@ -405,7 +402,7 @@ BEGIN
   v_access:=public.home_effective_access(p_home_id,p_viewer_id);
   SELECT coalesce(jsonb_agg(jsonb_build_object('id',a.id,'target_user_id',a.metadata->>'target_user_id',
       'about_you',a.metadata->>'target_user_id'=p_viewer_id::text,'opened_at',a.created_at,'closes_at',a.expires_at,
-      'contest_until',a.metadata->'contest_until','contested',a.metadata ? 'contested_at',
+      'contested',a.metadata ? 'contested_at',
       'my_vote',(SELECT v.vote FROM public."HomeQuorumVote" v WHERE v.quorum_action_id=a.id
         AND v.voter_user_id=p_viewer_id AND a.metadata->>'target_user_id'<>p_viewer_id::text),
       'can_vote',a.metadata->>'target_user_id'<>p_viewer_id::text AND public.home_settled_resident(p_home_id,p_viewer_id),

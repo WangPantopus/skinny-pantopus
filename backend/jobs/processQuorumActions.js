@@ -16,8 +16,9 @@
 //
 // Household removal votes (REMOVE_MEMBER, the residents' vote) are
 // settled first, by their own SQL (homeRemovalVoteService.settleDue):
-// a vote that passed waits 72 hours from opening so the person can
-// contest, then removes them or goes to Pantopus review.
+// a vote to remove takes effect only when it closes after 7 days, so
+// the person can contest; then it removes them or goes to Pantopus
+// review.
 // ============================================================
 
 const supabaseAdmin = require('../config/supabaseAdmin');

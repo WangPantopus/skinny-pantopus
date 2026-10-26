@@ -247,7 +247,7 @@ function MembersContent() {
       && localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY) === marker && document.visibilityState !== 'hidden';
     const confirmation = confirmStore.open({
       title: 'Ask the household?',
-      description: `This starts a private vote on whether ${name} lives here. Residents who have been here at least 7 days vote for 7 days; it needs most of them, and at least 2, to remove ${name}, and no removal takes effect for 3 days, so ${name} has time to contest it. ${name} keeps access while it’s open and is told a vote is open, but never who started it or how anyone voted. The household holds one vote at a time.`,
+      description: `This starts a private vote on whether ${name} lives here. Residents who have been here at least 7 days vote for 7 days; it needs most of them, and at least 2, to remove ${name}, and a removal takes effect only when the vote closes, so ${name} has time to contest it. ${name} keeps access while it’s open and is told a vote is open, but never who started it or how anyone voted. The household holds one vote at a time.`,
       confirmLabel: 'Start the vote',
       variant: 'destructive',
     });
