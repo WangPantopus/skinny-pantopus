@@ -787,7 +787,14 @@ for P10). The containers were not inspected on the host.
 
 ### P8. Production scheduled jobs (approved launch groups active October 21)
 
-**Current state, verified October 21:** `SchedulesEnabled=false`, with
+**October 26 update:** the founder authorized live payments before the final
+mobile builds. `PaymentJobsEnabled=true` now enables the five payment rules;
+all five completed a production invocation without errors after the live-key
+switch. Other activation parameters and deployed Lambda code are unchanged.
+See [P11](#p11-live-payments-for-crew-day-founder) for configuration validation
+and the remaining real-money acceptance checks.
+
+**October 21 baseline:** `SchedulesEnabled=false`, with
 `BriefingsEnabled`, `SeederEnabled`, `HomeRemindersEnabled`, `AlertsEnabled` and
 `MaintenanceJobsEnabled` true; `PaymentJobsEnabled=false`. There are **13 enabled
 and 11 disabled schedules**. Briefing, Home reminder and local poster functions
@@ -1077,6 +1084,27 @@ passes every line (health, HTTPS, security headers, the web's API and realtime f
 app-link files, robots.txt).
 
 ### P11. Live payments for Crew Day (founder)
+
+**October 26, founder-authorized live configuration:** the production API and
+worker now use the existing Pantopus account's live secret and publishable keys,
+with a new live webhook for the 36 supported event types at
+`https://api.pantopus.com/api/webhooks/stripe`. The account reports charges and
+payouts enabled, with card payments and transfers active. The production database
+had no Payment, PaymentMethod, StripeAccount or BusinessInvoice rows, and no User
+Stripe customer links, before the switch. Both containers remained on their
+existing image and passed readiness; public API health passed. A signed synthetic
+configuration event was accepted, its duplicate was suppressed, and an invalid
+signature was rejected. This verifies the receiver, not an actual Stripe delivery
+or card charge.
+
+The `ios-release` and `android-release` publishable-key secrets now match that
+live account; Android's test-payment exception was removed. Vercel's existing
+`NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` was verified to match, without changing it.
+The production stack's `PaymentJobsEnabled` is now true: the reviewed change set
+enabled the five payment rules and retained the other parameters and deployed
+Lambda code. The checked-in production SAM configuration preserves that state.
+Staging retains test keys. A real card charge, refund, delayed transfer and bank
+payout remain founder acceptance checks; no money was moved during this setup.
 
 Decided October 22 (NEXT_STEPS section 0): Crew Day street days are paid through business invoices, so production takes
 real cards for them. A crew invoices each household from its Pantopus business page; the household pays by card; 48
