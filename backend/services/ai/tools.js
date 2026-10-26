@@ -365,6 +365,8 @@ const TOOL_TIMEOUTS_MS = {
 function toolContext(userOrCtx) {
   if (userOrCtx && typeof userOrCtx === 'object') {
     const userId = userOrCtx.userId || userOrCtx.user?.id;
+    // Calls in one turn share resolved game perspectives despite the context copy below.
+    userOrCtx.sportsGames ||= new Map();
     return { ...userOrCtx, userId, user: userOrCtx.user || { id: userId } };
   }
   return { userId: userOrCtx, user: { id: userOrCtx } };
