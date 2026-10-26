@@ -303,6 +303,11 @@ export interface MyHome extends Omit<Home, 'location' | 'address' | 'city' | 'st
   /** That claim's kind: 'resident' (a renter's residency document) or 'owner'; older servers omit it. */
   pending_claim_type?: string | null;
   can_delete_home?: boolean;
+  /**
+   * Your own private setup whose instant claim (home_instant_claim) is held: the address watch sent it to review,
+   * and it stays held until the address is verified by mail. Older servers omit it.
+   */
+  claim_held?: boolean;
 }
 
 /**
