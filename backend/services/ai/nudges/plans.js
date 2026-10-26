@@ -608,7 +608,7 @@ async function gameDayFacts(userId, timeZone, now = Date.now()) {
   }
   return followed.map((game) => ({
     ...game, when: whenLabel(game.starts_at, game.ends_at, timeZone),
-    watch_parties: parties.filter((plan) => plan.details?.game?.team === game.team
+    watch_parties: parties.filter((plan) => require('../../plans/planTeams').teamById(plan.details?.game?.team)?.id === game.team
       && (plan.details.game.id === game.id || plan.details.game.starts_at === game.starts_at))
       .map((plan) => ({ id: plan.id, can_ask: plan.viewer?.can_ask === true, title_text: plan.title })),
     within_miles: 3,
