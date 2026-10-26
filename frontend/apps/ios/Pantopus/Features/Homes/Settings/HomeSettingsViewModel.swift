@@ -304,8 +304,9 @@ public final class HomeSettingsViewModel: GroupedListDataSource {
         // payload carries their owner_status / occupancy verification and role.
         let verified = detail.ownershipStatus == "verified" || detail.residencyStatus == "verified"
         // An invitation or a manager's approval gives household access, not a
-        // verified address (F3b), so it doesn't read as "Verified".
-        let householdOnly = verified && detail.ownershipStatus != "verified" && detail.residencySource == "household"
+        // verified address (F3b), and neither does a claim, so it doesn't read as "Verified".
+        let householdOnly = verified && detail.ownershipStatus != "verified"
+            && ["household", "claim"].contains(detail.residencySource ?? "")
         // A pending owner who verified the address by mail (founder option 4) reads as
         // verified; the footer still says the claim is pending.
         identity = HomeSettingsSampleData.Identity(

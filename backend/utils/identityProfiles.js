@@ -23,7 +23,9 @@ async function verifiedResidentUserIds(userIds) {
     .select('user_id, verified_at')
     .in('user_id', ids)
     .eq('is_active', true)
-    .eq('verification_status', 'verified');
+    .eq('verification_status', 'verified')
+    // A claim (home claims PR 3) is not a verified residence.
+    .neq('verification_source', 'claim');
   if (error) {
     logger.warn('identity.verified_resident_lookup_error', { error: error.message });
     return new Set();

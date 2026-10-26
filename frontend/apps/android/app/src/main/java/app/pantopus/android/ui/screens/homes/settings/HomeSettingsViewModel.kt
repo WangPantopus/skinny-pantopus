@@ -403,7 +403,8 @@ class HomeSettingsViewModel
         ): HomeSettingsSampleData.Identity {
             val verified = detail.ownershipStatus == "verified" || detail.residencyStatus == "verified"
             val householdOnly =
-                verified && detail.ownershipStatus != "verified" && detail.residencySource == "household"
+                verified && detail.ownershipStatus != "verified" &&
+                    (detail.residencySource == "household" || detail.residencySource == "claim")
             // A pending owner who verified the address by mail (founder option 4) reads as
             // verified; the footer still says the claim is pending.
             val (label, tone) =

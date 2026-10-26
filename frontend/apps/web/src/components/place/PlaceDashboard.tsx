@@ -100,13 +100,14 @@ export default function PlaceDashboard() {
   const linkHomeId = homeId !== homeQuery.data?.home?.id ? homeId : null;
 
   // Places for the switcher. Verified mirrors the dashboard tier (T4):
-  // a verified occupancy or a verified owner; everything else is claimed.
+  // an address-verified occupancy or a verified owner; everything else is
+  // claimed, including household consent and an instant claim.
   const switchHomes = useMemo<PlaceSwitcherHome[]>(
     () =>
       (myHomesQuery.data?.homes ?? []).filter(h => h.has_home_access === true).map((h) => {
         const unit = h.unit_number?.replace(/^#/, '').trim();
-        const verified =
-          h.occupancy?.verification_status === 'verified' || h.ownership_status === 'verified';
+        const verified = (h.occupancy?.verification_status === 'verified'
+          && !['household', 'claim'].includes(h.occupancy?.verification_source ?? '')) || h.ownership_status === 'verified';
         return {
           id: h.id,
           line1: unit && h.address ? `${h.address} #${unit}` : h.address || h.name || 'Home',

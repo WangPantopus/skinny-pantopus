@@ -81,7 +81,9 @@ async function findVerifiedResident(homeId, { excludeUserId } = {}) {
     .select('user_id')
     .eq('home_id', homeId)
     .eq('is_active', true)
-    .eq('verification_status', 'verified');
+    .eq('verification_status', 'verified')
+    // A message meant for the people at an address never reaches someone whose access is only a claim.
+    .neq('verification_source', 'claim');
   if (error) {
     logger.warn('neighborMessages.recipient_lookup_error', { homeId, error: error.message });
     return null;

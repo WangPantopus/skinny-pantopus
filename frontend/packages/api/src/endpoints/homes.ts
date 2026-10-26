@@ -269,8 +269,10 @@ export interface MyHomeOccupancy {
   start_at?: string | null;
   end_at?: string | null;
   access_end_at?: string | null;
-  /** 'verified' lifts the place to the verified (T4) tier. */
+  /** 'verified' lifts the place to the verified (T4) tier unless verification_source says it isn't address proof. */
   verification_status?: 'pending' | 'verified' | 'rejected' | 'moved_out' | string | null;
+  /** Where verified access came from: 'address' or 'legacy' proof, or 'household' consent or a 'claim' (both "Claimed"). */
+  verification_source?: 'address' | 'household' | 'legacy' | 'claim' | string | null;
 }
 
 /** One of the current user's places (GET /api/homes/my-homes). */
@@ -301,6 +303,11 @@ export interface MyHome extends Omit<Home, 'location' | 'address' | 'city' | 'st
   /** That claim's kind: 'resident' (a renter's residency document) or 'owner'; older servers omit it. */
   pending_claim_type?: string | null;
   can_delete_home?: boolean;
+  /**
+   * Your own private setup whose instant claim (home_instant_claim) is held: the address watch sent it to review,
+   * and it stays held until the address is verified by mail. Older servers omit it.
+   */
+  claim_held?: boolean;
 }
 
 /**
@@ -308,6 +315,16 @@ export interface MyHome extends Omit<Home, 'location' | 'address' | 'city' | 'st
  */
 export async function getMyHomes(): Promise<{ homes: MyHome[] }> {
   return get<{ homes: MyHome[] }>('/api/homes/my-homes');
+}
+
+/**
+ * Claim your own private setup at once (behind the home_instant_claim flag). A held claim stays a private
+ * setup until the address is verified by mail.
+ */
+export async function instantClaimHome(homeId: string): Promise<
+  { claimed: true; home_id: string; settles_at: string | null } | { claimed: false; held: true; message: string }
+> {
+  return post(`/api/homes/${homeId}/instant-claim`, {});
 }
 
 /**

@@ -22,6 +22,8 @@ const { encodeGeohash6 } = require('../utils/geohash');
 const { unlockThreshold } = require('../services/place/densityReader');
 
 const BASE_MILESTONES = [500, 200, 100, 50, 25, 10];
+// A claimed home counts on the meter once its claim has stood this long without being disproven (home claims PR 3).
+const CLAIM_COUNTS_AFTER_DAYS = 14;
 
 // The unlock threshold is always a milestone, whatever the env sets it to,
 // so crossing it is announced as the moment the neighborhood opens rather
@@ -77,18 +79,24 @@ module.exports = async function neighborhoodPreviewRefresh() {
     geohashToHomeIds.get(gh).push(home.id);
   }
 
-  // 3. Count distinct active users per geohash cell (single batch query)
+  // 3. Count distinct verified residents per geohash cell (single batch query). Someone who only set a home up,
+  // or asked to join one, isn't counted, and a claim (home claims PR 3) counts once it has stood for
+  // CLAIM_COUNTS_AFTER_DAYS, so new claims can't pad the meter.
   const allHomeIds = homes.map((h) => h.id);
-  const { data: occupancies, error: occErr } = await supabaseAdmin
+  const { data: activeOccupancies, error: occErr } = await supabaseAdmin
     .from('HomeOccupancy')
-    .select('home_id, user_id')
+    .select('home_id, user_id, verification_source, verified_at')
     .in('home_id', allHomeIds)
-    .eq('is_active', true);
+    .eq('is_active', true)
+    .eq('verification_status', 'verified');
 
   if (occErr) {
     logger.error('neighborhoodPreviewRefresh: failed to fetch occupancies', { error: occErr.message });
     return;
   }
+  const claimCutoff = Date.now() - CLAIM_COUNTS_AFTER_DAYS * 24 * 60 * 60 * 1000;
+  const occupancies = (activeOccupancies || []).filter((occ) => occ.verification_source !== 'claim'
+    || (occ.verified_at && Date.parse(occ.verified_at) <= claimCutoff));
 
   // Build home_id → geohash lookup
   const homeToGeohash = new Map();

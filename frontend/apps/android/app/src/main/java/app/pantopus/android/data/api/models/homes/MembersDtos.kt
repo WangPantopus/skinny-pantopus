@@ -41,16 +41,35 @@ data class OccupantDto(
     @Json(name = "can_manage_access") val canManageAccess: Boolean? = null,
     @Json(name = "can_manage_tasks") val canManageTasks: Boolean? = null,
     @Json(name = "can_view_sensitive") val canViewSensitive: Boolean? = null,
-    /** `address`, `household` (joined by invitation) or `legacy`; null from older servers. */
+    /** `address`, `household` (joined by invitation), `claim` or `legacy`; null from older servers. */
     @Json(name = "verification_source") val verificationSource: String? = null,
+    /**
+     * What a viewer who proved the address may do about this member, whose
+     * access is a claim (home claims PR 3). Only such a viewer gets it.
+     */
+    @Json(name = "claim_review") val claimReview: MemberClaimReviewDto? = null,
 ) {
     /**
      * Household members joined by invitation haven't proved the address (F3b),
-     * so only address-verified (or pre-F3b) members carry the verified badge.
+     * and neither has a claim (an instant claim, or an invitation from one), so
+     * only address-verified (or pre-F3b) members carry the verified badge.
      */
     val hasAddressVerification: Boolean
-        get() = verificationSource != "household"
+        get() = verificationSource != "household" && verificationSource != "claim"
 }
+
+/**
+ * A proof always beats a claim (`backend/services/homeDetailService.js`
+ * `withClaimReview`): once someone proves the address, a member whose access
+ * is a claim keeps only their role's defaults until a verified resident
+ * confirms them ([setAside]). That resident may confirm or remove them.
+ */
+@JsonClass(generateAdapter = true)
+data class MemberClaimReviewDto(
+    @Json(name = "set_aside") val setAside: Boolean = false,
+    @Json(name = "can_confirm") val canConfirm: Boolean = false,
+    @Json(name = "can_remove") val canRemove: Boolean = false,
+)
 
 /** Pending invite mapped to a member-like shape by the backend. */
 @JsonClass(generateAdapter = true)
