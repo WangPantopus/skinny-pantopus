@@ -165,11 +165,14 @@ Flow:
   3. Notify the person ("Residency review recorded")
   4. Probation (home claims PR 4, flag home_residency_probation; it ships off and the founder
      turns it on after testing, and while it's off this step reads nothing): household-review
-     requests unanswered for 7 days whose membership is still pending_approval. Address watch
-     first: high holds the request (admin address review case), medium gets a 14-day window,
-     low 7.
+     requests unanswered for 7 days, saved in the last 30 days (older ones stay pending, so the
+     first run doesn't sweep a months-old backlog onto probation), whose membership is still
+     pending_approval. A request with an open address-watch case stays held without running the
+     watch again. Otherwise the address watch first: high holds the request (admin address review
+     case), medium gets a 14-day window, low 7.
   5. admit_home_residency_probation: provisional, verification_source 'probation', audit row
-     RESIDENCY_PROBATION_STARTED; notify the person and the household's reviewers
+     RESIDENCY_PROBATION_STARTED; notify the person and the household's reviewers, saying how
+     many days the request has waited
 ```
 
 #### `expireInitiatedHomeClaims` (Hourly :11)
