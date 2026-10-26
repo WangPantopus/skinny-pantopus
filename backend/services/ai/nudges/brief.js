@@ -163,7 +163,7 @@ async function dayFacts(userId, { timeZone }) {
     // The address calendar's city schedules may be unconfirmed: pickups come only from pickups_confirmed.
     sections: (sections || []).filter((section) => section.topic !== 'address_calendar'),
     plans_today: plansToday,
-    followed_games_today: games.map(({ id, label, opponent, when, watch_parties, within_miles }) => ({ id, label, opponent, when, watch_parties, within_miles })),
+    ...(games.length ? { followed_games_today: games.map(({ id, label, opponent, when, watch_parties, within_miles }) => ({ id, label, opponent, when, watch_parties, within_miles })) } : {}),
     waiting_to_join: waiting.map((plan) => ({ plan_id: plan.plan_id, title_text: plan.title_text, when: plan.when, waiting: plan.waiting_requests })),
     pickups_confirmed: pickups,
     your_open_questions: questions,
