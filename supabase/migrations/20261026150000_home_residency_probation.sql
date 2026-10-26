@@ -32,7 +32,7 @@
 -- Latest permitted sources (bodies copied unchanged except the lines commented below):
 --   review_home_residency           supabase/migrations/20261004104000_home_verification_source.sql:222
 --   verify_home_postcard_current    supabase/migrations/20261004104000_home_verification_source.sql:603
---   home_postcard_current_context   supabase/migrations/20261025120000_home_instant_claim.sql:220
+--   home_postcard_current_context   supabase/migrations/20261026120000_home_instant_claim.sql:220
 --   home_residency_review_current   supabase/migrations/20260910233000_home_residency_review_receipts.sql:73
 SET LOCAL lock_timeout='5s';
 
