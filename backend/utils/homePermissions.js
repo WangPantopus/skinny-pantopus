@@ -30,6 +30,26 @@ async function checked(query) {
   return result.data;
 }
 
+// Home claims PR 3: a proof always beats a claim (home_proof_holder, home_claim_set_aside and home_effective_access in
+// SQL; keep these aligned). Someone who proved the address: source address or legacy, an adult, living there as a member.
+const PROOF_SOURCES = new Set(['address', 'legacy']);
+const PROOF_ROLES = new Set(['owner', 'admin', 'manager', 'lease_resident', 'member']);
+const holdsProof = (occupancy, role) => PROOF_SOURCES.has(occupancy?.verification_source) && PROOF_ROLES.has(role)
+  && (occupancy.age_band == null || occupancy.age_band === 'adult');
+/** Is this person's claim stepping back for someone who proved the address (SQL home_claim_set_aside)? */
+async function claimSetAside(homeId, userId) {
+  const setAside = await checked(supabaseAdmin.rpc('home_claim_set_aside', { p_home_id: homeId, p_user_id: userId }));
+  if (typeof setAside !== 'boolean') throw accessUnavailable();
+  return setAside;
+}
+/** Does anyone else at this Home have (or had) access by a claim? */
+async function homeHasClaim(homeId, userId) {
+  const rows = await checked(supabaseAdmin.from('HomeOccupancy').select('id').eq('home_id', homeId)
+    .eq('verification_source', 'claim').neq('user_id', userId).limit(1));
+  if (!Array.isArray(rows)) throw accessUnavailable();
+  return rows.length > 0;
+}
+
 /**
  * Resolve one current effective policy. Unknown verification does not attest
  * membership; missing age is preserved as historical adult-compatible data.
@@ -79,7 +99,17 @@ async function getUserAccess(homeId, userId) {
     else allowed.delete(row.permission);
   }
   const age = occupancy?.age_band;
-  const permissions = HOME_PERMISSIONS.filter(permission => allowed.has(permission) && ageAllows(age, permission));
+  let permissions = HOME_PERMISSIONS.filter(permission => allowed.has(permission) && ageAllows(age, permission));
+  // A claim keeps only its role's defaults while someone who proved the address hasn't said they live here too, and
+  // someone who proved the address at a Home with a claim sees who lives there (members.view) to decide about it.
+  if (!ownerEntitlement && occupancy?.verification_source === 'claim' && await claimSetAside(homeId, userId)) {
+    const defaults = new Set(roleRows.filter(row => row.allowed === true).map(row => row.permission));
+    permissions = permissions.filter(permission => defaults.has(permission));
+  } else if (holdsProof(occupancy, role) && !permissions.includes('members.view')
+    && !overrides.some(row => row.permission === 'members.view' && row.allowed === false)
+    && await homeHasClaim(homeId, userId)) {
+    permissions = HOME_PERMISSIONS.filter(permission => permission === 'members.view' || permissions.includes(permission));
+  }
   return {
     permissions, role_base: role || 'owner',
     effective_role_base: effectiveRole(ownerEntitlement ? 'owner' : role, age),

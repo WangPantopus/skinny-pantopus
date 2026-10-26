@@ -243,6 +243,8 @@ const HOME_TYPES = new Set([
   'new_ownership_claim', 'ownership_dispute',
   'challenge_window_opened', 'ownership_transfer_received',
   'tenant_request',
+  // A proof beats a claim (home claims PR 3): someone proved the address, someone should confirm a claim, confirmed.
+  'home_claim_set_aside', 'home_claim_to_review', 'home_claim_confirmed',
   // Home Record Watch (Wave 2b) — governed by the home-reminders toggle.
   'rate_watch',
   // A household letter another member deleted or dismissed (with Restore).

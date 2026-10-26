@@ -232,8 +232,26 @@ async function members(homeId, actorId, { history = false } = {}) {
     ]);
     if (JSON.stringify(settledValue(membersAgain)) !== JSON.stringify(occupants)) throw failure();
     if (manage && JSON.stringify(settledValue(invitesAgain)) !== JSON.stringify(invites)) throw failure();
-    return { occupants: settledValue(namedOccupants), pendingInvites };
+    const named = settledValue(namedOccupants);
+    return { occupants: history ? named : await withClaimReview(homeId, actorId, named), pendingInvites };
   });
+}
+// Home claims PR 3: a proof always beats a claim. For a viewer who proved the address, the rows of people whose access
+// is a claim say what the viewer may do about them: confirm them while their claim steps back for proof
+// (home_claim_set_aside), and remove them up to lease_resident (home_member_rank_ceiling). Nobody else sees this.
+async function withClaimReview(homeId, actorId, occupants) {
+  const claims = occupants.filter(member => member.verification_source === 'claim' && member.user_id !== actorId);
+  if (claims.length === 0) return occupants;
+  const proof = await checked(db.rpc('home_proof_holder', { p_home_id: homeId, p_user_id: actorId }));
+  if (typeof proof !== 'boolean') throw failure();
+  if (!proof) return occupants;
+  const review = new Map(await Promise.all(claims.map(async member => {
+    const setAside = await checked(db.rpc('home_claim_set_aside', { p_home_id: homeId, p_user_id: member.user_id }));
+    if (typeof setAside !== 'boolean') throw failure();
+    return [member.user_id, { set_aside: setAside, can_confirm: setAside,
+      can_remove: (ROLE_RANK[member.role] || ROLE_RANK.owner) <= ROLE_RANK.lease_resident }];
+  })));
+  return occupants.map(member => (review.has(member.user_id) ? { ...member, claim_review: review.get(member.user_id) } : member));
 }
 function sendError(res, error) {
   if (['HOME_DASHBOARD_DENIED', 'HOME_DASHBOARD_ACCESS_CHANGED', 'HOME_RESOURCE_DENIED'].includes(error?.code)) return authority.sendError(res, error);

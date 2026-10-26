@@ -32,8 +32,9 @@ function decision(action, { replayed = false, legacy = true, status } = {}) {
 beforeEach(() => { db.resetTables(); jest.clearAllMocks(); });
 
 test('legacy manager attach still uses the original admission transaction and authenticated actor', async () => {
-  const rpc = jest.fn(async () => ({ data: { ok: true, target_id: target, replayed: false,
-    occupancy: { id: id(300) }, user: { id: target } }, error: null }));
+  // A manager passes the review-authority check attach now makes first (home claims PR 3).
+  const rpc = jest.fn(async name => (name === 'home_residency_review_authority' ? { data: true, error: null }
+    : { data: { ok: true, target_id: target, replayed: false, occupancy: { id: id(300) }, user: { id: target } }, error: null }));
   db.setRpcMock(rpc);
   const res = await request(app).post(`/homes/${home}/attach`).set('x-test-user-id', actor)
     .send({ userId: target, actorId: id(99) });
