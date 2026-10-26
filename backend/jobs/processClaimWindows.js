@@ -14,7 +14,13 @@ const sameIds = (rows, cursor) => rows.some((row, index) => ![row?.id, row?.home
 // The address watch is read again first: a high level holds the request (a case in the admin queue) and a medium
 // level gets a 14-day window instead of 7. Probation opens no household records. The newcomer and the household's
 // reviewers are told; a failed notice can't undo the admission.
+// The home_residency_probation flag ships off; the founder turns it on after testing. The SQL rereads the row, and
+// it's read here first too (the same audience: everyone, or the listed accounts) so that while probation is off the
+// pass reads nothing and the address watch opens no admin queue case.
 async function admitUnansweredRequests() {
+  const flag = await require('../services/featureFlagService').getFlag('home_residency_probation').catch(() => null);
+  const listed = new Set(Array.isArray(flag?.beta_user_ids) ? flag.beta_user_ids : []);
+  if (flag?.enabled_globally !== true && !listed.size) return;
   const cutoff = new Date(Date.now() - PROBATION_WAIT_DAYS * 86400000).toISOString();
   let cursor = null, admitted = 0, held = 0, unavailable = 0;
   for (;;) {
@@ -41,6 +47,7 @@ async function admitUnansweredRequests() {
     for (const claim of claims.data) {
       if (![claim?.id, claim?.home_id, claim?.user_id].every(v => typeof v === 'string' && UUID.test(v))
         || !members.has(`${claim.home_id}:${claim.user_id}`)) continue;
+      if (flag.enabled_globally !== true && !listed.has(claim.user_id)) continue;
       const watch = await admitOnProbation(claim);
       if (watch === 'admitted') admitted++; else if (watch === 'held') held++; else if (watch === 'unavailable') unavailable++;
     }
