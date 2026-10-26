@@ -10,6 +10,10 @@ const crypto = require('crypto');
  * writes) and sessions record Vercel's address. The web's middleware adds the shared
  * EDGE_PROXY_SECRET to the requests it forwards; only then is the address one hop further
  * out trusted. Direct clients can't set it, so they can't choose their own address.
+ *
+ * A request that carried the secret is marked `req.viaWebEdge`, so routes can trust the
+ * few headers only the web's servers may send (the share-card marker on /api/public/place;
+ * the web's middleware strips it from visitors' requests).
  */
 const HEADER = 'x-pantopus-edge';
 
@@ -25,6 +29,7 @@ function edgeClientIp(req, _res, next) {
   delete req.headers[HEADER];
   const secret = process.env.EDGE_PROXY_SECRET || '';
   if (!secret || !secretMatches(given, secret)) return next();
+  req.viaWebEdge = true;
 
   const hops = String(req.headers['x-forwarded-for'] || '')
     .split(',')

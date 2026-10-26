@@ -1403,6 +1403,9 @@ Write these as `KEY=value` lines (no quotes, one line each) into
 | `SMARTY_AUTH_ID`, `SMARTY_AUTH_TOKEN` | required | deferred for first web release | Smarty (subscription must be active; S4 checks it) |
 | `DEFER_ADDRESS_PROVIDER_SETUP` | unset | `true` until the live Google, Smarty and Lob settings are ready; then remove | production-only startup switch, D5 |
 | `MAPBOX_ACCESS_TOKEN` | required | required | Mapbox secret token |
+| `GEO_ANON_HOURLY_CALLS` | unset | unset | Mapbox calls that signed-out address lookups may make in an hour, everyone together (default 300, `backend/services/geo/signedOutBudget.js`). Raise it before a planned push such as a postcard drop |
+| `GEO_ANON_LOOKUPS` | unset | unset | `off` refuses every signed-out address lookup that would call Mapbox (an emergency stop; members keep working) |
+| `GEO_OG_HOURLY_RENDERS` | unset | unset | share-card images (`/api/og/place`) that may render an address preview in an hour (default 100); past it a card renders without one. They count only with a matching `EDGE_PROXY_SECRET` |
 | `ATTOM_API_KEY` | optional | required for property facts | ATTOM |
 | `AIRNOW_API_KEY` | required for air quality | required for air quality | free AirNow key; without it the air section says it couldn't load. Also goes in the Lambda secret (S8) |
 | `CENSUS_API_KEY` | required for area facts | required for area facts | free Census key (api.census.gov/data/key_signup.html); the Census API refuses keyless calls, so without it Place's "Homes here", the address preview's area facts and the tract medians are unavailable (checked on staging October 9) |

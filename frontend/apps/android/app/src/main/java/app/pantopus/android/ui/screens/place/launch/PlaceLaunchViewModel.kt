@@ -99,7 +99,15 @@ class PlaceLaunchViewModel
                     if (_query.value != value) return@launch
                     when (r) {
                         is NetworkResult.Success -> _suggestions.value = r.data.suggestions
-                        is NetworkResult.Failure -> _error.value = "We couldn’t look up addresses. Please try again."
+                        // Out of suggestions for today (or everyone's are busy): a typed
+                        // address still works through See your place.
+                        is NetworkResult.Failure ->
+                            _error.value =
+                                if (r.error.code == HTTP_TOO_MANY_REQUESTS) {
+                                    "Address suggestions aren’t available right now. Type the full address, then tap See your place."
+                                } else {
+                                    "We couldn’t look up addresses. Please try again."
+                                }
                     }
                 }
         }
@@ -128,7 +136,15 @@ class PlaceLaunchViewModel
                                     LaunchStep.Preview(preview)
                                 }
                         }
-                        is NetworkResult.Failure -> _error.value = "We couldn’t load this address. Please try again."
+                        // A 429 carries the server's own sentence: today's lookups are used,
+                        // or lookups are busy.
+                        is NetworkResult.Failure ->
+                            _error.value =
+                                if (r.error.code == HTTP_TOO_MANY_REQUESTS) {
+                                    r.error.message
+                                } else {
+                                    "We couldn’t load this address. Please try again."
+                                }
                     }
                     _loadingPreview.value = false
                 }
@@ -185,6 +201,9 @@ class PlaceLaunchViewModel
 
             // Debounce keystrokes so we fire one autocomplete request per pause, not per key.
             const val AUTOCOMPLETE_DEBOUNCE_MS = 220L
+
+            // The daily lookup limits and the busy answer (backend/middleware/rateLimiter.js).
+            const val HTTP_TOO_MANY_REQUESTS = 429
         }
     }
 

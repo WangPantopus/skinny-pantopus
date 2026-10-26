@@ -16,7 +16,8 @@ import styles from './home.module.css';
 export default function CloseSection() {
   const router = useRouter();
   const [selected, setSelected] = useState<SelectedAddress | null>(null);
-  const open = (place: SelectedAddress | null) => router.push(place ? `/start?address=${encodeURIComponent(place.label)}` : '/start');
+  const [fallbackAddress, setFallbackAddress] = useState<string | null>(null);
+  const open = (address: string | null) => router.push(address ? `/start?address=${encodeURIComponent(address)}` : '/start');
 
   return (
     <section id="get-the-app" className={styles.close} aria-labelledby="close-title">
@@ -35,13 +36,14 @@ export default function CloseSection() {
                 placeholder="Start typing your address"
                 onSelect={(place) => {
                   setSelected(place);
-                  open(place);
+                  open(place.label);
                 }}
                 onClear={() => setSelected(null)}
-                onSubmit={() => open(selected)}
+                onFallbackChange={setFallbackAddress}
+                onSubmit={() => open(selected?.label ?? fallbackAddress)}
               />
             </div>
-            <button type="button" className={styles.closeBtn} onClick={() => open(selected)}>See your place</button>
+            <button type="button" className={styles.closeBtn} onClick={() => open(selected?.label ?? fallbackAddress)}>See your place</button>
           </div>
         </div>
         <p className={styles.note} style={{ color: '#C9D3E3' }}>Free to look. No account needed.</p>
