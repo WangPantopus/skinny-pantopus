@@ -265,6 +265,21 @@ read-only repository permissions and keep deployment secrets out of PR jobs.
 - Optional repository secrets `SLACK_WEBHOOK_URL` / `DISCORD_WEBHOOK_URL` send
   production deployment outcomes. A disabled deployment is not a success alert.
 
+## Places index
+
+`places-index.yml` rebuilds the public places the Plans place picker lists
+(parks, courts, playgrounds, libraries, community centers, cafés, bars,
+restaurants) for every US OpenStreetMap extract from Geofabrik, on the 3rd of
+each month and by hand (Actions → Places Index → Run workflow; `regions` limits
+a test build). It publishes `manifest.json` and `places-<yyyymmdd>.bin` on the
+`places-index` pre-release, with the ODbL credit. It needs no secrets: the
+job's own token writes the release. The backend reads the areas it needs with
+range requests (`backend/services/plans/placesIndex.js`; `PLACES_INDEX_URL`
+points elsewhere, and an empty value turns the index off), and asks the public
+Overpass servers only where the index can't answer. A build with under 80% of
+the published one's elements is not published. A pull request that changes the
+build runs it on two small extracts and publishes nothing.
+
 ## Runners and actions
 
 Linux jobs run on `ubuntu-24.04`, pinned so GitHub's move of `ubuntu-latest` to
