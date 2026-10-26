@@ -200,8 +200,8 @@ for more than 30 days stay pending (2026-10-26), so turning probation on doesn't
 backlog onto it. Probation is not approval: the person stays provisional with no household records, mail
 or Plans trust until a reviewer says yes or they prove the address, and a reviewer's no or a challenge
 suspends them. After that, their way back is proof: a postcard opens a dispute in the Pantopus address
-review queue instead of restoring access, and Pantopus approving it restores the membership (2026-10-26).
-Ownership claims are unchanged: D13 still holds for them.
+review queue instead of restoring access; Pantopus approving it restores the membership, and after a
+rejection they can send proof again (2026-10-26). Ownership claims are unchanged: D13 still holds for them.
 Probation ships off behind the FeatureFlag `home_residency_probation`; the founder turns it on after
 testing with `POST /api/admin/feature-flags/home_residency_probation`. Until then D13 holds for residents
 too.

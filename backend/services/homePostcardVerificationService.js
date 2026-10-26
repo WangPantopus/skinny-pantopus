@@ -62,9 +62,9 @@ function alertDispute(homeId, actorId) {
 }
 
 // Pantopus decides a probation dispute from the review queue (routes/adminAddressReview.js; founder decision
-// 2026-10-26): approved restores the membership as a resident verified by mail, rejected keeps the household's no for
-// good, dismissed closes it without a decision (resolve_home_probation_dispute). The person is told a restore or a
-// rejection, and the household's reviewers a restore. Returns null for any other case, which the generic resolver
+// 2026-10-26): approved restores the membership as a resident verified by mail, rejected keeps the household's no,
+// dismissed closes it without a decision (resolve_home_probation_dispute); after either they can send proof again.
+// The person is told a restore or a rejection, and the household's reviewers a restore. Returns null for any other case, which the generic resolver
 // handles; otherwise { success, status?, error? }.
 async function resolveDisputeCase({ caseId, reviewerId, outcome, note = null }) {
   if (!UUID.test(String(caseId)) || !UUID.test(String(reviewerId))) return null;
@@ -85,7 +85,7 @@ async function resolveDisputeCase({ caseId, reviewerId, outcome, note = null }) 
   };
   if (data.outcome === 'declined') {
     await notify({ userId: data.user_id, type: 'residency_rejected', title: 'Pantopus reviewed your proof', icon: '📬',
-      body: `Pantopus kept the household's answer for ${data.home_label}. To join, ask someone in the household to invite you.`,
+      body: `Pantopus kept the household's answer for ${data.home_label}. If you have new proof, you can verify your address by mail again.`,
       link: `/homes/${data.home_id}/residency`, metadata: { home_id: data.home_id } });
   } else if (data.outcome === 'restored') {
     await notify({ userId: data.user_id, type: 'residency_approved', title: 'Welcome back', icon: '🏡',

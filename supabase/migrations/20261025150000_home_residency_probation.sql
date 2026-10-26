@@ -23,8 +23,8 @@
 -- After a no, asking again is refused (MEMBERSHIP_RENEWAL_REQUIRED). The way back is proof: a suspended
 -- probationer may still request a postcard, and proving it opens a dispute in the Pantopus review queue
 -- (AddressReviewCase, trigger probation_dispute) instead of restoring access; the no stands until Pantopus decides
--- (resolve_home_probation_dispute): approving restores the membership (founder decision 2026-10-26), rejecting is
--- final for this probation, and dismissing lets them send proof again.
+-- (resolve_home_probation_dispute): approving restores the membership; after a rejection or a dismissal they can
+-- send proof again, which opens a new case (founder decisions 2026-10-26).
 --
 -- Latest permitted sources (bodies copied unchanged except the lines commented below):
 --   review_home_residency           supabase/migrations/20261004104000_home_verification_source.sql:222
@@ -513,14 +513,12 @@ BEGIN
       AND NOT v_dispute)
     OR (r.status='rejected' AND NOT v_dispute) THEN
     RETURN jsonb_build_object('ok',false,'code','POSTCARD_ACCESS_REVIEW_REQUIRED','status',409); END IF;
-  -- Only this probation's disputes count (its challenge window started when it began). Pantopus's rejection is final.
+  -- Only this probation's disputes count (its challenge window started when it began). After Pantopus decides one,
+  -- they can send proof again (founder decision 2026-10-26).
   IF v_dispute AND EXISTS(SELECT FROM public."AddressReviewCase" WHERE home_id=p_home_id AND user_id=p_actor_id
       AND trigger='probation_dispute' AND status IN ('open','in_review')
       AND created_at>=coalesce(o.challenge_window_started_at,'-infinity')) THEN
     RETURN jsonb_build_object('ok',false,'code','POSTCARD_DISPUTE_IN_REVIEW','status',409); END IF;
-  IF v_dispute AND EXISTS(SELECT FROM public."AddressReviewCase" WHERE home_id=p_home_id AND user_id=p_actor_id
-      AND trigger='probation_dispute' AND status='rejected' AND created_at>=coalesce(o.challenge_window_started_at,'-infinity')) THEN
-    RETURN jsonb_build_object('ok',false,'code','POSTCARD_DISPUTE_DECLINED','status',409); END IF;
   -- Household consent (an accepted invitation or a household-reviewed claim)
   -- is not address proof (F3b), so it must not block the postcard that adds it.
   -- Neither is an instant claim at an address with no household ('claim'), nor probation (home claims PR 4):
@@ -547,14 +545,14 @@ BEGIN
 END;
 $$;
 
--- Pantopus decides a probation dispute (backend/routes/adminAddressReview.js -> homeProbationDisputeService; founder
--- decision 2026-10-26: approving restores the membership). Approved: the person proved the address and Pantopus
+-- Pantopus decides a probation dispute (backend/routes/adminAddressReview.js -> homePostcardVerificationService;
+-- founder decision 2026-10-26: approving restores the membership). Approved: the person proved the address and Pantopus
 -- sides with them, so they come back as a resident verified by mail (source 'address', the role and permissions a
 -- postcard proof gives: home_postcard_verified_policy) and their request is marked verified; if their membership or
 -- the Home changed meanwhile, or the proof no longer matches the address, nothing changes
--- (PROBATION_DISPUTE_CHANGED) and the case stays open to reject or dismiss. Rejected: the household's no stands
--- and is final (home_postcard_current_context refuses another dispute postcard in this probation). Dismissed:
--- closed without a decision; they can send proof again. Returns who to tell; audit rows have no actor.
+-- (PROBATION_DISPUTE_CHANGED) and the case stays open to reject or dismiss. Rejected: the household's no stands,
+-- and the person may send proof again, which opens a new case (founder decision 2026-10-26). Dismissed: closed
+-- without a decision; they can send proof again too. Returns who to tell; audit rows have no actor.
 CREATE FUNCTION public.resolve_home_probation_dispute(p_case_id uuid,p_reviewer_id uuid,p_outcome text,p_note text,
   p_validity_days integer) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp SET lock_timeout='5s' AS $$

@@ -472,8 +472,8 @@ export interface PersonalResidencyProgress {
   /**
    * Probation (a request nobody in the household answered in 7 days, home_residency_probation): 'active' until
    * someone there says yes or the address is verified by mail; 'ended' after a no, when proof by mail is the way
-   * back; 'review' while Pantopus reviews that proof; 'declined' when Pantopus kept the household's no (an approval
-   * restores the membership). Older servers omit it.
+   * back; 'review' while Pantopus reviews that proof; 'declined' when Pantopus kept the household's no (they can send
+   * proof again; an approval restores the membership). Older servers omit it.
    */
   probation?: 'active' | 'ended' | 'review' | 'declined' | null;
 }

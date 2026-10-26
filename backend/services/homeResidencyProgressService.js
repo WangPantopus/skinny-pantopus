@@ -80,9 +80,9 @@ async function references(homeId, actorId) {
 }
 // Home claims PR 4: probation (a household-review request nobody answered in 7 days) is 'active' until someone in
 // the household says yes or the address is proven; a no or a challenge ends it, and the person's way back is proof
-// by mail, which opens a Pantopus review ('review'). Pantopus restores the membership, keeps the no ('declined',
-// final for this probation) or closes the review without a decision ('ended' again). Only a dispute from this
-// probation counts: its challenge window started when it began. next_step stays what older apps know.
+// by mail, which opens a Pantopus review ('review'). Pantopus restores the membership, keeps the no ('declined'), or
+// closes the review without a decision ('ended' again); after either they can send proof again. Only a dispute from
+// this probation counts: its challenge window started when it began. next_step stays what older apps know.
 function probation(occupancy, dispute) {
   if (occupancy?.verification_source !== 'probation') return null;
   if (occupancy.is_active === true && occupancy.verification_status === 'provisional') return 'active';
