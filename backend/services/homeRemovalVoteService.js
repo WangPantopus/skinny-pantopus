@@ -3,7 +3,8 @@
 // within 7 days (supabase/migrations/20261025180000_home_removal_vote.sql). Owners stay under the owners' vote. The
 // person keeps access while the vote is open and is told it's open and the result, never who started it or how anyone
 // voted; contesting means proving the address, and a proven member who contests goes to Pantopus review. Behind the
-// home_removal_vote flag (on); the SQL reads the flag row itself, so turning it off stops new votes at once.
+// home_removal_vote flag, which ships off: the founder turns it on only after testing and after the iOS and Android
+// apps have voting screens. The SQL reads the flag row itself, so turning it off again stops new votes at once.
 const db = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 

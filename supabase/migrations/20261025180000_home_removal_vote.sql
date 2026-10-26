@@ -1,11 +1,14 @@
 -- Backwards compatible: yes. Adds one allowed value to HomeQuorumAction.action_type, one partial unique index, one
--- FeatureFlag row, new service-only functions, narrower read policies on the two vote tables, and forward
--- replacements of two existing functions with the same signatures and grants. Only the new functions create a
--- REMOVE_MEMBER vote, and only the new API routes call them; until one exists, every replaced function behaves
--- exactly as before for every existing row. Deployed apps never read the vote tables directly.
+-- switched-off FeatureFlag row, new service-only functions, narrower read policies on the two vote tables, and
+-- forward replacements of two existing functions with the same signatures and grants. Only the new functions create
+-- a REMOVE_MEMBER vote, only the new API routes call them, and none opens while home_removal_vote is off (its
+-- default); until one exists, every replaced function behaves exactly as before for every existing row. Deployed
+-- apps never read the vote tables directly.
 --
 -- Home claims plan, PR 5: the resident removal vote (plan "when-users-claim-an-streamed-willow", approved by the
--- founder on 2026-10-25). Settled residents can remove someone who doesn't belong without an owner or manager:
+-- founder on 2026-10-25, behind a flag that ships off: the founder turns it on only after testing and after the iOS
+-- and Android apps have voting screens). Settled residents can remove someone who doesn't belong without an owner
+-- or manager:
 --   * Who can start one: a settled resident (home_settled_resident): a current, verified adult member who isn't a
 --     guest, service provider or restricted member, has been a member for at least 7 days (an instant claim: until
 --     its settles_at), and isn't the subject of an open vote. Probation and a challenged person aren't verified.
@@ -53,11 +56,12 @@ CREATE POLICY quorum_vote_select ON public."HomeQuorumVote" FOR SELECT USING (EX
   WHERE qa.id = "HomeQuorumVote".quorum_action_id AND qa.action_type <> 'REMOVE_MEMBER'
     AND ho.subject_id = auth.uid() AND ho.owner_status = 'verified'::public.owner_status_type));
 
--- On: the founder approved the resident removal vote. Turning it off (POST /api/admin/feature-flags/home_removal_vote)
--- stops new votes at once; votes already open run to their end.
+-- Off: it ships off. The founder turns it on only after testing and after the iOS and Android apps have voting
+-- screens (today only the web Members page has one), with POST /api/admin/feature-flags/home_removal_vote and
+-- {"enabled_globally": true}. Turning it off again stops new votes at once; votes already open run to their end.
 INSERT INTO public."FeatureFlag" (flag_name, enabled_globally, enabled_for_internal_team, beta_user_ids, description)
-VALUES ('home_removal_vote', true, false, ARRAY[]::uuid[],
-  'Resident removal vote: settled residents can vote to remove a member who doesn''t belong (majority of the other settled residents, at least 2, 7 days). Turn it off to stop new votes.')
+VALUES ('home_removal_vote', false, false, ARRAY[]::uuid[],
+  'Resident removal vote: settled residents can vote to remove a member who doesn''t belong (majority of the other settled residents, at least 2, 7 days). Off by default; the founder turns it on after testing, once the iOS and Android apps have voting screens. Turn it off to stop new votes.')
 ON CONFLICT (flag_name) DO NOTHING;
 
 -- Is a household vote about removing this person open at this Home: collecting votes and not past its end?
