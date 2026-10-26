@@ -208,8 +208,8 @@ fun BodyReactionsBody(
                 style = PostMediaGridStyle.Regular,
                 testTag = "pulsePostDetail-media",
                 usesSharpPreviews = true,
+                edgeToEdge = true,
                 locationBadge = mediaLocationBadge,
-                modifier = Modifier.padding(horizontal = Spacing.s4),
             )
         }
         ReactionsBar(
