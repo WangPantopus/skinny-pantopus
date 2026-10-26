@@ -20,7 +20,8 @@ const sameIds = (rows, cursor) => rows.some((row, index) => ![row?.id, row?.home
 // Older ones stay pending, as before the flag; the household can still answer and the person can verify by mail.
 // Going forward every new request reaches 7 days inside that window.
 // A request with an open address-watch case stays held until it's proven, so it's skipped before the watch (about
-// ten reads) runs again; the SQL holds it too.
+// ten reads) runs again; the SQL holds it too. The case is about the person, or about the home when the reasons are
+// the address's (watchResidencyRequest opens them the same way for every request), and either holds it.
 // The home_residency_probation flag ships off; the founder turns it on after testing. The SQL rereads the row, and
 // it's read here first too (the same audience: everyone, or the listed accounts) so that while probation is off the
 // pass reads nothing and the address watch opens no admin queue case.
@@ -54,21 +55,22 @@ async function admitUnansweredRequests() {
     } catch (_) { claims = null; }
     if (claims?.error || !Array.isArray(claims?.data)) { logger.error('[processClaimWindows] Probation request read unavailable'); return; }
     let holds = { data: [] };
-    if (claims.data.length) {
+    const users = [...new Set(claims.data.map(claim => claim?.user_id).filter(id => UUID.test(String(id))))];
+    if (users.length) {
       try {
         holds = await supabaseAdmin.from('AddressReviewCase').select('home_id, user_id').eq('trigger', 'address_watch')
           .in('status', OPEN_STATUSES).in('home_id', [...new Set(claims.data.map(claim => claim?.home_id))])
-          .in('user_id', [...new Set(claims.data.map(claim => claim?.user_id))]);
+          .or(`user_id.is.null,user_id.in.(${users.join(',')})`);
       } catch (_) { holds = null; }
       if (holds?.error || !Array.isArray(holds?.data)) { logger.error('[processClaimWindows] Probation hold read unavailable'); return; }
     }
     const members = new Set(rows.map(row => `${row.home_id}:${row.user_id}`));
-    const heldRequests = new Set(holds.data.map(hold => `${hold?.home_id}:${hold?.user_id}`));
+    const heldRequests = new Set(holds.data.map(hold => (hold?.user_id ? `${hold.home_id}:${hold.user_id}` : `${hold?.home_id}:*`)));
     for (const claim of claims.data) {
       if (![claim?.id, claim?.home_id, claim?.user_id].every(v => typeof v === 'string' && UUID.test(v))
         || !members.has(`${claim.home_id}:${claim.user_id}`)) continue;
       if (flag.enabled_globally !== true && !listed.has(claim.user_id)) continue;
-      if (heldRequests.has(`${claim.home_id}:${claim.user_id}`)) { held++; continue; }
+      if (heldRequests.has(`${claim.home_id}:${claim.user_id}`) || heldRequests.has(`${claim.home_id}:*`)) { held++; continue; }
       const watch = await admitOnProbation(claim);
       if (watch === 'admitted') admitted++; else if (watch === 'held') held++; else if (watch === 'unavailable') unavailable++;
     }
@@ -78,23 +80,10 @@ async function admitUnansweredRequests() {
 }
 
 async function admitOnProbation(claim) {
-  const policy = require('../utils/homeSecurityPolicy');
-  const reviewCases = require('../services/addressValidation/addressReviewService');
-  let assessment;
-  try { assessment = await policy.assessAddressWatch({ homeId: claim.home_id, userId: claim.user_id }); }
-  catch (_) { return 'unavailable'; }
-  if (assessment?.level === 'high') {
-    // Hold it until it's proven. Open the admin queue case once; an open case is left as it is.
-    try {
-      const open = await supabaseAdmin.from('AddressReviewCase').select('id').eq('trigger', 'address_watch')
-        .eq('home_id', claim.home_id).eq('user_id', claim.user_id).in('status', reviewCases.OPEN_STATUSES).limit(1);
-      if (!open.error && Array.isArray(open.data) && !open.data.length) {
-        await reviewCases.flagAddressWatch({ homeId: claim.home_id, userId: claim.user_id,
-          signals: assessment.signals, source: 'residency_probation' });
-      }
-    } catch (_) { /* The request stays held either way. */ }
-    return 'held';
-  }
+  // A high level holds it until it's proven; the watch opens the admin queue case (about the person or the home).
+  const assessment = await require('../utils/homeSecurityPolicy').watchResidencyRequest({ homeId: claim.home_id,
+    userId: claim.user_id, source: 'residency_probation' });
+  if (assessment?.level === 'high') return 'held';
   if (!['low', 'medium'].includes(assessment?.level)) return 'unavailable';
   let result;
   try {

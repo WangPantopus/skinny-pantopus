@@ -49,9 +49,9 @@ ON CONFLICT (flag_name) DO NOTHING;
 -- requests are renter or household requests only, so this never touches ownership; anyone with an owner record is
 -- refused. The request must still be pending and unreviewed, unchanged for p_wait_days but saved less than
 -- p_max_age_days ago (an older one stays pending), with the fresh pending membership the request created and no
--- challenge window. An open address-watch case for this person and Home holds it. p_window_days (7, or 14 for a
--- medium address watch) is the window in which a reviewer can challenge. Returns when the request was saved and
--- the household's current reviewers, who are told.
+-- challenge window. An open address-watch case about this person at this Home, or about the Home itself, holds it.
+-- p_window_days (7, or 14 for a medium address watch) is the window in which a reviewer can challenge. Returns when
+-- the request was saved and the household's current reviewers, who are told.
 CREATE FUNCTION public.admit_home_residency_probation(p_home_id uuid,p_actor_id uuid,p_claim_id uuid,
   p_wait_days integer,p_window_days integer,p_max_age_days integer) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp SET lock_timeout='5s' AS $$
@@ -81,7 +81,7 @@ BEGIN
     OR h.owner_id=p_actor_id OR h.security_state IN ('frozen','frozen_silent','disputed') OR h.home_status IN ('archived','merged')
     OR EXISTS(SELECT FROM public."HomeOwner" WHERE home_id=p_home_id AND subject_type='user' AND subject_id=p_actor_id) THEN
     RETURN '{"ok":true,"admitted":false}'::jsonb; END IF;
-  IF EXISTS(SELECT FROM public."AddressReviewCase" WHERE home_id=p_home_id AND user_id=p_actor_id
+  IF EXISTS(SELECT FROM public."AddressReviewCase" WHERE home_id=p_home_id AND (user_id=p_actor_id OR user_id IS NULL)
       AND trigger='address_watch' AND status IN ('open','in_review')) THEN
     RETURN '{"ok":true,"admitted":false,"held":true}'::jsonb; END IF;
   UPDATE public."HomeOccupancy" SET verification_status='provisional',verification_source='probation',
