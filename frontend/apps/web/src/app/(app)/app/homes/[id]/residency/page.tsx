@@ -19,7 +19,7 @@ const probationGuidance = {
   active: { title: 'You’re on probation', body: 'Nobody in the household answered your request in 7 days, so you’re on probation. Household records stay private until someone there says yes or you verify your address by mail.' },
   ended: { title: 'The household said no', body: 'Someone in the household said you don’t live here, so your probation ended. If you do live here, verify your address by mail. Pantopus will review your proof, and your access stays off until then.' },
   review: { title: 'Pantopus is reviewing your proof', body: 'You verified this address by mail after the household said no. Pantopus is reviewing it, and your access stays off until then.' },
-  declined: { title: 'Pantopus kept the household’s answer', body: 'Pantopus reviewed your proof of this address and kept the household’s no. To join this household, ask someone there to invite you.' },
+  declined: { title: 'Pantopus kept the household’s answer', body: 'Pantopus reviewed your proof of this address and kept the household’s no. If you have new proof, you can verify by mail again and Pantopus will take another look.' },
 };
 
 export default function ResidencyStatusPage() {
@@ -30,7 +30,7 @@ export default function ResidencyStatusPage() {
     title: 'Confirm your address',
     body: 'Check this Home’s address, apartment and how you live here, then send your request. We don’t mail anything until you ask for a postcard.',
   } : guidance[progress.next_step] : null;
-  const mailBack = progress?.probation === 'active' || progress?.probation === 'ended';
+  const mailBack = progress?.probation === 'active' || progress?.probation === 'ended' || progress?.probation === 'declined';
   return <main className="mx-auto max-w-lg px-4 py-6 pb-28">
     <Link href="/app/homes" className="inline-block rounded-lg py-2 text-sm font-semibold text-app-text-secondary">← My Homes</Link>
     <h1 className="mt-3 text-2xl font-semibold text-app-text">Residency status</h1>

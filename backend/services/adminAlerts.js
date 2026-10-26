@@ -193,7 +193,7 @@ async function notifyProbationDisputeToReview({ caseId, home }) {
     `Case: ${caseId}`,
     `Area: ${where}`,
     '',
-    `Decide it: ${resolve} with {"outcome": "approved"} to restore their membership, "rejected" to keep the household's no (final), or "dismissed" to close it without a decision (they can send proof again).`,
+    `Decide it: ${resolve} with {"outcome": "approved"} to restore their membership, "rejected" to keep the household's no, or "dismissed" to close it without a decision (either way they can send proof again).`,
     'Open cases: GET /api/admin/address-review/queue',
   ].join('\n');
   const html = `<p>A household said no to someone on probation, and they <strong>proved the address by mail</strong>. Their access stays off until it’s decided.</p>
@@ -201,7 +201,7 @@ async function notifyProbationDisputeToReview({ caseId, home }) {
   <li>Case: <code>${caseId}</code></li>
   <li>Area: ${where}</li>
 </ul>
-<p>Decide it: <code>${resolve}</code> with <code>{"outcome": "approved"}</code> to restore their membership, <code>"rejected"</code> to keep the household’s no (final), or <code>"dismissed"</code> to close it without a decision (they can send proof again).</p>
+<p>Decide it: <code>${resolve}</code> with <code>{"outcome": "approved"}</code> to restore their membership, <code>"rejected"</code> to keep the household’s no, or <code>"dismissed"</code> to close it without a decision (either way they can send proof again).</p>
 <p>Open cases: <code>GET /api/admin/address-review/queue</code></p>`;
 
   try {
