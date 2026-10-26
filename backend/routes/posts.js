@@ -2555,22 +2555,38 @@ router.put('/feed-preferences', verifyToken, async (req, res) => {
     if (showPoliticsConnections !== undefined) upsertData.show_politics_connections = !!showPoliticsConnections;
     if (showPoliticsPlace !== undefined) upsertData.show_politics_place = !!showPoliticsPlace;
 
+    let data, error;
     if (req.body.sports !== undefined) {
       const { isFeatureEnabled } = require('../services/featureFlagService');
       if (!await isFeatureEnabled('plans_sports', req.user)) return res.status(404).json({ error: 'Sports preferences are not available.' });
-      const { data: existing, error: readError } = await supabaseAdmin.from('UserFeedPreference')
-        .select('sports').eq('user_id', userId).maybeSingle();
-      if (readError) throw new Error('Could not read sports preferences.');
-      try {
-        upsertData.sports = require('../services/plans/planTeams').mergeSports(existing?.sports, req.body.sports);
-      } catch (err) { return res.status(400).json({ error: err.message }); }
+      const { mergeSports } = require('../services/plans/planTeams');
+      // Compare-and-swap the JSON value. Concurrent partial saves must merge with
+      // the latest choices, rather than overwrite a successful unrelated change.
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        const { data: existing, error: readError } = await supabaseAdmin.from('UserFeedPreference')
+          .select('sports').eq('user_id', userId).maybeSingle();
+        if (readError) throw new Error('Could not read sports preferences.');
+        const current = existing?.sports || {};
+        if (req.body.expected_sports !== undefined
+          && !require('node:util').isDeepStrictEqual(current, req.body.expected_sports)) {
+          return res.status(409).json({ error: 'Your teams changed. Reopen your teams or request a new card before saving.' });
+        }
+        try { upsertData.sports = mergeSports(current, req.body.sports); }
+        catch (err) { return res.status(400).json({ error: err.message }); }
+        const result = existing
+          ? await supabaseAdmin.from('UserFeedPreference').update(upsertData)
+            .eq('user_id', userId).eq('sports', JSON.stringify(current)).select().maybeSingle()
+          : await supabaseAdmin.from('UserFeedPreference').insert(upsertData).select().single();
+        // A competing first save created the row; read it and merge on the next attempt.
+        if (!existing && result.error?.code === '23505') continue;
+        ({ data, error } = result);
+        if (data || error) break;
+      }
+      if (!data && !error) return res.status(409).json({ error: 'Your teams changed while saving. Try again.' });
+    } else {
+      ({ data, error } = await supabaseAdmin.from('UserFeedPreference')
+        .upsert(upsertData, { onConflict: 'user_id' }).select().single());
     }
-
-    const { data, error } = await supabaseAdmin
-      .from('UserFeedPreference')
-      .upsert(upsertData, { onConflict: 'user_id' })
-      .select()
-      .single();
 
     if (error) {
       logger.error('Feed preferences update error', { error: error.message, userId });

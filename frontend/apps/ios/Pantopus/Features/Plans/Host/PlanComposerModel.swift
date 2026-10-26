@@ -53,6 +53,7 @@ final class PlanComposerModel {
     var game: PlanGameOptionDTO?
     private(set) var games: [PlanGameOptionDTO] = []
     private(set) var sports: PlansSportsDTO?
+    private var gamesGeneration = 0
     var kidsAges: Set<PlanKidsAgeBand> = []
     var sport = "pickleball"
     var level = "any"
@@ -120,11 +121,14 @@ final class PlanComposerModel {
     }
 
     func loadGames() async {
+        gamesGeneration += 1
+        let generation = gamesGeneration
         let reply: PlanGamesResponse? = try? await api.request(
             PlansEndpoints.games(from: PlansStoreReads.lastCenter, gps: PlansStoreReads.freshGPS, purpose: "composer")
         )
-        games = reply?.games.filter { $0.isAvailable(at: Date()) } ?? []
-        if let reply { sports = reply.sports }
+        guard generation == gamesGeneration, let reply, !Task.isCancelled else { return }
+        games = reply.games.filter { $0.isAvailable(at: Date()) }
+        sports = reply.sports
         if let selected = game, !games.contains(where: { $0.id == selected.id }) {
             game = nil
             dropAutoTitle()
