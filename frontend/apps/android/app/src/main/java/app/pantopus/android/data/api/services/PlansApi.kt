@@ -18,6 +18,7 @@ import app.pantopus.android.data.api.models.plans.PlanPlaceSuggestBody
 import app.pantopus.android.data.api.models.plans.PlanPlaceSuggestionsResponse
 import app.pantopus.android.data.api.models.plans.PlanReportBody
 import app.pantopus.android.data.api.models.plans.PlanRequestsResponse
+import app.pantopus.android.data.api.models.plans.PlanTeamsResponse
 import app.pantopus.android.data.api.models.plans.PlansListResponse
 import app.pantopus.android.data.api.models.plans.PublicPlanDto
 import app.pantopus.android.data.api.models.plans.StillComingBody
@@ -206,7 +207,16 @@ interface PlansApi {
         @Query("gps_latitude") gpsLatitude: Double? = null,
         @Query("gps_longitude") gpsLongitude: Double? = null,
         @Query("gps_timestamp") gpsTimestamp: String? = null,
+        @Query("v") version: Int = 2,
+        @Query("for") purpose: String = "sheet",
     ): PlanGamesResponse
+
+    @GET("api/plans/teams")
+    suspend fun teams(
+        @Query("q") query: String = "",
+        @Query("latitude") latitude: Double? = null,
+        @Query("longitude") longitude: Double? = null,
+    ): PlanTeamsResponse
 
     /**
      * `GET /api/plans/places/nearby`: public places for H6, nearest first, or with the plan's [kind] (and a pickup

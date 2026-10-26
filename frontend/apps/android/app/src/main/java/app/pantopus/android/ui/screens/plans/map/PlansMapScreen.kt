@@ -313,6 +313,7 @@ private fun PlansSheetHost(
                     state,
                     onHost = actions.onHost,
                     onInvite = actions.onInvite,
+                    onGamesChanged = viewModel::loadGames,
                     // The sheet goes down so the town with plans shows in the open map (as on iOS).
                     onShowElsewhere = {
                         onStop(PlanSheetStop.Peek)
