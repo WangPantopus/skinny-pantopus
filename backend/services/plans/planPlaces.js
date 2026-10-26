@@ -10,6 +10,9 @@
  *   - The second server is asked too when the first hasn't answered in 15
  *     seconds; the first good answer wins. An answer Overpass cut short
  *     ("runtime error: timed out") counts as a failure, never as no places.
+ *   - A server that fails is asked again after 3, 6, 12… seconds for up to
+ *     100 seconds: overpass-api.de often answers 502 "at capacity" at once
+ *     and then answers in full moments later.
  *   - Results are cached for 24 hours per area (a ~5 km geohash cell, padded
  *     so every point in the cell sees ~3 km around it) in PlaceSectionCache.
  *     A cached area answers at once, even when its day is up (it refreshes in
@@ -19,7 +22,9 @@
  *   - The Plans tab and the host flow warm the host's areas (`warmAround`),
  *     so the places are usually ready before the picker opens.
  *   - An area whose fetch just failed answers "unavailable" at once for 90
- *     seconds instead of asking the servers again on every request.
+ *     seconds instead of asking the servers again on every request, and is
+ *     fetched again in the background a few times so its places are ready
+ *     on the next look.
  * OSM's license asks for credit where the data shows: responses carry
  * `attribution`.
  *
@@ -46,8 +51,15 @@ const OVERPASS_URLS = [
 const QUERY_TIMEOUT_S = 50;
 const FETCH_TIMEOUT_MS = 55000;
 const HEDGE_AFTER_MS = 15000;
+// How long one fetch keeps asking busy servers (the apps ask again for up to 150 seconds).
+const ASK_BUDGET_MS = 100 * 1000;
+const RETRY_PAUSE_MS = 3000;
+// A query takes 25 to 40 seconds, so none starts with less time left than this.
+const MIN_ASK_MS = 30 * 1000;
 const FIRST_ANSWER_WAIT_MS = 8000;
 const FAILURE_COOLDOWN_MS = 90 * 1000;
+// An area whose fetch failed is fetched again in the background, after 90 s, 3, 6 and 12 minutes.
+const MAX_REFILLS = 4;
 const KNOWN_CELL_MS = 6 * 60 * 60 * 1000;
 const MAX_KNOWN_CELLS = 5000;
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -236,12 +248,12 @@ function toPlaces(elements) {
 }
 
 /** One server's answer: its elements, or an error for anything short of a full answer. */
-async function askOverpass(url, query, signal) {
+async function askOverpass(url, query, signal, timeoutMs = FETCH_TIMEOUT_MS) {
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Pantopus/1.0 (Nearby Plans place picker)' },
     body: `data=${encodeURIComponent(query)}`,
-    signal: AbortSignal.any([signal, AbortSignal.timeout(FETCH_TIMEOUT_MS)]),
+    signal: AbortSignal.any([signal, AbortSignal.timeout(Math.max(1000, Math.min(FETCH_TIMEOUT_MS, timeoutMs)))]),
   });
   const text = await response.text();
   if (!response.ok) throw new Error(`Overpass answered ${response.status}`);
@@ -261,49 +273,65 @@ async function askOverpass(url, query, signal) {
 
 /**
  * The servers in turn, the next one starting when the one before fails or
- * hasn't answered within HEDGE_AFTER_MS; the first full answer wins and the
- * others are stopped.
+ * hasn't answered within HEDGE_AFTER_MS. A server that fails is asked again
+ * after a pause that doubles each time: a busy one answers 502 "at capacity"
+ * at once and usually has room a few seconds later. The first full answer
+ * wins and the others are stopped; with none in ASK_BUDGET_MS, the last error.
  */
 function askServers(query) {
   return new Promise((resolve, reject) => {
     const stop = new AbortController();
-    let next = 0;
-    let running = 0;
+    const deadline = Date.now() + ASK_BUDGET_MS;
+    const timers = new Set();
+    let started = 0;
+    let pending = 0; // requests running or waiting for their pause
     let done = false;
-    let hedge = null;
     let lastError = null;
+    const later = (fn, ms) => {
+      const timer = setTimeout(() => { timers.delete(timer); fn(); }, ms);
+      timer.unref?.();
+      timers.add(timer);
+    };
     const finish = (fn, value) => {
       if (done) return;
       done = true;
-      clearTimeout(hedge);
+      timers.forEach(clearTimeout);
       stop.abort();
       fn(value);
     };
-    const start = () => {
-      clearTimeout(hedge);
-      if (done || next >= OVERPASS_URLS.length) return;
-      const url = OVERPASS_URLS[next];
-      next += 1;
-      running += 1;
-      hedge = setTimeout(start, HEDGE_AFTER_MS);
-      hedge.unref?.();
-      askOverpass(url, query, stop.signal).then(
+    const ask = (url, attempt) => {
+      if (done) return;
+      askOverpass(url, query, stop.signal, deadline - Date.now()).then(
         (elements) => finish(resolve, elements),
         (err) => {
-          running -= 1;
           if (done) return;
           lastError = err;
-          logger.warn('plans.places.overpass_failed', { host: new URL(url).host, error: err.message });
-          if (next < OVERPASS_URLS.length) start();
-          else if (running === 0) finish(reject, lastError);
+          logger.warn('plans.places.overpass_failed', { host: new URL(url).host, attempt, error: err.message });
+          if (attempt === 0) startNext();
+          const pause = RETRY_PAUSE_MS * 2 ** attempt;
+          if (Date.now() + pause + MIN_ASK_MS < deadline) {
+            later(() => ask(url, attempt + 1), pause);
+          } else {
+            pending -= 1;
+            if (pending === 0 && started >= OVERPASS_URLS.length) finish(reject, lastError);
+          }
         },
       );
+    };
+    const startNext = () => {
+      if (done || started >= OVERPASS_URLS.length) return;
+      const url = OVERPASS_URLS[started];
+      started += 1;
+      pending += 1;
+      later(startNext, HEDGE_AFTER_MS);
+      ask(url, 0);
     };
     if (OVERPASS_URLS.length === 0) {
       reject(new Error('No Overpass server is set'));
       return;
     }
-    start();
+    later(() => finish(reject, lastError || new Error('Overpass gave no answer in time')), ASK_BUDGET_MS);
+    startNext();
   });
 }
 
@@ -326,6 +354,8 @@ const failedUntil = new Map();
 const knownCells = new Map();
 // Areas whose cached row predates the hours and facts, already sent for a refresh in this process.
 const upgradedCells = new Set();
+// Areas whose last fetch failed: how many background fetches they've had since.
+const refills = new Map();
 
 class PlacesUnavailableError extends Error {
   constructor() {
@@ -336,22 +366,39 @@ class PlacesUnavailableError extends Error {
 
 const coolingDown = (cell) => (failedUntil.get(cell) || 0) > Date.now();
 
-/** One fetch per area at a time; the result is written to the cache. A failure is logged here, once. */
+/**
+ * One fetch per area at a time; the result is written to the cache. A failure
+ * is logged here, once, and the area is fetched again later in the background,
+ * so the next person to open the picker there finds its places.
+ */
 function refreshCell(cell) {
   if (inflight.has(cell)) return inflight.get(cell);
   const job = fetchCell(cell)
     .then(async (places) => {
       await placeSectionCache.writeRow(`geo:${cell}`, SECTION_ID, places, CACHE_TTL_MS, new Date().toISOString());
       failedUntil.delete(cell);
+      refills.delete(cell);
       return places;
     }, (err) => {
       failedUntil.set(cell, Date.now() + FAILURE_COOLDOWN_MS);
       logger.warn('plans.places.fetch_failed', { cell, error: err.message });
+      refillLater(cell);
       throw err;
     })
     .finally(() => inflight.delete(cell));
   inflight.set(cell, job);
   return job;
+}
+
+function refillLater(cell) {
+  const done = refills.get(cell) || 0;
+  if (done >= MAX_REFILLS || (!refills.has(cell) && refills.size >= MAX_KNOWN_CELLS)) {
+    refills.delete(cell);
+    return;
+  }
+  refills.set(cell, done + 1);
+  const timer = setTimeout(() => refreshQuietly(cell), FAILURE_COOLDOWN_MS * 2 ** done + 1000);
+  timer.unref?.();
 }
 
 /** Refresh in the background (an expired or older row keeps answering meanwhile). */
