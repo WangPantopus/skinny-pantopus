@@ -5,7 +5,9 @@
  * libraries, courts, trails, cafés, bars and restaurants near a point.
  *
  * Mapbox's geocoding no longer returns points of interest, so the places come
- * from OpenStreetMap through the public Overpass API (free, no key). Those
+ * from OpenStreetMap: in the US from our own monthly index of it
+ * (placesIndex.js), which answers a new area in about a second, and anywhere
+ * the index can't answer, from the public Overpass API (free, no key). Those
  * servers are often busy: a new area can take 20 to 40 seconds, or fail. So:
  *   - The second server is asked too when the first hasn't answered in 15
  *     seconds; the first good answer wins. An answer Overpass cut short
@@ -38,6 +40,7 @@ const logger = require('../../utils/logger');
 const { encodeGeohash, decodeGeohashBbox } = require('../../utils/geohash');
 const { timezoneFromCoordinates } = require('../../utils/timezone');
 const placeSectionCache = require('../placeSectionCache');
+const placesIndex = require('./placesIndex');
 const rules = require('./planRules');
 const { hoursDuring, sunMinutes } = require('./placeHours');
 
@@ -116,20 +119,17 @@ const FACT_WORDS = {
   fee: (v) => (v === true ? 'Entry fee' : null),
 };
 
-/** Plain tag matches only (no regular expressions): the cheapest query for the public servers. */
+/**
+ * Plain tag matches only (no regular expressions): the cheapest query for the
+ * public servers. The elements are placesIndex.SELECTORS, as in the index.
+ */
 function overpassQuery({ south, west, north, east }) {
   const b = `${south},${west},${north},${east}`;
+  const lines = placesIndex.SELECTORS.flatMap(([types, key, values]) => values.map((value) => [...types]
+    .map((type) => `${type === 'n' ? 'node' : 'way'}["${key}"="${value}"](${b});`).join(' ')));
   return `[out:json][timeout:${QUERY_TIMEOUT_S}];
 (
-  way["leisure"="park"](${b}); node["leisure"="park"](${b});
-  way["leisure"="dog_park"](${b}); way["leisure"="nature_reserve"](${b});
-  way["leisure"="playground"](${b}); node["leisure"="playground"](${b});
-  way["leisure"="pitch"](${b}); node["leisure"="pitch"](${b});
-  node["amenity"="library"](${b}); way["amenity"="library"](${b});
-  node["amenity"="community_centre"](${b}); way["amenity"="community_centre"](${b});
-  node["amenity"="cafe"](${b}); way["amenity"="cafe"](${b}); node["amenity"="ice_cream"](${b});
-  node["amenity"="bar"](${b}); node["amenity"="pub"](${b}); way["amenity"="pub"](${b});
-  node["amenity"="restaurant"](${b}); way["amenity"="restaurant"](${b});
+  ${lines.join('\n  ')}
 );
 out center tags 1500;`;
 }
@@ -335,15 +335,22 @@ function askServers(query) {
   });
 }
 
+/** The area's elements from our index, or from Overpass where the index can't answer just now. */
 async function fetchCell(cell) {
-  const box = decodeGeohashBbox(cell);
-  const query = overpassQuery({
-    south: box.minLat - PAD_DEGREES,
-    north: box.maxLat + PAD_DEGREES,
-    west: box.minLng - PAD_DEGREES,
-    east: box.maxLng + PAD_DEGREES,
-  });
-  const elements = await askServers(query);
+  const cellBox = decodeGeohashBbox(cell);
+  const box = {
+    south: cellBox.minLat - PAD_DEGREES,
+    north: cellBox.maxLat + PAD_DEGREES,
+    west: cellBox.minLng - PAD_DEGREES,
+    east: cellBox.maxLng + PAD_DEGREES,
+  };
+  let elements = null;
+  try {
+    elements = await placesIndex.elementsIn(box);
+  } catch (err) {
+    logger.warn('plans.places.index_failed', { cell, error: err.message });
+  }
+  if (!elements) elements = await askServers(overpassQuery(box));
   return toPlaces(elements).map((p) => ({ ...p, latitude: p.point.latitude, longitude: p.point.longitude, point: undefined }));
 }
 
