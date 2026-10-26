@@ -228,6 +228,7 @@ fun PulsePostCard(
                 items = content.media,
                 style = PostMediaGridStyle.Compact,
                 testTag = "pulsePostMedia_${content.id}",
+                usesSharpPreviews = true,
             )
         }
         content.attendees?.let { attendees ->

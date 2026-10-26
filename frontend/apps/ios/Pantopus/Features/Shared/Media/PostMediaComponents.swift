@@ -144,6 +144,7 @@ struct LivePhotoTileView: View {
     /// Fallback only: legacy thumbnails are too small for a feed-width still.
     let thumbnailURL: URL?
     let videoURL: URL
+    var usesSharpPreview = false
     /// `.fill` for grid cells, `.fit` for the full-screen viewer.
     let contentMode: ContentMode
     /// Yellow indicator dot (hidden in the viewer, which shows a pill).
@@ -216,10 +217,10 @@ struct LivePhotoTileView: View {
     private var mediaLayers: some View {
         ZStack {
             MediaStillImage(
-                url: stillURL,
+                url: contentMode == .fill && !usesSharpPreview ? (thumbnailURL ?? stillURL) : stillURL,
                 contentMode: contentMode,
-                keepsOnDisk: false,
-                maxPixelSize: contentMode == .fill ? 2400 : nil,
+                keepsOnDisk: !usesSharpPreview && !showsReplayButton,
+                maxPixelSize: usesSharpPreview && contentMode == .fill ? 2400 : nil,
                 fallbackURL: thumbnailURL
             )
             if let player {
@@ -329,12 +330,18 @@ struct LivePhotoTileView: View {
 /// One grid cell — dispatches on the item kind.
 struct PostMediaTileView: View {
     let item: PostMediaItem
+    var usesSharpPreview = false
     var onTap: (() -> Void)?
 
     var body: some View {
         switch item.kind {
         case .image:
-            MediaStillImage(url: item.url, keepsOnDisk: false, maxPixelSize: 2400, fallbackURL: item.thumbnailURL)
+            MediaStillImage(
+                url: usesSharpPreview ? item.url : (item.thumbnailURL ?? item.url),
+                keepsOnDisk: !usesSharpPreview,
+                maxPixelSize: usesSharpPreview ? 2400 : nil,
+                fallbackURL: item.thumbnailURL
+            )
                 .contentShape(Rectangle())
                 .onTapGesture { onTap?() }
                 .accessibilityElement()
@@ -355,7 +362,13 @@ struct PostMediaTileView: View {
             .accessibilityLabel("Open PDF")
         case .video:
             ZStack {
-                PostVideoPoster(item: item)
+                if usesSharpPreview {
+                    PostVideoPoster(item: item)
+                } else if let thumbnail = item.thumbnailURL {
+                    MediaStillImage(url: thumbnail)
+                } else {
+                    Theme.Color.appText.opacity(0.85)
+                }
                 playDisc
             }
             .contentShape(Rectangle())
@@ -370,6 +383,7 @@ struct PostMediaTileView: View {
                 stillURL: item.url,
                 thumbnailURL: item.thumbnailURL,
                 videoURL: item.liveVideoURL ?? item.url,
+                usesSharpPreview: usesSharpPreview,
                 contentMode: .fill,
                 showsDot: false,
                 onTap: onTap
@@ -420,6 +434,7 @@ public struct PostMediaGridView: View {
     private let accessibilityID: String
     /// Place label drawn on the last visible tile (A10.4 map-pin badge).
     private let locationBadge: String?
+    private let usesSharpPreviews: Bool
 
     @State private var viewerSelection: MediaViewerSelection?
 
@@ -427,12 +442,14 @@ public struct PostMediaGridView: View {
         items: [PostMediaItem],
         style: Style,
         accessibilityID: String = "postMediaGrid",
-        locationBadge: String? = nil
+        locationBadge: String? = nil,
+        usesSharpPreviews: Bool = false
     ) {
         self.items = items
         self.style = style
         self.accessibilityID = accessibilityID
         self.locationBadge = locationBadge
+        self.usesSharpPreviews = usesSharpPreviews
     }
 
     public var body: some View {
@@ -501,7 +518,7 @@ public struct PostMediaGridView: View {
     }
 
     private func tile(_ index: Int) -> some View {
-        PostMediaTileView(item: items[index]) {
+        PostMediaTileView(item: items[index], usesSharpPreview: usesSharpPreviews) {
             viewerSelection = MediaViewerSelection(index: index)
         }
     }

@@ -264,7 +264,8 @@ public struct BodyReactionsBody: View {
                     items: media,
                     style: .regular,
                     accessibilityID: "pulsePostDetail-media",
-                    locationBadge: mediaLocationBadge
+                    locationBadge: mediaLocationBadge,
+                    usesSharpPreviews: true
                 )
                 .padding(.horizontal, Spacing.s4)
             }

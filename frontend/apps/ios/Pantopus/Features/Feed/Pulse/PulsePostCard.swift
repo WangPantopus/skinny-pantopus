@@ -295,7 +295,8 @@ public struct PulsePostCard: View {
                 PostMediaGridView(
                     items: content.media,
                     style: .compact,
-                    accessibilityID: "pulsePostMedia_\(content.id)"
+                    accessibilityID: "pulsePostMedia_\(content.id)",
+                    usesSharpPreviews: true
                 )
             }
             if let attendees = content.attendees {
