@@ -582,12 +582,157 @@ async function afterPlans(now) {
   return sent;
 }
 
+// Followed games only, shared by the morning brief and the game-day nudge.
+async function gameDayFacts(userId, timeZone, now = Date.now()) {
+  const { isFeatureEnabled } = require('../../featureFlagService');
+  if (!await isFeatureEnabled('plans', userId) || !await isFeatureEnabled('plans_sports', userId)) return [];
+  const { data: prefs, error } = await supabaseAdmin.from('UserNotificationPreferences')
+    .select('suggestions_enabled').eq('user_id', userId).maybeSingle();
+  if (error) throw new Error(error.message);
+  if (prefs?.suggestions_enabled !== true) return [];
+  const viewer = await require('../../plans/planViewer').loadViewer({ id: userId });
+  if (viewer.sports.watch !== 'on' || !viewer.sports.teams?.length) return [];
+  const today = DateTime.fromMillis(now).setZone(timeZone).toISODate();
+  const { games } = await require('../../plans/planGames').gamesForViewer(viewer, 'sheet', now);
+  const followed = games.filter((game) => viewer.sports.teams.includes(game.team)
+    && DateTime.fromISO(game.starts_at).setZone(timeZone).toISODate() === today);
+  if (!followed.length) return [];
+  const parties = [];
+  if (viewer.origin) {
+    let cursor = null;
+    do {
+      const page = await planService.listNearby(viewer, { point: viewer.origin, window: 'week', kinds: ['watch_party'], cursor });
+      parties.push(...page.items.filter((plan) => plan.area && rules.distanceMeters(viewer.origin, plan.area) <= 3 * rules.MILE_METERS));
+      cursor = page.next_cursor;
+    } while (cursor);
+  }
+  return followed.map((game) => ({
+    ...game, when: whenLabel(game.starts_at, game.ends_at, timeZone),
+    watch_parties: parties.filter((plan) => require('../../plans/planTeams').teamById(plan.details?.game?.team)?.id === game.team
+      && (plan.details.game.id === game.id || plan.details.game.starts_at === game.starts_at))
+      .map((plan) => ({ id: plan.id, can_ask: plan.viewer?.can_ask === true, title_text: plan.title })),
+    within_miles: 3,
+    can_host: viewer.homes.some((home) => home.trusted && home.point),
+  }));
+}
+
+function gameDayAction(game) {
+  const party = game.watch_parties.find((plan) => plan.can_ask);
+  if (party) return ['draft_plan_ask', { plan_id: party.id, party_size: 1, ask_note: null, note: null }];
+  if (!game.can_host) return null;
+  return ['draft_plan', { kind: 'watch_party', title: `${game.label} watch party`, game_id: game.id,
+    starts_local: null, ends_local: null, spots: 8, at_home: true, place_name: null,
+    who_gets_in: 'host_approves', details: null, about: null, guest_note: null,
+    note: 'At your home, with 8 spots. Review before posting.' }];
+}
+
+async function gameDayFor(userId, now = Date.now()) {
+  const timeZone = await require('../chatContext').userTimeZone(userId);
+  let sent = 0;
+  for (const game of await gameDayFacts(userId, timeZone, now)) {
+    const target = { userId, kind: 'plan_game_day', subject: { type: 'person', id: userId }, checkpoint: game.id };
+    if (!(await engine().canNudge(target)).ok) continue;
+    const expiresAt = new Date(game.ends_at);
+    const choice = gameDayAction(game);
+    const built = choice ? await engine().nudgeCard(...choice, { userId, expiresAt }) : {};
+    const count = game.watch_parties.length;
+    const result = await engine().sendNudge({ ...target,
+      title: `${game.label} today`,
+      body: `${game.label}${game.opponent ? ` vs ${game.opponent}` : ''} · ${game.when}${count ? ` · ${count} watch ${count === 1 ? 'party' : 'parties'} within 3 mi` : ''}`,
+      card: built.card || null, expiresAt,
+    });
+    if (result.sent) sent += 1;
+  }
+  return sent;
+}
+
+async function gameDays(now) {
+  let sent = 0;
+  for (let offset = 0; ; offset += 300) {
+    const { data, error } = await supabaseAdmin.from('UserNotificationPreferences').select('user_id')
+      .eq('suggestions_enabled', true).order('user_id').range(offset, offset + 299);
+    if (error) throw new Error(error.message);
+    for (const person of data || []) {
+      try { sent += await gameDayFor(person.user_id, now); }
+      catch (err) { logger.warn('plans.game_day.failed', { userId: person.user_id, error: err.message }); }
+    }
+    if (!data || data.length < 300) break;
+  }
+  return sent;
+}
+
+// A provider revision proposes a host decision; it never changes a plan or tells guests.
+async function checkGameMoved(plan, now = Date.now()) {
+  const saved = plan.details?.game;
+  if (plan.kind !== 'watch_party' || !saved?.id || !saved.team || plan.status !== 'open'
+    || Date.parse(planService.startsAt(plan)) <= now) return false;
+  const flags = require('../../featureFlagService');
+  if (!await flags.isFeatureEnabled('plans', hostOf(plan)) || !await flags.isFeatureEnabled('plans_sports', hostOf(plan))) return false;
+  const schedule = require('../../sports/schedule');
+  // Refresh through the provider's shared TTL/cache, retaining cancelled and TBD records.
+  const records = await schedule.gamesForTeams([saved.team], now);
+  const current = records.games.find((game) => game.id === saved.id && game.team === saved.team);
+  if (!current) return false;
+  const unavailable = ['postponed', 'cancelled'].includes(current.status);
+  const delta = Date.parse(current.starts_at) - Date.parse(saved.starts_at);
+  if (!unavailable && (current.time_tbd || current.status !== 'scheduled' || !Number.isFinite(delta) || Math.abs(delta) < 15 * 60000)) return false;
+  const checkpoint = require('crypto').createHash('sha1').update(JSON.stringify([saved.id, current.status, current.starts_at, current.time_tbd])).digest('hex');
+  if (!await hostWouldHear(plan, 'plan_game_moved', checkpoint)) return false;
+  const expiresAt = new Date(planService.endsAt(plan));
+  let draft;
+  if (unavailable) {
+    draft = await hostCard(plan, 'draft_plan_cancel', { plan_id: plan.post_id,
+      cancel_note: `The game was ${current.status}.`, note: 'Your plan stays as it is unless you confirm.' }, expiresAt);
+  } else {
+    const zone = rules.timezoneForPlan(plan);
+    const local = (time) => DateTime.fromMillis(Date.parse(time) + delta).setZone(zone).toFormat("yyyy-MM-dd'T'HH:mm");
+    draft = await hostCard(plan, 'draft_plan_change', { plan_id: plan.post_id,
+      starts_local: local(planService.startsAt(plan)), ends_local: local(planService.endsAt(plan)),
+      note: 'The game time changed. This keeps your planned time before or after the game. Guests hear only after you save.' }, expiresAt);
+    if (draft) {
+      // Preserve the provider's seconds; the display-only local labels round to minutes.
+      draft.actions[0].request.body.starts_at = new Date(Date.parse(planService.startsAt(plan)) + delta).toISOString();
+      draft.actions[0].request.body.ends_at = new Date(Date.parse(planService.endsAt(plan)) + delta).toISOString();
+      // The edit endpoint resolves this ID again; only its canonical game facts are saved.
+      draft.actions[0].request.body.details = { ...plan.details, game: { id: current.id, team: current.team } };
+    }
+  }
+  if (!draft) return false;
+  draft.actions[0].request.body.sports_revision = {
+    game: require('../../plans/planGames').scheduleRevision(current),
+    plan_starts_at: planService.startsAt(plan), plan_ends_at: planService.endsAt(plan),
+    plan_updated_at: plan.updated_at,
+  };
+  const result = await sendForHost(plan, {
+    kind: 'plan_game_moved', checkpoint, title: unavailable ? `Game ${current.status}` : 'The game time changed',
+    body: `${current.label}${current.opponent ? ` vs ${current.opponent}` : ''}: ${unavailable ? current.status : whenLabel(current.starts_at, current.ends_at, rules.timezoneForPlan(plan))}. Review your watch party.`,
+    cards: [draft], expiresAt,
+  });
+  return Boolean(result.sent);
+}
+
+async function gameMoves(now) {
+  let sent = 0;
+  for (let offset = 0; ; offset += 300) {
+    const { data, error } = await supabaseAdmin.from('Plan').select(planService.PLAN_SELECT)
+      .eq('kind', 'watch_party').eq('status', 'open').gt('post.event_date', new Date(now).toISOString())
+      .order('post_id').range(offset, offset + 299);
+    if (error) throw new Error(error.message);
+    for (const plan of data || []) {
+      try { if (await checkGameMoved(plan, now)) sent += 1; }
+      catch (err) { logger.warn('plans.game_moved.failed', { planId: plan.post_id, error: err.message }); }
+    }
+    if (!data || data.length < 300) break;
+  }
+  return sent;
+}
+
 // ─── The tick ──────────────────────────────────────────────────────────────
 
 /** The three Plans nudges, each on its own: one failing never stops the others. */
 async function runPlanNudges(now = Date.now()) {
-  const counts = { weather: 0, requests: 0, after: 0 };
-  const steps = [['weather', weatherWatch], ['requests', requestsWaiting], ['after', afterPlans]];
+  const counts = { weather: 0, requests: 0, after: 0, games: 0, moved: 0 };
+  const steps = [['moved', gameMoves], ['weather', weatherWatch], ['requests', requestsWaiting], ['after', afterPlans], ['games', gameDays]];
   for (const [name, step] of steps) {
     try {
       counts[name] = await step(now);
@@ -595,11 +740,16 @@ async function runPlanNudges(now = Date.now()) {
       logger.warn('plans.nudge.step_failed', { step: name, error: err.message });
     }
   }
-  return { ...counts, sent: counts.weather + counts.requests + counts.after };
+  return { ...counts, sent: counts.weather + counts.requests + counts.after + counts.games + counts.moved };
 }
 
 module.exports = {
   runPlanNudges,
+  gameDayFacts,
+  gameDayAction,
+  gameDayFor,
+  checkGameMoved,
+  gameMoves,
   weatherWatch,
   requestsWaiting,
   afterPlans,

@@ -369,11 +369,15 @@ async function draftPlanAlert(args, ctx) {
   const asked = (Array.isArray(args.plan_kinds) ? args.plan_kinds : []).filter((kind, i, list) => list.indexOf(kind) === i);
   const kinds = asked.filter((kind) => allowed.includes(kind));
   if (!kinds.length) return { error: `plan_kinds must name at least one of: ${allowed.join(', ')}.` };
+  const teams = args.teams == null ? [] : args.teams;
+  const { teamById } = require('../plans/planTeams');
+  if (!Array.isArray(teams) || teams.length > 40 || teams.some((id) => typeof id !== 'string' || teamById(id)?.id !== id)) return { error: 'Choose up to 40 known team ids from find_teams.' };
+  if (teams.length && !viewer.sportsFlag) return { error: 'Sports team alerts are not available yet.' };
   const miles = Number.isInteger(args.within_miles) ? Math.min(ALERT_MILES.max, Math.max(ALERT_MILES.min, args.within_miles)) : ALERT_MILES.default;
   const { homes, defaultHomeId } = await homesOf(ctx.userId);
   const home = homes.find((candidate) => candidate.id === defaultHomeId) || homes[0];
   if (!home) return { error: 'Plan alerts measure from their home, and they have none in Pantopus yet. Say so; no card.' };
-  const fact = alertSentence(kinds, miles);
+  const fact = alertSentence(kinds, miles) + (teams.length ? ` Teams: ${[...new Set(teams)].map((id) => teamById(id).label).join(', ')}.` : '');
   const { rows, duplicate } = await alreadySaved(ctx.userId, fact);
   if (duplicate) return { message: 'They already have this plan alert. Say so; no card.' };
   if (rows.length >= LIMIT) return { error: `${SAVED_ELSEWHERE} Say so, and link memory_settings.` };
@@ -384,7 +388,7 @@ async function draftPlanAlert(args, ctx) {
     homeId: home.id,
     homeLabel: labels.get(home.id),
     kind: 'plan_alert',
-    structured: { plan_kinds: kinds, within_miles: miles },
+    structured: { plan_kinds: kinds, within_miles: miles, ...(teams.length ? { teams: [...new Set(teams)] } : {}) },
     used: 'A suggestion when one is posted, at most one a day',
   });
   return cardResult(draft, args.note, 'Tap Remember to turn the alert on.');
@@ -450,6 +454,7 @@ const memoryToolDefinitions = [
       type: 'object',
       properties: {
         plan_kinds: { type: 'array', items: { type: 'string', enum: ['watch_party', 'pickup_game', 'walk_coffee', 'study_group', 'playdate'] }, minItems: 1, maxItems: 5 },
+        teams: { type: ['array', 'null'], items: { type: 'string' }, maxItems: 40, description: 'Optional known team ids from find_teams; match the watch party game team.' },
         within_miles: nullable({ type: 'integer', minimum: ALERT_MILES.min, maximum: ALERT_MILES.max, description: `From their home; null for ${ALERT_MILES.default}.` }),
         note: { type: ['string', 'null'], description: NOTE },
       },
