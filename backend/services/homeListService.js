@@ -127,13 +127,14 @@ function materialize(opening, claims, homeCard) {
 }
 
 // Private setups whose instant claim the address watch held (home claims PR 3): a high watch opens an address-watch
-// case about this person and Home in the admin queue, and the claim stays held until the address is proven, so the
-// apps offer mail verification instead of "Claim it now". A failed read never fails the list; the offer stays.
+// case in the admin queue, about this person at the Home or, when the reasons are the address's (a mail drop, a PO
+// box), about the Home itself, and the claim stays held until the address is proven, so the apps offer mail
+// verification instead of "Claim it now". A failed read never fails the list; the offer stays.
 async function heldClaims(actorId, homeIds) {
   if (!homeIds.length) return new Set();
   try {
-    const { data, error } = await db.from('AddressReviewCase').select('home_id').eq('user_id', actorId)
-      .eq('trigger', 'address_watch').in('status', OPEN_STATUSES).in('home_id', homeIds);
+    const { data, error } = await db.from('AddressReviewCase').select('home_id').eq('trigger', 'address_watch')
+      .in('status', OPEN_STATUSES).in('home_id', homeIds).or(`user_id.eq.${actorId},user_id.is.null`);
     if (error) throw error;
     return new Set((data || []).map(row => row.home_id));
   } catch (err) {
