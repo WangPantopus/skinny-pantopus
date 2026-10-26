@@ -499,6 +499,21 @@ function pickAha(sections, point = null) {
 
   if (!best || best.score < AHA_FLOOR) {
     const facts = calmFacts(byId);
+    // A timed-out or missing layer is not evidence that the address is quiet.
+    // Keep the facts we do have, without an all-clear over failed cards.
+    const incomplete = !byId.size || [...byId.values()].some((env) =>
+      env.status === 'error' || env.status === 'unavailable');
+    if (incomplete) {
+      return {
+        section_id: null,
+        tone: 'info',
+        grade: 'Partial',
+        headline: 'Some public information is still missing',
+        detail: (facts.length ? `${facts.join(', ')}. `.replace(/^./, (m) => m.toUpperCase()) : '')
+          + 'The cards below show what could not be checked. This is not a complete risk picture.',
+        follow_up: 'Save this address to check back later.',
+      };
+    }
     const listed = facts.length
       ? `${facts.join(', ')}.`.replace(/^./, (m) => m.toUpperCase())
       : 'Nothing on the public layers stands out for this spot.';

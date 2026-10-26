@@ -17,7 +17,7 @@
 
 'use client';
 
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
@@ -698,11 +698,37 @@ export default function StartFunnel() {
     retry: false,
   });
 
+  // A fast preview can arrive before its slow public-data requests finish.
+  // They keep warming the server's caches. Give failed cards two chances to
+  // recover, within the caller's free-repeat window; never poll an old tab or
+  // retry a refused lookup. Real outages still leave the manual retry visible.
+  const recovery = useRef({ address: submitted, attempts: 0, firstResponseAt: 0 });
+  const { refetch: refetchPreview } = previewQuery;
+  useEffect(() => {
+    if (recovery.current.address !== submitted) {
+      recovery.current = { address: submitted, attempts: 0, firstResponseAt: 0 };
+    }
+    if (!submitted || !previewQuery.data || previewQuery.isError || previewQuery.isFetching) return;
+    const run = recovery.current;
+    if (!run.firstResponseAt) run.firstResponseAt = previewQuery.dataUpdatedAt;
+    const hasFailedCards = previewQuery.data.sections?.some((section) => section.status === 'error');
+    if (!hasFailedCards || run.attempts >= 2 || Date.now() - run.firstResponseAt >= 60_000) return;
+    const timer = setTimeout(() => {
+      if (document.visibilityState !== 'visible' || Date.now() - run.firstResponseAt >= 60_000) return;
+      run.attempts += 1;
+      void refetchPreview();
+    }, 4_000);
+    return () => clearTimeout(timer);
+  }, [submitted, previewQuery.data, previewQuery.dataUpdatedAt, previewQuery.isError,
+    previewQuery.isFetching, refetchPreview]);
+
   // Funnel: T0 preview rendered — client-reported, because the preview
   // endpoint itself persists nothing by contract. Once per submit.
   const previewStatus = previewQuery.data?.status ?? null;
+  const viewedPreview = useRef<string | null>(null);
   useEffect(() => {
-    if (submitted && previewStatus) {
+    if (submitted && previewStatus && viewedPreview.current !== submitted) {
+      viewedPreview.current = submitted;
       api.recordFunnelEvent('t0_preview_viewed', { status: previewStatus });
     }
   }, [submitted, previewStatus]);
@@ -710,8 +736,10 @@ export default function StartFunnel() {
   // Funnel: the aha rate (D1) — which card led, and whether it was the
   // calm fallback. Section id, tone and grade only; never the address.
   const aha = previewQuery.data?.aha ?? null;
+  const viewedAha = useRef<string | null>(null);
   useEffect(() => {
-    if (submitted && previewStatus === 'ready' && aha) {
+    if (submitted && previewStatus === 'ready' && aha && viewedAha.current !== submitted) {
+      viewedAha.current = submitted;
       api.recordFunnelEvent('t0_aha_viewed', {
         section_id: aha.section_id ?? '',
         tone: aha.tone,

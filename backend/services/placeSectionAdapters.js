@@ -58,9 +58,18 @@ async function fetchJson(url, { headers } = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    const res = await fetch(url, { signal: controller.signal, headers });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
+    // These are read-only public-data requests. EPA occasionally answers a
+    // healthy query with a transient 500; retry once inside the SAME timeout
+    // instead of dropping the whole card or starting a county fallback.
+    // A provider asking us to wait (or throttling us) keeps its own policy.
+    for (let attempt = 0; ; attempt += 1) {
+      const res = await fetch(url, { signal: controller.signal, headers });
+      if (res.ok) return await res.json();
+      if (attempt > 0 || ![500, 502, 503, 504].includes(res.status)
+        || res.headers?.get?.('retry-after')) throw new Error(`HTTP ${res.status}`);
+      await res.body?.cancel();
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
   } finally {
     clearTimeout(timer);
   }
