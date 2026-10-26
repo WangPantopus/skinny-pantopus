@@ -464,11 +464,34 @@ async function createPlan(user, input) {
   return planBodyFor(post.id, viewer);
 }
 
+// Schedule cards are snapshots. A later provider update or host edit requires
+// another review; saving old party times with new game metadata hides the drift.
+async function checkedSportsRevision(viewer, plan, revision, cancelling = false) {
+  if (revision === undefined) return null;
+  const stale = () => fail(409, 'sports_revision_changed', 'The game or your plan changed. Review a new card before saving.');
+  if (!viewer.sportsFlag || plan.kind !== 'watch_party' || !revision?.game
+    || revision.game.id !== plan.details?.game?.id || revision.game.team !== plan.details?.game?.team
+    || revision.plan_updated_at !== plan.updated_at
+    || Date.parse(revision.plan_starts_at) !== Date.parse(planService.startsAt(plan))
+    || Date.parse(revision.plan_ends_at) !== Date.parse(planService.endsAt(plan))) stale();
+  const { games } = await require('../sports/schedule').gamesForTeams([revision.game.team]);
+  const current = games.find((game) => game.id === revision.game.id && game.team === revision.game.team);
+  const { scheduleRevision, gameDetails } = require('./planGames');
+  if (!current || !require('node:util').isDeepStrictEqual(scheduleRevision(current), revision.game)) stale();
+  if (cancelling) {
+    if (!['cancelled', 'postponed'].includes(current.status)) stale();
+    return null;
+  }
+  if (current.status !== 'scheduled' || current.time_tbd || !current.starts_at || !current.ends_at) stale();
+  return gameDetails(current);
+}
+
 // ── Edit ─────────────────────────────────────────────────────
 
 async function editPlan(user, postId, patch, { io = null } = {}) {
   const viewer = await loadViewer(user, { gps: patch.gps });
   const plan = await loadHostedPlan(postId, viewer);
+  const reviewedGame = await checkedSportsRevision(viewer, plan, patch.sports_revision);
   const state = rules.planState(plan, plan.post.event_date, plan.post.event_end_date);
   if (state === 'ended' || state === 'cancelled') fail(409, 'ended', 'This plan is over, so it can’t change.');
 
@@ -541,8 +564,8 @@ async function editPlan(user, postId, patch, { io = null } = {}) {
     planUpdate.join_requirement = oneOf(patch.join_requirement, ['located', 'verified'], 'who can ask');
   }
   if (patch.details !== undefined) {
-    const resolvedGame = viewer.sportsFlag && plan.kind === 'watch_party'
-      ? await require('./planGames').resolveGame(patch.details?.game?.id, patch.details?.game?.team) : null;
+    const resolvedGame = reviewedGame || (viewer.sportsFlag && plan.kind === 'watch_party'
+      ? await require('./planGames').resolveGame(patch.details?.game?.id, patch.details?.game?.team) : null);
     planUpdate.details = normalizeDetails(plan.kind, patch.details, resolvedGame);
   }
 
@@ -601,10 +624,11 @@ async function editPlan(user, postId, patch, { io = null } = {}) {
 
 // ── Cancel ───────────────────────────────────────────────────
 
-async function cancelPlan(user, postId, { note } = {}) {
+async function cancelPlan(user, postId, { note, sports_revision: sportsRevision } = {}) {
   const viewer = await loadViewer(user);
   const plan = await loadHostedPlan(postId, viewer);
   if (plan.status === 'cancelled') return planBodyFor(postId, viewer);
+  await checkedSportsRevision(viewer, plan, sportsRevision, true);
   const state = rules.planState(plan, plan.post.event_date, plan.post.event_end_date);
   if (state === 'ended') fail(409, 'ended', 'This plan is already over.');
   const cancelNote = cleanText(note, 280, 'The note');

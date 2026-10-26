@@ -31,6 +31,14 @@ function gameDetails(game) {
   };
 }
 
+/** Facts a host reviewed when a schedule-change card was drafted. */
+function scheduleRevision(game) {
+  return {
+    id: game.id, team: game.team, status: game.status,
+    starts_at: game.starts_at, ends_at: game.ends_at, time_tbd: Boolean(game.time_tbd),
+  };
+}
+
 function findGame(id) {
   if (typeof id !== 'string' || id.length > 80) return null;
   const game = GAMES.find((candidate) => candidate.id === id);
@@ -166,5 +174,5 @@ async function repeatDetailsForViewer(kind, details, startsAtMillis, user) {
   return out;
 }
 
-module.exports = { upcomingGames, upcomingGamesForTeams, gamesForViewer, suggestedForViewer, resolveGame,
+module.exports = { gameDetails, scheduleRevision, upcomingGames, upcomingGamesForTeams, gamesForViewer, suggestedForViewer, resolveGame,
   findGame, nextGameForTeam, repeatDetails, repeatDetailsForViewer, FAN_RADIUS_METERS };

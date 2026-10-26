@@ -661,12 +661,78 @@ async function gameDays(now) {
   return sent;
 }
 
+// A provider revision proposes a host decision; it never changes a plan or tells guests.
+async function checkGameMoved(plan, now = Date.now()) {
+  const saved = plan.details?.game;
+  if (plan.kind !== 'watch_party' || !saved?.id || !saved.team || plan.status !== 'open'
+    || Date.parse(planService.startsAt(plan)) <= now) return false;
+  const flags = require('../../featureFlagService');
+  if (!await flags.isFeatureEnabled('plans', hostOf(plan)) || !await flags.isFeatureEnabled('plans_sports', hostOf(plan))) return false;
+  const schedule = require('../../sports/schedule');
+  // Refresh through the provider's shared TTL/cache, retaining cancelled and TBD records.
+  const records = await schedule.gamesForTeams([saved.team], now);
+  const current = records.games.find((game) => game.id === saved.id && game.team === saved.team);
+  if (!current) return false;
+  const unavailable = ['postponed', 'cancelled'].includes(current.status);
+  const delta = Date.parse(current.starts_at) - Date.parse(saved.starts_at);
+  if (!unavailable && (current.time_tbd || current.status !== 'scheduled' || !Number.isFinite(delta) || Math.abs(delta) < 15 * 60000)) return false;
+  const checkpoint = require('crypto').createHash('sha1').update(JSON.stringify([saved.id, current.status, current.starts_at, current.time_tbd])).digest('hex');
+  if (!await hostWouldHear(plan, 'plan_game_moved', checkpoint)) return false;
+  const expiresAt = new Date(planService.endsAt(plan));
+  let draft;
+  if (unavailable) {
+    draft = await hostCard(plan, 'draft_plan_cancel', { plan_id: plan.post_id,
+      cancel_note: `The game was ${current.status}.`, note: 'Your plan stays as it is unless you confirm.' }, expiresAt);
+  } else {
+    const zone = rules.timezoneForPlan(plan);
+    const local = (time) => DateTime.fromMillis(Date.parse(time) + delta).setZone(zone).toFormat("yyyy-MM-dd'T'HH:mm");
+    draft = await hostCard(plan, 'draft_plan_change', { plan_id: plan.post_id,
+      starts_local: local(planService.startsAt(plan)), ends_local: local(planService.endsAt(plan)),
+      note: 'The game time changed. This keeps your planned time before or after the game. Guests hear only after you save.' }, expiresAt);
+    if (draft) {
+      // Preserve the provider's seconds; the display-only local labels round to minutes.
+      draft.actions[0].request.body.starts_at = new Date(Date.parse(planService.startsAt(plan)) + delta).toISOString();
+      draft.actions[0].request.body.ends_at = new Date(Date.parse(planService.endsAt(plan)) + delta).toISOString();
+      // The edit endpoint resolves this ID again; only its canonical game facts are saved.
+      draft.actions[0].request.body.details = { ...plan.details, game: { id: current.id, team: current.team } };
+    }
+  }
+  if (!draft) return false;
+  draft.actions[0].request.body.sports_revision = {
+    game: require('../../plans/planGames').scheduleRevision(current),
+    plan_starts_at: planService.startsAt(plan), plan_ends_at: planService.endsAt(plan),
+    plan_updated_at: plan.updated_at,
+  };
+  const result = await sendForHost(plan, {
+    kind: 'plan_game_moved', checkpoint, title: unavailable ? `Game ${current.status}` : 'The game time changed',
+    body: `${current.label}${current.opponent ? ` vs ${current.opponent}` : ''}: ${unavailable ? current.status : whenLabel(current.starts_at, current.ends_at, rules.timezoneForPlan(plan))}. Review your watch party.`,
+    cards: [draft], expiresAt,
+  });
+  return Boolean(result.sent);
+}
+
+async function gameMoves(now) {
+  let sent = 0;
+  for (let offset = 0; ; offset += 300) {
+    const { data, error } = await supabaseAdmin.from('Plan').select(planService.PLAN_SELECT)
+      .eq('kind', 'watch_party').eq('status', 'open').gt('post.event_date', new Date(now).toISOString())
+      .order('post_id').range(offset, offset + 299);
+    if (error) throw new Error(error.message);
+    for (const plan of data || []) {
+      try { if (await checkGameMoved(plan, now)) sent += 1; }
+      catch (err) { logger.warn('plans.game_moved.failed', { planId: plan.post_id, error: err.message }); }
+    }
+    if (!data || data.length < 300) break;
+  }
+  return sent;
+}
+
 // ─── The tick ──────────────────────────────────────────────────────────────
 
 /** The three Plans nudges, each on its own: one failing never stops the others. */
 async function runPlanNudges(now = Date.now()) {
-  const counts = { weather: 0, requests: 0, after: 0, games: 0 };
-  const steps = [['weather', weatherWatch], ['requests', requestsWaiting], ['after', afterPlans], ['games', gameDays]];
+  const counts = { weather: 0, requests: 0, after: 0, games: 0, moved: 0 };
+  const steps = [['moved', gameMoves], ['weather', weatherWatch], ['requests', requestsWaiting], ['after', afterPlans], ['games', gameDays]];
   for (const [name, step] of steps) {
     try {
       counts[name] = await step(now);
@@ -674,7 +740,7 @@ async function runPlanNudges(now = Date.now()) {
       logger.warn('plans.nudge.step_failed', { step: name, error: err.message });
     }
   }
-  return { ...counts, sent: counts.weather + counts.requests + counts.after + counts.games };
+  return { ...counts, sent: counts.weather + counts.requests + counts.after + counts.games + counts.moved };
 }
 
 module.exports = {
@@ -682,6 +748,8 @@ module.exports = {
   gameDayFacts,
   gameDayAction,
   gameDayFor,
+  checkGameMoved,
+  gameMoves,
   weatherWatch,
   requestsWaiting,
   afterPlans,
