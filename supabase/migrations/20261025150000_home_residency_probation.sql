@@ -1,11 +1,13 @@
--- Backwards compatible: yes. Adds one allowed value to HomeOccupancy.verification_source, one FeatureFlag row,
--- one new service-only function, and forward replacements of three existing functions with the same signatures
--- and grants. Only the new function creates a 'probation' occupancy, and only the backend job calls it, so the
--- replaced functions behave exactly as before for every existing row.
+-- Backwards compatible: yes. Adds one allowed value to HomeOccupancy.verification_source, one switched-off
+-- FeatureFlag row, one new service-only function, and forward replacements of three existing functions with the
+-- same signatures and grants. Only the new function creates a 'probation' occupancy, only the backend job calls it,
+-- and it creates none while home_residency_probation is off (its default), so the replaced functions behave exactly
+-- as before for every existing row.
 --
 -- Home claims plan, PR 4: probation join (plan "when-users-claim-an-streamed-willow", approved by the founder on
 -- 2026-10-25 together with 7-day probation for unanswered join requests, for residents only and never for
--- ownership; for residents this reverses April decision D13, "no approval because review is slow").
+-- ownership, behind a flag that ships off until the founder has tested it; for residents this reverses April
+-- decision D13, "no approval because review is slow").
 -- A household-review request that nobody has answered for 7 days is admitted on probation: the existing
 -- provisional state, with source 'probation' and the existing challenge window (7 days, or 14 for a medium
 -- address watch). A high address watch holds the request until it's proven. Waiting alone never opens the
@@ -28,11 +30,12 @@ ALTER TABLE public."HomeOccupancy" VALIDATE CONSTRAINT "HomeOccupancy_verificati
 COMMENT ON COLUMN public."HomeOccupancy".verification_source IS
   'Origin of residency trust: address proof, household consent, retained legacy verification, a claim (an instant claim at an address with no household, or an invitation from someone whose own access is a claim), or probation (a household-review request nobody answered in 7 days; provisional, no household records). Status/access/expiry still apply.';
 
--- On: the founder approved probation. Turning it off (POST /api/admin/feature-flags/home_residency_probation)
--- stops new probation at once; people already on probation stay until a reviewer, a proof or a challenge decides.
+-- Off: it ships off, and the founder turns it on after testing (POST /api/admin/feature-flags/home_residency_probation
+-- with {"enabled_globally": true}). Turning it off again stops new probation at once; people already on probation
+-- stay until a reviewer, a proof or a challenge decides.
 INSERT INTO public."FeatureFlag" (flag_name, enabled_globally, enabled_for_internal_team, beta_user_ids, description)
-VALUES ('home_residency_probation', true, false, ARRAY[]::uuid[],
-  'Probation join: a household-review request nobody answered in 7 days becomes probation (provisional, no household records) until a reviewer decides or the address is proven. Turn it off to stop new probation.')
+VALUES ('home_residency_probation', false, false, ARRAY[]::uuid[],
+  'Probation join: a household-review request nobody answered in 7 days becomes probation (provisional, no household records) until a reviewer decides or the address is proven. Off by default; the founder turns it on after testing. Turn it off to stop new probation.')
 ON CONFLICT (flag_name) DO NOTHING;
 
 -- Admits one unanswered household-review request on probation (backend/jobs/processClaimWindows.js). Residency

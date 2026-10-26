@@ -163,9 +163,11 @@ Flow:
   1. Query: provisional occupancies past challenge_window_ends_at, except probation
   2. promote_home_postcard_review (needs a postcard proved in the window), audit row
   3. Notify the person ("Residency review recorded")
-  4. Probation (home claims PR 4, flag home_residency_probation): household-review requests
-     unanswered for 7 days whose membership is still pending_approval. Address watch first:
-     high holds the request (admin address review case), medium gets a 14-day window, low 7.
+  4. Probation (home claims PR 4, flag home_residency_probation; it ships off and the founder
+     turns it on after testing, and while it's off this step reads nothing): household-review
+     requests unanswered for 7 days whose membership is still pending_approval. Address watch
+     first: high holds the request (admin address review case), medium gets a 14-day window,
+     low 7.
   5. admit_home_residency_probation: provisional, verification_source 'probation', audit row
      RESIDENCY_PROBATION_STARTED; notify the person and the household's reviewers
 ```
