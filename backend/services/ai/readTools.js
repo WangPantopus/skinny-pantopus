@@ -79,6 +79,11 @@ function findPlansDefinition({ playdates = false } = {}) {
 const readToolDefinitions = [
   findPlansDefinition(),
   {
+    name: 'find_teams',
+    description: 'Find teams by name, nickname, city or state; null query returns local suggestions. Use the person’s words and remembered preferences when geography is unhelpful. Return ids for draft_sports_teams; never invent a team or follow one automatically.',
+    input_schema: { type: 'object', properties: { query: { type: ['string', 'null'], maxLength: 100 } }, additionalProperties: false },
+  },
+  {
     name: 'find_games',
     description: "Read listed sports games for a direct question or a watch party the person asked for. Optional team name/id or league; otherwise use their followed and local teams. Never volunteer sports when their sports preference is off. Empty means no game listed, not proof there is no game. Use its id and exact start/end in draft_plan.",
     input_schema: { type: 'object', properties: {
@@ -223,6 +228,19 @@ function planForModel(card, zone) {
     out.place_kind = card.place_kind;
   }
   return out;
+}
+
+async function findTeams(args, ctx) {
+  const user = { id: ctx.userId, role: ctx.user?.role || null };
+  if (!(await plansOn(ctx)) || !(await isFeatureEnabled('plans_sports', user))) return { error: 'Sports teams are not available yet.' };
+  const { searchTeams, publicTeam } = require('../plans/planTeams');
+  const viewer = await loadViewer(user);
+  const query = typeof args.query === 'string' ? args.query.trim().slice(0, 100) : '';
+  const teams = (query ? searchTeams(query) : require('../plans/planGames').suggestedForViewer(viewer)).map(publicTeam);
+  ctx.sportsTeamIds ||= new Set();
+  for (const team of teams) ctx.sportsTeamIds.add(team.id);
+  return { teams, suggested: !query, preferences: viewer.sports || {},
+    note: teams.length ? 'Offer choices, then draft changes for confirmation.' : 'No teams listed here. Ask which team, city or home state they care about; search works nationwide.' };
 }
 
 async function findGames(args, ctx) {
@@ -791,6 +809,7 @@ async function getNotificationSettings(_args, ctx) {
 const READ_EXECUTORS = {
   find_plans: findPlans,
   find_games: findGames,
+  find_teams: findTeams,
   get_plan: getPlan,
   find_posts: findPosts,
   get_post: getPost,
@@ -801,7 +820,7 @@ const READ_EXECUTORS = {
   get_notification_settings: getNotificationSettings,
 };
 
-const PLAN_TOOLS = new Set(['find_plans', 'get_plan', 'find_games']);
+const PLAN_TOOLS = new Set(['find_plans', 'get_plan', 'find_games', 'find_teams']);
 
 async function runReadTool(name, args, ctx) {
   const executor = READ_EXECUTORS[name];

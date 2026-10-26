@@ -367,6 +367,7 @@ function toolContext(userOrCtx) {
     const userId = userOrCtx.userId || userOrCtx.user?.id;
     // Calls in one turn share resolved game perspectives despite the context copy below.
     userOrCtx.sportsGames ||= new Map();
+    userOrCtx.sportsTeamIds ||= new Set();
     return { ...userOrCtx, userId, user: userOrCtx.user || { id: userId } };
   }
   return { userId: userOrCtx, user: { id: userOrCtx } };
