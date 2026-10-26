@@ -14,6 +14,7 @@ final class PlanTeamsModel {
     var error: String?
     private let api: APIClient
     private let scope: HomeClaimSessionScope
+    private var preferencesGeneration = 0
 
     static let leagues = ["nfl", "nba", "wnba", "mlb", "nhl", "mls", "nwsl", "ncaaf"]
     static func leagueLabel(_ id: String) -> String {
@@ -26,15 +27,22 @@ final class PlanTeamsModel {
     }
 
     func load() async {
+        guard !saving else { return }
+        preferencesGeneration += 1
+        let generation = preferencesGeneration
         loaded = false
         do {
             try scope.requireCurrent()
             let reply: FeedPreferencesResponse = try await api.request(FeedActionsEndpoints.feedPreferences())
             try scope.requireCurrent()
+            guard generation == preferencesGeneration else { return }
             preferences = reply.preferences.sports ?? SportsPreferencesDTO()
             loaded = true
             await search()
-        } catch { self.error = "Couldn't load your teams. Try again." }
+        } catch {
+            guard generation == preferencesGeneration else { return }
+            self.error = "Couldn't load your teams. Try again."
+        }
     }
 
     func search() async {
@@ -57,14 +65,20 @@ final class PlanTeamsModel {
     @discardableResult
     func save(_ patch: SportsPreferencesDTO) async -> Bool {
         guard !saving, scope.isCurrent else { return false }
+        preferencesGeneration += 1
+        let expected = loaded ? preferences : nil
         saving = true
         defer { saving = false }
         do {
             let reply: FeedPreferencesResponse = try await api.request(
-                FeedActionsEndpoints.updateFeedPreferences(FeedPreferencesUpdateRequest(sports: patch))
+                FeedActionsEndpoints.updateFeedPreferences(
+                    FeedPreferencesUpdateRequest(sports: patch, expectedSports: expected),
+                    dispatchGuard: { [scope] in try scope.requireCurrent() }
+                )
             )
             try scope.requireCurrent()
             preferences = reply.preferences.sports ?? SportsPreferencesDTO()
+            loaded = true
             error = nil
             return true
         } catch {
@@ -87,10 +101,12 @@ final class PlanTeamsModel {
     }
 
     func unhide(_ id: String) async {
+        guard loaded else { return }
         await save(SportsPreferencesDTO(hidden: (preferences.hidden ?? []).filter { $0 != id }))
     }
 
     func toggleLeague(_ id: String) async {
+        guard loaded else { return }
         let leagues = preferences.leagues ?? []
         await save(SportsPreferencesDTO(watch: "on", leagues: leagues.contains(id) ? leagues.filter { $0 != id } : leagues + [id]))
     }

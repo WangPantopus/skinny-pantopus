@@ -170,6 +170,7 @@ class HostFlowViewModel
         private var placesSearch: Job? = null
         private var placesRead: Job? = null
         private var suggestJob: Job? = null
+        private var gamesGeneration = 0
 
         private val _ui =
             MutableStateFlow(
@@ -253,6 +254,7 @@ class HostFlowViewModel
         }
 
         private suspend fun loadContext(gameId: String?) {
+            val generation = ++gamesGeneration
             val payload = (viewing.current() as? NetworkResult.Success)?.data ?: viewing.currentCopy()
             val home = payload?.homes?.firstOrNull()?.let { HostHome(it.id, it.name, it.city, it.latitude, it.longitude) }
             val homePoints = payload?.homes.orEmpty().mapNotNull { h -> h.latitude?.let { lat -> h.longitude?.let { lat to it } } }
@@ -260,7 +262,9 @@ class HostFlowViewModel
             val games = reply?.games.orEmpty()
             // Hosting a playdate needs a verified address (`/mine` says where the person stands; unknown means yes).
             val verified = (repository.mineCopy() ?: repository.mine().data)?.viewer?.verifiedAddress ?: true
-            _ui.update { it.copy(home = home, homePoints = homePoints, games = games, sports = reply?.sports, canHostPlaydates = verified) }
+            _ui.update { it.copy(home = home, homePoints = homePoints, canHostPlaydates = verified) }
+            if (generation != gamesGeneration) return
+            _ui.update { it.copy(games = games, sports = reply?.sports) }
             warmPlaces(home)
             val draft = _ui.value.draft
             when {
@@ -279,8 +283,10 @@ class HostFlowViewModel
             }
 
         fun refreshGames() {
+            val generation = ++gamesGeneration
             viewModelScope.launch {
                 val reply = (repository.games("composer") as? NetworkResult.Success)?.data ?: return@launch
+                if (generation != gamesGeneration) return@launch
                 _ui.update { it.copy(games = reply.games, sports = reply.sports) }
                 if (_ui.value.draft.gameId != null && reply.games.none { it.id == _ui.value.draft.gameId }) {
                     pickGame(null)
