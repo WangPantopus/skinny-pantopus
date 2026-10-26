@@ -343,6 +343,9 @@ async function checkedPlanInput(viewer, input) {
     : (oneOf(input.join_requirement, ['located', 'verified'], 'who can ask') || 'located');
   const resolvedGame = viewer.sportsFlag && kind === 'watch_party'
     ? await require('./planGames').resolveGame(input.details?.game?.id, input.details?.game?.team) : null;
+  if (viewer.sportsFlag && kind === 'watch_party' && /^(tsdb|cfbd):/.test(input.details?.game?.id || '') && !resolvedGame) {
+    fail(409, 'game_unavailable', 'This game is no longer available. Choose another game or enter your own.');
+  }
   const details = normalizeDetails(kind, input.details, resolvedGame);
   await assertHostLimits(viewer.id);
   return { kind, title, about, guestNote, spots, place, autoRules, joinRequirement, details };
@@ -566,6 +569,9 @@ async function editPlan(user, postId, patch, { io = null } = {}) {
   if (patch.details !== undefined) {
     const resolvedGame = reviewedGame || (viewer.sportsFlag && plan.kind === 'watch_party'
       ? await require('./planGames').resolveGame(patch.details?.game?.id, patch.details?.game?.team) : null);
+    if (viewer.sportsFlag && plan.kind === 'watch_party' && /^(tsdb|cfbd):/.test(patch.details?.game?.id || '') && !resolvedGame) {
+      fail(409, 'game_unavailable', 'This game is no longer available. Choose another game or enter your own.');
+    }
     planUpdate.details = normalizeDetails(plan.kind, patch.details, resolvedGame);
   }
 

@@ -17,7 +17,9 @@ async function seasonGames(year) {
       if (!Array.isArray(games)) throw new Error('Invalid schedule');
       return games;
     }));
-    return [...new Map(seasons.flat().map((game) => [game.id, game])).values()];
+    return [...new Map(seasons.flat()
+      .filter((game) => game && typeof game === 'object')
+      .map((game) => [game.id, game])).values()];
   } catch (error) {
     const safe = new Error('College football schedule unavailable');
     if (error.name === 'TimeoutError' || error.name === 'AbortError') safe.name = error.name;

@@ -155,8 +155,9 @@ async function resolveGame(id, team) {
   const manual = findGame(id);
   const { teamById } = require('./planTeams');
   if (manual) return { ...manual, team: teamById(manual.team)?.id || manual.team };
-  const game = await require('../sports/schedule').findCachedGame(id, team);
-  if (!game || game.time_tbd || game.status !== 'scheduled' || !game.starts_at || !game.ends_at) return null;
+  const schedule = require('../sports/schedule');
+  const game = await schedule.findCachedGame(id, team);
+  if (!game || !schedule.isAvailable(game)) return null;
   return gameDetails(game);
 }
 
