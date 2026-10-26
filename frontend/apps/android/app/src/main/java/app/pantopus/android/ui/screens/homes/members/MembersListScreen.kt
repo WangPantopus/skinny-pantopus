@@ -167,6 +167,10 @@ fun MembersListScreen(
                 actionsTarget = null
                 viewModel.requestRemoval(target.userId)
             },
+            onConfirmClaim = {
+                actionsTarget = null
+                viewModel.confirmClaim(target.userId)
+            },
             onDismiss = { actionsTarget = null },
         )
     }
@@ -237,6 +241,7 @@ private fun MemberActionsDialog(
     target: MemberActionTarget,
     onChangeRole: () -> Unit,
     onRemove: () -> Unit,
+    onConfirmClaim: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
@@ -249,6 +254,12 @@ private fun MemberActionsDialog(
                         onClick = onChangeRole,
                         modifier = Modifier.fillMaxWidth().testTag("membersList_changeRole"),
                     ) { Text("Change role") }
+                }
+                if (target.canConfirmClaim) {
+                    TextButton(
+                        onClick = onConfirmClaim,
+                        modifier = Modifier.fillMaxWidth().testTag("membersList_confirmClaimAction"),
+                    ) { Text("Yes, they live here") }
                 }
                 if (target.canRemove) {
                     TextButton(

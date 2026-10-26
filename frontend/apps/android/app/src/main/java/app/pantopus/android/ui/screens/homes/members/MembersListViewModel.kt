@@ -10,6 +10,7 @@ import app.pantopus.android.data.api.models.homes.HomeAccessDto
 import app.pantopus.android.data.api.models.homes.HomeAuditEntryDto
 import app.pantopus.android.data.api.models.homes.HouseholdAccessRequestDto
 import app.pantopus.android.data.api.models.homes.InvitationDto
+import app.pantopus.android.data.api.models.homes.MemberClaimReviewDto
 import app.pantopus.android.data.api.models.homes.OccupantDto
 import app.pantopus.android.data.api.models.homes.OccupantsResponse
 import app.pantopus.android.data.api.models.homes.PendingInviteDto
@@ -113,6 +114,8 @@ data class MemberActionTarget(
     val currentRole: String?,
     val assignableRoles: List<HomeAssignableRole>,
     val canRemove: Boolean,
+    /** "Yes, they live here": the viewer proved the address and this member's claim steps back for it. */
+    val canConfirmClaim: Boolean = false,
 )
 
 /**
@@ -354,6 +357,24 @@ class MembersListViewModel
             val target = actionTarget(occupant, displayName(occupant))
             if (!target.canRemove) return
             _pendingEvent.value = MembersListEvent.ConfirmRemove(target.userId, target.name)
+        }
+
+        /**
+         * `POST /api/homes/:id/members/:userId/confirm-claim` — "Yes, they live
+         * here" (`backend/routes/homeIam.js:314`). The roster refetches so the
+         * row shows the confirmation; the server's message shows on failure.
+         */
+        fun confirmClaim(userId: String) {
+            val occupant = occupants.singleOrNull { it.userId == userId } ?: return
+            if (!actionTarget(occupant, displayName(occupant)).canConfirmClaim) return
+            _actionError.value = null
+            viewModelScope.launch {
+                when (val result = adminRepo.confirmClaimMember(homeId, userId)) {
+                    is NetworkResult.Success -> fetch()
+                    is NetworkResult.Failure ->
+                        _actionError.value = result.error.displayMessage("Could not confirm this member")
+                }
+            }
         }
 
         /** Review an explicit withdrawal; current server authority is checked before submission. */
@@ -744,16 +765,20 @@ class MembersListViewModel
                     emptyList()
                 }
             val targetIsOwner = occ.role?.lowercase() == "owner"
+            // Someone who proved the address decides about a claim (`claim_review`), without managing members.
+            val claimReview = if (isSelf) null else occ.claimReview
             val canRemove =
                 if (isSelf) {
                     true
                 } else {
-                    canManageMembers &&
-                        !targetIsOwner &&
-                        HomeRoleAssignment.canMutate(
-                            actorRole = if (actorIsOwner) "owner" else access?.roleBase,
-                            targetRole = occ.role,
-                        )
+                    (
+                        canManageMembers &&
+                            !targetIsOwner &&
+                            HomeRoleAssignment.canMutate(
+                                actorRole = if (actorIsOwner) "owner" else access?.roleBase,
+                                targetRole = occ.role,
+                            )
+                    ) || (claimReview?.canRemove == true && !targetIsOwner)
                 }
             return MemberActionTarget(
                 userId = occ.userId,
@@ -761,6 +786,7 @@ class MembersListViewModel
                 currentRole = occ.role,
                 assignableRoles = assignable,
                 canRemove = canRemove,
+                canConfirmClaim = claimReview?.canConfirm == true,
             )
         }
 
@@ -775,9 +801,10 @@ class MembersListViewModel
             val palette = role.palette
             val name = displayName(occ)
             val target = actionTarget(occ, name)
-            val hasActions = target.assignableRoles.isNotEmpty() || target.canRemove
+            val hasActions = target.assignableRoles.isNotEmpty() || target.canRemove || target.canConfirmClaim
+            val claimNote = claimNote(occ.claimReview)
             val joined =
-                relativeText(
+                claimNote ?: relativeText(
                     occ.joinedAt ?: occ.startAt ?: occ.createdAt,
                     now = now,
                     zone = zone,
@@ -804,7 +831,7 @@ class MembersListViewModel
                     },
                 body = joined,
                 subtitleIcon = role.icon,
-                bodyIcon = joined?.let { PantopusIcon.Clock },
+                bodyIcon = if (claimNote != null) PantopusIcon.ShieldAlert else joined?.let { PantopusIcon.Clock },
                 inlineChip =
                     RowChip(
                         text = role.label,
@@ -817,6 +844,16 @@ class MembersListViewModel
                     ),
             )
         }
+
+        /** The line a viewer who proved the address sees on a claim member's row (same copy as web and iOS). */
+        internal fun claimNote(review: MemberClaimReviewDto?): String? =
+            when {
+                review == null -> null
+                review.setAside ->
+                    "Claimed this home before you verified your address. They can’t see the home’s codes, " +
+                        "documents, bills or emergency info until you confirm they live here."
+                else -> "Claimed this home. A verified resident confirmed they live here."
+            }
 
         internal fun rowForPending(
             invite: PendingInviteDto,

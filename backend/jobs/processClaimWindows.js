@@ -46,6 +46,8 @@ async function processExpiredClaimWindows() {
           link: `/homes/${row.home_id}/residency`, metadata: { home_id: row.home_id },
         });
       } catch (_) { logger.warn('[processClaimWindows] Status notification unavailable'); }
+      // A proof beats a claim: anyone whose claim now steps back, and the person who proved it, are told.
+      await require('../services/homeInstantClaimService').tellProofOverClaims({ homeId: row.home_id, provenUserId: row.user_id });
     }
     if (rows.length < 200) break;
   }
