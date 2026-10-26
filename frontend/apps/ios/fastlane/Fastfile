@@ -134,6 +134,10 @@ platform :ios do
     )
   end
 
+  # Keep App Review information in App Store Connect. A notes-only metadata
+  # file makes deliver set demo_account_required=false, even when credentials
+  # are already saved there. The approved notes live in the release checklist;
+  # neither listing nor release should upload partial review information.
   desc "Prepare an App Store version with metadata and screenshots, without submitting (listing version:2.0.4)"
   lane :listing do |options|
     upload_to_app_store(

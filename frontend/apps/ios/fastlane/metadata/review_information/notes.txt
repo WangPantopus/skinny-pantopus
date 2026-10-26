@@ -1,9 +1,0 @@
-Pantopus 2.0.4 updates the existing Pantopus app (com.pantopus.app). It brings the current native experience to the same listing.
-
-Start with the address preview, which does not require an account. Sign in using the dedicated review account supplied in App Review Information to access the household and community features.
-
-The main tabs are Place, Today, Nearby, Plans, and Messages. Place contains household tasks, members, documents, and emergency information. Today shows address-based weather, air quality, local information, pickup schedules, and reminders. Nearby contains Pulse and Neighborhood. Plans supports local plans and join requests. Messages contains conversations. The menu provides additional account and community tools.
-
-The upgrade preserves account sign-ins through the account transfer, while homes, tasks, posts, messages, and other product content start fresh. The public update notes disclose this reset.
-
-Exact home and plan details follow membership and approval permissions. A reviewer account with a prepared synthetic household is needed to inspect restricted household features. No real resident information is needed for review.

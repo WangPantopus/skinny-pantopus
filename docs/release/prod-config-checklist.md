@@ -1194,6 +1194,34 @@ bundle exec fastlane listing
 
 The `release` lanes submit/promote builds and remain founder actions. The existing store links on the website already point to the correct original records.
 
+Android's `beta` and `listing` lanes disable Fastlane's automatic retry of a
+rejected `changes_not_sent_for_review` request. If Play rejects the hold, the
+command fails for founder review; do not retry without the flag as part of
+draft preparation.
+
+**App Review information**
+
+Manage the review account, **Sign-in required** setting and notes directly in
+App Store Connect. The iOS `listing` and `release` lanes leave those saved
+details untouched. Do not add a notes-only file to
+`fastlane/metadata/review_information/`: Fastlane sets **Sign-in required** to
+false when it uploads notes without both demo credentials, even if credentials
+are already saved in App Store Connect. Keep credentials outside the repository.
+
+Approved notes for the founder to paste into the editable version's **App
+Review Information → Notes**, retaining **Sign-in required** and the private
+review account, then verify after saving:
+
+> Pantopus 2.0.4 updates the existing Pantopus app (com.pantopus.app). It brings the current native experience to the same listing.
+>
+> Start with the address preview, which does not require an account. Sign in using the dedicated review account supplied in App Review Information to access the household and community features.
+>
+> The main tabs are Place, Today, Nearby, Plans, and Messages. Place contains household tasks, members, documents, and emergency information. Today shows address-based weather, air quality, local information, pickup schedules, and reminders. Nearby contains Pulse and Neighborhood. Plans supports local plans and join requests. Messages contains conversations. The menu provides additional account and community tools.
+>
+> The upgrade preserves account sign-ins through the account transfer, while homes, tasks, posts, messages, and other product content start fresh. The public update notes disclose this reset.
+>
+> Exact home and plan details follow membership and approval permissions. A reviewer account with a prepared synthetic household is needed to inspect restricted household features. No real resident information is needed for review.
+
 **Android key recovery, October 23:** after the initial Mac file search found
 no matching keystore, the existing Expo CLI login provided access to the
 original project's matching Android build credentials. The original key and
