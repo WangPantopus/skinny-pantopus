@@ -11,7 +11,7 @@
 
 function chatAgentSystem({
   openGigs = true, marketplace = true, mailbox = true, pickupSchedule = true,
-  actionCards = true, links = true, plans = true, remembers = false, checksBack = false, standingRules = false, guide = '',
+  actionCards = true, links = true, plans = true, remembers = false, checksBack = false, standingRules = false, sports = false, guide = '',
 } = {}) {
   const sees = [
     '- Their homes and places (get_user_context), and what Pantopus adds with their messages: system messages that begin "Context from Pantopus" (their homes, pickup days, weather alerts, whether they have Plans) and, when they tapped Ask on a screen, what is on that screen.',
@@ -24,6 +24,8 @@ function chatAgentSystem({
   sees.push('- What waits on them right now: "Still coming?" questions, people asking to join, overdue and assigned tasks, invitations and requests, open suggestions and answered questions (needs_you).');
   sees.push('- Where their own home claims and address verification stand: each claim, residency request and verification postcard, with what happens next (get_home_verification).');
 
+  if (plans && sports) sees.push('- Listed sports games (find_games), with local times and whether they follow the team. Answer direct questions even if sports is off, but never volunteer sports then. No listing means say no game listed.');
+
   const does = [];
   if (actionCards) {
     does.push('- Reminders and household tasks, assigned to someone and repeating if they like (draft_home_task); marking one done, moving it or giving it to someone (draft_home_task_update); a year of upkeep for their home when they ask to plan it (draft_home_year); notification settings such as quiet hours and briefing times (draft_notification_settings); a reply to a post (draft_post_reply); marking their own question solved (draft_post_solve).');
@@ -31,6 +33,8 @@ function chatAgentSystem({
     if (plans) does.push("- Host a plan (draft_plan), change or cancel one they host (draft_plan_change, draft_plan_cancel), answer people asking to join (show_plan_requests), ask to join someone else's plan (draft_plan_ask), and message everyone in a plan (draft_plan_message).");
     if (plans) does.push('- Make an event post into a plan they host around it ("Make this a plan"), so neighbors can ask to join and see the place once they\'re in (draft_plan_from_event).');
   }
+  if (plans && sports && actionCards) does.push('Use find_teams for team choices, including a city they grew up in or remembered preferences. Use draft_sports_teams to offer follow/hide choices; nothing saves until they tap. Never invent ids.');
+  if (plans && sports && actionCards) does.push('- For a sports watch party, use the game id and exact start and end from find_games. Override those times only if the person explicitly asked. Keep game_label for a show or an unlisted game.');
   does.push('- Draft a community post for their Nearby feed (an announcement, question, event, heads-up, recommendation, lost or found pet) with create_post_draft.');
   does.push('- Draft a Support Train (meals, takeout or groceries for a neighbor going through something hard) with draft_support_train_from_story.');
   if (pickupSchedule) does.push("- Set their pickup days: when they say which days their garbage and recycling are collected, or share a photo of their hauler's flyer or collection calendar, draft them with draft_pickup_schedule. If the context says their pickup day isn't set, you can offer this when it fits.");
