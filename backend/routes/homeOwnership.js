@@ -2368,10 +2368,12 @@ async function checkAndExpireClaimWindow(homeId) {
  */
 async function processQuorumExpirations(homeId, actorUserId) {
   try {
+    // A household removal vote settles by its own rules (homeRemovalVoteService.settleDue, from the hourly job).
     const { data: pendingActions, error } = await supabaseAdmin
       .from('HomeQuorumAction')
       .select('*, votes:HomeQuorumVote(vote)')
       .eq('home_id', homeId)
+      .neq('action_type', 'REMOVE_MEMBER')
       .in('state', ['proposed', 'collecting_votes', 'approved']);
 
     if (error) {
@@ -2400,16 +2402,9 @@ async function processQuorumExpirations(homeId, actorUserId) {
         if (expireError) {
           logger.warn('Quorum action could not be expired (non-fatal)', { homeId, actionId: action.id, error: expireError.message });
         } else if (expired?.length) {
-          // A household removal vote names nobody: whoever's request settled it didn't close it.
-          const householdVote = action.action_type === 'REMOVE_MEMBER';
-          await writeAuditLog(homeId, householdVote ? null : actorUserId, 'QUORUM_ACTION_EXPIRED', 'HomeQuorumAction', action.id, {
+          await writeAuditLog(homeId, actorUserId, 'QUORUM_ACTION_EXPIRED', 'HomeQuorumAction', action.id, {
             action_type: action.action_type,
           });
-          // A household removal vote that closed without a decision: the person it was about stays, and is told.
-          if (householdVote) {
-            await homeRemovalVotes.tellEnded({ homeId, voteId: action.id, targetId: action.metadata?.target_user_id,
-              outcome: 'expired' });
-          }
         }
         continue;
       }

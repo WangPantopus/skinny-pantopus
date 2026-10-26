@@ -450,6 +450,8 @@ export interface HouseholdRemovalVote {
   about_you: boolean;
   opened_at: string;
   closes_at: string;
+  /** A vote that passes takes effect no sooner than this (72 hours after it opened), so the member can contest. */
+  contest_until: string | null;
   contested: boolean;
   my_vote: 'remove' | 'keep' | null;
   can_vote: boolean;
@@ -463,7 +465,7 @@ export async function getRemovalVotes(homeId: string): Promise<{ votes: Househol
 }
 
 export async function startRemovalVote(homeId: string, targetUserId: string): Promise<{
-  vote: { id: string; closes_at: string; replayed: boolean };
+  vote: { id: string; closes_at: string; contest_until: string | null; replayed: boolean };
 }> {
   return post(`/api/homes/${homeId}/removal-votes`, { target_user_id: targetUserId });
 }
@@ -471,7 +473,7 @@ export async function startRemovalVote(homeId: string, targetUserId: string): Pr
 export async function castRemovalVote(homeId: string, voteId: string, vote: 'remove' | 'keep'): Promise<{
   my_vote: 'remove' | 'keep';
   ended: boolean;
-  outcome: 'removed' | 'kept' | 'review' | 'not_applied' | null;
+  outcome: 'removed' | 'kept' | 'review' | 'not_applied' | 'withdrawn' | null;
 }> {
   return post(`/api/homes/${homeId}/removal-votes/${voteId}/vote`, { vote });
 }

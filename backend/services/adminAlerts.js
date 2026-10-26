@@ -115,4 +115,48 @@ async function notifyReportToReview({ kind, reason, reportId }) {
   }
 }
 
-module.exports = { notifyClaimToReview, notifyReportToReview, recipients };
+/**
+ * A household removal vote passed, but the member it was about proved the address and contested it, so an
+ * AddressReviewCase (trigger removal_vote) waits for Pantopus and the member keeps access until it's decided
+ * (homeRemovalVoteService). One email per case with the case id and how to decide it; never names or the address.
+ * No admin screen lists these cases yet, so the email says which API calls do.
+ *
+ * @param {object} params
+ * @param {string} params.caseId
+ * @param {object} [params.home] The Home row (city, state): city only is printed.
+ * @returns {Promise<boolean>} true when an email was handed to the mailer.
+ */
+async function notifyRemovalVoteToReview({ caseId, home }) {
+  const to = recipients();
+  if (!to.length || !caseId) return false;
+
+  const where = [home && home.city, home && home.state].filter(Boolean).join(', ') || 'unknown area';
+  const subject = `[Pantopus] Contested household vote to review · ${where}`;
+  const resolve = `POST /api/admin/address-review/${caseId}/resolve`;
+  const text = [
+    'A household voted to remove a member who proved the address and contested the vote. They keep access until it\'s decided.',
+    '',
+    `Case: ${caseId}`,
+    `Area: ${where}`,
+    '',
+    `Decide it: ${resolve} with {"outcome": "approved"} to remove them, or "rejected" or "dismissed" to keep them.`,
+    'Open cases: GET /api/admin/address-review/queue',
+  ].join('\n');
+  const html = `<p>A household voted to remove a member who <strong>proved the address and contested</strong> the vote. They keep access until it’s decided.</p>
+<ul>
+  <li>Case: <code>${caseId}</code></li>
+  <li>Area: ${where}</li>
+</ul>
+<p>Decide it: <code>${resolve}</code> with <code>{"outcome": "approved"}</code> to remove them, or <code>"rejected"</code> or <code>"dismissed"</code> to keep them.</p>
+<p>Open cases: <code>GET /api/admin/address-review/queue</code></p>`;
+
+  try {
+    await emailService.sendEmail({ to: to.join(','), subject, text, html });
+    return true;
+  } catch (err) {
+    logger.warn('adminAlerts: removal-vote-to-review email failed (non-fatal)', { caseId, error: err.message });
+    return false;
+  }
+}
+
+module.exports = { notifyClaimToReview, notifyReportToReview, notifyRemovalVoteToReview, recipients };
