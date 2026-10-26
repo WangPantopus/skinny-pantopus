@@ -8,7 +8,6 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.plans.CreatePlanBody
 import app.pantopus.android.data.api.models.plans.PlanDetailsDto
 import app.pantopus.android.data.api.models.plans.PlanGameDto
-import app.pantopus.android.data.api.models.plans.PlanGameRefDto
 import app.pantopus.android.data.api.models.plans.PlanGpsInput
 import app.pantopus.android.data.api.models.plans.PlanNearbyPlaceDto
 import app.pantopus.android.data.api.models.plans.PlanPlaceInput
@@ -739,7 +738,7 @@ class HostFlowViewModel
             game: PlanGameDto?,
         ): PlanDetailsDto =
             when (kind) {
-                PlanKind.WATCH_PARTY -> PlanDetailsDto(game = game?.let { PlanGameRefDto(it.label, it.startsAt) })
+                PlanKind.WATCH_PARTY -> PlanDetailsDto(game = game?.reference())
                 PlanKind.PLAYDATE -> PlanDetailsDto(kidsAgeBands = draft.kidsAgeBands.toList())
                 PlanKind.PICKUP_GAME -> PlanDetailsDto(sport = draft.sport, level = draft.level, extraGear = draft.extraGear)
                 PlanKind.WALK_COFFEE -> PlanDetailsDto(walkKind = draft.walkKind, pace = draft.pace, dogsWelcome = draft.dogsWelcome)

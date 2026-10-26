@@ -200,7 +200,13 @@ interface PlansApi {
 
     /** `GET /api/plans/games`: upcoming games for the next 14 days. */
     @GET("api/plans/games")
-    suspend fun games(): PlanGamesResponse
+    suspend fun games(
+        @Query("latitude") latitude: Double? = null,
+        @Query("longitude") longitude: Double? = null,
+        @Query("gps_latitude") gpsLatitude: Double? = null,
+        @Query("gps_longitude") gpsLongitude: Double? = null,
+        @Query("gps_timestamp") gpsTimestamp: String? = null,
+    ): PlanGamesResponse
 
     /**
      * `GET /api/plans/places/nearby`: public places for H6, nearest first, or with the plan's [kind] (and a pickup

@@ -22,6 +22,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -54,6 +56,8 @@ import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
 import app.pantopus.android.ui.theme.pantopusShadow
+import kotlinx.coroutines.delay
+import java.time.Instant
 
 /** Font scale at which chip groups turn into full-width rows (board P2: "at large text"). */
 internal const val LARGE_TEXT_SCALE = 1.3f
@@ -437,3 +441,13 @@ fun PlanDivider(modifier: Modifier = Modifier) {
 
 /** Keeps a control at least [TOUCH_TARGET] wide. */
 fun Modifier.planTouchTarget(): Modifier = this.heightIn(min = TOUCH_TARGET).widthIn(min = TOUCH_TARGET)
+
+/** Refreshes game availability while the chips or suggestion remain on screen. */
+@Composable
+internal fun rememberGameTime(): State<Instant> =
+    produceState(Instant.now()) {
+        while (true) {
+            delay(30_000L)
+            value = Instant.now()
+        }
+    }
