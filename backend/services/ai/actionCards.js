@@ -1682,7 +1682,7 @@ async function draftSportsTeams(args, ctx) {
     title,
     lines: [follow.length ? line('Follow', labels(follow)) : null, hide.length ? line('Hide', labels(hide)) : null],
     actions: [action('confirm', 'Save teams', { method: 'PUT', path: '/api/posts/feed-preferences',
-      body: { sports, expected_user_id: ctx.userId } }, { label: 'Teams saved', link: linkFor('notification_settings') })],
+      body: { sports, expected_sports: current, expected_user_id: ctx.userId } }, { label: 'Teams saved', link: linkFor('notification_settings') })],
   }), args.note, 'Tap Save teams to confirm your choices.');
 }
 

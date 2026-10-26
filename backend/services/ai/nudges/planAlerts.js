@@ -47,10 +47,16 @@ async function newPlans(now) {
 
 /** The alerts for this kind of plan, one per person (the widest distance they asked for). */
 async function alertsFor(kind, team = null) {
+  // Filter team subscriptions before the recipient cap; unrelated teams must
+  // not crowd a matching subscription out of the query. Only catalog ids enter
+  // the PostgREST expression; missing/empty lists retain generic kind alerts.
+  const canonicalTeam = require('../../plans/planTeams').teamById(team);
+  const teamFilter = canonicalTeam?.id === team ? `,structured->teams.cs.${JSON.stringify([team])}` : '';
   const { data, error } = await supabaseAdmin.from('AgentMemoryItem')
     .select('id, user_id, home_id, structured')
     .eq('kind', 'plan_alert')
     .contains('structured', { plan_kinds: [kind] })
+    .or(`structured->teams.is.null,structured->teams.eq.[]${teamFilter}`)
     .order('created_at', { ascending: true })
     .limit(PEOPLE_PER_PLAN);
   if (error) throw new Error(`Plan alerts read failed: ${error.message}`);

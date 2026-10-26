@@ -213,6 +213,7 @@ public struct FeedPreferencesResponse: Decodable, Sendable, Hashable {
 /// Body for `PUT /api/posts/feed-preferences`. Every field is optional —
 /// the handler only writes the keys that are present.
 public struct FeedPreferencesUpdateRequest: Encodable, Sendable, Hashable {
+    public let expectedSports: SportsPreferencesDTO?
     public let sports: SportsPreferencesDTO?
     public let hideDealsPlace: Bool?
     public let hideAlertsPlace: Bool?
@@ -224,12 +225,19 @@ public struct FeedPreferencesUpdateRequest: Encodable, Sendable, Hashable {
         hideAlertsPlace: Bool? = nil,
         showPoliticsConnections: Bool? = nil,
         showPoliticsPlace: Bool? = nil,
-        sports: SportsPreferencesDTO? = nil
+        sports: SportsPreferencesDTO? = nil,
+        expectedSports: SportsPreferencesDTO? = nil
     ) {
+        self.expectedSports = expectedSports
         self.sports = sports
         self.hideDealsPlace = hideDealsPlace
         self.hideAlertsPlace = hideAlertsPlace
         self.showPoliticsConnections = showPoliticsConnections
         self.showPoliticsPlace = showPoliticsPlace
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case sports, hideDealsPlace, hideAlertsPlace, showPoliticsConnections, showPoliticsPlace
+        case expectedSports = "expected_sports"
     }
 }
