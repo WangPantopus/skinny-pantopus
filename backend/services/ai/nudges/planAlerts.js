@@ -51,7 +51,7 @@ async function alertsFor(kind, team = null) {
   // not crowd a matching subscription out of the query. Only catalog ids enter
   // the PostgREST expression; missing/empty lists retain generic kind alerts.
   const canonicalTeam = require('../../plans/planTeams').teamById(team);
-  const teamFilter = canonicalTeam?.id === team ? `,structured->teams.cs.${JSON.stringify([team])}` : '';
+  const teamFilter = canonicalTeam ? `,structured->teams.cs.${JSON.stringify([canonicalTeam.id])}` : '';
   const { data, error } = await supabaseAdmin.from('AgentMemoryItem')
     .select('id, user_id, home_id, structured')
     .eq('kind', 'plan_alert')
@@ -62,7 +62,7 @@ async function alertsFor(kind, team = null) {
   if (error) throw new Error(`Plan alerts read failed: ${error.message}`);
   const byUser = new Map();
   for (const alert of data || []) {
-    if (alert.structured?.teams?.length && !alert.structured.teams.includes(team)) continue;
+    if (alert.structured?.teams?.length && !alert.structured.teams.includes(canonicalTeam?.id)) continue;
     const miles = Number(alert.structured?.within_miles) || 3;
     const known = byUser.get(alert.user_id);
     if (!known || miles > known.miles) byUser.set(alert.user_id, { ...alert, miles });
@@ -109,7 +109,7 @@ async function alertOne(plan, alert, area) {
   const userId = String(alert.user_id);
   if (userId === String(plan.host_user_id)) return false;
   const viewer = await loadViewer({ id: userId, role: null });
-  if (alert.structured?.teams?.length && (!viewer.sportsFlag || !alert.structured.teams.includes(plan.details?.game?.team))) return false;
+  if (alert.structured?.teams?.length && (!viewer.sportsFlag || !alert.structured.teams.includes(require('../../plans/planTeams').teamById(plan.details?.game?.team)?.id))) return false;
   const miles = milesFromHome(viewer, alert, area);
   if (miles == null || miles > alert.miles) return false;
   // As the viewer, through the plan service: visible to them, and theirs to ask (not in it, not blocked).
