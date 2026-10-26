@@ -159,6 +159,14 @@ struct HomeResidencyCurrentReview: Equatable {
         fields["residency_session"]?.dictValue?["session_scope"]?.stringValue ?? ""
     }
 
+    /// Nobody answered their request in 7 days (home claims PR 4), so a rejection also ends their membership.
+    /// Older servers omit `verification_source`.
+    var onProbation: Bool {
+        guard let occupancy else { return false }
+        return occupancy["verification_source"]?.stringValue == "probation" && occupancy["is_active"] == .bool(true)
+            && occupancy["verification_status"]?.stringValue == "provisional"
+    }
+
     func matches(_ scope: HomeResidencyReviewScope, claimId: String, expectedSession: String?) -> Bool {
         guard scope.isValid, HomePostalValidation.uuid(claimId), fields["ok"] == .bool(true),
               fields["home_id"]?.stringValue == scope.homeId,

@@ -51,7 +51,18 @@ data class PersonalHomeResidencyProgress(
     val request: PersonalHomeResidencyRequest?,
     @Json(name = "current_access") val currentAccess: String,
     @Json(name = "next_step") val nextStep: String,
+    /**
+     * Probation (home claims PR 4), for a request nobody in the household answered in 7 days: "active" until someone
+     * there says yes or the address is verified by mail, "ended" after a no (proof by mail is the way back), "review"
+     * while Pantopus reviews that proof, and "declined" when Pantopus kept the household's no (new proof by mail opens
+     * another review; an approval restores the membership instead). It has its own field because [nextStep] stays
+     * what older apps know. Older servers omit it, and a value this app doesn't know falls back to [nextStep].
+     */
+    val probation: String? = null,
 ) {
+    /** Proof by mail ends probation, and it's the way back after a no (Pantopus reviews it then, again if needed). */
+    val verifiesOnProbation: Boolean get() = probation in setOf("active", "ended", "declined")
+
     fun matches(home: String): Boolean =
         homeId == home && homeTaskUUID(homeId) &&
             currentAccess in setOf("shared", "private_setup", "none") &&
@@ -65,6 +76,33 @@ data class PersonalHomeResidencyProgress(
     val needsResidencyRequest: Boolean get() = nextStep == "address_verification" && request == null
 
     val title: String get() =
+        when (probation) {
+            "active" -> "You're on probation"
+            "ended" -> "The household said no"
+            "review" -> "Pantopus is reviewing your proof"
+            "declined" -> "Pantopus kept the household's answer"
+            else -> stepTitle
+        }
+
+    val explanation: String get() =
+        when (probation) {
+            "active" ->
+                "Nobody in the household answered your request in 7 days, so you're on probation. " +
+                    "Household records stay private until someone there says yes or you verify your address by mail."
+            "ended" ->
+                "Someone in the household said you don't live here, so your probation ended. If you do live here, " +
+                    "verify your address by mail. Pantopus will review your proof, and your access stays off until then."
+            "review" ->
+                "You verified this address by mail after the household said no. Pantopus is reviewing it, " +
+                    "and your access stays off until then."
+            "declined" ->
+                "Pantopus reviewed your proof of this address and kept the household's no. If you have new proof, " +
+                    "you can verify by mail again and Pantopus will take another look."
+            else -> stepExplanation
+        }
+
+    // What next_step alone says. Moshi's generated adapter needs every property visible, so these aren't private.
+    val stepTitle: String get() =
         when (nextStep) {
             "home" -> "You're part of this household"
             "household_review" -> "Waiting for household review"
@@ -75,7 +113,7 @@ data class PersonalHomeResidencyProgress(
             else -> "This Home can't be verified right now"
         }
 
-    val explanation: String get() =
+    val stepExplanation: String get() =
         when (nextStep) {
             "home" -> "Open the Home to see your household. What you can see and change depends on your role."
             "household_review" ->

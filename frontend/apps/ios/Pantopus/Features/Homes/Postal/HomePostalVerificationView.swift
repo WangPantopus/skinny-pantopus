@@ -109,7 +109,7 @@ struct HomePostalVerificationView: View {
             Text(HomePostalMessages.explanation(kind: draft.kind, outcome: result)).pantopusTextStyle(.body)
             if viewModel.isWorking { ProgressView("Checking…") }
             if viewModel.canAcknowledge {
-                Button(result?.state == "completed" ? "Done" : "Start over") {
+                Button(result?.state == "completed" || HomePostalMessages.sentForReview(result) ? "Done" : "Start over") {
                     Task { await viewModel.acknowledge() }
                 }
                 .frame(minHeight: 44).accessibilityIdentifier("homePostalAcknowledge")
