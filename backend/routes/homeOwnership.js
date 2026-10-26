@@ -167,6 +167,31 @@ async function markHomeSecurityDisputed(_homeId) {
   return;
 }
 
+/**
+ * Tell the people who can open this Home's ownership claims (GET /:id/ownership-claims) about one: its verified owners
+ * and a legacy owner pointer, each with ownership.manage now, never `exceptIds`. Runs after the change committed and
+ * never rejects; an unreadable owner or access check leaves that person out.
+ */
+async function notifyHomeOwners(homeId, exceptIds, send) {
+  try {
+    const [owners, home] = await Promise.all([
+      supabaseAdmin.from('HomeOwner').select('subject_id').eq('home_id', homeId)
+        .eq('subject_type', 'user').eq('owner_status', 'verified'),
+      supabaseAdmin.from('Home').select('owner_id, name, address').eq('id', homeId).maybeSingle(),
+    ]);
+    const candidates = new Set([...(owners.error ? [] : owners.data || []).map(row => row.subject_id),
+      home.error ? null : home.data?.owner_id].filter(id => id && !exceptIds.includes(id)));
+    const homeName = home.data?.name || home.data?.address || null;
+    for (const userId of candidates) {
+      let access;
+      try { access = await checkHomePermission(homeId, userId, 'ownership.manage'); } catch { continue; }
+      if (access.hasAccess) await send(userId, homeName);
+    }
+  } catch (err) {
+    logger.warn('Owner notice failed after commit', { homeId, error: err.message });
+  }
+}
+
 async function getVerifiedHouseholdAuthority(homeId, userId) {
   const [ownerResult, occupancyResult, homeResult] = await Promise.all([
     supabaseAdmin
@@ -411,6 +436,11 @@ router.post('/:id/ownership-claims', verifyToken, ownershipClaimLimiter, validat
       });
     }
 
+    // Tell the current owners. Not awaited, so the claimant's opaque answer takes the same time whether or not
+    // the home has owners to tell.
+    notifyHomeOwners(claim.home_id, [userId], (ownerUserId, homeName) => require('../services/notificationService')
+      .notifyNewOwnershipClaim({ ownerUserId, homeName, homeId: claim.home_id, claimId: claim.id })).catch(() => {});
+
     // ── BUG 5A: Property data match — auto-verify against public records ──
     if (method === 'property_data_match' && propertyDataService.isAvailable()) {
       try {
@@ -627,6 +657,11 @@ router.post('/:id/ownership-claims/:claimId/resolve-relationship', verifyToken, 
       homeId, claimId, actorId: userId, action, note,
       requestId: req.body.request_id, reviewToken: req.body.review_token,
     });
+    // A flag that turned the claim into a dispute tells the other owners; the flagging owner already knows.
+    if (!result.replayed && result.receipt.result.qualifies_for_dispute === true) {
+      notifyHomeOwners(result.homeId, [userId, result.claimantId], (ownerUserId, homeName) => require('../services/notificationService')
+        .notifyOwnershipDispute({ userId: ownerUserId, homeName, homeId: result.homeId, claimId: result.claimId })).catch(() => {});
+    }
     const message = result.replayed
       ? 'Original relationship decision confirmed; current claim refreshed'
       : action === 'decline_relationship'
@@ -766,6 +801,9 @@ router.post('/:id/ownership-claims/:claimId/challenge', verifyToken, validate(ch
       note: note || null,
       claim_strength: challengeStrength,
     });
+
+    notifyHomeOwners(claim.home_id, [userId], (ownerUserId, homeName) => require('../services/notificationService')
+      .notifyOwnershipDispute({ userId: ownerUserId, homeName, homeId: claim.home_id, claimId: claim.id })).catch(() => {});
 
     res.json({
       message: 'Ownership challenge opened',

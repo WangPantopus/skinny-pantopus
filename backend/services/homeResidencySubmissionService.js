@@ -39,6 +39,39 @@ async function rpc(name, args) {
   if (r.state === 'rejected' && (!Object.hasOwn(MESSAGES, r.code) || ![400, 403, 404, 409, 422].includes(r.status))) throw failure();
   return r;
 }
+// Tell the people who can approve a household-review request that it is waiting. This runs after the admission
+// committed and cannot change it. get_legacy_home_residency_reviewers rechecks the exact pending claim and each
+// reviewer's current authority; each reviewer's notice has a key, so a retry or a resubmission of the unchanged claim
+// tells nobody twice. A failed read or notice only means no notice. Shared with the legacy POST /:id/claim, which
+// passes the claim version it saved; a submission command keeps only the claim id, so its claim is read as saved now.
+async function notifyReviewers({ homeId, actorId, claimId, claimUpdatedAt = null, claimedRole }) {
+  try {
+    let version = claimUpdatedAt;
+    if (!version) {
+      const { data: claim, error: claimError } = await db.from('HomeResidencyClaim').select('updated_at')
+        .eq('id', claimId).eq('home_id', homeId).eq('user_id', actorId).maybeSingle();
+      if (claimError || typeof claim?.updated_at !== 'string') return;
+      version = claim.updated_at;
+    }
+    const { data, error } = await db.rpc('get_legacy_home_residency_reviewers', { p_home_id: homeId, p_actor_id: actorId,
+      p_claim_id: claimId, p_claim_updated_at: version });
+    const reviewers = data?.reviewer_ids;
+    if (error || data?.ok !== true || data.home_id !== homeId || data.actor_id !== actorId || data.claim_id !== claimId
+      || !Array.isArray(reviewers) || !reviewers.length || new Set(reviewers).size !== reviewers.length
+      || reviewers.some(id => typeof id !== 'string' || !UUID.test(id) || id === actorId)) return;
+    const [people, home] = await Promise.all([require('./chatPeople').loadChatPeople([actorId]),
+      db.from('Home').select('name, address').eq('id', homeId).maybeSingle()]);
+    const claimantName = people.get(String(actorId))?.displayName || null;
+    const homeName = home?.data?.name || home?.data?.address || null;
+    const { notifyResidencyClaim } = require('./notificationService');
+    for (const userId of reviewers) {
+      await notifyResidencyClaim({ authorityUserId: userId, claimantName, homeName, homeId, claimantId: actorId, claimedRole,
+        claimId, idempotencyKey: `residency-claim:${claimId}:${version}:${userId}` });
+    }
+  } catch (_) {
+    // The notice is not proof of inbox or device delivery, and the saved request stands without it.
+  }
+}
 async function submit(input) {
   const args = identity(input), { intent } = input;
   const fields = { line1: 255, line2: 255, city: 100, state: 50, postal_code: 20, country: 100 };
@@ -49,7 +82,12 @@ async function submit(input) {
     || Object.keys(address).some(key => !Object.hasOwn(fields, key))
     || Object.entries(fields).some(([key, max]) => typeof address[key] !== 'string' || address[key].length > max
       || (key !== 'line2' && !address[key].trim()))) throw failure('RESIDENCY_SUBMISSION_INVALID', 400);
-  return rpc('submit_home_residency', { ...args, p_intent: intent });
+  const result = await rpc('submit_home_residency', { ...args, p_intent: intent });
+  if (result.state === 'completed' && result.replayed === false && result.routing === 'household_review') {
+    await notifyReviewers({ homeId: args.p_home_id, actorId: args.p_actor_id, claimId: result.claim_id,
+      claimedRole: result.claimed_role });
+  }
+  return result;
 }
 async function read(input) { return rpc('get_home_residency_submission', identity(input)); }
 async function cancel(input) { return rpc('cancel_home_residency_submission', identity(input)); }
@@ -75,4 +113,4 @@ function sendError(res, error) {
   const safe = Object.hasOwn(MESSAGES, error?.code) || error?.code === 'RESIDENCY_SUBMISSION_UNAVAILABLE' ? error : failure();
   return res.status(safe.statusCode).json({ code: safe.code, error: safe.message });
 }
-module.exports = { submit, read, cancel, send, sendError };
+module.exports = { submit, read, cancel, send, sendError, notifyReviewers };
