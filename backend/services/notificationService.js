@@ -73,7 +73,7 @@ const PERSONAL_TEMPLATES = [
   { name: 'ownership_claim_rejected', pushTitle: 'Home verification not approved', pushBody: '{reason}' },
   { name: 'ownership_claim_needs_more_info', pushTitle: 'More info needed', pushBody: 'We need additional details for {home.name}.' },
   { name: 'new_ownership_claim', pushTitle: 'New ownership claim', pushBody: 'Someone submitted an ownership claim for {home.name}.' },
-  { name: 'ownership_dispute', pushTitle: 'Ownership dispute', pushBody: 'Someone with strong ownership documents disputes who owns {home.name}.' },
+  { name: 'ownership_dispute', pushTitle: 'Ownership dispute', pushBody: 'Someone filed ownership documents that dispute who owns {home.name}. Pantopus will review them.' },
   { name: 'mail_delivered', pushTitle: 'Mail delivered', pushBody: 'New mail at {mailbox.id}.' },
   { name: 'density_milestone', pushTitle: 'Neighborhood milestone reached', pushBody: '{message}' },
   { name: 'household_access_request', pushTitle: 'Household access request', pushBody: '{actor.displayName} requested access to your home.' },
@@ -1107,7 +1107,7 @@ async function notifyNewOwnershipClaim({ ownerUserId, homeName, homeId, claimId 
 }
 
 /**
- * Tell a current owner that an ownership claim backed by strong ownership documents now disputes the household.
+ * Tell a current owner that someone filed documents disputing ownership; the documents still need review.
  * Pantopus reviews it in the admin claims queue. Dispute escalation is off (routes/homeOwnership.js
  * markHomeSecurityDisputed), so nothing at the home is restricted meanwhile; the dispute center page only redirects,
  * so the link opens the claim review, which marks the claim as needing admin review.
@@ -1117,7 +1117,7 @@ async function notifyOwnershipDispute({ userId, homeName, homeId, claimId }) {
     userId,
     type: 'ownership_dispute',
     title: 'Ownership dispute',
-    body: `Someone with strong ownership documents disputes who owns ${homeName || 'your home'}. Pantopus will review it. Your access hasn't changed.`,
+    body: `Someone filed ownership documents that dispute who owns ${homeName || 'your home'}. Pantopus will review them. Your access hasn't changed.`,
     icon: '⚖️',
     link: `/homes/${homeId}/owners/review-claim?tab=ownership`,
     metadata: { home_id: homeId, claim_id: claimId },

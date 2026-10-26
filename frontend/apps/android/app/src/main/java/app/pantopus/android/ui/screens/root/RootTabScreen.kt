@@ -2547,7 +2547,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 DeepLinkRouter.consume()
             }
             is DeepLinkRouter.Destination.HomeClaimReview -> {
-                navController.navigate(ChildRoutes.homeClaimReview(pending.id, residency = true))
+                navController.navigate(ChildRoutes.homeClaimReview(pending.id, residency = pending.residency))
                 DeepLinkRouter.consume()
             }
             is DeepLinkRouter.Destination.HomeOwnersTransfer -> {
