@@ -22,6 +22,9 @@ public struct PulseComposeView: View {
     @State private var isLoadingMedia = false
     @State private var showsPhotosPicker = false
     @State private var showsPlacePicker = false
+    @State private var showsCamera = false
+    /// Photos added from the AI assist card: a suggestion follows them.
+    @State private var suggestsAfterPicking = false
     /// The "Before you ask" post open over the composer.
     @State private var openedEarlierPost: OpenedEarlierPost?
     @Environment(\.dismiss) private var dismiss
@@ -83,7 +86,7 @@ public struct PulseComposeView: View {
         FormShell(
             title: viewModel.displayTitle,
             rightActionLabel: viewModel.ctaLabel,
-            isValid: viewModel.isValid && !isLoadingMedia,
+            isValid: viewModel.isValid && !isLoadingMedia && !viewModel.isSuggesting,
             isDirty: viewModel.isDirty,
             isSaving: viewModel.isSubmitting,
             onClose: closeCompose,
@@ -127,6 +130,7 @@ public struct PulseComposeView: View {
                 if let error { viewModel.toast = ToastMessage(text: error, kind: .error) }
                 isLoadingMedia = false
                 showsPhotosPicker = false
+                suggestAfterPicking(media.count)
             }
             .interactiveDismissDisabled()
         })
@@ -150,6 +154,20 @@ public struct PulseComposeView: View {
         } onCancellation: {
             isLoadingMedia = false
         }
+        .fullScreenCover(isPresented: $showsCamera, onDismiss: { suggestsAfterPicking = false }, content: {
+            SystemCameraPicker(isPresented: $showsCamera) { image in
+                // Re-encoding drops the capture's metadata; a JPEG over the post upload's 10 MB is scaled down.
+                let jpeg = image.jpegData(compressionQuality: 0.85).flatMap { $0.count <= 10 * 1024 * 1024 ? $0 : nil }
+                    ?? ListingPhotoProcessor.uploadData(from: image)
+                guard let jpeg else {
+                    viewModel.toast = ToastMessage(text: "Couldn't use that photo. Try again.", kind: .error)
+                    return
+                }
+                viewModel.append(photo: PulseComposePhoto(data: jpeg, mimeType: "image/jpeg", filename: "camera-\(UUID().uuidString).jpg"))
+                suggestAfterPicking(1)
+            }
+            .ignoresSafeArea()
+        })
         .sheet(isPresented: $showsPlacePicker) {
             PlacePickerSheet(
                 currentTag: viewModel.selectedPlaceTag,
@@ -214,6 +232,14 @@ public struct PulseComposeView: View {
         return nil
     }
 
+    /// After photos from the assist card arrive, the suggestion follows on its own.
+    private func suggestAfterPicking(_ added: Int) {
+        guard suggestsAfterPicking else { return }
+        suggestsAfterPicking = false
+        guard added > 0 else { return }
+        Task { await viewModel.suggestPost() }
+    }
+
     private func closeCompose() {
         if managesDismiss {
             dismiss()
@@ -235,6 +261,23 @@ public struct PulseComposeView: View {
             PulseComposeContent(
                 state: viewModel.contentState,
                 actions: actions
+            )
+            // Words the AI suggested are checked before they go out under the person's name.
+            .alert(
+                "Post this?",
+                isPresented: Binding(
+                    get: { viewModel.aiPostConfirmation != nil },
+                    set: { if !$0 { viewModel.keepEditingAIPost() } }
+                ),
+                actions: {
+                    Button("Keep editing", role: .cancel) { viewModel.keepEditingAIPost() }
+                        .accessibilityIdentifier("composePulseAIConfirmKeepEditing")
+                    Button("Post") { Task { await viewModel.confirmAIPost() } }
+                        .accessibilityIdentifier("composePulseAIConfirmPost")
+                },
+                message: {
+                    Text(viewModel.aiPostConfirmation ?? "")
+                }
             )
         }
     }
@@ -264,7 +307,19 @@ public struct PulseComposeView: View {
             onDismissPrecheckNudge: { viewModel.precheckNudge = nil },
             onAddLocation: { showsPlacePicker = true },
             onClearLocation: { viewModel.clearPlaceTag() },
-            onOpenEarlierPost: { openedEarlierPost = OpenedEarlierPost(id: $0) }
+            onOpenEarlierPost: { openedEarlierPost = OpenedEarlierPost(id: $0) },
+            onSuggest: { Task { await viewModel.suggestPost() } },
+            onUndoSuggestion: { viewModel.undoSuggestion() },
+            onAssistTakePhoto: {
+                suggestsAfterPicking = true
+                showsCamera = true
+            },
+            onAssistChoosePhotos: {
+                suggestsAfterPicking = true
+                isLoadingMedia = true
+                showsPhotosPicker = true
+            },
+            onTakePhoto: { showsCamera = true }
         )
     }
 }
@@ -298,7 +353,12 @@ public extension PulseComposeViewModel {
             // Edits open on a Connections target; the header names the post's own (fixed) audience.
             postingTargetLabel: isEditing ? visibility.label : postingTarget?.displayLabel,
             isNetworkTarget: !isEditing && postingTarget?.isNetworkTarget == true,
-            earlierAnswers: earlierAnswers
+            earlierAnswers: earlierAnswers,
+            assist: isEditing ? nil : assist,
+            assistHasMaterial: assistHasMaterial,
+            assistPhotoCount: assistPhotoCount,
+            assistCanUndo: canUndoSuggestion,
+            canTakePhoto: UIImagePickerController.isSourceTypeAvailable(.camera)
         )
     }
 }

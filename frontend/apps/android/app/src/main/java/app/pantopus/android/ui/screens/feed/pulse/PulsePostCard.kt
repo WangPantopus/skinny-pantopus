@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -179,77 +180,85 @@ fun PulsePostCard(
         modifier =
             modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(Radii.xl))
-                .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.xl))
                 .background(PantopusColors.appSurface)
                 .then(if (onTap != null) Modifier.clickable(onClick = onTap) else Modifier)
-                .padding(Spacing.s3)
+                .padding(top = Spacing.s4)
                 .semantics(mergeDescendants = true) {
                     contentDescription = buildA11yLabel(content)
                 }
                 .testTag("pulsePostCard_${content.id}"),
         verticalArrangement = Arrangement.spacedBy(Spacing.s2),
     ) {
-        CardHeader(
-            content = content,
-            onOverflow = onOverflow,
-            onDismissSeeded = onDismissSeeded,
-        )
-        if (!content.title.isNullOrEmpty()) {
-            Text(
-                text = content.title,
-                fontSize = 13.5.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = PantopusColors.appText,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+        Column(modifier = Modifier.padding(horizontal = Spacing.s4), verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+            CardHeader(
+                content = content,
+                onOverflow = onOverflow,
+                onDismissSeeded = onDismissSeeded,
             )
-        }
-        if (content.body.isNotEmpty()) {
-            Text(
-                text = postLinkedText(content.body),
-                fontSize = 12.5.sp,
-                color = PantopusColors.appTextStrong,
-                maxLines = if (!content.title.isNullOrEmpty()) 2 else 3,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        // An Event's when and where, under its text (as on the web card).
-        content.event?.let { event ->
-            PulseEventDetailRows(
-                details = event,
-                page = false,
-                whenTag = "pulsePostEventWhen_${content.id}",
-                placeTag = "pulsePostEventPlace_${content.id}",
-            )
+            if (!content.title.isNullOrEmpty()) {
+                Text(
+                    text = content.title,
+                    fontSize = 13.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = PantopusColors.appText,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (content.body.isNotEmpty()) {
+                Text(
+                    text = postLinkedText(content.body),
+                    fontSize = 12.5.sp,
+                    color = PantopusColors.appTextStrong,
+                    maxLines = if (!content.title.isNullOrEmpty()) 2 else 3,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            // An Event's when and where, under its text (as on the web card).
+            content.event?.let { event ->
+                PulseEventDetailRows(
+                    details = event,
+                    page = false,
+                    whenTag = "pulsePostEventWhen_${content.id}",
+                    placeTag = "pulsePostEventPlace_${content.id}",
+                )
+            }
         }
         if (content.media.isNotEmpty()) {
             PostMediaGridWithViewer(
                 items = content.media,
                 style = PostMediaGridStyle.Compact,
                 testTag = "pulsePostMedia_${content.id}",
+                usesSharpPreviews = true,
+                edgeToEdge = true,
             )
         }
-        content.attendees?.let { attendees ->
-            AttendeeStrip(attendees = attendees, onRSVP = onRSVP, postId = content.id)
-        }
-        // A tip has nothing to react to: its id isn't a post.
-        if (!content.actions.isSeeded) {
-            ReactionStrip(
-                content = content,
-                onPrimary = onPrimaryReaction,
-                onToggleSave = onToggleSave,
-                onToggleRepost = onToggleRepost,
-            )
-            if (content.likePending || content.savePending) {
-                Text(
-                    "Pending",
-                    fontSize = 11.sp,
-                    color = PantopusColors.appTextSecondary,
-                    modifier = Modifier.testTag("pulsePostPending_${content.id}"),
+        Column(
+            modifier = Modifier.padding(horizontal = Spacing.s4).padding(bottom = Spacing.s4),
+            verticalArrangement = Arrangement.spacedBy(Spacing.s2),
+        ) {
+            content.attendees?.let { attendees ->
+                AttendeeStrip(attendees = attendees, onRSVP = onRSVP, postId = content.id)
+            }
+            // A tip has nothing to react to: its id isn't a post.
+            if (!content.actions.isSeeded) {
+                ReactionStrip(
+                    content = content,
+                    onPrimary = onPrimaryReaction,
+                    onToggleSave = onToggleSave,
+                    onToggleRepost = onToggleRepost,
                 )
+                if (content.likePending || content.savePending) {
+                    Text(
+                        "Pending",
+                        fontSize = 11.sp,
+                        color = PantopusColors.appTextSecondary,
+                        modifier = Modifier.testTag("pulsePostPending_${content.id}"),
+                    )
+                }
             }
         }
+        HorizontalDivider(color = PantopusColors.appBorderSubtle, thickness = 1.dp)
     }
 }
 

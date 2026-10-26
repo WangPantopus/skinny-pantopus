@@ -37,9 +37,9 @@ public final class NewMessageViewModel {
     /// frame. Pure constants for now.
     public let emptyHeadline = "Search for someone to message"
     public let emptyBody =
-        "You can message anyone on Pantopus. Search by name, " +
-        "or invite someone who isn't on the platform yet."
-    public let emptySearchHints = ["A neighbor's name", "Your block", "A local business"]
+        "Find people by name or username, " +
+        "or invite someone who isn't on Pantopus yet."
+    public let emptySearchHints = ["A neighbor's name", "A username", "A local business"]
 
     private let api: APIClient
     private let onSelect: @MainActor (NewMessageDestination) -> Void
@@ -56,7 +56,8 @@ public final class NewMessageViewModel {
     /// responses with a stale value are dropped so the rendered
     /// "All verified" rows always reflect the most recent query.
     private var searchSequence: Int = 0
-    private var searchFailed = false
+    public private(set) var searchFailed = false
+    public private(set) var isSearching = false
 
     init(
         api: APIClient = .shared,
@@ -73,6 +74,7 @@ public final class NewMessageViewModel {
     // MARK: - Public API
 
     public func load() async {
+        if !normalizedSearch.isEmpty { scheduleSearch() }
         if loadedOnce { return }
         state = .loading
         await fetchInitial()
@@ -83,11 +85,12 @@ public final class NewMessageViewModel {
     }
 
     public func updateSearch(_ value: String) {
-        guard searchText != value else { return }
-        searchText = value
-        searchFailed = false
-        rebuild()
-        scheduleSearch(value)
+        let text = String(value.prefix(100))
+        guard searchText != text else { return }
+        let previous = normalizedSearch
+        searchText = text
+        guard normalizedSearch != previous else { return }
+        scheduleSearch()
     }
 
     public func clearSearch() {
@@ -96,14 +99,19 @@ public final class NewMessageViewModel {
 
     /// Runs the failed people search again for the same text.
     public func retrySearch() {
-        searchFailed = false
-        rebuild()
-        scheduleSearch(searchText)
+        scheduleSearch()
     }
 
     public func tapCancel() {
-        searchTask?.cancel()
+        stopSearch()
         onCancel()
+    }
+
+    public func stopSearch() {
+        searchSequence += 1
+        searchTask?.cancel()
+        searchTask = nil
+        isSearching = false
     }
 
     public func tapInvite() {
@@ -131,7 +139,7 @@ public final class NewMessageViewModel {
         async let connectionsTask = fetchConnections()
         async let recentsTask = fetchRecents()
         let (connectionsOK, recentsOK) = await (connectionsTask, recentsTask)
-        if !connectionsOK && !recentsOK {
+        if !connectionsOK && !recentsOK && normalizedSearch.isEmpty && accepted.isEmpty && recents.isEmpty {
             state = .error(message: "Couldn't load contacts. Try again.")
             return
         }
@@ -175,15 +183,14 @@ public final class NewMessageViewModel {
 
     // MARK: - Search
 
-    private func scheduleSearch(_ query: String) {
-        searchTask?.cancel()
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.count >= 2 else {
-            verifiedResults = []
-            rebuild()
-            return
-        }
-        searchSequence += 1
+    private func scheduleSearch() {
+        stopSearch()
+        let trimmed = normalizedSearch
+        verifiedResults = []
+        searchFailed = false
+        isSearching = trimmed.count >= 2
+        rebuild()
+        guard isSearching else { return }
         let seq = searchSequence
         searchTask = Task { [weak self] in
             // 280ms debounce — matches the backend rate-limit budget
@@ -206,16 +213,18 @@ public final class NewMessageViewModel {
                 UsersEndpoints.search(query: query, limit: 20)
             )
             // Drop the response if the user has typed again since.
-            guard sequence == searchSequence else { return }
+            guard sequence == searchSequence, !Task.isCancelled else { return }
+            isSearching = false
             verifiedResults = response.users
             searchFailed = false
             rebuild()
         } catch {
-            guard sequence == searchSequence else { return }
+            guard sequence == searchSequence, !Task.isCancelled else { return }
             // Search failures don't tip the whole screen into error
             // state — the Connections + Recent sections stay visible.
             // We clear "All verified"; with nothing else to show, the
             // body says the search failed rather than "No matches".
+            isSearching = false
             verifiedResults = []
             searchFailed = true
             rebuild()
@@ -290,8 +299,9 @@ public final class NewMessageViewModel {
         return NewMessageSection(id: .allVerified, label: "People", rows: rows)
     }
 
-    private var normalizedSearch: String {
-        searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    public var normalizedSearch: String {
+        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return String(trimmed.drop { $0 == "@" }).lowercased()
     }
 
     // MARK: - Row mapping (pure projections, public for tests)

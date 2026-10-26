@@ -444,9 +444,15 @@ function publicDetails(plan) {
     'subject', 'study_style']) {
     if (details[key] !== undefined && details[key] !== null) out[key] = details[key];
   }
-  // A watch party's game time is the plan's time; it is public like the plan's.
+  // Schedule facts are public; the host can choose a different party time.
   if (out.game && typeof out.game === 'object') {
-    out.game = { label: out.game.label || null, starts_at: iso(out.game.starts_at) };
+    const game = out.game;
+    out.game = { label: game.label || null, starts_at: iso(game.starts_at) };
+    for (const [key, limit] of [['id', 80], ['team', 40], ['opponent', 60]]) {
+      if (typeof game[key] === 'string') out.game[key] = game[key].slice(0, limit);
+    }
+    if (typeof game.home === 'boolean') out.game.home = game.home;
+    if (game.ends_at) out.game.ends_at = iso(game.ends_at);
   }
   return out;
 }

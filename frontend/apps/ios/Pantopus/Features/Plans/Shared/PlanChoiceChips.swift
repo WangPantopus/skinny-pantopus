@@ -22,6 +22,7 @@ struct PlanChoiceChips<ID: Hashable>: View {
     /// What the group is, for VoiceOver ("Who's coming").
     let groupLabel: String
     var identifier: String?
+    var menu: ((ID) -> AnyView)?
 
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var width: CGFloat = 400
@@ -63,6 +64,7 @@ struct PlanChoiceChips<ID: Hashable>: View {
         }
         .buttonStyle(.plain)
         .frame(minHeight: 44)
+        .contextMenu { menu?(option.id) }
         .disabled(!option.isEnabled)
         .opacity(option.isEnabled ? 1 : 0.5)
         .accessibilityLabel(option.label)
@@ -88,6 +90,7 @@ struct PlanChoiceChips<ID: Hashable>: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .contextMenu { menu?(option.id) }
                 .disabled(!option.isEnabled)
                 .opacity(option.isEnabled ? 1 : 0.5)
                 .accessibilityLabel(option.label)

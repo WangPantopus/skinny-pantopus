@@ -57,7 +57,7 @@ DO $$ DECLARE h uuid:=pg_temp.rq_id(100); a uuid:=pg_temp.rq_id(1); r jsonb; n i
    r:=public.submit_legacy_home_residency(h,pg_temp.rq_id(n),jsonb_build_object(
      'claimed_role',CASE WHEN n%2=0 THEN 'tenant' ELSE 'member' END,'claimed_address','Private asserted address'));
    ASSERT r->>'ok'='true' AND r->>'routing'='household_review', 'Actual synthetic admission must save pending claims';
-   -- The queue needs 30 people on household review; past 10 new people in 30 days the per-Home limit (20261025090000)
+   -- The queue needs 30 people on household review; past 10 new people in 30 days the per-Home limit (20261026090000)
    -- sends a request to proof by mail instead.
    UPDATE public."HomeResidencyClaim" SET created_at=created_at-interval '31 days' WHERE home_id=h AND user_id=pg_temp.rq_id(n);
  END LOOP;

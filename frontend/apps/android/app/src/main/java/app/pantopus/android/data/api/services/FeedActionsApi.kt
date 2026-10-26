@@ -10,6 +10,7 @@ import app.pantopus.android.data.api.models.feed.FeedPreferencesUpdateRequest
 import app.pantopus.android.data.api.models.feed.FeedSeededDismissResponse
 import app.pantopus.android.data.api.models.feed.FeedSolveResponse
 import app.pantopus.android.data.api.models.feed.MutedEntitiesResponse
+import app.pantopus.android.data.auth.AuthenticatedDispatchGuard
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
@@ -19,6 +20,7 @@ import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Path
+import retrofit2.http.Tag
 
 /**
  * Feed-row moderation + feed-preference routes from
@@ -124,5 +126,6 @@ interface FeedActionsApi {
     @PUT("api/posts/feed-preferences")
     suspend fun updateFeedPreferences(
         @Body body: FeedPreferencesUpdateRequest,
+        @Tag dispatchGuard: AuthenticatedDispatchGuard? = null,
     ): FeedPreferencesResponse
 }

@@ -1,11 +1,13 @@
 package app.pantopus.android.ui.screens.homes.tasks
 
 import android.graphics.pdf.PdfDocument
+import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.test.platform.app.InstrumentationRegistry
 import app.pantopus.android.ui.screens.homes.claim_evidence.PrivateHomeFilePreview
+import kotlinx.coroutines.test.StandardTestDispatcher
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -13,7 +15,12 @@ import java.io.ByteArrayOutputStream
 import java.util.concurrent.atomic.AtomicBoolean
 
 class PrivateHomeFilePreviewTest {
-    @get:Rule val compose = createComposeRule()
+    // The preview renders on Dispatchers.IO. With the default rule's unconfined dispatcher the
+    // effect resumes on that IO thread, and the rule can run a whole frame there and touch views
+    // off the main thread. A standard dispatcher resumes on the main thread, as the app does.
+    @OptIn(ExperimentalTestApi::class)
+    @get:Rule
+    val compose = createComposeRule(StandardTestDispatcher())
 
     @Test fun pdf_renders_from_the_unlinked_descriptor_without_a_named_private_cache_file() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext

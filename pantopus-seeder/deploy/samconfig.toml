@@ -45,5 +45,5 @@ capabilities = "CAPABILITY_IAM"
 resolve_s3 = true
 # Matches the founder-approved production activation on 2026-10-21: briefings,
 # local seeding, Home/weather reminders and maintenance on; payments/sports/Mail/no-bid off.
-parameter_overrides = "Environment=production SchedulesEnabled=false BriefingsEnabled=true SeederEnabled=true HomeRemindersEnabled=true AlertsEnabled=true MaintenanceJobsEnabled=true PaymentJobsEnabled=false"
+parameter_overrides = "Environment=production SchedulesEnabled=false BriefingsEnabled=true SeederEnabled=true HomeRemindersEnabled=true AlertsEnabled=true MaintenanceJobsEnabled=true PaymentJobsEnabled=false HealthMonitoringEnabled=true"
 disable_rollback = false

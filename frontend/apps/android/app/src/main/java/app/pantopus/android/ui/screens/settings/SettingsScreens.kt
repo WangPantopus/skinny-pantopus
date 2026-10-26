@@ -35,6 +35,7 @@ import app.pantopus.android.core.security.findFragmentActivity
 import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.components.ToastController
 import app.pantopus.android.ui.components.ToastHost
+import app.pantopus.android.ui.screens.plans.teams.PlanTeamsSheet
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListBanner
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListCallbacks
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListScreen
@@ -115,6 +116,8 @@ fun NotificationSettingsScreen(
     onBack: () -> Unit = {},
     viewModel: NotificationSettingsViewModel = hiltViewModel(),
 ) {
+    var showsTeams by remember { mutableStateOf(false) }
+    if (showsTeams) PlanTeamsSheet({ showsTeams = false })
     val state by viewModel.state.collectAsStateWithLifecycle()
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val footer by viewModel.footerCaption.collectAsStateWithLifecycle()
@@ -169,7 +172,7 @@ fun NotificationSettingsScreen(
                 GroupedListCallbacks(
                     onBack = onBack,
                     onToggleRow = viewModel::onToggle,
-                    onTapRow = viewModel::onTapRow,
+                    onTapRow = { if (it == "sportsTeams") showsTeams = true else viewModel.onTapRow(it) },
                     onSelectRadio = viewModel::onSelectRadio,
                     onSelectChip = viewModel::onSelectChip,
                     onRetry = viewModel::refresh,

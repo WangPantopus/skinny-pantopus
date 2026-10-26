@@ -195,9 +195,11 @@ public struct FeedComposeFAB: View {
 /// (Event today; Gigs uses titles too).
 public struct FeedSkeletonCard: View {
     private let withTitle: Bool
+    private let edgeToEdge: Bool
 
-    public init(withTitle: Bool = false) {
+    public init(withTitle: Bool = false, edgeToEdge: Bool = false) {
         self.withTitle = withTitle
+        self.edgeToEdge = edgeToEdge
     }
 
     public var body: some View {
@@ -225,12 +227,12 @@ public struct FeedSkeletonCard: View {
                 Shimmer(width: 42, height: 10, cornerRadius: Radii.xs)
             }
         }
-        .padding(Spacing.s3)
+        .padding(edgeToEdge ? Spacing.s4 : Spacing.s3)
         .background(Theme.Color.appSurface)
-        .clipShape(RoundedRectangle(cornerRadius: Radii.xl, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: edgeToEdge ? 0 : Radii.xl, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: Radii.xl, style: .continuous)
-                .stroke(Theme.Color.appBorder, lineWidth: 1)
+            RoundedRectangle(cornerRadius: edgeToEdge ? 0 : Radii.xl, style: .continuous)
+                .stroke(edgeToEdge ? Color.clear : Theme.Color.appBorder, lineWidth: 1)
         )
         .accessibilityHidden(true)
     }

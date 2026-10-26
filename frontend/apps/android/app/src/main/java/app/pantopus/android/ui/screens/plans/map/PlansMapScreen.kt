@@ -313,6 +313,7 @@ private fun PlansSheetHost(
                     state,
                     onHost = actions.onHost,
                     onInvite = actions.onInvite,
+                    onGamesChanged = viewModel::loadGames,
                     // The sheet goes down so the town with plans shows in the open map (as on iOS).
                     onShowElsewhere = {
                         onStop(PlanSheetStop.Peek)
@@ -709,7 +710,7 @@ private fun PlansTopChrome(
             }
             menu()
         }
-        if (!state.isEmpty) KindChips(state = state, onKind = onKind)
+        if (!state.isEmpty || state.kind != null) KindChips(state = state, onKind = onKind)
     }
 }
 

@@ -408,17 +408,52 @@ class SavedCopies
             val accountHash = accountHash(account)
             rotateEpoch(accountHash)
             envelopeIndex.clear()
+            // The new account epoch already hides every older thread epoch's copies.
+            File(epochsRoot, accountHash + THREADS_SUFFIX).delete()
             // Cleanup is optional for correctness: all these paths became unreadable at the atomic marker change.
             File(root, accountHash).listFiles()?.filter { it.extension in setOf("enc", "media") }?.forEach { it.delete() }
         }
 
-        private fun rotateEpoch(name: String) {
+        /**
+         * A Read correction retires only the copies saved under [paths], each with every query (a person's All window
+         * and each topic, a room for each identity), not the account's. Each path gets a new epoch in the account's
+         * thread marker, written like [retireChat]'s before any old file is deleted; a copy's name carries its path's
+         * epoch, so no old copy can be read after this returns, even if cleanup stops. Other conversations and received
+         * files stay. [keyIds] name the old copies to delete now; others become unreadable and leave with a trim or the
+         * account's retirement. Throws when the epochs cannot be recorded: the caller then retires the account.
+         */
+        fun retireChatThreads(
+            account: String,
+            paths: Set<String>,
+            keyIds: Collection<String>,
+        ) {
+            val accountHash = accountHash(account)
+            val epochs = checkNotNull(readThreadEpochs(accountHash)) { "Chat thread retirement is unavailable." }
+            val retiring = paths.map(::hash).toSet()
+            val previous = retiring.mapNotNull { epochs[it] }
+            val old = keyIds.map { file(account, it, encrypted = true) }
+            val next = epochs + retiring.associateWith { UUID.randomUUID().toString() }
+            check(next.size <= MAX_THREAD_EPOCHS) { "Too many retired chat threads." }
+            writeMarker(accountHash + THREADS_SUFFIX, next.entries.joinToString("\n") { "${it.key} ${it.value}" })
+            envelopeIndex.clear()
+            old.forEach { it.delete() }
+            File(root, accountHash).listFiles()?.filter { file ->
+                file.extension == "enc" && previous.any { file.name.contains(".$it.") }
+            }?.forEach { it.delete() }
+        }
+
+        private fun rotateEpoch(name: String) = writeMarker(name, UUID.randomUUID().toString())
+
+        private fun writeMarker(
+            name: String,
+            contents: String,
+        ) {
             check(epochsRoot.isDirectory || epochsRoot.mkdirs()) { "Chat history retirement is unavailable." }
             val marker = File(epochsRoot, name)
             val temporary = File.createTempFile("epoch-", ".tmp", epochsRoot)
             try {
                 FileOutputStream(temporary).use { output ->
-                    output.write(UUID.randomUUID().toString().toByteArray(Charsets.UTF_8))
+                    output.write(contents.toByteArray(Charsets.UTF_8))
                     output.fd.sync()
                 }
                 Files.move(temporary.toPath(), marker.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
@@ -439,6 +474,7 @@ class SavedCopies
             // One durable marker retires even unopened accounts before interruptible recursive cleanup starts.
             rotateEpoch("all")
             envelopeIndex.clear()
+            epochsRoot.listFiles()?.filter { it.name.endsWith(THREADS_SUFFIX) }?.forEach { it.delete() }
             root.deleteRecursively()
         }
 
@@ -491,7 +527,8 @@ class SavedCopies
             val accountHash = accountHash(account)
             val epoch =
                 if (encrypted) {
-                    listOfNotNull(readEpoch("all"), readEpoch(accountHash)).joinToString(".").takeIf { it.isNotEmpty() }
+                    listOfNotNull(readEpoch("all"), readEpoch(accountHash), threadEpoch(accountHash, keyId))
+                        .joinToString(".").takeIf { it.isNotEmpty() }
                 } else {
                     null
                 }
@@ -502,7 +539,30 @@ class SavedCopies
             val marker = File(epochsRoot, name)
             if (!marker.exists()) return null
             // Corrupt/unreadable metadata fails closed into a separate namespace, never back to legacy files.
-            return runCatching { UUID.fromString(marker.readText()).toString() }.getOrDefault("unavailable")
+            return runCatching { UUID.fromString(marker.readText()).toString() }.getOrDefault(UNAVAILABLE)
+        }
+
+        /** A store key's thread is its path, whatever its query. Received files and other names have none. */
+        private fun threadEpoch(
+            accountHash: String,
+            keyId: String,
+        ): String? {
+            if (!keyId.startsWith(KEY_METHOD)) return null
+            val epochs = readThreadEpochs(accountHash) ?: return UNAVAILABLE
+            return epochs[hash(keyId.removePrefix(KEY_METHOD).substringBefore('?'))]
+        }
+
+        /** Each retired path's hash and epoch; null when the marker can't be read, which fails closed like [readEpoch]. */
+        private fun readThreadEpochs(accountHash: String): Map<String, String>? {
+            val marker = File(epochsRoot, accountHash + THREADS_SUFFIX)
+            if (!marker.exists()) return emptyMap()
+            return runCatching {
+                marker.readLines().filter { it.isNotEmpty() }.associate { line ->
+                    val fields = line.split(' ')
+                    require(fields.size == 2 && fields[0].length == HASH_CHARS)
+                    fields[0] to UUID.fromString(fields[1]).toString()
+                }
+            }.getOrNull()
         }
 
         private fun accountHash(account: String): String = hash("${BuildConfig.PANTOPUS_API_BASE_URL}|$account")
@@ -521,6 +581,12 @@ class SavedCopies
         private companion object {
             const val THUMBNAIL_KEY_SUFFIX = "?thumbnail"
             const val HASH_CHARS = 32
+            const val KEY_METHOD = "GET "
+            const val THREADS_SUFFIX = ".threads"
+            const val UNAVAILABLE = "unavailable"
+
+            /** Read corrections are rare; past this many retired threads one retires the whole account instead. */
+            const val MAX_THREAD_EPOCHS = 64
             const val MEDIA_ENVELOPE_BYTES = 512
             const val MEDIA_CONTENT_TYPE_LENGTH = 128
         }

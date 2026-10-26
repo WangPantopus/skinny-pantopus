@@ -22,6 +22,7 @@ const { loadViewer, verifiedUserIds } = require('./planViewer');
 const planPlace = require('./planPlace');
 const planChat = require('./planChat');
 const planNotify = require('./planNotifications');
+const { findGame } = require('./planGames');
 
 class PlanError extends Error {
   constructor(status, code, message, extra = {}) {
@@ -163,15 +164,21 @@ function bool(value, label) {
   return value;
 }
 
-function normalizeDetails(kind, details) {
+function normalizeDetails(kind, details, resolvedGame = null) {
   const input = details && typeof details === 'object' ? details : {};
   const out = {};
   if (kind === 'watch_party') {
     if (input.game && typeof input.game === 'object') {
-      const label = String(input.game.label || '').trim().slice(0, 60);
-      if (label) out.game = { label };
-      const at = input.game.starts_at ? new Date(input.game.starts_at) : null;
-      if (out.game && at && !Number.isNaN(at.getTime())) out.game.starts_at = at.toISOString();
+      const known = resolvedGame || findGame(input.game.id);
+      if (known) out.game = known;
+      else {
+        // Unknown ids and old clients keep the free-text game contract. Never trust
+        // client-supplied team identity or times as a verified schedule record.
+        const label = String(input.game.label || '').trim().slice(0, 60);
+        if (label) out.game = { label };
+        const at = input.game.starts_at ? new Date(input.game.starts_at) : null;
+        if (out.game && at && !Number.isNaN(at.getTime())) out.game.starts_at = at.toISOString();
+      }
     }
   } else if (kind === 'pickup_game') {
     out.sport = oneOf(input.sport, rules.SPORTS, 'sport') || 'other';
@@ -334,7 +341,9 @@ async function checkedPlanInput(viewer, input) {
   const autoRules = normalizeAutoRules(kind, place.kind, input.auto_rules);
   const joinRequirement = kind === 'playdate' ? 'verified'
     : (oneOf(input.join_requirement, ['located', 'verified'], 'who can ask') || 'located');
-  const details = normalizeDetails(kind, input.details);
+  const resolvedGame = viewer.sportsFlag && kind === 'watch_party'
+    ? await require('./planGames').resolveGame(input.details?.game?.id, input.details?.game?.team) : null;
+  const details = normalizeDetails(kind, input.details, resolvedGame);
   await assertHostLimits(viewer.id);
   return { kind, title, about, guestNote, spots, place, autoRules, joinRequirement, details };
 }
@@ -531,7 +540,11 @@ async function editPlan(user, postId, patch, { io = null } = {}) {
   if (patch.join_requirement !== undefined && plan.kind !== 'playdate') {
     planUpdate.join_requirement = oneOf(patch.join_requirement, ['located', 'verified'], 'who can ask');
   }
-  if (patch.details !== undefined) planUpdate.details = normalizeDetails(plan.kind, patch.details);
+  if (patch.details !== undefined) {
+    const resolvedGame = viewer.sportsFlag && plan.kind === 'watch_party'
+      ? await require('./planGames').resolveGame(patch.details?.game?.id, patch.details?.game?.team) : null;
+    planUpdate.details = normalizeDetails(plan.kind, patch.details, resolvedGame);
+  }
 
   // A plan moved to another time is reminded again (when its new reminder time is still
   // ahead) and, moved to a later day, gets that day's morning summary.
