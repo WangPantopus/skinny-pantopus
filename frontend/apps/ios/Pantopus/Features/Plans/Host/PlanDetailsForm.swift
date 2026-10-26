@@ -306,13 +306,15 @@ struct PlanKindFields: View {
         switch model.kind {
         case .watchParty:
             PlanFormField(label: "Game") {
-                PlanChoiceChips(
-                    options: gameOptions,
-                    isSelected: { $0 == (model.game?.id ?? "") },
-                    onTap: { id in model.pick(model.games.first { $0.id == id }) },
-                    groupLabel: "Game",
-                    identifier: "planGame"
-                )
+                TimelineView(.periodic(from: .now, by: 30)) { context in
+                    PlanChoiceChips(
+                        options: gameOptions(at: context.date),
+                        isSelected: { $0 == (model.game?.id ?? "") },
+                        onTap: { id in model.pick(model.games.first { $0.id == id && $0.isAvailable(at: Date()) }) },
+                        groupLabel: "Game",
+                        identifier: "planGame"
+                    )
+                }
                 Text("Picking a game fills in the title and the time.").planFont(.caption).foregroundStyle(Theme.Color.appTextSecondary)
             }
         case .playdate:
@@ -370,9 +372,9 @@ struct PlanKindFields: View {
     }
 
     /// "Seahawks · Sun 1:25 PM", then "Another game".
-    private var gameOptions: [PlanChoiceOption<String>] {
-        model.games.prefix(3).map { game in
-            let name = game.label
+    private func gameOptions(at now: Date) -> [PlanChoiceOption<String>] {
+        model.games.filter { $0.isAvailable(at: now) }.prefix(3).map { game in
+            let name = game.matchupLabel
             guard let start = game.startsAtDate,
                   let when = PlanFormat.rowWhen(state: .upcoming, start: start, end: nil) else {
                 return PlanChoiceOption(id: game.id, label: name)
