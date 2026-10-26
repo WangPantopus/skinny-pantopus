@@ -1,8 +1,8 @@
 -- Backwards compatible: yes. Adds one allowed value to HomeOccupancy.verification_source, one switched-off
--- FeatureFlag row, one new service-only function, and forward replacements of three existing functions with the
+-- FeatureFlag row, one new service-only function, and forward replacements of four existing functions with the
 -- same signatures and grants. Only the new function creates a 'probation' occupancy, only the backend job calls it,
 -- and it creates none while home_residency_probation is off (its default), so the replaced functions behave exactly
--- as before for every existing row.
+-- as before for every existing row (the reviewer's projection only gains the verification_source field).
 --
 -- Home claims plan, PR 4: probation join (plan "when-users-claim-an-streamed-willow", approved by the founder on
 -- 2026-10-25 together with 7-day probation for unanswered join requests, for residents only and never for
@@ -16,11 +16,15 @@
 -- person proves the address (the postcard review window, then the existing promotion), or with a no: a
 -- reviewer's denial or a challenge in the window suspends them ('suspended_challenged'). Time never promotes a
 -- probationer: promote_home_postcard_review still needs a postcard proved in the window.
+-- After a no, asking again is refused (MEMBERSHIP_RENEWAL_REQUIRED). The way back is proof: a suspended
+-- probationer may still request a postcard, and proving it opens a dispute in the Pantopus review queue
+-- (AddressReviewCase, trigger probation_dispute) instead of restoring access; the no stands until Pantopus decides.
 --
 -- Latest permitted sources (bodies copied unchanged except the lines commented below):
 --   review_home_residency           supabase/migrations/20261004104000_home_verification_source.sql:222
 --   verify_home_postcard_current    supabase/migrations/20261004104000_home_verification_source.sql:603
 --   home_postcard_current_context   supabase/migrations/20261025120000_home_instant_claim.sql:150
+--   home_residency_review_current   supabase/migrations/20260910233000_home_residency_review_receipts.sql:73
 SET LOCAL lock_timeout='5s';
 
 ALTER TABLE public."HomeOccupancy" DROP CONSTRAINT "HomeOccupancy_verification_source_check";
@@ -323,7 +327,7 @@ DECLARE c public."HomePostcardVerificationCommand"%ROWTYPE; p public."HomePostca
  h public."Home"%ROWTYPE; o public."HomeOccupancy"%ROWTYPE; r public."HomeResidencyClaim"%ROWTYPE;
  context jsonb; policy jsonb; intent text; t timestamptz; age public.home_age_band;
  code text; status integer; remaining integer; v_status text; v_recorded timestamptz;
- v_challenge timestamptz; v_existing boolean:=false;
+ v_challenge timestamptz; v_existing boolean:=false; v_case uuid;
 BEGIN
  IF p_home_id IS NULL OR p_actor_id IS NULL OR p_postcard_id IS NULL OR p_request_id IS NULL
    OR p_submitted_hash IS NULL OR p_submitted_hash !~ '^[a-f0-9]{64}$'
@@ -378,6 +382,19 @@ BEGIN
      UPDATE public."HomePostcardCode" SET attempts=attempts+1,
        status=CASE WHEN attempts+1>=5 THEN 'expired' ELSE public."HomePostcardCode".status END,updated_at=t WHERE id=p.id;
      code:='POSTCARD_WRONG_CODE';status:=400;EXIT validate_code;
+   END IF;
+   IF context->>'dispute'='true' THEN
+     -- Home claims PR 4: the household turned this probationer down, so proof doesn't bring them back. It opens a
+     -- dispute in the Pantopus review queue (AddressReviewCase, trigger probation_dispute) and the household's no
+     -- stands until Pantopus decides. The code is used up and the membership is left exactly as it is.
+     UPDATE public."HomePostcardCode" SET status='verified',verified_at=t,attempts=attempts+1,updated_at=t WHERE id=p.id;
+     INSERT INTO public."AddressReviewCase"(home_id,user_id,verdict_status,reasons,trigger,status)
+       VALUES(p_home_id,p_actor_id,'PROBATION_DISPUTED',jsonb_build_array(jsonb_build_object('code','PROBATION_DISPUTED',
+         'claim_id',r.id,'postcard_id',p.id)),'probation_dispute','open') RETURNING id INTO v_case;
+     INSERT INTO public."HomeAuditLog"(home_id,actor_user_id,action,target_type,target_id,metadata)
+       VALUES(p_home_id,p_actor_id,'RESIDENCY_PROBATION_DISPUTED','HomeOccupancy',o.id,
+         jsonb_build_object('postcard_id',p.id,'request_id',p_request_id,'review_case_id',v_case));
+     code:='POSTCARD_DISPUTE_RECORDED';status:=409;EXIT validate_code;
    END IF;
    IF o.verification_status='provisional' AND o.verification_source='probation' THEN
      -- Home claims PR 4: proof during probation starts the postcard review a newcomer at a Home with reviewers
@@ -449,7 +466,7 @@ DECLARE
   h public."Home"%ROWTYPE; o public."HomeOccupancy"%ROWTYPE;
   r public."HomeResidencyClaim"%ROWTYPE; u public."User"%ROWTYPE;
   t timestamptz:=clock_timestamp(); v_role text; v_age public.home_age_band;
-  v_authorities boolean;
+  v_authorities boolean; v_dispute boolean;
 BEGIN
   IF p_home_id IS NULL OR p_actor_id IS NULL OR p_confirmation IS NULL THEN
     RETURN jsonb_build_object('ok',false,'code','POSTCARD_REQUEST_INVALID','status',400); END IF;
@@ -473,13 +490,22 @@ BEGIN
     OR EXISTS(SELECT FROM public."HomeOwner" WHERE home_id=p_home_id AND subject_type='user' AND subject_id=p_actor_id
       AND owner_status IS DISTINCT FROM 'pending') THEN
     RETURN jsonb_build_object('ok',false,'code','OWNERSHIP_FLOW_REQUIRED','status',409); END IF;
+  -- Home claims PR 4: a probationer the household turned down (a reviewer's no, or a challenge in the window) can't
+  -- come back by asking again. Proof of the address is their way back, and it becomes a dispute in the Pantopus
+  -- review queue (verify_home_postcard_current) instead of restoring access, one open dispute at a time.
+  v_dispute:=coalesce(o.is_active IS FALSE AND o.verification_status='suspended_challenged'
+    AND o.verification_source='probation',false);
   IF v_role IS NULL OR v_role NOT IN ('member','lease_resident','restricted_member')
-    OR o.is_active IS DISTINCT FROM true OR o.end_at IS NOT NULL
+    OR (o.is_active IS DISTINCT FROM true AND NOT v_dispute) OR o.end_at IS NOT NULL
     OR o.start_at>t OR o.access_start_at>t OR o.access_end_at<=t
-    OR o.verification_status IS NULL OR o.verification_status NOT IN
+    OR o.verification_status IS NULL OR (o.verification_status NOT IN
       ('verified','unverified','pending','pending_approval','pending_doc','pending_postcard','provisional_bootstrap','provisional')
-    OR r.status='rejected' THEN
+      AND NOT v_dispute)
+    OR (r.status='rejected' AND NOT v_dispute) THEN
     RETURN jsonb_build_object('ok',false,'code','POSTCARD_ACCESS_REVIEW_REQUIRED','status',409); END IF;
+  IF v_dispute AND EXISTS(SELECT FROM public."AddressReviewCase" WHERE home_id=p_home_id AND user_id=p_actor_id
+      AND trigger='probation_dispute' AND status IN ('open','in_review')) THEN
+    RETURN jsonb_build_object('ok',false,'code','POSTCARD_DISPUTE_IN_REVIEW','status',409); END IF;
   -- Household consent (an accepted invitation or a household-reviewed claim)
   -- is not address proof (F3b), so it must not block the postcard that adds it.
   -- Neither is an instant claim at an address with no household ('claim'), nor probation (home claims PR 4):
@@ -502,13 +528,31 @@ BEGIN
   ) candidates WHERE candidate IS NOT NULL AND candidate<>p_actor_id
     AND public.home_residency_review_authority(p_home_id,candidate)) INTO v_authorities;
   RETURN jsonb_build_object('ok',true,'age_band',v_age,'has_authorities',v_authorities,
-    'already_verified',o.verification_status='verified','occupancy_id',o.id,'claim_id',r.id);
+    'already_verified',o.verification_status='verified','occupancy_id',o.id,'claim_id',r.id,'dispute',v_dispute);
 END;
+$$;
+
+-- Home claims PR 4: the reviewer's view of the requester's access now says where it came from, so a review of
+-- someone on probation can say that a no ends their membership.
+CREATE OR REPLACE FUNCTION public.home_residency_review_current(c public."HomeResidencyClaim") RETURNS jsonb
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public,pg_temp AS $$
+  SELECT jsonb_build_object('claim',jsonb_build_object('id',c.id,'home_id',c.home_id,'user_id',c.user_id,
+    'status',c.status,'claimed_role',c.claimed_role,'claimed_address',c.claimed_address,
+    'reviewed_by',c.reviewed_by,'reviewed_at',c.reviewed_at,'review_note',c.review_note,
+    'created_at',c.created_at,'updated_at',c.updated_at,'review_token',public.home_residency_review_snapshot(c)),
+    'occupancy',(SELECT jsonb_build_object('id',o.id,'user_id',o.user_id,'role',o.role,'role_base',o.role_base,
+      'age_band',o.age_band,'is_active',o.is_active,'verification_status',o.verification_status,
+      'verification_source',o.verification_source,
+      'start_at',o.start_at,'end_at',o.end_at,'access_start_at',o.access_start_at,'access_end_at',o.access_end_at,
+      'verified_at',o.verified_at,'verification_expires_at',o.verification_expires_at)
+      FROM public."HomeOccupancy" o WHERE home_id=c.home_id AND user_id=c.user_id));
 $$;
 -- The replaced functions keep their service-only grants; restated here.
 REVOKE ALL ON FUNCTION public.review_home_residency(uuid,uuid,text,jsonb,integer),
   public.verify_home_postcard_current(uuid,uuid,uuid,uuid,text,integer),
-  public.home_postcard_current_context(uuid,uuid,boolean) FROM PUBLIC,anon,authenticated;
+  public.home_postcard_current_context(uuid,uuid,boolean),
+  public.home_residency_review_current(public."HomeResidencyClaim") FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION public.review_home_residency(uuid,uuid,text,jsonb,integer),
   public.verify_home_postcard_current(uuid,uuid,uuid,uuid,text,integer),
-  public.home_postcard_current_context(uuid,uuid,boolean) TO service_role;
+  public.home_postcard_current_context(uuid,uuid,boolean),
+  public.home_residency_review_current(public."HomeResidencyClaim") TO service_role;

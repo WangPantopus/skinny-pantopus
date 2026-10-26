@@ -51,7 +51,8 @@ function VerifyPostcardContent() {
       {flow.error && <button className={button} onClick={flow.reopen}>Reload</button>}
     </section> : pending ? <section className={panel}>
       <h2 className="text-lg font-semibold">{outcome?.state === 'completed' ? pending.kind === 'code' ? 'Code accepted' : 'Postcard requested'
-        : outcome?.state === 'cancelled' ? 'Attempt discarded' : outcome?.state === 'rejected' ? 'Couldn’t finish this' : 'Check your last attempt'}</h2>
+        : outcome?.state === 'cancelled' ? 'Attempt discarded' : outcome?.code === 'POSTCARD_DISPUTE_RECORDED' ? 'Proof sent for review'
+          : outcome?.state === 'rejected' ? 'Couldn’t finish this' : 'Check your last attempt'}</h2>
       {retainedAddress && <><p className="text-xs font-semibold uppercase tracking-wide text-app-text-secondary">Mailing address</p><Address address={retainedAddress} /></>}
       {pending.kind === 'code' && <p className="text-sm text-app-text-secondary">Postcard reference: {pending.postcard_id?.slice(-8)}. For your security, the code you entered isn’t shown.</p>}
       <p className="text-sm text-app-text-secondary">{outcome?.state === 'completed'
@@ -116,7 +117,8 @@ function VerifyPostcardContent() {
       <section className={panel}>
         <div className="flex items-start gap-2"><ShieldCheck className="h-5 w-5 shrink-0 text-emerald-700" aria-hidden="true" />
           <p className="text-sm">{progress?.current_access === 'shared' ? 'You can open this Home. What you can do depends on your role.'
-            : progress?.next_step === 'household_review' ? 'Your residency is waiting for household review.' : 'Residency status shows your access and next step.'}</p></div>
+            : progress?.probation === 'active' ? 'You’re on probation until someone in the household says yes or you verify your address by mail.'
+              : progress?.next_step === 'household_review' ? 'Your residency is waiting for household review.' : 'Residency status shows your access and next step.'}</p></div>
         <Link className={`${button} block text-center`} href={`/app/homes/${homeId}/residency`}>Check residency status</Link>
         {progress?.current_access === 'shared' && <Link className={`${button} block text-center`} href={search.get('return') === 'place' ? '/app/place' : `/app/homes/${homeId}/dashboard`}>
           {search.get('return') === 'place' ? 'Return to Place' : 'Open Home'}</Link>}

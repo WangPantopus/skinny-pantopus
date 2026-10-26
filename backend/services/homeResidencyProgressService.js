@@ -61,18 +61,31 @@ async function list(actorId, after) {
   return { requests: opening.slice(0, 50).map(project), next_cursor: opening.length > 50 ? opening[49].id : null };
 }
 async function references(homeId, actorId) {
-  const [request, occupancy, owner, created] = await Promise.all([
+  const [request, occupancy, owner, created, disputes] = await Promise.all([
     checked(db.from('HomeResidencyClaim').select(COLUMNS).eq('home_id', homeId).eq('user_id', actorId).maybeSingle()),
     checked(db.from('HomeOccupancy').select('id, home_id, user_id').eq('home_id', homeId).eq('user_id', actorId).maybeSingle()),
     checked(db.from('HomeOwner').select('id, home_id, subject_id, subject_type')
       .eq('home_id', homeId).eq('subject_id', actorId).eq('subject_type', 'user').maybeSingle()),
     checked(db.from('Home').select('id, created_by_user_id').eq('id', homeId).eq('created_by_user_id', actorId).maybeSingle()),
+    // The person's own open dispute after a no ended their probation (home claims PR 4).
+    checked(db.from('AddressReviewCase').select('id').eq('home_id', homeId).eq('user_id', actorId)
+      .eq('trigger', 'probation_dispute').in('status', ['open', 'in_review']).limit(1)),
   ]);
   if (request !== null) claim(request, actorId, homeId);
   if (occupancy !== null && (!occupancy || !uuid(occupancy.id) || occupancy.home_id !== homeId || occupancy.user_id !== actorId)) throw failure();
   if (owner !== null && (!owner || !uuid(owner.id) || owner.home_id !== homeId || owner.subject_id !== actorId || owner.subject_type !== 'user')) throw failure();
   if (created !== null && (!created || created.id !== homeId || created.created_by_user_id !== actorId)) throw failure();
-  return { request, occupancy, owner, created };
+  if (!Array.isArray(disputes)) throw failure();
+  return { request, occupancy, owner, created, dispute: disputes.length > 0 };
+}
+// Home claims PR 4: probation (a household-review request nobody answered in 7 days) is 'active' until someone in
+// the household says yes or the address is proven; a no or a challenge ends it, and the person's way back is proof
+// by mail, which opens a Pantopus review ('review'). next_step stays what older apps know.
+function probation(occupancy, dispute) {
+  if (occupancy?.verification_source !== 'probation') return null;
+  if (occupancy.is_active === true && occupancy.verification_status === 'provisional') return 'active';
+  if (occupancy.is_active === false && occupancy.verification_status === 'suspended_challenged') return dispute ? 'review' : 'ended';
+  return null;
 }
 function nextStep(refs, state, actorId) {
   const { home, access, owners, mode } = state;
@@ -109,6 +122,7 @@ async function read(homeId, actorId) {
     home_id: homeId, request: refs.request ? project(refs.request) : null,
     current_access: current.mode === 'shared' ? 'shared' : current.mode === 'private_setup' ? 'private_setup' : 'none',
     next_step: nextStep(refs, current, actorId),
+    probation: current.mode === 'shared' ? null : probation(current.access.occupancy, refs.dispute),
   };
 }
 function sendError(res, error) {
