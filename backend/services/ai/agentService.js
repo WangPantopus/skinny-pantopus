@@ -88,7 +88,12 @@ function launchScopedChatTools({
     })
     .map((tool) => (tool.name === 'draft_support_train_from_story' && !giftFunds ? withoutGiftFunds(tool) : tool))
     .map((tool) => (playdates && PLAYDATE_TOOLS.get(tool.name)) || tool)
-    .map((tool) => tool.name === 'draft_plan' ? draftPlanDefinition({ playdates, sports: plans && sports }) : tool);
+    .map((tool) => tool.name === 'draft_plan' ? draftPlanDefinition({ playdates, sports: plans && sports }) : tool)
+    .map((tool) => {
+      if (tool.name !== 'draft_plan_alert' || (plans && sports)) return tool;
+      const { teams: _teams, ...properties } = tool.input_schema.properties;
+      return { ...tool, input_schema: { ...tool.input_schema, properties } };
+    });
 }
 
 function withoutGiftFunds(tool) {
