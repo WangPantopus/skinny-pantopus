@@ -989,15 +989,16 @@ private fun FooterPrimaryButton(
     modifier: Modifier = Modifier,
     accessibilityLabel: String,
 ) {
+    // Off (not just busy submitting) reads as off, as on iOS: faded and flat.
+    val dimmed = !enabled && !isSubmitting
     Row(
         modifier =
             modifier
                 .fillMaxWidth()
                 .heightIn(min = 48.dp)
-                // Off (not just busy submitting) reads as off, as on iOS.
-                .alpha(if (enabled || isSubmitting) 1f else 0.5f)
-                .shadow(8.dp, RoundedCornerShape(Radii.xl))
+                .shadow(if (dimmed) 0.dp else 8.dp, RoundedCornerShape(Radii.xl))
                 .clip(RoundedCornerShape(Radii.xl))
+                .alpha(if (dimmed) 0.5f else 1f)
                 .background(background)
                 .conditionalClickable(enabled = enabled, onClick = onClick)
                 .padding(horizontal = Spacing.s3)
