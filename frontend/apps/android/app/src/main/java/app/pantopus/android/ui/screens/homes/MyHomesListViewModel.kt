@@ -274,7 +274,8 @@ class MyHomesListViewModel
                 val stored = repo.myHomesCopy()?.homes
                 if (stored != null && listChecksOut(stored) && stored.all { it.showsInListBeforeRecheck }) entries = stored
             }
-            if (entries.isNotEmpty() || requests.isNotEmpty()) render(revision)
+            // The stored Homes and the requests still on screen show at once.
+            if (entries.size + requests.size > 0) render(revision)
             _refreshing.value = force && entries.isNotEmpty()
             refreshJob =
                 viewModelScope.launch {
