@@ -2555,6 +2555,8 @@ router.get('/:id/postcard-status', postcardNoStore, verifyToken, async (req, res
 });
 
 const postcardVerification = require('../services/homePostcardVerificationService');
+// Letters from Pantopus: a proven address brings a welcome to its Home's mailbox (Mail tab, SRV-6).
+const pantopusLetters = require('../services/pantopusLetters');
 const postcardVerificationInput = req => ({ homeId: req.params.id, actorId: req.user.id,
   postcardId: req.params.postcardId, requestId: req.params.requestId || req.body?.request_id });
 router.post('/:id/postcards/:postcardId/verifications', postcardNoStore, verifyToken, verificationAttemptLimiter, async (req, res) => {
@@ -2566,6 +2568,8 @@ router.post('/:id/postcards/:postcardId/verifications', postcardNoStore, verifyT
     // A proof beats a claim: anyone whose claim now steps back, and the person who proved it, are told.
     if (result.state === 'completed' && result.verification_status === 'verified') {
       void homeInstantClaimService.tellProofOverClaims({ homeId: result.home_id, provenUserId: req.user.id });
+      // The address is proven: a letter welcomes them to this Home's mailbox (Mail tab, SRV-6).
+      void pantopusLetters.ensureHomeLetter(req.user.id, { home_id: result.home_id });
     }
     postcardVerification.send(res, result);
   } catch (error) { postcardVerification.sendError(res, error); }
@@ -2680,6 +2684,8 @@ router.post('/:id/verify-postcard', postcardNoStore, verifyToken, verificationAt
     }
     // A proof beats a claim: anyone whose claim now steps back, and the person who proved it, are told.
     if (verificationStatus === 'verified') void homeInstantClaimService.tellProofOverClaims({ homeId, provenUserId: userId });
+    // The address is proven: a letter welcomes them to this Home's mailbox (Mail tab, SRV-6).
+    if (verificationStatus === 'verified') void pantopusLetters.ensureHomeLetter(userId, { home_id: homeId });
 
     res.json({
       message: verificationStatus === 'verified'

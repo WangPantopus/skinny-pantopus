@@ -101,6 +101,7 @@ import app.pantopus.android.ui.components.BidderStack
 import app.pantopus.android.ui.components.CompactButton
 import app.pantopus.android.ui.components.CompactButtonSize
 import app.pantopus.android.ui.components.EmptyState
+import app.pantopus.android.ui.components.NavigationMenuButton
 import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.components.RefreshFailedLine
 import app.pantopus.android.ui.components.RefreshNotice
@@ -173,6 +174,12 @@ fun ListOfRowsScreen(
     refreshing: Boolean = false,
     /** Instant Screens contract §3: the quiet "Couldn't refresh. Showing 3:42 PM." line above the rows. */
     refreshNotice: RefreshNotice? = null,
+    /**
+     * The side menu (☰, founder decision 2026-10-20) when this list is a tab's top screen: drawn in the leading slot
+     * where Back would be, so a screen passes [onBack] or this, never both. [menuTestTag] tags the button.
+     */
+    onOpenMenu: (() -> Unit)? = null,
+    menuTestTag: String = "listOfRows.menu",
 ) {
     val pullState =
         rememberPullRefreshState(
@@ -216,6 +223,8 @@ fun ListOfRowsScreen(
                                 tint = PantopusColors.appText,
                             )
                         }
+                    } else if (onOpenMenu != null) {
+                        NavigationMenuButton(onClick = onOpenMenu, testTag = menuTestTag)
                     }
                 },
                 actions = {

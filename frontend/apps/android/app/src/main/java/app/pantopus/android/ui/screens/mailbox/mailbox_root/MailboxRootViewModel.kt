@@ -179,6 +179,11 @@ class MailboxRootViewModel
                 viewModelScope.launch {
                     MailboxRepository.mailViewed.collect { mailId -> markLoadedMailViewed(mailId) }
                 }
+                // A mail push came in: read the open tab and the drawer counts again, as the Mail tab's badge does,
+                // so the new piece is here when the badge says so.
+                viewModelScope.launch {
+                    MailboxRepository.mailArrived.collect { if (_state.value !is ListOfRowsUiState.Loading) refresh() }
+                }
             }
         }
 

@@ -8,10 +8,7 @@
 //  the Pulse tab). Place is selected at launch. Today is the daily briefing.
 //  Plans shows only while the `plans` switch is on, so the bar has four
 //  tabs or five and follows the switch while the app runs. The last tab is
-//  Messages, with the unread badge, while Mailbox is off for launch
-//  (`LaunchFeatures.mailbox`, founder decision 2026-10-09). With Mailbox on
-//  it reads Mail and hosts the mailbox and the Messages inbox as two
-//  segments; its id stays `mail` either way.
+//  Messages, the conversation list with the unread badge.
 //
 //  While the Pulse redesign is off (launch cut #11, `LaunchFeatures.pulseRedesign`,
 //  founder decision 2026-10-15) the bar is the October 13 one: Place · Today ·
@@ -25,6 +22,14 @@
 //  menu (the navigation drawer) is hosted here, above every tab, and the top
 //  screen of every tab has its menu button (`NavigationMenuButton`).
 //
+//  With the Mailbox on (launch cut #10, `LaunchFeatures.mailbox`; Mail tab,
+//  founder decisions 2026-10-26/27) Mail is a tab of its own before Messages:
+//  Place · Today · Nearby · Plans · Mail · Messages. Mail opens on the
+//  Mailbox and its red badge counts unopened mail. SwiftUI's TabView moves a
+//  sixth tab under "More", so these tabs live in `RootTabContainer` under a
+//  drawn bar (`RootTabBar`). With the Mailbox off the system bar stays as it
+//  was.
+//
 
 // swiftlint:disable file_length
 
@@ -34,10 +39,9 @@ import SwiftUI
 /// A tab in the primary bottom bar. Encoded as an enum so call sites never
 /// reach for stringly-typed paths.
 public enum RootTab: Hashable, CaseIterable {
-    case place, today, nearby, pulse, plans, mail
+    case place, today, nearby, pulse, plans, mail, messages
 
-    /// Human-readable label rendered under each tab icon. The last tab is
-    /// "Messages" while Mailbox is off for launch; its id stays `mail`.
+    /// Human-readable label rendered under each tab icon.
     public var label: String {
         switch self {
         case .place: "Place"
@@ -45,7 +49,8 @@ public enum RootTab: Hashable, CaseIterable {
         case .nearby: "Nearby"
         case .pulse: "Pulse"
         case .plans: "Plans"
-        case .mail: LaunchFeatures.mailbox ? "Mail" : "Messages"
+        case .mail: "Mail"
+        case .messages: "Messages"
         }
     }
 
@@ -58,6 +63,7 @@ public enum RootTab: Hashable, CaseIterable {
         case .pulse: "pulse"
         case .plans: "plans"
         case .mail: "mail"
+        case .messages: "messages"
         }
     }
 
@@ -69,7 +75,8 @@ public enum RootTab: Hashable, CaseIterable {
         case .nearby: .compass
         case .pulse: .activity
         case .plans: .calendar
-        case .mail: LaunchFeatures.mailbox ? .mail : .messageCircle
+        case .mail: .mail
+        case .messages: .messageCircle
         }
     }
 
@@ -78,33 +85,24 @@ public enum RootTab: Hashable, CaseIterable {
     static var pulseHome: RootTab {
         LaunchFeatures.pulseRedesign ? .pulse : .nearby
     }
-}
 
-/// The two segments of the Mail tab. Chat threads are just another kind
-/// of mail, so the inbox lives beside the mailbox instead of on its own
-/// tab (an empty Messages tab at zero density read as a dead app).
-public enum MailSegment: String, CaseIterable, Hashable {
-    case mailbox, messages
-
-    public var label: String {
-        switch self {
-        case .mailbox: "Mailbox"
-        case .messages: "Messages"
-        }
+    /// The bar's tabs in order: Plans while its switch is on, Mail while the
+    /// Mailbox is on (launch cut #10), Messages last.
+    static func barTabs(plans: Bool) -> [RootTab] {
+        var tabs: [RootTab] = [.place, .today, pulseHome]
+        if plans { tabs.append(.plans) }
+        if LaunchFeatures.mailbox { tabs.append(.mail) }
+        tabs.append(.messages)
+        return tabs
     }
 }
 
-/// Cross-tab hand-off into a specific Mail segment (a `/app/chat` status
-/// item, a `.conversation` deep link). The Mail tab root consumes it.
-@Observable
-@MainActor
-public final class MailTabStore {
-    public static let shared = MailTabStore()
-    public var pendingSegment: MailSegment?
-    /// Segment roots showing; the switch hides below a root (switching would discard it).
-    public var mailboxAtRoot = true
-    public var messagesAtRoot = true
-    public init() {}
+/// What the Mail tab's stack (`HubTabRoot` in its mailbox mode) is asked to
+/// show from another tab: the side menu's Mailbox row and the You screen's
+/// mail tile open its top, a Place card a screen on it.
+enum MailTabRequest: Equatable {
+    case top
+    case route(HubRoute)
 }
 
 /// Observable state for the root tab view. Holds the selected tab and a
@@ -114,7 +112,7 @@ public final class MailTabStore {
 public final class RootTabModel {
     /// Currently selected tab. Starts at `.place`.
     public var selected: RootTab = .place
-    /// Unread Messages count rendered as the Messages (Mail) tab badge.
+    /// Unread Messages count rendered as the Messages tab badge.
     public var messagesBadge: Int = 0
     /// The Place stack is on its root (kept current by `HubTabRoot`).
     public var placeAtRoot = false
@@ -127,6 +125,12 @@ public final class RootTabModel {
     /// A side-menu choice waiting for the Place tab's stack (`HubTabRoot`),
     /// where the menu's screens open.
     var pendingMenuAction: NavigationMenuAction?
+    /// A screen for the Mail tab's stack, taken when the Mail tab shows.
+    var pendingMailRequest: MailTabRequest?
+    /// Screens showing that hide the drawn bar (`hidesTabBar()`).
+    var barHiders: Set<UUID> = []
+    /// The selected tab tapped again, for the drawn bar's container.
+    var reselection: RootTabReselection?
     public init() {}
 }
 
@@ -155,130 +159,106 @@ public struct RootTabView: View {
     /// stale. Replaced for another account.
     @State private var youModel = MeViewModel()
     @State private var youModelUserID: String?
+    /// The side menu's model, made once (a view model made in `body` can
+    /// write observed state while the bar draws: the Xcode 16.4 render loop).
+    @State private var drawerModel = NavigationDrawerViewModel(context: .personal(name: ""))
+    private let mailBadgeStore = MailBadgeStore.shared
 
     public init() {}
 
     public var body: some View {
-        TabView(selection: tabBinding) {
-            HubTabRoot(
-                onOpenProfile: { showProfile = true },
-                onOpenProfileScreen: { route in presentProfile(at: route) },
-                addHomeRequest: $addHomeRequest
-            )
-            .tabItem { tabLabel(.place) }
-            .tag(RootTab.place)
-
-            TodayTabRoot(onAddHome: startAddingHome)
-                .tabItem { tabLabel(.today) }
-                .tag(RootTab.today)
-
-            if LaunchFeatures.pulseRedesign {
-                PulseTabRoot(onAddHome: startAddingHome)
-                    .tabItem { tabLabel(.pulse) }
-                    .tag(RootTab.pulse)
-            } else {
-                // Launch cut #11 (the Pulse redesign) is off: the Nearby tab,
-                // Pulse and Neighborhood as two segments (founder, 2026-10-20).
-                NeighborhoodTabRoot(onAddHome: startAddingHome)
-                    .tabItem { tabLabel(.nearby) }
-                    .tag(RootTab.nearby)
-            }
-
-            // Only while the `plans` switch is on (`onChange` below moves a
-            // reader off it when the switch turns off).
-            if plansFlags.plans {
-                PlansTabRoot()
-                    .tabItem { tabLabel(.plans) }
-                    .tag(RootTab.plans)
-            }
-
-            MailTabRoot(
-                onOpenProfile: { showProfile = true },
-                onOpenProfileScreen: { route in presentProfile(at: route) }
-            )
-            .tabItem { tabLabel(.mail) }
-            .tag(RootTab.mail)
-            .badge(model.messagesBadge)
-        }
-        // The app-wide tint also reaches the dialogs UIKit presents; primaryTint resolves for dark mode there.
-        .tint(Theme.Color.primaryTint)
-        .environment(model)
-        // The side menu, above every tab and the bar (founder, 2026-10-20).
-        .overlay { navigationMenu }
-        .background {
-            if signedInUserID != nil, !AppLockManager.shared.isLocked,
-               !showProfile, pendingInviteToken == nil {
-                BriefingNoticeView().id(signedInUserID)
-            }
-        }
-        .task {
-            // Live updates (sync:changed, notification:new, reconnects) for every screen.
-            ScreenStoreLive.start()
-            await chatBadgeStore.start()
-            model.messagesBadge = chatBadgeStore.unreadMessages
-            await TabWarmer.warm()
-        }
-        .task(id: signedInUserID) {
-            // Another account never sees the previous account's You screen.
-            if youModelUserID != signedInUserID {
-                if youModelUserID != nil { youModel = MeViewModel() }
-                youModelUserID = signedInUserID
-            }
-            await plansFlags.refresh(account: signedInUserID)
-        }
-        .onChange(of: scenePhase) { _, phase in
-            guard phase == .active else { return }
-            // Plans change while the app is away (a yes, a moved time, a removal,
-            // a cancel) and their pushes don't reach the app in the background:
-            // coming back re-checks every Plans screen on view.
-            if plansFlags.plans { PlansStoreReads.changed() }
-            Task { await plansFlags.refresh(account: signedInUserID) }
-        }
-        .onChange(of: plansFlags.plans) { _, isOn in
-            // The Plans tab goes with the switch; a reader on it lands on Pulse
-            // (Nearby while the Pulse redesign is off).
-            if !isOn, model.selected == .plans { model.selected = RootTab.pulseHome }
-        }
-        .onChange(of: chatBadgeStore.unreadMessages) { _, unread in
-            model.messagesBadge = unread
-        }
-        .onChange(of: router.pending) { _, pending in
-            consumeInviteDeepLinkIfNeeded(pending: pending)
-        }
-        .task {
-            consumeInviteDeepLinkIfNeeded(pending: router.pending)
-        }
-        .fullScreenCover(
-            isPresented: $showProfile,
-            onDismiss: {
-                expandMonthlyReceipt = false
-                youModel.expandMonthlyReceipt = false
-                profileInitialRoute = nil
-            },
-            content: {
-                YouTabRoot(
-                    expandMonthlyReceipt: expandMonthlyReceipt,
-                    initialRoute: profileInitialRoute,
-                    meViewModel: youModel
-                ) {
-                    showProfile = false
+        tabs
+            // The app-wide tint also reaches the dialogs UIKit presents; primaryTint resolves for dark mode there.
+            .tint(Theme.Color.primaryTint)
+            .environment(model)
+            // The side menu, above every tab and the bar (founder, 2026-10-20).
+            .overlay { navigationMenu }
+            .background {
+                if signedInUserID != nil, !AppLockManager.shared.isLocked,
+                   !showProfile, pendingInviteToken == nil {
+                    BriefingNoticeView().id(signedInUserID)
                 }
-                // A cover doesn't see the tab view's environment; the profile can switch tabs under it.
-                .environment(model)
             }
-        )
-        .fullScreenCover(item: $pendingInviteToken) { item in
-            TokenAcceptView(
-                viewModel: TokenAcceptViewModel(
-                    token: item.token,
-                    leaseInvitation: item.leaseInvitation,
-                    onAccepted: { _ in pendingInviteToken = nil },
-                    onDeclined: { pendingInviteToken = nil }
-                )
+            .task {
+                // Live updates (sync:changed, notification:new, reconnects) for every screen.
+                ScreenStoreLive.start()
+                if LaunchFeatures.mailbox { mailBadgeStore.start() }
+                await chatBadgeStore.start()
+                model.messagesBadge = chatBadgeStore.unreadMessages
+                await TabWarmer.warm()
+            }
+            .task(id: signedInUserID) {
+                // Another account never sees the previous account's You screen.
+                if youModelUserID != signedInUserID {
+                    if youModelUserID != nil { youModel = MeViewModel() }
+                    youModelUserID = signedInUserID
+                }
+                await plansFlags.refresh(account: signedInUserID)
+            }
+            .onChange(of: signedInUserName, initial: true) { _, name in
+                drawerModel.updateContext(.personal(name: name))
+            }
+            .onChange(of: scenePhase) { _, phase in
+                guard phase == .active else { return }
+                // Plans change while the app is away (a yes, a moved time, a removal,
+                // a cancel) and their pushes don't reach the app in the background:
+                // coming back re-checks every Plans screen on view.
+                if plansFlags.plans { PlansStoreReads.changed() }
+                Task { await plansFlags.refresh(account: signedInUserID) }
+                // Mail may have come while the app was away.
+                mailBadgeStore.refresh()
+            }
+            .onChange(of: plansFlags.plans) { _, isOn in
+                // The Plans tab goes with the switch; a reader on it lands on Pulse
+                // (Nearby while the Pulse redesign is off).
+                if !isOn, model.selected == .plans { model.selected = RootTab.pulseHome }
+            }
+            .onChange(of: model.selected) { _, selected in
+                // A tab that isn't on the bar (Plans switched off, Mail without
+                // the Mailbox) lands on the nearest one that is.
+                let onBar = RootTab.barTabs(plans: plansFlags.plans)
+                if !onBar.contains(selected) { model.selected = Self.nearestTab(to: selected, on: onBar) }
+            }
+            .onChange(of: chatBadgeStore.unreadMessages) { _, unread in
+                model.messagesBadge = unread
+            }
+            .onChange(of: router.pending) { _, pending in
+                consumeInviteDeepLinkIfNeeded(pending: pending)
+            }
+            .task {
+                consumeInviteDeepLinkIfNeeded(pending: router.pending)
+            }
+            .fullScreenCover(
+                isPresented: $showProfile,
+                onDismiss: {
+                    expandMonthlyReceipt = false
+                    youModel.expandMonthlyReceipt = false
+                    profileInitialRoute = nil
+                },
+                content: {
+                    YouTabRoot(
+                        expandMonthlyReceipt: expandMonthlyReceipt,
+                        initialRoute: profileInitialRoute,
+                        meViewModel: youModel
+                    ) {
+                        showProfile = false
+                    }
+                    // A cover doesn't see the tab view's environment; the profile can switch tabs under it.
+                    .environment(model)
+                }
             )
-            // A newer link while this one is open must load its own token, not keep the first link's state.
-            .id(item.id)
-        }
+            .fullScreenCover(item: $pendingInviteToken) { item in
+                TokenAcceptView(
+                    viewModel: TokenAcceptViewModel(
+                        token: item.token,
+                        leaseInvitation: item.leaseInvitation,
+                        onAccepted: { _ in pendingInviteToken = nil },
+                        onDeclined: { pendingInviteToken = nil }
+                    )
+                )
+                // A newer link while this one is open must load its own token, not keep the first link's state.
+                .id(item.id)
+            }
     }
 
     // A flat switch over every destination: one case per tab hand-off is
@@ -329,9 +309,9 @@ public struct RootTabView: View {
             model.selected = RootTab.pulseHome
             NeighborhoodDoorStore.shared.pendingSurface = .marketplace
         // Mailbox-cluster destinations resolve in the Mail tab's stack
-        // (a mailbox-rooted HubTabRoot sharing the same destinations). While
-        // Mailbox is off for launch, the Place stack shows its "not in the
-        // app yet" placeholder for them instead.
+        // (a mailbox-rooted HubTabRoot sharing the same destinations), from
+        // any tab. While Mailbox is off for launch, the Place stack shows its
+        // "not in the app yet" placeholder for them instead.
         case .vacationHold, .mailDay,
              .stamps, .mailTask, .mailTranslation, .unboxing, .packageGig, .earn,
              .mailbox, .mailItem:
@@ -370,10 +350,8 @@ public struct RootTabView: View {
         case .creatorAudienceMembers:
             openProfile(at: .creatorAudienceMembers)
         case .conversation, .assistant:
-            // Chat, and the Pantopus AI thread with it, lives in the Messages
-            // tab (the Mail tab's Messages segment while Mailbox is on).
-            if LaunchFeatures.mailbox { MailTabStore.shared.pendingSegment = .messages }
-            model.selected = .mail
+            // Chat, and the Pantopus AI thread with it, lives in the Messages tab.
+            model.selected = .messages
         case .home:
             model.selected = .place
             _ = router.consume()
@@ -438,7 +416,7 @@ public struct RootTabView: View {
     /// cover, and rows open their screens in the Place tab's stack.
     private var navigationMenu: some View {
         NavigationDrawerView(
-            viewModel: NavigationDrawerViewModel(context: .personal(name: signedInUserName)),
+            viewModel: drawerModel,
             isPresented: Binding(
                 get: { model.showsNavigationMenu },
                 set: { model.showsNavigationMenu = $0 }
@@ -454,9 +432,16 @@ public struct RootTabView: View {
     }
 
     /// The menu's screens live in the Place stack, as the account links
-    /// (`/connections`, `/wallet` …) do: from any tab, Place shows them.
+    /// (`/connections`, `/wallet` …) do: from any tab, Place shows them. The
+    /// Mailbox rows open the Mail tab, on its top.
     private func openFromMenu(_ action: NavigationMenuAction) {
         model.showsNavigationMenu = false
+        if LaunchFeatures.mailbox, case let .open(destination) = action,
+           destination == .mailbox || destination == .homeMailbox {
+            model.pendingMailRequest = .top
+            model.selected = .mail
+            return
+        }
         model.pendingMenuAction = action
         model.selected = .place
     }
@@ -513,6 +498,142 @@ public struct RootTabView: View {
         }
         .accessibilityLabel(tab.label)
         .accessibilityIdentifier("tab.\(tab.id)")
+    }
+}
+
+// MARK: - The tabs
+
+extension RootTabView {
+    /// The tabs: the system tab bar while the Mailbox is off, as it was; with
+    /// it on, the container and the drawn bar, which fit six.
+    @ViewBuilder
+    private var tabs: some View {
+        if LaunchFeatures.mailbox {
+            drawnTabs
+        } else {
+            systemTabs
+        }
+    }
+
+    private var systemTabs: some View {
+        TabView(selection: tabBinding) {
+            HubTabRoot(
+                onOpenProfile: { showProfile = true },
+                onOpenProfileScreen: { route in presentProfile(at: route) },
+                addHomeRequest: $addHomeRequest
+            )
+            .tabItem { tabLabel(.place) }
+            .tag(RootTab.place)
+
+            TodayTabRoot(onAddHome: startAddingHome)
+                .tabItem { tabLabel(.today) }
+                .tag(RootTab.today)
+
+            if LaunchFeatures.pulseRedesign {
+                PulseTabRoot(onAddHome: startAddingHome)
+                    .tabItem { tabLabel(.pulse) }
+                    .tag(RootTab.pulse)
+            } else {
+                // Launch cut #11 (the Pulse redesign) is off: the Nearby tab,
+                // Pulse and Neighborhood as two segments (founder, 2026-10-20).
+                NeighborhoodTabRoot(onAddHome: startAddingHome)
+                    .tabItem { tabLabel(.nearby) }
+                    .tag(RootTab.nearby)
+            }
+
+            // Only while the `plans` switch is on (`onChange` below moves a
+            // reader off it when the switch turns off).
+            if plansFlags.plans {
+                PlansTabRoot()
+                    .tabItem { tabLabel(.plans) }
+                    .tag(RootTab.plans)
+            }
+
+            InboxTabRoot()
+                .tabItem { tabLabel(.messages) }
+                .tag(RootTab.messages)
+                .badge(model.messagesBadge)
+        }
+    }
+
+    /// Six tabs: each tab's root is made once, when the tab first opens, and
+    /// kept by the container; the bar is drawn above it.
+    private var drawnTabs: some View {
+        let onBar = RootTab.barTabs(plans: plansFlags.plans)
+        let showsBar = model.barHiders.isEmpty
+        return ZStack(alignment: .bottom) {
+            RootTabContainer(
+                tabs: onBar,
+                selected: model.selected,
+                barHeight: showsBar ? RootTabBar.height : 0,
+                environment: RootTabEnvironment(auth: auth, tabs: model, scenePhase: scenePhase),
+                reselection: model.reselection,
+                makeRoot: tabRoot(for:)
+            )
+            .ignoresSafeArea()
+            if showsBar {
+                RootTabBar(
+                    tabs: onBar,
+                    selected: model.selected,
+                    badges: [.mail: mailBadgeStore.unopened, .messages: model.messagesBadge],
+                    onSelect: select
+                )
+            }
+        }
+        // The keyboard covers the bar, as it covers the system one; each
+        // tab's screens make room for it in their own hosting controller.
+        .ignoresSafeArea(.keyboard)
+    }
+
+    /// A tab's root for the container, made the first time the tab opens.
+    private func tabRoot(for tab: RootTab) -> AnyView {
+        switch tab {
+        case .place:
+            AnyView(HubTabRoot(
+                onOpenProfile: { showProfile = true },
+                onOpenProfileScreen: { route in presentProfile(at: route) },
+                addHomeRequest: $addHomeRequest
+            ))
+        case .today:
+            AnyView(TodayTabRoot(onAddHome: startAddingHome))
+        case .nearby:
+            AnyView(NeighborhoodTabRoot(onAddHome: startAddingHome))
+        case .pulse:
+            AnyView(PulseTabRoot(onAddHome: startAddingHome))
+        case .plans:
+            AnyView(PlansTabRoot())
+        case .mail:
+            // The Mailbox at the root of its own stack, with the mailbox
+            // cluster's destinations.
+            AnyView(HubTabRoot(
+                mode: .mailbox,
+                onOpenProfile: { showProfile = true },
+                onOpenProfileScreen: { route in presentProfile(at: route) }
+            ))
+        case .messages:
+            AnyView(InboxTabRoot())
+        }
+    }
+
+    /// A tap on the drawn bar. Tapping the tab you're on takes its stack back
+    /// to its root; on Place's root it scrolls to the top.
+    private func select(_ tab: RootTab) {
+        guard tab == model.selected else {
+            model.selected = tab
+            return
+        }
+        if tab == .place, model.placeAtRoot { model.placeReselectedAtRoot = UUID() }
+        model.reselection = RootTabReselection(tab: tab)
+    }
+
+    /// Where a selection that isn't on the bar lands.
+    private static func nearestTab(to tab: RootTab, on onBar: [RootTab]) -> RootTab {
+        let nearest: RootTab = switch tab {
+        case .mail: .messages
+        case .plans, .pulse, .nearby: RootTab.pulseHome
+        default: .place
+        }
+        return onBar.contains(nearest) ? nearest : .place
     }
 }
 
@@ -604,77 +725,6 @@ public struct TodayTabRoot: View {
     }
 }
 
-/// The fourth tab. While Mailbox is off for launch it is Messages: the
-/// conversation list itself, with no Mailbox/Messages switch. With Mailbox
-/// on it is Mail — the mailbox and the Messages inbox as two segments under
-/// one tab. Only the visible segment is mounted, so each root's own
-/// deep-link consumption keeps working unchanged.
-public struct MailTabRoot: View {
-    @Environment(RootTabModel.self) private var rootTabs
-    @State private var store = MailTabStore.shared
-    @State private var segment: MailSegment = .mailbox
-    private let onOpenProfile: @MainActor () -> Void
-    private let onOpenProfileScreen: @MainActor (YouRoute) -> Void
-
-    public init(
-        onOpenProfile: @escaping @MainActor () -> Void = {},
-        onOpenProfileScreen: @escaping @MainActor (YouRoute) -> Void = { _ in }
-    ) {
-        self.onOpenProfile = onOpenProfile
-        self.onOpenProfileScreen = onOpenProfileScreen
-    }
-
-    public var body: some View {
-        if LaunchFeatures.mailbox {
-            segmentedMail
-        } else {
-            InboxTabRoot()
-        }
-    }
-
-    private var segmentedMail: some View {
-        VStack(spacing: 0) {
-            if segment == .mailbox ? store.mailboxAtRoot : store.messagesAtRoot {
-                Picker("Mail", selection: $segment) {
-                    ForEach(MailSegment.allCases, id: \.self) { seg in
-                        Text(seg.label)
-                            .tag(seg)
-                            .accessibilityIdentifier("mailSegment.\(seg.rawValue)")
-                    }
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal, Spacing.s4)
-                .padding(.top, Spacing.s2)
-                .padding(.bottom, Spacing.s2)
-                .accessibilityIdentifier("mailSegments")
-            }
-
-            switch segment {
-            case .mailbox:
-                HubTabRoot(mode: .mailbox, onOpenProfile: onOpenProfile, onOpenProfileScreen: onOpenProfileScreen)
-            case .messages:
-                InboxTabRoot()
-            }
-        }
-        .background(Theme.Color.appBg)
-        .onChange(of: store.pendingSegment) { _, pending in
-            consumePendingSegmentIfNeeded(pending)
-        }
-        .onChange(of: rootTabs.selected) { _, _ in
-            consumePendingSegmentIfNeeded(store.pendingSegment)
-        }
-        .task {
-            consumePendingSegmentIfNeeded(store.pendingSegment)
-        }
-    }
-
-    private func consumePendingSegmentIfNeeded(_ pending: MailSegment?) {
-        guard let pending, rootTabs.selected == .mail else { return }
-        segment = pending
-        store.pendingSegment = nil
-    }
-}
-
 /// `Identifiable` wrapper so `fullScreenCover(item:)` can fire when
 /// the token string is non-nil.
 private struct InviteSheetToken: Identifiable, Equatable {
@@ -685,7 +735,7 @@ private struct InviteSheetToken: Identifiable, Equatable {
     }
 }
 
-/// Root-level unread badge source for the Mail tab (Messages segment). It mirrors the
+/// Root-level unread badge source for the Messages tab. It mirrors the
 /// Expo mobile BadgeContext: seed from `/api/chat/stats`, then keep the
 /// count warm with `badge:update` socket events and reconnect refreshes.
 /// Muted conversation unread is excluded so the badge reflects "notify me"

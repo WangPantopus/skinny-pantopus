@@ -46,6 +46,7 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.MailboxApi
 import app.pantopus.android.data.api.services.MailboxV2Api
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -231,6 +232,15 @@ class MailboxRepository
 
             fun announceMailViewed(mailId: String) {
                 mailViewedFlow.tryEmit(mailId)
+            }
+
+            private val mailArrivedFlow = MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+
+            /** A mail push came in: the Mail tab's badge reads its count again. */
+            val mailArrived: SharedFlow<Unit> = mailArrivedFlow.asSharedFlow()
+
+            fun announceMailArrived() {
+                mailArrivedFlow.tryEmit(Unit)
             }
         }
     }

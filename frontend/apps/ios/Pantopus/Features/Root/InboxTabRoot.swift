@@ -118,10 +118,6 @@ public struct InboxTabRoot: View {
                     .toolbar(.hidden, for: .navigationBar)
             }
         }
-        // The Mail tab hides its Mailbox/Messages switch below the root.
-        .onChange(of: path.isEmpty, initial: true) { _, atRoot in
-            MailTabStore.shared.messagesAtRoot = atRoot
-        }
         .onChange(of: router.pending) { _, pending in
             consumeDeepLinkIfNeeded(pending: pending)
         }

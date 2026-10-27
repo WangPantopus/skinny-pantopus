@@ -10,6 +10,14 @@ import Foundation
 /// `GET /api/mailbox/v2/drawers` envelope — route `backend/routes/mailboxV2.js:214`.
 public struct DrawerListResponse: Decodable, Sendable, Hashable {
     public let drawers: [Drawer]
+    /// The Mail tab badge: unopened, delivered pieces in Me + Home + Biz that
+    /// this person can read (Mail build contract v1). Absent from older servers.
+    public let unreadTotal: Int?
+
+    private enum CodingKeys: String, CodingKey {
+        case drawers
+        case unreadTotal = "unread_total"
+    }
 
     public struct Drawer: Decodable, Sendable, Hashable, Identifiable {
         public let drawer: String
