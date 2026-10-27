@@ -19,6 +19,8 @@ const mailVault = require('../services/mailVault');
 const mailEnclosures = require('../services/mailEnclosures');
 const mailVacation = require('../services/mailVacation');
 const pantopusLetters = require('../services/pantopusLetters');
+// A bill's invoice, read live (SRV-7).
+const { attachInvoices } = require('../services/invoiceBills');
 const { MAIL_HOME_NEEDS_PROOF, MAIL_NOT_FOUND } = require('../utils/homeMailAccess');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
@@ -468,7 +470,7 @@ router.get('/drawer/:drawer', verifyToken, async (req, res) => {
     }, userId), { timeZone }));
 
     // A bundle's pieces (on the Counter, in the Vault, Archived) say which bundle they came in.
-    return res.json({ mail: await mailPiece.withBundleLabels(enrichedMail), total: count || 0, drawer });
+    return res.json({ mail: await attachInvoices(await mailPiece.withBundleLabels(enrichedMail)), total: count || 0, drawer });
   } catch (err) {
     logger.error('Drawer fetch error', { error: err.message });
     return res.status(500).json({ error: "Couldn't load your mail. Try again in a moment.", code: 'MAIL_UNAVAILABLE' });
@@ -534,7 +536,7 @@ router.get('/search', verifyToken, async (req, res) => {
       sender_display: resolveSenderDisplay(m),
       sender_trust: resolveSenderTrust(m),
     }, userId), { timeZone }));
-    return res.json({ mail: await mailPiece.withBundleLabels(rows), total: Math.max(0, (count || 0) - (named.length - kept.length)) });
+    return res.json({ mail: await attachInvoices(await mailPiece.withBundleLabels(rows)), total: Math.max(0, (count || 0) - (named.length - kept.length)) });
   } catch (err) {
     logger.error('Mail search error', { error: err.message });
     return res.status(500).json({ error: "Couldn't search your mail. Try again in a moment.", code: 'MAIL_UNAVAILABLE' });
@@ -563,11 +565,11 @@ async function bundlePieces(bundleId, userId, timeZone) {
     .limit(100);
   if (error) throw new Error(error.message);
   const named = await nameMailSenders(data || [], userId);
-  return mailPiece.withBundleLabels(named.map((m) => mailPiece.present(presentMailSender({
+  return attachInvoices(await mailPiece.withBundleLabels(named.map((m) => mailPiece.present(presentMailSender({
     ...m,
     sender_display: resolveSenderDisplay(m),
     sender_trust: resolveSenderTrust(m),
-  }, userId), { timeZone })));
+  }, userId), { timeZone }))));
 }
 
 // GET /api/mailbox/v2/item/:id — Get mail item detail
@@ -663,7 +665,7 @@ router.get('/item/:id', verifyToken, async (req, res) => {
     const timeZone = (await mailDelivery.personTimeZone(userId)) || mailDelivery.FALLBACK_TIME_ZONE;
     // A bundle opens to its pieces (SRV-5).
     const pieces = mail.mail_object_type === 'bundle' && !mail.removed ? await bundlePieces(id, userId, timeZone) : null;
-    const piece = await mailPiece.withBundleLabels(mailPiece.present(presentMailSender({
+    const piece = await attachInvoices(await mailPiece.withBundleLabels(mailPiece.present(presentMailSender({
         ...named,
         sender_display: resolveSenderDisplay(named),
         sender_trust: resolveSenderTrust(named),
@@ -673,7 +675,7 @@ router.get('/item/:id', verifyToken, async (req, res) => {
         // What the piece encloses, the letter's own attachments included; each opens through
         // GET /api/mailbox/:id/enclosures/:enclosureId (SRV-4).
         enclosures: mailEnclosures.listFor(named, objectPayload?.envelope?.attachments || objectPayload?.attachments),
-      }, userId), { timeZone }));
+      }, userId), { timeZone })));
     return res.json({ mail: pieces ? { ...piece, pieces } : piece });
   } catch (err) {
     logger.error('Item fetch error', { error: err.message });
@@ -766,7 +768,7 @@ router.post('/item/:id/action', verifyToken, async (req, res) => {
       sender_trust: resolveSenderTrust(named),
     }, userId), { timeZone }) : null;
     if (piece && action === 'shred') piece.removed = await removedMailInfo(after);
-    return res.json({ mail: piece ? await mailPiece.withBundleLabels(piece) : piece, message: `Action '${action}' recorded`, action });
+    return res.json({ mail: piece ? await attachInvoices(await mailPiece.withBundleLabels(piece)) : piece, message: `Action '${action}' recorded`, action });
   } catch (err) {
     logger.error('Action error', { error: err.message });
     return res.status(500).json({ error: "Couldn't do that just now. Your mail is as it was. Try again in a moment.", code: 'MAIL_UNAVAILABLE' });

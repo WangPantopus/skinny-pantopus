@@ -57,6 +57,8 @@ const { createHash } = require('node:crypto');
 const express = require('express');
 const router = express.Router();
 const supabaseAdmin = require('../config/supabaseAdmin');
+// Bills from business invoices in the payer's Mail (Mail tab, SRV-7).
+const invoiceBills = require('../services/invoiceBills');
 const verifyToken = require('../middleware/verifyToken');
 const optionalAuth = require('../middleware/optionalAuth');
 const validate = require('../middleware/validate');
@@ -5079,6 +5081,8 @@ async function markInvoicePaid(invoiceId) {
     .neq('status', 'paid')
     .select();
   if (error) throw error;
+  // Its bill in the payer's Mail shows Paid and moves to Receipts (Mail tab, SRV-7); never fails the payment.
+  void invoiceBills.onInvoicePaid(invoiceId);
   if (updatedRows?.[0]) {
     // Only the request that marked it paid says so; a notice that fails never fails the payment.
     notifyInvoicePaid(updatedRows[0]).catch((err) => {
@@ -5347,6 +5351,8 @@ router.post('/:businessId/invoices', verifyToken, validate(createInvoiceSchema),
       if (!sameInvoice) {
         return res.status(409).json({ error: 'This invoice request was already used for a different invoice.', code: 'INVOICE_REQUEST_REUSED' });
       }
+      // The bill in the payer's Mail is one per invoice: a retry makes sure it exists, never a second (SRV-7).
+      void invoiceBills.deliverBillSafe(existing);
       return res.status(201).json({ invoice: existing });
     };
     if (requestInvoiceId) {
@@ -5426,6 +5432,8 @@ router.post('/:businessId/invoices', verifyToken, validate(createInvoiceSchema),
       .catch((err) => {
         logger.warn('Invoice notification skipped', { invoiceId: invoice.id, error: err.message });
       });
+    // A bill, a window envelope, goes to the payer's Mail and follows the morning delivery rule (Mail tab, SRV-7).
+    void invoiceBills.deliverBillSafe(invoice);
 
     res.status(201).json({ invoice });
   } catch (err) {
@@ -5561,6 +5569,8 @@ router.patch('/:businessId/invoices/:invoiceId', verifyToken, async (req, res) =
     if (updateErr) {
       return res.status(500).json({ error: 'Failed to void invoice' });
     }
+    // Its bill in the payer's Mail shows Void, leaves the Counter and stays readable (Mail tab, SRV-7).
+    void invoiceBills.onInvoiceVoid(invoiceId);
 
     res.json({ invoice: updated });
   } catch (err) {

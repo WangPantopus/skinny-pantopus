@@ -14,6 +14,8 @@ const mailPiece = require('../services/mailPiece');
 const mailSummaries = require('../services/mailSummaries');
 // Private enclosures (SRV-4).
 const mailEnclosures = require('../services/mailEnclosures');
+// A bill's invoice, read live (SRV-7).
+const { attachInvoices } = require('../services/invoiceBills');
 const { HOME_DOCUMENT_TYPES } = require('../utils/homeDocumentAccess');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
@@ -1829,7 +1831,7 @@ router.get('/:id', verifyToken, async (req, res) => {
     }
 
     const timeZone = (await mailDelivery.personTimeZone(userId)) || mailDelivery.FALLBACK_TIME_ZONE;
-    res.json({ mail: await mailPiece.withBundleLabels(mailPiece.present(presentMailSender(await nameMailSender(mail, userId), userId), { timeZone })) });
+    res.json({ mail: await attachInvoices(await mailPiece.withBundleLabels(mailPiece.present(presentMailSender(await nameMailSender(mail, userId), userId), { timeZone }))) });
 
   } catch (err) {
     logger.error('Mail fetch error', { error: err.message, mailId: req.params.id });
