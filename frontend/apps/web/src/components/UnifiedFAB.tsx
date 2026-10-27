@@ -32,9 +32,10 @@ const ROUTES_WITH_PAGE_FAB = ['/app/homes/'];
 
 /**
  * Chat has its own composer and "New message"; on a phone the button sat on
- * the composer's Send button. No quick-actions button there at all.
+ * the composer's Send button. The Mailbox has its own actions under each
+ * letter, and the button sat on Shred. No quick-actions button there at all.
  */
-const ROUTES_WITHOUT_FAB = ['/app/chat'];
+const ROUTES_WITHOUT_FAB = ['/app/chat', '/app/mailbox'];
 
 /** Whether a quick-actions button (global or page-level) floats over this route. */
 export function routeHasFab(pathname: string): boolean {

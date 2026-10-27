@@ -209,7 +209,7 @@ final class HomeClaimDecisionTests: XCTestCase {
         await vm.load()
         await assertTrue(vm.review(.approve))
         XCTAssertEqual(posts().first?.authTestJSONBody()?["review_token"] as? String, token)
-        XCTAssertEqual(vm.toast?.text, "Claim approved as Renter.")
+        XCTAssertEqual(vm.toast?.text, "Claim approved as Resident.")
     }
 
     func testAdminUnknownResultRequiresExactNoteAndActionOnRetry() async {
@@ -249,7 +249,7 @@ final class HomeClaimDecisionTests: XCTestCase {
             await waitFor { !self.posts().isEmpty }
             if changeAccount { session.identity = "another-account" }
             await assertFalse(review.value)
-            XCTAssertNotEqual(vm.toast?.text, "Claim approved as Renter.")
+            XCTAssertNotEqual(vm.toast?.text, "Claim approved as Resident.")
         }
     }
 

@@ -116,6 +116,8 @@ object TodayDetailMapper {
             body = dto.detail ?: "",
             timing = "",
             severity = signalSeverity(dto.urgency),
+            // The mail line opens the Mail tab, while the Mailbox is on (as on iOS).
+            route = (dto.action?.route ?: MAILBOX_ROUTE).takeIf { dto.kind == MAILBOX_SIGNAL_KIND && LaunchFeatures.mailbox },
         )
 
     @Suppress("CyclomaticComplexMethod")
@@ -247,6 +249,7 @@ object TodayDetailMapper {
 
     /** The briefing's "N urgent mail" signal, which opens the mailbox. */
     private const val MAILBOX_SIGNAL_KIND = "mail"
+    private const val MAILBOX_ROUTE = "/app/mailbox"
 
     private const val SHARE_FALLBACK = "Today's Pantopus briefing — ${InviteLinks.DOWNLOAD_URL}"
 

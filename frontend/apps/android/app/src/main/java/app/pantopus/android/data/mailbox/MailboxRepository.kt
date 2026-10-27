@@ -21,6 +21,7 @@ import app.pantopus.android.data.api.models.mailbox.v2.DrawerListResponse
 import app.pantopus.android.data.api.models.mailbox.v2.EarnBalanceResponse
 import app.pantopus.android.data.api.models.mailbox.v2.LogEventRequest
 import app.pantopus.android.data.api.models.mailbox.v2.LogEventResponse
+import app.pantopus.android.data.api.models.mailbox.v2.MailSearchResponse
 import app.pantopus.android.data.api.models.mailbox.v2.MailboxItemActionRequest
 import app.pantopus.android.data.api.models.mailbox.v2.MailboxItemActionResponse
 import app.pantopus.android.data.api.models.mailbox.v2.MailboxV2ItemResponse
@@ -42,14 +43,18 @@ import app.pantopus.android.data.api.models.mailbox.v2.StartVacationResponse
 import app.pantopus.android.data.api.models.mailbox.v2.TranslateMailRequest
 import app.pantopus.android.data.api.models.mailbox.v2.TranslationResult
 import app.pantopus.android.data.api.models.mailbox.v2.VacationStatusResponse
+import app.pantopus.android.data.api.models.mailbox.v2.unopenedTotal
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.MailboxApi
 import app.pantopus.android.data.api.services.MailboxV2Api
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -102,8 +107,14 @@ class MailboxRepository
         /** `POST /api/mailbox/:id/restore` — puts a deleted or household-dismissed letter back. */
         suspend fun restore(mailId: String): NetworkResult<RestoreMailResponse> = safeApiCall { mailboxApi.restore(mailId) }
 
+        private val _unopened = MutableStateFlow<Int?>(null)
+
+        /** The unopened count the latest drawers read returned (null before any), so the Mail badge matches the Mailbox. */
+        val unopened: StateFlow<Int?> = _unopened.asStateFlow()
+
         /** `GET /api/mailbox/v2/drawers`. */
-        suspend fun drawers(): NetworkResult<DrawerListResponse> = safeApiCall { v2Api.drawers() }
+        suspend fun drawers(): NetworkResult<DrawerListResponse> =
+            safeApiCall { v2Api.drawers() }.also { if (it is NetworkResult.Success) _unopened.value = it.data.unopenedTotal() }
 
         /** `GET /api/mailbox/v2/drawer/:drawer?tab=…` — the (drawer, tab)
          *  mail window backing the B.1 Mailbox root. */
@@ -113,6 +124,13 @@ class MailboxRepository
             limit: Int,
             offset: Int,
         ): NetworkResult<DrawerItemsResponse> = safeApiCall { v2Api.drawer(drawer = drawer, tab = tab, limit = limit, offset = offset) }
+
+        /** `GET /api/mailbox/v2/search?q=` — searched on the server, over all the mail the person can read. */
+        suspend fun search(
+            query: String,
+            limit: Int,
+            offset: Int,
+        ): NetworkResult<MailSearchResponse> = safeApiCall { v2Api.search(query = query, limit = limit, offset = offset) }
 
         /** `GET /api/mailbox/v2/item/:id`. */
         suspend fun item(mailId: String): NetworkResult<MailboxV2ItemResponse> = safeApiCall { v2Api.item(mailId) }

@@ -92,7 +92,7 @@ function ReviewSummary({ summary, historical = false }: { summary: RemovalSummar
   return <dl className="space-y-2 text-sm">
     <div><dt className="font-medium">Home</dt><dd className="break-words">{summary.home.name || 'Selected Home'}</dd></div>
     <div><dt className="font-medium">Member</dt><dd className="break-words">{name}{t.is_self ? ' (you)' : ''}</dd></div>
-    <div><dt className="font-medium">Role</dt><dd>{t.role_base ? t.role_base.charAt(0).toUpperCase() + t.role_base.slice(1).replaceAll('_', ' ') : 'Not recorded'}</dd></div>
+    <div><dt className="font-medium">Role</dt><dd>{t.role_base === 'lease_resident' ? 'Resident' : t.role_base ? t.role_base.charAt(0).toUpperCase() + t.role_base.slice(1).replaceAll('_', ' ') : 'Not recorded'}</dd></div>
     {t.access_start_at && <div><dt>Access starts</dt><dd>{new Date(t.access_start_at).toLocaleString()}</dd></div>}
     {(t.access_end_at || t.end_at) && <div><dt>Access ends</dt><dd>{new Date(t.access_end_at || t.end_at!).toLocaleString()}</dd></div>}
   </dl>;

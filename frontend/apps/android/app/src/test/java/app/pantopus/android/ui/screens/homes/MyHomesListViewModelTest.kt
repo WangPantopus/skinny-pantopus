@@ -156,7 +156,7 @@ class MyHomesListViewModelTest {
             assertTrue(chips.first().tint is RowChip.Tint.Status)
             assertTrue(rows[0].leading is RowLeading.TypeIcon)
             assertEquals("1 Main", rows[1].title)
-            assertEquals("Tenant · Sellwood, CA", rows[1].subtitle)
+            assertEquals("Resident · Sellwood, CA", rows[1].subtitle)
             assertEquals(listOf("Household access"), rows[1].chips?.map { it.text })
             assertTrue(rows[1].leading is RowLeading.TypeIcon)
             // Banner shows count + home tint when populated.

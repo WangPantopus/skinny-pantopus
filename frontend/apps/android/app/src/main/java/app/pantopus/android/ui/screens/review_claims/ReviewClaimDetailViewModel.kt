@@ -58,7 +58,7 @@ enum class ClaimApprovalRole(val wire: String, val label: String, val hint: Stri
     Admin("admin", "Admin", "Views the home and its ownership, and votes on household decisions."),
     Manager("manager", "Manager", "Views the home and works on tasks."),
     Member("member", "Member", "Views the home and works on tasks."),
-    Renter("lease_resident", "Renter", "Sees members, Wi-Fi, the calendar and packages, and works on tasks."),
+    LeaseResident("lease_resident", "Resident", "Sees members, Wi-Fi, the calendar and packages, and works on tasks."),
     RestrictedMember("restricted_member", "Restricted member", "Views the home only."),
     Guest("guest", "Guest", "Views the home only."),
     ;
@@ -69,7 +69,7 @@ enum class ClaimApprovalRole(val wire: String, val label: String, val hint: Stri
             when (claimType) {
                 "owner" -> Owner
                 "admin" -> Admin
-                else -> Renter
+                else -> LeaseResident
             }
     }
 }

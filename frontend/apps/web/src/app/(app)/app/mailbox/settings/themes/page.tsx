@@ -6,6 +6,8 @@ import type { Stamp, SeasonalTheme } from '@/types/mailbox';
 import { useStamps, useThemes, useSetActiveTheme } from '@/lib/mailbox-queries';
 import { StampCard } from '@/components/mailbox';
 import { toast } from '@/components/ui/toast-store';
+import ErrorState from '@/components/ui/ErrorState';
+import { mailLoadMessage } from '@/components/mailbox/mailLoadMessage';
 
 // ── Stamp category filter ────────────────────────────────────
 
@@ -236,8 +238,8 @@ const SEASON_ICONS: Record<string, string> = {
 // ── Main Page ────────────────────────────────────────────────
 
 export default function StampsThemesPage() {
-  const { data: stampData, isLoading: stampsLoading } = useStamps();
-  const { data: themeData, isLoading: themesLoading } = useThemes();
+  const { data: stampData, isLoading: stampsLoading, error: stampsError, refetch: refetchStamps } = useStamps();
+  const { data: themeData, isLoading: themesLoading, error: themesError, refetch: refetchThemes } = useThemes();
   const setThemeMutation = useSetActiveTheme();
 
   const [activeTab, setActiveTab] = useState<'stamps' | 'themes'>('stamps');
@@ -288,6 +290,16 @@ export default function StampsThemesPage() {
       <div className="flex items-center justify-center h-full">
         <div className="w-6 h-6 border-2 border-app-border border-t-gray-600 rounded-full animate-spin" />
       </div>
+    );
+  }
+
+  if (stampsError || themesError) {
+    return (
+      <ErrorState
+        title="Couldn't load your stamps and themes"
+        message={mailLoadMessage(stampsError ?? themesError)}
+        onRetry={() => { void refetchStamps(); void refetchThemes(); }}
+      />
     );
   }
 

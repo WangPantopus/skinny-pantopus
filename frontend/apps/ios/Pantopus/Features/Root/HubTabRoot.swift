@@ -554,6 +554,8 @@ public struct HubTabRoot: View {
     @State private var opensAudienceProfileAfterIdentityCenter = false
     /// The Mail tab's Mailbox model, once made (`mailTabMailboxModel`).
     @State private var mailboxModelBox = MailboxRootModelBox()
+    /// "Verify your home" from a Home letter that waits for proof of address.
+    @State private var mailVerifyHome: MailVerifyHome?
     #if DEBUG
     @State private var debugSheet: HubRoute?
     #endif
@@ -758,6 +760,27 @@ public struct HubTabRoot: View {
             launchScopedDestination(for: item.route) { path.append($0) }
         }
         .sheet(item: $systemSheet) { request in request.makeView() }
+        .sheet(item: $mailVerifyHome) { home in
+            PlaceVerifySheet(
+                address: home.address,
+                homeId: home.homeId,
+                onStart: { method in
+                    mailVerifyHome = nil
+                    switch method {
+                    case .document: path.append(.verifyResidency(homeId: home.homeId))
+                    case .mail: path.append(.postcardVerification(homeId: home.homeId))
+                    case .landlord: path.append(.verifyLandlord(homeId: home.homeId))
+                    }
+                },
+                onClose: { mailVerifyHome = nil },
+                onOpenDocumentStatus: {
+                    mailVerifyHome = nil
+                    path.append(.waitingRoom(homeId: home.homeId))
+                }
+            )
+            .presentationDetents([.large])
+            .presentationDragIndicator(.hidden)
+        }
         .findPeopleSheet(isPresented: $showFindPeople)
         // The side menu is `RootTabView`'s, over every tab: its choices
         // arrive here, where its screens live.
@@ -2283,8 +2306,20 @@ public struct HubTabRoot: View {
                     Task { @MainActor in
                         push(.packageGig(mailId: mailId, isPreDelivery: isPreDelivery))
                     }
+                },
+                onPay: { invoiceId in Task { @MainActor in push(.invoiceDetail(invoiceId: invoiceId)) } },
+                onOpenMail: { pieceId in Task { @MainActor in push(.mailItemDetail(mailId: pieceId)) } },
+                onVerifyHome: { homeId in
+                    let home = MailBadgeStore.shared.homes.first { $0.homeId == homeId }
+                    mailVerifyHome = MailVerifyHome(
+                        homeId: homeId,
+                        address: home.flatMap { MailPieceModel.firstText($0.addressLine, $0.name) } ?? "Your home"
+                    )
                 }
             )
+            // A link that swaps one open letter for another gets a fresh page,
+            // not the first letter's view model.
+            .id(mailId)
         case let .publicProfile(userId):
             PublicProfileView(
                 userId: userId,
@@ -3978,5 +4013,15 @@ struct OwnHeaderBar: ViewModifier {
         } else {
             content
         }
+    }
+}
+
+/// The Home a "Verify your home" from the Mail tab is for.
+struct MailVerifyHome: Identifiable {
+    let homeId: String
+    let address: String
+
+    var id: String {
+        homeId
     }
 }

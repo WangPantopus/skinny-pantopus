@@ -309,7 +309,7 @@ class TokenAcceptViewModel
                     )
                 return TokenAcceptOffer(
                     invitationId = null, inviteType = InviteType.LeaseInvite, title = "Review your lease invitation",
-                    sender = "Your landlord invited you", roleOffered = "Tenant",
+                    sender = "Your landlord invited you", roleOffered = "Resident",
                     venue = listOfNotNull(preview.home.name ?: "Your rental Home", preview.home.city).joinToString(", "),
                     benefits = dates, expiry = formatExpiry(invitation.expiresAt),
                     safetyBand =

@@ -132,7 +132,7 @@ extension MailDetailContent {
         partyDetail: PartyDetailDTO?? = nil,
         recordsDetail: RecordsDetailDTO?? = nil
     ) -> MailDetailContent {
-        MailDetailContent(
+        var rebuilt = MailDetailContent(
             mailId: content.mailId,
             category: content.category,
             mailCategoryKey: content.mailCategoryKey,
@@ -170,6 +170,8 @@ extension MailDetailContent {
             recordsDetail: recordsDetail ?? content.recordsDetail,
             extractedFacts: content.extractedFacts
         )
+        rebuilt.letter = content.letter
+        return rebuilt
     }
 }
 

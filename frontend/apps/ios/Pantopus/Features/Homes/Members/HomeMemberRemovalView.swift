@@ -224,6 +224,7 @@ struct HomeMemberRemovalView: View {
 
     private func roleLabel(_ value: String?) -> String {
         guard let value else { return "Not recorded" }
+        if value == "lease_resident" { return "Resident" }
         return value.replacingOccurrences(of: "_", with: " ").capitalized
     }
 

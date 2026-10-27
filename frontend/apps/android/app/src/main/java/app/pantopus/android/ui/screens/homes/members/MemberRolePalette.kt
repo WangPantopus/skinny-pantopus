@@ -15,8 +15,9 @@ import app.pantopus.android.ui.theme.PantopusIcon
  * palette files that need to encode a per-category background +
  * foreground pair.
  *
- * Backend roles (see `backend/utils/homePermissions.js` ROLE_RANK):
- *   owner / admin / manager / member / restricted_member / guest
+ * Backend roles (see `backend/utils/homeAccessPolicy.js` ROLE_RANK):
+ *   owner / admin / manager / lease_resident / member /
+ *   restricted_member / guest / service_provider
  *
  * Wire role strings → typed [MemberRole] → display label + icon + chip
  * tint. Unknown / null roles collapse to [MemberRole.Member].
@@ -32,8 +33,9 @@ enum class MemberRole(
     Manager(wire = "manager", label = "Manager", icon = PantopusIcon.ShieldCheck),
     Member(wire = "member", label = "Member", icon = PantopusIcon.User),
     Restricted(wire = "restricted_member", label = "Limited", icon = PantopusIcon.Lock),
-    Tenant(wire = "lease_resident", label = "Tenant", icon = PantopusIcon.FileText),
+    LeaseResident(wire = "lease_resident", label = "Resident", icon = PantopusIcon.FileText),
     Guest(wire = "guest", label = "Guest", icon = PantopusIcon.Clock),
+    ServiceProvider(wire = "service_provider", label = "Service provider", icon = PantopusIcon.Wrench),
     ;
 
     /** (background, foreground) pair for the role chip. */
@@ -65,12 +67,18 @@ enum class MemberRole(
                         background = PantopusColors.warningBg,
                         foreground = PantopusColors.warning,
                     )
-                Tenant ->
+                LeaseResident ->
                     MemberRolePalette(
                         background = PantopusColors.businessBg,
                         foreground = PantopusColors.business,
                     )
                 Guest ->
+                    MemberRolePalette(
+                        background = PantopusColors.appSurfaceSunken,
+                        foreground = PantopusColors.appTextSecondary,
+                    )
+                // Same neutral as a guest: works at the home, doesn't live there.
+                ServiceProvider ->
                     MemberRolePalette(
                         background = PantopusColors.appSurfaceSunken,
                         foreground = PantopusColors.appTextSecondary,
@@ -90,8 +98,9 @@ enum class MemberRole(
                 "manager" -> Manager
                 "member" -> Member
                 "restricted_member", "restricted", "limited" -> Restricted
-                "tenant", "lease_resident" -> Tenant
+                "tenant", "lease_resident" -> LeaseResident
                 "guest" -> Guest
+                "service_provider" -> ServiceProvider
                 else -> Member
             }
     }

@@ -15,7 +15,7 @@ enum class HomeResidencyDecision(val wire: String, val title: String) {
 
 enum class HomeResidencyReviewRole(val wire: String, val title: String) {
     Member("member", "Member"),
-    LeaseResident("lease_resident", "Lease resident"),
+    LeaseResident("lease_resident", "Resident"),
     RestrictedMember("restricted_member", "Restricted member"),
     Guest("guest", "Guest"),
     ServiceProvider("service_provider", "Service provider"),

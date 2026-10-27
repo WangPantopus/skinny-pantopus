@@ -256,6 +256,10 @@ export interface VacationHold {
   auto_neighbor_request: boolean;
   status: 'scheduled' | 'active' | 'completed' | 'cancelled';
   items_held_count: number;
+  /** Pieces the hold keeps now (live, from the status reply). */
+  held_count?: number;
+  /** When the held pieces come: 7:00 a.m. on end_date in the person's zone. */
+  release_at?: string | null;
 }
 
 // ── Translation ──

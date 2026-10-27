@@ -324,22 +324,49 @@ function generateAddressCalendarSignals(addressCalendar) {
   return out;
 }
 
+// "7:00 a.m." in the person's zone.
+function mailClockText(iso, timeZone) {
+  let text;
+  try {
+    text = new Intl.DateTimeFormat('en-US', { timeZone, hour: 'numeric', minute: '2-digit' }).format(new Date(iso));
+  } catch (_) {
+    text = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', minute: '2-digit' }).format(new Date(iso));
+  }
+  return text.replace(/\s?AM$/, ' a.m.').replace(/\s?PM$/, ' p.m.');
+}
+
 /**
- * Generate urgent mail signal.
+ * Today's mail line (Mail tab), from the Mailbox's own delivery line (internal.mail_today): after this morning's round
+ * brought pieces that are still unopened, when it came and how many ("Today's mail came at 7:00 a.m. · 4 pieces"),
+ * with what needs the person today folded in ("· 1 needs you today"); that alone on a morning with nothing new still
+ * unopened. Useful only: no line for no mail, before the round, or while the mailbox is off.
  */
 function generateMailSignals(internal) {
-  if (!internal.urgent_mail_count) return [];
+  const today = internal.mail_today;
+  if (!today) return [];
+  const unopened = today.last_unopened || 0;
+  const needsYou = today.needs_you_today || 0;
+  if (!unopened && !needsYou) return [];
 
-  const count = internal.urgent_mail_count;
+  const pieces = (n) => `${n} ${n === 1 ? 'piece' : 'pieces'}`;
+  const needs = (n, noun) => `${noun ? pieces(n) : n} ${n === 1 ? 'needs' : 'need'} you today`;
+  const parts = unopened ? [`Today's mail came at ${mailClockText(today.last_at, today.time_zone)}`, pieces(unopened)] : [];
+  if (needsYou) parts.push(needs(needsYou, !unopened));
+  const detail = [
+    unopened ? `${pieces(unopened)} from today's mail ${unopened === 1 ? 'is' : 'are'} still unopened.` : null,
+    needsYou ? `${needs(needsYou, true)}.` : null,
+  ].filter(Boolean).join(' ');
   return [{
     kind: 'mail',
     score: 0.60 * 0.35 + 0.70 * 0.25 + 0.90 * 0.30 + 0.95 * 0.10,
-    label: `${count} urgent mail`,
-    detail: `You have ${count} urgent mail item${count > 1 ? 's' : ''} in your mailbox.`,
-    urgency: 'medium',
+    label: parts.join(' · '),
+    detail,
+    urgency: needsYou ? 'high' : 'medium',
     source_provider: 'pantopus',
     action: { label: 'Open mailbox', route: '/app/mailbox' },
-    data: { urgent_count: count, unread_count: internal.unread_mail_count },
+    // urgent_count and unread_count stay for older app builds.
+    data: { unopened_count: unopened, needs_you_today: needsYou, delivered_at: today.last_at, urgent_count: needsYou,
+      unread_count: internal.unread_mail_count },
   }];
 }
 

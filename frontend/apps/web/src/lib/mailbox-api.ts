@@ -55,6 +55,8 @@ export class MailboxApiError extends Error {
     message: string,
     public status: number,
     public retryable: boolean,
+    /** The server's stable code (MAIL_NOT_FOUND …): its `error` is then a sentence people can read. */
+    public serverCode?: string,
   ) {
     super(message);
     this.name = 'MailboxApiError';
@@ -79,7 +81,7 @@ async function call<T>(fn: () => Promise<T>): Promise<T> {
     const e = err as {
       message?: string;
       statusCode?: number;
-      data?: { error?: string };
+      data?: { error?: string; code?: string };
     };
 
     // Network-level failure (no response at all)
@@ -110,6 +112,7 @@ async function call<T>(fn: () => Promise<T>): Promise<T> {
       e.message || e.data?.error || 'An error occurred',
       e.statusCode,
       e.statusCode >= 500,
+      typeof e.data?.code === 'string' ? e.data.code : undefined,
     );
   }
 }
@@ -125,9 +128,30 @@ export async function getDrawers(): Promise<MailboxDrawers> {
   });
 }
 
+/**
+ * GET /api/mailbox/v2/search: everything the person can read (Me, Home after
+ * proof, Biz), filed and archived included; at most 50 a page.
+ */
+export async function searchMail(
+  query: string,
+  params?: { page?: number; limit?: number },
+): Promise<MailboxPaginatedResponse<MailItemV2>> {
+  const limit = Math.min(params?.limit ?? 30, 50);
+  const page = params?.page ?? 1;
+  return call(async () => {
+    const res = await get<{ mail?: MailItemV2[]; results?: MailItemV2[]; total?: number }>(
+      '/api/mailbox/v2/search',
+      { q: query, limit, offset: (page - 1) * limit },
+    );
+    const items = res?.mail ?? res?.results ?? [];
+    const total = typeof res?.total === 'number' ? res.total : items.length;
+    return { items, total, page, has_more: page * limit < total };
+  });
+}
+
 export async function getDrawerItems(
   drawer: DrawerParam,
-  params?: { page?: number; limit?: number; filter?: string; tab?: 'incoming' | 'counter' | 'vault' },
+  params?: { page?: number; limit?: number; filter?: string; tab?: 'incoming' | 'counter' | 'vault' | 'archived'; homeId?: string; folderId?: string },
 ): Promise<MailboxPaginatedResponse<MailItemV2>> {
   return call(async () => {
     const res = await get<{ mail: MailItemV2[]; total: number; drawer: string }>(
@@ -137,6 +161,10 @@ export async function getDrawerItems(
         offset: params?.page ? (params.page - 1) * (params.limit ?? 20) : 0,
         ...(params?.tab ? { tab: params.tab } : {}),
         ...(params?.filter ? { filter: params.filter } : {}),
+        // One Home's pieces (the Home drawer only, contract SRV-2).
+        ...(params?.homeId && drawer === 'home' ? { home_id: params.homeId } : {}),
+        // One Vault folder (tab=vault).
+        ...(params?.folderId ? { folder_id: params.folderId } : {}),
       },
     );
     const limit = params?.limit ?? 20;
@@ -204,8 +232,28 @@ export async function getItemDetail(itemId: string): Promise<MailItemDetailRespo
         requires_acknowledgment: certified,
         certified,
       },
+      piece: mail,
     };
   });
+}
+
+/** What you can do with a piece (contract: POST /api/mailbox/v2/item/:id/action). */
+export type MailActionName = 'counter' | 'done' | 'file' | 'unfile' | 'shred' | 'acknowledge';
+
+/** Do something with a piece; returns the piece as it is now (null when it's gone). */
+export async function mailAction(itemId: string, action: MailActionName, folderId?: string): Promise<MailItemV2 | null> {
+  return call(async () => {
+    const res = await post<{ mail: MailItemV2 | null }>(`/api/mailbox/v2/item/${itemId}/action`, {
+      action,
+      ...(folderId ? { folder_id: folderId } : {}),
+    });
+    return res?.mail ?? null;
+  });
+}
+
+/** A short-lived link to one enclosure, fetched when the person opens it. */
+export async function getEnclosureLink(itemId: string, enclosureId: string): Promise<{ url: string; expires_at: string }> {
+  return call(() => get<{ url: string; expires_at: string }>(`/api/mailbox/${itemId}/enclosures/${enclosureId}`));
 }
 
 /** Certified-mail columns the item route returns with the Mail row. */
@@ -241,8 +289,15 @@ export async function getCounterItems(): Promise<MailItemV2[]> {
 // BUNDLES
 // ============================================================
 
+/**
+ * A bundle's pieces you may read. The bundle's detail answers them as list rows
+ * (SRV-5), with the fields the paper drawings need (`kind`, `from_pantopus`,
+ * `postmark`); a server without them answers the older bundle route.
+ */
 export async function expandBundle(bundleId: string): Promise<MailItemV2[]> {
   return call(async () => {
+    const detail = await get<{ mail: MailItemV2 & { pieces?: MailItemV2[] } }>(`/api/mailbox/v2/item/${bundleId}`);
+    if (Array.isArray(detail.mail?.pieces)) return detail.mail.pieces;
     const res = await get<{ bundle: unknown; items: MailItemV2[] }>(
       `/api/mailbox/v2/p2/bundle/${bundleId}/items`,
     );
@@ -350,6 +405,8 @@ export async function createVaultFolder(data: {
   icon: string;
   color: string;
   drawer: DrawerParam;
+  /** A Home folder goes in that Home's cabinet (needed when the person reads more than one Home's mail). */
+  home_id?: string;
   autoFileRules?: AutoFileRule[];
 }): Promise<VaultFolder> {
   return call(async () => {
@@ -799,8 +856,12 @@ export async function getVacationHold(): Promise<VacationHold | null> {
     const res = await get<{
       active: VacationHold | null;
       upcoming: VacationHold | null;
+      held_count?: number;
+      hold?: { held_count?: number; release_at?: string } | null;
     }>('/api/mailbox/v2/p3/vacation/status');
-    return res.active ?? res.upcoming;
+    const hold = res.active ?? res.upcoming;
+    // The live count and the release time come with the reply's hold line (SRV-5).
+    return hold ? { ...hold, held_count: res.hold?.held_count ?? res.held_count ?? hold.items_held_count, release_at: res.hold?.release_at ?? null } : null;
   });
 }
 

@@ -3003,12 +3003,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             navController.navigate(ChildRoutes.mailboxItemDetail(mailId))
                         },
                         onOpenSearch = { navController.navigate(ChildRoutes.MAILBOX_SEARCH) },
-                        onOpenMap = { navController.navigate(ChildRoutes.MAILBOX_MAP) },
-                        onOpenMailDay = { navController.navigate(ChildRoutes.mailDay()) },
-                        onOpenEarn = { navController.navigate(ChildRoutes.EARN) },
                         onOpenVacationHold = { navController.navigate(ChildRoutes.MAILBOX_VACATION) },
                         onOpenStamps = { navController.navigate(ChildRoutes.STAMPS) },
-                        onOpenUnboxing = { navController.navigate(ChildRoutes.unboxing()) },
                         onOpenCompose = { navController.navigate(ChildRoutes.CEREMONIAL_MAIL) },
                         onOpenRoutingQueue = { navController.navigate(ChildRoutes.MAIL_ROUTING_QUEUE) },
                         onOpenMailParty = { navController.navigate(ChildRoutes.MAILBOX_PARTY) },

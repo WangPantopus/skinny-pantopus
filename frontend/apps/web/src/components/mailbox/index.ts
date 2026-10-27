@@ -10,7 +10,6 @@ export { default as AIElfStrip } from './AIElfStrip';
 export { default as CounterBanner } from './CounterBanner';
 export { default as CounterCard } from './CounterCard';
 export { default as CertifiedBanner } from './CertifiedBanner';
-export { default as BundleCard } from './BundleCard';
 export { default as BookletCard } from './BookletCard';
 export { default as OfferCard } from './OfferCard';
 export { default as VaultFolderCard } from './VaultFolderCard';

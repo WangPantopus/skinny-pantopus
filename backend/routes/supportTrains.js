@@ -19,7 +19,7 @@ const {
   requireSupportTrainViewer,
   supportTrainUnavailable,
 } = require('../middleware/supportTrainPermissions');
-const { emitSupportTrainEvent, formatSupportTrainSlotTime } = require('../services/supportTrainNotifications');
+const { emitSupportTrainEvent, formatSupportTrainSlotTime, inviteLetters, giftReceiptLetter } = require('../services/supportTrainNotifications');
 const { deliverNewMessage } = require('./chats');
 const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
 const {
@@ -2375,6 +2375,9 @@ router.post(
       .update({ total_amount: fund.total_amount + amount })
       .eq('id', fund.id);
 
+    // The donor's receipt, filed in their Receipts (Mail tab, SRV-9).
+    void giftReceiptLetter(contribution.id);
+
     // Notify organizers + recipient
     emitSupportTrainEvent({
       event: 'support_train.donation_received',
@@ -2555,6 +2558,11 @@ router.post(
     if (error || !data) {
       logger.error('Create invite failed', { supportTrainId: st.id, error: error?.message });
       return res.status(500).json({ error: 'INTERNAL', message: 'Failed to create invite.' });
+    }
+
+    // Someone invited after the Train is shared gets the invitation letter too (Mail tab, SRV-9).
+    if (data.invitee_user_id && ['published', 'active', 'paused'].includes(st.status)) {
+      void inviteLetters(st.id, [data.invitee_user_id]);
     }
 
     res.status(201).json(data);

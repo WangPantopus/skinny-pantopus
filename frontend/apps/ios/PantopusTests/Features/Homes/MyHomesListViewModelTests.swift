@@ -68,7 +68,7 @@ final class MyHomesListViewModelTests: XCTestCase {
         if case .typeIcon = rows[0].leading {} else { XCTFail("Expected Home icon without fabricated progress") }
         // A lease-resident role and verified occupancy do not invent ownership.
         XCTAssertEqual(rows[1].title, "88 Greenwood Ave")
-        XCTAssertEqual(rows[1].subtitle, "Tenant · Sellwood, OR")
+        XCTAssertEqual(rows[1].subtitle, "Resident · Sellwood, OR")
         XCTAssertEqual(rows[1].chips?.map(\.text), ["Household access"])
         if case .typeIcon = rows[1].leading {} else { XCTFail("Expected Home icon") }
         // Banner shows count + tap hint when populated.

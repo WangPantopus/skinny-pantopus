@@ -341,7 +341,7 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
         case "owner": return "Owner role"
         case "admin": return "Administrator"
         case "manager": return "Manager"
-        case "lease_resident": return "Tenant"
+        case "lease_resident": return "Resident"
         case "member": return "Member"
         case "restricted_member": return "Restricted member"
         case "guest": return "Guest"
