@@ -236,13 +236,34 @@ export interface DrawerMeta {
 }
 
 /**
- * GET /api/mailbox/v2/drawers. `unread_total` (the Mail tab badge: unopened,
- * delivered pieces in Me, Home and Biz) is new in the Mail build's contract;
- * servers before it send only the drawers.
+ * GET /api/mailbox/v2/drawers. The fields after `drawers` are new in the Mail
+ * build's contract; servers before them send only the drawers.
  */
 export interface MailboxDrawers {
   drawers: DrawerMeta[];
+  /** The Mail tab badge: unopened, delivered pieces in Me, Home and Biz. */
   unread_total?: number;
+  /** The morning round: the latest one that brought this person mail, and the next. */
+  delivery?: MailDelivery;
+  /** One row per Home the person lives at; `needs_proof` keeps its mail closed. */
+  homes?: MailboxHome[];
+}
+
+export interface MailDelivery {
+  /** The latest round (7:00 a.m. in the mailbox's zone) that brought something, or null (never). */
+  last_at: string | null;
+  last_count: number;
+  last_unopened: number;
+  next_at: string;
+  /** The person's own mailbox zone (IANA). */
+  time_zone: string;
+}
+
+export interface MailboxHome {
+  home_id: string;
+  address_line: string;
+  name: string | null;
+  mail_access: 'open' | 'needs_proof';
 }
 
 // ── Mail Wrapper / Envelope ──────────────────────────────────

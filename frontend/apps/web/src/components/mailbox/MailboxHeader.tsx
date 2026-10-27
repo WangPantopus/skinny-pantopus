@@ -8,13 +8,13 @@
 // 2026-10-27). The Mailbox's other pages get a back bar with the same menu.
 // ============================================================
 
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import Link from 'next/link';
-import { ChevronLeft, MoreHorizontal, PenLine } from 'lucide-react';
+import { ChevronLeft, MoreHorizontal, PenLine, Search } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { MailboxIcons } from '@/lib/icons';
 import { launchFeatures } from '@/lib/featureFlags';
-import { useCounterItems, useDrawerMeta } from '@/lib/mailbox-queries';
+import { useCounterItems, useDrawerMeta, useOwnsBusiness } from '@/lib/mailbox-queries';
 
 export type MailboxDrawer = 'personal' | 'home' | 'business' | 'earn';
 export type MailboxTab = 'incoming' | 'counter' | 'vault';
@@ -51,7 +51,7 @@ const TABS: { key: MailboxTab; label: string }[] = [
 // The Mailbox's other pages: a letter id or any other word in their place is
 // a link the drawer route sends on (to the letter, or to Me).
 const MAILBOX_PAGES = new Set([
-  'deleted', 'travel', 'vacation', 'map', 'tasks', 'records', 'settings', 'memory', 'stamps',
+  'search', 'deleted', 'travel', 'vacation', 'map', 'tasks', 'records', 'settings', 'memory', 'stamps',
   'booklet', 'coupon', 'disambiguate', 'certified', 'community', 'party', 'translation', 'package', 'unboxing', 'gig',
 ]);
 
@@ -102,11 +102,14 @@ const MENU_GROUPS: MenuEntry[][] = [
 export default function MailboxHeader({
   view,
   backHref,
+  hero,
   onWriteLetter,
 }: {
   view: MailboxView;
   /** Where the back bar returns to: the main screen last shown. */
   backHref: string;
+  /** Your mailbox and today's delivery, shown above the drawers on Incoming. */
+  hero?: ReactNode;
   /** Opens the letter composer; only passed while Mail extras is on. */
   onWriteLetter?: () => void;
 }) {
@@ -132,10 +135,18 @@ export default function MailboxHeader({
   // with its own Back; wider screens keep the list beside it.
   return (
     <div className={`flex-shrink-0 bg-app ${view.pushed ? 'hidden md:block' : ''}`}>
-      <div className="flex items-center gap-2 px-4 pb-1 pt-3">
+      <div className="flex items-center gap-1 px-4 pb-1 pt-3">
         <h1 className="flex-1 text-2xl font-bold tracking-tight text-app-text">Mail</h1>
+        <Link
+          href="/app/mailbox/search"
+          aria-label="Search all mail"
+          className="flex h-11 w-11 items-center justify-center rounded-xl text-app-text transition-colors hover:bg-app-hover"
+        >
+          <Search className="h-[22px] w-[22px]" aria-hidden />
+        </Link>
         <MailboxMenu onWriteLetter={onWriteLetter} />
       </div>
+      {view.tab === 'incoming' ? hero : null}
       <DrawerChips view={view} />
       <MailboxTabs view={view} />
     </div>
@@ -144,11 +155,14 @@ export default function MailboxHeader({
 
 function DrawerChips({ view }: { view: Extract<MailboxView, { kind: 'main' }> }) {
   const { data: drawers } = useDrawerMeta();
+  const { data: ownsBusiness = false } = useOwnsBusiness();
   const unread = (drawer: MailboxDrawer) => drawers?.find((d) => d.drawer === drawer)?.unread_count ?? 0;
+  // Biz is for business owners; anyone with unopened Biz mail (or on it now) still sees it.
+  const shown = MAILBOX_DRAWERS.filter((drawer) => drawer !== 'business' || ownsBusiness || unread('business') > 0 || view.drawer === 'business');
 
   return (
     <div role="group" aria-label="Drawers" className="flex gap-2 overflow-x-auto px-4 pb-1 pt-2">
-      {MAILBOX_DRAWERS.map((drawer) => {
+      {shown.map((drawer) => {
         const Icon = DRAWER_ICONS[drawer];
         const on = drawer === view.drawer;
         const count = unread(drawer);

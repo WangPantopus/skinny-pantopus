@@ -14,6 +14,7 @@
 
 import {
   useQuery,
+  useInfiniteQuery,
   useMutation,
   useQueryClient,
   type UseQueryOptions,
@@ -22,6 +23,7 @@ import {
 
 import * as api from '@/lib/mailbox-api';
 import { MailboxApiError } from '@/lib/mailbox-api';
+import { businesses as businessesApi } from '@pantopus/api';
 import type { AssetFullDetail } from '@/lib/mailbox-api';
 import type { DeletedMail } from '@pantopus/api';
 
@@ -159,6 +161,41 @@ export function useDrawerMeta(
   });
 }
 
+/** The whole drawers reply (the delivery and the Homes for the hero); shares the drawers request. */
+export function useMailboxDrawers(
+  options?: Omit<UseQueryOptions<MailboxDrawers, MailboxApiError>, 'queryKey' | 'queryFn'>,
+) {
+  return useQuery<MailboxDrawers, MailboxApiError>({
+    queryKey: mailboxKeys.drawers(),
+    queryFn: api.getDrawers,
+    staleTime: STALE_30S,
+    ...options,
+  });
+}
+
+/** Search all mail on the server, a page at a time ("Show more"). */
+export function useMailSearch(query: string) {
+  const q = query.trim();
+  return useInfiniteQuery<MailboxPaginatedResponse<MailItemV2>, MailboxApiError>({
+    queryKey: [...mailboxKeys.all, 'search', q],
+    queryFn: ({ pageParam }) => api.searchMail(q, { page: pageParam as number, limit: 30 }),
+    initialPageParam: 1,
+    getNextPageParam: (last) => (last.has_more ? last.page + 1 : undefined),
+    enabled: q.length >= 2,
+    staleTime: STALE_30S,
+  });
+}
+
+/** Whether the person owns a business: the Biz drawer is for business owners. */
+export function useOwnsBusiness() {
+  return useQuery<{ businesses: { role_base: string }[] }, unknown, boolean>({
+    queryKey: [...mailboxKeys.all, 'owns-business'],
+    queryFn: () => businessesApi.getMyBusinesses(),
+    select: (reply) => (reply?.businesses ?? []).some((membership) => membership.role_base === 'owner'),
+    staleTime: STALE_5M,
+  });
+}
+
 /** The Mail tab badge count; shares the drawers request with useDrawerMeta. */
 export function useMailUnread(
   options?: Omit<UseQueryOptions<MailboxDrawers, MailboxApiError, number>, 'queryKey' | 'queryFn' | 'select'>,
@@ -174,7 +211,7 @@ export function useMailUnread(
 
 export function useDrawerItems(
   drawer: 'personal' | 'home' | 'business' | 'earn',
-  params?: { page?: number; limit?: number; filter?: string; tab?: 'incoming' | 'counter' | 'vault' },
+  params?: { page?: number; limit?: number; filter?: string; tab?: 'incoming' | 'counter' | 'vault'; homeId?: string },
   options?: Omit<
     UseQueryOptions<MailboxPaginatedResponse<MailItemV2>, MailboxApiError>,
     'queryKey' | 'queryFn'

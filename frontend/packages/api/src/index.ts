@@ -247,7 +247,7 @@ export type { AuditEntry, GuestPass, ScopedGrant, MemberClaimReview } from './en
 export type { GuestPassView, SharedResourceView, PasscodeRequired } from './endpoints/homeGuest';
 
 // Types from mailboxV2
-export type { MailItemV2, MailRemovedInfo, Drawer, Tab, PendingRouting, EarnOffer, EarnBalance, MailPackage, PackageEvent, SenderTrust, MailDaySummary as MailDaySummaryV2 } from './endpoints/mailboxV2';
+export type { MailItemV2, MailKind, MailRemovedInfo, Drawer, Tab, PendingRouting, EarnOffer, EarnBalance, MailPackage, PackageEvent, SenderTrust, MailDaySummary as MailDaySummaryV2 } from './endpoints/mailboxV2';
 
 // Types from mailboxV2Phase2
 export type { BookletPage, BookletMail, CertifiedMail, AuditEvent, VaultFolder, VaultSearchResult } from './endpoints/mailboxV2Phase2';

@@ -76,7 +76,25 @@ export interface MailItemV2 {
   // Package join
   package?: MailPackage | null;
   timeline?: PackageEvent[];
+  // Mail tab build (contract v1, 2026-10-27): what the piece is and how it arrived.
+  /** What to draw it as; an unknown value draws as a letter. */
+  kind?: MailKind | string;
+  /** When it went into the box (morning-round pieces: 7:00 a.m. in their mailbox's time zone). */
+  delivered_at?: string;
+  /** Arrived on its own, outside the morning round. */
+  special_delivery?: boolean;
+  /** Sent by Pantopus itself. */
+  from_pantopus?: boolean;
+  /** The sender's post office town and the date; a null town draws the date only. */
+  postmark?: { town: string | null; date: string } | null;
+  on_counter?: boolean;
+  certified?: boolean;
+  bundle_id?: string | null;
+  bundle_label?: string | null;
+  bundle_item_count?: number | null;
 }
+
+export type MailKind = 'letter' | 'bill' | 'notice' | 'postcard' | 'booklet' | 'parcel' | 'bundle';
 
 export interface MailPackage {
   id: string;

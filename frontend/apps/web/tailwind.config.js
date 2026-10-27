@@ -157,6 +157,16 @@ module.exports = {
           '85%': { backgroundColor: 'rgb(var(--app-hover))' },
           '100%': { backgroundColor: 'transparent' },
         },
+        // The Mailbox's delivery moment (Mail tab, R2-Delivery board): the door
+        // drops open, then today's pieces slide out of the box.
+        mailDoorOpen: {
+          '0%': { transform: 'scaleY(0.15)' },
+          '100%': { transform: 'scaleY(1)' },
+        },
+        mailSlideOut: {
+          '0%': { opacity: '0', transform: 'translateY(-24px) scale(0.97)' },
+          '100%': { opacity: '1', transform: 'translateY(0) scale(1)' },
+        },
       },
       animation: {
         'fade-in-up': 'fadeInUp 0.2s ease-out',
@@ -168,6 +178,8 @@ module.exports = {
         'slide-out': 'slideOut 0.3s ease-in forwards',
         'section-in': 'fadeInUp 0.3s ease-out forwards',
         'highlight-flash': 'highlightFlash 1.5s ease-in-out',
+        'mail-door-open': 'mailDoorOpen 0.35s ease-out both',
+        'mail-slide-out': 'mailSlideOut 0.45s ease-out both',
       },
     },
   },

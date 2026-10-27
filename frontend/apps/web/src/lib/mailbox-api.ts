@@ -55,6 +55,8 @@ export class MailboxApiError extends Error {
     message: string,
     public status: number,
     public retryable: boolean,
+    /** The server's stable code (MAIL_NOT_FOUND …): its `error` is then a sentence people can read. */
+    public serverCode?: string,
   ) {
     super(message);
     this.name = 'MailboxApiError';
@@ -79,7 +81,7 @@ async function call<T>(fn: () => Promise<T>): Promise<T> {
     const e = err as {
       message?: string;
       statusCode?: number;
-      data?: { error?: string };
+      data?: { error?: string; code?: string };
     };
 
     // Network-level failure (no response at all)
@@ -110,6 +112,7 @@ async function call<T>(fn: () => Promise<T>): Promise<T> {
       e.message || e.data?.error || 'An error occurred',
       e.statusCode,
       e.statusCode >= 500,
+      typeof e.data?.code === 'string' ? e.data.code : undefined,
     );
   }
 }
@@ -125,9 +128,30 @@ export async function getDrawers(): Promise<MailboxDrawers> {
   });
 }
 
+/**
+ * GET /api/mailbox/v2/search: everything the person can read (Me, Home after
+ * proof, Biz), filed and archived included; at most 50 a page.
+ */
+export async function searchMail(
+  query: string,
+  params?: { page?: number; limit?: number },
+): Promise<MailboxPaginatedResponse<MailItemV2>> {
+  const limit = Math.min(params?.limit ?? 30, 50);
+  const page = params?.page ?? 1;
+  return call(async () => {
+    const res = await get<{ mail?: MailItemV2[]; results?: MailItemV2[]; total?: number }>(
+      '/api/mailbox/v2/search',
+      { q: query, limit, offset: (page - 1) * limit },
+    );
+    const items = res?.mail ?? res?.results ?? [];
+    const total = typeof res?.total === 'number' ? res.total : items.length;
+    return { items, total, page, has_more: page * limit < total };
+  });
+}
+
 export async function getDrawerItems(
   drawer: DrawerParam,
-  params?: { page?: number; limit?: number; filter?: string; tab?: 'incoming' | 'counter' | 'vault' },
+  params?: { page?: number; limit?: number; filter?: string; tab?: 'incoming' | 'counter' | 'vault'; homeId?: string },
 ): Promise<MailboxPaginatedResponse<MailItemV2>> {
   return call(async () => {
     const res = await get<{ mail: MailItemV2[]; total: number; drawer: string }>(
@@ -137,6 +161,8 @@ export async function getDrawerItems(
         offset: params?.page ? (params.page - 1) * (params.limit ?? 20) : 0,
         ...(params?.tab ? { tab: params.tab } : {}),
         ...(params?.filter ? { filter: params.filter } : {}),
+        // One Home's pieces (the Home drawer only, contract SRV-2).
+        ...(params?.homeId && drawer === 'home' ? { home_id: params.homeId } : {}),
       },
     );
     const limit = params?.limit ?? 20;
