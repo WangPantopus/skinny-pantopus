@@ -1341,6 +1341,9 @@ router.post('/invoices/:id/send', validate(invoiceSendSchema), withOwner('edit')
         idempotencyKey: `invoice-send:${inv.id}:${inv.recipient_user_id}:${req.body.client_request_id.toLowerCase()}`,
       } : {}),
     });
+    // The payer's bill in their Mail: one per invoice, so sending it again never delivers a second (SRV-7).
+    // eslint-disable-next-line global-require
+    await require('../services/invoiceBills').deliverBillSafe(inv);
   }
   res.json({ ok: true });
 }));

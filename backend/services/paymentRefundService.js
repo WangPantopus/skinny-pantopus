@@ -166,6 +166,9 @@ async function settleInvoiceAfterRefund(payment) {
     notifyInvoiceRefunded(voided[0], payment).catch((err) => {
       logger.warn('Invoice refund notice skipped', { invoiceId, error: err.message });
     });
+    // Its bill in the payer's Mail shows Void (Mail tab, SRV-7).
+    // eslint-disable-next-line global-require
+    void require('./invoiceBills').onInvoiceVoid(invoiceId);
   }
 }
 // The crew learns of a refund (the payer's own, or one Pantopus made) from its owner's notices, as it learned of the
