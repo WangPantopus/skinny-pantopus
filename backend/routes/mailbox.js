@@ -1996,7 +1996,7 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
     try {
       normalizedPayload = normalizeSendMailPayload(req.body, senderId);
     } catch (normalizeErr) {
-      return res.status(400).json({ error: normalizeErr.message || 'Invalid mail payload' });
+      return res.status(400).json({ error: normalizeErr.message || "This mail can't be sent as it is. Check it and try again.", code: 'MAIL_SEND_INVALID' });
     }
 
     const {
@@ -2081,13 +2081,13 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
       // Pantopus emails or texts the person about it, so only a letter goes to someone who isn't on Pantopus: never
       // an ad, bill, notice or promotion to an address the sender typed in.
       if (type !== 'letter') {
-        return res.status(400).json({ error: 'Only a letter can go to someone who isn’t on Pantopus yet.' });
+        return res.status(400).json({ error: 'Only a letter can go to someone who isn’t on Pantopus yet.', code: 'MAIL_TYPE_NOT_ALLOWED' });
       }
 
       // Rate limit check
       const rateCheck = await checkEscrowRateLimits(senderId, escrowContact);
       if (!rateCheck.allowed) {
-        return res.status(429).json({ error: rateCheck.reason });
+        return res.status(429).json({ error: rateCheck.reason, code: 'MAIL_SEND_LIMIT' });
       }
 
       // Generate unique claim token
@@ -2154,7 +2154,7 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
 
       if (escrowError) {
         logger.error('Error creating escrowed mail', { error: escrowError.message, senderId });
-        return res.status(500).json({ error: 'Failed to send mail' });
+        return res.status(500).json({ error: "Couldn't send this mail. Try again in a moment.", code: 'MAIL_UNAVAILABLE' });
       }
 
       // The recipient's email address or phone number stays out of the log.
@@ -2244,7 +2244,7 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
         .single();
 
       if (!user) {
-        return res.status(404).json({ error: 'We couldn\u2019t find that person. They may have deactivated their account.' });
+        return res.status(404).json({ error: 'We couldn\u2019t find that person. They may have deactivated their account.', code: 'MAIL_RECIPIENT_NOT_FOUND' });
       }
     }
 
@@ -2252,7 +2252,7 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
     if (addressHomeId) {
       const homeAccess = await hasHomeAccess(addressHomeId, senderId);
       if (!homeAccess.home) {
-        return res.status(404).json({ error: 'That home address wasn\u2019t found. It may have been removed.' });
+        return res.status(404).json({ error: 'That home address wasn\u2019t found. It may have been removed.', code: 'MAIL_HOME_NOT_FOUND' });
       }
       if (!homeAccess.allowed) {
         logger.info('Mailbox send blocked: destination address not allowed', {
@@ -2272,7 +2272,7 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
     if (recipientHomeId && !addressHomeId) {
       const homeAccess = await hasHomeAccess(recipientHomeId, senderId);
       if (!homeAccess.home) {
-        return res.status(404).json({ error: 'That home wasn\u2019t found. It may have been removed.' });
+        return res.status(404).json({ error: 'That home wasn\u2019t found. It may have been removed.', code: 'MAIL_HOME_NOT_FOUND' });
       }
       if (!homeAccess.allowed) {
         logger.info('Mailbox send blocked: destination home not allowed', {
@@ -2293,7 +2293,8 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
       const linkedToHome = await isUserLinkedToHome(addressHome, recipientUserId);
       if (!linkedToHome) {
         return res.status(400).json({
-          error: 'That person doesn\u2019t live at the selected home address.'
+          error: 'That person doesn\u2019t live at the selected home address.',
+          code: 'MAIL_RECIPIENT_NOT_AT_HOME',
         });
       }
     }
@@ -2305,7 +2306,8 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
       const attnHomeIds = await trustedHomeIdsOrThrow(attnUserId);
       if (!addressHome || !attnHomeIds.includes(addressHome.id)) {
         return res.status(400).json({
-          error: 'That person doesn\u2019t live at the selected home address.'
+          error: 'That person doesn\u2019t live at the selected home address.',
+          code: 'MAIL_RECIPIENT_NOT_AT_HOME',
         });
       }
     }
@@ -2314,7 +2316,7 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
     if (type === 'ad' && recipientUserId) {
       const prefs = await getUserPreferences(recipientUserId);
       if (prefs && !prefs.receive_ads) {
-        return res.status(400).json({ error: 'This person has opted out of receiving ads.' });
+        return res.status(400).json({ error: 'This person has opted out of receiving ads.', code: 'MAIL_ADS_OPTED_OUT' });
       }
     }
 
@@ -2384,7 +2386,7 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
 
     if (error) {
       logger.error('Error sending mail', { error: error.message, senderId });
-      return res.status(500).json({ error: 'Failed to send mail' });
+      return res.status(500).json({ error: "Couldn't send this mail. Try again in a moment.", code: 'MAIL_UNAVAILABLE' });
     }
 
     let fanoutLinks = [];
@@ -2553,7 +2555,7 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
 
   } catch (err) {
     logger.error('Mail send error', { error: err.message, userId: req.user.id });
-    res.status(500).json({ error: 'Failed to send mail' });
+    res.status(500).json({ error: "Couldn't send this mail. Try again in a moment.", code: 'MAIL_UNAVAILABLE' });
   }
 });
 
