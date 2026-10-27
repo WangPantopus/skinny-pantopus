@@ -108,7 +108,9 @@ fun MyHomesListScreen(
             LifecycleEventObserver { _, event ->
                 when (event) {
                     Lifecycle.Event.ON_RESUME -> viewModel.load()
-                    Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP -> {
+                    // Paused but still on screen (a permission prompt, the share sheet, another app's dialog):
+                    // the list stays. Only a hidden screen suspends, and coming back re-reads it.
+                    Lifecycle.Event.ON_STOP -> {
                         deleteTarget = null
                         viewModel.suspendContent()
                     }
