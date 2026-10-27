@@ -455,6 +455,77 @@ router.get('/drawer/:drawer', verifyToken, async (req, res) => {
   }
 });
 
+// GET /api/mailbox/v2/search?q=&limit=&offset= — Search everything this person can read (Mail tab, SRV-3): their
+// own mail, their proven Homes' mail and Biz, including filed and archived pieces; never a piece still waiting for
+// its round, deleted or shredded. Every word must match the sender, subject, letter text (full text, English stems),
+// its title, preview or "Pantopus read this for you". Rows are pieces like the drawer lists'. The words searched are
+// never logged or stored.
+const SEARCH_FIELDS = ['subject', 'display_title', 'sender_display', 'sender_business_name', 'preview_text', 'content',
+  'mail_extracted->>summary'];
+router.get('/search', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const text = typeof req.query.q === 'string' ? req.query.q.normalize('NFKC').replace(/[\u0000-\u001f]/g, ' ').trim() : '';
+    if (!text) return res.status(400).json({ error: 'Type a word to search your mail.', code: 'MAIL_SEARCH_INVALID' });
+    if (text.length > 100) return res.status(400).json({ error: 'Search for 100 characters or fewer.', code: 'MAIL_SEARCH_INVALID' });
+    // Words of letters, digits and a few signs ($84.00, a@b): nothing PostgREST would read as syntax.
+    const terms = [...new Set(text.toLowerCase().split(/\s+/)
+      .map((t) => t.replace(/[^\p{L}\p{N}$.@'&-]/gu, '').replace(/^[.'&-]+|[.'&-]+$/g, ''))
+      .filter((t) => t.length > 0))].slice(0, 6);
+    if (!terms.length) return res.status(400).json({ error: 'Search with letters or numbers.', code: 'MAIL_SEARCH_INVALID' });
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 50);
+    const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+
+    const homeIds = await getAccessibleHomeIds(userId);
+    let query = onlyDelivered(supabaseAdmin
+      .from('Mail')
+      .select('*, sender:sender_user_id(name, username)', { count: 'exact' })
+      .or(visibleMailFilter(userId, homeIds))
+      // Earn stays hidden with mail_extras.
+      .or('drawer.is.null,drawer.neq.earn')
+      .or('lifecycle.is.null,lifecycle.neq.shredded')
+      .is('deleted_at', null));
+    for (const term of terms) {
+      query = query.or([...SEARCH_FIELDS.map((field) => `${field}.ilike.*${term}*`), `content.wfts(english).${term}`].join(','));
+    }
+    const { data: found, error, count } = await query
+      .order('delivered_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(offset, offset + limit - 1);
+    if (error?.code === 'PGRST103') return res.json({ mail: [], total: offset });
+    if (error) {
+      logger.error('Mail search failed', { error: error.message });
+      return res.status(500).json({ error: "Couldn't search your mail. Try again in a moment.", code: 'MAIL_UNAVAILABLE' });
+    }
+
+    // Each sender as neighbors see them now (their Local Profile): a letter only the name stored when it came
+    // matched is left out, so no one finds a sender by a name they no longer show.
+    const named = await nameMailSenders(found || [], userId);
+    const matches = (item, term) => [item.sender_display, item.sender_business_name && !item.sender_user_id ? item.sender_business_name : null,
+      item.subject, item.display_title, item.preview_text, item.content, item.mail_extracted?.summary]
+      .some((value) => typeof value === 'string' && value.toLowerCase().includes(term));
+    const kept = named.filter((item) => (found || []).find((f) => f.id === item.id)?.sender_user_id
+      ? terms.every((term) => matches(item, term) || matchesStem(item, term)) : true);
+    const timeZone = (await mailDelivery.personTimeZone(userId)) || mailDelivery.FALLBACK_TIME_ZONE;
+    const rows = kept.map((m) => mailPiece.present(presentMailSender({
+      ...m,
+      sender_display: resolveSenderDisplay(m),
+      sender_trust: resolveSenderTrust(m),
+    }, userId), { timeZone }));
+    return res.json({ mail: rows, total: Math.max(0, (count || 0) - (named.length - kept.length)) });
+  } catch (err) {
+    logger.error('Mail search error', { error: err.message });
+    return res.status(500).json({ error: "Couldn't search your mail. Try again in a moment.", code: 'MAIL_UNAVAILABLE' });
+  }
+});
+
+// A full-text match the plain check above can't see (an English stem: "holds" for "hold"): the letter text has a word
+// starting with the term's first five letters.
+function matchesStem(item, term) {
+  const stem = term.slice(0, Math.max(4, Math.min(5, term.length)));
+  return typeof item.content === 'string' && new RegExp(`\\b${stem.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i').test(item.content);
+}
+
 // GET /api/mailbox/v2/item/:id — Get mail item detail
 router.get('/item/:id', verifyToken, async (req, res) => {
   try {

@@ -1716,6 +1716,33 @@ router.get('/deleted', verifyToken, async (req, res) => {
  * GET /api/mailbox/:id
  * Get single mail item
  */
+/**
+ * GET /api/mailbox/campaigns
+ * Get user's ad campaigns. Declared before GET /:id, which used to answer this path (Mail tab, SRV-3).
+ */
+router.get('/campaigns', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const { data: campaigns, error } = await supabaseAdmin
+      .from('AdCampaign')
+      .select('*')
+      .eq('business_user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      logger.error('Error fetching campaigns', { error: error.message, userId });
+      return res.status(500).json({ error: "Couldn't load your campaigns. Try again in a moment.", code: 'MAIL_UNAVAILABLE' });
+    }
+
+    res.json({ campaigns: campaigns || [] });
+
+  } catch (err) {
+    logger.error('Campaigns fetch error', { error: err.message, userId: req.user.id });
+    res.status(500).json({ error: "Couldn't load your campaigns. Try again in a moment.", code: 'MAIL_UNAVAILABLE' });
+  }
+});
+
 router.get('/:id', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
@@ -3308,73 +3335,6 @@ router.post('/campaigns', verifyToken, validate(createCampaignSchema), async (re
   } catch (err) {
     logger.error('Campaign creation error', { error: err.message, userId: req.user.id });
     res.status(500).json({ error: 'Failed to create campaign' });
-  }
-});
-
-/**
- * GET /api/mailbox/campaigns
- * Get user's ad campaigns
- */
-router.get('/campaigns', verifyToken, async (req, res) => {
-  try {
-    const userId = req.user.id;
-
-    const { data: campaigns, error } = await supabaseAdmin
-      .from('AdCampaign')
-      .select('*')
-      .eq('business_user_id', userId)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      logger.error('Error fetching campaigns', { error: error.message, userId });
-      return res.status(500).json({ error: 'Failed to fetch campaigns' });
-    }
-
-    res.json({ campaigns: campaigns || [] });
-
-  } catch (err) {
-    logger.error('Campaigns fetch error', { error: err.message, userId: req.user.id });
-    res.status(500).json({ error: 'Failed to fetch campaigns' });
-  }
-});
-
-// GET /api/mailbox/summary — counts by type for InboxEarnCard
-router.get('/summary', verifyToken, async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const scope = req.query.scope || 'personal';
-    const homeId = req.query.homeId;
-
-    let query = supabaseAdmin
-      .from('Mail')
-      .select('id, type, viewed')
-      .eq('archived', false);
-
-    if (scope === 'home' && homeId) {
-      query = query.eq('home_id', homeId);
-    } else {
-      query = query.eq('recipient_user_id', userId);
-    }
-
-    const { data, error } = await query;
-    if (error) throw error;
-
-    const items = data || [];
-    const unread = items.filter(m => !m.viewed).length;
-    const bills = items.filter(m => m.type === 'bill' || m.type === 'statement').length;
-    const notices = items.filter(m => m.type === 'notice').length;
-    const offers = items.filter(m => m.type === 'ad' || m.type === 'promotion' || m.type === 'newsletter').length;
-
-    res.json({
-      total: items.length,
-      unread,
-      bills,
-      notices,
-      offers,
-    });
-  } catch (err) {
-    logger.error('Failed to fetch mailbox summary:', err);
-    res.status(500).json({ error: 'Failed to fetch mailbox summary' });
   }
 });
 
