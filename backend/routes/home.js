@@ -3058,12 +3058,13 @@ const maintenanceCostSchema = Joi.number().min(0).max(9999999999.99)
  * `status` (Scheduled = `scheduled|in_progress`).
  */
 router.get('/:id/maintenance', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
     const { status } = req.query;
 
-    const access = await checkHomePermission(homeId, userId);
+    const access = await checkHomePermission(homeId, userId, 'maintenance.view');
     if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
 
     // Upcoming work by due date, soonest first. Logged work usually has no due date, so among
