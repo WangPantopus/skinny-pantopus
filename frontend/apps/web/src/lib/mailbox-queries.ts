@@ -234,6 +234,23 @@ export function useBooklet(itemId: string, enabled: boolean) {
   });
 }
 
+/** A drawer's Counter, Vault (all of it or one folder) or Archived list, a page at a time ("Show more"). */
+export function useDrawerTab(
+  drawer: 'personal' | 'home' | 'business',
+  tab: 'counter' | 'vault' | 'archived',
+  params?: { folderId?: string; homeId?: string },
+  options?: { enabled?: boolean },
+) {
+  return useInfiniteQuery<MailboxPaginatedResponse<MailItemV2>, MailboxApiError>({
+    queryKey: [...mailboxKeys.drawerItems(drawer, { tab, ...params }), 'pages'],
+    queryFn: ({ pageParam }) => api.getDrawerItems(drawer, { tab, page: pageParam as number, limit: 30, ...params }),
+    initialPageParam: 1,
+    getNextPageParam: (last) => (last.has_more ? last.page + 1 : undefined),
+    enabled: options?.enabled ?? true,
+    staleTime: STALE_30S,
+  });
+}
+
 /** Search all mail on the server, a page at a time ("Show more"). */
 export function useMailSearch(query: string) {
   const q = query.trim();
@@ -272,7 +289,7 @@ export function useMailUnread(
 
 export function useDrawerItems(
   drawer: 'personal' | 'home' | 'business' | 'earn',
-  params?: { page?: number; limit?: number; filter?: string; tab?: 'incoming' | 'counter' | 'vault'; homeId?: string },
+  params?: { page?: number; limit?: number; filter?: string; tab?: 'incoming' | 'counter' | 'vault' | 'archived'; homeId?: string; folderId?: string },
   options?: Omit<
     UseQueryOptions<MailboxPaginatedResponse<MailItemV2>, MailboxApiError>,
     'queryKey' | 'queryFn'
@@ -484,14 +501,14 @@ export function useCreateVaultFolder(
   options?: UseMutationOptions<
     VaultFolder,
     MailboxApiError,
-    { label: string; icon: string; color: string; drawer: 'personal' | 'home' | 'business' | 'earn'; autoFileRules?: AutoFileRule[] }
+    { label: string; icon: string; color: string; drawer: 'personal' | 'home' | 'business' | 'earn'; home_id?: string; autoFileRules?: AutoFileRule[] }
   >,
 ) {
   const qc = useQueryClient();
   return useMutation<
     VaultFolder,
     MailboxApiError,
-    { label: string; icon: string; color: string; drawer: 'personal' | 'home' | 'business' | 'earn'; autoFileRules?: AutoFileRule[] }
+    { label: string; icon: string; color: string; drawer: 'personal' | 'home' | 'business' | 'earn'; home_id?: string; autoFileRules?: AutoFileRule[] }
   >({
     mutationFn: api.createVaultFolder,
     onSuccess: () => {

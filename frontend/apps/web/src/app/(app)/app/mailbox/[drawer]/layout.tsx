@@ -10,6 +10,9 @@ import { OfferCard } from '@/components/mailbox';
 import { DRAWER_LABELS, isMailboxDrawer, type MailboxDrawer } from '@/components/mailbox/MailboxHeader';
 import MailRow, { deliveryDayLabel } from '@/components/mailbox/MailRow';
 import BundlePieces from '@/components/mailbox/BundlePieces';
+import HomeLockedBox from '@/components/mailbox/HomeLockedBox';
+import WelcomePorch, { isSealedWelcome } from '@/components/mailbox/WelcomePorch';
+import { useMe } from '@/lib/me';
 import MailboxIllustration from '@/components/mailbox/MailboxIllustration';
 import { mailLoadMessage } from '@/components/mailbox/mailLoadMessage';
 import useMailAddressee, { type Addressee } from '@/components/mailbox/useMailAddressee';
@@ -111,6 +114,35 @@ export default function DrawerLayout({
   const queryClient = useQueryClient();
   const { addressee, timeZone, homes } = useMailAddressee();
   const narrowedHome = homeId ? homes?.find((home) => home.home_id === homeId) : undefined;
+  // Homes whose mail waits on proof of address (R14): the closed box in place of
+  // the list when that's all there is (or it's the Home asked for), a card above
+  // the other Homes' mail otherwise.
+  const lockedHomes = drawer === 'home'
+    ? (homes ?? []).filter((home) => home.mail_access === 'needs_proof' && (!homeId || home.home_id === homeId))
+    : [];
+  const openHomeCount = (homes ?? []).filter((home) => home.mail_access === 'open').length;
+  const homeLocked = lockedHomes.length > 0
+    && (Boolean(homeId) || openHomeCount === 0 || error?.serverCode === 'MAIL_HOME_NEEDS_PROOF');
+
+  // The first day (R12): the porch with Pantopus's sealed welcome letter, once;
+  // closing it leaves the letter sealed in Incoming (remembered in this browser).
+  const { data: me } = useMe();
+  const welcome = drawer === 'personal' && !isItemView ? allItems.find(isSealedWelcome) : undefined;
+  const porchKey = me?.id ? `pantopus_mail_welcome_closed:${me.id}` : null;
+  const [porchClosed, setPorchClosed] = useState<{ key: string; id: string | null } | null>(null);
+  useEffect(() => {
+    if (!porchKey) return;
+    let closedId: string | null = null;
+    try { closedId = window.localStorage.getItem(porchKey); } catch { /* storage off: the porch shows each visit */ }
+    setPorchClosed({ key: porchKey, id: closedId });
+  }, [porchKey]);
+  const showPorch = Boolean(welcome && porchClosed && porchClosed.key === porchKey && porchClosed.id !== welcome.id);
+  const closePorch = useCallback(() => {
+    if (!welcome || !porchKey) return;
+    try { window.localStorage.setItem(porchKey, welcome.id); } catch { /* storage off */ }
+    setPorchClosed({ key: porchKey, id: welcome.id });
+  }, [welcome, porchKey]);
+  const ownAddress = homes?.find((home) => home.mail_access === 'open')?.address_line ?? null;
   const { deliveryOpening } = useMailboxContext();
 
   // Accumulate items for infinite scroll. A refetched later page (after a
@@ -165,11 +197,8 @@ export default function DrawerLayout({
     }
   }, [drawer, markOpened, router]);
 
-  // A bundle's own pieces show inside it, not again on their own.
-  const rows = useMemo(() => {
-    const bundles = new Set(allItems.filter((item) => item.mail_object_type === 'bundle' || item.kind === 'bundle').map((item) => item.id));
-    return allItems.filter((item) => !item.bundle_id || !bundles.has(item.bundle_id));
-  }, [allItems]);
+  // Incoming lists a bundle once and leaves out its pieces (the server's rule, SRV-5).
+  const rows = allItems;
 
   // Pieces under day headings, in the mailbox's own time zone.
   const groups = useMemo(() => {
@@ -217,7 +246,10 @@ export default function DrawerLayout({
 
         {/* Item list */}
         <div className="md:flex-1 md:overflow-y-auto">
-          {isPending && page === 1 ? (
+          {!homeLocked ? lockedHomes.map((home) => <HomeLockedBox key={home.home_id} home={home} compact />) : null}
+          {homeLocked ? (
+            <HomeLockedBox home={lockedHomes[0]} />
+          ) : isPending && page === 1 ? (
             // Loading: paper-shaped placeholders
             <div className="space-y-5 px-4 py-4" role="status" aria-label="Loading your mail">
               {[1, 2, 3].map((i) => (
@@ -309,6 +341,14 @@ export default function DrawerLayout({
       >
         {children}
       </div>
+
+      {showPorch && welcome ? (
+        <WelcomePorch
+          address={ownAddress}
+          onOpen={() => { closePorch(); router.push(`/app/mailbox/personal/${welcome.id}`); }}
+          onClose={closePorch}
+        />
+      ) : null}
     </div>
   );
 }

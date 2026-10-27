@@ -55,7 +55,8 @@ function whenLine(item: MailItemV2, timeZone?: string, now = new Date()): string
 }
 
 function dueLine(item: MailItemV2, timeZone?: string): { text: string; overdue: boolean } | null {
-  if (!item.due_date) return null;
+  // Filed or paid mail is done with: no due date on it.
+  if (!item.due_date || item.lifecycle === 'filed' || item.invoice?.status === 'paid') return null;
   const due = parseDisplayDate(item.due_date);
   if (Number.isNaN(due.getTime())) return null;
   const day = due.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });

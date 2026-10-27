@@ -100,11 +100,11 @@ describe('existing residency letter cards', () => {
     await screen.findByText('ABCD-EFGH-JKLM-NPQR');
     expect(screen.getByText(label)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'PDF' })).toBeEnabled();
+    // Open in Mail opens the letter's own piece in Mail, whatever the letter's status is now.
+    expect(screen.getByRole('button', { name: 'Open in Mail' })).toBeEnabled();
     if (active) {
-      expect(screen.getByRole('button', { name: 'Mail' })).toBeEnabled();
       expect(screen.getByRole('button', { name: 'Revoke' })).toBeEnabled();
     } else {
-      expect(screen.getByRole('button', { name: 'Mail' })).toBeDisabled();
       expect(screen.queryByRole('button', { name: 'Revoke' })).not.toBeInTheDocument();
     }
   });

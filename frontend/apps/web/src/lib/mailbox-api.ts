@@ -151,7 +151,7 @@ export async function searchMail(
 
 export async function getDrawerItems(
   drawer: DrawerParam,
-  params?: { page?: number; limit?: number; filter?: string; tab?: 'incoming' | 'counter' | 'vault'; homeId?: string },
+  params?: { page?: number; limit?: number; filter?: string; tab?: 'incoming' | 'counter' | 'vault' | 'archived'; homeId?: string; folderId?: string },
 ): Promise<MailboxPaginatedResponse<MailItemV2>> {
   return call(async () => {
     const res = await get<{ mail: MailItemV2[]; total: number; drawer: string }>(
@@ -163,6 +163,8 @@ export async function getDrawerItems(
         ...(params?.filter ? { filter: params.filter } : {}),
         // One Home's pieces (the Home drawer only, contract SRV-2).
         ...(params?.homeId && drawer === 'home' ? { home_id: params.homeId } : {}),
+        // One Vault folder (tab=vault).
+        ...(params?.folderId ? { folder_id: params.folderId } : {}),
       },
     );
     const limit = params?.limit ?? 20;
@@ -287,8 +289,15 @@ export async function getCounterItems(): Promise<MailItemV2[]> {
 // BUNDLES
 // ============================================================
 
+/**
+ * A bundle's pieces you may read. The bundle's detail answers them as list rows
+ * (SRV-5), with the fields the paper drawings need (`kind`, `from_pantopus`,
+ * `postmark`); a server without them answers the older bundle route.
+ */
 export async function expandBundle(bundleId: string): Promise<MailItemV2[]> {
   return call(async () => {
+    const detail = await get<{ mail: MailItemV2 & { pieces?: MailItemV2[] } }>(`/api/mailbox/v2/item/${bundleId}`);
+    if (Array.isArray(detail.mail?.pieces)) return detail.mail.pieces;
     const res = await get<{ bundle: unknown; items: MailItemV2[] }>(
       `/api/mailbox/v2/p2/bundle/${bundleId}/items`,
     );
@@ -396,6 +405,8 @@ export async function createVaultFolder(data: {
   icon: string;
   color: string;
   drawer: DrawerParam;
+  /** A Home folder goes in that Home's cabinet (needed when the person reads more than one Home's mail). */
+  home_id?: string;
   autoFileRules?: AutoFileRule[];
 }): Promise<VaultFolder> {
   return call(async () => {
@@ -845,8 +856,12 @@ export async function getVacationHold(): Promise<VacationHold | null> {
     const res = await get<{
       active: VacationHold | null;
       upcoming: VacationHold | null;
+      held_count?: number;
+      hold?: { held_count?: number; release_at?: string } | null;
     }>('/api/mailbox/v2/p3/vacation/status');
-    return res.active ?? res.upcoming;
+    const hold = res.active ?? res.upcoming;
+    // The live count and the release time come with the reply's hold line (SRV-5).
+    return hold ? { ...hold, held_count: res.hold?.held_count ?? res.held_count ?? hold.items_held_count, release_at: res.hold?.release_at ?? null } : null;
   });
 }
 

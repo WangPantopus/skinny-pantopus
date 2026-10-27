@@ -18,7 +18,8 @@ const SERIF = "'Iowan Old Style', 'Hoefler Text', Charter, Georgia, serif";
 
 function longDate(iso: string | null | undefined): string {
   if (!iso) return '';
-  const date = new Date(iso);
+  // A postmark is a calendar day (YYYY-MM-DD): read it as that day, not UTC midnight.
+  const date = new Date(iso.length === 10 ? `${iso}T12:00:00` : iso);
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 }
 

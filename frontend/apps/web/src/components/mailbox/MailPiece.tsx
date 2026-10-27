@@ -70,11 +70,12 @@ export function pieceSentence(item: MailItemV2, opened: boolean): string {
   const kind = pieceKind(item);
   const what = item.special_delivery ? `Special delivery ${KIND_WORDS[kind].toLowerCase()}` : KIND_WORDS[kind];
   const from = item.sender_display || 'an unknown sender';
-  const trust = pieceTrust(item).label.toLowerCase();
+  // Pantopus's own mail is already "from Pantopus": no trust words after it.
+  const trust = item.from_pantopus ? '' : `, ${pieceTrust(item).label.toLowerCase()}`;
   const envelope = kind === 'letter' || kind === 'bill' || kind === 'notice' || kind === 'bundle';
   const state = envelope ? (opened ? ', opened' : ', sealed') : '';
   const title = item.display_title || item.subject;
-  return `${what} from ${from}, ${trust}${state}${title ? `: ${title}` : ''}`;
+  return `${what} from ${item.from_pantopus ? 'Pantopus' : from}${trust}${state}${title ? `: ${title}` : ''}`;
 }
 
 /** Old mail fades: a read piece from before today, more with age. */

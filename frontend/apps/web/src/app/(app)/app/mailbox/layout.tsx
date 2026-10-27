@@ -117,6 +117,11 @@ function MailboxLayoutInner({ children }: { children: React.ReactNode }) {
   const isTravelActive =
     vacationHold &&
     (vacationHold.status === 'active' || vacationHold.status === 'scheduled');
+  const holdDay = (value: string) => new Date(`${value.slice(0, 10)}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  const held = vacationHold?.held_count ?? vacationHold?.items_held_count ?? 0;
+  const holdLine = !isTravelActive ? '' : vacationHold.status === 'scheduled'
+    ? `Your mail hold starts ${holdDay(vacationHold.start_date)}`
+    : `Your mail is on hold until ${holdDay(vacationHold.end_date)}${held > 0 ? ` · ${held} held` : ''}`;
 
   // The banners belong to the main screens; a letter or folder opened from one
   // is its own screen on phones.
@@ -131,22 +136,16 @@ function MailboxLayoutInner({ children }: { children: React.ReactNode }) {
         onWriteLetter={launchFeatures.mailExtras ? () => setComposeOpen(true) : undefined}
       />
 
-      {/* Travel dates banner */}
+      {/* Your mail on hold: until when, and what it has kept so far */}
       {isTravelActive && (
         <button
           type="button"
           onClick={() => router.push('/app/mailbox/travel')}
-          className={`${bannerClass} items-center gap-2 px-4 py-2 bg-amber-50 border-b border-amber-200 text-left flex-shrink-0`}
-          aria-label={`Travel dates ${vacationHold?.status === 'scheduled' ? 'scheduled' : 'current'}. Open Travel Mode.`}
+          className={`${bannerClass} w-full items-center gap-2 px-4 py-2 bg-amber-50 border-b border-amber-200 text-left flex-shrink-0 dark:bg-amber-950/30 dark:border-amber-800`}
+          aria-label={`${holdLine}. Open Hold my mail.`}
         >
-          <MailboxIcons.travel className="w-4 h-4 flex-shrink-0 text-amber-700" aria-hidden="true" />
-          <span className="text-xs font-medium text-amber-700 truncate">
-            Travel dates {vacationHold?.status === 'scheduled' ? 'scheduled' : 'current'} · Returns{' '}
-            {new Date(`${vacationHold!.end_date.slice(0, 10)}T00:00:00`).toLocaleDateString(undefined, {
-              month: 'short',
-              day: 'numeric',
-            })}
-          </span>
+          <MailboxIcons.travel className="w-4 h-4 flex-shrink-0 text-amber-700 dark:text-amber-300" aria-hidden="true" />
+          <span className="text-xs font-medium text-amber-800 truncate dark:text-amber-200">{holdLine}</span>
         </button>
       )}
 

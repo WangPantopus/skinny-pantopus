@@ -88,6 +88,7 @@ export default function LetterActions({ piece }: { piece: MailItemV2 }) {
 
   const busy = action.isPending;
   const filed = piece.lifecycle === 'filed';
+  const archived = Boolean(piece.archived) && !filed;
   const invoice = piece.invoice;
   const payable = invoice && (invoice.status === 'sent' || invoice.status === 'viewed' || invoice.status === 'overdue');
   const needsAck = piece.ack_required && !piece.acknowledged_at && !piece.certified;
@@ -133,9 +134,9 @@ export default function LetterActions({ piece }: { piece: MailItemV2 }) {
             </div>
           </div>
         ) : (
-          <div className={`grid gap-2 ${filed ? 'grid-cols-2' : 'grid-cols-3'}`}>
-            {/* Filed mail isn't on the counter; take it out of the Vault first. */}
-            {filed ? null : piece.on_counter ? (
+          <div className={`grid gap-2 ${filed || archived ? 'grid-cols-2' : 'grid-cols-3'}`}>
+            {/* Filed or archived mail isn't on the counter; bring it back first. */}
+            {filed || archived ? null : piece.on_counter ? (
               <button type="button" onClick={() => run('done')} disabled={busy} className={secondary}>
                 <Check className="h-[18px] w-[18px]" aria-hidden />
                 <span>Done</span>
@@ -147,10 +148,10 @@ export default function LetterActions({ piece }: { piece: MailItemV2 }) {
               </button>
             )}
 
-            {filed ? (
+            {filed || archived ? (
               <button type="button" onClick={() => run('unfile')} disabled={busy} className={secondary}>
                 <ArchiveRestore className="h-[18px] w-[18px]" aria-hidden />
-                <span>Take out of the Vault</span>
+                <span>{filed ? 'Take out of the Vault' : 'Back to Incoming'}</span>
               </button>
             ) : (
               <div ref={pickerRef} className="relative">

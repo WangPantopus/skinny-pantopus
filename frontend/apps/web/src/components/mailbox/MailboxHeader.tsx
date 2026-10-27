@@ -81,7 +81,7 @@ type MenuEntry = { label: string; href: string; icon: LucideIcon };
 const MENU_GROUPS: MenuEntry[][] = [
   [
     { label: 'Recently shredded', href: '/app/mailbox/deleted', icon: MailboxIcons.deleted },
-    { label: 'Travel Mode', href: '/app/mailbox/travel', icon: MailboxIcons.travel },
+    { label: 'Hold my mail', href: '/app/mailbox/travel', icon: MailboxIcons.travel },
   ],
   [
     { label: 'Map', href: '/app/mailbox/map', icon: MailboxIcons.map },
