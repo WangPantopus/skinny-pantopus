@@ -4,6 +4,7 @@ package app.pantopus.android.push
 
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.auth.DeviceIdentity
+import app.pantopus.android.data.mailbox.MailboxRepository
 import app.pantopus.android.data.notifications.NotificationsRepository
 import app.pantopus.android.data.plans.PlansEvents
 import app.pantopus.android.data.plans.PlansRepository
@@ -97,6 +98,8 @@ class PantopusMessagingService : FirebaseMessagingService() {
         val type = message.data["type"].orEmpty()
         // A connection request or acceptance: Connections reads its lists again, even when its socket was down.
         if (isConnectionNotice(type)) screenStore.get().markStale(StoreTopics.CONNECTIONS)
+        // Mail came ("Your mail is here", a special delivery): the Mail tab's badge counts it.
+        if (dispatcher.channelFor(type) == NotificationDispatcher.Channel.MAIL) MailboxRepository.announceMailArrived()
         // Nearby Plans: a plan push means the map, the lists, Today and an open plan page are out of date
         // (a "You're in" plays the reveal on the open page).
         if (type.startsWith("plan_")) {

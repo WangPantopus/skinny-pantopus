@@ -41,9 +41,9 @@ sealed class PantopusRoute(
     data object Plans : PantopusRoute(path = "root/plans", label = "Plans", icon = PantopusIcon.Calendar)
 
     /**
-     * Mail — the digital mailbox, with Messages as its inbox. While Mailbox is off for launch (contract §9,
-     * 2026-10-09) this tab is Messages: the conversation list itself, with a chat bubble. Its path and the
-     * `tab.mail` test tag stay, so links, saved state and UI tests keep working.
+     * Mail — the digital mailbox, its own tab beside Messages (founder, 2026-10-26). While Mailbox is off for launch
+     * (contract §9, 2026-10-09) this tab is Messages: the conversation list itself, with a chat bubble. Its path and
+     * the `tab.mail` test tag stay, so links, saved state and UI tests keep working.
      */
     data object Mail : PantopusRoute(path = "root/mail", label = "Mail", icon = PantopusIcon.Mailbox) {
         override val label: String get() = if (LaunchFeatures.mailbox) "Mail" else "Messages"
@@ -51,8 +51,9 @@ sealed class PantopusRoute(
     }
 
     // ── Reachable, not in the bar: Nearby stays only so `pantopus://nearby` links, pushes and saved state resolve
-    // (to Pulse); the pillars open from Pulse and Messages lives inside Mail. Their routes stay registered so every
-    // existing push still lands. With the Pulse redesign off, Nearby is the tab and Pulse sits behind it instead.
+    // (to Pulse); the pillars open from Pulse. Their routes stay registered so every existing push still lands. With
+    // the Pulse redesign off, Nearby is the tab and Pulse sits behind it instead. Messages is a tab while Mailbox is
+    // on; with it off its route stays registered and belongs to Mail, which is the conversation list then.
 
     /**
      * Nearby — the density door and its window (the cells map, the meter, what opens): the tab while the Pulse
@@ -67,17 +68,21 @@ sealed class PantopusRoute(
     /** Local marketplace — buy, sell, and rent nearby. */
     data object Marketplace : PantopusRoute(path = "root/marketplace", label = "Marketplace", icon = PantopusIcon.ShoppingBag)
 
-    /** Direct messages and group chats. */
+    /** Direct messages and group chats: its own tab after Mail while Mailbox is on. */
     data object Messages : PantopusRoute(path = "root/messages", label = "Messages", icon = PantopusIcon.MessageCircle)
 
     companion object {
         /**
          * Bottom-bar destinations in display order, with every tab the app can show: Place · Today · Pulse · Plans ·
          * Mail with the Pulse redesign on, and Place · Today · Nearby · Plans · Mail while it is off (launch cut 11;
-         * the October 13 bar with Plans added, 2026-10-17). Plans shows only while its switch is on: read [barTabs]
-         * for what the bar draws.
+         * the October 13 bar with Plans added, 2026-10-17). With Mailbox on, Messages follows Mail as a sixth tab (the
+         * Mail tab, 2026-10-27). Plans shows only while its switch is on: read [barTabs] for what the bar draws.
          */
-        val entries: List<PantopusRoute> get() = if (LaunchFeatures.pulseRedesign) redesignTabs else launchTabs
+        val entries: List<PantopusRoute>
+            get() {
+                val tabs = if (LaunchFeatures.pulseRedesign) redesignTabs else launchTabs
+                return if (LaunchFeatures.mailbox) tabs + Messages else tabs
+            }
 
         /*
          * `by lazy` is intentional: when these lists are built eagerly, the
@@ -89,21 +94,26 @@ sealed class PantopusRoute(
         private val redesignTabs: List<PantopusRoute> by lazy { listOf(Place, Today, Pulse, Plans, Mail) }
         private val launchTabs: List<PantopusRoute> by lazy { listOf(Place, Today, Nearby, Plans, Mail) }
 
-        /** The tabs the bar draws: five while the `plans` switch is [plansOn], four (without Plans) while it is off. */
+        /** The tabs the bar draws: every [entries] tab while the `plans` switch is [plansOn], all but Plans while it is off. */
         fun barTabs(plansOn: Boolean): List<PantopusRoute> = if (plansOn) entries else entries - Plans
 
         /** Every root destination, bar tabs first — for `fromPath` lookups off the bar. */
-        val all: List<PantopusRoute> get() = if (LaunchFeatures.pulseRedesign) redesignRoots else launchRoots
+        val all: List<PantopusRoute>
+            get() {
+                val tabs = entries
+                val offBar = if (LaunchFeatures.pulseRedesign) redesignOffBar else launchOffBar
+                return tabs + offBar.filterNot { it in tabs }
+            }
 
-        private val redesignRoots: List<PantopusRoute> by lazy { redesignTabs + listOf(Nearby, Tasks, Marketplace, Messages) }
-        private val launchRoots: List<PantopusRoute> by lazy { launchTabs + listOf(Pulse, Tasks, Marketplace, Messages) }
+        private val redesignOffBar: List<PantopusRoute> by lazy { listOf(Nearby, Tasks, Marketplace, Messages) }
+        private val launchOffBar: List<PantopusRoute> by lazy { listOf(Pulse, Tasks, Marketplace, Messages) }
 
         /** Lookup a route by its `path`. Returns null for unknown paths. */
         fun fromPath(path: String?): PantopusRoute? = all.firstOrNull { it.path == path }
 
         /**
-         * Where "open my conversations" lands: the Messages tab itself while Mailbox is off, so chat pushes and
-         * Hub taps share the tab's list, Back and re-tap; else the Messages root inside Mail.
+         * Where "open my conversations" lands: the Messages tab. While Mailbox is off that is Mail, which shows the
+         * conversation list, so chat pushes and Hub taps share the tab's list, Back and re-tap.
          */
         val messagesTab: PantopusRoute get() = if (LaunchFeatures.mailbox) Messages else Mail
 
@@ -112,20 +122,21 @@ sealed class PantopusRoute(
 
         /**
          * The bar tab that owns [route]: bar tabs own themselves, the old Nearby door and the pillars behind it
-         * (Tasks, Marketplace) belong to Pulse, and Messages sits inside Mail. With the Pulse redesign off, Pulse and
-         * the pillars sit behind Nearby, as on October 13, and Plans is its own tab.
+         * (Tasks, Marketplace) belong to Pulse, and Messages is its own tab (Mail, the conversation list, while
+         * Mailbox is off). With the Pulse redesign off, Pulse and the pillars sit behind Nearby, as on October 13,
+         * and Plans is its own tab.
          */
         fun barTabFor(route: PantopusRoute): PantopusRoute =
             if (LaunchFeatures.pulseRedesign) {
                 when (route) {
                     Nearby, Tasks, Marketplace -> Pulse
-                    Messages -> Mail
+                    Messages -> messagesTab
                     else -> route
                 }
             } else {
                 when (route) {
                     Pulse, Tasks, Marketplace -> Nearby
-                    Messages -> Mail
+                    Messages -> messagesTab
                     else -> route
                 }
             }

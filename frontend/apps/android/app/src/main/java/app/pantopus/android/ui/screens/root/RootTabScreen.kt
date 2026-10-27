@@ -1863,7 +1863,7 @@ private object ChildRoutes {
         label: String,
     ): String = "$EXPLORE?$EXPLORE_LAT_KEY=$latitude&$EXPLORE_LNG_KEY=$longitude&$EXPLORE_LABEL_KEY=${Uri.encode(label)}"
 
-    /** B.1 prerequisite — Mailbox root archetype. */
+    /** B.1 prerequisite — the old pushed Mailbox. The Mailbox is the Mail tab's top screen now; this only opens it. */
     const val MAILBOX_ROOT = "mailbox/root"
 
     /** A.x — Mailbox map. */
@@ -2135,16 +2135,25 @@ private fun NavHostController.popToTabRoot(tab: PantopusRoute) {
     }
 }
 
-/** The Place tab at its root: the tab selected (another tab's screens kept for it), and everything pushed on Place cleared. */
-private fun NavHostController.openPlaceRoot() {
+/**
+ * [tab] at its root, with [route] on top so Back lands on the root: the tab selected (another tab's screens kept for
+ * it), and everything pushed on [tab] cleared. Place's root is the person's place. Mail's is the Mailbox, so every way
+ * into Mail (a side-menu row, a Place card, the Me screen, a mail link or push) opens the Mail tab, never a second
+ * Mailbox over another tab (the Mail tab, 2026-10-27).
+ */
+private fun NavHostController.openTabRoot(
+    tab: PantopusRoute,
+    route: String? = null,
+) {
     // The lit tab: child screens keep the tab they were opened from.
     val litTab =
         PantopusRoute.barTabFor(
             top = PantopusRoute.fromPath(currentDestination?.route),
             rootsOnStack = PantopusRoute.all.filter { isOnBackStack(it.path) },
         )
-    if (litTab != PantopusRoute.Place) navigateToRootTab(PantopusRoute.Place)
-    popBackStack(PantopusRoute.Place.path, inclusive = false)
+    if (litTab != tab) navigateToRootTab(tab)
+    popToTabRoot(tab)
+    if (route != null) navigate(route)
 }
 
 /**
@@ -2160,7 +2169,7 @@ private suspend fun NavHostController.openPlaceLink(
 ) {
     val section = slug?.takeIf { it.isNotBlank() }
     if (homeId.isNullOrBlank()) {
-        openPlaceRoot()
+        openTabRoot(PantopusRoute.Place)
         val rootHomeId = section?.let { host.awaitRootHomeId() } ?: return
         // Only while nothing else opened on top of the root meanwhile.
         if (currentDestination?.route == PantopusRoute.Place.path) navigate(ChildRoutes.placeDetail(rootHomeId, section))
@@ -2168,7 +2177,7 @@ private suspend fun NavHostController.openPlaceLink(
     }
     if (host.isOpenable(homeId)) {
         host.switchHome(homeId)
-        openPlaceRoot()
+        openTabRoot(PantopusRoute.Place)
     } else {
         val top = currentBackStackEntry
         val showing =
@@ -2217,7 +2226,7 @@ private fun schedulingOwnerNavArgs() =
 private fun schedulingHomeNavArg() = optionalStringNavArg(SchedulingRoutes.ARG_HOME_ID)
 
 /**
- * Signed-in root. Hosts [PantopusBottomBar] + a [NavHost] with the five
+ * Signed-in root. Hosts [PantopusBottomBar] + a [NavHost] with the bar's
  * top-level destinations from [PantopusRoute] plus drill-down destinations
  * wired from the Hub.
  *
@@ -2255,9 +2264,13 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
     SuggestionsNotice(waiting = briefingNoticeShowing != null)
     val sessionViewModel: RootSessionViewModel = hiltViewModel()
     val chatBadgeViewModel: ChatBadgeViewModel = hiltViewModel()
+    val mailBadgeViewModel: MailBadgeViewModel = hiltViewModel()
     val currentHandle by sessionViewModel.currentHandle.collectAsStateWithLifecycle()
     val online by sessionViewModel.isOnline.collectAsStateWithLifecycle()
     val liveInboxBadgeCount by chatBadgeViewModel.unreadMessages.collectAsStateWithLifecycle()
+    val unopenedMail by mailBadgeViewModel.unopened.collectAsStateWithLifecycle()
+    // The Mail badge reads its count again whenever the app comes back (mail may have come meanwhile).
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { mailBadgeViewModel.refresh() }
     // §1C-b — context-aware navigation drawer, opened from the Hub menu button
     // (repurposed from "open Settings"; Settings now lives as a drawer row).
     val navDrawerState = rememberDrawerState(DrawerValue.Closed)
@@ -2302,8 +2315,13 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
         }
     }
     val resolvedInboxBadgeCount = maxOf(inboxBadgeCount, liveInboxBadgeCount)
+    // Messages counts unread chats (on Mail while Mailbox is off, when Mail is the conversation list); Mail counts
+    // unopened mail.
     val badges: Map<PantopusRoute, Int> =
-        if (resolvedInboxBadgeCount > 0) mapOf(PantopusRoute.Mail to resolvedInboxBadgeCount) else emptyMap()
+        buildMap {
+            if (resolvedInboxBadgeCount > 0) put(PantopusRoute.messagesTab, resolvedInboxBadgeCount)
+            if (LaunchFeatures.mailbox && unopenedMail > 0) put(PantopusRoute.Mail, unopenedMail)
+        }
     // The Place tab's root sits at the bottom of the stack for the whole session. Its host holds the session's
     // current home, which the homes sheet, links and Add Home set, so they reach it from here.
     val placeRootEntry =
@@ -2579,11 +2597,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 DeepLinkRouter.consume()
             }
             DeepLinkRouter.Destination.VacationHold -> {
-                // A14.8 — push the Mailbox root first so Back returns
-                // to the mailbox surface (not the hub home), then drill
-                // into the Vacation hold screen.
-                navController.navigate(ChildRoutes.MAILBOX_ROOT)
-                navController.navigate(ChildRoutes.MAILBOX_VACATION)
+                // A14.8 — the Vacation hold screen on the Mail tab, so Back
+                // returns to the Mailbox (not the hub home).
+                navController.openTabRoot(PantopusRoute.Mail, ChildRoutes.MAILBOX_VACATION)
                 DeepLinkRouter.consume()
             }
             is DeepLinkRouter.Destination.Place -> {
@@ -2596,50 +2612,49 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 DeepLinkRouter.consume()
             }
             DeepLinkRouter.Destination.MailDay -> {
-                // Push mailbox root first so Back walks back through the
-                // drawer view, then push the day editor on top.
-                navController.navigate(ChildRoutes.MAILBOX_ROOT)
-                navController.navigate(ChildRoutes.mailDay())
+                // The day editor on the Mail tab, so Back walks back through
+                // the drawer view.
+                navController.openTabRoot(PantopusRoute.Mail, ChildRoutes.mailDay())
                 DeepLinkRouter.consume()
             }
-            // ---- B1.6 batch-2 routing seam. The mailbox sub-screens push
-            // through MAILBOX_ROOT first so Back walks back through the
-            // mailbox, matching VacationHold / MailDay above. ----
+            // ---- B1.6 batch-2 routing seam. The mailbox sub-screens open on
+            // the Mail tab so Back walks back through the mailbox, matching
+            // VacationHold / MailDay above. ----
             DeepLinkRouter.Destination.Stamps -> {
-                navController.navigate(ChildRoutes.MAILBOX_ROOT)
-                navController.navigate(ChildRoutes.STAMPS)
+                navController.openTabRoot(PantopusRoute.Mail, ChildRoutes.STAMPS)
                 DeepLinkRouter.consume()
             }
             is DeepLinkRouter.Destination.MailTask -> {
-                navController.navigate(ChildRoutes.MAILBOX_ROOT)
-                navController.navigate(ChildRoutes.mailTask(pending.taskId))
+                navController.openTabRoot(PantopusRoute.Mail, ChildRoutes.mailTask(pending.taskId))
                 DeepLinkRouter.consume()
             }
             is DeepLinkRouter.Destination.MailTranslation -> {
-                navController.navigate(ChildRoutes.MAILBOX_ROOT)
-                navController.navigate(ChildRoutes.translation(pending.mailId))
+                navController.openTabRoot(PantopusRoute.Mail, ChildRoutes.translation(pending.mailId))
                 DeepLinkRouter.consume()
             }
             is DeepLinkRouter.Destination.Unboxing -> {
-                navController.navigate(ChildRoutes.MAILBOX_ROOT)
-                navController.navigate(ChildRoutes.unboxing(pending.mailId))
+                navController.openTabRoot(PantopusRoute.Mail, ChildRoutes.unboxing(pending.mailId))
                 DeepLinkRouter.consume()
             }
             DeepLinkRouter.Destination.Earn -> {
-                navController.navigate(ChildRoutes.MAILBOX_ROOT)
-                navController.navigate(ChildRoutes.EARN)
+                navController.openTabRoot(PantopusRoute.Mail, ChildRoutes.EARN)
                 DeepLinkRouter.consume()
             }
-            // A mail notification's letter, in the item detail the mailbox list
-            // opens; pushed through MAILBOX_ROOT like the other mailbox links.
+            // A mail notification's piece (a special delivery), in the item
+            // detail the Mailbox opens, on the Mail tab over the Mailbox. The
+            // same piece already on screen stays, so a repeated push never
+            // stacks a second copy.
             is DeepLinkRouter.Destination.MailItem -> {
-                navController.navigate(ChildRoutes.MAILBOX_ROOT)
-                navController.navigate(ChildRoutes.mailboxItemDetail(pending.mailId))
+                val top = navController.currentBackStackEntry
+                val showing =
+                    top?.destination?.route == ChildRoutes.MAILBOX_ITEM_DETAIL &&
+                        top.arguments?.getString(MAILBOX_ITEM_DETAIL_MAIL_ID_KEY) == pending.mailId
+                if (!showing) navController.openTabRoot(PantopusRoute.Mail, ChildRoutes.mailboxItemDetail(pending.mailId))
                 DeepLinkRouter.consume()
             }
-            // `/mailbox` (the Mail Day summary notification) — the Mail tab.
+            // `/mailbox` ("Your mail is here", the morning summary) — the Mail tab at its Mailbox.
             DeepLinkRouter.Destination.Mailbox -> {
-                navController.navigateToRootTab(PantopusRoute.Mail)
+                navController.openTabRoot(PantopusRoute.Mail)
                 DeepLinkRouter.consume()
             }
             is DeepLinkRouter.Destination.NeighborMessage -> {
@@ -2767,12 +2782,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 context = NavigationDrawerContext.Personal(name = currentHandle),
                 onSelect = { destination ->
                     navDrawerScope.launch { navDrawerState.close() }
-                    navController.navigate(
-                        routeForDrawer(
-                            destination,
-                            NavigationDrawerContext.Personal(name = currentHandle),
-                        ),
-                    )
+                    val route = routeForDrawer(destination, NavigationDrawerContext.Personal(name = currentHandle))
+                    // The Mailbox rows switch to the Mail tab, whose top screen is the Mailbox.
+                    if (route == PantopusRoute.Mail.path) navController.openTabRoot(PantopusRoute.Mail) else navController.navigate(route)
                 },
                 onOpenIdentityCenter = {
                     navDrawerScope.launch { navDrawerState.close() }
@@ -2781,7 +2793,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 // "Back to Place": Your Place, the Place tab's root.
                 onBackToHub = {
                     navDrawerScope.launch { navDrawerState.close() }
-                    navController.openPlaceRoot()
+                    navController.openTabRoot(PantopusRoute.Place)
                 },
                 // The pill's name opens the profile, as the Hub avatar does.
                 onOpenProfile = {
@@ -2983,6 +2995,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             onOpenMenu = openMenu,
                         )
                     }
+                    // The Mail tab (2026-10-27): the Mailbox is its top screen, with the side menu; Messages is its
+                    // own tab beside it.
                     MailboxRootScreen(
                         onOpenMail = { mailId ->
                             navController.navigate(ChildRoutes.mailboxItemDetail(mailId))
@@ -3001,7 +3015,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onOpenRecords = { navController.navigate(ChildRoutes.MAILBOX_HOME_RECORDS) },
                         onOpenMailTasks = { navController.navigate(ChildRoutes.mailTaskList()) },
                         onBack = null,
-                        onOpenInbox = { navController.navigate(PantopusRoute.Messages.path) },
+                        onOpenMenu = openMenu,
                     )
                 }
                 composable(PantopusRoute.Pulse.path) {
@@ -3061,12 +3075,14 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(PantopusRoute.Messages.path) {
+                    // The Messages tab while Mailbox is on: the conversation list, with the side menu.
                     InboxScreen(
                         onOpenConversation = { row ->
                             navController.navigate(ChildRoutes.chatConversation(row))
                         },
                         onCompose = { navController.navigate(ChildRoutes.NEW_MESSAGE) },
                         onOpenSearch = { navController.navigate(ChildRoutes.CHAT_SEARCH) },
+                        onOpenMenu = openMenu,
                     )
                 }
                 composable(
@@ -3108,7 +3124,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onOpenCeremonialMailOpen = { mailId ->
                             navController.navigate(ChildRoutes.ceremonialMailOpen(mailId))
                         },
-                        onOpenMailbox = { navController.navigate(ChildRoutes.MAILBOX_ROOT) },
+                        onOpenMailbox = { navController.openTabRoot(PantopusRoute.Mail) },
                         onOpenEditProfile = {
                             navController.navigate(ChildRoutes.EDIT_PROFILE)
                         },
@@ -3217,7 +3233,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onOpenMenu = openMenu,
                         onSwitchHome = { id ->
                             currentPlaceHost?.switchHome(id)
-                            navController.openPlaceRoot()
+                            navController.openTabRoot(PantopusRoute.Place)
                         },
                         onPlaceUnavailable = { goneId ->
                             // Only if this unreadable Home is still on screen.
@@ -5097,17 +5113,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             // FAB shortcut — drop the user back to the inbox
                             // where mail items expose the kebab
                             // "Save to vault" action.
-                            navController.navigate(ChildRoutes.MAILBOX_ROOT) {
-                                popUpTo(ChildRoutes.MAILBOX_ROOT) { inclusive = false }
-                                launchSingleTop = true
-                            }
+                            navController.openTabRoot(PantopusRoute.Mail)
                         },
-                        onOpenMailbox = {
-                            navController.navigate(ChildRoutes.MAILBOX_ROOT) {
-                                popUpTo(ChildRoutes.MAILBOX_ROOT) { inclusive = false }
-                                launchSingleTop = true
-                            }
-                        },
+                        onOpenMailbox = { navController.openTabRoot(PantopusRoute.Mail) },
                         onBack = { navController.popBackStack() },
                     )
                 }
@@ -6678,25 +6686,13 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 }
                 composable(ChildRoutes.MAILBOX_ROOT) {
                     if (!LaunchFeatures.mailbox) return@composable LaunchCutPlaceholder("Mailbox", navController)
-                    MailboxRootScreen(
-                        onOpenMail = { mailId ->
-                            navController.navigate(ChildRoutes.mailboxItemDetail(mailId))
-                        },
-                        onOpenSearch = { navController.navigate(ChildRoutes.MAILBOX_SEARCH) },
-                        onOpenMap = { navController.navigate(ChildRoutes.MAILBOX_MAP) },
-                        onOpenMailDay = { navController.navigate(ChildRoutes.mailDay()) },
-                        onOpenEarn = { navController.navigate(ChildRoutes.EARN) },
-                        onOpenVacationHold = { navController.navigate(ChildRoutes.MAILBOX_VACATION) },
-                        onOpenStamps = { navController.navigate(ChildRoutes.STAMPS) },
-                        onOpenUnboxing = { navController.navigate(ChildRoutes.unboxing()) },
-                        onOpenCompose = { navController.navigate(ChildRoutes.CEREMONIAL_MAIL) },
-                        onOpenRoutingQueue = { navController.navigate(ChildRoutes.MAIL_ROUTING_QUEUE) },
-                        onOpenMailParty = { navController.navigate(ChildRoutes.MAILBOX_PARTY) },
-                        onOpenCommunity = { navController.navigate(ChildRoutes.MAILBOX_COMMUNITY) },
-                        onOpenRecords = { navController.navigate(ChildRoutes.MAILBOX_HOME_RECORDS) },
-                        onOpenMailTasks = { navController.navigate(ChildRoutes.mailTaskList()) },
-                        onBack = { navController.popBackStack() },
-                    )
+                    // The Mailbox is the Mail tab's top screen (the Mail tab, 2026-10-27): this old route (saved
+                    // state, a stale entry) gives way to the tab instead of showing a second Mailbox over another tab.
+                    // It leaves first, so no tab's saved screens keep it.
+                    LaunchedEffect(Unit) {
+                        navController.popBackStack(ChildRoutes.MAILBOX_ROOT, inclusive = true)
+                        navController.openTabRoot(PantopusRoute.Mail)
+                    }
                 }
                 composable(ChildRoutes.MAILBOX_PARTY) {
                     if (!LaunchFeatures.mailbox) return@composable LaunchCutPlaceholder("Mailbox", navController)
@@ -7107,7 +7103,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             val host = currentPlaceHost
                             if (homeId != null && host != null) {
                                 host.landOnAddedHome(homeId)
-                                navController.openPlaceRoot()
+                                navController.openTabRoot(PantopusRoute.Place)
                             } else {
                                 navController.navigate(ChildRoutes.MY_HOMES) {
                                     popUpTo(ChildRoutes.MY_HOMES) { inclusive = true }
@@ -7432,7 +7428,8 @@ private fun PlaceDashboardDestination(
         onOpenPulse = { navController.navigate(ChildRoutes.placePulse(homeId)) },
         onComposeMessage = { address -> navController.navigate(ChildRoutes.neighborCompose(homeId, address)) },
         onOpenInbox = { navController.navigate(ChildRoutes.NEIGHBOR_INBOX) },
-        onOpenMailDay = { navController.navigate(ChildRoutes.mailDay()) },
+        // The just-moved card's mail step: a mailbox page, so it opens on the Mail tab.
+        onOpenMailDay = { navController.openTabRoot(PantopusRoute.Mail, ChildRoutes.mailDay()) },
         onOpenPrivacyMirror = { navController.navigate(ChildRoutes.placePrivacyMirror(homeId)) },
         onOpenHomeTools = { navController.navigate(ChildRoutes.homeDashboard(homeId)) },
         onOpenHomeShortcut = { shortcut ->
@@ -7601,7 +7598,8 @@ private fun routeForDrawer(
         NavigationDrawerDestination.MyHomes -> ChildRoutes.MY_HOMES
         NavigationDrawerDestination.MyBusinesses -> ChildRoutes.MY_BUSINESSES
         NavigationDrawerDestination.Connections -> ChildRoutes.CONNECTIONS
-        NavigationDrawerDestination.Mailbox -> ChildRoutes.MAILBOX_ROOT
+        // The Mail tab (the Mail tab, 2026-10-27): its top screen is the Mailbox.
+        NavigationDrawerDestination.Mailbox -> PantopusRoute.Mail.path
         // Privacy holds Delete account; iOS opens the same screen from this row.
         NavigationDrawerDestination.ProfileAndPrivacy -> ChildRoutes.SETTINGS_PRIVACY
         NavigationDrawerDestination.BeaconUpdates -> ChildRoutes.BEACONS_FEED
@@ -7645,7 +7643,7 @@ private fun routeForDrawer(
             if (homeId.isNotEmpty()) ChildRoutes.homeBills(homeId) else ChildRoutes.placeholder("Coming soon")
         NavigationDrawerDestination.HomeMembers ->
             if (homeId.isNotEmpty()) ChildRoutes.homeMembers(homeId) else ChildRoutes.placeholder("Coming soon")
-        NavigationDrawerDestination.HomeMailbox -> ChildRoutes.MAILBOX_ROOT
+        NavigationDrawerDestination.HomeMailbox -> PantopusRoute.Mail.path
         NavigationDrawerDestination.HomePackages ->
             if (homeId.isNotEmpty()) ChildRoutes.homePackages(homeId) else ChildRoutes.placeholder("Coming soon")
         NavigationDrawerDestination.HomeDocuments ->
