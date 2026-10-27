@@ -6,7 +6,7 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 // before reading or changing anything and otherwise answers its not-found.
 const {
   getAccessibleHomeIds, canAccessMail, readableMail, homesMailFilter, visibleMailFilter, visibleMailIds,
-  removedMailInfo, sendHomeMailRemovedNotice,
+  removedMailInfo, sendHomeMailRemovedNotice, mailReaderIdsOrThrow,
 } = require('../utils/homeMailAccess');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
@@ -325,6 +325,9 @@ router.get('/drawer/:drawer', verifyToken, async (req, res) => {
       // The caller's own letters, or Home letters the Home mail rule shows them
       // (M01): a letter filed into Business keeps its recipient and attention.
       query = query.or(visibleMailFilter(userId, homeIds));
+    } else {
+      // Earn: only the caller's own offers (the drawer count above scopes it the same way).
+      query = query.eq('recipient_user_id', userId);
     }
 
     // Tab filter: incoming vs counter vs vault
@@ -818,16 +821,11 @@ router.post('/package/:mailId/share-eta', verifyToken, async (req, res) => {
     const homeId = mail.recipient_home_id || mail.address_home_id;
     if (!homeId) return res.status(400).json({ error: 'No home associated' });
 
-    // Household members to notify. The User embed names the user_id FK:
-    // HomeOccupancy also references User through added_by_user_id, and the
-    // unqualified embed failed as ambiguous (PGRST201), so nobody was notified.
-    const { data: residents, error: residentsError } = await supabaseAdmin
-      .from('HomeOccupancy')
-      .select('user_id, User!HomeOccupancy_user_id_fkey!inner(id)')
-      .eq('home_id', homeId)
-      .eq('is_active', true);
-    if (residentsError) throw residentsError;
-    const otherResidents = (residents || []).filter(r => r.user_id !== userId);
+    // Household members to notify: the people who may read this Home's mail. A pending claim, a guest or someone
+    // on probation never gets a household notice about its packages.
+    const otherResidents = (await mailReaderIdsOrThrow(homeId))
+      .filter((residentId) => residentId !== userId)
+      .map((residentId) => ({ user_id: residentId }));
 
     // Create notification mail items for all household members (batch insert)
     if (otherResidents.length > 0) {

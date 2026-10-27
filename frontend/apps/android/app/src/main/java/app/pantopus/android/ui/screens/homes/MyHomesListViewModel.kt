@@ -222,7 +222,7 @@ class MyHomesListViewModel
         }
 
         /**
-         * Pause and leave. Instant Screens: the Homes rows stay (shown again at once, then re-read) while every row is
+         * Hidden (stopped) and leave. Instant Screens: the Homes rows stay (shown again at once, then re-read) while every row is
          * an owner's or household home (founder decision 3); a guest's or expiring home blanks the list and re-checks.
          * The residency requests (verification) are read again on every visit.
          */

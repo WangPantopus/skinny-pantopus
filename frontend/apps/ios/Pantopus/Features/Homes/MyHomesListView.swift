@@ -13,6 +13,7 @@ import SwiftUI
 struct MyHomesListView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var isVisible = false
+    @State private var wasInBackground = false
     @State private var viewModel: MyHomesListViewModel
     @State private var deleteTarget: DeleteTarget?
     @State private var showingRemovalRecovery = false
@@ -49,13 +50,21 @@ struct MyHomesListView: View {
             deleteTarget = nil
             viewModel.suspend()
         }
+        // Inactive (Control Center, Notification Center, the app switcher, a
+        // system prompt) still shows the list, so it stays. Only the background
+        // suspends it, and coming back from there re-reads it.
         .onChange(of: scenePhase) { _, phase in
             guard isVisible else { return }
-            deleteTarget = nil
-            if phase == .active {
+            switch phase {
+            case .background:
+                deleteTarget = nil
+                wasInBackground = true
+                viewModel.suspendInBackground()
+            case .active where wasInBackground:
+                wasInBackground = false
                 Task { await viewModel.refresh() }
-            } else {
-                viewModel.suspend()
+            default:
+                break
             }
         }
         .onChange(of: viewModel.isCurrent) { _, current in
