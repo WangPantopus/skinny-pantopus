@@ -100,7 +100,10 @@ Tests run with every feature on (`backend/jest.config.js`, `frontend/apps/web/te
    returns). Three keep running because they keep stored data correct: the purge of letters deleted more than 30 days
    ago (a deletion people were promised), vacation-hold dates, and letter escrow expiry (its notice to the sender is
    already dropped). The mail notification Lambda's pushes (`mail_summary`, `mail_urgent`) are refused at
-   `/api/internal/briefing/reminder-push`.
+   `/api/internal/briefing/reminder-push`. Since 2026-10-27 community-mail moderation, mail-party expiry and the Earn
+   risk review need `mail_extras` as well (they serve only mail extras), and the Lambda's schedule has its own switch
+   in the seeder stack, `MailEnabled` (off by default; turn it on with the Mailbox, see
+   `docs/release/prod-config-checklist.md`).
 14. **Letters to a contact need both mail keys:** the email or text that tells a non-member about a letter, and the
    `mail_claimed` / `mail_escrow_*` notices, go out only with `mailbox` and `mail_extras` both on (a surface of two cut
    features). With either key off, `POST /api/mailbox/send` refuses a letter to an email address or phone number
