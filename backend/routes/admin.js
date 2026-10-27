@@ -11,6 +11,7 @@ const verifyToken = require('../middleware/verifyToken');
 const { requireAdmin } = require('../middleware/verifyToken');
 const logger = require('../utils/logger');
 const homeClaimReviewService = require('../services/homeClaimReviewService');
+const homeClaimIdentityService = require('../services/homeClaimIdentityService');
 const { getRequestSessionScope, requireExpectedSessionScope } = require('../utils/requestSessionScope');
 const funnelReport = require('../services/funnelReport');
 
@@ -65,9 +66,11 @@ async function enrichClaims(claims) {
   if (claimIds.length > 0) {
     const { data: evidenceCounts } = await supabaseAdmin
       .from('HomeVerificationEvidence')
-      .select('claim_id')
+      .select('claim_id, evidence_type')
       .in('claim_id', claimIds);
+    // Documents only: a claim's identity check isn't one.
     for (const e of (evidenceCounts || [])) {
+      if (e.evidence_type === 'idv') continue;
       evidenceCountMap[e.claim_id] = (evidenceCountMap[e.claim_id] || 0) + 1;
     }
   }
@@ -245,8 +248,10 @@ router.get('/claims/:claimId', async (req, res) => {
   try {
     if (!requireExpectedSessionScope(req, res)) return;
     const result = await homeClaimReviewService.read({ claimId: req.params.claimId, actorId: req.user.id, platformAdmin: true });
+    const approval = await homeClaimIdentityService.reviewerApprovalOrNull(result.claimId);
     res.set('Cache-Control', 'private, no-store');
-    res.json({ claim: result.claim, home: result.home, claimant: result.claimant, evidence: result.evidence,
+    res.json({ claim: { ...result.claim, evidence: homeClaimIdentityService.withoutIdentityEvidence(result.claim.evidence) },
+      home: result.home, claimant: result.claimant, evidence: homeClaimIdentityService.withoutIdentityEvidence(result.evidence), approval,
       claim_session: { ...getRequestSessionScope(req), home_id: result.homeId, claim_id: result.claimId } });
   } catch (error) { homeClaimReviewService.sendError(res, error); }
 });

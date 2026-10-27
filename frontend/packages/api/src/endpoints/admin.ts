@@ -3,6 +3,7 @@
 // ============================================================
 
 import { get, post } from '../client';
+import type { ClaimReviewApproval } from './homeOwnership';
 
 export interface AdminClaim {
   id: string;
@@ -54,6 +55,8 @@ export interface ClaimDetail {
   home: any;
   claimant: any;
   evidence: ClaimEvidence[];
+  /** Null when it couldn't be read; approval itself still decides. */
+  approval?: ClaimReviewApproval | null;
   claim_session: { actor_id: string; session_scope: string; home_id: string; claim_id: string };
 }
 

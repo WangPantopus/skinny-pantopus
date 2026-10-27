@@ -217,6 +217,10 @@ export type {
   ClaimRoutingClassification,
   HouseholdResolutionState,
   HouseholdRemovalVote,
+  ClaimApprovalProgress,
+  ClaimReviewApproval,
+  ClaimIdentityCheckState,
+  ClaimProofState,
 } from './endpoints/homeOwnership';
 
 // Types from homes

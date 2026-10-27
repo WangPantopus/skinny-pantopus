@@ -7,6 +7,7 @@
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const householdClaimConfig = require('../config/householdClaims');
+const homeClaimIdentityService = require('./homeClaimIdentityService');
 
 /**
  * Opaque handshake: mask internal claim states for the claimant.
@@ -47,17 +48,31 @@ async function listOwnClaims(userId) {
 
   // Whether each claim has documents, so a claim started from Add Home isn't
   // described as documents waiting for review. Unknown (null) if unreadable.
+  // An identity check is not a document.
   let withEvidence = null;
   const claimIds = (claims || []).map(c => c.id);
   if (claimIds.length) {
     const { data: evidence, error: evidenceError } = await supabaseAdmin
       .from('HomeVerificationEvidence')
       .select('claim_id')
-      .in('claim_id', claimIds);
+      .in('claim_id', claimIds)
+      .neq('evidence_type', 'idv');
     if (evidenceError) {
       logger.warn('Failed to read claim evidence presence', { error: evidenceError.message });
     } else {
       withEvidence = new Set((evidence || []).map(e => e.claim_id));
+    }
+  }
+
+  // What each claim in review still needs before it can be approved (the claimant's
+  // checklist). Unknown (null) if unreadable; the claims still list.
+  let progress = null;
+  const inReview = (claims || []).filter(c => maskClaimState(c.state, c.claim_phase_v2) === 'under_review').map(c => c.id);
+  if (inReview.length) {
+    try {
+      progress = await homeClaimIdentityService.progressFor(inReview);
+    } catch (error) {
+      logger.warn('Failed to read claim approval progress', { errorCode: error.code });
     }
   }
 
@@ -69,6 +84,7 @@ async function listOwnClaims(userId) {
     method: c.method,
     status: maskClaimState(c.state, c.claim_phase_v2),
     has_evidence: withEvidence ? withEvidence.has(c.id) : null,
+    approval: progress?.get(c.id)?.active ? homeClaimIdentityService.claimantApproval(progress.get(c.id)) : null,
     created_at: c.created_at,
     updated_at: c.updated_at,
     home: c.home ? {
