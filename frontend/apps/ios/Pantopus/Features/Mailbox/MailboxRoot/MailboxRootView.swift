@@ -16,12 +16,19 @@ import SwiftUI
 
 public struct MailboxRootView: View {
     @State private var viewModel: MailboxRootViewModel
+    /// The Mail tab's top screen carries the side menu, as every tab's does.
+    private let showsMenuButton: Bool
 
     /// Split init (see GigsFeedView): avoids a Swift 6.1.2 / Xcode 16.4 SILGen
     /// crash in the defaulted-view-model argument generator. Behaviour is
     /// unchanged.
     public init(viewModel: MailboxRootViewModel) {
+        self.init(viewModel: viewModel, showsMenuButton: false)
+    }
+
+    public init(viewModel: MailboxRootViewModel, showsMenuButton: Bool) {
         _viewModel = State(initialValue: viewModel)
+        self.showsMenuButton = showsMenuButton
     }
 
     public init() {
@@ -106,6 +113,12 @@ public struct MailboxRootView: View {
                 }
                 .accessibilityLabel("Mailbox settings")
                 .accessibilityIdentifier("mailboxRootSettings")
+            }
+            if showsMenuButton {
+                // The side menu (founder decision 2026-10-20), leading as in the Mail tab drawing.
+                ToolbarItem(placement: .topBarLeading) {
+                    NavigationMenuButton(accessibilityIdentifier: "mail.menu")
+                }
             }
         }
         .accessibilityIdentifier("mailboxRoot")

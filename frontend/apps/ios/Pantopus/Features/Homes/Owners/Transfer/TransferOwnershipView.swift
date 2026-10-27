@@ -40,7 +40,7 @@ public struct TransferOwnershipView: View {
                 stickyBottom: { AnyView(stickyCTA) }
             )
             .accessibilityIdentifier("transferOwnershipForm")
-            .toolbar(.hidden, for: .tabBar)
+            .hidesTabBar()
 
             if viewModel.sheetPhase != .hidden {
                 sheetOverlay

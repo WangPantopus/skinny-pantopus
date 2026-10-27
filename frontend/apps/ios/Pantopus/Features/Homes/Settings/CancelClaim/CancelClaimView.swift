@@ -77,7 +77,7 @@ public struct CancelClaimView: View {
                 .padding(Spacing.s4)
             }
         )
-        .toolbar(.hidden, for: .tabBar)
+        .hidesTabBar()
         .background(Theme.Color.appBg)
         .accessibilityIdentifier("cancelClaim")
         .task { viewModel.load() }

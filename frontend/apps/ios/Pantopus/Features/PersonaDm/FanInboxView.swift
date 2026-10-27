@@ -47,7 +47,7 @@ public struct FanInboxView: View {
         }
         .background(Theme.Color.appBg)
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
-        .toolbar(.hidden, for: .tabBar)
+        .hidesTabBar()
     }
 
     // MARK: - Top bar
