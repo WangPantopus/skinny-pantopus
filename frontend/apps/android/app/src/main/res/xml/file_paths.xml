@@ -20,6 +20,10 @@
     <cache-path
         name="chat_files"
         path="chat-files/" />
+    <!-- Mail enclosures opened in another app (MailEnclosureFiles). -->
+    <cache-path
+        name="mail_enclosures"
+        path="mail-enclosures/" />
     <!-- Home documents, the emergency card and residency letters (HomeDocumentTemporaryFiles). -->
     <cache-path
         name="home_documents"

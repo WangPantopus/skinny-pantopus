@@ -9,6 +9,7 @@ import app.pantopus.android.data.api.models.mailbox.MailDetailResponse
 import app.pantopus.android.data.api.models.mailbox.MailboxListResponse
 import app.pantopus.android.data.api.models.mailbox.MarkMailViewedResponse
 import app.pantopus.android.data.api.models.mailbox.RestoreMailResponse
+import app.pantopus.android.data.api.models.mailbox.v2.EnclosureLinkResponse
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.PATCH
@@ -37,6 +38,13 @@ interface MailboxApi {
     suspend fun detail(
         @Path("id") id: String,
     ): MailDetailResponse
+
+    /** `GET /api/mailbox/:id/enclosures/:enclosureId` — a five-minute link to one enclosure (SRV-4). */
+    @GET("api/mailbox/{id}/enclosures/{enclosureId}")
+    suspend fun enclosureLink(
+        @Path("id") id: String,
+        @Path("enclosureId") enclosureId: String,
+    ): EnclosureLinkResponse
 
     /**
      * `PATCH /api/mailbox/:id/view` — route `backend/routes/mailbox.js:2768`

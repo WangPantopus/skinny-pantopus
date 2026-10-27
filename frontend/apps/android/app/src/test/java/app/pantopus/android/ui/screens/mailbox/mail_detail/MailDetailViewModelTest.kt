@@ -5,10 +5,10 @@ package app.pantopus.android.ui.screens.mailbox.mail_detail
 import androidx.lifecycle.SavedStateHandle
 import app.pantopus.android.core.LaunchFeature
 import app.pantopus.android.core.LaunchFeatures
-import app.pantopus.android.data.api.models.mailbox.AckResponse
 import app.pantopus.android.data.api.models.mailbox.MailDetail
 import app.pantopus.android.data.api.models.mailbox.MailDetailResponse
 import app.pantopus.android.data.api.models.mailbox.MarkMailViewedResponse
+import app.pantopus.android.data.api.models.mailbox.v2.MailboxItemActionResponse
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.gigs.GigsRepository
@@ -110,6 +110,7 @@ class MailDetailViewModelTest {
             documentRepo = documentRepo,
             savedStateHandle = SavedStateHandle(mapOf(MAIL_DETAIL_MAIL_ID_KEY to "m1")),
             checkoutIdentities = gigIdentityFixture(),
+            auth = mockk(relaxed = true),
         )
 
     // ─── Four states ───────────────────────────────────────
@@ -266,15 +267,15 @@ class MailDetailViewModelTest {
         assertNull(projected.senderUserId)
     }
 
-    // ─── Optimistic acknowledge ──────────────────────────
+    // ─── Optimistic acknowledge (the Mail tab's plain `acknowledge` action: every launch feature is on here) ───
 
     @Test
     fun acknowledge_flips_flag_optimistically_then_succeeds() =
         runTest {
             coEvery { repo.detail("m1") } returns
                 NetworkResult.Success(MailDetailResponse(mail = makeDetail(ackRequired = true)))
-            coEvery { repo.acknowledge("m1") } returns
-                NetworkResult.Success(AckResponse(message = "ok", ackStatus = "acknowledged"))
+            coEvery { repo.itemAction("m1", "acknowledge", any()) } returns
+                NetworkResult.Success(MailboxItemActionResponse(message = "ok", action = "acknowledge"))
             val vm = makeVm()
             vm.load()
             vm.acknowledge()
@@ -284,7 +285,7 @@ class MailDetailViewModelTest {
             assertNull(state.content.aiSummary)
             assertEquals("Acknowledged", vm.toast.value)
             vm.acknowledge()
-            coVerify(exactly = 1) { repo.acknowledge("m1") }
+            coVerify(exactly = 1) { repo.itemAction("m1", "acknowledge", any()) }
         }
 
     @Test
@@ -292,7 +293,7 @@ class MailDetailViewModelTest {
         runTest {
             coEvery { repo.detail("m1") } returns
                 NetworkResult.Success(MailDetailResponse(mail = makeDetail(ackRequired = true)))
-            coEvery { repo.acknowledge("m1") } returns
+            coEvery { repo.itemAction("m1", "acknowledge", any()) } returns
                 NetworkResult.Failure(NetworkError.Server(500, null))
             val vm = makeVm()
             vm.load()
@@ -301,11 +302,11 @@ class MailDetailViewModelTest {
             assertTrue(state is MailDetailUiState.Loaded)
             assertFalse((state as MailDetailUiState.Loaded).content.isAcknowledged)
             assertNotNull(vm.toast.value)
-            coEvery { repo.acknowledge("m1") } returns
-                NetworkResult.Success(AckResponse(message = "ok", ackStatus = "acknowledged"))
+            coEvery { repo.itemAction("m1", "acknowledge", any()) } returns
+                NetworkResult.Success(MailboxItemActionResponse(message = "ok", action = "acknowledge"))
             vm.acknowledge()
             assertTrue((vm.state.value as MailDetailUiState.Loaded).content.isAcknowledged)
             vm.acknowledge()
-            coVerify(exactly = 2) { repo.acknowledge("m1") }
+            coVerify(exactly = 2) { repo.itemAction("m1", "acknowledge", any()) }
         }
 }

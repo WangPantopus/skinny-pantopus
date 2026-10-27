@@ -72,6 +72,35 @@ data class MailInvoice(
     val owed: Boolean get() = status in setOf("sent", "viewed", "overdue")
 }
 
+/** `summary` on a piece (SRV-2): "Pantopus read this for you", a short note and key facts; null when there's none. */
+@JsonClass(generateAdapter = true)
+data class MailSummary(
+    val text: String? = null,
+    @Json(name = "key_facts") val keyFacts: List<MailKeyFact> = emptyList(),
+)
+
+@JsonClass(generateAdapter = true)
+data class MailKeyFact(
+    val label: String? = null,
+    val value: String? = null,
+)
+
+/** `enclosures[]` on a piece's detail (SRV-4): what came inside; each opens through a fresh link. */
+@JsonClass(generateAdapter = true)
+data class MailEnclosure(
+    val id: String,
+    val name: String? = null,
+    @Json(name = "mime_type") val mimeType: String? = null,
+    @Json(name = "size_bytes") val sizeBytes: Long? = null,
+)
+
+/** `GET /api/mailbox/:id/enclosures/:enclosure_id` (SRV-4): a link signed for five minutes (null: an older public file). */
+@JsonClass(generateAdapter = true)
+data class EnclosureLinkResponse(
+    val url: String,
+    @Json(name = "expires_at") val expiresAt: String? = null,
+)
+
 /** `GET /api/mailbox/v2/search` — every piece this person can read, the same row shape as a drawer (SRV-3). */
 @JsonClass(generateAdapter = true)
 data class MailSearchResponse(
@@ -144,6 +173,8 @@ data class DrawerMail(
     @Json(name = "page_count") val pageCount: Int? = null,
     /** The business invoice a bill was made from (SRV-7); null for everything else. */
     val invoice: MailInvoice? = null,
+    /** `delivered`, `opened`, `filed` (in the Vault) … */
+    val lifecycle: String? = null,
 ) {
     @JsonClass(generateAdapter = true)
     data class SenderRef(
@@ -190,13 +221,17 @@ data class MailboxV2Item(
     @Json(name = "ack_required") val ackRequired: Boolean? = null,
     val tags: List<String> = emptyList(),
     val attachments: List<String>? = null,
+    /** A bundle's pieces this person may read, newest first (SRV-5); null for anything else. */
+    val pieces: List<DrawerMail>? = null,
 )
 
 /** `POST /api/mailbox/v2/item/:id/action` — route `backend/routes/mailboxV2.js:459`. */
 @JsonClass(generateAdapter = true)
 data class MailboxItemActionRequest(
-    /** One of: pay, sign, forward, file, shred, remind, split, acknowledge, share_household, create_task, dispute. */
+    /** The receiving actions (Mail build contract): counter, done, file, unfile, shred, acknowledge; older ones too. */
     val action: String,
+    /** The Vault folder for `file` and `done`; null files it where the server chooses. */
+    @Json(name = "folder_id") val folderId: String? = null,
 )
 
 @JsonClass(generateAdapter = true)

@@ -36,7 +36,12 @@ class MailBadgeViewModel
         init {
             if (LaunchFeatures.mailbox) {
                 viewModelScope.launch {
-                    merge(MailboxRepository.mailViewed, MailboxRepository.mailLeftList, MailboxRepository.mailArrived).collect {
+                    merge(
+                        MailboxRepository.mailViewed,
+                        MailboxRepository.mailLeftList,
+                        MailboxRepository.mailChanged,
+                        MailboxRepository.mailArrived,
+                    ).collect {
                         refresh()
                     }
                 }

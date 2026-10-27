@@ -183,6 +183,10 @@ class MailboxRootViewModel
             viewModelScope.launch {
                 MailboxRepository.mailArrived.collect { if (_state.value !is MailboxUiState.Loading) refreshQuietly() }
             }
+            // A letter was put on the counter or brought back from its page: read the tab again.
+            viewModelScope.launch {
+                MailboxRepository.mailChanged.collect { if (_state.value !is MailboxUiState.Loading) refreshQuietly() }
+            }
         }
 
         fun configureNavigation(onOpenMail: (String) -> Unit) {

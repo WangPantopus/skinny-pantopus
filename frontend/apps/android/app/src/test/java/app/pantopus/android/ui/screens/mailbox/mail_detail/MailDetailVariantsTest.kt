@@ -72,6 +72,7 @@ class MailDetailVariantsTest {
             documentRepo = documentRepo,
             savedStateHandle = SavedStateHandle(mapOf(MAIL_DETAIL_MAIL_ID_KEY to "m1")),
             checkoutIdentities = gigIdentityFixture(),
+            auth = mockk(relaxed = true),
         )
 
     private fun makeDetail(

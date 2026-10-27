@@ -1,4 +1,4 @@
-@file:Suppress("PackageNaming", "MagicNumber", "LongMethod", "TooManyFunctions", "LongParameterList")
+@file:Suppress("PackageNaming", "MagicNumber", "LongMethod", "TooManyFunctions", "LongParameterList", "LargeClass")
 
 package app.pantopus.android.ui.screens.mailbox.mail_detail
 
@@ -15,23 +15,34 @@ import app.pantopus.android.data.api.models.mailbox.v2.CommunityDetailDto
 import app.pantopus.android.data.api.models.mailbox.v2.CommunityRsvpStatus
 import app.pantopus.android.data.api.models.mailbox.v2.CouponDetailDto
 import app.pantopus.android.data.api.models.mailbox.v2.GigDetailDto
+import app.pantopus.android.data.api.models.mailbox.v2.MailEnclosure
 import app.pantopus.android.data.api.models.mailbox.v2.MemoryDetailDto
 import app.pantopus.android.data.api.models.mailbox.v2.PartyDetailDto
 import app.pantopus.android.data.api.models.mailbox.v2.PartyRsvpStatus
 import app.pantopus.android.data.api.models.mailbox.v2.RecordsDetailDto
 import app.pantopus.android.data.api.models.mailbox.vault.VaultFolderDto
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
+import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.gigs.GigsRepository
+import app.pantopus.android.data.mailbox.MailEnclosureFiles
 import app.pantopus.android.data.mailbox.MailboxDocumentRepository
 import app.pantopus.android.data.mailbox.MailboxPackageRepository
 import app.pantopus.android.data.mailbox.MailboxRepository
 import app.pantopus.android.data.mailbox.MailboxVaultRepository
 import app.pantopus.android.ui.screens.gigs.checkout.GigBidCheckoutCoordinator
 import app.pantopus.android.ui.screens.gigs.checkout.GigPaymentIdentitySource
+import app.pantopus.android.ui.screens.mailbox.components.MailAddressBook
+import app.pantopus.android.ui.screens.mailbox.components.MailPieceMapper
+import app.pantopus.android.ui.screens.mailbox.components.mailMessage
 import app.pantopus.android.ui.screens.mailbox.item_detail.MailItemCategory
 import app.pantopus.android.ui.screens.mailbox.item_detail.MailTrust
 import app.pantopus.android.ui.screens.mailbox.item_detail.PackageBodyContent
+import app.pantopus.android.ui.screens.mailbox.mail_detail.letter.MailBundleState
+import app.pantopus.android.ui.screens.mailbox.mail_detail.letter.MailCantOpen
+import app.pantopus.android.ui.screens.mailbox.mail_detail.letter.MailLetter
+import app.pantopus.android.ui.screens.mailbox.mail_detail.letter.OpenedEnclosure
 import app.pantopus.android.ui.screens.mailbox.mail_detail.variants.decodePackageDetail
 import app.pantopus.android.ui.screens.shared.mail_item_detail.AIElfBullet
 import app.pantopus.android.ui.screens.shared.mail_item_detail.MailDetailTrust
@@ -43,6 +54,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -119,6 +131,8 @@ data class MailDetailContent(
     val recordsDetail: RecordsDetailDto? = null,
     /** Facts read off the item (`Mail.key_facts`), such as a bill's amount due, as label to value. */
     val extractedFacts: List<Pair<String, String>> = emptyList(),
+    /** The letter page's parts while the Mail tab is on (`mailbox`); null keeps the card layouts. */
+    val letter: MailLetter? = null,
 ) {
     /** Build a typed key-facts row list for the shell's KeyFacts slot. */
     fun keyFacts(): List<MailDetailKeyFact> =
@@ -178,6 +192,7 @@ class MailDetailViewModel
         private val documentRepo: MailboxDocumentRepository,
         savedStateHandle: SavedStateHandle,
         private val checkoutIdentities: GigPaymentIdentitySource,
+        private val auth: AuthRepository,
     ) : ViewModel() {
         private val mailId: String =
             checkNotNull(savedStateHandle.get<String>(MAIL_DETAIL_MAIL_ID_KEY)) {
@@ -271,6 +286,57 @@ class MailDetailViewModel
         private val _restoreInFlight = MutableStateFlow(false)
         val restoreInFlight: StateFlow<Boolean> = _restoreInFlight.asStateFlow()
 
+        // ── The letter page (Mail tab, receiving) ──
+
+        /** The detail last read, so the letter is drawn again once the person's Homes are known. */
+        private var lastDetail: MailDetail? = null
+
+        /** The page has shown once; coming back to it (from paying, say) reads the piece again. */
+        private var shownOnce = false
+
+        private val _letterActionInFlight = MutableStateFlow<String?>(null)
+
+        /** The letter action being saved (`counter`, `done`, `file`, `unfile`, `shred`); the buttons wait for it. */
+        val letterActionInFlight: StateFlow<String?> = _letterActionInFlight.asStateFlow()
+
+        private val _letterFolders = MutableStateFlow<List<VaultFolderDto>?>(null)
+
+        /** The Vault folders that fit this letter while the folder picker is open; null when it's closed. */
+        val letterFolders: StateFlow<List<VaultFolderDto>?> = _letterFolders.asStateFlow()
+
+        private val _openedEnclosure = MutableStateFlow<OpenedEnclosure?>(null)
+
+        /** An enclosure saved on the phone for a viewer; the screen opens it once. */
+        val openedEnclosure: StateFlow<OpenedEnclosure?> = _openedEnclosure.asStateFlow()
+
+        private val _enclosureInFlight = MutableStateFlow<String?>(null)
+
+        /** The enclosure being fetched; its slip says so. */
+        val enclosureInFlight: StateFlow<String?> = _enclosureInFlight.asStateFlow()
+
+        private val _bundle = MutableStateFlow<MailBundleState?>(null)
+
+        /** A bundle's pieces; null for anything that isn't a bundle. */
+        val bundle: StateFlow<MailBundleState?> = _bundle.asStateFlow()
+
+        private val _cantOpen = MutableStateFlow<MailCantOpen?>(null)
+
+        /** Why the piece couldn't open (Home mail waiting for proof, or not found); null for other failures. */
+        val cantOpen: StateFlow<MailCantOpen?> = _cantOpen.asStateFlow()
+
+        init {
+            // The person's Homes come with the drawers: the envelope's address and the trail's mailbox follow them.
+            viewModelScope.launch {
+                MailboxRepository.latestDrawers.collect { drawers ->
+                    val detail = lastDetail ?: return@collect
+                    val current = _state.value as? MailDetailUiState.Loaded ?: return@collect
+                    if (drawers != null && LaunchFeatures.mailbox) {
+                        _state.value = MailDetailUiState.Loaded(current.content.copy(letter = letterFor(detail)))
+                    }
+                }
+            }
+        }
+
         val bidCheckout =
             GigBidCheckoutCoordinator(
                 gigsRepo,
@@ -332,14 +398,225 @@ class MailDetailViewModel
                         if (result.data.mail.stationeryTheme != null && LaunchFeatures.mailExtras) {
                             _ceremonialRedirectMailId.value = mailId
                         } else {
-                            _state.value = MailDetailUiState.Loaded(project(result.data.mail))
+                            lastDetail = result.data.mail
+                            _cantOpen.value = null
+                            _state.value = MailDetailUiState.Loaded(withLetter(project(result.data.mail), result.data.mail))
+                            if (_state.value.letterIsBundle()) loadBundle()
                             // Certified mail is read like any letter (Received → Read);
                             // its Sign for delivery confirmation keys on signed.
                             if (!result.data.mail.viewed) markViewed()
                         }
-                    is NetworkResult.Failure ->
-                        _state.value = MailDetailUiState.Error(result.error.displayMessage("Couldn't load this item."))
+                    is NetworkResult.Failure -> {
+                        // The Mail tab says why in its own words: not here, Home mail waiting for proof, or offline.
+                        _cantOpen.value = if (LaunchFeatures.mailbox) cantOpen(result.error) else null
+                        val message =
+                            if (LaunchFeatures.mailbox) {
+                                letterLoadFailure(result.error)
+                            } else {
+                                result.error.displayMessage("Couldn't load this item.")
+                            }
+                        _state.value = MailDetailUiState.Error(message)
+                    }
                 }
+            }
+        }
+
+        /** The letter page's parts, with the Mail tab on. */
+        private fun withLetter(
+            content: MailDetailContent,
+            detail: MailDetail,
+        ): MailDetailContent = if (LaunchFeatures.mailbox) content.copy(letter = letterFor(detail)) else content
+
+        /** The letter, its envelope addressed with the person's name and their Homes. */
+        private fun letterFor(detail: MailDetail): MailLetter {
+            val drawers = MailboxRepository.latestDrawers.value
+            val book = MailAddressBook(personName = signedInName(), homes = drawers?.homes.orEmpty())
+            return MailLetter.from(detail, book, MailPieceMapper.zoneOf(drawers?.delivery))
+        }
+
+        private fun signedInName(): String? =
+            (auth.state.value as? AuthRepository.State.SignedIn)?.user?.displayName?.takeIf { it.isNotBlank() }
+
+        private fun MailDetailUiState.letterIsBundle(): Boolean = (this as? MailDetailUiState.Loaded)?.content?.letter?.isBundle == true
+
+        /** Home mail waiting for proof names the Home to verify (from the mailbox); a piece that isn't here says so. */
+        private fun cantOpen(error: NetworkError): MailCantOpen? =
+            when (error) {
+                is NetworkError.Forbidden -> {
+                    val home = MailboxRepository.latestDrawers.value?.homes?.firstOrNull { it.mailAccess != "open" }
+                    MailCantOpen.NeedsProof(homeId = home?.homeId, address = home?.addressLine)
+                }
+                is NetworkError.NotFound -> MailCantOpen.NotFound
+                else -> null
+            }
+
+        private fun letterLoadFailure(error: NetworkError): String =
+            when (error) {
+                is NetworkError.NotFound ->
+                    "This mail isn't in your mailbox. It may have been shredded, or it was meant for someone else."
+                is NetworkError.Forbidden -> error.reason ?: "Prove your address to open your home's mail."
+                is NetworkError.Transport -> "You're offline. Check your connection and try again."
+                else -> error.mailMessage(online = true, doing = "open this mail")
+            }
+
+        /** Back on the page (from paying, say): the piece read again, so it shows where it stands now. */
+        fun onLetterResume() {
+            if (!shownOnce) {
+                shownOnce = true
+                return
+            }
+            if (LaunchFeatures.mailbox) reloadLetter()
+        }
+
+        /** The piece read again without the loading page, after an action or on coming back. */
+        private fun reloadLetter() {
+            if (_state.value !is MailDetailUiState.Loaded) return
+            viewModelScope.launch {
+                val result = repo.detail(mailId)
+                if (result is NetworkResult.Success) {
+                    lastDetail = result.data.mail
+                    _removed.value = result.data.mail.removed
+                    _state.value = MailDetailUiState.Loaded(withLetter(project(result.data.mail), result.data.mail))
+                }
+                // A failed read leaves the page as it was: the action already said how it went.
+            }
+        }
+
+        /** Put on the counter, done with it, file it, take it out of the Vault, or shred it; then the piece is read again. */
+        private fun letterAction(
+            action: String,
+            done: String,
+            doing: String,
+            folderId: String? = null,
+            leavesList: Boolean = true,
+        ) {
+            if (_letterActionInFlight.value != null) return
+            _letterActionInFlight.value = action
+            viewModelScope.launch {
+                // NonCancellable, like the item actions above: leaving the page doesn't undo a confirmed action.
+                withContext(NonCancellable) {
+                    when (val result = repo.itemAction(mailId, action, folderId)) {
+                        is NetworkResult.Success -> {
+                            _toast.value = done
+                            if (leavesList) {
+                                MailboxRepository.announceMailLeftList(mailId)
+                            } else {
+                                MailboxRepository.announceMailChanged(mailId)
+                            }
+                        }
+                        is NetworkResult.Failure -> _toast.value = result.error.mailMessage(online = true, doing = doing)
+                    }
+                }
+                _letterActionInFlight.value = null
+                reloadLetter()
+            }
+        }
+
+        fun putOnCounter() = letterAction("counter", "On the counter.", "put this on the counter", leavesList = false)
+
+        /** Done with it: off the counter and into the Vault. */
+        fun doneWithIt() = letterAction("done", "Done. It's in the Vault.", "file this")
+
+        fun takeOutOfVault() = letterAction("unfile", "Back in Incoming.", "take this out of the Vault")
+
+        /** Shred: gone for everyone who gets it, and back with Bring it back for 30 days. */
+        fun shred() = letterAction("shred", "Shredded. You can bring it back for 30 days.", "shred this")
+
+        /** File in the Vault: the folders that fit this letter (its Home's shared cabinet for Home mail). */
+        fun openFolderPicker() {
+            val letter = (_state.value as? MailDetailUiState.Loaded)?.content?.letter ?: return
+            viewModelScope.launch {
+                when (val result = vaultRepo.folders(drawer = letter.drawer ?: "personal")) {
+                    is NetworkResult.Success -> {
+                        val fits =
+                            result.data.folders.filter { folder ->
+                                if (letter.drawer == "home") folder.homeId == letter.homeId else folder.homeId == null
+                            }
+                        if (fits.isEmpty()) {
+                            _toast.value = "There's no Vault folder for this yet."
+                        } else {
+                            _letterFolders.value = fits
+                        }
+                    }
+                    is NetworkResult.Failure -> _toast.value = result.error.mailMessage(online = true, doing = "load your Vault's folders")
+                }
+            }
+        }
+
+        fun closeFolderPicker() {
+            _letterFolders.value = null
+        }
+
+        fun fileInVault(folder: VaultFolderDto) {
+            _letterFolders.value = null
+            letterAction("file", "Filed in ${folder.label}.", "file this", folderId = folder.id)
+        }
+
+        /** Opens an enclosure: a fresh five-minute link each time, asked for again once if it expired on the way. */
+        fun openEnclosure(
+            enclosure: MailEnclosure,
+            cacheDir: File,
+        ) {
+            if (_enclosureInFlight.value != null) return
+            _enclosureInFlight.value = enclosure.id
+            viewModelScope.launch {
+                fetchEnclosure(enclosure, cacheDir, retries = 1)?.let { _toast.value = it }
+                _enclosureInFlight.value = null
+            }
+        }
+
+        /** Null when it's saved for the viewer; else what went wrong, in words. */
+        private suspend fun fetchEnclosure(
+            enclosure: MailEnclosure,
+            cacheDir: File,
+            retries: Int,
+        ): String? {
+            val link =
+                when (val result = repo.enclosureLink(mailId, enclosure.id)) {
+                    is NetworkResult.Success -> result.data.url
+                    is NetworkResult.Failure -> return result.error.mailMessage(online = true, doing = "open this enclosure")
+                }
+            val name = enclosure.name?.takeIf { it.isNotBlank() } ?: "Enclosure"
+            return when (val fetched = MailEnclosureFiles.fetch(cacheDir, link, name)) {
+                is MailEnclosureFiles.Fetch.Saved -> {
+                    _openedEnclosure.value = OpenedEnclosure(fetched.file, enclosure.mimeType ?: "application/octet-stream", name)
+                    null
+                }
+                MailEnclosureFiles.Fetch.Expired ->
+                    if (retries > 0) {
+                        fetchEnclosure(enclosure, cacheDir, retries - 1)
+                    } else {
+                        "Couldn't open this file just now. Try again in a moment."
+                    }
+                MailEnclosureFiles.Fetch.Failed -> "Couldn't download this file. Check your connection and try again."
+            }
+        }
+
+        fun enclosureOpened() {
+            _openedEnclosure.value = null
+        }
+
+        /** A message for the page's toast, from the screen (no app to open a file, say). */
+        fun say(message: String) {
+            _toast.value = message
+        }
+
+        /** A bundle opens to its pieces (`GET /api/mailbox/v2/item/:id`, `pieces`). */
+        fun loadBundle() {
+            if (_bundle.value is MailBundleState.Loading) return
+            _bundle.value = MailBundleState.Loading
+            viewModelScope.launch {
+                _bundle.value =
+                    when (val result = repo.item(mailId)) {
+                        is NetworkResult.Success -> {
+                            val drawers = MailboxRepository.latestDrawers.value
+                            val book = MailAddressBook(personName = signedInName(), homes = drawers?.homes.orEmpty())
+                            val zone = MailPieceMapper.zoneOf(drawers?.delivery)
+                            MailBundleState.Loaded(result.data.mail.pieces.orEmpty().map { MailPieceMapper.piece(it, book, zone) })
+                        }
+                        is NetworkResult.Failure ->
+                            MailBundleState.Failed(result.error.mailMessage(online = true, doing = "open this bundle"))
+                    }
             }
         }
 
@@ -371,16 +648,24 @@ class MailDetailViewModel
             if (_ackInFlight.value || current.content.isAcknowledged) return
             _ackInFlight.value = true
             val signed = current.content.certifiedDetail?.completing("acknowledged", Instant.now().toString())
-            val optimistic = current.content.copy(isAcknowledged = true, certifiedDetail = signed)
+            val letter = current.content.letter?.copy(asksAcknowledge = false, acknowledged = true)
+            val optimistic = current.content.copy(isAcknowledged = true, certifiedDetail = signed, letter = letter)
             _state.value = MailDetailUiState.Loaded(optimistic)
-            // Signing certified mail goes through the recipient-only certified
-            // route, which records the receipt and its proof.
-            val isCertified = current.content.category == MailItemCategory.Certified
+            // Signing certified mail goes through the recipient-only certified route, which records the receipt and
+            // its proof; that stays with Mail extras. The Mail tab acknowledges plainly, through the contract's
+            // `acknowledge` action, certified mail included (it never signs anything).
+            val isCertified = current.content.category == MailItemCategory.Certified && LaunchFeatures.mailExtras
             viewModelScope.launch {
-                val result = if (isCertified) documentRepo.certifiedAcknowledge(mailId) else repo.acknowledge(mailId)
+                val result =
+                    when {
+                        isCertified -> documentRepo.certifiedAcknowledge(mailId)
+                        LaunchFeatures.mailbox -> repo.itemAction(mailId, "acknowledge")
+                        else -> repo.acknowledge(mailId)
+                    }
                 when (result) {
                     is NetworkResult.Success -> {
                         _toast.value = if (isCertified) "Signed · receipt on file" else "Acknowledged"
+                        if (LaunchFeatures.mailbox) MailboxRepository.announceMailChanged(mailId)
                     }
                     is NetworkResult.Failure -> {
                         _state.value = MailDetailUiState.Loaded(current.content)
@@ -560,7 +845,8 @@ class MailDetailViewModel
                 when (val result = repo.restore(mailId)) {
                     is NetworkResult.Success -> {
                         _removed.value = null
-                        _toast.value = "Letter restored"
+                        _toast.value = if (LaunchFeatures.mailbox) "It's back in your mailbox." else "Letter restored"
+                        if (LaunchFeatures.mailbox) MailboxRepository.announceMailChanged(mailId)
                         refresh()
                     }
                     is NetworkResult.Failure ->

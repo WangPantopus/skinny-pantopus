@@ -119,6 +119,8 @@ object MailPieceMapper {
         row: DrawerMail,
         today: LocalDate,
     ): String? {
+        // Filed in the Vault, it's done with: no due words.
+        if (row.lifecycle == "filed") return null
         val owed = row.invoice?.takeIf { it.owed }
         val amount = owed?.totalCents?.let { money(it, owed.currency) }
         val due = dueWords(parseDay(owed?.dueDate ?: row.dueDate), today)
@@ -221,7 +223,7 @@ object MailPieceMapper {
     }
 
     /** "$184.00" (a bill's dollars and cents); another currency keeps its code ("12.50 CAD"). */
-    private fun money(
+    fun money(
         cents: Long,
         currency: String?,
     ): String {
