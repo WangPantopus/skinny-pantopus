@@ -87,6 +87,7 @@ public struct MailItemDetailShell<
                 ScrollView {
                     VStack(alignment: .leading, spacing: Spacing.s3) {
                         heroContent
+                            .accessibilityElement(children: .contain)
                             .accessibilityIdentifier("mailItemDetail_hero")
                         if let aiElf {
                             AIElfStripView(content: aiElf)
@@ -124,21 +125,25 @@ public struct MailItemDetailShell<
     /// renders nothing, costs nothing.
     private var keyFactsSection: some View {
         keyFactsContent
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("mailItemDetail_keyFacts")
     }
 
     private var bodySection: some View {
         bodyContent
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("mailItemDetail_body")
     }
 
     private var senderSection: some View {
         senderContent
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("mailItemDetail_sender")
     }
 
     private var actionsShelf: some View {
         actionsContent
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("mailItemDetail_actions")
             .padding(.horizontal, Spacing.s4)
             .padding(.bottom, Spacing.s4)
@@ -199,7 +204,7 @@ public extension MailItemDetailShell
 
 // MARK: - Top bar
 
-/// 44pt nav bar — back chevron (with optional "Mailbox" label) + eyebrow
+/// 44pt nav bar — back chevron (with the "Mail" label) + eyebrow
 /// trust dot + overflow menu. Mirrors `mail-detail.jsx:7-39`.
 public struct MailItemDetailTopBar: View {
     public let config: MailTopBarConfig
@@ -230,7 +235,8 @@ public struct MailItemDetailTopBar: View {
             Button(action: { onBack() }) {
                 HStack(spacing: Spacing.s0) {
                     Icon(.chevronLeft, size: 22, color: Theme.Color.primaryInk)
-                    Text("Mailbox")
+                    // Mail lives in the Mail tab.
+                    Text("Mail")
                         .font(.system(size: 15, weight: .regular))
                         .foregroundStyle(Theme.Color.primaryInk)
                 }
@@ -239,7 +245,7 @@ public struct MailItemDetailTopBar: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Back to Mailbox")
+            .accessibilityLabel("Back to Mail")
             .accessibilityIdentifier("mailItemDetail_back")
         } else {
             Spacer().frame(width: 44, height: 44)

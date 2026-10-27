@@ -42,6 +42,15 @@ enum MailPaper {
     static let bookletPage = dynamic(light: 0xF8FAFC, dark: 0xC9CED6)
     static let bookletPageUnder = dynamic(light: 0xF1F5F9, dark: 0xB8BEC8)
 
+    /// The letter itself, unfolded on its page, its rules, and an
+    /// enclosure's slip inside it.
+    static let sheet = dynamic(light: 0xFFFEFA, dark: 0xDDD8CC)
+    static let sheetEdge = dynamic(light: 0xECE7DA, dark: 0xB9AF98)
+    static let sheetRule = dynamic(light: 0xE7E1D2, dark: 0xBDB4A0)
+    static let slip = dynamic(light: 0xF8F6F0, dark: 0xCFC9BB)
+    /// The paper clip holding Pantopus's note to the letter.
+    static let clip = Color(red: 0x64 / 255, green: 0x74 / 255, blue: 0x8B / 255)
+
     // MARK: Ink
 
     /// Postmarks, printed postage and typewritten labels.

@@ -21,6 +21,9 @@ final class MailBadgeStore {
 
     /// Unopened pieces across the drawers the person can read.
     private(set) var unopened = 0
+    /// The Homes the person lives at, from the same answer: a letter is
+    /// addressed to its Home, and a Home that waits for proof is known.
+    private(set) var homes: [DrawerListResponse.MailboxHome] = []
 
     private let api: APIClient
     private let logger = Logger(label: "app.pantopus.ios.MailBadge")
@@ -74,6 +77,7 @@ final class MailBadgeStore {
 
     /// The Mailbox read the drawers itself: the badge follows them.
     func apply(_ response: DrawerListResponse) {
+        homes = response.homes
         unopened = response.unreadTotal ?? response.drawers
             .filter { Self.countedDrawers.contains($0.drawer) }
             .reduce(0) { $0 + max($1.unreadCount, 0) }
@@ -85,5 +89,6 @@ final class MailBadgeStore {
         refreshTask?.cancel()
         refreshTask = nil
         unopened = 0
+        homes = []
     }
 }

@@ -36,6 +36,13 @@ public enum MailboxEndpoints {
         Endpoint(method: .get, path: "/api/mailbox/\(mailId)")
     }
 
+    /// `GET /api/mailbox/:id/enclosures/:enclosureId` — route
+    /// `backend/routes/mailbox.js:1846` (Mail build contract, SRV-4): a link to one
+    /// enclosed file, signed for five minutes; fetched again when it expires.
+    public static func enclosureLink(mailId: String, enclosureId: String) -> Endpoint {
+        Endpoint(method: .get, path: "/api/mailbox/\(mailId)/enclosures/\(enclosureId)")
+    }
+
     /// `PATCH /api/mailbox/:id/view` — route `backend/routes/mailbox.js:2768`
     /// (the web Mailbox's mark-as-read). Idempotent: the first view marks the
     /// letter read and, for an ad letter, sets its payout pending once.

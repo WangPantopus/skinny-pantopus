@@ -55,9 +55,10 @@ enum MailPieceKind: String, CaseIterable {
 
 /// How Pantopus checked the sender, as the piece shows it.
 enum MailPieceTrust {
-    case business, government, utility, pantopus, neighbor, unknown
+    /// `pantopusBusiness`: a business with a Pantopus account that isn't verified.
+    case business, government, utility, pantopus, pantopusBusiness, neighbor, unknown
 
-    init(senderTrust: String?, fromPantopus: Bool) {
+    init(senderTrust: String?, fromPantopus: Bool, fromBusiness: Bool = false) {
         if fromPantopus {
             self = .pantopus
             return
@@ -66,7 +67,7 @@ enum MailPieceTrust {
         case "verified_business": self = .business
         case "verified_gov": self = .government
         case "verified_utility": self = .utility
-        case "pantopus_user": self = .neighbor
+        case "pantopus_user": self = fromBusiness ? .pantopusBusiness : .neighbor
         default: self = .unknown
         }
     }
@@ -77,6 +78,7 @@ enum MailPieceTrust {
         case .government: "Verified government"
         case .utility: "Verified utility"
         case .pantopus: "From Pantopus"
+        case .pantopusBusiness: "Business on Pantopus"
         case .neighbor: "Pantopus neighbor"
         case .unknown: "Unverified sender"
         }
@@ -87,6 +89,7 @@ enum MailPieceTrust {
     var spokenLabel: String? {
         switch self {
         case .pantopus: nil
+        case .pantopusBusiness: "a business on Pantopus"
         case .neighbor: "a Pantopus neighbor"
         default: label.lowercased()
         }
@@ -98,13 +101,14 @@ enum MailPieceTrust {
         case .business: "BUSINESS"
         case .government: "GOVERNMENT"
         case .utility: "UTILITY"
-        case .pantopus, .neighbor, .unknown: nil
+        case .pantopus, .pantopusBusiness, .neighbor, .unknown: nil
         }
     }
 
-    /// People stamp their mail; verified senders and Pantopus print postage.
+    /// People and unverified senders stamp their mail; verified senders and
+    /// Pantopus print postage.
     var usesStamp: Bool {
-        self == .neighbor || self == .unknown
+        self == .neighbor || self == .pantopusBusiness || self == .unknown
     }
 }
 
@@ -240,7 +244,11 @@ extension MailPieceModel {
         let calendar = clock.calendar
         let item = mail.item
         let kind = MailPieceKind.of(item)
-        let trust = MailPieceTrust(senderTrust: mail.senderTrust, fromPantopus: item.fromPantopus)
+        let trust = MailPieceTrust(
+            senderTrust: mail.senderTrust,
+            fromPantopus: item.fromPantopus,
+            fromBusiness: Self.firstText(item.senderBusinessName) != nil || item.senderEntityId != nil
+        )
         let from = Self.firstText(mail.senderDisplay, item.senderBusinessName, mail.sender?.name) ?? "Unknown sender"
         let delivered = MailDates.parse(item.deliveredAt) ?? MailDates.parse(item.createdAt) ?? now
         let postmarked = item.postmark?.date.flatMap(MailDates.parseDay) ?? delivered

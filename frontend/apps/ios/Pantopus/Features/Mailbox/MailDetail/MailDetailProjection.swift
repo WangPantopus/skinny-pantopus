@@ -53,7 +53,7 @@ extension MailDetailViewModel {
         case .party: .celebration
         default: trust.detailTrust
         }
-        return MailDetailContent(
+        var content = MailDetailContent(
             mailId: item.id,
             category: category,
             mailCategoryKey: item.category,
@@ -77,7 +77,9 @@ extension MailDetailViewModel {
             readStatusLabel: item.viewed || item.openedAt != nil || resolvedAck ? "Read" : "Unread",
             bodyParagraphs: bodyParagraphs(from: item.content),
             attachments: item.attachments ?? [],
-            aiSummary: nil,
+            // "Pantopus read this for you" (Mail build contract, SRV-2).
+            aiSummary: item.summary?.text,
+            aiBullets: summaryBullets(item.summary),
             ackRequired: ackRequired,
             isAcknowledged: resolvedAck,
             isArchived: item.archived,
@@ -92,6 +94,15 @@ extension MailDetailViewModel {
             recordsDetail: variants.records,
             extractedFacts: item.keyFacts
         )
+        content.letter = MailLetter.make(detail: detail, homes: MailBadgeStore.shared.homes, personName: MailPieceRecipient.personName)
+        return content
+    }
+
+    /// The note's key facts as the summary strip's bullets.
+    static func summaryBullets(_ summary: MailSummary?) -> [AIElfBullet] {
+        (summary?.keyFacts ?? []).enumerated().map { index, fact in
+            AIElfBullet(id: "fact-\(index)", icon: .info, label: fact.label, text: fact.value)
+        }
     }
 
     /// RN `getSenderTrust` (`src/components/mailbox/sender.ts:39-58`) — the
