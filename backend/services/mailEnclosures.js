@@ -65,6 +65,23 @@ async function store({ buffer, name, mimeType, uploaderId }) {
   return { ref: `${REF_PREFIX}${payload}.${sign(payload)}`, id, name: meta.name, mime_type: meta.mime_type, size_bytes: meta.size_bytes };
 }
 
+/**
+ * Keep a file the server itself encloses (a Pantopus letter's PDF). Answers the enclosure as the piece stores it in
+ * mail_extracted.enclosures: { id, sha256, name, mime_type, size_bytes }.
+ */
+async function keep({ buffer, name, mimeType }) {
+  const id = crypto.randomUUID();
+  const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
+  const bucket = await privateBucket();
+  let result;
+  try {
+    result = await db.storage.from(bucket).upload(objectKey(id, sha256), buffer,
+      { contentType: mimeType || 'application/octet-stream', cacheControl: '0', upsert: false });
+  } catch (_) { result = null; }
+  if (!result || result.error) throw failure('The file could not be stored.');
+  return { id, sha256, name: cleanName(name), mime_type: mimeType || 'application/octet-stream', size_bytes: buffer.length };
+}
+
 /** The enclosure a reference names, if it is well formed, signed by this server and uploaded by `senderId`. */
 function readRef(ref, senderId) {
   if (!SECRET || typeof ref !== 'string' || !ref.startsWith(REF_PREFIX)) return null;
@@ -141,4 +158,4 @@ async function linkFor(mail, enclosureId, objectAttachments) {
   return legacy ? { url: legacy.url, expires_at: null } : null;
 }
 
-module.exports = { LINK_SECONDS, REF_PREFIX, store, readRef, fromAttachments, listFor, linkFor };
+module.exports = { LINK_SECONDS, REF_PREFIX, store, keep, readRef, fromAttachments, listFor, linkFor };

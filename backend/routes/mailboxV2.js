@@ -18,6 +18,7 @@ const mailSummaries = require('../services/mailSummaries');
 const mailVault = require('../services/mailVault');
 const mailEnclosures = require('../services/mailEnclosures');
 const mailVacation = require('../services/mailVacation');
+const pantopusLetters = require('../services/pantopusLetters');
 const { MAIL_HOME_NEEDS_PROOF, MAIL_NOT_FOUND } = require('../utils/homeMailAccess');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
@@ -282,10 +283,14 @@ router.get('/drawers', verifyToken, async (req, res) => {
 
     // The Homes this person lives at, and whether each one's mail is open to them yet (D1: only after the
     // address is proven). A failed read lists none rather than failing the mailbox.
-    const homesRead = mailHomesOrThrow(userId).catch((error) => {
+    const homes = await mailHomesOrThrow(userId).catch((error) => {
       logger.error('GET /drawers: homes unavailable', { error: error.message });
       return [];
     });
+    // Letters from Pantopus (SRV-6): the welcome letter on the first open, in the box at once, and a welcome to each
+    // Home whose mail they can now open (with the morning's mail). Once each.
+    await pantopusLetters.ensureWelcomeLetter(userId, { homes });
+    await pantopusLetters.ensureHomeLetters(userId, homes);
     // When the mail came and when it comes next. A failed read leaves it out rather than failing the mailbox.
     const deliveryRead = mailDelivery.deliverySummary({ userId, homeIds, now }).catch((error) => {
       logger.error('GET /drawers: delivery line unavailable', { error: error.message });
@@ -296,12 +301,11 @@ router.get('/drawers', verifyToken, async (req, res) => {
       logger.error('GET /drawers: vacation line unavailable', { error: error.message });
       return null;
     });
-    const [personal, home, business, earn, homes, delivery, vacation] = await Promise.all([
+    const [personal, home, business, earn, delivery, vacation] = await Promise.all([
       countForDrawer('personal'),
       countForDrawer('home'),
       countForDrawer('business'),
       countForDrawer('earn'),
-      homesRead,
       deliveryRead,
       vacationRead,
     ]);
@@ -344,6 +348,8 @@ router.get('/drawer/:drawer', verifyToken, async (req, res) => {
     }
 
     let homeIds = await getAccessibleHomeIds(userId);
+    // The welcome letter waits in Me the first time Mail is opened, whichever list asks first (SRV-6).
+    if (drawer === 'personal') await pantopusLetters.ensureWelcomeLetter(userId, { loadHomes: () => mailHomesOrThrow(userId) });
     // home_id narrows the Home drawer to one Home the caller may read (SRV-2). One they live at but haven't proven
     // says so (D1); any other isn't theirs.
     if (drawer === 'home' && req.query.home_id) {
