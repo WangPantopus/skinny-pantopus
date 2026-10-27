@@ -10,7 +10,7 @@ import app.pantopus.android.data.api.models.feed.FeedPreferencesResponse
 import app.pantopus.android.data.api.models.feed.FeedResponse
 import app.pantopus.android.data.api.models.homedashboard.HomeDashboardResponse
 import app.pantopus.android.data.api.models.homes.MyHomesResponse
-import app.pantopus.android.data.api.models.homes.showsCopyBeforeRecheck
+import app.pantopus.android.data.api.models.homes.showsInListBeforeRecheck
 import app.pantopus.android.data.api.models.hub.NotificationPreferences
 import app.pantopus.android.data.api.models.location.SavedViewingArea
 import app.pantopus.android.data.api.models.location.ViewingLocationPayload
@@ -141,7 +141,7 @@ object StoreKeys {
             kind = StoreKind.HOMES,
             topics = setOf(StoreTopics.HOMES),
             type = MyHomesResponse::class.java,
-            saveWhen = { reply -> reply.homes.all { it.showsCopyBeforeRecheck } },
+            saveWhen = { reply -> reply.homes.all { it.showsInListBeforeRecheck } },
         )
 
     /**

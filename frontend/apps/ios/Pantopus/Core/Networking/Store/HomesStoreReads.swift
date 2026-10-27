@@ -13,10 +13,11 @@ import Foundation
 enum HomesStoreReads {
     /// `GET /api/homes/my-homes`. The copy shows before the re-check only when
     /// every home on it is an owner's or household member's with open-ended
-    /// access (founder decision 3, 2026-10-09); a list with a guest, service
-    /// provider or expiring access waits for the server each time.
+    /// access (founder decision 3, 2026-10-09) or one the person asked to claim
+    /// or join (founder, 2026-10-27); a list with a guest, service provider or
+    /// expiring access waits for the server each time.
     static func myHomes(store: ScreenStore = .shared, force: Bool = false) async throws -> ScreenSnapshot<MyHomesResponse> {
-        let gate: @Sendable (MyHomesResponse) -> Bool = { $0.homes.allSatisfy(\.showsCopyBeforeRecheck) }
+        let gate: @Sendable (MyHomesResponse) -> Bool = { $0.homes.allSatisfy(\.showsInListBeforeRecheck) }
         return try await store.load(
             HomesEndpoints.myHomes(),
             as: MyHomesResponse.self,
@@ -64,5 +65,13 @@ extension MyHome {
         if accessKind == "private_setup" { return true }
         let household = ["owner", "admin", "manager", "lease_resident", "member", "restricted_member"]
         return hasSharedAccess && household.contains(roleBase ?? "")
+    }
+
+    /// The homes list may also show a Home the person asked to claim or join
+    /// (still in verification) before the re-check: it's their own request
+    /// (founder, 2026-10-27). A Home's own screens keep `showsCopyBeforeRecheck`.
+    var showsInListBeforeRecheck: Bool {
+        showsCopyBeforeRecheck || (accessKind == "verification" && hasValidListContext
+            && occupancy?.endAt == nil && occupancy?.accessEndAt == nil)
     }
 }
