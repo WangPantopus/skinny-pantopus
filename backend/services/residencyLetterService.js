@@ -320,6 +320,8 @@ async function issueLetter({ homeId, userId, purpose, clientRequestId }) {
   }
   if (!saved) throw new Error('Could not save the letter');
   logger.info('residencyLetter: issued', { letterId: saved.id, homeId, userId });
+  // It also arrives in their Mail as a letter from Pantopus, the PDF enclosed (Mail tab, SRV-6). Never fails the issue.
+  void require('./pantopusLetters').residencyLetter({ userId, letter: saved, pdf });
   return serializeLetter(saved);
 }
 

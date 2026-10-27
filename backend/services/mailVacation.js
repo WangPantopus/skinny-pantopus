@@ -41,7 +41,8 @@ const holding = (windows, when) => windows.find((w) => when >= w.from && when < 
  * own mail that would come at `natural`, the hold and the time it arrives instead.
  */
 async function heldUntil(piece, natural) {
-  if (!piece?.recipient_user_id) return null;
+  // Home mail keeps coming for the household, a letter for this person at the Home included.
+  if (!piece?.recipient_user_id || piece.recipient_home_id) return null;
   const w = holding(await holdWindows(piece.recipient_user_id), natural);
   return w ? { until: w.release, holdId: w.hold.id } : null;
 }
@@ -60,7 +61,7 @@ async function syncHeldMail(userId, now = new Date()) {
   const timeZone = (await personTimeZone(userId)) || FALLBACK_TIME_ZONE;
   const { data: waiting, error } = await supabaseAdmin.from('Mail')
     .select('id, delivered_at, special_delivery, mail_extracted, mail_object_type, bundle_id, lifecycle')
-    .eq('recipient_user_id', userId).eq('special_delivery', false).gt('delivered_at', now.toISOString())
+    .eq('recipient_user_id', userId).is('recipient_home_id', null).eq('special_delivery', false).gt('delivered_at', now.toISOString())
     .is('deleted_at', null).limit(2000);
   if (error) throw new Error(error.message);
   const pieces = (waiting || []).filter((m) => m.mail_object_type !== 'bundle' && !m.mail_extracted?.vacation_bundle_hold_id);
