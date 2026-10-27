@@ -5,7 +5,7 @@
 // ============================================================
 
 import { get, post, put, patch, del } from '../client';
-import type { HomeEmergencyType } from '@pantopus/types';
+import type { HomeEmergencyType, HomePoll, HomePollOption, HomePollType, HomePollStatus } from '@pantopus/types';
 import { assertHomeTaskSession, taskSessionHeaders, rethrowTaskSessionError, type HomeTaskSessionScope } from '../taskSessionScope';
 
 // ---- HomeTask ----
@@ -416,30 +416,30 @@ export async function deleteHomePet(homeId: string, petId: string) {
 // ---- Polls ----
 
 export async function getHomePolls(homeId: string) {
-  return get<{ polls: any[] }>(`/api/homes/${homeId}/polls`);
+  return get<{ polls: HomePoll[] }>(`/api/homes/${homeId}/polls`);
 }
 
 export async function createHomePoll(homeId: string, data: {
-  question: string;
-  poll_type?: string;
-  options?: string[];
+  title: string;
+  poll_type?: HomePollType;
+  options: HomePollOption[];
   closes_at?: string;
 }) {
-  return post<{ poll: any }>(`/api/homes/${homeId}/polls`, data);
+  return post<{ poll: HomePoll }>(`/api/homes/${homeId}/polls`, data);
 }
 
 export async function voteOnPoll(homeId: string, pollId: string, data: {
-  option_index: number;
+  selected_options: (string | number)[];
 }) {
-  return post<{ vote: any }>(`/api/homes/${homeId}/polls/${pollId}/vote`, data);
+  return post<{ vote: unknown }>(`/api/homes/${homeId}/polls/${pollId}/vote`, data);
 }
 
 export async function updateHomePoll(homeId: string, pollId: string, data: Partial<{
-  question: string;
+  title: string;
   closes_at: string;
-  status: string;
+  status: HomePollStatus;
 }>) {
-  return put<{ poll: any }>(`/api/homes/${homeId}/polls/${pollId}`, data);
+  return put<{ poll: HomePoll }>(`/api/homes/${homeId}/polls/${pollId}`, data);
 }
 
 // ---- Activity Log ----

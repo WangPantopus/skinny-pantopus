@@ -919,7 +919,7 @@ function HomeSidebarNavigation({ homeId, currentTab, showLabels, onNavigate }: H
 
       {shared && can('packages.view') && launchFeatures.householdExtras ? <SidebarItem icon={HomeIcons.packages} label="Packages" active={isTabActive('packages')} onClick={() => goTab('packages')} showLabel={showLabels} /> : null}
       {shared && can('docs.view') && <SidebarItem icon={HomeIcons.documents} label="Documents" active={isTabActive('documents')} onClick={() => goTab('documents')} showLabel={showLabels} />}
-      {shared && <SidebarItem icon={HomeIcons.vendors} label="Vendors" active={isTabActive('vendors')} onClick={() => goTab('vendors')} showLabel={showLabels} />}
+      {shared && can('vendors.view') && <SidebarItem icon={HomeIcons.vendors} label="Vendors" active={isTabActive('vendors')} onClick={() => goTab('vendors')} showLabel={showLabels} />}
       {shared && can('sensitive.view') && <SidebarItem icon={HomeIcons.emergency} label="Emergency" active={isTabActive('emergency')} onClick={() => goTab('emergency')} showLabel={showLabels} />}
 
       {shared && <SidebarDivider showLabel={showLabels} />}
