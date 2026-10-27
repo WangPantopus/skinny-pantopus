@@ -2191,14 +2191,14 @@ router.get('/:id/occupants', verifyToken, async (req, res) => {
  * Add private data to home (owner/occupants only)
  */
 router.post('/:id/private-data', verifyToken, validate(homeDataSchema), async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
   try {
     const { id: homeId } = req.params;
     const { type, data } = req.body;
     const userId = req.user.id;
 
-    // Check access
-    const access = await checkHomePermission(homeId, userId);
-    if (!access.hasAccess) {
+    const { mode, access } = await homeListService.readAccessState(homeId, userId);
+    if (mode !== 'shared' || !access.permissions.includes('home.edit')) {
       return res.status(403).json({ error: 'You do not have access to this home' });
     }
 
@@ -2237,17 +2237,19 @@ router.post('/:id/private-data', verifyToken, validate(homeDataSchema), async (r
  * Get all private data for home (owner/occupants only)
  */
 router.get('/:id/private-data', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
     const { type } = req.query;
 
-    // Check access
-    const access = await checkHomePermission(homeId, userId);
-    if (!access.hasAccess) {
+    const { mode, access } = await homeListService.readAccessState(homeId, userId);
+    if (mode !== 'shared' || !access.permissions.includes('sensitive.view')) {
       return res.status(403).json({ error: 'You do not have access to this home' });
     }
 
+    // Both legacy tables carry the same visibility enum as Home documents.
+    const { allowed } = await homeDocumentVisibilities(homeId, userId, access);
     let query = supabaseAdmin
       .from('HomePrivateData')
       .select(`
@@ -2258,6 +2260,7 @@ router.get('/:id/private-data', verifyToken, async (req, res) => {
         )
       `)
       .eq('home_id', homeId)
+      .in('visibility', allowed)
       .order('created_at', { ascending: false });
 
     if (type) {
@@ -2286,14 +2289,14 @@ router.get('/:id/private-data', verifyToken, async (req, res) => {
  * Add public data to home (owner/occupants only)
  */
 router.post('/:id/public-data', verifyToken, validate(homeDataSchema), async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
   try {
     const { id: homeId } = req.params;
     const { type, data } = req.body;
     const userId = req.user.id;
 
-    // Check access
-    const access = await checkHomePermission(homeId, userId);
-    if (!access.hasAccess) {
+    const { mode, access } = await homeListService.readAccessState(homeId, userId);
+    if (mode !== 'shared' || !access.permissions.includes('home.edit')) {
       return res.status(403).json({ error: 'You do not have access to this home' });
     }
 
@@ -2332,17 +2335,19 @@ router.post('/:id/public-data', verifyToken, validate(homeDataSchema), async (re
  * Get all public data for home (anyone with home access)
  */
 router.get('/:id/public-data', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
     const { type } = req.query;
 
-    // Check access
-    const access = await checkHomePermission(homeId, userId);
-    if (!access.hasAccess) {
+    const { mode, access } = await homeListService.readAccessState(homeId, userId);
+    if (mode !== 'shared' || !access.permissions.includes('home.view')) {
       return res.status(403).json({ error: 'You do not have access to this home' });
     }
 
+    // Both legacy tables carry the same visibility enum as Home documents.
+    const { allowed } = await homeDocumentVisibilities(homeId, userId, access);
     let query = supabaseAdmin
       .from('HomePublicData')
       .select(`
@@ -2353,6 +2358,7 @@ router.get('/:id/public-data', verifyToken, async (req, res) => {
         )
       `)
       .eq('home_id', homeId)
+      .in('visibility', allowed)
       .order('created_at', { ascending: false });
 
     if (type) {
@@ -2381,27 +2387,31 @@ router.get('/:id/public-data', verifyToken, async (req, res) => {
  * Delete private data entry (creator or owner only)
  */
 router.delete('/:id/private-data/:dataId', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
   try {
     const { id: homeId, dataId } = req.params;
     const userId = req.user.id;
+
+    // Attribution does not retain access after leaving a household. Check current
+    // shared authority before looking up the record, including Home security state.
+    const { mode, access } = await homeListService.readAccessState(homeId, userId);
+    if (mode !== 'shared' || !access.permissions.includes('home.edit')) {
+      return res.status(403).json({ error: 'No permission to change home data' });
+    }
 
     // Get the data entry
     const { data: entry, error: fetchError } = await supabaseAdmin
       .from('HomePrivateData')
       .select('created_by, home_id')
       .eq('id', dataId)
+      .eq('home_id', homeId)
       .single();
 
     if (fetchError || !entry) {
       return res.status(404).json({ error: 'Data entry not found' });
     }
 
-    if (entry.home_id !== homeId) {
-      return res.status(400).json({ error: 'Data entry does not belong to this home' });
-    }
-
     // Check if user is creator or home owner
-    const access = await checkHomePermission(homeId, userId);
     if (entry.created_by !== userId && !access.isOwner) {
       return res.status(403).json({ error: 'Only the creator or home owner can delete this' });
     }
@@ -2409,7 +2419,8 @@ router.delete('/:id/private-data/:dataId', verifyToken, async (req, res) => {
     const { error } = await supabaseAdmin
       .from('HomePrivateData')
       .delete()
-      .eq('id', dataId);
+      .eq('id', dataId)
+      .eq('home_id', homeId);
 
     if (error) {
       logger.error('Error deleting private data', { error: error.message, dataId });
@@ -2431,27 +2442,31 @@ router.delete('/:id/private-data/:dataId', verifyToken, async (req, res) => {
  * Delete public data entry (creator or owner only)
  */
 router.delete('/:id/public-data/:dataId', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
   try {
     const { id: homeId, dataId } = req.params;
     const userId = req.user.id;
+
+    // Attribution does not retain access after leaving a household. Check current
+    // shared authority before looking up the record, including Home security state.
+    const { mode, access } = await homeListService.readAccessState(homeId, userId);
+    if (mode !== 'shared' || !access.permissions.includes('home.edit')) {
+      return res.status(403).json({ error: 'No permission to change home data' });
+    }
 
     // Get the data entry
     const { data: entry, error: fetchError } = await supabaseAdmin
       .from('HomePublicData')
       .select('created_by, home_id')
       .eq('id', dataId)
+      .eq('home_id', homeId)
       .single();
 
     if (fetchError || !entry) {
       return res.status(404).json({ error: 'Data entry not found' });
     }
 
-    if (entry.home_id !== homeId) {
-      return res.status(400).json({ error: 'Data entry does not belong to this home' });
-    }
-
     // Check if user is creator or home owner
-    const access = await checkHomePermission(homeId, userId);
     if (entry.created_by !== userId && !access.isOwner) {
       return res.status(403).json({ error: 'Only the creator or home owner can delete this' });
     }
@@ -2459,7 +2474,8 @@ router.delete('/:id/public-data/:dataId', verifyToken, async (req, res) => {
     const { error } = await supabaseAdmin
       .from('HomePublicData')
       .delete()
-      .eq('id', dataId);
+      .eq('id', dataId)
+      .eq('home_id', homeId);
 
     if (error) {
       logger.error('Error deleting public data', { error: error.message, dataId });
