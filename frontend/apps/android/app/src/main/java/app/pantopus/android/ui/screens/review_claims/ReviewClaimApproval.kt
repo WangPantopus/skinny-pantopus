@@ -39,24 +39,48 @@ import app.pantopus.android.ui.theme.Spacing
  */
 object ReviewClaimApproval {
     /**
-     * Why Accept is off, or null when it can go ahead (also when the server didn't send the
-     * panel). The app approves as claimed, so the claimed type's document is needed.
+     * Why Accept is off for approving as [role], or null when it can go ahead (also when the server didn't send
+     * the panel). The document the role needs decides the proof check ([proof]).
      */
     fun blockedReason(
         detail: AdminClaimDetailResponse,
         identityAttested: Boolean,
+        role: ClaimApprovalRole,
     ): String? {
         val approval = detail.approval ?: return null
         if (detail.claim.identityStatus == "failed") return "Their identity check failed, so this claim can’t be approved."
         val identity = approval.identityConfirmed || identityAttested
-        val proof = approval.proof == "verified"
+        val proofStatus = proof(detail, role)
+        val proof = proofStatus == "verified"
         return when {
             identity && proof -> null
             proof -> "Confirm the claimant’s identity first."
-            identity && approval.proof == "pending" -> "Check the claimant’s document first (Open private documents)."
+            identity && proofStatus == "pending" -> "Check the claimant’s document first (Open private documents)."
             identity -> "No document yet. Use Request info to ask for one."
-            approval.proof == "pending" -> "Confirm the claimant’s identity and check their document (Open private documents)."
+            proofStatus == "pending" -> "Confirm the claimant’s identity and check their document (Open private documents)."
             else -> "Needs a confirmed identity and a checked document. Use Request info to ask for a document."
+        }
+    }
+
+    private val ownershipDocuments = setOf("deed", "closing_disclosure", "tax_bill", "escrow_attestation", "title_match")
+
+    /**
+     * `verified` · `pending` · `missing` for approving as [role]. As claimed, the server's own test
+     * (`approval.proof`); as another role, the approval function's rule: owner and admin need an ownership
+     * document, any other role also accepts a utility bill or lease.
+     */
+    fun proof(
+        detail: AdminClaimDetailResponse,
+        role: ClaimApprovalRole,
+    ): String {
+        if (role == ClaimApprovalRole.claimed(detail.claim.claimType)) return detail.approval?.proof ?: "missing"
+        val ownership = role == ClaimApprovalRole.Owner || role == ClaimApprovalRole.Admin
+        val accepted = if (ownership) ownershipDocuments else ownershipDocuments + setOf("utility_bill", "lease")
+        val documents = detail.evidence.filter { it.evidenceType in accepted }
+        return when {
+            documents.any { it.eligibleForReview == true } -> "verified"
+            documents.any { it.status == "pending" && it.availabilityCode == null } -> "pending"
+            else -> "missing"
         }
     }
 
@@ -75,18 +99,19 @@ object ReviewClaimApproval {
             else -> "Identity not confirmed" to "The claimant hasn’t done the ID check yet. They’re asked to on their claim."
         }
 
-    fun proofLine(approval: ClaimReviewApprovalDto): Pair<String, String> =
-        when (approval.proof) {
+    fun proofLine(proof: String): Pair<String, String> =
+        when (proof) {
             "verified" -> "Document checked" to "A reviewer verified a document."
             "pending" -> "Document waiting for your check" to "Open private documents and verify it."
             else -> "No document yet" to "The claimant is asked to upload one."
         }
 }
 
-/** The panel with the identity confirmation switch. */
+/** The panel with the identity confirmation switch. [proof] is the document status for the role being granted. */
 @Composable
 fun ReviewClaimApprovalPanel(
     approval: ClaimReviewApprovalDto,
+    proof: String,
     identityFailed: Boolean,
     identityAttested: Boolean,
     onIdentityAttested: (Boolean) -> Unit,
@@ -138,13 +163,13 @@ fun ReviewClaimApprovalPanel(
             }
         }
         HorizontalDivider(modifier = Modifier.height(1.dp), color = PantopusColors.appBorder)
-        val (proofTitle, proofDetail) = ReviewClaimApproval.proofLine(approval)
+        val (proofTitle, proofDetail) = ReviewClaimApproval.proofLine(proof)
         ApprovalLine(
             icon = PantopusIcon.FileText,
             title = proofTitle,
             detail = proofDetail,
-            done = approval.proof == "verified",
-            waiting = approval.proof == "pending",
+            done = proof == "verified",
+            waiting = proof == "pending",
             modifier = Modifier.testTag("reviewClaimDetail_approvalProof"),
         )
     }

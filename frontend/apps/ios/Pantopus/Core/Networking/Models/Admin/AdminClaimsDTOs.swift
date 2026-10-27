@@ -245,24 +245,82 @@ public struct ClaimReviewApprovalDTO: Decodable, Sendable, Hashable {
     }
 }
 
+/// Household role a platform admin may approve a claim as (`approve_as`). Left out, the claim type decides:
+/// owner → owner, admin → admin, resident → renter. Labels and hints match the web review page.
+public enum AdminClaimApprovalRole: String, Codable, CaseIterable, Sendable, Hashable, Identifiable {
+    case owner
+    case admin
+    case manager
+    case member
+    case leaseResident = "lease_resident"
+    case restrictedMember = "restricted_member"
+    case guest
+
+    public var id: String {
+        rawValue
+    }
+
+    public var label: String {
+        switch self {
+        case .owner: "Owner"
+        case .admin: "Admin"
+        case .manager: "Manager"
+        case .member: "Member"
+        case .leaseResident: "Renter"
+        case .restrictedMember: "Restricted member"
+        case .guest: "Guest"
+        }
+    }
+
+    /// The role's default access.
+    public var hint: String {
+        switch self {
+        case .owner: "Full control of the home, including ownership and security."
+        case .admin: "Views the home and its ownership, and votes on household decisions."
+        case .manager, .member: "Views the home and works on tasks."
+        case .leaseResident: "Sees members, Wi-Fi, the calendar and packages, and works on tasks."
+        case .restrictedMember, .guest: "Views the home only."
+        }
+    }
+
+    /// The role an approval grants when the admin keeps what the person claimed.
+    public static func claimed(by claimType: String?) -> Self {
+        switch claimType {
+        case "owner": .owner
+        case "admin": .admin
+        default: .leaseResident
+        }
+    }
+}
+
 /// Request body for `POST /api/admin/claims/:claimId/review`.
 public struct AdminClaimReviewRequest: Encodable, Sendable, Hashable {
     public let action: AdminClaimReviewAction
     public let note: String?
     public let reviewToken: String
+    /// Approve only: grant this role instead of the one the claim type gives.
+    public let approveAs: AdminClaimApprovalRole?
     /// Approve only: the admin confirmed the claimant's identity themselves. Sent only when true.
     public let identityConfirmed: Bool?
 
-    public init(action: AdminClaimReviewAction, reviewToken: String, note: String? = nil, identityConfirmed: Bool? = nil) {
+    public init(
+        action: AdminClaimReviewAction,
+        reviewToken: String,
+        note: String? = nil,
+        approveAs: AdminClaimApprovalRole? = nil,
+        identityConfirmed: Bool? = nil
+    ) {
         self.action = action
         self.note = note
         self.reviewToken = reviewToken
+        self.approveAs = approveAs
         self.identityConfirmed = identityConfirmed == true ? true : nil
     }
 
     private enum CodingKeys: String, CodingKey {
         case action, note
         case reviewToken = "review_token"
+        case approveAs = "approve_as"
         case identityConfirmed = "identity_confirmed"
     }
 }

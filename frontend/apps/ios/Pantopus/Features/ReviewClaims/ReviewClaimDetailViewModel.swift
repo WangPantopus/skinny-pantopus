@@ -62,6 +62,8 @@ public final class ReviewClaimDetailViewModel {
     /// "I confirmed this person's identity" — a platform admin's own confirmation, sent with Approve
     /// only while the claim has no confirmed identity.
     public var identityAttested = false
+    /// The household role Accept grants. Starts as what the person claimed.
+    public var approveAs: AdminClaimApprovalRole = .owner
 
     // MARK: Challenge composer state
 
@@ -79,6 +81,7 @@ public final class ReviewClaimDetailViewModel {
         let claim: AdminClaimRecordDTO
         let action: AdminClaimReviewAction
         let note: String?
+        let approveAs: AdminClaimApprovalRole?
     }
 
     private var pendingDecision: PendingDecision?
@@ -108,6 +111,7 @@ public final class ReviewClaimDetailViewModel {
                   HomeClaimReviewSnapshot.validToken(response.claim.reviewToken) else { throw APIError.invalidResponse }
             contentState = .loaded(response)
             pendingDecision = nil
+            if !loadedOnce { approveAs = .claimed(by: response.claim.claimType) }
             loadedOnce = true
         } catch {
             guard revision == loadGeneration else { return }
@@ -142,17 +146,27 @@ public final class ReviewClaimDetailViewModel {
                 throw HomeClaimReviewError.snapshotChanged
             }
             guard !detail.claim.requiresDisputeReview else { throw HomeClaimReviewError.disputeReview }
+            // Only an approval carries a role, and only when it differs from what they claimed.
+            let role = approveAs
+            let roleChoice = action == .approve && role != .claimed(by: detail.claim.claimType) ? role : nil
             if let pendingDecision,
-               pendingDecision.claim != detail.claim || pendingDecision.action != action || pendingDecision.note != note {
+               pendingDecision.claim != detail.claim || pendingDecision.action != action || pendingDecision.note != note
+               || pendingDecision.approveAs != roleChoice {
                 throw HomeClaimReviewError.pendingDecision
             }
-            pendingDecision = PendingDecision(claim: detail.claim, action: action, note: note)
+            pendingDecision = PendingDecision(claim: detail.claim, action: action, note: note, approveAs: roleChoice)
             let attest = action == .approve && identityAttested
                 && detail.approval?.identityConfirmed != true && detail.claim.identityStatus != "verified"
             let receipt: AdminClaimReviewResponse = try await api.request(
                 AdminEndpoints.reviewClaim(
                     claimId: claimId,
-                    request: AdminClaimReviewRequest(action: action, reviewToken: token, note: note, identityConfirmed: attest)
+                    request: AdminClaimReviewRequest(
+                        action: action,
+                        reviewToken: token,
+                        note: note,
+                        approveAs: roleChoice,
+                        identityConfirmed: attest
+                    )
                 )
             )
             try scope.requireCurrent()
@@ -165,7 +179,7 @@ public final class ReviewClaimDetailViewModel {
                 throw APIError.invalidResponse
             }
             pendingDecision = nil
-            toast = ToastMessage(text: Self.successCopy(for: action), kind: .success)
+            toast = ToastMessage(text: Self.successCopy(for: action, role: role), kind: .success)
             reviewingAction = nil
             await load()
             return true
@@ -178,6 +192,16 @@ public final class ReviewClaimDetailViewModel {
 
     public func clearToast() {
         toast = nil
+    }
+
+    /// Why Accept is off for the chosen role, or nil when it can go ahead.
+    func acceptBlockedReason(_ detail: AdminClaimDetailResponse) -> String? {
+        ReviewClaimApproval.blockedReason(detail, identityAttested: identityAttested, role: approveAs)
+    }
+
+    /// "Accept claim" while the role is what they claimed, otherwise the chosen role.
+    func acceptLabel(_ detail: AdminClaimDetailResponse) -> String {
+        approveAs == .claimed(by: detail.claim.claimType) ? "Accept claim" : "Accept as \(approveAs.label)"
     }
 
     // MARK: - Challenge composer
@@ -240,9 +264,9 @@ public final class ReviewClaimDetailViewModel {
         return note.isEmpty ? nil : note
     }
 
-    private static func successCopy(for action: AdminClaimReviewAction) -> String {
+    private static func successCopy(for action: AdminClaimReviewAction, role: AdminClaimApprovalRole) -> String {
         switch action {
-        case .approve: "Claim approved."
+        case .approve: "Claim approved as \(role.label)."
         case .reject: "Claim rejected."
         case .challenge: "Request for more information saved."
         }
