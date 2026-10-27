@@ -6,7 +6,9 @@ const homeRecordService = require('../services/homeRecordService');
 // canAccessMail: the per-item rule, shared with the v2 mailbox routes.
 const { getAccessibleHomeIds, trustedHomeIdsOrThrow, canAccessMail, readableMail, homeMailFilter, visibleMailFilter,
   restorableMail, isDeletedMail, removedMailInfo, sendHomeMailRemovedNotice, MAIL_RESTORE_DAYS,
-  sendMailUnavailable, mailHomesOrThrow, MAIL_HOME_NEEDS_PROOF } = require('../utils/homeMailAccess');
+  sendMailUnavailable, mailHomesOrThrow, MAIL_HOME_NEEDS_PROOF, onlyDelivered } = require('../utils/homeMailAccess');
+// Mail comes in the morning (SRV-1): the delivery rule every writer follows.
+const mailDelivery = require('../services/mailDelivery');
 const { HOME_DOCUMENT_TYPES } = require('../utils/homeDocumentAccess');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
@@ -844,8 +846,9 @@ const resolveSenderBusiness = async (senderId, requestedName) => {
 // to another member or for another member's attention only.
 const applyMailboxScopeToQuery = (query, { scope, userId, homeId, accessibleHomeIds }) => {
   // Deleted letters (recoverable for 30 days) and dismissed ones leave the
-  // lists and their counts.
-  query = query.is('deleted_at', null).or('lifecycle.is.null,lifecycle.neq.shredded');
+  // lists and their counts, and a piece waiting for its morning round isn't
+  // there yet (SRV-1).
+  query = onlyDelivered(query.is('deleted_at', null).or('lifecycle.is.null,lifecycle.neq.shredded'));
   if (scope === 'home') {
     return query.eq('recipient_home_id', homeId).or(homeMailFilter(homeId, userId));
   }
@@ -906,7 +909,10 @@ const createMailObject = async ({
   return { objectId: objectRow.id };
 };
 
-const insertMailWithCompatibility = async (mailData) => {
+const insertMailWithCompatibility = async (stored) => {
+  // Every piece follows the morning delivery rule (SRV-1, services/mailDelivery): it goes into the box at the next
+  // 7 a.m. where the mailbox is, or at once as a special delivery.
+  const mailData = { ...stored, ...(await mailDelivery.deliveryFor(stored)) };
   const primaryInsert = await supabaseAdmin
     .from('Mail')
     .insert(mailData)
@@ -1486,6 +1492,8 @@ router.get('/', verifyToken, async (req, res) => {
         attachments,
         expires_at,
         created_at,
+        delivered_at,
+        special_delivery,
         sender:sender_user_id (
           id,
           username,
@@ -1493,8 +1501,8 @@ router.get('/', verifyToken, async (req, res) => {
         )
       `, { count: 'exact' })
       .eq('archived', archived === 'true')
-      .order('created_at', { ascending: false })
-      // Mail delivered together shares created_at; the id keeps the order the same on every page.
+      .order('delivered_at', { ascending: false })
+      // Mail delivered together shares delivered_at; the id keeps the order the same on every page.
       .order('id', { ascending: false })
       .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
 
@@ -2353,9 +2361,12 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
       stationeryTheme: composePayload.stationeryTheme || null,
     });
 
-    // Fire-and-forget: fetch sender name + home address, then notify
+    // Fire-and-forget: fetch sender name + home address, then notify. Only a
+    // special delivery is told now; a piece in the morning round is told in
+    // the morning notice with the rest of that day's mail (SRV-1).
     (async () => {
       try {
+        if (!mail.special_delivery) return;
         const senderName = senderDisplayName;
 
         // Fetch home address if available
@@ -2411,6 +2422,7 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
             address: homeAddress,
             amount: payoutAmount != null ? payoutAmount : undefined,
             vendorName,
+            special: true,
           });
         }
       } catch (notifErr) {

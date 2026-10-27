@@ -100,7 +100,8 @@ Tests run with every feature on (`backend/jest.config.js`, `frontend/apps/web/te
    returns). Three keep running because they keep stored data correct: the purge of letters deleted more than 30 days
    ago (a deletion people were promised), vacation-hold dates, and letter escrow expiry (its notice to the sender is
    already dropped). The mail notification Lambda's pushes (`mail_summary`, `mail_urgent`) are refused at
-   `/api/internal/briefing/reminder-push`. Since 2026-10-27 community-mail moderation, mail-party expiry and the Earn
+   `/api/internal/briefing/reminder-push`, and its morning notice at `/api/internal/briefing/mail-morning`. Since
+   2026-10-27 (Mail tab, SRV-1) the Mail Day reminder doesn't run at all: the Mail tab has one morning notice. Since 2026-10-27 community-mail moderation, mail-party expiry and the Earn
    risk review need `mail_extras` as well (they serve only mail extras), and the Lambda's schedule has its own switch
    in the seeder stack, `MailEnabled` (off by default; turn it on with the Mailbox, see
    `docs/release/prod-config-checklist.md`).

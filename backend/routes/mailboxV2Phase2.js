@@ -4,7 +4,7 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 // canAccessMail / readableMail: the mailbox's per-item rule (own mail, or mail
 // for a Home whose mail the caller may read), checked before any read or change.
 const {
-  getAccessibleHomeIds, canAccessMail, readableMail, visibleMailFilter,
+  getAccessibleHomeIds, canAccessMail, readableMail, visibleMailFilter, onlyDelivered,
 } = require('../utils/homeMailAccess');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
@@ -279,11 +279,11 @@ async function routeAndGroup(userId, addressId) {
   // Only letters the caller may see: an address also receives other members'
   // private mail, which must never land in the caller's bundle.
   const homeIds = await getAccessibleHomeIds(userId);
-  const { data: items } = await supabaseAdmin
+  const { data: items } = await onlyDelivered(supabaseAdmin
     .from('Mail')
     .select('*')
     .eq('recipient_address_id', addressId)
-    .or(visibleMailFilter(userId, homeIds))
+    .or(visibleMailFilter(userId, homeIds)))
     .is('deleted_at', null)
     .is('bundle_id', null)
     .neq('mail_object_type', 'bundle')
@@ -477,11 +477,11 @@ router.get('/bundle/:bundleId/items', async (req, res, next) => {
 
     // Each item passes the per-item rule too: a bundle can hold letters the
     // caller may not read.
-    const { data: items } = await supabaseAdmin
+    const { data: items } = await onlyDelivered(supabaseAdmin
       .from('Mail')
       .select('*')
       .eq('bundle_id', bundleId)
-      .or(visibleMailFilter(req.user.id, await getAccessibleHomeIds(req.user.id)))
+      .or(visibleMailFilter(req.user.id, await getAccessibleHomeIds(req.user.id))))
       .is('deleted_at', null)
       .order('urgency', { ascending: true })
       .order('created_at', { ascending: false });
@@ -516,6 +516,7 @@ router.post('/bundle/action', validate(bundleActionSchema), async (req, res, nex
       .select('id')
       .eq('bundle_id', bundleId)
       .or(visibleMailFilter(req.user.id, homeIds))
+      .lte('delivered_at', new Date().toISOString())
       .is('deleted_at', null);
 
     if (action === 'file_all') {
@@ -1149,6 +1150,7 @@ router.get('/vault/folder/:folderId/items', async (req, res, next) => {
       .select('*', { count: 'exact' })
       .eq('vault_folder_id', folderId)
       .or(visibleMailFilter(req.user.id, homeIds))
+      .lte('delivered_at', new Date().toISOString())
       .is('deleted_at', null)
       .order('created_at', { ascending: false })
       // Mail delivered together shares created_at; the id keeps the order the same on every page.
@@ -1228,6 +1230,8 @@ router.post('/vault/auto-file', async (req, res, next) => {
       .eq('recipient_user_id', req.user.id)
       .is('vault_folder_id', null)
       .is('deleted_at', null)
+      // Never files a piece that hasn't arrived yet (SRV-1).
+      .lte('delivered_at', new Date().toISOString())
       .in('lifecycle', ['delivered', 'opened'])
       .order('created_at', { ascending: false })
       .limit(100);
@@ -1288,6 +1292,7 @@ router.get('/vault/search', async (req, res, next) => {
       .from('Mail')
       .select('*', { count: 'exact' })
       .eq('recipient_user_id', req.user.id)
+      .lte('delivered_at', new Date().toISOString())
       .is('deleted_at', null);
 
     if (drawer) query = query.eq('drawer', drawer);
