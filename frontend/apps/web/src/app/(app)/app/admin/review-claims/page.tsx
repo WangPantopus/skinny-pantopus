@@ -3,6 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import ClaimEvidenceReview from '@/components/home/ClaimEvidenceReview';
+import ClaimReviewApprovalPanel from '@/components/homes/ClaimReviewApprovalPanel';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, CheckCircle, XCircle, HelpCircle, MapPin, User,
@@ -291,6 +292,7 @@ export default function AdminReviewClaimsPage() {
 
   // Identity counts as confirmed once the claim says so or an ID document on it is verified.
   const identityVerified = claimDetail?.claim?.identity_status === 'verified'
+    || claimDetail?.approval?.identity_confirmed === true
     || !!claimDetail?.evidence?.some(ev => ev.evidence_type === 'idv' && ev.eligible_for_review === true);
   const identityFailed = claimDetail?.claim?.identity_status === 'failed';
 
@@ -427,6 +429,8 @@ export default function AdminReviewClaimsPage() {
             </section>
 
             {renderComparisonSection()}
+
+            {claimDetail.approval ? <ClaimReviewApprovalPanel approval={claimDetail.approval} /> : null}
 
             {/* Evidence */}
             <section>

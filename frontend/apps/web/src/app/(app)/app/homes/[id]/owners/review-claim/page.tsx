@@ -7,6 +7,7 @@ import { ArrowLeft, CheckCircle, Check, Flag, Shield, User, UserPlus, X } from '
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
+import { approvalBlockedReason } from '@/components/homes/ClaimReviewApprovalPanel';
 import { confirmStore } from '@/components/ui/confirm-store';
 import { useResidencyQueue } from '@/components/home/residency/queue/useResidencyQueue';
 import { ResidencyQueueContent } from '@/components/home/residency/queue/ResidencyQueueContent';
@@ -78,8 +79,11 @@ function ReviewClaimContent() {
   const handleOwnershipReview = useCallback(async (claimId: string, action: 'approve' | 'reject' | 'flag') => {
     setActionLoading(claimId);
     try {
-      const { claim } = await api.homeOwnership.getOwnershipClaimDetail(homeId!, claimId);
+      const { claim, approval } = await api.homeOwnership.getOwnershipClaimDetail(homeId!, claimId);
       if (!claim.review_token) throw new Error('Reopen the claim before reviewing it.');
+      // Approval needs a confirmed identity and a checked document; say which is missing first.
+      const blocked = action === 'approve' && approval ? approvalBlockedReason(approval) : null;
+      if (blocked) { toast.info(blocked); return; }
       const labels = { approve: 'Approve', reject: 'Reject', flag: 'Flag for review' };
       const verifiedCount = claim.evidence.filter(e => e.eligible_for_review === true).length;
       const yes = await confirmStore.open({

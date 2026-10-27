@@ -19,13 +19,14 @@ const propertyDataService = require('../services/propertyDataService');
 const homeClaimRoutingService = require('../services/homeClaimRoutingService');
 const adminAlerts = require('../services/adminAlerts');
 const homeClaimReviewService = require('../services/homeClaimReviewService');
+const homeClaimIdentityService = require('../services/homeClaimIdentityService');
 const { getRequestSessionScope, requireExpectedSessionScope } = require('../utils/requestSessionScope');
 const homeClaimComparisonService = require('../services/homeClaimComparisonService');
 const homeClaimCompatService = require('../services/homeClaimCompatService');
 const homeClaimMergeService = require('../services/homeClaimMergeService');
 const householdClaimConfig = require('../config/householdClaims');
 const { listOwnClaims } = require('../services/homeOwnershipClaimListService');
-const { ownershipClaimLimiter, postcardLimiter, homePostcardRequestLimiter, verificationAttemptLimiter } = require('../middleware/rateLimiter');
+const { ownershipClaimLimiter, identityCheckLimiter, postcardLimiter, homePostcardRequestLimiter, verificationAttemptLimiter } = require('../middleware/rateLimiter');
 const logger = require('../utils/logger');
 const homePostcardService = require('../services/homePostcardService');
 const homeInstantClaimService = require('../services/homeInstantClaimService');
@@ -582,8 +583,48 @@ router.get('/:id/ownership-claims/compare', verifyToken, async (req, res) => {
 router.get('/:id/ownership-claims/:claimId', verifyToken, async (req, res) => {
   try {
     const result = await homeClaimReviewService.read({ homeId: req.params.id, claimId: req.params.claimId, actorId: req.user.id });
-    res.json({ claim: result.claim });
+    const approval = await homeClaimIdentityService.reviewerApprovalOrNull(result.claimId);
+    res.json({ claim: { ...result.claim, evidence: homeClaimIdentityService.withoutIdentityEvidence(result.claim.evidence) }, approval });
   } catch (error) { homeClaimReviewService.sendError(res, error); }
+});
+
+const identityCheckSchema = Joi.object({
+  platform: Joi.string().valid('web', 'ios', 'android').default('web'),
+});
+
+// Where Stripe sends the claimant after the check: back to My Homes on the web; a page that says
+// to return to the app in the browser the app opened.
+function identityReturnUrl(platform, claimId) {
+  const base = String(process.env.APP_URL || '').replace(/\/+$/, '');
+  if (!/^https?:\/\//.test(base)) return null;
+  return platform === 'web'
+    ? `${base}/app/homes?identity_check=${encodeURIComponent(claimId)}`
+    : `${base}/identity-check/done`;
+}
+
+/**
+ * POST /:id/ownership-claims/:claimId/identity-check
+ * The claimant starts or continues the Stripe Identity check approval needs.
+ */
+router.post('/:id/ownership-claims/:claimId/identity-check', verifyToken, identityCheckLimiter, validate(identityCheckSchema), async (req, res) => {
+  try {
+    res.set('Cache-Control', 'private, no-store');
+    const started = await homeClaimIdentityService.start({ homeId: req.params.id, claimId: req.params.claimId,
+      userId: req.user.id, returnUrl: identityReturnUrl(req.body.platform, req.params.claimId) });
+    res.json(started);
+  } catch (error) { homeClaimIdentityService.sendError(res, error); }
+});
+
+/**
+ * GET /:id/ownership-claims/:claimId/identity-check
+ * The claimant's approval checklist, after re-reading an open check from Stripe.
+ */
+router.get('/:id/ownership-claims/:claimId/identity-check', verifyToken, identityCheckLimiter, async (req, res) => {
+  try {
+    res.set('Cache-Control', 'private, no-store');
+    const approval = await homeClaimIdentityService.refresh({ homeId: req.params.id, claimId: req.params.claimId, userId: req.user.id });
+    res.json({ approval });
+  } catch (error) { homeClaimIdentityService.sendError(res, error); }
 });
 
 /** Withdraw an exact own in-progress claim, retaining its evidence and audit history. */
