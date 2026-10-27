@@ -25,6 +25,16 @@ struct PlaceLaunchHost: View {
         )
         .fullScreenCover(isPresented: $showAuth) {
             LoginView()
+                .overlay(alignment: .topTrailing) {
+                    Button { showAuth = false } label: {
+                        Icon(.x, size: 20, color: Theme.Color.appTextSecondary)
+                            .frame(width: Spacing.s12, height: Spacing.s12)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Back to address preview")
+                    .accessibilityIdentifier("place.launch.dismissLogin")
+                    .padding(.trailing, Spacing.s4)
+                }
         }
         // Workstream 1.4 — RN AuthGate parity: a deferred protected (or
         // auth-owned) deep link auto-presents the existing Sign-in cover
@@ -347,7 +357,10 @@ struct PlaceLaunchView: View {
                 .font(Theme.Font.body)
                 .autocorrectionDisabled()
                 .submitLabel(.search)
-                .onSubmit { if !viewModel.query.isEmpty { viewModel.loadPreview(address: viewModel.query) } }
+                // Weakly: the keyboard's AutoFill can keep this field, and the action with it, after the screen closes.
+                .onSubmit { [weak viewModel] in
+                    if let viewModel, !viewModel.query.isEmpty { viewModel.loadPreview(address: viewModel.query) }
+                }
             if !viewModel.query.isEmpty {
                 Button { viewModel.query = "" } label: {
                     Icon(.x, size: 16, strokeWidth: 2, color: Theme.Color.appTextMuted)

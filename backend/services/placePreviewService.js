@@ -30,8 +30,10 @@
 const { serializePlaceSection } = require('../serializers/placeIntelligenceSerializer');
 const { encodeGeohash } = require('../utils/geohash');
 const { isInCascadiaRegion } = require('../utils/geo');
+const logger = require('../utils/logger');
 const adapters = require('./placeSectionAdapters');
 const placeIntelligenceService = require('./placeIntelligenceService');
+const ballotSummary = require('./ballot/summary');
 
 const DEFAULT_BUDGET_MS = 3500;
 
@@ -77,6 +79,12 @@ function sectionBudgetMs() {
   return Number.isFinite(n) && n > 0 ? n : DEFAULT_BUDGET_MS;
 }
 
+// Ballot's boundary lookup ends a little before its section's budget does, so
+// a slow geocoder still leaves time to show the dates without the count.
+function ballotLookupMs(budgetMs = sectionBudgetMs()) {
+  return Math.max(Math.floor(budgetMs / 2), budgetMs - 500);
+}
+
 // Race a composer against the budget. On timeout OR rejection the
 // fallback envelopes are returned; the composer itself keeps running so
 // its read-through cache still fills.
@@ -102,11 +110,30 @@ function withBudget(run, ms, fallback) {
 const failed = (ids) =>
   () => ids.map((id) => serializePlaceSection(id, { status: 'error' }));
 
+// The election row. While ballot_p0 is on (`ballot` carries the route's
+// boundary lookup) it is Ballot's: the checked dates and official links for
+// the point's state, the card a Home there shows. Otherwise, or when that
+// fails, the plain row.
+async function composeElection(home, ballot, budgetMs) {
+  if (ballot) {
+    try {
+      const summary = await ballotSummary.summaryForPoint(
+        { lat: home.map_center_lat, lng: home.map_center_lng, state: home.state },
+        { timeoutMs: ballotLookupMs(budgetMs), lookup: ballot.lookup },
+      );
+      if (summary) return [adapters.ballotElectionSection(summary)];
+    } catch (err) {
+      logger.warn('placePreview: ballot election row failed', { error: err.message });
+    }
+  }
+  return adapters.composeCivicElection(home);
+}
+
 // ── Remote Band-A layers for a point ─────────────────────────
 // Returns envelopes for the layers that need a provider round-trip.
 // Flood / census / density are assembled by the route (it already has
 // them) via assemblePreviewSections.
-async function composePreviewSections({ lat, lng, city = null, state = null, resolveTract = null }) {
+async function composePreviewSections({ lat, lng, city = null, state = null, resolveTract = null, ballot = null }) {
   const gh6 = encodeGeohash(lat, lng, 6);
   // The route resolves the tract ONCE (a thunk shared with the census
   // teaser and the money lead); county falls out of it for free, so the
@@ -150,7 +177,7 @@ async function composePreviewSections({ lat, lng, city = null, state = null, res
     withBudget(() => adapters.composeEnvironmentalHazards(home), ms, failed(['environmental_hazards'])),
     withBudget(() => adapters.composeRentBand(home), ms, failed(['rent_band'])),
     withBudget(() => adapters.composeCivicDistricts(home), ms, failed(['civic_districts'])),
-    withBudget(() => adapters.composeCivicElection(home), ms, failed(['civic_election'])),
+    withBudget(() => composeElection(home, ballot, ms), ms, failed(['civic_election'])),
   ];
   const settled = await Promise.all(tasks);
   return settled.flat();
@@ -396,6 +423,9 @@ const AHA_BUILDERS = {
     };
   },
   civic_election(d) {
+    // Ballot's row is the election's own card (the web shows it as the teaser
+    // under the aha), so it never doubles as the aha: the ranking is unchanged.
+    if (d.election_id) return null;
     const days = Number(d.days_until);
     if (!d.name || !Number.isFinite(days)) return null;
     return {
@@ -469,6 +499,21 @@ function pickAha(sections, point = null) {
 
   if (!best || best.score < AHA_FLOOR) {
     const facts = calmFacts(byId);
+    // A timed-out or missing layer is not evidence that the address is quiet.
+    // Keep the facts we do have, without an all-clear over failed cards.
+    const incomplete = !byId.size || [...byId.values()].some((env) =>
+      env.status === 'error' || env.status === 'unavailable');
+    if (incomplete) {
+      return {
+        section_id: null,
+        tone: 'info',
+        grade: 'Partial',
+        headline: 'Some public information is still missing',
+        detail: (facts.length ? `${facts.join(', ')}. `.replace(/^./, (m) => m.toUpperCase()) : '')
+          + 'The cards below show what could not be checked. This is not a complete risk picture.',
+        follow_up: 'Save this address to check back later.',
+      };
+    }
     const listed = facts.length
       ? `${facts.join(', ')}.`.replace(/^./, (m) => m.toUpperCase())
       : 'Nothing on the public layers stands out for this spot.';
@@ -496,4 +541,5 @@ module.exports = {
   // Exported for unit testing.
   withBudget,
   sectionBudgetMs,
+  ballotLookupMs,
 };

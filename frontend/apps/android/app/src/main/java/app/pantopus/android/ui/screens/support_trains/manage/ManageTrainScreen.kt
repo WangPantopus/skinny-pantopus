@@ -3,6 +3,7 @@
 package app.pantopus.android.ui.screens.support_trains.manage
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -12,9 +13,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -33,11 +36,16 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -52,6 +60,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.core.perf.ReportContentShown
+import app.pantopus.android.ui.components.KeyboardResizeEffect
 import app.pantopus.android.ui.components.RefreshFailedLine
 import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
@@ -132,12 +141,23 @@ fun ManageTrainScreen(
         }
     }
 
+    // The app draws edge to edge, so this screen makes room for the keyboard itself: the window
+    // doesn't pan (the top bar stays put), and the body and the close sheet end at the keyboard.
+    // The tab bar under this screen is already behind the keyboard, so only the rest of it counts.
+    KeyboardResizeEffect()
+    val density = LocalDensity.current
+    val rootView = LocalView.current.rootView
+    var belowScreen by remember { mutableStateOf(0.dp) }
+
     PullToRefreshBox(
         isRefreshing = state.refreshing,
         onRefresh = viewModel::refresh,
         modifier =
             Modifier
                 .fillMaxSize()
+                .onGloballyPositioned { coords ->
+                    belowScreen = with(density) { (rootView.height - coords.boundsInWindow().bottom).coerceAtLeast(0f).toDp() }
+                }.consumeWindowInsets(PaddingValues(bottom = belowScreen))
                 .background(PantopusColors.appBg)
                 .testTag(MANAGE_TRAIN_SCREEN_TAG),
     ) {
@@ -397,12 +417,14 @@ private fun LoadedBody(
             else -> null
         }
     }
+    val listScroll = rememberScrollState()
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
+                    .imePadding()
+                    .verticalScroll(listScroll)
                     .padding(
                         PaddingValues(
                             start = Spacing.s4,
@@ -459,7 +481,13 @@ private fun LoadedBody(
                     onTapRow = { row -> organizeHandler(row.id)?.invoke(content.trainId) },
                 )
 
-                OrganizerControls(content = content, ui = ui, viewModel = viewModel, onInviteHelpers = onInviteHelpers)
+                OrganizerControls(
+                    content = content,
+                    ui = ui,
+                    viewModel = viewModel,
+                    onInviteHelpers = onInviteHelpers,
+                    listScroll = listScroll,
+                )
 
                 SectionOverline("Wind down")
                 WindDownSection(
@@ -525,6 +553,7 @@ private fun OrganizerControls(
     ui: ManageTrainUiState,
     viewModel: ManageTrainViewModel,
     onInviteHelpers: ((String) -> Unit)?,
+    listScroll: ScrollState,
 ) {
     // The chat New message picker chooses the co-organizer. Each opening gets its own
     // view model (as chat's picker route does), so connections are read fresh.
@@ -572,6 +601,7 @@ private fun OrganizerControls(
 
     ManageHelpersSection(
         rows = ui.helperRows,
+        addressAvailable = content.deliveryAddressAvailable,
         failed = ui.helpersFailed,
         isBusy = ui.isSubmitting,
         onShareAddress = { viewModel.shareExactAddress(it.id) },
@@ -591,8 +621,10 @@ private fun OrganizerControls(
 
     ManageOrganizersSection(
         rows = ui.organizerRows,
+        failed = ui.organizersFailed,
+        onRetry = viewModel::refresh,
         canEdit = content.viewerRole == SupportTrainViewerRole.PRIMARY_ORGANIZER,
-        isBusy = ui.isSubmitting,
+        isBusy = ui.isSubmitting || ui.refreshing,
         onAdd = {
             pickerSession += 1
             showOrganizerPicker = true
@@ -614,7 +646,9 @@ private fun OrganizerControls(
         openSlotCount = content.slotsOpen,
         hasDates = ui.slotRows.isNotEmpty(),
         draft = ui.nudgeDraft,
+        draftNote = ui.nudgeDraftNote,
         isBusy = ui.isSubmitting,
+        listScroll = listScroll,
         onDraft = { viewModel.draftNudge() },
         onEditDraft = { viewModel.updateNudgeDraft(it) },
         onSend = { viewModel.sendNudge() },
@@ -708,7 +742,7 @@ private fun CloseSheetOverlay(
     onCancel: () -> Unit,
     onConfirm: () -> Unit,
 ) {
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize().imePadding()) {
         Box(
             modifier =
                 Modifier

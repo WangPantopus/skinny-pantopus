@@ -70,8 +70,8 @@ router.get('/:id/preview', verifyToken, async (req, res) => {
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
       return res.json({ status: 'could_not_place', tier: 'preview', region: null, message: 'This saved place has no location.' });
     }
-    const { buildPlacePreview } = require('./public');
-    return res.json(await buildPlacePreview({
+    const { placePreviewWithBallot } = require('./public');
+    return res.json(await placePreviewWithBallot({
       lat, lng, city: place.city || null, state: place.state || null, line: place.label, zipcode: null,
     }));
   } catch (err) {
@@ -118,11 +118,11 @@ router.post('/', verifyToken, async (req, res) => {
 
     if (error) throw error;
     require('../services/context/providerOrchestrator').clearHubTodayCache(req.user.id);
-    // Insert only: saving an address must never opt a new account into
-    // briefings or overwrite an existing account's notification choices.
+    // New accounts start with both briefings on. Insert only preserves every
+    // existing notification choice, including an explicit opt-out.
     const { error: preferencesError } = await supabaseAdmin
       .from('UserNotificationPreferences')
-      .upsert({ user_id: req.user.id, daily_briefing_enabled: false, evening_briefing_enabled: false },
+      .upsert({ user_id: req.user.id, daily_briefing_enabled: true, evening_briefing_enabled: true },
         { onConflict: 'user_id', ignoreDuplicates: true });
     if (preferencesError) throw preferencesError;
     res.status(201).json({ savedPlace: data });

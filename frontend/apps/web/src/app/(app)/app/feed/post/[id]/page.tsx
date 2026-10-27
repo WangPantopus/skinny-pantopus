@@ -15,14 +15,17 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import { CommentThread, EditPostDialog } from '@/components/feed';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
-import FeedMediaImage from '@/components/feed/FeedMediaImage';
+import { PostMediaPreview, resolvePostMediaSlots } from '@/components/feed/PostMediaGrid';
+import PostMediaLightbox from '@/components/feed/PostMediaLightbox';
+import { PostLinkContent } from '@/components/feed/LinkPreviewCard';
 import { formatDistance, formatTimeAgo as timeAgo, getPostTypeConfig, POST_TYPE_ICONS_LUCIDE } from '@pantopus/ui-utils';
-import { buildCanonicalShareUrlForPost, getErrorMessage, chosenUsername } from '@pantopus/utils';
+import { getErrorMessage, chosenUsername } from '@pantopus/utils';
 import Image from 'next/image';
 import { confirmStore } from '@/components/ui/confirm-store';
 import ReportModal from '@/components/ui/ReportModal';
 import ErrorState from '@/components/ui/ErrorState';
-import { lostFoundContactLabel } from '@/components/feed/composer/LostFoundFields';
+import PostMetadata from '@/components/feed/PostMetadata';
+import { sharePostLink } from '@/components/feed/sharePostLink';
 import { patchPostInFeedCaches, removePostFromFeedCaches } from '@/hooks/useFeedData';
 import { launchFeatures } from '@/lib/featureFlags';
 import { fetchMe } from '@/lib/me';
@@ -67,14 +70,6 @@ export default function PostDetailPage() {
 
   // Lightbox
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
-  // Escape closes the media viewer, as it does in the feed's PostMediaLightbox.
-  useEffect(() => {
-    if (lightboxIdx === null) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setLightboxIdx(null); };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [lightboxIdx]);
-
   // ─── Load user ─────────────────────────────────────────────
   useEffect(() => {
     (async () => {
@@ -306,22 +301,17 @@ export default function PostDetailPage() {
 
   const handleShare = () => {
     if (!post) return;
-    const url = buildCanonicalShareUrlForPost(post);
     const share = async () => {
-      if (typeof navigator !== 'undefined' && navigator.share) {
-        await navigator.share({ title: post.title || 'Post', text: post.content?.slice(0, 100), url });
-      } else {
-        await navigator.clipboard.writeText(url);
-      }
+      if (!await sharePostLink(post)) return;
       const res = await api.posts.sharePost(post.id);
       setPost((p: Post | null) => (p ? { ...p, share_count: res.shareCount } : p));
-      showToast('Link copied!');
+      showToast('Post link shared');
     };
 
     share().catch((err: unknown) => {
       // A post that isn't public is never counted as shared, but the link is already copied and opens for people who can see the post.
       if ((err as { code?: string } | null)?.code === 'SHARE_NOT_ALLOWED') {
-        showToast('Link copied! Only people who can see this post in Pantopus can open it.');
+        showToast('Post link shared. Only people who can see this post in Pantopus can open it.');
         return;
       }
       showToast('Failed to share post');
@@ -355,6 +345,11 @@ export default function PostDetailPage() {
     publicAuthor?.handle ||
     post?.creator?.username ||
     null;
+  // The hover card follows and connects by account id: a person's creator.id is their Local Profile id. A business
+  // keeps its own id, which its writer's copy of the post doesn't carry in user_id.
+  const creatorUserId = publicAuthor?.type === 'local'
+    ? post?.author_user_id || post?.user_id
+    : post?.creator?.id || post?.user_id;
   const creatorInitial = (creatorName || '?')[0]?.toUpperCase() || '?';
   const locationText = '';
   const homeLabel = post?.home?.address || post?.home?.city || null;
@@ -516,7 +511,7 @@ export default function PostDetailPage() {
                   ) : <span className="text-sm font-semibold text-app">{creatorName}</span>
                 ) : creatorHandle ? (
                   <UserIdentityLink
-                    userId={post.creator?.id || post.user_id}
+                    userId={creatorUserId}
                     username={creatorHandle}
                     displayName={creatorName || 'Neighbor'}
                     avatarUrl={creatorAvatarUrl}
@@ -603,73 +598,17 @@ export default function PostDetailPage() {
 
           {/* Title */}
           {post.title && (
-            <h1 className="px-5 pb-1 text-lg font-bold text-app">{post.title}</h1>
+            <h1 className="px-5 pb-1 text-lg font-bold text-app break-words">{post.title}</h1>
           )}
 
           {/* Full content (no truncation) */}
           <div className="px-5 pb-4">
             <p className="text-sm text-app leading-relaxed whitespace-pre-wrap">
-              {post.content}
+              <PostLinkContent content={post.content} />
             </p>
           </div>
 
-          {/* Type-specific metadata cards */}
-          {post.post_type === 'event' && (post.event_date || post.event_venue) && (
-            <div className="mx-5 mb-3 p-3 bg-blue-50 rounded-xl border-l-4 border-blue-400 space-y-1">
-              {post.event_date && (
-                <div className="flex items-center gap-2 text-xs text-blue-800">
-                  <span>📅</span>
-                  <span>
-                    {/* Stored as the wall-clock time the poster picked, labelled UTC (every composer), so shown in UTC. */}
-                    {new Date(post.event_date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'UTC' })}
-                    {post.event_end_date && ` – ${new Date(post.event_end_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'UTC' })}`}
-                  </span>
-                </div>
-              )}
-              {post.event_venue && (
-                <div className="flex items-center gap-2 text-xs text-blue-800">
-                  <span>📍</span>
-                  <span>{post.event_venue}</span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {post.post_type === 'deal' && (post.deal_business_name || post.deal_expires_at) && (
-            <div className="mx-5 mb-3 p-3 bg-green-50 rounded-xl border-l-4 border-green-400 space-y-1">
-              {post.deal_business_name && (
-                <div className="flex items-center gap-2 text-xs text-green-800">
-                  <span>🏪</span>
-                  <span>{post.deal_business_name}</span>
-                </div>
-              )}
-              {post.deal_expires_at && (
-                <div className="flex items-center gap-2 text-xs text-green-800">
-                  <span>⏰</span>
-                  <span>Expires {new Date(post.deal_expires_at).toLocaleDateString(undefined, { timeZone: 'UTC' })}</span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {post.post_type === 'lost_found' && post.lost_found_type && (
-            <div className="mx-5 mb-3 p-3 bg-yellow-50 rounded-xl border-l-4 border-yellow-400">
-              <div className="flex items-center gap-2 text-xs text-yellow-800 font-bold">
-                <span>{post.lost_found_type === 'lost' ? '🔍' : '✅'}</span>
-                <span className="uppercase">{post.lost_found_type}</span>
-                {post.lost_found_contact_pref && <span className="font-normal">· Contact: {lostFoundContactLabel(post.lost_found_contact_pref)}</span>}
-              </div>
-            </div>
-          )}
-
-          {post.post_type === 'service_offer' && post.service_category && (
-            <div className="mx-5 mb-3 p-3 bg-violet-50 rounded-xl border-l-4 border-violet-400">
-              <div className="flex items-center gap-2 text-xs text-violet-800">
-                <span>🔧</span>
-                <span>{post.service_category}</span>
-              </div>
-            </div>
-          )}
+          <PostMetadata post={post} spacing="mx-5 mb-3" />
 
           {/* Cross-surface reference links */}
           {/* Launch cuts #3 (listings) and #4 (open tasks): their links are hidden. */}
@@ -714,7 +653,8 @@ export default function PostDetailPage() {
                   } ${post.media_urls!.length === 3 && idx === 0 ? 'row-span-2 aspect-auto' : ''}`}
                   onClick={() => setLightboxIdx(idx)}
                 >
-                  <FeedMediaImage src={url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                  <PostMediaPreview url={url} thumbnailUrl={post.media_thumbnails?.[idx]} slot={resolvePostMediaSlots(post.media_urls!, post.media_types, post.media_live_urls)[idx]} onPress={() => setLightboxIdx(idx)} />
+
                 </div>
               ))}
             </div>
@@ -881,66 +821,9 @@ export default function PostDetailPage() {
       {/* ─── Media Lightbox ───────────────────────────────── */}
       {/* Rendered into document.body, like the feed's post panel: inside the app's <main> (its own stacking context)
           the viewer stayed under the header and sidebar, and the header covered its close button. */}
-      {lightboxIdx !== null && post.media_urls && typeof document !== 'undefined' && createPortal(
-        <div
-          className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center"
-          onClick={() => setLightboxIdx(null)}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Full size media"
-        >
-          {/* Close */}
-          <button
-            onClick={() => setLightboxIdx(null)}
-            className="absolute top-4 right-4 p-2 text-white/70 hover:text-white transition"
-            aria-label="Close"
-          >
-            <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-
-          {/* Prev */}
-          {lightboxIdx > 0 && (
-            <button
-              onClick={(e) => { e.stopPropagation(); setLightboxIdx(lightboxIdx - 1); }}
-              className="absolute left-4 p-2 text-white/70 hover:text-white transition"
-              aria-label="Previous media"
-            >
-              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-          )}
-
-          {/* Image */}
-          <FeedMediaImage
-            src={post.media_urls[lightboxIdx]}
-            alt=""
-            className="max-w-[90vw] max-h-[85vh] object-contain rounded-lg"
-            onClick={(e) => e.stopPropagation()}
-          />
-
-          {/* Next */}
-          {lightboxIdx < post.media_urls.length - 1 && (
-            <button
-              onClick={(e) => { e.stopPropagation(); setLightboxIdx(lightboxIdx + 1); }}
-              className="absolute right-4 p-2 text-white/70 hover:text-white transition"
-              aria-label="Next media"
-            >
-              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          )}
-
-          {/* Counter */}
-          {post.media_urls.length > 1 && (
-            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-white/60 text-sm font-medium">
-              {lightboxIdx + 1} / {post.media_urls.length}
-            </div>
-          )}
-        </div>,
+      {post.media_urls && typeof document !== 'undefined' && createPortal(
+        <PostMediaLightbox urls={post.media_urls} mediaTypes={post.media_types} liveUrls={post.media_live_urls}
+          index={lightboxIdx} onIndexChange={setLightboxIdx} onClose={() => setLightboxIdx(null)} />,
         document.body,
       )}
 

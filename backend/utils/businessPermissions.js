@@ -12,6 +12,7 @@
 
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('./logger');
+const { userFacing } = require('./userFacingError');
 
 // ============================================================
 // ROLE HIERARCHY
@@ -25,6 +26,30 @@ const BUSINESS_ROLE_RANK = {
   owner: 50,
 };
 
+// Every business permission (the business_permission enum). An owner holds all of them.
+const ALL_PERMS = [
+  'profile.view', 'profile.edit',
+  'locations.view', 'locations.edit', 'locations.manage',
+  'hours.view', 'hours.edit',
+  'catalog.view', 'catalog.edit', 'catalog.manage',
+  'pages.view', 'pages.edit', 'pages.publish', 'pages.manage',
+  'team.view', 'team.invite', 'team.manage',
+  'reviews.view', 'reviews.respond',
+  'gigs.post', 'gigs.manage',
+  'mail.view', 'mail.send',
+  'ads.view', 'ads.manage',
+  'finance.view', 'finance.manage',
+  'insights.view', 'sensitive.view',
+];
+
+// A failed read can't show that someone is off the team, holds a lower role or has no explicit deny, so a check
+// that can't guess refuses with this instead (503; the message is safe to show).
+function authorizationUnavailable() {
+  return userFacing(Object.assign(new Error('Business access could not be checked right now. Please try again.'), {
+    code: 'AUTHORIZATION_UNAVAILABLE', status: 503, statusCode: 503,
+  }));
+}
+
 // ============================================================
 // Core: check if a user has a specific IAM permission in a business
 // ============================================================
@@ -36,10 +61,12 @@ const BUSINESS_ROLE_RANK = {
  * @param {string} businessUserId - The business's user ID (User.id where account_type='business')
  * @param {string} userId - The acting user's personal ID
  * @param {string} permission - e.g. 'profile.edit', 'catalog.manage'
+ * @param {{ throwOnError?: boolean }} [options] - throwOnError: a failed read throws a 503 error instead of
+ *   answering false
  * @returns {Promise<boolean>}
  */
-async function hasPermission(businessUserId, userId, permission) {
-  const membership = await getActiveMembership(businessUserId, userId);
+async function hasPermission(businessUserId, userId, permission, { throwOnError = false } = {}) {
+  const membership = await getActiveMembership(businessUserId, userId, { throwOnError });
   if (!membership) return false;
 
   const roleBase = membership.role_base;
@@ -57,29 +84,35 @@ async function hasPermission(businessUserId, userId, permission) {
     .maybeSingle();
 
   // A failed read cannot establish that an explicit denial is absent.
-  if (overrideError) return false;
+  if (overrideError) {
+    if (throwOnError) throw authorizationUnavailable();
+    return false;
+  }
 
   if (override && override.allowed !== null && override.allowed !== undefined) {
     return override.allowed;
   }
 
   // Fall back to role default
-  const { data: rolePerm } = await supabaseAdmin
+  const { data: rolePerm, error: roleError } = await supabaseAdmin
     .from('BusinessRolePermission')
     .select('allowed')
     .eq('role_base', roleBase)
     .eq('permission', permission)
     .maybeSingle();
 
+  if (roleError && throwOnError) throw authorizationUnavailable();
   return rolePerm?.allowed === true;
 }
 
 /**
  * Get all permissions for a user in a business.
  * Returns { permissions: string[], role_base: string, membership: object, hasAccess: boolean, isOwner: boolean }
+ * Throws a 503 error when a read fails: a list missing an explicit deny would grant what the deny refuses, and a
+ * missing membership would hide an owner.
  */
 async function getUserAccess(businessUserId, userId) {
-  const membership = await getActiveMembership(businessUserId, userId);
+  const membership = await getActiveMembership(businessUserId, userId, { throwOnError: true });
   if (!membership) {
     return { permissions: [], role_base: null, membership: null, hasAccess: false, isOwner: false };
   }
@@ -89,22 +122,8 @@ async function getUserAccess(businessUserId, userId) {
 
   // Owner: return all permissions
   if (isOwner) {
-    const ALL_PERMS = [
-      'profile.view', 'profile.edit',
-      'locations.view', 'locations.edit', 'locations.manage',
-      'hours.view', 'hours.edit',
-      'catalog.view', 'catalog.edit', 'catalog.manage',
-      'pages.view', 'pages.edit', 'pages.publish', 'pages.manage',
-      'team.view', 'team.invite', 'team.manage',
-      'reviews.view', 'reviews.respond',
-      'gigs.post', 'gigs.manage',
-      'mail.view', 'mail.send',
-      'ads.view', 'ads.manage',
-      'finance.view', 'finance.manage',
-      'insights.view', 'sensitive.view',
-    ];
     return {
-      permissions: ALL_PERMS,
+      permissions: [...ALL_PERMS],
       role_base: roleBase,
       membership,
       hasAccess: true,
@@ -112,21 +131,22 @@ async function getUserAccess(businessUserId, userId) {
     };
   }
 
-  // Get base role permissions
-  const { data: rolePerms } = await supabaseAdmin
-    .from('BusinessRolePermission')
-    .select('permission')
-    .eq('role_base', roleBase)
-    .eq('allowed', true);
+  // Base role permissions, then per-user overrides on top
+  const [{ data: rolePerms, error: roleError }, { data: overrides, error: overrideError }] = await Promise.all([
+    supabaseAdmin
+      .from('BusinessRolePermission')
+      .select('permission')
+      .eq('role_base', roleBase)
+      .eq('allowed', true),
+    supabaseAdmin
+      .from('BusinessPermissionOverride')
+      .select('permission, allowed')
+      .eq('business_user_id', businessUserId)
+      .eq('user_id', userId),
+  ]);
+  if (roleError || overrideError) throw authorizationUnavailable();
 
   const basePerms = new Set((rolePerms || []).map(r => r.permission));
-
-  // Overlay per-user overrides
-  const { data: overrides } = await supabaseAdmin
-    .from('BusinessPermissionOverride')
-    .select('permission, allowed')
-    .eq('business_user_id', businessUserId)
-    .eq('user_id', userId);
 
   for (const ov of (overrides || [])) {
     if (ov.allowed) {
@@ -155,10 +175,12 @@ async function getUserAccess(businessUserId, userId) {
  * @param {string} businessUserId
  * @param {string} userId
  * @param {string|null} permission - e.g. 'profile.edit', 'team.manage'
+ * @param {{ throwOnError?: boolean }} [options] - throwOnError: a failed read throws a 503 error instead of
+ *   answering no access
  * @returns {Promise<{ hasAccess: boolean, isOwner: boolean, membership: object|null }>}
  */
-async function checkBusinessPermission(businessUserId, userId, permission = null) {
-  const membership = await getActiveMembership(businessUserId, userId);
+async function checkBusinessPermission(businessUserId, userId, permission = null, { throwOnError = false } = {}) {
+  const membership = await getActiveMembership(businessUserId, userId, { throwOnError });
 
   if (!membership) {
     return { hasAccess: false, isOwner: false, membership: null };
@@ -177,7 +199,7 @@ async function checkBusinessPermission(businessUserId, userId, permission = null
   }
 
   // Check the IAM permission
-  const allowed = await hasPermission(businessUserId, userId, permission);
+  const allowed = await hasPermission(businessUserId, userId, permission, { throwOnError });
   return { hasAccess: allowed, isOwner: false, membership };
 }
 
@@ -193,23 +215,25 @@ async function checkBusinessPermission(businessUserId, userId, permission = null
  *
  * @param {string} userId - The acting user's personal ID
  * @param {string[]} permissions - e.g. ['gigs.manage', 'gigs.post']
- * @returns {Promise<string[]>} - Business user IDs where user has at least one permission
+ * @returns {Promise<string[]>} - Business user IDs where user has at least one permission. Throws a 503 error
+ *   when a read fails: without the overrides, a business whose deny applies would be listed.
  */
 async function getBusinessIdsWithPermissions(userId, permissions) {
   // 1) Fetch all active memberships
-  const { data: memberships } = await supabaseAdmin
+  const { data: memberships, error: membershipError } = await supabaseAdmin
     .from('BusinessTeam')
     .select('business_user_id, role_base')
     .eq('user_id', userId)
     .eq('is_active', true);
 
+  if (membershipError) throw authorizationUnavailable();
   if (!memberships || memberships.length === 0) return [];
 
   const bizIds = memberships.map(m => m.business_user_id);
   const roles = [...new Set(memberships.map(m => m.role_base))];
 
   // 2) Batch-fetch overrides + role defaults (2 queries instead of 2-4 per business)
-  const [{ data: overrides }, { data: rolePerms }] = await Promise.all([
+  const [{ data: overrides, error: overrideError }, { data: rolePerms, error: roleError }] = await Promise.all([
     supabaseAdmin
       .from('BusinessPermissionOverride')
       .select('business_user_id, permission, allowed')
@@ -222,6 +246,7 @@ async function getBusinessIdsWithPermissions(userId, permissions) {
       .in('role_base', roles)
       .in('permission', permissions),
   ]);
+  if (overrideError || roleError) throw authorizationUnavailable();
 
   // 3) Build O(1) lookup maps
   const ovrMap = {};
@@ -253,23 +278,28 @@ async function getBusinessIdsWithPermissions(userId, permissions) {
  * @param {string} businessUserId - The business user ID
  * @param {string[]} permissions - e.g. ['gigs.manage', 'gigs.post']
  * @param {string|null} excludeUserId - Optional user to exclude from results
- * @returns {Promise<string[]>} - User IDs with at least one permission
+ * @returns {Promise<string[]>} - User IDs with at least one permission. When the overrides can't be read, only
+ *   the owners (who hold every permission): a member someone denied must not be notified.
  */
 async function getTeamMembersWithPermissions(businessUserId, permissions, excludeUserId = null) {
   // 1) Fetch all active team members
-  const { data: members } = await supabaseAdmin
+  const { data: members, error: membersError } = await supabaseAdmin
     .from('BusinessTeam')
     .select('user_id, role_base')
     .eq('business_user_id', businessUserId)
     .eq('is_active', true);
 
+  if (membersError) {
+    logger.warn('getTeamMembersWithPermissions: team read failed', { businessUserId, error: membersError.message });
+    return [];
+  }
   if (!members || members.length === 0) return [];
 
   const memberIds = members.map(m => m.user_id);
   const roles = [...new Set(members.map(m => m.role_base))];
 
   // 2) Batch-fetch overrides + role defaults
-  const [{ data: overrides }, { data: rolePerms }] = await Promise.all([
+  const [{ data: overrides, error: overrideError }, { data: rolePerms, error: roleError }] = await Promise.all([
     supabaseAdmin
       .from('BusinessPermissionOverride')
       .select('user_id, permission, allowed')
@@ -282,6 +312,14 @@ async function getTeamMembersWithPermissions(businessUserId, permissions, exclud
       .in('role_base', roles)
       .in('permission', permissions),
   ]);
+  if (overrideError || roleError) {
+    logger.warn('getTeamMembersWithPermissions: permission read failed; owners only', {
+      businessUserId, error: (overrideError || roleError).message,
+    });
+    return members
+      .filter((m) => m.role_base === 'owner' && !(excludeUserId && String(m.user_id) === String(excludeUserId)))
+      .map((m) => String(m.user_id));
+  }
 
   // 3) Build lookup maps
   const ovrMap = {};
@@ -373,10 +411,12 @@ async function getBusinessPayoutAccount(businessUserId) {
 // ============================================================
 
 /**
- * Get active team membership for a user in a business
+ * Get active team membership for a user in a business. A failed read answers null (no access) unless
+ * throwOnError is set; a check about someone else (is the target the owner?) must set it, since null would read
+ * as "not a member".
  */
-async function getActiveMembership(businessUserId, userId) {
-  const { data: membership } = await supabaseAdmin
+async function getActiveMembership(businessUserId, userId, { throwOnError = false } = {}) {
+  const { data: membership, error } = await supabaseAdmin
     .from('BusinessTeam')
     .select('*')
     .eq('business_user_id', businessUserId)
@@ -384,6 +424,7 @@ async function getActiveMembership(businessUserId, userId) {
     .eq('is_active', true)
     .maybeSingle();
 
+  if (error && throwOnError) throw authorizationUnavailable();
   return membership || null;
 }
 
@@ -453,13 +494,14 @@ async function assertCanGrantPermission(actorRoleBase, permission) {
   }
 
   // Query the actor's role permission set
-  const { data: rolePerm } = await supabaseAdmin
+  const { data: rolePerm, error } = await supabaseAdmin
     .from('BusinessRolePermission')
     .select('allowed')
     .eq('role_base', actorRoleBase)
     .eq('permission', permission)
     .maybeSingle();
 
+  if (error) throw authorizationUnavailable();
   if (rolePerm?.allowed === true) {
     return { allowed: true };
   }
@@ -475,7 +517,7 @@ async function assertCanGrantPermission(actorRoleBase, permission) {
  */
 async function writeAuditLog(businessUserId, actorUserId, action, targetType, targetId, metadata = {}) {
   try {
-    await supabaseAdmin
+    const { error } = await supabaseAdmin
       .from('BusinessAuditLog')
       .insert({
         business_user_id: businessUserId,
@@ -485,6 +527,7 @@ async function writeAuditLog(businessUserId, actorUserId, action, targetType, ta
         target_id: targetId || null,
         metadata,
       });
+    if (error) throw error;
   } catch (err) {
     logger.warn('Failed to write business audit log (non-fatal)', {
       error: err.message,
@@ -508,5 +551,7 @@ module.exports = {
   assertCanMutateTarget,
   assertCanGrantPermission,
   writeAuditLog,
+  authorizationUnavailable,
   BUSINESS_ROLE_RANK,
+  ALL_PERMS,
 };

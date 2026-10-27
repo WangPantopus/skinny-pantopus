@@ -8,6 +8,7 @@
 
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
+const { GeoCache } = require('../utils/geoCache');
 const { personaPostVisibleToViewer } = require('../utils/personaPostVisibility');
 const {
   applyLocationPrecision,
@@ -17,6 +18,7 @@ const {
 } = require('../utils/locationPrivacy');
 const s3 = require('./s3Service');
 const { readablePosts, postScopeAccess } = require('./pulse/readAccess');
+const { unpublishedBusinessIds } = require('../utils/visibilityPolicy');
 const {
   SAFE_CREATOR_SELECT,
   serializeAudienceProfileForViewer,
@@ -31,7 +33,7 @@ const {
 // In-memory cache for mute/hide filters (60-second TTL)
 // ---------------------------------------------------------------------------
 
-const _filterCache = new Map(); // key: userId, value: { data, expires }
+const _filterCache = new GeoCache(1000); // userId → { data }, including pending read guards
 const FILTER_CACHE_TTL = 60_000; // 60 seconds
 
 // ---------------------------------------------------------------------------
@@ -250,6 +252,20 @@ function normalizeFeedPostRow(row, likedPostIds = new Set(), savedPostIds = new 
   };
 }
 
+// A house number and then a word: how the geocoder writes a street line ("4014 Tacoma Court").
+const STREET_LINE_LABEL = /^\s*\d+[a-z]?(?:-\d+)?\s+\S/i;
+
+// The place label everyone but the author reads names a place or a town, never a street address or the home itself
+// (docs/location-privacy-matrix.md). A Home post says its home's city, as Home posts are labelled since October 6;
+// older ones carry the home's name, which is often its street address, and iOS sends the address for a home with no
+// city. Any other label that is a street line (an address tagged as the place, or a picker that found no town) is left
+// out.
+function placeLabelForOthers(post) {
+  const isHomePost = post.identity_context_type === 'home' || post.post_as === 'home';
+  if (isHomePost && post.home?.city) return post.home.city;
+  return STREET_LINE_LABEL.test(post.location_name) ? null : post.location_name;
+}
+
 function applyPostLocationPrivacy(post, viewerUserId) {
   if (!post) return post;
 
@@ -268,6 +284,7 @@ function applyPostLocationPrivacy(post, viewerUserId) {
     });
     delete post.location;
     post.locationUnlocked = false;
+    if (post.location_name) post.location_name = placeLabelForOthers(post);
     if (post.home) {
       post.home = {
         ...post.home,
@@ -300,6 +317,32 @@ function sortMatchedBusinessesByRating(businesses) {
   ));
 }
 
+// The match job's snapshot and ranked ids keep a business that closed or went back to draft after the job ran,
+// until its next run. Leave such businesses out, as the live list does. If their state can't be read, show none.
+async function dropUnpublishedMatches(posts) {
+  const ids = posts.flatMap((post) => [
+    ...(Array.isArray(post.matched_business_ids) ? post.matched_business_ids : []),
+    ...(Array.isArray(post.matched_businesses_cache) ? post.matched_businesses_cache.map((b) => b?.business_user_id) : []),
+  ]);
+  if (!ids.length) return posts;
+  let hidden = null;
+  try {
+    hidden = await unpublishedBusinessIds(ids);
+  } catch (err) {
+    logger.warn('Matched business state unavailable', { error: err.message });
+  }
+  const shown = (id) => hidden !== null && !hidden.has(String(id));
+  for (const post of posts) {
+    if (Array.isArray(post.matched_business_ids)) {
+      post.matched_business_ids = post.matched_business_ids.filter(shown);
+    }
+    if (Array.isArray(post.matched_businesses_cache)) {
+      post.matched_businesses_cache = post.matched_businesses_cache.filter((b) => shown(b?.business_user_id));
+    }
+  }
+  return posts;
+}
+
 // Where this viewer is shown a post: the stored point for its author, the point
 // applyPostLocationPrivacy gives everyone else, or null when it shows none. Worked out on a
 // copy, so the post itself still gets privacy exactly once (in enrichWithUserStatus). Area
@@ -330,13 +373,13 @@ function displayedPoint(post, viewerUserId, { orEffective = false } = {}) {
 
 async function getMuteAndHideFilters(userId) {
   const cached = _filterCache.get(userId);
-  if (cached && cached.expires > Date.now()) {
+  if (cached?.data) {
     return cached.data;
   }
 
   // A mute/unmute can invalidate this read while its database response is pending.
-  const pendingEntry = { data: null, expires: 0 };
-  _filterCache.set(userId, pendingEntry);
+  const pendingEntry = { data: null };
+  _filterCache.set(userId, pendingEntry, FILTER_CACHE_TTL);
 
   const [
     { data: mutes, error: mutesError },
@@ -401,6 +444,7 @@ async function getMuteAndHideFilters(userId) {
     globalMutedTopics,
     mutedTopicsBySurface,
     mutedTopicAreas,
+    sports: feedPrefs?.sports || {},
     feedPreferences: feedPrefs || {
       hide_deals_place: false, hide_alerts_place: false,
       show_politics_connections: false, show_politics_place: false,
@@ -409,7 +453,7 @@ async function getMuteAndHideFilters(userId) {
 
   if (_filterCache.get(userId) === pendingEntry) {
     pendingEntry.data = result;
-    pendingEntry.expires = Date.now() + FILTER_CACHE_TTL;
+    _filterCache.set(userId, pendingEntry, FILTER_CACHE_TTL);
   }
   return result;
 }
@@ -482,6 +526,7 @@ function loadUserStatusRows(posts, userId) {
 // `statusRows` is loadUserStatusRows' result when the caller has already read it.
 async function enrichWithUserStatus(posts, userId, statusRows = null) {
   if (!posts.length) return posts;
+  await dropUnpublishedMatches(posts);
   const [{ data: likes }, { data: saves }, { data: reposts }] = statusRows || await loadUserStatusRows(posts, userId);
   const likedSet = new Set((likes || []).map(r => r.post_id));
   const savedSet = new Set((saves || []).map(r => r.post_id));
@@ -506,8 +551,17 @@ async function enrichWithUserStatus(posts, userId, statusRows = null) {
 // serializeUserAsLocalIdentity (new keys only). Audience Profile design v2
 // §16 item 3.
 
-function redactPrivateIdentityFields(post, author) {
+function redactPrivateIdentityFields(post, author, viewerUserId = null) {
   if (!author) return post;
+
+  if (author.type === 'business') {
+    // A business post names the business, never the owner or staff member who wrote it. Only that person keeps
+    // their own id on it: the apps offer Edit and Delete when user_id is the viewer's (and the server lets only
+    // them edit). Everyone else, the business's other team members included, gets the business's id.
+    const writerId = post.author_user_id || post.user_id;
+    if (viewerUserId && writerId && String(writerId) === String(viewerUserId)) return post;
+    return { ...post, user_id: author.id, author_user_id: author.id };
+  }
 
   if (author.type === 'persona') {
     return sanitizePersonaPostForViewer({
@@ -522,7 +576,28 @@ function redactPrivateIdentityFields(post, author) {
   return post;
 }
 
-// The persona, local profile and user rows of these posts' authors.
+const isBusinessPost = (post) => post.identity_context_type === 'business' || post.post_as === 'business';
+// The business a business post was written for.
+const businessIdOfPost = (post) => post.business_id || post.business_author_id || post.business_author?.id
+  || post.identity_context_id || null;
+
+// The businesses these posts were written for, as their posts show them: the name and avatar, and the handle (a link
+// to the business page) only while the business is published. A failed read leaves the generic "Business".
+async function loadBusinessAuthors(ids) {
+  try {
+    const [{ data, error }, hidden] = await Promise.all([
+      supabaseAdmin.from('User').select('id, username, name, profile_picture_url').in('id', ids).eq('account_type', 'business'),
+      unpublishedBusinessIds(ids),
+    ]);
+    if (error) throw error;
+    return new Map((data || []).map((row) => [String(row.id), { ...row, published: !hidden.has(String(row.id)) }]));
+  } catch (err) {
+    logger.warn('Business post authors unavailable', { error: err.message });
+    return new Map();
+  }
+}
+
+// The persona, local profile and user rows of these posts' authors, and the businesses of business posts.
 function loadIdentityAuthorRows(posts) {
   const personaIds = [...new Set(posts
     .filter(p => p.identity_context_type === 'persona' && p.identity_context_id)
@@ -531,6 +606,7 @@ function loadIdentityAuthorRows(posts) {
     .filter(p => !p.identity_context_type || p.identity_context_type === 'local' || p.post_as === 'personal')
     .map(p => p.author_user_id || p.user_id)
     .filter(Boolean))];
+  const businessIds = [...new Set(posts.filter(isBusinessPost).map(businessIdOfPost).filter(Boolean).map(String))];
 
   return Promise.all([
     personaIds.length
@@ -542,6 +618,7 @@ function loadIdentityAuthorRows(posts) {
     localUserIds.length
       ? supabaseAdmin.from('User').select(LOCAL_AUTHOR_USER_SELECT).in('id', localUserIds)
       : Promise.resolve({ data: [] }),
+    businessIds.length ? loadBusinessAuthors(businessIds) : Promise.resolve(new Map()),
   ]);
 }
 
@@ -549,7 +626,7 @@ function loadIdentityAuthorRows(posts) {
 async function attachIdentityAuthors(posts, viewerUserId, authorRows = null) {
   if (!posts.length) return posts;
 
-  const [personaResult, localResult, localUserResult] = authorRows || await loadIdentityAuthorRows(posts);
+  const [personaResult, localResult, localUserResult, businessesById = new Map()] = authorRows || await loadIdentityAuthorRows(posts);
 
   const personasById = new Map((personaResult.data || []).map(row => [row.id, row]));
   const localsByUserId = new Map((localResult.data || []).map(row => [String(row.user_id), row]));
@@ -565,11 +642,15 @@ async function attachIdentityAuthors(posts, viewerUserId, authorRows = null) {
           isOwner: persona.user_id === viewerUserId,
         });
       }
-    } else if (post.identity_context_type === 'business' || post.post_as === 'business') {
+    } else if (isBusinessPost(post)) {
+      const businessId = businessIdOfPost(post);
+      const business = businessId ? businessesById.get(String(businessId)) : null;
       author = serializeBusinessSeatForViewer({
-        id: post.business_id || post.business_author?.id || post.identity_context_id || 'business',
-        display_name: post.business_author?.name || post.business_author?.username || 'Business',
-        display_avatar_url: post.business_author?.profile_picture_url || null,
+        id: businessId || 'business',
+        business_user_id: businessId,
+        business_username: business?.published ? business.username : null,
+        display_name: business?.name || post.business_author?.name || post.business_author?.username || 'Business',
+        display_avatar_url: business?.profile_picture_url || post.business_author?.profile_picture_url || null,
         role_base: 'business',
       });
     } else if (post.identity_context_type === 'home' || post.post_as === 'home') {
@@ -597,7 +678,7 @@ async function attachIdentityAuthors(posts, viewerUserId, authorRows = null) {
 
     if (!author) return post;
 
-    const publicPost = redactPrivateIdentityFields(post, author);
+    const publicPost = redactPrivateIdentityFields(post, author, viewerUserId);
 
     // P0.4 follow-up: legacyCreatorFromAuthor (which fabricated a
     // {username, name, first_name, profile_picture_url} legacy shape) is
@@ -919,6 +1000,9 @@ function politicsPrefKey(surface) {
  * @param {string} [opts.cursorId]
  * @param {number} [opts.limit]        – defaults to 20
  * @param {string[]} [opts.tags]
+ * @param {boolean} [opts.includeEnded] – also posts that ended (archived when their time ran out,
+ *   or past their own end time), which still open on their pages; never one moderation removed.
+ *   Off for the feeds; "Before you ask" reads earlier questions with it.
  * @returns {Promise<{ posts: object[], pagination: object }>}
  */
 async function getListFeed({
@@ -936,6 +1020,7 @@ async function getListFeed({
   topic,
   sportsMode,
   eventKey,
+  includeEnded = false,
 }) {
   // 1. Validate surface
   if (!FEED_SURFACES.includes(surface)) {
@@ -1032,10 +1117,10 @@ async function getListFeed({
 
   for (let round = 0; round < MAX_ROUNDS && accumulated.length < parsedLimit && !dbExhausted; round++) {
     // 5. Build base query
-    let query = scopeAccess.query(onlyShownPosts(supabaseAdmin
-      .from('Post')
-      .select(FEED_POST_SELECT)
-      .is('archived_at', null)))
+    const rows = supabaseAdmin.from('Post').select(FEED_POST_SELECT);
+    let query = scopeAccess.query(includeEnded
+      ? rows.eq('moderation_state', 'live').or('archive_reason.is.null,archive_reason.neq.moderation')
+      : onlyShownPosts(rows.is('archived_at', null)))
       .order('is_pinned', { ascending: false })
       .order('created_at', { ascending: false })
       .order('id', { ascending: false })
@@ -1050,9 +1135,11 @@ async function getListFeed({
         .eq('identity_context_type', 'persona')
         .overlaps('distribution_targets', [distributionTarget]);
     } else {
+      // A business post is the business's, not its writer's: it never reaches the writer's connections.
       query = query
         .in('user_id', authorIds)
-        .overlaps('distribution_targets', [distributionTarget]);
+        .overlaps('distribution_targets', [distributionTarget])
+        .or('post_as.is.null,post_as.neq.business');
     }
 
     // Place bounding-box filter
@@ -1585,7 +1672,8 @@ async function loadMapPosts({
     .limit(queryLimit + 40);
 
   if (postType) query = query.eq('post_type', postType);
-  if (authorIds) query = query.in('user_id', authorIds);
+  // A business post is the business's, not its writer's: it never reaches the writer's connections.
+  if (authorIds) query = query.in('user_id', authorIds).or('post_as.is.null,post_as.neq.business');
 
   const { data, error } = await query;
   if (error) {
@@ -1695,6 +1783,7 @@ module.exports = {
   enrichFeedPosts,
   applyPostLocationPrivacy,
   sortMatchedBusinessesByRating,
+  dropUnpublishedMatches,
   applyCursorCondition,
   buildCursorPagination,
   applyPinnedCursorCondition,

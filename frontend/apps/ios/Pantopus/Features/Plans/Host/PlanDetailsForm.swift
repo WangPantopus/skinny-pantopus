@@ -3,9 +3,9 @@
 //  Pantopus
 //
 //  Boards H2 (watch party), H3 (playdate), H4 (pickup game) and H5 (walk &
-//  coffee): the kind's own choices, the title, when, where (with the place
-//  picker, H6), spots, how people get in, the note for people who are in,
-//  and for a watch party the "about" everyone sees.
+//  coffee), and the study group: the kind's own choices, the title, when,
+//  where (with the place picker, H6), spots, how people get in, the note for
+//  people who are in, and for a watch party the "about" everyone sees.
 //
 
 import SwiftUI
@@ -64,6 +64,7 @@ struct PlanDetailsForm: View {
         case .playdate: "Playground morning"
         case .pickupGame: ""
         case .walkCoffee: "Coffee walk around the lake"
+        case .studyGroup: "Spanish practice at the library"
         }
     }
 
@@ -203,7 +204,7 @@ struct PlanDetailsForm: View {
 
     private var spotsTitle: String {
         switch model.kind {
-        case .watchParty: "Spots"
+        case .watchParty, .studyGroup: "Spots"
         case .playdate: "Families"
         case .pickupGame: "Players needed"
         case .walkCoffee: "People"
@@ -212,7 +213,7 @@ struct PlanDetailsForm: View {
 
     private var spotsSubtitle: String {
         switch model.kind {
-        case .watchParty: "People who can join, besides you"
+        case .watchParty, .studyGroup: "People who can join, besides you"
         case .playdate: "Besides yours"
         case .pickupGame: "Shown as \u{201C}need \(model.spots)\u{201D}"
         case .walkCoffee: "Besides you"
@@ -253,6 +254,7 @@ struct PlanDetailsForm: View {
         case .playdate: "Meet by the big slide. We'll bring bubbles."
         case .pickupGame: "Court 3, by the fence."
         case .walkCoffee: "Meet at the trailhead sign. Coffee after."
+        case .studyGroup: "Second floor, the long table by the windows."
         }
     }
 
@@ -303,16 +305,7 @@ struct PlanKindFields: View {
     var body: some View {
         switch model.kind {
         case .watchParty:
-            PlanFormField(label: "Game") {
-                PlanChoiceChips(
-                    options: gameOptions,
-                    isSelected: { $0 == (model.game?.id ?? "") },
-                    onTap: { id in model.pick(model.games.first { $0.id == id }) },
-                    groupLabel: "Game",
-                    identifier: "planGame"
-                )
-                Text("Picking a game fills in the title and the time.").planFont(.caption).foregroundStyle(Theme.Color.appTextSecondary)
-            }
+            PlanWatchGameFields(model: model)
         case .playdate:
             PlanNote(
                 icon: .shieldCheck,
@@ -353,19 +346,18 @@ struct PlanKindFields: View {
                     identifier: "planWalkKind"
                 )
             }
-        }
-    }
-
-    /// "Seahawks · Sun 1:25 PM", then "Another game".
-    private var gameOptions: [PlanChoiceOption<String>] {
-        model.games.prefix(3).map { game in
-            let name = game.label
-            guard let start = game.startsAtDate,
-                  let when = PlanFormat.rowWhen(state: .upcoming, start: start, end: nil) else {
-                return PlanChoiceOption(id: game.id, label: name)
+        case .studyGroup:
+            PlanFormField(label: "Subject") {
+                PlanTextInput(placeholder: "Spanish", text: $model.subject, limit: 60, identifier: "planSubject", label: "Subject")
             }
-            return PlanChoiceOption(id: game.id, label: "\(name) · \(when)")
-        } + [PlanChoiceOption(id: "", label: "Another game")]
+            PlanFormField(label: "How you'll study") {
+                PlanSegmented(
+                    options: PlanComposerOptions.studyStyles.map { ($0.value, $0.label) },
+                    selection: $model.studyStyle,
+                    label: "How you'll study"
+                )
+            }
+        }
     }
 }
 

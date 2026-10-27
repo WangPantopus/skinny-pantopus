@@ -1,13 +1,29 @@
 [
   {
     "relation": [
-      "delegate_permission/common.handle_all_urls"
+      "delegate_permission/common.handle_all_urls",
+      "delegate_permission/common.get_login_creds"
     ],
     "target": {
       "namespace": "android_app",
       "package_name": "com.pantopus.app",
       "sha256_cert_fingerprints": [
         "33:60:AE:F8:09:B6:BF:18:3F:FB:DE:4F:F7:CD:BD:68:0A:F0:2E:5F:84:61:5A:2E:9A:A0:F3:89:EF:73:02:EF"
+      ]
+    }
+  },
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls",
+      "delegate_permission/common.get_login_creds"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "app.pantopus.android",
+      "sha256_cert_fingerprints": [
+        "25:9F:84:5E:6D:E9:53:91:7A:F8:D6:A2:B6:11:68:4A:1F:34:3F:9B:99:EA:99:63:8E:58:64:AD:EB:DF:D9:3A",
+        "12:D7:95:26:BF:C4:68:3F:4F:6B:48:AF:C0:C1:FB:A6:04:0A:99:B6:DE:41:BB:1C:33:8E:92:E8:51:53:25:2D",
+        "A9:C1:8D:6F:7E:87:55:2A:21:0D:3C:CE:06:8B:95:6A:63:5C:B0:86:31:50:BA:32:FA:DE:E0:A0:64:A6:E5:16"
       ]
     }
   }

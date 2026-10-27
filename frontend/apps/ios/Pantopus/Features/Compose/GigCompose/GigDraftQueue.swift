@@ -236,12 +236,7 @@ enum GigMagicPostBuilder {
         default:
             break
         }
-        switch form.category {
-        case .petcare, .childcare: return .care
-        case .handyman, .cleaning, .moving, .tutoring, .tech: return .logistics
-        case .delivery: return .delivery
-        case .other, nil: return nil
-        }
+        return form.category?.moduleGroup
     }
 
     /// Whitespace-trimmed, or nil when the field is blank — RN sends
@@ -283,5 +278,21 @@ enum GigMagicPostBuilder {
             zip: trimmedOrNil(place.zip),
             homeId: place.homeId
         )
+    }
+}
+
+extension GigComposeCategory {
+    /// The manual path's module field group for this category. Mirrors the
+    /// backend's `inferArchetypeFromCategory` (backend/services/magicTaskService.js).
+    var moduleGroup: GigModuleGroup? {
+        switch self {
+        case .petcare, .childcare: .care
+        case .handyman, .cleaning, .moving, .tutoring, .tech, .photography, .cooking, .gardening: .logistics
+        case .delivery, .errands, .groceryPickup: .delivery
+        case .eventHelp: .event
+        case .plumbing, .electrical, .hvac, .roofing, .generalContractor, .landscapingPro, .homeInspector,
+             .paintingPro, .flooring: .proService
+        case .other: nil
+        }
     }
 }

@@ -204,6 +204,7 @@ private fun typeBlurb(kind: PlanKind): String =
         PlanKind.PLAYDATE -> "Kids play, parents meet"
         PlanKind.PICKUP_GAME -> "Need players, now or later"
         PlanKind.WALK_COFFEE -> "Walks, dog walks, coffee"
+        PlanKind.STUDY_GROUP -> "Study together at a library or café"
     }
 
 @Composable

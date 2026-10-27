@@ -30,9 +30,70 @@ const {
   writeAuditLog,
   assertCanMutateTarget,
   assertCanGrantPermission,
+  authorizationUnavailable,
   BUSINESS_ROLE_RANK,
 } = require('../utils/businessPermissions');
 const membershipService = require('../services/businessMembershipService');
+const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
+
+// A team change that could not be read or finished answers 503 with what didn't happen; trying again finishes it.
+function teamUnavailable(res, error) {
+  return res.status(503).json({ error, code: 'BUSINESS_TEAM_UNAVAILABLE' });
+}
+
+// A failed access read (utils/businessPermissions authorizationUnavailable) answers 503 with its own message.
+function accessUnavailableResponse(res, err) {
+  if (err?.code !== 'AUTHORIZATION_UNAVAILABLE') return false;
+  res.status(503).json({ error: err.message, code: err.code });
+  return true;
+}
+
+// The acting member's role, read strictly. They passed the permission check, so no row now means the lowest rank.
+async function readActorRole(businessId, actorId) {
+  const { data, error } = await supabaseAdmin
+    .from('BusinessTeam')
+    .select('role_base')
+    .eq('business_user_id', businessId)
+    .eq('user_id', actorId)
+    .eq('is_active', true)
+    .maybeSingle();
+  if (error) throw authorizationUnavailable();
+  return data?.role_base || 'viewer';
+}
+
+// The target's roles here: their active team row's role and their active seats' roles. Rank checks compare the
+// highest of them, so a check can't pass on whichever row holds the lower role. A failed read throws (503): it
+// must never read as 'viewer' or as "not the owner".
+async function readTargetRoles(businessId, userId) {
+  const [{ data: team, error: teamError }, { data: bindings, error: bindingError }] = await Promise.all([
+    supabaseAdmin
+      .from('BusinessTeam')
+      .select('role_base')
+      .eq('business_user_id', businessId)
+      .eq('user_id', userId)
+      .eq('is_active', true)
+      .maybeSingle(),
+    supabaseAdmin.from('SeatBinding').select('seat_id').eq('user_id', userId),
+  ]);
+  if (teamError || bindingError) throw authorizationUnavailable();
+
+  let seatRoles = [];
+  if (bindings && bindings.length > 0) {
+    const { data: seats, error: seatError } = await supabaseAdmin
+      .from('BusinessSeat')
+      .select('role_base')
+      .in('id', bindings.map((b) => b.seat_id))
+      .eq('business_user_id', businessId)
+      .eq('is_active', true);
+    if (seatError) throw authorizationUnavailable();
+    seatRoles = (seats || []).map((s) => s.role_base);
+  }
+
+  const teamRole = team?.role_base || null;
+  const highestRole = [teamRole, ...seatRoles].filter(Boolean)
+    .reduce((top, role) => (!top || getRoleRank(role) > getRoleRank(top) ? role : top), null);
+  return { teamRole, highestRole };
+}
 
 
 // ============================================================
@@ -68,6 +129,7 @@ router.get('/:businessId/me', verifyToken, async (req, res) => {
     });
   } catch (err) {
     logger.error('GET business /me error', { error: err.message, businessId: req.params.businessId });
+    if (accessUnavailableResponse(res, err)) return;
     res.status(500).json({ error: 'Failed to load access info' });
   }
 });
@@ -106,7 +168,7 @@ router.get('/:businessId/members', verifyToken, async (req, res) => {
     const { businessId } = req.params;
     const userId = req.user.id;
 
-    const access = await checkBusinessPermission(businessId, userId, 'team.view');
+    const access = await checkBusinessPermission(businessId, userId, 'team.view', { throwOnError: true });
     if (!access.hasAccess) {
       return res.status(403).json({ error: 'No permission to view team' });
     }
@@ -133,9 +195,20 @@ router.get('/:businessId/members', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch members' });
     }
 
-    res.json({ members: members || [] });
+    // Teammates name each other as everyone else names them, by the Local Profile's name, handle and photo
+    // (services/chatPeople.js), not by the account behind the seat (identity firewall design §9.3). `id` stays the
+    // account id the role, permission and removal routes take. An account's email is its owner's alone: each member
+    // sees only their own.
+    const people = await loadChatPeople((members || []).map((m) => m.user?.id));
+    res.json({
+      members: (members || []).map((m) => {
+        const user = chatPersonRow(m.user, people);
+        return { ...m, user: user && String(user.id) !== String(userId) ? { ...user, email: null } : user };
+      }),
+    });
   } catch (err) {
     logger.error('Business members error', { error: err.message });
+    if (accessUnavailableResponse(res, err)) return;
     res.status(500).json({ error: 'Failed to fetch members' });
   }
 });
@@ -150,7 +223,7 @@ router.post('/:businessId/members', verifyToken, async (req, res) => {
     const { businessId } = req.params;
     const actorId = req.user.id;
 
-    const access = await checkBusinessPermission(businessId, actorId, 'team.invite');
+    const access = await checkBusinessPermission(businessId, actorId, 'team.invite', { throwOnError: true });
     if (!access.hasAccess) {
       return res.status(403).json({ error: 'No permission to invite members' });
     }
@@ -160,12 +233,15 @@ router.post('/:businessId/members', verifyToken, async (req, res) => {
     // Resolve user by ID or username
     let targetUserId = user_id;
     if (!targetUserId && username) {
-      const { data: user } = await supabaseAdmin
+      const { data: user, error: userError } = await supabaseAdmin
         .from('User')
         .select('id')
         .eq('username', username)
-        .single();
+        .maybeSingle();
 
+      if (userError) {
+        return teamUnavailable(res, "Couldn't look up that username right now. Please try again.");
+      }
       if (!user) {
         return res.status(404).json({ error: 'User not found' });
       }
@@ -187,6 +263,15 @@ router.post('/:businessId/members', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'Only the owner can add another owner' });
     }
 
+    // As with seat invites, someone who isn't an owner adds only roles below their own: an invite permission
+    // granted to a staff member must not let them add an admin.
+    if (!access.isOwner) {
+      const assignCheck = assertCanMutateTarget(await readActorRole(businessId, actorId), role_base);
+      if (!assignCheck.allowed) {
+        return res.status(403).json({ error: `Cannot add a member as '${role_base}': ${assignCheck.reason}` });
+      }
+    }
+
     // Dual-write via membership service (AUTH-2.3)
     const addResult = await membershipService.addMember({
       businessUserId: businessId,
@@ -201,7 +286,7 @@ router.post('/:businessId/members', verifyToken, async (req, res) => {
       return res.status(409).json({ error: addResult.error });
     }
     if (addResult.error) {
-      return res.status(500).json({ error: addResult.error });
+      return teamUnavailable(res, "Couldn't finish adding this member. Please try again.");
     }
 
     await writeAuditLog(businessId, actorId, 'invite_member', 'BusinessTeam', targetUserId, {
@@ -212,6 +297,7 @@ router.post('/:businessId/members', verifyToken, async (req, res) => {
     res.status(201).json({ message: 'Member added', user_id: targetUserId, role_base });
   } catch (err) {
     logger.error('Add business member error', { error: err.message });
+    if (accessUnavailableResponse(res, err)) return;
     res.status(500).json({ error: 'Failed to add member' });
   }
 });
@@ -226,178 +312,121 @@ router.post('/:businessId/members/:userId/role', verifyToken, async (req, res) =
     const { businessId, userId: targetUserId } = req.params;
     const actorId = req.user.id;
 
-    const access = await checkBusinessPermission(businessId, actorId, 'team.manage');
+    const access = await checkBusinessPermission(businessId, actorId, 'team.manage', { throwOnError: true });
     if (!access.hasAccess) {
       logger.warn('auth.denied', { event: 'role_change_denied', actor_id: actorId, target_id: targetUserId, reason: 'no_permission', business_id: businessId, ip: req.ip });
       return res.status(403).json({ error: 'No permission to manage team' });
     }
 
     const { preset_key, role_base, title } = req.body;
+    let preset = null;
+    if (preset_key) {
+      const { data, error } = await supabaseAdmin
+        .from('BusinessRolePreset')
+        .select('*')
+        .eq('key', preset_key)
+        .maybeSingle();
+      if (error) {
+        return teamUnavailable(res, "Couldn't load that role preset right now. Please try again.");
+      }
+      if (!data) {
+        return res.status(400).json({ error: 'Unknown role preset' });
+      }
+      preset = data;
+    } else if (!role_base) {
+      return res.status(400).json({ error: 'preset_key or role_base is required' });
+    } else if (!Object.keys(BUSINESS_ROLE_RANK).includes(role_base)) {
+      return res.status(400).json({ error: `Invalid role_base: ${role_base}` });
+    }
+    const requestedRole = preset?.role_base || role_base;
 
     // Prevent demoting self from owner
-    if (targetUserId === actorId && access.isOwner && role_base && role_base !== 'owner') {
+    if (targetUserId === actorId && access.isOwner && requestedRole && requestedRole !== 'owner') {
       return res.status(400).json({ error: 'Cannot demote yourself from owner. Transfer ownership instead.' });
     }
 
     // Prevent promoting to owner unless you are owner
-    if (role_base === 'owner' && !access.isOwner) {
+    if (requestedRole === 'owner' && !access.isOwner) {
       logger.warn('auth.denied', { event: 'role_change_denied', actor_id: actorId, target_id: targetUserId, reason: 'non_owner_promote_to_owner', business_id: businessId, ip: req.ip });
       return res.status(403).json({ error: 'Only the owner can promote to owner' });
+    }
+    if (requestedRole && !access.isOwner && targetUserId === actorId) {
+      const assignCheck = assertCanMutateTarget(access.membership?.role_base || 'viewer', requestedRole);
+      if (!assignCheck.allowed) {
+        return res.status(403).json({ error: `Cannot assign role '${requestedRole}': ${assignCheck.reason}` });
+      }
     }
 
     // ── Rank enforcement (AUTH-1.5) ──────────────────────────
     if (targetUserId !== actorId) {
-      const { data: actorTeam } = await supabaseAdmin
-        .from('BusinessTeam')
-        .select('role_base')
-        .eq('business_user_id', businessId)
-        .eq('user_id', actorId)
-        .eq('is_active', true)
-        .maybeSingle();
-      const { data: targetTeam } = await supabaseAdmin
-        .from('BusinessTeam')
-        .select('role_base')
-        .eq('business_user_id', businessId)
-        .eq('user_id', targetUserId)
-        .eq('is_active', true)
-        .maybeSingle();
+      const [actorRoleBase, target] = await Promise.all([
+        readActorRole(businessId, actorId),
+        readTargetRoles(businessId, targetUserId),
+      ]);
+      if (!target.teamRole) {
+        return res.status(404).json({ error: 'This person is not on the team' });
+      }
 
-      const actorRoleBase = actorTeam?.role_base || 'viewer';
-      const targetRoleBase = targetTeam?.role_base || 'viewer';
-
-      const mutateCheck = assertCanMutateTarget(actorRoleBase, targetRoleBase);
+      const mutateCheck = assertCanMutateTarget(actorRoleBase, target.highestRole);
       if (!mutateCheck.allowed) {
         logger.warn('auth.denied', { event: 'role_change_denied', actor_id: actorId, target_id: targetUserId, reason: mutateCheck.reason, business_id: businessId, ip: req.ip });
         return res.status(403).json({ error: mutateCheck.reason });
       }
 
-      const newRole = role_base || null;
-      if (newRole) {
-        const assignCheck = assertCanMutateTarget(actorRoleBase, newRole);
-        if (!assignCheck.allowed) {
-          logger.warn('auth.denied', { event: 'role_change_denied', actor_id: actorId, target_id: targetUserId, reason: assignCheck.reason, new_role: newRole, business_id: businessId, ip: req.ip });
-          return res.status(403).json({ error: `Cannot assign role '${newRole}': ${assignCheck.reason}` });
-        }
+      const assignCheck = assertCanMutateTarget(actorRoleBase, requestedRole);
+      if (!assignCheck.allowed) {
+        logger.warn('auth.denied', { event: 'role_change_denied', actor_id: actorId, target_id: targetUserId, reason: assignCheck.reason, new_role: requestedRole, business_id: businessId, ip: req.ip });
+        return res.status(403).json({ error: `Cannot assign role '${requestedRole}': ${assignCheck.reason}` });
       }
     }
 
-    // If using a preset, apply it
-    if (preset_key) {
-      const { data: preset } = await supabaseAdmin
-        .from('BusinessRolePreset')
-        .select('*')
-        .eq('key', preset_key)
-        .single();
+    // Preset or direct role, via the membership service (AUTH-2.3). Each reports success only once every write
+    // held; a failure part way is answered 503, and sending the same change again finishes it.
+    const result = preset
+      ? await membershipService.applyRolePreset({ businessUserId: businessId, userId: targetUserId, preset, actorId })
+      : await membershipService.updateMemberRole({ businessUserId: businessId, userId: targetUserId, newRoleBase: role_base });
+    invalidateRoleCache(targetUserId); // AUTH-3.4
+    if (result.notMember) {
+      return res.status(404).json({ error: 'This person is not on the team' });
+    }
+    const failedMessage = preset
+      ? "Couldn't finish applying this preset. Please try again."
+      : "Couldn't finish changing this role. Please try again.";
+    if (result.error) {
+      return teamUnavailable(res, failedMessage);
+    }
 
-      if (!preset) {
-        return res.status(400).json({ error: `Unknown preset: ${preset_key}` });
-      }
-
-      // Dual-write role update via membership service (AUTH-2.3)
-      const presetRoleResult = await membershipService.updateMemberRole({
-        businessUserId: businessId,
-        userId: targetUserId,
-        newRoleBase: preset.role_base,
-      });
-
-      if (presetRoleResult.error) {
-        return res.status(500).json({ error: presetRoleResult.error });
-      }
-
-      // Title update (not part of dual-write concern)
-      if (title !== undefined) {
-        await supabaseAdmin
-          .from('BusinessTeam')
-          .update({ title, updated_at: new Date().toISOString() })
-          .eq('business_user_id', businessId)
-          .eq('user_id', targetUserId)
-          .eq('is_active', true);
-      }
-
-      // Clear existing overrides
-      await supabaseAdmin
-        .from('BusinessPermissionOverride')
-        .delete()
+    // Title update is separate (not part of dual-write concern)
+    if (title !== undefined) {
+      const { error: titleError } = await supabaseAdmin
+        .from('BusinessTeam')
+        .update({ title, updated_at: new Date().toISOString() })
         .eq('business_user_id', businessId)
-        .eq('user_id', targetUserId);
-
-      // Apply preset grants
-      if (preset.grant_perms && preset.grant_perms.length > 0) {
-        const grants = preset.grant_perms.map(perm => ({
-          business_user_id: businessId,
-          user_id: targetUserId,
-          permission: perm,
-          allowed: true,
-          created_by: actorId,
-        }));
-        await supabaseAdmin
-          .from('BusinessPermissionOverride')
-          .upsert(grants, { onConflict: 'business_user_id,user_id,permission' });
+        .eq('user_id', targetUserId)
+        .eq('is_active', true);
+      if (titleError) {
+        logger.error('Business member title update failed', { error: titleError.message, businessId, targetUserId });
+        return teamUnavailable(res, failedMessage);
       }
+    }
 
-      // Apply preset denies
-      if (preset.deny_perms && preset.deny_perms.length > 0) {
-        const denies = preset.deny_perms.map(perm => ({
-          business_user_id: businessId,
-          user_id: targetUserId,
-          permission: perm,
-          allowed: false,
-          created_by: actorId,
-        }));
-        await supabaseAdmin
-          .from('BusinessPermissionOverride')
-          .upsert(denies, { onConflict: 'business_user_id,user_id,permission' });
-      }
-
+    if (preset) {
       await writeAuditLog(businessId, actorId, 'apply_role_preset', 'BusinessTeam', targetUserId, {
         preset_key,
         role_base: preset.role_base,
       });
-
-      invalidateRoleCache(targetUserId); // AUTH-3.4
       logger.info('auth.action', { event: 'role_changed', actor_id: actorId, target_id: targetUserId, business_id: businessId, preset_key, new_role: preset.role_base });
       return res.json({ message: 'Preset applied', preset_key, role_base: preset.role_base });
     }
 
-    // Direct role_base update via membership service (AUTH-2.3)
-    if (role_base) {
-      const validRoles = Object.keys(BUSINESS_ROLE_RANK);
-      if (!validRoles.includes(role_base)) {
-        return res.status(400).json({ error: `Invalid role_base: ${role_base}` });
-      }
-
-      const roleResult = await membershipService.updateMemberRole({
-        businessUserId: businessId,
-        userId: targetUserId,
-        newRoleBase: role_base,
-      });
-
-      if (roleResult.error) {
-        return res.status(500).json({ error: roleResult.error });
-      }
-
-      // Title update is separate (not part of dual-write concern)
-      if (title !== undefined) {
-        await supabaseAdmin
-          .from('BusinessTeam')
-          .update({ title, updated_at: new Date().toISOString() })
-          .eq('business_user_id', businessId)
-          .eq('user_id', targetUserId)
-          .eq('is_active', true);
-      }
-
-      await writeAuditLog(businessId, actorId, 'change_role', 'BusinessTeam', targetUserId, {
-        new_role_base: role_base,
-      });
-
-      invalidateRoleCache(targetUserId); // AUTH-3.4
-      logger.info('auth.action', { event: 'role_changed', actor_id: actorId, target_id: targetUserId, business_id: businessId, new_role: role_base });
-      return res.json({ message: 'Role updated', role_base });
-    }
-
-    res.status(400).json({ error: 'preset_key or role_base is required' });
+    await writeAuditLog(businessId, actorId, 'change_role', 'BusinessTeam', targetUserId, {
+      new_role_base: role_base,
+    });
+    logger.info('auth.action', { event: 'role_changed', actor_id: actorId, target_id: targetUserId, business_id: businessId, new_role: role_base });
+    return res.json({ message: 'Role updated', role_base });
   } catch (err) {
     logger.error('Update business member role error', { error: err.message });
+    if (accessUnavailableResponse(res, err)) return;
     res.status(500).json({ error: 'Failed to update role' });
   }
 });
@@ -412,7 +441,7 @@ router.post('/:businessId/members/:userId/permissions', verifyToken, async (req,
     const { businessId, userId: targetUserId } = req.params;
     const actorId = req.user.id;
 
-    const access = await checkBusinessPermission(businessId, actorId, 'team.manage');
+    const access = await checkBusinessPermission(businessId, actorId, 'team.manage', { throwOnError: true });
     if (!access.hasAccess) {
       logger.warn('auth.denied', { event: 'permission_override_denied', actor_id: actorId, target_id: targetUserId, reason: 'no_permission', business_id: businessId, ip: req.ip });
       return res.status(403).json({ error: 'No permission to manage team' });
@@ -425,25 +454,16 @@ router.post('/:businessId/members/:userId/permissions', verifyToken, async (req,
     }
 
     // ── Rank enforcement (AUTH-1.5) ──────────────────────────
-    const { data: actorTeam } = await supabaseAdmin
-      .from('BusinessTeam')
-      .select('role_base')
-      .eq('business_user_id', businessId)
-      .eq('user_id', actorId)
-      .eq('is_active', true)
-      .maybeSingle();
-    const { data: targetTeam } = await supabaseAdmin
-      .from('BusinessTeam')
-      .select('role_base')
-      .eq('business_user_id', businessId)
-      .eq('user_id', targetUserId)
-      .eq('is_active', true)
-      .maybeSingle();
+    const [actorRoleBase, target] = await Promise.all([
+      readActorRole(businessId, actorId),
+      readTargetRoles(businessId, targetUserId),
+    ]);
+    // An override belongs to a membership: one written for someone off the team would apply when they join.
+    if (!target.teamRole) {
+      return res.status(404).json({ error: 'This person is not on the team' });
+    }
 
-    const actorRoleBase = actorTeam?.role_base || 'viewer';
-    const targetRoleBase = targetTeam?.role_base || 'viewer';
-
-    const mutateCheck = assertCanMutateTarget(actorRoleBase, targetRoleBase);
+    const mutateCheck = assertCanMutateTarget(actorRoleBase, target.highestRole);
     if (!mutateCheck.allowed) {
       logger.warn('auth.denied', { event: 'permission_override_denied', actor_id: actorId, target_id: targetUserId, reason: mutateCheck.reason, business_id: businessId, ip: req.ip });
       return res.status(403).json({ error: mutateCheck.reason });
@@ -469,8 +489,10 @@ router.post('/:businessId/members/:userId/permissions', verifyToken, async (req,
       }, { onConflict: 'business_user_id,user_id,permission' });
 
     if (error) {
-      logger.error('Error toggling business permission', { error: error.message });
-      return res.status(500).json({ error: 'Failed to update permission' });
+      logger.error('Error toggling business permission', { error: error.message, errorCode: error.code });
+      // 22P02: not a value of the business_permission enum.
+      if (error.code === '22P02') return res.status(400).json({ error: `Unknown permission: ${permission}` });
+      return teamUnavailable(res, "Couldn't update this permission right now. Please try again.");
     }
 
     await writeAuditLog(businessId, actorId, 'toggle_permission', 'BusinessPermissionOverride', targetUserId, {
@@ -481,6 +503,7 @@ router.post('/:businessId/members/:userId/permissions', verifyToken, async (req,
     res.json({ message: 'Permission updated', permission, allowed });
   } catch (err) {
     logger.error('Toggle business permission error', { error: err.message });
+    if (accessUnavailableResponse(res, err)) return;
     res.status(500).json({ error: 'Failed to update permission' });
   }
 });
@@ -495,14 +518,11 @@ router.get('/:businessId/members/:userId/permissions', verifyToken, async (req, 
     const { businessId, userId: targetUserId } = req.params;
     const actorId = req.user.id;
 
-    // Can view own permissions or need team.view
+    // Can view own permissions or need team.view (a member someone denied the team view can't read the others')
     if (targetUserId !== actorId) {
-      const canView = await hasPermission(businessId, actorId, 'team.view');
+      const canView = await hasPermission(businessId, actorId, 'team.view', { throwOnError: true });
       if (!canView) {
-        const access = await checkBusinessPermission(businessId, actorId);
-        if (!access.hasAccess) {
-          return res.status(403).json({ error: 'No access' });
-        }
+        return res.status(403).json({ error: 'No permission to view team' });
       }
     }
 
@@ -513,6 +533,7 @@ router.get('/:businessId/members/:userId/permissions', verifyToken, async (req, 
     });
   } catch (err) {
     logger.error('Get business member permissions error', { error: err.message });
+    if (accessUnavailableResponse(res, err)) return;
     res.status(500).json({ error: 'Failed to get permissions' });
   }
 });
@@ -531,32 +552,22 @@ router.delete('/:businessId/members/:userId', verifyToken, async (req, res) => {
     const isSelf = targetUserId === actorId;
 
     if (!isSelf) {
-      const access = await checkBusinessPermission(businessId, actorId, 'team.manage');
+      const access = await checkBusinessPermission(businessId, actorId, 'team.manage', { throwOnError: true });
       if (!access.hasAccess) {
         logger.warn('auth.denied', { event: 'member_remove_denied', actor_id: actorId, target_id: targetUserId, reason: 'no_permission', business_id: businessId, ip: req.ip });
         return res.status(403).json({ error: 'No permission to remove members' });
       }
+    }
 
+    // The target's roles, read strictly: a failed read must not pass the rank check or hide an owner.
+    const target = await readTargetRoles(businessId, targetUserId);
+
+    if (!isSelf) {
       // ── Rank enforcement (AUTH-1.5) ──────────────────────────
-      const { data: actorTeam } = await supabaseAdmin
-        .from('BusinessTeam')
-        .select('role_base')
-        .eq('business_user_id', businessId)
-        .eq('user_id', actorId)
-        .eq('is_active', true)
-        .maybeSingle();
-      const { data: targetTeam } = await supabaseAdmin
-        .from('BusinessTeam')
-        .select('role_base')
-        .eq('business_user_id', businessId)
-        .eq('user_id', targetUserId)
-        .eq('is_active', true)
-        .maybeSingle();
-
-      const actorRoleBase = actorTeam?.role_base || 'viewer';
-      const targetRoleBase = targetTeam?.role_base || 'viewer';
-
-      const mutateCheck = assertCanMutateTarget(actorRoleBase, targetRoleBase);
+      // Someone already off the team (an earlier removal that failed part way) is checked as the lowest role, so
+      // removing them again finishes the cleanup.
+      const actorRoleBase = await readActorRole(businessId, actorId);
+      const mutateCheck = assertCanMutateTarget(actorRoleBase, target.highestRole || 'viewer');
       if (!mutateCheck.allowed) {
         logger.warn('auth.denied', { event: 'member_remove_denied', actor_id: actorId, target_id: targetUserId, reason: mutateCheck.reason, business_id: businessId, ip: req.ip });
         return res.status(403).json({ error: mutateCheck.reason });
@@ -564,15 +575,15 @@ router.delete('/:businessId/members/:userId', verifyToken, async (req, res) => {
     }
 
     // Cannot remove the owner (unless self-leaving)
-    const targetAccess = await getUserAccess(businessId, targetUserId);
-    if (targetAccess.isOwner && !isSelf) {
+    const targetIsOwner = target.highestRole === 'owner';
+    if (targetIsOwner && !isSelf) {
       return res.status(400).json({ error: 'Cannot remove the business owner' });
     }
 
     // Prevent owner from leaving without transferring ownership
-    if (targetAccess.isOwner && isSelf) {
+    if (targetIsOwner && isSelf) {
       // Check if there's another owner
-      const { data: otherOwners } = await supabaseAdmin
+      const { data: otherOwners, error: ownersError } = await supabaseAdmin
         .from('BusinessTeam')
         .select('id')
         .eq('business_user_id', businessId)
@@ -580,6 +591,9 @@ router.delete('/:businessId/members/:userId', verifyToken, async (req, res) => {
         .eq('is_active', true)
         .neq('user_id', actorId);
 
+      if (ownersError) {
+        return teamUnavailable(res, "Couldn't check the business's other owners right now. Please try again.");
+      }
       if (!otherOwners || otherOwners.length === 0) {
         return res.status(400).json({ error: 'Cannot leave as the sole owner. Transfer ownership first.' });
       }
@@ -593,7 +607,9 @@ router.delete('/:businessId/members/:userId', verifyToken, async (req, res) => {
     });
 
     if (removeResult.error) {
-      return res.status(500).json({ error: removeResult.error });
+      return teamUnavailable(res, isSelf
+        ? "Couldn't finish leaving this business. Please try again."
+        : "Couldn't finish removing this member. Please try again.");
     }
 
     await writeAuditLog(businessId, actorId, isSelf ? 'self_leave' : 'remove_member', 'BusinessTeam', targetUserId, {});
@@ -602,6 +618,7 @@ router.delete('/:businessId/members/:userId', verifyToken, async (req, res) => {
     res.json({ message: 'Member removed' });
   } catch (err) {
     logger.error('Remove business member error', { error: err.message });
+    if (accessUnavailableResponse(res, err)) return;
     res.status(500).json({ error: 'Failed to remove member' });
   }
 });
@@ -643,7 +660,9 @@ router.get('/:businessId/audit-log', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch audit log' });
     }
 
-    res.json({ entries: data || [] });
+    // The teammate who acted goes by their Local Profile, as in the members list.
+    const people = await loadChatPeople((data || []).map((entry) => entry.actor?.id));
+    res.json({ entries: (data || []).map((entry) => ({ ...entry, actor: chatPersonRow(entry.actor, people) })) });
   } catch (err) {
     logger.error('Business audit log error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch audit log' });

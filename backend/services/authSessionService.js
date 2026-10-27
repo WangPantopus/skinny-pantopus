@@ -25,6 +25,14 @@ const authPolicy = require('../config/authPolicy');
 const authEvents = new EventEmitter();
 authEvents.setMaxListeners(50);
 
+// An unreadable security record is not an absent, pre-registry record. Keep
+// the session intact, but refuse admission until its policy can be checked.
+function authUnavailableError(cause) {
+  return Object.assign(new Error('Could not verify this session right now. Please try again.', { cause }), {
+    status: 503, code: 'AUTH_UNAVAILABLE', authBusy: true,
+  });
+}
+
 const SUPABASE_AUTH_CLIENT_OPTIONS = {
   auth: { persistSession: false, autoRefreshToken: false },
 };
@@ -141,6 +149,8 @@ function userAgent(req) {
 /**
  * Insert (or refresh) the AuthSession row for a freshly issued Supabase session.
  * Idempotent on id (a second /oauth/token call with the same pair updates).
+ * `replace: false` only creates a missing row: it returns null, writing nothing,
+ * when the session already has one.
  */
 async function insertSession({
   id,
@@ -151,6 +161,7 @@ async function insertSession({
   boundAtIssue = false,
   refreshToken = null,
   req = null,
+  replace = true,
 }) {
   const row = {
     id,
@@ -171,13 +182,14 @@ async function insertSession({
   };
   const { data, error } = await supabaseAdmin
     .from('AuthSession')
-    .upsert(row, { onConflict: 'id' })
+    .upsert(row, { onConflict: 'id', ignoreDuplicates: !replace })
     .select('*')
-    .single();
+    .maybeSingle();
   if (error) {
     logger.error('auth.session.insert_failed', { sessionId: id, userId, error: error.message });
     return null;
   }
+  if (!data && !replace) return null;
   return data || row;
 }
 
@@ -190,7 +202,7 @@ async function getSessionById(sessionId) {
     .maybeSingle();
   if (error) {
     logger.warn('auth.session.lookup_failed', { sessionId, error: error.message });
-    return null;
+    throw authUnavailableError(error);
   }
   return data || null;
 }
@@ -204,7 +216,7 @@ async function findSessionByRefreshHash(hash) {
     .maybeSingle();
   if (error) {
     logger.warn('auth.session.hash_lookup_failed', { error: error.message });
-    return null;
+    throw authUnavailableError(error);
   }
   return data || null;
 }
@@ -218,7 +230,7 @@ async function findSessionByPrevRefreshHash(hash) {
     .maybeSingle();
   if (error) {
     logger.warn('auth.session.prev_hash_lookup_failed', { error: error.message });
-    return null;
+    throw authUnavailableError(error);
   }
   return data || null;
 }
@@ -279,11 +291,12 @@ const _sessionStateCache = new Map(); // sessionId -> { value, ts }
 
 /**
  * @returns {Promise<{known:boolean, revoked:boolean, context:string|null, row:object|null}>}
- *   `known:false` ⇒ pre-registry session (no row) or lookup failure — callers
- *   treat that as "allow" (getUser stays the authority).
+ *   `known:false` means a successful read found no pre-registry session row.
+ *   Lookup failures throw and are never cached as an absent session.
  */
 async function getSessionStateCached(sessionId) {
   if (!isUuid(sessionId)) return { known: false, revoked: false, context: null, row: null };
+  if (signOutPending(sessionId)) return { known: true, revoked: true, context: null, row: null };
   const hit = _sessionStateCache.get(sessionId);
   if (hit && Date.now() - hit.ts <= SESSION_STATE_TTL_MS) return hit.value;
   const row = await getSessionById(sessionId);
@@ -305,6 +318,37 @@ async function getSessionStateCached(sessionId) {
 function invalidateSessionStateCache(sessionId) {
   if (sessionId === undefined) _sessionStateCache.clear();
   else _sessionStateCache.delete(sessionId);
+}
+
+/** Drop cached state for every session of one user, e.g. after another process revoked one. */
+function invalidateSessionStateCacheForUser(userId) {
+  if (!userId) return;
+  const id = String(userId).toLowerCase();
+  for (const [sessionId, entry] of _sessionStateCache) {
+    if (String(entry.value.row?.user_id || '').toLowerCase() === id) _sessionStateCache.delete(sessionId);
+  }
+}
+
+// Sign-outs this process accepted but could not save yet: a local /logout
+// while the registry or Supabase Auth was failing, which routes/users.js keeps
+// retrying. Until the retry's deadline this process reads the session as
+// revoked, so verifyToken, optionalAuth, sockets and /refresh refuse it here.
+// Other processes refuse it once the row is saved.
+const _pendingSignOuts = new Map(); // sessionId -> deadline (ms)
+
+/** Read `sessionId`, the session of a verified token, as signed out in this process until `untilMs`. */
+function markSignOutPending(sessionId, userId, untilMs) {
+  if (!isUuid(sessionId)) return;
+  const now = Date.now();
+  for (const [id, until] of _pendingSignOuts) if (until <= now) _pendingSignOuts.delete(id);
+  if ((_pendingSignOuts.get(sessionId) || 0) >= untilMs) return;
+  _pendingSignOuts.set(sessionId, untilMs);
+  emitRevoked(userId, [sessionId], 'logout');
+}
+
+function signOutPending(sessionId) {
+  const until = _pendingSignOuts.get(sessionId);
+  return Boolean(until) && until > Date.now();
 }
 
 function emitRevoked(userId, sessionIds, reason) {
@@ -329,7 +373,7 @@ async function revokeSessionRow(sessionId, reason, { userId } = {}) {
     .select('id, user_id');
   if (error) {
     logger.error('auth.session.revoke_failed', { sessionId, error: error.message });
-    return false;
+    throw authUnavailableError(error);
   }
   const rows = Array.isArray(data) ? data : data ? [data] : [];
   if (rows.length > 0) emitRevoked(userId || rows[0].user_id, rows.map((r) => r.id), reason);
@@ -351,7 +395,7 @@ async function revokeSessionsForUser(userId, { exceptSessionId = null, deviceRow
   const { data, error } = await query.select('id');
   if (error) {
     logger.error('auth.session.revoke_many_failed', { userId, error: error.message });
-    return 0;
+    throw authUnavailableError(error);
   }
   const ids = (data || []).map((r) => r.id);
   emitRevoked(userId, ids, reason);
@@ -367,7 +411,7 @@ async function revokeSessionsForDevice(deviceRowId, reason, { userId } = {}) {
     .select('id, user_id');
   if (error) {
     logger.error('auth.session.revoke_device_failed', { deviceRowId, error: error.message });
-    return 0;
+    throw authUnavailableError(error);
   }
   const ids = (data || []).map((r) => r.id);
   emitRevoked(userId || data?.[0]?.user_id, ids, reason);
@@ -394,15 +438,22 @@ async function listActiveSessions(userId) {
 
 /**
  * supabaseAdmin.auth.admin.signOut(jwt, scope). 401/403/404 count as
- * "already gone". Returns true when GoTrue-side revocation is in effect.
+ * "already gone", and so does a session GoTrue already ended: auth-js reports
+ * its 403 session_not_found as AuthSessionMissingError with status 400 (a
+ * password change or reset ends sessions before this runs).
+ * Returns true when GoTrue-side revocation is in effect.
  */
+function sessionAlreadyEnded(error) {
+  return [401, 403, 404].includes(Number(error.status)) || error.name === 'AuthSessionMissingError';
+}
+
 async function signOutSupabase(accessToken, scope = 'local', context = {}) {
   if (!accessToken || typeof accessToken !== 'string') return false;
   try {
     const { error } = await supabaseAdmin.auth.admin.signOut(accessToken, scope);
     if (error) {
       const status = Number(error.status);
-      if ([401, 403, 404].includes(status)) {
+      if (sessionAlreadyEnded(error)) {
         logger.info('auth.session_revoke_already_invalid', { ...context, scope, status });
         return true;
       }
@@ -424,7 +475,7 @@ async function setSessionsValidAfter(userId, at = new Date()) {
     .eq('id', userId);
   if (error) {
     logger.error('auth.watermark_failed', { userId, error: error.message });
-    return false;
+    throw authUnavailableError(error);
   }
   try {
     // verifyToken folds the watermark into its 60-s role cache; let this
@@ -442,7 +493,8 @@ async function getSessionsValidAfter(userId) {
     .select('sessions_valid_after')
     .eq('id', userId)
     .maybeSingle();
-  if (error || !data?.sessions_valid_after) return null;
+  if (error) throw authUnavailableError(error);
+  if (!data?.sessions_valid_after) return null;
   const d = new Date(data.sessions_valid_after);
   return Number.isNaN(d.getTime()) ? null : d;
 }
@@ -610,7 +662,7 @@ async function revokeGrantsForUser(userId, { deviceRowId = undefined } = {}) {
   const { data, error } = await query.select('id');
   if (error) {
     logger.error('auth.grant.revoke_failed', { userId, error: error.message });
-    return 0;
+    throw authUnavailableError(error);
   }
   return (data || []).length;
 }
@@ -689,6 +741,7 @@ async function listSecurityEvents(userId, limit = 20) {
 
 module.exports = {
   authEvents,
+  authUnavailableError,
   createAuthClient,
   isAuthServiceBusy,
   hashToken,
@@ -707,12 +760,16 @@ module.exports = {
   setSessionContext,
   getSessionStateCached,
   invalidateSessionStateCache,
+  invalidateSessionStateCacheForUser,
+  markSignOutPending,
+  signOutPending,
   _sessionStateCache,
   revokeSessionRow,
   revokeSessionsForUser,
   revokeSessionsForDevice,
   listActiveSessions,
   signOutSupabase,
+  sessionAlreadyEnded,
   setSessionsValidAfter,
   getSessionsValidAfter,
   // minting

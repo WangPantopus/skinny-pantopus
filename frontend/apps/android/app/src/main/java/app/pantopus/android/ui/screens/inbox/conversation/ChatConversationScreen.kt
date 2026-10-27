@@ -3,17 +3,14 @@
 package app.pantopus.android.ui.screens.inbox.conversation
 
 import android.Manifest
-import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.Context
-import android.content.ContextWrapper
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.util.Patterns
-import android.view.WindowManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -29,6 +26,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -61,6 +59,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SnackbarHost
@@ -71,15 +71,19 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -88,6 +92,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -95,6 +100,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -113,20 +119,30 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.LaunchFeatures
+import app.pantopus.android.core.routing.DeepLinkRouter
+import app.pantopus.android.data.ai.AIPdfCheck
 import app.pantopus.android.data.links.LinkPreview
 import app.pantopus.android.ui.components.GhostButton
+import app.pantopus.android.ui.components.KeyboardResizeEffect
 import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.screens.inbox.conversation.ai.AiActionCard
 import app.pantopus.android.ui.screens.inbox.conversation.ai.AiCapabilityChip
+import app.pantopus.android.ui.screens.inbox.conversation.ai.AiContextStrip
 import app.pantopus.android.ui.screens.inbox.conversation.ai.AiEstimateCard
+import app.pantopus.android.ui.screens.inbox.conversation.ai.AiLinkButtons
+import app.pantopus.android.ui.screens.inbox.conversation.ai.AiStarterRow
 import app.pantopus.android.ui.screens.inbox.conversation.ai.ChatAiAvatar
+import app.pantopus.android.ui.screens.inbox.conversation.ai.starterChips
 import app.pantopus.android.ui.screens.plans.chat.PlanChatClosedBar
 import app.pantopus.android.ui.screens.plans.chat.PlanChatStrip
 import app.pantopus.android.ui.screens.plans.chat.rememberPlanChat
@@ -139,12 +155,14 @@ import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
 import coil.compose.AsyncImage
+import coil.imageLoader
 import coil.request.CachePolicy
 import coil.request.ImageRequest
+import coil.size.Scale
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
 import java.util.UUID
 import kotlin.math.roundToInt
 
@@ -157,8 +175,8 @@ import kotlin.math.roundToInt
  * A15 design parity notes — intentionally NOT implemented (design-only,
  * no backend support yet): voice bubbles + mic button, and the A15.2
  * person preview card with stats in the empty state. A15.2 link-preview
- * card-bubbles ARE implemented (tappable URLs + Open-Graph card below
- * the bubble, metadata via [app.pantopus.android.data.links.LinkPreviewRepository]). The pinned gig context strip (`.ctx-strip`) renders for
+ * card-bubbles ARE implemented (tappable URLs + a text-only card below
+ * the bubble, read via [app.pantopus.android.data.links.LinkPreviewRepository]). The pinned gig context strip (`.ctx-strip`) renders for
  * gig rooms whose route carried a `gigId` (chat-list room rows); the
  * listing variant stays deferred — no listing id reaches the thread.
  */
@@ -193,7 +211,10 @@ fun ChatConversationScreen(
     val isCounterpartyTyping by viewModel.isCounterpartyTyping.collectAsStateWithLifecycle()
     val queuedAttachments by viewModel.queuedAttachments.collectAsStateWithLifecycle()
     val pendingScroll by viewModel.pendingScrollTarget.collectAsStateWithLifecycle()
+    val showLatestMessages by viewModel.showLatestMessages.collectAsStateWithLifecycle()
+    val olderPageFailed by viewModel.olderPageFailed.collectAsStateWithLifecycle()
     val sendLimitNotice by viewModel.sendLimitNotice.collectAsStateWithLifecycle()
+    val composerClosedNote by viewModel.composerClosedNote.collectAsStateWithLifecycle()
     val isSelectionMode by viewModel.isSelectionMode.collectAsStateWithLifecycle()
     val selectedMessageIds by viewModel.selectedMessageIds.collectAsStateWithLifecycle()
     val isBlocking by viewModel.isBlocking.collectAsStateWithLifecycle()
@@ -203,8 +224,15 @@ fun ChatConversationScreen(
     val openFile by viewModel.openFile.collectAsStateWithLifecycle()
     val linkPreviews by viewModel.linkPreviews.collectAsStateWithLifecycle()
     val isAiStreaming by viewModel.isAiStreaming.collectAsStateWithLifecycle()
+    val isDeletingAi by viewModel.isDeletingAi.collectAsStateWithLifecycle()
+    val aiContext by viewModel.aiContext.collectAsStateWithLifecycle()
+    val aiStarters by viewModel.aiStarters.collectAsStateWithLifecycle()
     // Nearby Plans (A4): a plan room shows its plan under the header and closes after the plan.
-    val planChat = rememberPlanChat((args.mode as? ChatThreadMode.Room)?.id)
+    val planChat =
+        rememberPlanChat(
+            (args.mode as? ChatThreadMode.Room)?.id,
+            (state as? ChatConversationUiState.Loaded)?.rows?.filterIsInstance<ChatTimelineRow.SystemNote>()?.lastOrNull()?.id,
+        )
     val gigContext by viewModel.gigContext.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -224,11 +252,12 @@ fun ChatConversationScreen(
     var showReportFailed by remember { mutableStateOf(false) }
     var showBulkDeleteConfirm by remember { mutableStateOf(false) }
     var pendingDeleteId by remember { mutableStateOf<String?>(null) }
+    var showAiDeleteConfirm by remember { mutableStateOf(false) }
     // Photos (and the tapped index) shown in the full-screen viewer.
     var viewerPhotos by remember { mutableStateOf<Pair<List<String>, Int>?>(null) }
+    var viewerFile by remember { mutableStateOf<ChatOpenFile?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
-    // Photos and videos, as on iOS. A video rides as a named file, like one
-    // picked with Document; web plays it inline, the apps open it.
+    // Images and videos share the same private attachment upload and viewer.
     val photoPicker =
         rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(maxItems = 5)) { uris ->
             if (uris.isEmpty()) return@rememberLauncherForActivityResult
@@ -236,7 +265,13 @@ fun ChatConversationScreen(
                 uris.take(5).forEach { uri ->
                     withContext(Dispatchers.IO) {
                         val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
-                        val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return@withContext
+                        val bytes =
+                            readChatAttachment(context, uri, mimeType) ?: run {
+                                snackbarHostState.showSnackbar(
+                                    "Couldn’t read this file. Images: 10 MB, videos: 100 MB, documents: 25 MB maximum.",
+                                )
+                                return@withContext
+                            }
                         val extension = mimeType.substringAfter('/', "jpg").substringBefore('+')
                         val isVideo = mimeType.startsWith("video/")
                         val name = if (isVideo) context.pickedFileName(uri) else null
@@ -245,6 +280,7 @@ fun ChatConversationScreen(
                             filename = name ?: "chat-${UUID.randomUUID()}.$extension",
                             mimeType = mimeType,
                             bytes = bytes,
+                            sourceUri = uri.toString(),
                         )
                     }
                 }
@@ -259,19 +295,33 @@ fun ChatConversationScreen(
                         uris.take(5).mapNotNull { uri ->
                             val mimeType = context.contentResolver.getType(uri) ?: "application/octet-stream"
                             val bytes =
-                                context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                                    ?: return@mapNotNull null
+                                readChatAttachment(context, uri, mimeType) ?: run {
+                                    snackbarHostState.showSnackbar(
+                                        "Couldn’t read this file. Images: 10 MB, videos: 100 MB, documents: 25 MB maximum.",
+                                    )
+                                    return@mapNotNull null
+                                }
                             val extension = mimeType.substringAfter('/', "bin").substringBefore('+')
                             val name = context.pickedFileName(uri) ?: "chat-${UUID.randomUUID()}.$extension"
-                            Triple(mimeType, name, bytes)
+                            uri to Triple(mimeType, name, bytes)
                         }
                     }
-                attachments.forEach { (mimeType, filename, bytes) ->
+                attachments.forEach { (uri, picked) ->
+                    val (mimeType, filename, bytes) = picked
+                    // The assistant reads a PDF only within the server's limits: say which one it can't, at once.
+                    if (args.mode is ChatThreadMode.Ai && mimeType == "application/pdf") {
+                        val problem = withContext(Dispatchers.IO) { AIPdfCheck.problem(bytes, context.cacheDir) }
+                        if (problem != null) {
+                            viewModel.refuseAttachment(problem)
+                            return@forEach
+                        }
+                    }
                     viewModel.queueAttachment(
                         kind = if (mimeType.startsWith("image/")) ChatQueuedAttachmentKind.Image else ChatQueuedAttachmentKind.Document,
                         filename = filename,
                         mimeType = mimeType,
                         bytes = bytes,
+                        sourceUri = uri.toString(),
                     )
                 }
             }
@@ -290,19 +340,22 @@ fun ChatConversationScreen(
             scope.launch {
                 withContext(Dispatchers.IO) {
                     val bytes =
-                        context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                            ?: return@withContext
+                        readChatAttachment(context, uri, "image/jpeg") ?: run {
+                            snackbarHostState.showSnackbar("Couldn’t read this photo. Images must be under 10 MB.")
+                            return@withContext
+                        }
                     viewModel.queueAttachment(
                         kind = ChatQueuedAttachmentKind.Image,
                         filename = "camera-${UUID.randomUUID()}.jpg",
                         mimeType = "image/jpeg",
                         bytes = bytes,
+                        sourceUri = uri.toString(),
                     )
                 }
             }
         }
     val launchCamera = {
-        val photoFile = File(context.cacheDir, "chat-camera-${UUID.randomUUID()}.jpg")
+        val photoFile = ChatMediaUrl.cameraFile(context.cacheDir)
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", photoFile)
         pendingCameraUri = uri.toString()
         // No camera app (or a broken resolver) must not crash the thread —
@@ -331,8 +384,15 @@ fun ChatConversationScreen(
             args.scrollToMessageId,
             args.initialTopic,
             args.gigId,
+            args.aiContext,
+            args.aiNudgeId,
+            args.aiConversationId,
         )
         viewModel.load()
+    }
+    LifecycleStartEffect(viewModel) {
+        viewModel.setForeground(true)
+        onStopOrDispose { viewModel.setForeground(false) }
     }
     DisposableEffect(Unit) {
         onDispose { viewModel.teardown() }
@@ -341,6 +401,17 @@ fun ChatConversationScreen(
     val isCreatorThread = conversationMode == ChatConversationMode.CreatorThread
     val isCreatorQuotaLocked = isCreatorThread && resolvedCreatorContext.quota?.isMaxed == true
 
+    // AI assistant phase 1: action cards send through the view model; links open with the deep-link router.
+    val aiReplyActions =
+        remember(viewModel) {
+            ChatAIReplyActions(
+                onAction = viewModel::runAIAction,
+                onDismiss = viewModel::dismissAIAction,
+                onOpenLink = { url -> if (DeepLinkRouter.canRoute(url)) DeepLinkRouter.handle(url) },
+                canOpen = DeepLinkRouter::canRoute,
+            )
+        }
+
     // The chat sits on the keyboard: pad the bottom by the keyboard height
     // minus the space already below the chat (the tab bar).
     KeyboardResizeEffect()
@@ -348,6 +419,7 @@ fun ChatConversationScreen(
     val rootView = LocalView.current.rootView
     val keyboardPx = WindowInsets.ime.getBottom(density)
     var belowChatPx by remember { mutableIntStateOf(0) }
+    val focusManager = LocalFocusManager.current
     Box(
         modifier =
             Modifier
@@ -373,6 +445,8 @@ fun ChatConversationScreen(
                     onOpenDetails = { showDetailsSheet = true },
                     onOpenProfile = profileTapFor(args.mode, conversationMode, onOpenProfile),
                     onNewAiChat = viewModel::startNewAiConversation,
+                    onDeleteAiChat = { showAiDeleteConfirm = true },
+                    isDeletingAiChat = isDeletingAi,
                     // Nearby Plans (A4): a plan room counts everyone in, parties too ("7 people", as on iOS).
                     planPeople = planChat.plan?.people?.takeIf { it.isNotEmpty() }?.sumOf { it.partySize.coerceAtLeast(1) },
                 )
@@ -381,6 +455,8 @@ fun ChatConversationScreen(
                 GigContextStrip(strip = strip, onTap = { onOpenGig(strip.gigId) })
             }
             PlanChatStrip(state = planChat, onOpenPlan = onOpenPlan)
+            // AI assistant phase 1: the screen Ask Pantopus was tapped on.
+            if (conversationMode == ChatConversationMode.AiAssistant) aiContext?.let { AiContextStrip(label = it.label) }
             if (conversationMode == ChatConversationMode.CreatorThread) {
                 CreatorAudienceStrip(
                     context = resolvedCreatorContext,
@@ -419,7 +495,15 @@ fun ChatConversationScreen(
                     onSelect = viewModel::selectTopic,
                 )
             }
-            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            // A tap on the thread puts the keyboard away, so the whole conversation shows again, as on iOS; buttons,
+            // links and cards keep their own taps. Scrolling still scrolls, and Back still closes the keyboard too.
+            Box(
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .pointerInput(focusManager) { detectTapGestures(onTap = { focusManager.clearFocus() }) },
+            ) {
                 when (val s = state) {
                     ChatConversationUiState.Loading -> LoadingFrame()
                     ChatConversationUiState.Empty ->
@@ -431,49 +515,63 @@ fun ChatConversationScreen(
                             conversationMode = conversationMode,
                             fanEntitlement = fanEntitlement,
                             onCapabilityTap = viewModel::sendCapabilityPrompt,
+                            aiStarters = aiStarters,
                         )
                     is ChatConversationUiState.Loaded ->
-                        PopulatedFrame(
-                            rows = s.rows,
-                            onRetry = viewModel::retry,
-                            onLoadOlder = viewModel::loadOlder,
-                            scrollToRowId = pendingScroll,
-                            onScrollConsumed = viewModel::consumePendingScroll,
-                            conversationMode = conversationMode,
-                            incomingInitials = incomingInitialsFor(conversationMode, activeCounterparty),
-                            aiPrompts = viewModel.aiPrompts,
-                            onCapabilityTap = viewModel::sendCapabilityPrompt,
-                            onLockedAction = { showFanUpgradePrompt = true },
-                            onBubbleLongPress = {
-                                if (isSelectionMode) viewModel.toggleSelection(it.id) else actionTarget = it
-                            },
-                            selectedMessageIds = if (isSelectionMode) selectedMessageIds else emptySet(),
-                            onBubbleTap = { if (isSelectionMode) viewModel.toggleSelection(it.id) },
-                            // A pickup-days card saves here; once saved it opens Today. Other drafts open composers.
-                            onUseAIDraft = { draft ->
-                                when {
-                                    draft.pickup == null -> onUseAIDraft(draft)
-                                    draft.pickup.save == ChatAIPickupSave.Saved -> onOpenToday()
-                                    else -> viewModel.savePickupSchedule(draft)
-                                }
-                            },
-                            onOpenGig = onOpenGig,
-                            onOpenListing = onOpenListing,
-                            onOpenLocation = { lat, lng ->
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("geo:$lat,$lng?q=$lat,$lng"))
-                                runCatching { context.startActivity(intent) }
-                            },
-                            onReact = viewModel::react,
-                            linkPreviews = linkPreviews,
-                            onResolveLink = viewModel::resolveLinkPreview,
-                            onOpenUrl = { url ->
-                                runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
-                            },
-                            onOpenPhotos = { urls, index -> viewerPhotos = urls to index },
-                            onOpenAttachment = { attachment ->
-                                viewModel.openAttachment(attachment, File(context.cacheDir, "chat-files").apply { mkdirs() })
-                            },
-                        )
+                        // A topic switch is a new timeline: it opens at that topic's newest message, never at the
+                        // previous topic's scroll anchor.
+                        key(selectedTopicId) {
+                            PopulatedFrame(
+                                rows = s.rows,
+                                onRetry = viewModel::retry,
+                                onLoadOlder = viewModel::loadOlder,
+                                olderPageFailed = olderPageFailed,
+                                onVisibleMessage = viewModel::markVisibleMessageRead,
+                                onViewport = viewModel::observeTimelineViewport,
+                                scrollToRowId = pendingScroll,
+                                onScrollConsumed = viewModel::consumePendingScroll,
+                                showLatestMessages = showLatestMessages,
+                                onLatestMessages = viewModel::returnToLatestMessages,
+                                conversationMode = conversationMode,
+                                incomingInitials = incomingInitialsFor(conversationMode, activeCounterparty),
+                                aiPrompts = viewModel.aiPrompts,
+                                onCapabilityTap = viewModel::sendCapabilityPrompt,
+                                onLockedAction = { showFanUpgradePrompt = true },
+                                onBubbleLongPress = {
+                                    if (isSelectionMode) viewModel.toggleSelection(it.id) else actionTarget = it
+                                },
+                                selectedMessageIds = if (isSelectionMode) selectedMessageIds else emptySet(),
+                                // A message takes the tap itself, so it puts the keyboard away too.
+                                onBubbleTap = { if (isSelectionMode) viewModel.toggleSelection(it.id) else focusManager.clearFocus() },
+                                // A pickup-days card saves here; once saved it opens Today. Other drafts open composers.
+                                onUseAIDraft = { draft ->
+                                    when {
+                                        draft.pickup == null -> onUseAIDraft(draft)
+                                        draft.pickup.save == ChatAIPickupSave.Saved -> onOpenToday()
+                                        else -> viewModel.savePickupSchedule(draft)
+                                    }
+                                },
+                                aiReplyActions = aiReplyActions,
+                                onOpenGig = onOpenGig,
+                                onOpenListing = onOpenListing,
+                                onOpenLocation = { lat, lng ->
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("geo:$lat,$lng?q=$lat,$lng"))
+                                    runCatching { context.startActivity(intent) }
+                                },
+                                onReact = viewModel::react,
+                                linkPreviews = linkPreviews,
+                                onResolveLink = viewModel::resolveLinkPreview,
+                                onOpenUrl = { url ->
+                                    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+                                },
+                                onOpenPhotos = { urls, index -> viewerPhotos = urls to index },
+                                onOpenAttachment = { attachment ->
+                                    val folder = ChatMediaUrl.openedFilesFolder(context.cacheDir).apply { mkdirs() }
+                                    viewModel.openAttachment(attachment, folder)
+                                },
+                                timelineSession = viewModel.timelineSession,
+                            )
+                        }
                     is ChatConversationUiState.Error -> ErrorFrame(message = s.message, onRetry = viewModel::refresh)
                 }
             }
@@ -484,6 +582,7 @@ fun ChatConversationScreen(
                 TypingIndicator(initials = typingInitials)
             }
             if (queuedAttachments.isNotEmpty()) {
+                PrefetchLocalPhotos(queuedAttachments)
                 AttachmentStripView(
                     attachments = queuedAttachments,
                     onRemove = viewModel::removeQueuedAttachment,
@@ -495,8 +594,11 @@ fun ChatConversationScreen(
                     onUpgrade = { showFanUpgradePrompt = true },
                 )
             }
+            val closedNote = composerClosedNote
             if (planChat.closed) {
                 PlanChatClosedBar(planChat)
+            } else if (closedNote != null) {
+                ChatClosedLine(text = closedNote)
             } else if (isSelectionMode) {
                 SelectionDeleteBar(
                     enabled = selectedMessageIds.isNotEmpty(),
@@ -511,6 +613,11 @@ fun ChatConversationScreen(
                     editing = editingMessageId != null,
                     onCancel = viewModel::cancelMessageAction,
                 )
+                // The empty thread offers them in its welcome instead.
+                val aiThreadIdle = state is ChatConversationUiState.Loaded && !isAiStreaming
+                if (conversationMode == ChatConversationMode.AiAssistant && aiStarters.isNotEmpty() && aiThreadIdle) {
+                    AiStarterRow(starters = aiStarters, onTap = viewModel::sendAiStarter)
+                }
                 Composer(
                     text = composerText,
                     placeholder =
@@ -562,8 +669,20 @@ fun ChatConversationScreen(
                             PackageManager.PERMISSION_GRANTED
                     if (granted) launchCamera() else cameraPermission.launch(Manifest.permission.CAMERA)
                 },
-                onPhotos = { photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
-                onDocument = { attachmentPicker.launch(arrayOf("*/*")) },
+                // The assistant reads photos and PDFs (AI assistant phase 2 §7.1): its thread's Photos picks photos and its
+                // Document picks PDFs.
+                onPhotos = {
+                    val media =
+                        if (args.mode is ChatThreadMode.Ai) {
+                            ActivityResultContracts.PickVisualMedia.ImageOnly
+                        } else {
+                            ActivityResultContracts.PickVisualMedia.ImageAndVideo
+                        }
+                    photoPicker.launch(PickVisualMediaRequest(media))
+                },
+                onDocument = {
+                    attachmentPicker.launch(if (args.mode is ChatThreadMode.Ai) arrayOf("application/pdf") else arrayOf("*/*"))
+                },
                 onLocation = { viewModel.sendCurrentLocation() },
                 onGig = { showGigPicker = true },
                 onListing = { showListingPicker = true },
@@ -621,6 +740,12 @@ fun ChatConversationScreen(
             ) {
                 MessageActionSheet(
                     content = target,
+                    canManageMessages = viewModel.canManageMessage(target.id),
+                    canDiscardMessage = viewModel.canDiscardMessage(target.id),
+                    onDiscard = {
+                        viewModel.discardMessage(target.id)
+                        actionTarget = null
+                    },
                     onCopy = { actionTarget = null },
                     onReply = {
                         viewModel.beginReply(target.id)
@@ -755,6 +880,30 @@ fun ChatConversationScreen(
                 },
             )
         }
+        if (showAiDeleteConfirm) {
+            AlertDialog(
+                onDismissRequest = { showAiDeleteConfirm = false },
+                containerColor = PantopusColors.appSurface,
+                title = { Text(text = "Delete this conversation?") },
+                text = { Text(text = "Pantopus AI won't remember it. Any earlier chats with Pantopus AI are deleted too.") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showAiDeleteConfirm = false
+                            viewModel.deleteAiConversations()
+                        },
+                        modifier = Modifier.testTag("chatAIDeleteConfirm"),
+                    ) {
+                        Text(text = "Delete", color = PantopusColors.error)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showAiDeleteConfirm = false }) {
+                        Text(text = "Cancel", color = PantopusColors.appTextSecondary)
+                    }
+                },
+            )
+        }
         pendingDeleteId?.let { id ->
             AlertDialog(
                 onDismissRequest = { pendingDeleteId = null },
@@ -795,6 +944,10 @@ fun ChatConversationScreen(
         LaunchedEffect(openFile) {
             val opened = openFile ?: return@LaunchedEffect
             viewModel.consumeOpenFile()
+            if (opened.mimeType == "application/pdf" || opened.mimeType.startsWith("video/") || opened.liveFile != null) {
+                viewerFile = opened
+                return@LaunchedEffect
+            }
             val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", opened.file)
             val intent =
                 Intent(Intent.ACTION_VIEW)
@@ -806,6 +959,35 @@ fun ChatConversationScreen(
             } catch (_: ActivityNotFoundException) {
                 snackbarHostState.showSnackbar("No app on this device can open this file.")
             }
+        }
+        viewerFile?.let { opened ->
+            DisposableEffect(opened) { onDispose { opened.file.parentFile?.deleteRecursively() } }
+            val kind =
+                when {
+                    opened.liveFile != null -> PostMediaKind.LivePhoto
+                    opened.mimeType == "application/pdf" -> PostMediaKind.Document
+                    else -> PostMediaKind.Video
+                }
+            MediaViewerDialog(
+                items =
+                    listOf(
+                        PostMediaItem(
+                            id = opened.file.name,
+                            kind = kind,
+                            url =
+                                Uri.fromFile(
+                                    opened.file,
+                                ).toString(),
+                            liveVideoUrl =
+                                opened.liveFile?.let {
+                                    Uri.fromFile(it).toString()
+                                },
+                        ),
+                    ),
+                startIndex = 0,
+                localPdfFile = opened.file.takeIf { kind == PostMediaKind.Document },
+                onDismiss = { viewerFile = null },
+            )
         }
         viewerPhotos?.let { (urls, index) ->
             MediaViewerDialog(
@@ -867,7 +1049,7 @@ private fun incomingInitialsFor(
     } else {
         when (counterparty) {
             is ChatCounterparty.Person -> counterparty.initials
-            is ChatCounterparty.Group -> counterparty.displayName.initials()
+            is ChatCounterparty.Group -> null
             is ChatCounterparty.Ai -> null
         }
     }
@@ -896,6 +1078,9 @@ internal fun ChatHeader(
     onOpenProfile: (() -> Unit)? = null,
     // The assistant's "New chat" (AI thread only).
     onNewAiChat: () -> Unit = {},
+    // The assistant's More menu: "Delete conversation" (AI thread only), and whether that delete is running.
+    onDeleteAiChat: () -> Unit = {},
+    isDeletingAiChat: Boolean = false,
     // A plan room's people (Nearby Plans, board A4): the second line reads "7 people" instead.
     planPeople: Int? = null,
 ) {
@@ -1003,7 +1188,7 @@ internal fun ChatHeader(
                 }
             }
             // A15.3 AI header: "New chat" (lucide square-pen; closest token
-            // icon is MessageSquarePlus) + overflow (decorative until it has actions).
+            // icon is MessageSquarePlus) + overflow, whose menu deletes the conversation.
             isAi -> {
                 Row {
                     Box(
@@ -1023,7 +1208,7 @@ internal fun ChatHeader(
                             tint = PantopusColors.appText,
                         )
                     }
-                    HeaderIcon(PantopusIcon.MoreHorizontal)
+                    AiMoreMenu(onDelete = onDeleteAiChat, enabled = !isDeletingAiChat)
                 }
             }
             else ->
@@ -1662,6 +1847,42 @@ private fun HeaderIcon(icon: PantopusIcon) {
     }
 }
 
+/** The assistant header's More (overflow) button and its menu: "Delete conversation". */
+@Composable
+private fun AiMoreMenu(
+    onDelete: () -> Unit,
+    enabled: Boolean,
+) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        Box(
+            modifier =
+                Modifier
+                    .size(34.dp)
+                    .clip(CircleShape)
+                    .clickable(enabled = enabled, onClickLabel = "More options") { open = true }
+                    .testTag("chatAIMore")
+                    .semantics { contentDescription = "More options" },
+            contentAlignment = Alignment.Center,
+        ) {
+            PantopusIconImage(icon = PantopusIcon.MoreHorizontal, contentDescription = null, size = 18.dp, tint = PantopusColors.appText)
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(
+                leadingIcon = {
+                    PantopusIconImage(icon = PantopusIcon.Trash2, contentDescription = null, size = 16.dp, tint = PantopusColors.error)
+                },
+                text = { Text(text = "Delete conversation", fontSize = 13.sp, color = PantopusColors.error) },
+                onClick = {
+                    open = false
+                    onDelete()
+                },
+                modifier = Modifier.testTag("chatAIDeleteConversation"),
+            )
+        }
+    }
+}
+
 @Composable
 private fun HeaderAvatar(
     isAi: Boolean,
@@ -1989,10 +2210,11 @@ internal fun EmptyFrame(
     conversationMode: ChatConversationMode = ChatConversationMode.Dm,
     fanEntitlement: ChatFanEntitlement? = null,
     onCapabilityTap: (ChatPromptChip) -> Unit = {},
+    aiStarters: List<String> = emptyList(),
 ) {
     val isAi = conversationMode == ChatConversationMode.AiAssistant || counterparty is ChatCounterparty.Ai
     when {
-        isAi -> AiWelcomeFrame(onCapabilityTap = onCapabilityTap)
+        isAi -> AiWelcomeFrame(onCapabilityTap = onCapabilityTap, starters = aiStarters)
         conversationMode == ChatConversationMode.FanThread ->
             FanEmptyFrame(
                 counterparty = counterparty,
@@ -2279,7 +2501,10 @@ private fun TrustPill(text: String) {
 
 /** A15.3 "Empty AI" frame: big avatar, "Ask me anything", trust pill, 2×2 prompt grid. */
 @Composable
-private fun AiWelcomeFrame(onCapabilityTap: (ChatPromptChip) -> Unit) {
+private fun AiWelcomeFrame(
+    onCapabilityTap: (ChatPromptChip) -> Unit,
+    starters: List<String> = emptyList(),
+) {
     Column(
         modifier =
             Modifier
@@ -2315,26 +2540,37 @@ private fun AiWelcomeFrame(onCapabilityTap: (ChatPromptChip) -> Unit) {
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(Spacing.s2),
         ) {
-            // Launch cut #3 (Marketplace): a Home prompt takes the Marketplace card's place.
-            launchPromptCards().chunked(2).forEach { rowCards ->
-                Row(
+            // Opened with Ask Pantopus: the starter prompts of the screen it was tapped on.
+            starterChips(starters).forEach { chip ->
+                AiCapabilityChip(
+                    chip = chip,
+                    onTap = onCapabilityTap,
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
-                ) {
-                    rowCards.forEach { card ->
-                        AiPromptCard(
-                            card = card,
-                            onTap = { tapped ->
-                                // Tapping sends the full question as the
-                                // thread's first message (iOS parity).
-                                onCapabilityTap(
-                                    ChatPromptChip(id = tapped.id, label = tapped.question, icon = tapped.icon),
-                                )
-                            },
-                            modifier = Modifier.weight(1f),
-                        )
+                    testTag = "chatAIStarter_${chip.id}",
+                )
+            }
+            // Launch cut #3 (Marketplace): a Home prompt takes the Marketplace card's place.
+            if (starters.isEmpty()) {
+                launchPromptCards().chunked(2).forEach { rowCards ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+                    ) {
+                        rowCards.forEach { card ->
+                            AiPromptCard(
+                                card = card,
+                                onTap = { tapped ->
+                                    // Tapping sends the full question as the
+                                    // thread's first message (iOS parity).
+                                    onCapabilityTap(
+                                        ChatPromptChip(id = tapped.id, label = tapped.question, icon = tapped.icon),
+                                    )
+                                },
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                        if (rowCards.size == 1) Spacer(modifier = Modifier.weight(1f))
                     }
-                    if (rowCards.size == 1) Spacer(modifier = Modifier.weight(1f))
                 }
             }
         }
@@ -2519,13 +2755,26 @@ private fun AiWelcomeCard(
  */
 private const val NEAR_BOTTOM_ROW_SLACK = 2
 
+private val PHOTO_BUBBLE_WIDTH = 200.dp
+private val PHOTO_BUBBLE_HEIGHT = 130.dp
+
+/** A send that is accepted sooner shows "Sending..." and then its check, without a spinner flashing in between. */
+private const val SENDING_INDICATOR_DELAY_MS = 600L
+
+private data class ChatPrependAnchor(val rowId: String, val scrollOffset: Int, val oldestMessageId: String)
+
 @Composable
 internal fun PopulatedFrame(
     rows: List<ChatTimelineRow>,
     onRetry: (String) -> Unit,
     onLoadOlder: () -> Unit,
+    olderPageFailed: Boolean = false,
+    onVisibleMessage: (String) -> Unit = {},
+    onViewport: (String?, Boolean) -> Unit = { _, _ -> },
     scrollToRowId: String? = null,
     onScrollConsumed: () -> Unit = {},
+    showLatestMessages: Boolean = false,
+    onLatestMessages: () -> Unit = {},
     conversationMode: ChatConversationMode = ChatConversationMode.Dm,
     incomingInitials: String? = null,
     aiPrompts: List<ChatPromptChip> = emptyList(),
@@ -2535,6 +2784,7 @@ internal fun PopulatedFrame(
     selectedMessageIds: Set<String> = emptySet(),
     onBubbleTap: (ChatBubbleContent) -> Unit = {},
     onUseAIDraft: (ChatAIDraftCard) -> Unit = {},
+    aiReplyActions: ChatAIReplyActions = ChatAIReplyActions(),
     onOpenGig: (String) -> Unit = {},
     onOpenListing: (String) -> Unit = {},
     onOpenLocation: (Double, Double) -> Unit = { _, _ -> },
@@ -2544,11 +2794,16 @@ internal fun PopulatedFrame(
     onOpenUrl: (String) -> Unit = {},
     onOpenPhotos: ((List<String>, Int) -> Unit)? = null,
     onOpenAttachment: ((ChatBubbleBody.Attachment) -> Unit)? = null,
+    timelineSession: String? = null,
 ) {
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     var newMessageCount by rememberSaveable { mutableIntStateOf(0) }
     var previousNewestId by rememberSaveable { mutableStateOf<String?>(null) }
+    var previousTailKeys by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var previousRowCount by remember { mutableIntStateOf(0) }
+    var prependAnchor by remember { mutableStateOf<ChatPrependAnchor?>(null) }
+    val oldestMessageId = rows.firstOrNull { it is ChatTimelineRow.Bubble }?.rowId
     // Leading non-row items (pagination spacer + any pinned welcome card)
     // offset row indices inside the LazyColumn.
     val headerCount =
@@ -2556,19 +2811,43 @@ internal fun PopulatedFrame(
     // Set once the first non-empty projection has been positioned — gates
     // the load-older trigger so it can't fire while the list still sits at
     // the top pre-scroll.
-    var initialScrollDone by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(rows.size, rows.lastOrNull()?.rowId) {
+    // A saved position belongs to the view model whose rows it indexed. After the process was stopped, the new one's
+    // rows open at their newest message instead of at that unrelated saved row index.
+    var initialScrollDone by rememberSaveable(key = timelineSession?.let { "chatTimelinePositioned-$it" }) {
+        mutableStateOf(false)
+    }
+    // The first non-empty timeline is measured at its newest message in this same frame, so opening a thread never
+    // flashes its oldest loaded rows or lays them out twice. The effect below then marks the initial scroll done.
+    if (!initialScrollDone && rows.isNotEmpty() && scrollToRowId == null) {
+        SideEffect { listState.requestScrollToItem(headerCount + rows.lastIndex) }
+    }
+    LaunchedEffect(rows.size, rows.lastOrNull()?.rowId, oldestMessageId) {
         if (rows.isEmpty()) return@LaunchedEffect
         val lastIndex = headerCount + rows.lastIndex
         val previousIndex = rows.indexOfLast { it.rowId == previousNewestId }
         val appended = if (previousIndex >= 0) rows.drop(previousIndex + 1).count { it is ChatTimelineRow.Bubble } else 0
+        val oldTailKeys = previousTailKeys
+        val addedRows = rows.size - previousRowCount
+        previousRowCount = rows.size
+        previousTailKeys = rows.takeLast(NEAR_BOTTOM_ROW_SLACK + 1).map { it.rowId }.toSet()
         previousNewestId = rows.lastOrNull { it is ChatTimelineRow.Bubble }?.rowId
         if (!initialScrollDone) {
             // Open at the latest message. A Chat Search deep-link owns the
             // first scroll instead (the effect below lands on the match).
             if (scrollToRowId == null) listState.scrollToItem(lastIndex)
+            newMessageCount = 0
             initialScrollDone = true
             return@LaunchedEffect
+        }
+        // A day divider can keep the same key when older bubbles are inserted below it. Restore the
+        // visible bubble explicitly so that keeping that divider at the top cannot jump a whole page.
+        prependAnchor?.takeIf { it.oldestMessageId != oldestMessageId }?.let { anchor ->
+            prependAnchor = null
+            val anchorIndex = rows.indexOfFirst { it.rowId == anchor.rowId }
+            if (anchorIndex >= 0) {
+                listState.scrollToItem(anchorIndex + headerCount, anchor.scrollOffset)
+                return@LaunchedEffect
+            }
         }
         // Follow appended rows (own sends, incoming messages) only when the
         // user is already reading near the bottom — never yank them out of
@@ -2576,12 +2855,33 @@ internal fun PopulatedFrame(
         // stable keys, so they fail this check and preserve position.
         val layoutInfo = listState.layoutInfo
         val lastVisible = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: return@LaunchedEffect
-        if (lastVisible >= layoutInfo.totalItemsCount - 1 - NEAR_BOTTOM_ROW_SLACK) {
+        // A recovered batch can grow the measured list before this effect runs, including before a pending bubble.
+        // Visible keys from the previous tail retain the reader's position relative to the old bottom.
+        val wasNearBottom = layoutInfo.visibleItemsInfo.any { it.key in oldTailKeys }
+        if (wasNearBottom || lastVisible >= layoutInfo.totalItemsCount - 1 - NEAR_BOTTOM_ROW_SLACK) {
             newMessageCount = 0
-            listState.animateScrollToItem(lastIndex)
+            if (addedRows > NEAR_BOTTOM_ROW_SLACK) {
+                listState.scrollToItem(lastIndex)
+            } else {
+                listState.animateScrollToItem(lastIndex)
+            }
         } else {
             newMessageCount += appended
         }
+    }
+    val rowsByKey = remember(rows) { rows.associateBy { it.rowId } }
+    LaunchedEffect(listState, rowsByKey) {
+        snapshotFlow { listState.layoutInfo.visibleItemsInfo.map { it.key } to !listState.canScrollForward }
+            .collect { (visibleKeys, atBottom) ->
+                val visibleMessages =
+                    visibleKeys.mapNotNull { key ->
+                        (rowsByKey[key] as? ChatTimelineRow.Bubble)?.content?.id?.takeUnless { it.startsWith("client_") }
+                    }
+                if (initialScrollDone) onViewport(visibleMessages.firstOrNull(), atBottom)
+                // A person thread can interleave several rooms. Report every visible room's messages so
+                // reading its newest bubble cannot acknowledge a different room's unseen history.
+                visibleMessages.forEach(onVisibleMessage)
+            }
     }
     LaunchedEffect(listState) {
         snapshotFlow { !listState.canScrollForward }.collect { atBottom ->
@@ -2611,8 +2911,24 @@ internal fun PopulatedFrame(
     val shouldLoadOlder by remember {
         derivedStateOf { initialScrollDone && listState.firstVisibleItemIndex <= 1 }
     }
-    LaunchedEffect(shouldLoadOlder, rows.firstOrNull()?.rowId) {
-        if (shouldLoadOlder) onLoadOlder()
+    val loadOlderAnchored: () -> Unit = {
+        val visibleBubbles = listState.layoutInfo.visibleItemsInfo.filter { rowsByKey[it.key] is ChatTimelineRow.Bubble }
+        // The oldest bubble can lose its sender heading when its preceding bubble arrives. Anchor a
+        // following visible bubble, whose contents keep the same height, whenever one is available.
+        val firstBubble = visibleBubbles.firstOrNull { it.key != oldestMessageId } ?: visibleBubbles.firstOrNull()
+        prependAnchor =
+            firstBubble?.let { bubble ->
+                oldestMessageId?.let { ChatPrependAnchor(bubble.key.toString(), -bubble.offset, it) }
+            }
+        onLoadOlder()
+    }
+    LaunchedEffect(shouldLoadOlder, oldestMessageId) {
+        if (shouldLoadOlder) {
+            // A gesture can reach the top while the prior cursor is still in flight. Reconsider after
+            // its page changes, but let the prepend anchor settle before deciding whether to fetch again.
+            withFrameNanos { }
+            if (initialScrollDone && listState.firstVisibleItemIndex <= 1 && !olderPageFailed) loadOlderAnchored()
+        }
     }
     // Chat Search deep-link: animate to the matched row once it lands in
     // the list, then clear the target. The [headerCount] offset skips the
@@ -2634,7 +2950,13 @@ internal fun PopulatedFrame(
             contentPadding = PaddingValues(horizontal = Spacing.s3, vertical = Spacing.s3),
         ) {
             item(key = "chat_pagination_top_spacer") {
-                Spacer(modifier = Modifier.size(1.dp))
+                if (olderPageFailed) {
+                    TextButton(onClick = loadOlderAnchored, modifier = Modifier.fillMaxWidth()) {
+                        Text("Couldn't load earlier messages. Retry")
+                    }
+                } else {
+                    Spacer(modifier = Modifier.size(1.dp))
+                }
             }
             // A15.5's "Auto-welcome · free" card is omitted: no persona
             // welcome-message exists on the wire, and the design's copy is
@@ -2650,7 +2972,7 @@ internal fun PopulatedFrame(
                     )
                 }
             }
-            items(items = rows, key = { it.rowId }) { row ->
+            items(items = rows, key = { it.rowId }, contentType = { it.javaClass }) { row ->
                 when (row) {
                     is ChatTimelineRow.DayDivider -> DayDividerRow(label = row.divider.label)
                     is ChatTimelineRow.TopicDivider -> TopicDividerRow(label = row.label)
@@ -2659,12 +2981,13 @@ internal fun PopulatedFrame(
                     is ChatTimelineRow.Bubble ->
                         BubbleRow(
                             content = row.content,
-                            incomingInitials = incomingInitials,
+                            incomingInitials = row.content.senderName?.initials() ?: incomingInitials,
                             onLockedAction = onLockedAction,
                             onLongPress = { onBubbleLongPress(row.content) },
                             isSelected = selectedMessageIds.contains(row.content.id),
                             onTap = { onBubbleTap(row.content) },
                             onUseAIDraft = onUseAIDraft,
+                            aiReplyActions = aiReplyActions,
                             onOpenGig = onOpenGig,
                             onOpenListing = onOpenListing,
                             onOpenLocation = onOpenLocation,
@@ -2681,11 +3004,15 @@ internal fun PopulatedFrame(
                 }
             }
         }
-        if (newMessageCount > 0) {
+        if (newMessageCount > 0 || showLatestMessages) {
             TextButton(
                 onClick = {
                     newMessageCount = 0
-                    scope.launch { listState.animateScrollToItem((listState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0)) }
+                    if (showLatestMessages) {
+                        onLatestMessages()
+                    } else {
+                        scope.launch { listState.animateScrollToItem((listState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0)) }
+                    }
                 },
                 modifier =
                     Modifier.align(Alignment.BottomCenter).padding(bottom = Spacing.s2)
@@ -2693,7 +3020,16 @@ internal fun PopulatedFrame(
                         .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.pill))
                         .testTag("chatNewMessages"),
             ) {
-                Text(if (newMessageCount == 1) "1 new message ↓" else "$newMessageCount new messages ↓", color = PantopusColors.appText)
+                Text(
+                    if (showLatestMessages) {
+                        "Latest messages ↓"
+                    } else if (newMessageCount == 1) {
+                        "1 new message ↓"
+                    } else {
+                        "$newMessageCount new messages ↓"
+                    },
+                    color = PantopusColors.appText,
+                )
             }
         }
     }
@@ -2837,6 +3173,7 @@ private fun BubbleRow(
     isSelected: Boolean = false,
     onTap: () -> Unit = {},
     onUseAIDraft: (ChatAIDraftCard) -> Unit,
+    aiReplyActions: ChatAIReplyActions = ChatAIReplyActions(),
     onOpenGig: (String) -> Unit,
     onOpenListing: (String) -> Unit,
     onOpenLocation: (Double, Double) -> Unit,
@@ -2897,20 +3234,77 @@ private fun BubbleRow(
             Spacer(modifier = Modifier.size(6.dp))
         }
         Column(horizontalAlignment = if (isOut) Alignment.End else Alignment.Start) {
+            if (!isOut && !content.isContinuation) {
+                content.senderName?.let { name ->
+                    Text(text = name, fontSize = 12.sp, color = PantopusColors.appTextSecondary)
+                }
+            }
+            val canViewAttachments = content.lockedTier == null || isOut
+            if (content.body !is ChatBubbleBody.Text && content.replyPreview != null && canViewAttachments) {
+                BubbleContainer(
+                    isOut = isOut,
+                    hasTail = false,
+                    isContinuation = content.isContinuation,
+                    bubbleColor = bubbleColor,
+                    contentId = content.id,
+                ) {
+                    Column(modifier = Modifier.widthIn(max = bubbleMaxWidth)) {
+                        ReplyPreview(preview = content.replyPreview, isOut = isOut)
+                    }
+                }
+            }
             // Reactions float as pills overlapping the bubble's bottom
             // corner (design `.reaction { bottom: -10; left/right: 8 }`).
             Box {
-                when (val body = content.body) {
-                    is ChatBubbleBody.Text ->
-                        if (isEmojiOnly(body.text)) {
-                            // Emoji-only messages render large with no bubble (RN).
-                            Text(
-                                text = body.text,
-                                fontSize = 48.sp,
-                                lineHeight = 56.sp,
-                                color = textColor,
-                            )
-                        } else {
+                val hasInlineAttachments =
+                    content.attachments.any {
+                        !it.mimeType.orEmpty().startsWith("image/") || it.liveVideoFileId != null
+                    }
+                if (hasInlineAttachments && canViewAttachments) {
+                    BubbleContainer(
+                        isOut = isOut,
+                        hasTail = content.hasTail,
+                        isContinuation = content.isContinuation,
+                        bubbleColor = bubbleColor,
+                        lockedTier = null,
+                        onLockedAction = onLockedAction,
+                        contentId = content.id,
+                    ) {
+                        ChatAttachmentRows(content, isOut, textColor, onOpenAttachment, onOpenPhotos, onOpenUrl)
+                    }
+                } else {
+                    when (val body = content.body) {
+                        is ChatBubbleBody.Text ->
+                            if (isEmojiOnly(body.text) && content.replyPreview == null) {
+                                // Emoji-only messages render large with no bubble (RN).
+                                Text(
+                                    text = body.text,
+                                    fontSize = 48.sp,
+                                    lineHeight = 56.sp,
+                                    color = textColor,
+                                )
+                            } else {
+                                BubbleContainer(
+                                    isOut = isOut,
+                                    hasTail = content.hasTail,
+                                    isContinuation = content.isContinuation,
+                                    bubbleColor = bubbleColor,
+                                    lockedTier = content.lockedTier?.takeIf { !isOut },
+                                    onLockedAction = onLockedAction,
+                                    contentId = content.id,
+                                ) {
+                                    Column(modifier = Modifier.widthIn(max = bubbleMaxWidth)) {
+                                        ReplyPreview(preview = content.replyPreview, isOut = isOut)
+                                        LinkifiedBubbleText(
+                                            text = body.text,
+                                            isOut = isOut,
+                                            textColor = textColor,
+                                            onOpenUrl = onOpenUrl,
+                                        )
+                                    }
+                                }
+                            }
+                        is ChatBubbleBody.TextWithImages ->
                             BubbleContainer(
                                 isOut = isOut,
                                 hasTail = content.hasTail,
@@ -2920,87 +3314,135 @@ private fun BubbleRow(
                                 onLockedAction = onLockedAction,
                                 contentId = content.id,
                             ) {
-                                Column(modifier = Modifier.widthIn(max = bubbleMaxWidth)) {
-                                    ReplyPreview(preview = content.replyPreview, isOut = isOut)
-                                    LinkifiedBubbleText(
-                                        text = body.text,
-                                        isOut = isOut,
-                                        textColor = textColor,
-                                        onOpenUrl = onOpenUrl,
-                                    )
+                                Column(
+                                    modifier = Modifier.widthIn(max = bubbleMaxWidth),
+                                    verticalArrangement = Arrangement.spacedBy(Spacing.s2),
+                                ) {
+                                    if (body.text.isNotBlank()) {
+                                        LinkifiedBubbleText(
+                                            text = body.text,
+                                            isOut = isOut,
+                                            textColor = textColor,
+                                            onOpenUrl = onOpenUrl,
+                                        )
+                                    }
+                                    if (body.imageUrls.isNotEmpty()) {
+                                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            body.imageUrls.take(3).forEach { url ->
+                                                AsyncImage(
+                                                    model = inlinePhotoRequest(url),
+                                                    contentDescription = "AI prompt image",
+                                                    contentScale = ContentScale.Crop,
+                                                    modifier =
+                                                        Modifier
+                                                            .size(72.dp)
+                                                            .clip(RoundedCornerShape(Radii.md)),
+                                                )
+                                            }
+                                        }
+                                    }
+                                    // Documents sent to the assistant: a chip each, as a file in a chat shows.
+                                    body.files.forEach { file -> SentFileChip(file = file, isOut = isOut, textColor = textColor) }
                                 }
                             }
-                        }
-                    is ChatBubbleBody.TextWithImages ->
-                        BubbleContainer(
-                            isOut = isOut,
-                            hasTail = content.hasTail,
-                            isContinuation = content.isContinuation,
-                            bubbleColor = bubbleColor,
-                            lockedTier = content.lockedTier?.takeIf { !isOut },
-                            onLockedAction = onLockedAction,
-                            contentId = content.id,
-                        ) {
+                        is ChatBubbleBody.Image -> {
+                            val photos = listOfNotNull(body.url) + body.moreUrls
+                            val lockedTier = content.lockedTier?.takeIf { !isOut }
                             Column(
-                                modifier = Modifier.widthIn(max = bubbleMaxWidth),
-                                verticalArrangement = Arrangement.spacedBy(Spacing.s2),
+                                horizontalAlignment = if (isOut) Alignment.End else Alignment.Start,
+                                verticalArrangement = Arrangement.spacedBy(2.dp),
                             ) {
-                                if (body.text.isNotBlank()) {
-                                    LinkifiedBubbleText(
-                                        text = body.text,
+                                PhotoBubble(
+                                    url = body.url,
+                                    local = body.local.firstOrNull(),
+                                    isOut = isOut,
+                                    hasTail = content.hasTail && body.caption == null,
+                                    isContinuation = content.isContinuation,
+                                    lockedTier = lockedTier,
+                                    onLockedAction = onLockedAction,
+                                    contentId = content.id,
+                                    moreCount = maxOf(body.moreUrls.size, body.local.size - 1),
+                                    onOpen =
+                                        onOpenPhotos
+                                            ?.takeIf { photos.isNotEmpty() && lockedTier == null }
+                                            ?.let { open -> { open(photos, 0) } },
+                                    onLongPress = onLongPress,
+                                )
+                                if (body.caption != null && lockedTier == null) {
+                                    BubbleContainer(
                                         isOut = isOut,
-                                        textColor = textColor,
-                                        onOpenUrl = onOpenUrl,
-                                    )
-                                }
-                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    body.imageUrls.take(3).forEach { url ->
-                                        AsyncImage(
-                                            model = inlinePhotoRequest(url),
-                                            contentDescription = "AI prompt image",
-                                            contentScale = ContentScale.Crop,
-                                            modifier =
-                                                Modifier
-                                                    .size(72.dp)
-                                                    .clip(RoundedCornerShape(Radii.md)),
-                                        )
+                                        hasTail = content.hasTail,
+                                        isContinuation = true,
+                                        bubbleColor = bubbleColor,
+                                        contentId = content.id,
+                                    ) {
+                                        Column(modifier = Modifier.widthIn(max = bubbleMaxWidth)) {
+                                            LinkifiedBubbleText(
+                                                text = body.caption,
+                                                isOut = isOut,
+                                                textColor = textColor,
+                                                onOpenUrl = onOpenUrl,
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
-                    is ChatBubbleBody.Image -> {
-                        val photos = listOfNotNull(body.url) + body.moreUrls
-                        val lockedTier = content.lockedTier?.takeIf { !isOut }
-                        Column(
-                            horizontalAlignment = if (isOut) Alignment.End else Alignment.Start,
-                            verticalArrangement = Arrangement.spacedBy(2.dp),
-                        ) {
-                            PhotoBubble(
-                                url = body.url,
+                        is ChatBubbleBody.Attachment ->
+                            BubbleContainer(
                                 isOut = isOut,
-                                hasTail = content.hasTail && body.caption == null,
+                                hasTail = content.hasTail,
                                 isContinuation = content.isContinuation,
-                                lockedTier = lockedTier,
+                                bubbleColor = bubbleColor,
+                                lockedTier = content.lockedTier?.takeIf { !isOut },
                                 onLockedAction = onLockedAction,
                                 contentId = content.id,
-                                moreCount = body.moreUrls.size,
-                                onOpen =
-                                    onOpenPhotos
-                                        ?.takeIf { photos.isNotEmpty() && lockedTier == null }
-                                        ?.let { open -> { open(photos, 0) } },
-                                onLongPress = onLongPress,
-                            )
-                            if (body.caption != null && lockedTier == null) {
-                                BubbleContainer(
-                                    isOut = isOut,
-                                    hasTail = content.hasTail,
-                                    isContinuation = true,
-                                    bubbleColor = bubbleColor,
-                                    contentId = content.id,
+                            ) {
+                                val openFile = onOpenAttachment?.takeIf { body.fileUrl != null }
+                                Column(
+                                    modifier = Modifier.widthIn(max = bubbleMaxWidth),
+                                    verticalArrangement = Arrangement.spacedBy(Spacing.s1),
                                 ) {
-                                    Column(modifier = Modifier.widthIn(max = bubbleMaxWidth)) {
+                                    Row(
+                                        modifier =
+                                            if (openFile != null) {
+                                                Modifier
+                                                    .combinedClickable(
+                                                        onClickLabel = "Open ${body.filename}",
+                                                        onClick = { openFile(body) },
+                                                        onLongClick = onLongPress,
+                                                    ).testTag("chatAttachmentOpen")
+                                            } else {
+                                                Modifier
+                                            },
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+                                    ) {
+                                        PantopusIconImage(
+                                            icon = PantopusIcon.File,
+                                            contentDescription = null,
+                                            size = 18.dp,
+                                            tint = if (isOut) PantopusColors.appTextInverse else PantopusColors.primary600,
+                                        )
+                                        Column {
+                                            Text(
+                                                text = body.filename,
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = textColor,
+                                            )
+                                            body.sizeLabel?.let { size ->
+                                                Text(
+                                                    text = size,
+                                                    fontSize = 11.sp,
+                                                    color = textColor.copy(alpha = 0.75f),
+                                                )
+                                            }
+                                        }
+                                    }
+                                    body.caption?.let { caption ->
                                         LinkifiedBubbleText(
-                                            text = body.caption,
+                                            text = caption,
                                             isOut = isOut,
                                             textColor = textColor,
                                             onOpenUrl = onOpenUrl,
@@ -3008,90 +3450,28 @@ private fun BubbleRow(
                                     }
                                 }
                             }
-                        }
+                        is ChatBubbleBody.SystemLink -> SystemLinkPill(body)
+                        is ChatBubbleBody.LocationCard ->
+                            ChatLocationCardView(
+                                card = body.card,
+                                isOutgoing = isOut,
+                                onOpen = { onOpenLocation(body.card.latitude, body.card.longitude) },
+                            )
+                        is ChatBubbleBody.GigOfferCard ->
+                            ChatGigOfferCardView(
+                                card = body.card,
+                                isOutgoing = isOut,
+                                onOpen = { body.card.gigId.takeIf { it.isNotBlank() }?.let(onOpenGig) },
+                            )
+                        is ChatBubbleBody.ListingOfferCard ->
+                            ChatListingOfferCardView(
+                                card = body.card,
+                                isOutgoing = isOut,
+                                onOpen = { body.card.listingId.takeIf { it.isNotBlank() }?.let(onOpenListing) },
+                            )
+                        is ChatBubbleBody.AiReply ->
+                            AiReplyBubble(body = body, hasTail = content.hasTail, onUseDraft = onUseAIDraft, actions = aiReplyActions)
                     }
-                    is ChatBubbleBody.Attachment ->
-                        BubbleContainer(
-                            isOut = isOut,
-                            hasTail = content.hasTail,
-                            isContinuation = content.isContinuation,
-                            bubbleColor = bubbleColor,
-                            lockedTier = content.lockedTier?.takeIf { !isOut },
-                            onLockedAction = onLockedAction,
-                            contentId = content.id,
-                        ) {
-                            val openFile = onOpenAttachment?.takeIf { body.fileUrl != null }
-                            Column(
-                                modifier = Modifier.widthIn(max = bubbleMaxWidth),
-                                verticalArrangement = Arrangement.spacedBy(Spacing.s1),
-                            ) {
-                                Row(
-                                    modifier =
-                                        if (openFile != null) {
-                                            Modifier
-                                                .combinedClickable(
-                                                    onClickLabel = "Open ${body.filename}",
-                                                    onClick = { openFile(body) },
-                                                    onLongClick = onLongPress,
-                                                ).testTag("chatAttachmentOpen")
-                                        } else {
-                                            Modifier
-                                        },
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
-                                ) {
-                                    PantopusIconImage(
-                                        icon = PantopusIcon.File,
-                                        contentDescription = null,
-                                        size = 18.dp,
-                                        tint = if (isOut) PantopusColors.appTextInverse else PantopusColors.primary600,
-                                    )
-                                    Column {
-                                        Text(
-                                            text = body.filename,
-                                            fontSize = 13.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = textColor,
-                                        )
-                                        body.sizeLabel?.let { size ->
-                                            Text(
-                                                text = size,
-                                                fontSize = 11.sp,
-                                                color = textColor.copy(alpha = 0.75f),
-                                            )
-                                        }
-                                    }
-                                }
-                                body.caption?.let { caption ->
-                                    LinkifiedBubbleText(
-                                        text = caption,
-                                        isOut = isOut,
-                                        textColor = textColor,
-                                        onOpenUrl = onOpenUrl,
-                                    )
-                                }
-                            }
-                        }
-                    is ChatBubbleBody.SystemLink -> SystemLinkPill(body)
-                    is ChatBubbleBody.LocationCard ->
-                        ChatLocationCardView(
-                            card = body.card,
-                            isOutgoing = isOut,
-                            onOpen = { onOpenLocation(body.card.latitude, body.card.longitude) },
-                        )
-                    is ChatBubbleBody.GigOfferCard ->
-                        ChatGigOfferCardView(
-                            card = body.card,
-                            isOutgoing = isOut,
-                            onOpen = { body.card.gigId.takeIf { it.isNotBlank() }?.let(onOpenGig) },
-                        )
-                    is ChatBubbleBody.ListingOfferCard ->
-                        ChatListingOfferCardView(
-                            card = body.card,
-                            isOutgoing = isOut,
-                            onOpen = { body.card.listingId.takeIf { it.isNotBlank() }?.let(onOpenListing) },
-                        )
-                    is ChatBubbleBody.AiReply -> AiReplyBubble(body = body, hasTail = content.hasTail, onUseDraft = onUseAIDraft)
                 }
                 if (content.reactions.isNotEmpty()) {
                     // Tapping a pill toggles the reaction (iOS parity).
@@ -3173,21 +3553,23 @@ private fun ReplyPreview(
 }
 
 /**
- * First http(s) URL in [text] via [Patterns.WEB_URL], or null. Schemeless
- * matches ("example.com") are ignored — only explicit http/https links
- * become tappable / drive the preview card.
+ * Detect web links and discard surrounding punctuation, including schemeless domains.
  */
-private fun firstHttpUrl(text: String): String? {
-    if (!text.contains("http://", ignoreCase = true) && !text.contains("https://", ignoreCase = true)) return null
+private fun chatLinks(text: String): List<Triple<Int, String, String>> {
+    val links = mutableListOf<Triple<Int, String, String>>()
     val matcher = Patterns.WEB_URL.matcher(text)
     while (matcher.find()) {
-        val match = matcher.group()
-        if (match.startsWith("http://", ignoreCase = true) || match.startsWith("https://", ignoreCase = true)) {
-            return match
+        var raw = matcher.group().trimEnd('.', ',', ';', ':', '!', '?')
+        for ((open, close) in listOf('(' to ')', '[' to ']', '{' to '}')) {
+            while (raw.endsWith(close) && raw.count { it == close } > raw.count { it == open }) raw = raw.dropLast(1)
         }
+        val http = raw.startsWith("http://", true) || raw.startsWith("https://", true)
+        if (raw.isNotBlank() && (http || !raw.contains("://"))) links += Triple(matcher.start(), raw, if (http) raw else "https://$raw")
     }
-    return null
+    return links
 }
+
+private fun firstHttpUrl(text: String): String? = chatLinks(text).firstOrNull()?.third
 
 /**
  * Bubble body text with http(s) URLs rendered as tappable, underlined
@@ -3206,17 +3588,11 @@ private fun LinkifiedBubbleText(
         remember(text, isOut) {
             buildAnnotatedString {
                 var cursor = 0
-                val matcher = Patterns.WEB_URL.matcher(text)
-                while (matcher.find()) {
-                    val match = matcher.group()
-                    val isHttp =
-                        match.startsWith("http://", ignoreCase = true) ||
-                            match.startsWith("https://", ignoreCase = true)
-                    if (!isHttp) continue
-                    append(text.substring(cursor, matcher.start()))
+                for ((start, match, url) in chatLinks(text)) {
+                    append(text.substring(cursor, start))
                     withLink(
                         LinkAnnotation.Url(
-                            url = match,
+                            url = url,
                             styles =
                                 TextLinkStyles(
                                     style =
@@ -3225,10 +3601,10 @@ private fun LinkifiedBubbleText(
                                             textDecoration = TextDecoration.Underline,
                                         ),
                                 ),
-                            linkInteractionListener = { onOpenUrl(match) },
+                            linkInteractionListener = { onOpenUrl(url) },
                         ),
                     ) { append(match) }
-                    cursor = matcher.end()
+                    cursor = start + match.length
                 }
                 append(text.substring(cursor))
             }
@@ -3242,8 +3618,10 @@ private fun LinkifiedBubbleText(
 }
 
 /**
- * A15.2 `.link-bubble` preview card under a text bubble: optional image
- * strip, host overline, title, description. Tapping opens the URL.
+ * A15.2 `.link-bubble` preview card under a text bubble: site overline,
+ * title, description. Text only: the page's own image would load from a
+ * host the sender picked, showing it the recipient's IP address. Tapping
+ * opens the URL.
  */
 @Composable
 private fun LinkPreviewCard(
@@ -3261,49 +3639,37 @@ private fun LinkPreviewCard(
                 .background(PantopusColors.appSurface)
                 .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.lg))
                 .clickable(onClick = onOpen)
-                .testTag("chatLinkPreview_${preview.url.hashCode()}"),
+                .testTag("chatLinkPreview_${preview.url.hashCode()}")
+                .padding(horizontal = Spacing.s3, vertical = Spacing.s2),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        preview.imageUrl?.let { imageUrl ->
-            AsyncImage(
-                model = imageUrl,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .height(88.dp),
-            )
-        }
-        Column(
-            modifier = Modifier.padding(horizontal = Spacing.s3, vertical = Spacing.s2),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
+        Text(
+            text = preview.site.uppercase(),
+            fontSize = 9.5.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.5.sp,
+            color = PantopusColors.appTextMuted,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        preview.title?.let { title ->
             Text(
-                text = preview.host.uppercase(),
-                fontSize = 9.5.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 0.5.sp,
-                color = PantopusColors.appTextMuted,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = preview.title,
+                text = title,
                 fontSize = 12.5.sp,
                 fontWeight = FontWeight.Bold,
                 color = PantopusColors.appText,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-            preview.description?.takeIf { it.isNotBlank() }?.let { description ->
-                Text(
-                    text = description,
-                    fontSize = 11.sp,
-                    color = PantopusColors.appTextSecondary,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
+        }
+        preview.description?.let { description ->
+            Text(
+                text = description,
+                fontSize = 11.sp,
+                color = PantopusColors.appTextSecondary,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
@@ -3539,6 +3905,9 @@ private val ChatBubbleBody.copyableText: String?
 @Composable
 private fun MessageActionSheet(
     content: ChatBubbleContent,
+    canManageMessages: Boolean,
+    canDiscardMessage: Boolean,
+    onDiscard: () -> Unit,
     // Invoked after the text has landed on the clipboard — dismisses the sheet.
     onCopy: () -> Unit,
     onReply: () -> Unit,
@@ -3583,10 +3952,11 @@ private fun MessageActionSheet(
         // for rows with no server id: in-flight optimistic sends
         // (`client_`) and AI-thread local rows (`ai_user_` /
         // `ai_assistant_`), whose edits/deletes can only ever 404.
-        if (content.side == ChatMessageSide.Outgoing &&
-            !content.id.startsWith("client_") &&
-            !content.id.startsWith("ai_")
-        ) {
+        if (canDiscardMessage) {
+            MessageActionRow(label = "Stop retrying", icon = PantopusIcon.Trash2, destructive = true, onClick = onDiscard)
+        }
+        val isPersistedMessage = !content.id.startsWith("client_") && !content.id.startsWith("ai_")
+        if (canManageMessages && content.side == ChatMessageSide.Outgoing && isPersistedMessage) {
             MessageActionRow(label = "Select", icon = PantopusIcon.CheckCircle, onClick = onSelect)
             MessageActionRow(label = "Edit", icon = PantopusIcon.Pencil, onClick = onEdit)
             MessageActionRow(label = "Delete", icon = PantopusIcon.Trash2, destructive = true, onClick = onDelete)
@@ -3693,6 +4063,26 @@ private fun SelectionDeleteBar(
                 color = if (enabled) PantopusColors.appTextInverse else PantopusColors.appTextMuted,
             )
         }
+    }
+}
+
+// MARK: - Closed conversation line
+
+/**
+ * In place of the composer when the conversation takes no messages from you, in the server's words (a direct chat
+ * with a draft or closed business), as iOS shows its closed line.
+ */
+@Composable
+private fun ChatClosedLine(text: String) {
+    Column(modifier = Modifier.fillMaxWidth().background(PantopusColors.appSurface).testTag("chatClosedLine")) {
+        Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(PantopusColors.appBorder))
+        Text(
+            text = text,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s4, vertical = 14.dp),
+            fontSize = 13.sp,
+            color = PantopusColors.appTextSecondary,
+            textAlign = TextAlign.Center,
+        )
     }
 }
 
@@ -4261,6 +4651,8 @@ private fun MiniAvatar(
 private fun PhotoBubble(
     url: String?,
     isOut: Boolean,
+    // The same photo as picked on this phone: shown at once while it sends, and kept once it is sent.
+    local: ChatLocalPhoto? = null,
     hasTail: Boolean,
     isContinuation: Boolean = false,
     lockedTier: String? = null,
@@ -4282,7 +4674,7 @@ private fun PhotoBubble(
     Box(
         modifier =
             Modifier
-                .size(200.dp, 130.dp)
+                .size(PHOTO_BUBBLE_WIDTH, PHOTO_BUBBLE_HEIGHT)
                 .clip(shape)
                 .background(PantopusColors.appSurfaceSunken)
                 .border(1.dp, if (isOut) Color.Transparent else PantopusColors.appBorder, shape)
@@ -4294,7 +4686,14 @@ private fun PhotoBubble(
                     },
                 ).testTag("chatPhotoBubble"),
     ) {
-        if (url != null) {
+        if (local != null) {
+            AsyncImage(
+                model = localPhotoRequest(local),
+                contentDescription = "Photo attachment",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else if (url != null) {
             AsyncImage(
                 model = inlinePhotoRequest(url),
                 contentDescription = "Photo attachment",
@@ -4340,6 +4739,52 @@ private fun inlinePhotoRequest(url: String): ImageRequest {
             .data(thumbnail ?: url)
             .diskCachePolicy(if (thumbnail != null) CachePolicy.ENABLED else CachePolicy.READ_ONLY)
             .build()
+    }
+}
+
+/**
+ * A picked photo decodes from its bytes in this process; nothing is written to disk. Its decoded thumbnail is kept in
+ * memory under the attachment id at the bubble's size, so the sending bubble (decoded ahead while the message is being
+ * written) and the sent bubble that replaces it show it without decoding again.
+ */
+@Composable
+private fun localPhotoRequest(photo: ChatLocalPhoto): ImageRequest {
+    val context = LocalContext.current
+    val size = photoBubbleSize()
+    return remember(context, photo.id, size) { localPhotoRequest(context, photo, size) }
+}
+
+private fun localPhotoRequest(
+    context: Context,
+    photo: ChatLocalPhoto,
+    size: IntSize,
+): ImageRequest =
+    ImageRequest.Builder(context)
+        .data(photo.bytes)
+        .memoryCacheKey("chat-local-photo:${photo.id}")
+        .diskCachePolicy(CachePolicy.DISABLED)
+        .size(size.width, size.height)
+        .scale(Scale.FILL)
+        .crossfade(false)
+        .build()
+
+@Composable
+private fun photoBubbleSize(): IntSize {
+    val density = LocalDensity.current
+    return with(density) { IntSize(PHOTO_BUBBLE_WIDTH.roundToPx(), PHOTO_BUBBLE_HEIGHT.roundToPx()) }
+}
+
+/** Photos queued in the composer are decoded for their bubble while the message is still being written. */
+@Composable
+private fun PrefetchLocalPhotos(attachments: List<ChatQueuedAttachment>) {
+    val context = LocalContext.current
+    val size = photoBubbleSize()
+    val photos =
+        attachments.mapNotNull { queued ->
+            queued.bytes?.takeIf { queued.mimeType.startsWith("image/") }?.let { ChatLocalPhoto(queued.id, it) }
+        }
+    LaunchedEffect(photos, size) {
+        photos.forEach { photo -> context.imageLoader.enqueue(localPhotoRequest(context, photo, size)) }
     }
 }
 
@@ -4391,6 +4836,7 @@ private fun AiReplyBubble(
     body: ChatBubbleBody.AiReply,
     hasTail: Boolean,
     onUseDraft: (ChatAIDraftCard) -> Unit,
+    actions: ChatAIReplyActions = ChatAIReplyActions(),
 ) {
     val shape =
         RoundedCornerShape(
@@ -4399,7 +4845,7 @@ private fun AiReplyBubble(
             bottomEnd = 18.dp,
             bottomStart = if (hasTail) Radii.sm else 18.dp,
         )
-    val isThinking = body.text.isEmpty() && body.estimate == null && body.drafts.isEmpty()
+    val isThinking = body.text.isEmpty() && body.estimate == null && body.drafts.isEmpty() && body.links.isEmpty()
     Column(
         modifier =
             Modifier
@@ -4420,8 +4866,20 @@ private fun AiReplyBubble(
             Text(text = body.text, fontSize = 13.5.sp, lineHeight = 18.sp, color = PantopusColors.appText)
             body.estimate?.let { AiEstimateCard(estimate = it, modifier = Modifier.fillMaxWidth()) }
             body.drafts.forEach { draft ->
-                AiDraftCard(draft = draft, onUse = onUseDraft)
+                val card = draft.action
+                if (card != null) {
+                    AiActionCard(
+                        card = card,
+                        onAction = { scope, action -> actions.onAction(draft, scope, action) },
+                        onDismiss = { actions.onDismiss(draft) },
+                        onOpenLink = actions.onOpenLink,
+                        canOpen = actions.canOpen,
+                    )
+                } else {
+                    AiDraftCard(draft = draft, onUse = onUseDraft)
+                }
             }
+            if (body.links.isNotEmpty()) AiLinkButtons(links = body.links, onOpen = actions.onOpenLink)
         }
     }
 }
@@ -4671,6 +5129,27 @@ private fun SystemLinkPill(body: ChatBubbleBody.SystemLink) {
     }
 }
 
+/**
+ * The sending spinner, in its place from the start, turns only once a send takes noticeably long: a spinning frame on
+ * every display refresh would also compete with the save and the request it is waiting for.
+ */
+@Composable
+private fun SendingIndicator(id: String) {
+    val spinning by produceState(initialValue = false, id) {
+        delay(SENDING_INDICATOR_DELAY_MS)
+        value = true
+    }
+    Box(modifier = Modifier.padding(start = Spacing.s1).size(10.dp)) {
+        if (spinning) {
+            CircularProgressIndicator(
+                modifier = Modifier.fillMaxSize(),
+                strokeWidth = 1.5.dp,
+                color = PantopusColors.appTextSecondary,
+            )
+        }
+    }
+}
+
 @Composable
 private fun StampRow(
     content: ChatBubbleContent,
@@ -4681,8 +5160,9 @@ private fun StampRow(
         when (content.deliveryState) {
             ChatDeliveryState.Read -> "Read $stamp"
             // Delivered is conveyed by the small check icon, not a loud word (RN).
-            ChatDeliveryState.Delivered -> stamp
+            ChatDeliveryState.Sent, ChatDeliveryState.Delivered -> stamp
             ChatDeliveryState.Sending -> "Sending..."
+            ChatDeliveryState.Queued -> "Queued · retrying"
             ChatDeliveryState.Failed -> "Failed to send"
             ChatDeliveryState.Refused -> "Not sent"
             null -> stamp
@@ -4705,21 +5185,16 @@ private fun StampRow(
         }
         if (content.side == ChatMessageSide.Outgoing && content.deliveryState != ChatDeliveryState.Read) {
             when (content.deliveryState) {
-                ChatDeliveryState.Read -> Unit
-                ChatDeliveryState.Delivered ->
+                ChatDeliveryState.Read, ChatDeliveryState.Queued -> Unit
+                ChatDeliveryState.Sent, ChatDeliveryState.Delivered ->
                     PantopusIconImage(
                         icon = PantopusIcon.Check,
-                        contentDescription = null,
+                        contentDescription = if (content.deliveryState == ChatDeliveryState.Sent) "Sent" else "Delivered",
                         size = 10.dp,
                         tint = PantopusColors.appTextMuted,
                         modifier = Modifier.padding(start = Spacing.s1),
                     )
-                ChatDeliveryState.Sending ->
-                    CircularProgressIndicator(
-                        modifier = Modifier.padding(start = Spacing.s1).size(10.dp),
-                        strokeWidth = 1.5.dp,
-                        color = PantopusColors.appTextSecondary,
-                    )
+                ChatDeliveryState.Sending -> SendingIndicator(content.id)
                 ChatDeliveryState.Failed ->
                     Row(
                         modifier =
@@ -5062,6 +5537,40 @@ internal fun AttachmentStripView(
     }
 }
 
+/** A document sent to the assistant, inside the person's bubble: the file's icon, name and size, as a chat file shows. */
+@Composable
+private fun SentFileChip(
+    file: ChatSentFile,
+    isOut: Boolean,
+    textColor: Color,
+) {
+    Row(
+        modifier = Modifier.semantics(mergeDescendants = true) {}.testTag("chatAISentFile"),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+    ) {
+        PantopusIconImage(
+            icon = PantopusIcon.FileText,
+            contentDescription = null,
+            size = 18.dp,
+            tint = if (isOut) PantopusColors.appTextInverse else PantopusColors.primary600,
+        )
+        Column {
+            Text(
+                text = file.name,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = textColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            file.sizeLabel?.let { size ->
+                Text(text = size, fontSize = 11.sp, color = textColor.copy(alpha = 0.75f))
+            }
+        }
+    }
+}
+
 @Composable
 private fun AttachmentTile(
     attachment: ChatQueuedAttachment,
@@ -5273,22 +5782,6 @@ private fun ErrorFrame(
     }
 }
 
-/**
- * While the chat is open the window resizes for the keyboard instead of
- * panning, so the header stays on screen; the previous mode comes back when
- * the chat closes.
- */
-@Composable
-private fun KeyboardResizeEffect() {
-    val context = LocalContext.current
-    DisposableEffect(context) {
-        val window = context.findActivity()?.window
-        val previous = window?.attributes?.softInputMode
-        window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
-        onDispose { if (window != null && previous != null) window.setSoftInputMode(previous) }
-    }
-}
-
 /** A picked file's own name ("Lease.pdf"), which the file bubble shows, or null. */
 private fun Context.pickedFileName(uri: Uri): String? =
     contentResolver
@@ -5296,9 +5789,91 @@ private fun Context.pickedFileName(uri: Uri): String? =
         ?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
         ?.takeIf(String::isNotBlank)
 
-private tailrec fun Context.findActivity(): Activity? =
-    when (this) {
-        is Activity -> this
-        is ContextWrapper -> baseContext.findActivity()
-        else -> null
+/** Every logical attachment remains reachable, including mixed photo/video/document sends. */
+@Composable
+private fun ChatAttachmentRows(
+    content: ChatBubbleContent,
+    isOut: Boolean,
+    textColor: Color,
+    onOpenAttachment: ((ChatBubbleBody.Attachment) -> Unit)?,
+    onOpenPhotos: ((List<String>, Int) -> Unit)?,
+    onOpenUrl: (String) -> Unit,
+) {
+    val files = content.attachments
+    val logical = files.filter { clip -> files.none { it.liveVideoFileId == clip.id && clip.livePhotoFileId == it.id } }
+    Column(modifier = Modifier.widthIn(max = 240.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        logical.forEach { file ->
+            val clip = files.firstOrNull { it.id == file.liveVideoFileId && it.livePhotoFileId == file.id }
+            val mime = file.mimeType.orEmpty()
+            val image = mime.startsWith("image/")
+            val label =
+                when {
+                    clip != null -> "LIVE · Tap to play"
+                    mime.startsWith("video/") -> "Video · Tap to play"
+                    mime == "application/pdf" -> "PDF · Tap to read"
+                    else -> file.originalFilename ?: "Attachment"
+                }
+            Column(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(Radii.md)).background(PantopusColors.appSurfaceSunken).clickable {
+                    if (image && clip == null) {
+                        ChatMediaUrl.resolve(file.fileUrl)?.let { onOpenPhotos?.invoke(listOf(it), 0) }
+                    } else {
+                        onOpenAttachment?.invoke(
+                            ChatBubbleBody.Attachment(
+                                filename = file.originalFilename ?: "Attachment",
+                                fileUrl = file.fileUrl,
+                                mimeType = file.mimeType,
+                                liveVideoFileId = clip?.id,
+                            ),
+                        )
+                    }
+                }.padding(8.dp),
+            ) {
+                if (image) {
+                    ChatMediaUrl.resolve(file.fileUrl)?.let { url ->
+                        AsyncImage(
+                            model = inlinePhotoRequest(url),
+                            contentDescription = "Photo",
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.fillMaxWidth().height(140.dp),
+                        )
+                    }
+                }
+                Text(label, color = PantopusColors.appText, fontSize = 13.sp)
+            }
+        }
+        val caption =
+            when (val body = content.body) {
+                is ChatBubbleBody.Image -> body.caption
+                is ChatBubbleBody.Attachment -> body.caption
+                else -> null
+            }
+        caption?.let { LinkifiedBubbleText(text = it, isOut = isOut, textColor = textColor, onOpenUrl = onOpenUrl) }
     }
+}
+
+/** Bound picker reads before allocating media bytes; remote uploads use the same limits. */
+private fun readChatAttachment(
+    context: Context,
+    uri: Uri,
+    mime: String,
+): ByteArray? =
+    runCatching {
+        val limit =
+            when {
+                mime.startsWith("video/") -> 100 * 1024 * 1024
+                mime.startsWith("image/") -> 10 * 1024 * 1024
+                else -> 25 * 1024 * 1024
+            }
+        context.contentResolver.openInputStream(uri)?.use { stream ->
+            val output = java.io.ByteArrayOutputStream()
+            val buffer = ByteArray(8192)
+            while (true) {
+                val count = stream.read(buffer)
+                if (count < 0) break
+                require(output.size() + count <= limit)
+                output.write(buffer, 0, count)
+            }
+            output.toByteArray().takeIf { it.isNotEmpty() }
+        }
+    }.getOrNull()

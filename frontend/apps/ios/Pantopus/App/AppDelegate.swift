@@ -34,6 +34,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         _: UIApplication,
         didFinishLaunchingWithOptions _: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        ChatPerformance.signposter.emitEvent("AppLaunch")
         Self.bootstrapLogging()
         // Photos load through PantopusImagePipeline, which keeps them on the phone inside
         // the storage limit and clears them with the cache (Instant Screens). The shared URL
@@ -42,6 +43,9 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         URLCache.shared.removeAllCachedResponses()
         URLCache.shared = URLCache(memoryCapacity: 32 * 1024 * 1024, diskCapacity: 0)
         try? HomeDocumentTemporaryFiles.clearPreviousLaunch()
+        // Files opened from chats and copies of photos sent to the assistant that an earlier run left.
+        ChatMediaURL.removeLocalFiles()
+        ChatLocalStore.shared.clearTemporaryUploads()
         APIClient.removeLegacyDiskCache()
         MainActor.assumeIsolated {
             Observability.shared.start(environment: AppEnvironment.current)
@@ -144,10 +148,11 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
     /// chat pushes for the conversation the user is currently viewing.
     /// The backend's chat push carries `type: "chat_message"` and
     /// `room_id` at the top level of the APNs payload
-    /// (`backend/routes/chats.js:1837`, flattened by
-    /// `backend/services/push/apnsClient.js:buildPayload`); when that
-    /// room is registered as on-screen we suppress the banner entirely —
-    /// the socket already rendered the message in place.
+    /// (`backend/routes/chats.js`, POST /messages, flattened by
+    /// `backend/services/push/apnsClient.js:buildPayload`), and so does
+    /// the business inbox notice (`business_message`) owners and staff
+    /// get; when that room is registered as on-screen we suppress the
+    /// banner entirely — the socket already rendered the message in place.
     nonisolated func userNotificationCenter(
         _: UNUserNotificationCenter,
         willPresent notification: UNNotification
@@ -157,9 +162,15 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         let userInfo = notification.request.content.userInfo
         let type = userInfo["type"] as? String
         let roomId = userInfo["room_id"] as? String
-        if type == "chat_message", let roomId {
+        let topicId = userInfo["topic_id"] as? String ?? userInfo["topicId"] as? String
+        let recipient = userInfo["recipient_user_id"] as? String
+        let belongsToCurrentAccount = await MainActor.run {
+            Self.permitsNotification(type: type, recipient: recipient, allowSignedOut: false)
+        }
+        guard belongsToCurrentAccount else { return [] }
+        if type == "chat_message" || type == "business_message", let roomId {
             let isViewingThread = await MainActor.run {
-                ActiveChatThreadTracker.shared.isViewingRoom(roomId)
+                ActiveChatThreadTracker.shared.isViewingRoom(roomId, topicId: topicId)
             }
             if isViewingThread { return [] }
         }
@@ -184,6 +195,14 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         }
         if !launchAvailable { return [] }
         return [.banner, .list, .sound, .badge]
+    }
+
+    @MainActor
+    private static func permitsNotification(type: String?, recipient: String?, allowSignedOut: Bool) -> Bool {
+        guard type == "chat_message" || type == "business_message" || recipient != nil else { return true }
+        guard let recipient, let recipientID = UUID(uuidString: recipient) else { return false }
+        guard case let .signedIn(user) = AuthManager.shared.state else { return allowSignedOut }
+        return UUID(uuidString: user.id) == recipientID
     }
 
     private struct ReminderPayload {
@@ -253,7 +272,14 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         let taskPath = HomeTaskNotificationRoute.pushPath(userInfo)
         let homeId = userInfo["homeId"] as? String ?? userInfo["home_id"] as? String
         let taskId = userInfo["taskId"] as? String ?? userInfo["task_id"] as? String
-        let deepLink = HomeTaskNotificationRoute.pushPath(userInfo)
+        // A brief or nudge opens the assistant at its message (AI assistant phase 2).
+        let assistantPath = DeepLinkRouter.assistantPath(
+            type: type,
+            notificationId: userInfo["notificationId"] as? String ?? userInfo["notification_id"] as? String,
+            conversationId: userInfo["conversation_id"] as? String
+        )
+        let deepLink = assistantPath
+            ?? HomeTaskNotificationRoute.pushPath(userInfo)
             ?? DeepLinkRouter.notificationPath(type: userInfo["type"] as? String, link: userInfo["link"] as? String)
             ?? (userInfo["deepLink"] as? String)
             // Briefing / monthly-receipt pushes carry no `link` — compose one
@@ -275,9 +301,14 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         // (HOME) banner tap crashed the app with SIGABRT (2026-09-22).
         Task { @MainActor in
             defer { completionHandler() }
+            // A queued push can arrive after this device changes accounts.
+            // Chat pushes must be bound, including when sign-in is deferred.
+            guard Self.permitsNotification(type: type, recipient: recipient, allowSignedOut: true) else { return }
             // Opened while the app was in the background (willPresent never
             // ran): a connection request or acceptance marks Connections first.
-            ScreenStoreLive.pushArrived(type: type)
+            if case .signedIn = AuthManager.shared.state {
+                ScreenStoreLive.pushArrived(type: type)
+            }
             if action == UNNotificationDismissActionIdentifier { return }
             if action == "TASK_NOT_NOW" {
                 guard category == "TASK_REMINDER", let recipient, UUID(uuidString: recipient) != nil,
@@ -297,10 +328,19 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
             }
             guard action == UNNotificationDefaultActionIdentifier else { return }
             PilotEvents.shared.notificationOpened(type: type)
+            // Only for the account it was sent to; signed out, it waits for that sign-in.
+            if let assistantPath, let recipient, UUID(uuidString: recipient) != nil {
+                DeepLinkRouter.shared.handle(path: assistantPath, expectedUserID: recipient)
+                return
+            }
             if let deepLink, !deepLink.isEmpty {
                 // `link` is a path like `/chat/42`; handle(path:) normalises it
                 // to the pantopus:// scheme, matching the Android dispatcher.
-                DeepLinkRouter.shared.handle(path: deepLink)
+                if let recipient {
+                    DeepLinkRouter.shared.handle(path: deepLink, expectedUserID: recipient)
+                } else {
+                    DeepLinkRouter.shared.handle(path: deepLink)
+                }
             }
         }
     }

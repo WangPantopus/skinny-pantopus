@@ -59,6 +59,9 @@ data class FeedQuery(
     }
 }
 
+/** The Nearby feed moves the person's marker at most this often (AI assistant phase 2 contract §6.1). */
+private const val NEARBY_SEEN_INTERVAL_MS = 5 * 60 * 1000L
+
 /** Wraps [PostsApi] in the [NetworkResult] taxonomy. */
 @Singleton
 @Suppress("TooManyFunctions") // One wrapper per existing post endpoint; keep the shared store and mutations together.
@@ -128,6 +131,25 @@ class PostsRepository
 
         /** True while [query]'s first page is fresh and unmarked: coming back reads nothing. */
         fun feedFirstPageIsCurrent(query: FeedQuery): Boolean = store.isCurrent(StoreKeys.feedFirstPage(query))
+
+        /** When each account last moved its Nearby marker (wall-clock millis), this app session. */
+        private val nearbySeenAt = mutableMapOf<String, Long>()
+
+        /**
+         * The Nearby feed is on screen: `POST /api/posts/feed/seen`, at most once every 5 minutes for [userId]
+         * (AI assistant phase 2 contract §6.1). A failed call waits out the same 5 minutes; nothing depends on it.
+         */
+        suspend fun markNearbySeen(
+            userId: String,
+            nowMillis: Long = System.currentTimeMillis(),
+        ) {
+            val due =
+                synchronized(nearbySeenAt) {
+                    val last = nearbySeenAt[userId]
+                    (last == null || nowMillis - last >= NEARBY_SEEN_INTERVAL_MS).also { if (it) nearbySeenAt[userId] = nowMillis }
+                }
+            if (due) safeApiCall { api.markFeedSeen() }
+        }
 
         /** `POST /api/posts` — create a new post. */
         suspend fun createPost(body: PostCreateRequest): NetworkResult<PostCreateResponse> =
@@ -345,6 +367,7 @@ private fun FeedPost.detailSeed(): PostDetailResponse? {
                         projectedDisplayName = it.authorDisplayName,
                         handle = it.handle,
                         avatarUrl = it.avatarUrl,
+                        identityType = it.type,
                     )
                 },
             userHasLiked = userHasLiked,
@@ -356,6 +379,7 @@ private fun FeedPost.detailSeed(): PostDetailResponse? {
             allowExternalShare = allowExternalShare,
             moderationState = moderationState,
             eventDate = eventDate,
+            eventEndDate = eventEndDate,
             eventVenue = eventVenue,
             lostFoundType = lostFoundType,
         ),

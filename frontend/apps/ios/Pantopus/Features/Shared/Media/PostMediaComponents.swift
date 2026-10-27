@@ -12,6 +12,8 @@
 import AVFoundation
 import SwiftUI
 
+// swiftlint:disable file_length
+
 // MARK: - Still image
 
 /// AsyncImage with the standard Pulse loading / failure placeholders.
@@ -24,11 +26,14 @@ struct MediaStillImage: View {
     let url: URL?
     /// `.fill` for grid cells, `.fit` for full-screen viewer slides.
     var contentMode: ContentMode = .fill
+    var keepsOnDisk = true
+    var maxPixelSize: Int?
+    var fallbackURL: URL?
 
     var body: some View {
         Color.clear
             .overlay {
-                CachedAsyncImage(url: url) { phase in
+                CachedAsyncImage(url: url, keepsOnDisk: keepsOnDisk, maxPixelSize: maxPixelSize) { phase in
                     switch phase {
                     case let .success(image):
                         if contentMode == .fill {
@@ -37,8 +42,23 @@ struct MediaStillImage: View {
                             image.resizable().scaledToFit()
                         }
                     case .failure:
-                        Theme.Color.appSurfaceSunken
-                            .overlay(Icon(.alertCircle, size: 22, color: Theme.Color.appTextMuted))
+                        if let fallbackURL, fallbackURL != url {
+                            CachedAsyncImage(url: fallbackURL) { fallback in
+                                if let image = fallback.image {
+                                    if contentMode == .fill {
+                                        image.resizable().scaledToFill()
+                                    } else {
+                                        image.resizable().scaledToFit()
+                                    }
+                                } else {
+                                    Theme.Color.appSurfaceSunken
+                                        .overlay(Icon(.alertCircle, size: 22, color: Theme.Color.appTextMuted))
+                                }
+                            }
+                        } else {
+                            Theme.Color.appSurfaceSunken
+                                .overlay(Icon(.alertCircle, size: 22, color: Theme.Color.appTextMuted))
+                        }
                     case .empty:
                         Theme.Color.appSurfaceSunken.overlay(ProgressView())
                     @unknown default:
@@ -47,6 +67,40 @@ struct MediaStillImage: View {
                 }
             }
             .clipped()
+    }
+}
+
+/// Read one sharp frame without starting playback or saving a video to disk.
+/// The server poster remains visible if the asset cannot supply a frame.
+private struct PostVideoPoster: View {
+    let item: PostMediaItem
+    @State private var frame: UIImage?
+
+    var body: some View {
+        Color.clear
+            .overlay {
+                if let frame {
+                    Image(uiImage: frame).resizable().scaledToFill()
+                } else if let thumbnail = item.thumbnailURL {
+                    MediaStillImage(url: thumbnail)
+                } else {
+                    Theme.Color.appSurfaceSunken
+                }
+            }
+            .clipped()
+            .task(id: item.url) {
+                frame = nil
+                let generator = AVAssetImageGenerator(asset: AVURLAsset(url: item.url))
+                generator.appliesPreferredTrackTransform = true
+                generator.maximumSize = CGSize(width: 1600, height: 1600)
+                let result = await withTaskCancellationHandler {
+                    try? await generator.image(at: .zero)
+                } onCancel: {
+                    generator.cancelAllCGImageGeneration()
+                }
+                guard !Task.isCancelled, let result else { return }
+                frame = UIImage(cgImage: result.image)
+            }
     }
 }
 
@@ -89,18 +143,23 @@ struct PlayerLayerView: UIViewRepresentable {
 /// scrolling never pays video setup cost.
 struct LivePhotoTileView: View {
     let stillURL: URL
-    /// Smaller preview rendered in grid cells when available.
+    /// Fallback only: legacy thumbnails are too small for a feed-width still.
     let thumbnailURL: URL?
     let videoURL: URL
+    var usesSharpPreview = false
     /// `.fill` for grid cells, `.fit` for the full-screen viewer.
     let contentMode: ContentMode
     /// Yellow indicator dot (hidden in the viewer, which shows a pill).
+    var isActive = true
     var showsDot = true
     /// Viewer slide: render a LIVE pill that replays the clip once.
     var showsReplayButton = false
     var onTap: (() -> Void)?
 
     @State private var player: AVPlayer?
+    /// A chat clip's protected local copy, kept while this tile holds its player.
+    @State private var clipFile: URL?
+    @State private var clipLoad: Task<Void, Never>?
     @State private var isShowingVideo = false
     /// True while a tap-triggered play-once run is in flight.
     @State private var isPlayingOnce = false
@@ -136,10 +195,12 @@ struct LivePhotoTileView: View {
                 stopPlayback()
             }
         }
-        .onDisappear {
-            stopPlayback()
-            player?.replaceCurrentItem(with: nil)
-            player = nil
+        .onChange(of: isActive) { _, active in
+            if !active { stopPlayback() }
+        }
+        .onDisappear(perform: releasePlayer)
+        .onReceive(NotificationCenter.default.publisher(for: ChatLocalStore.historyRetired)) { _ in
+            if ChatMediaURL.isChatFile(videoURL) { releasePlayer() }
         }
         .onReceive(
             NotificationCenter.default.publisher(
@@ -158,8 +219,11 @@ struct LivePhotoTileView: View {
     private var mediaLayers: some View {
         ZStack {
             MediaStillImage(
-                url: contentMode == .fill ? (thumbnailURL ?? stillURL) : stillURL,
-                contentMode: contentMode
+                url: contentMode == .fill && !usesSharpPreview ? (thumbnailURL ?? stillURL) : stillURL,
+                contentMode: contentMode,
+                keepsOnDisk: !usesSharpPreview && !showsReplayButton,
+                maxPixelSize: usesSharpPreview && contentMode == .fill ? 2400 : nil,
+                fallbackURL: thumbnailURL
             )
             if let player {
                 PlayerLayerView(
@@ -214,12 +278,41 @@ struct LivePhotoTileView: View {
     private func startPlayback() {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         if player == nil {
-            player = AVPlayer(url: videoURL)
+            if ChatMediaURL.isChatFile(videoURL) { loadChatClip() } else { player = AVPlayer(url: videoURL) }
         }
         player?.seek(to: .zero)
         player?.isMuted = false
         player?.play()
         isShowingVideo = true
+    }
+
+    /// A chat clip takes the account-fenced download and encrypted media cache that
+    /// chat photos and videos take, so it plays offline once seen and goes with the
+    /// account. The player reads a protected local copy, removed with the tile.
+    private func loadChatClip() {
+        guard clipLoad == nil else { return }
+        clipLoad = Task {
+            let file = try? await ChatMediaURL.download(raw: videoURL.absoluteString, filename: "live.mp4", mimeType: "video/mp4")
+            guard !Task.isCancelled else {
+                if let file { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
+                return
+            }
+            clipLoad = nil
+            guard let file else { return }
+            clipFile = file
+            player = AVPlayer(url: file)
+            if isShowingVideo { player?.play() }
+        }
+    }
+
+    private func releasePlayer() {
+        stopPlayback()
+        player?.replaceCurrentItem(with: nil)
+        player = nil
+        clipLoad?.cancel()
+        clipLoad = nil
+        if let clipFile { try? FileManager.default.removeItem(at: clipFile.deletingLastPathComponent()) }
+        clipFile = nil
     }
 
     private func playOnce() {
@@ -239,21 +332,42 @@ struct LivePhotoTileView: View {
 /// One grid cell — dispatches on the item kind.
 struct PostMediaTileView: View {
     let item: PostMediaItem
+    var usesSharpPreview = false
     var onTap: (() -> Void)?
 
     var body: some View {
         switch item.kind {
         case .image:
-            MediaStillImage(url: item.url)
-                .contentShape(Rectangle())
-                .onTapGesture { onTap?() }
-                .accessibilityElement()
-                .accessibilityLabel("Photo")
-                .accessibilityAddTraits(.isImage)
+            MediaStillImage(
+                url: usesSharpPreview ? item.url : (item.thumbnailURL ?? item.url),
+                keepsOnDisk: !usesSharpPreview,
+                maxPixelSize: usesSharpPreview ? 2400 : nil,
+                fallbackURL: item.thumbnailURL
+            )
+            .contentShape(Rectangle())
+            .onTapGesture { onTap?() }
+            .accessibilityElement()
+            .accessibilityLabel("Photo")
+            .accessibilityAddTraits(.isImage)
+        case .document:
+            Button { onTap?() } label: {
+                VStack(spacing: Spacing.s2) {
+                    Icon(.fileText, size: 32, color: Theme.Color.appText)
+                    Text("PDF").font(.headline)
+                    Text("Tap to read").font(.caption)
+                }
+                .foregroundStyle(Theme.Color.appText)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Theme.Color.appSurfaceSunken)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Open PDF")
         case .video:
             ZStack {
-                if item.thumbnailURL != nil {
-                    MediaStillImage(url: item.thumbnailURL)
+                if usesSharpPreview {
+                    PostVideoPoster(item: item)
+                } else if let thumbnail = item.thumbnailURL {
+                    MediaStillImage(url: thumbnail)
                 } else {
                     Theme.Color.appText.opacity(0.85)
                 }
@@ -271,6 +385,7 @@ struct PostMediaTileView: View {
                 stillURL: item.url,
                 thumbnailURL: item.thumbnailURL,
                 videoURL: item.liveVideoURL ?? item.url,
+                usesSharpPreview: usesSharpPreview,
                 contentMode: .fill,
                 showsDot: false,
                 onTap: onTap
@@ -321,6 +436,8 @@ public struct PostMediaGridView: View {
     private let accessibilityID: String
     /// Place label drawn on the last visible tile (A10.4 map-pin badge).
     private let locationBadge: String?
+    private let usesSharpPreviews: Bool
+    private let edgeToEdge: Bool
 
     @State private var viewerSelection: MediaViewerSelection?
 
@@ -328,12 +445,16 @@ public struct PostMediaGridView: View {
         items: [PostMediaItem],
         style: Style,
         accessibilityID: String = "postMediaGrid",
-        locationBadge: String? = nil
+        locationBadge: String? = nil,
+        usesSharpPreviews: Bool = false,
+        edgeToEdge: Bool = false
     ) {
         self.items = items
         self.style = style
         self.accessibilityID = accessibilityID
         self.locationBadge = locationBadge
+        self.usesSharpPreviews = usesSharpPreviews
+        self.edgeToEdge = edgeToEdge
     }
 
     public var body: some View {
@@ -355,13 +476,13 @@ public struct PostMediaGridView: View {
                 .aspectRatio(16.0 / 9.0, contentMode: .fit)
                 .clipped()
                 .overlay(alignment: .bottomLeading) { badgeView }
-                .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: edgeToEdge ? 0 : Radii.lg, style: .continuous))
         case 2:
             HStack(spacing: Spacing.s2) {
                 sizedTile(0, height: style.twoUpHeight)
                 sizedTile(1, height: style.twoUpHeight)
             }
-            .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: edgeToEdge ? 0 : Radii.lg, style: .continuous))
         case 3:
             let halfHeight = (style.threeUpHeight - Spacing.s2) / 2
             HStack(spacing: Spacing.s2) {
@@ -371,7 +492,7 @@ public struct PostMediaGridView: View {
                     sizedTile(2, height: halfHeight)
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: edgeToEdge ? 0 : Radii.lg, style: .continuous))
         default:
             let overflow = items.count - 4
             LazyVGrid(
@@ -397,12 +518,12 @@ public struct PostMediaGridView: View {
                     .clipped()
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: edgeToEdge ? 0 : Radii.lg, style: .continuous))
         }
     }
 
     private func tile(_ index: Int) -> some View {
-        PostMediaTileView(item: items[index]) {
+        PostMediaTileView(item: items[index], usesSharpPreview: usesSharpPreviews) {
             viewerSelection = MediaViewerSelection(index: index)
         }
     }

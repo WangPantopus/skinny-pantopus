@@ -34,8 +34,9 @@ sealed class PantopusRoute(
 
     /**
      * Plans — what's on nearby and what you're going to: the Plans map and list, hosting, requests and Your plans. A
-     * tab only while the Pulse redesign and the `plans` switch are on for the person ([barTabs]); with the redesign
-     * off the Plans map is the Nearby tab, as on October 13.
+     * tab only while the `plans` switch is on for the person ([barTabs]), with the Pulse redesign on or off (founder,
+     * 2026-10-17: with it off the bar is Place · Today · Nearby · Plans · Messages, and Nearby stays the October 13
+     * screen).
      */
     data object Plans : PantopusRoute(path = "root/plans", label = "Plans", icon = PantopusIcon.Calendar)
 
@@ -72,8 +73,9 @@ sealed class PantopusRoute(
     companion object {
         /**
          * Bottom-bar destinations in display order, with every tab the app can show: Place · Today · Pulse · Plans ·
-         * Mail with the Pulse redesign on, and the October 13 Place · Today · Nearby · Mail while it is off (launch cut
-         * 11). Plans shows only while its switch is on: read [barTabs] for what the bar draws.
+         * Mail with the Pulse redesign on, and Place · Today · Nearby · Plans · Mail while it is off (launch cut 11;
+         * the October 13 bar with Plans added, 2026-10-17). Plans shows only while its switch is on: read [barTabs]
+         * for what the bar draws.
          */
         val entries: List<PantopusRoute> get() = if (LaunchFeatures.pulseRedesign) redesignTabs else launchTabs
 
@@ -85,7 +87,7 @@ sealed class PantopusRoute(
          * first access lets every `data object` finish initialising first.
          */
         private val redesignTabs: List<PantopusRoute> by lazy { listOf(Place, Today, Pulse, Plans, Mail) }
-        private val launchTabs: List<PantopusRoute> by lazy { listOf(Place, Today, Nearby, Mail) }
+        private val launchTabs: List<PantopusRoute> by lazy { listOf(Place, Today, Nearby, Plans, Mail) }
 
         /** The tabs the bar draws: five while the `plans` switch is [plansOn], four (without Plans) while it is off. */
         fun barTabs(plansOn: Boolean): List<PantopusRoute> = if (plansOn) entries else entries - Plans
@@ -94,7 +96,7 @@ sealed class PantopusRoute(
         val all: List<PantopusRoute> get() = if (LaunchFeatures.pulseRedesign) redesignRoots else launchRoots
 
         private val redesignRoots: List<PantopusRoute> by lazy { redesignTabs + listOf(Nearby, Tasks, Marketplace, Messages) }
-        private val launchRoots: List<PantopusRoute> by lazy { launchTabs + listOf(Pulse, Plans, Tasks, Marketplace, Messages) }
+        private val launchRoots: List<PantopusRoute> by lazy { launchTabs + listOf(Pulse, Tasks, Marketplace, Messages) }
 
         /** Lookup a route by its `path`. Returns null for unknown paths. */
         fun fromPath(path: String?): PantopusRoute? = all.firstOrNull { it.path == path }
@@ -105,10 +107,13 @@ sealed class PantopusRoute(
          */
         val messagesTab: PantopusRoute get() = if (LaunchFeatures.mailbox) Messages else Mail
 
+        /** Where a Plans entry point lands while the `plans` switch is off: Pulse, or Nearby with the Pulse redesign off. */
+        val plansOffTab: PantopusRoute get() = if (LaunchFeatures.pulseRedesign) Pulse else Nearby
+
         /**
          * The bar tab that owns [route]: bar tabs own themselves, the old Nearby door and the pillars behind it
-         * (Tasks, Marketplace) belong to Pulse, and Messages sits inside Mail. With the Pulse redesign off, Pulse,
-         * Plans and the pillars sit behind Nearby, as on October 13.
+         * (Tasks, Marketplace) belong to Pulse, and Messages sits inside Mail. With the Pulse redesign off, Pulse and
+         * the pillars sit behind Nearby, as on October 13, and Plans is its own tab.
          */
         fun barTabFor(route: PantopusRoute): PantopusRoute =
             if (LaunchFeatures.pulseRedesign) {
@@ -119,7 +124,7 @@ sealed class PantopusRoute(
                 }
             } else {
                 when (route) {
-                    Pulse, Plans, Tasks, Marketplace -> Nearby
+                    Pulse, Tasks, Marketplace -> Nearby
                     Messages -> Mail
                     else -> route
                 }

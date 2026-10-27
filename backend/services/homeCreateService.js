@@ -106,6 +106,8 @@ function send(res, result, originalError = null) {
       requires_verification: true, verification_type: result.role === 'owner' ? 'ownership' : 'residency',
       current_access: 'not_checked',
       message: 'Home saved. Open your Homes to check current access and verification options.',
+      // Set by POST /api/homes when home_instant_claim is on: { claimed, held, settles_at }.
+      ...(result.instant_claim ? { instant_claim: result.instant_claim } : {}),
     });
   }
   if (result.state === 'rejected') {

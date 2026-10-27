@@ -62,8 +62,9 @@ internal fun BusinessCatalogCategoriesPanel(
     isSaving: Boolean,
     onClose: () -> Unit,
     onCreate: (String, (Boolean) -> Unit) -> Unit,
-    onRename: (String, String) -> Unit,
+    onRename: (String, String, (Boolean) -> Unit) -> Unit,
     onDelete: (String) -> Unit,
+    errorMessage: String? = null,
 ) {
     var newName by remember { mutableStateOf("") }
     var renameTarget by remember { mutableStateOf<BusinessCatalogCategoryRow?>(null) }
@@ -78,7 +79,7 @@ internal fun BusinessCatalogCategoriesPanel(
                 .statusBarsPadding()
                 .testTag("businessCatalog.categoriesSheet"),
     ) {
-        ContentDetailTopBar(title = "Categories", onBack = onClose)
+        ContentDetailTopBar(title = "Categories", onBack = { if (!isSaving) onClose() })
         Column(
             modifier =
                 Modifier
@@ -166,7 +167,7 @@ internal fun BusinessCatalogCategoriesPanel(
 
     renameTarget?.let { category ->
         AlertDialog(
-            onDismissRequest = { renameTarget = null },
+            onDismissRequest = { if (!isSaving) renameTarget = null },
             title = { Text(text = "Rename category") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
@@ -177,19 +178,18 @@ internal fun BusinessCatalogCategoriesPanel(
                         onValueChange = { renameText = it },
                         fieldTestTag = "businessCatalog.renameCategoryField",
                     )
+                    errorMessage?.let { Text(text = it, color = PantopusColors.error, fontSize = 12.5.sp) }
                 }
             },
             confirmButton = {
-                TextButton(onClick = {
-                    val name = renameText
-                    renameTarget = null
-                    onRename(category.id, name)
+                TextButton(enabled = renameText.isNotBlank() && !isSaving, onClick = {
+                    onRename(category.id, renameText) { ok -> if (ok) renameTarget = null }
                 }) {
                     Text(text = "Save")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { renameTarget = null }) { Text(text = "Cancel") }
+                TextButton(enabled = !isSaving, onClick = { renameTarget = null }) { Text(text = "Cancel") }
             },
             modifier = Modifier.testTag("businessCatalog.renameCategoryDialog"),
         )

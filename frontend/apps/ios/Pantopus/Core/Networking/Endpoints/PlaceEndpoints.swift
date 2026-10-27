@@ -34,17 +34,19 @@ public enum PlaceEndpoints {
     }
 
     /// `GET /api/public/place?address=` — route
-    /// `backend/routes/public.js:377`. The anonymous, address-only T0
-    /// preview — no account required, non-persistent (no DB writes).
-    /// Returns the free Band-A subset live (flood, density bucket, area
-    /// teaser) with everything recurring or exact as a locked
-    /// descriptor. Rate-limited server-side (`previewLimiter`).
+    /// `backend/routes/public.js:704`. The address-only T0 preview — no
+    /// account required, non-persistent (no DB writes). Returns the free
+    /// Band-A subset live (flood, density bucket, area teaser) with
+    /// everything recurring or exact as a locked descriptor.
+    ///
+    /// Five lookups a day (`placeLookupLimiter`): per account when signed
+    /// in (the token rides along when there is one), else per network. A
+    /// 429 carries the sentence to show.
     public static func publicPreview(address: String) -> Endpoint {
         Endpoint(
             method: .get,
             path: "/api/public/place",
-            query: ["address": address],
-            authenticated: false
+            query: ["address": address]
         )
     }
 }

@@ -1015,6 +1015,27 @@ public struct YouTabRoot: View {
         if !path.isEmpty { path.removeLast() }
     }
 
+    /// A closed business has no screens left: back to My businesses (which
+    /// re-reads on `.businessClosed`), or onto it when the editor was opened another way.
+    @MainActor
+    private func showMyBusinesses(afterClosing businessId: String) {
+        if path.contains(.myBusinesses) {
+            while let last = path.last, last != .myBusinesses {
+                path.removeLast()
+            }
+            return
+        }
+        path.removeAll { route in
+            switch route {
+            case let .editBusinessPage(id), let .businessOwner(id), let .businessProfile(id):
+                id == businessId
+            default:
+                false
+            }
+        }
+        path.append(.myBusinesses)
+    }
+
     @MainActor
     private func handleWaitingRoomNav(_ nav: WaitingRoomNav, homeId _: String) {
         switch nav {
@@ -1197,6 +1218,9 @@ public struct YouTabRoot: View {
                 onBack: { Task { @MainActor in pop() } },
                 onOpenSenderProfile: { userId in
                     Task { @MainActor in path.append(.publicProfile(userId: userId)) }
+                },
+                onOpenSenderBusiness: { businessId in
+                    Task { @MainActor in path.append(.businessProfile(businessId: businessId)) }
                 },
                 onOpenExtractedTask: { sourceMailId in
                     // A17.12 — the certified-notice "view task" affordance
@@ -1574,9 +1598,9 @@ public struct YouTabRoot: View {
                 onEdit: { id in
                     Task { @MainActor in path.append(.editPost(postId: id)) }
                 },
-                onOpenBusiness: { username in
-                    // "Nearby Providers" row → `/business/:username`.
-                    Task { @MainActor in path.append(.businessProfile(businessId: username)) }
+                onOpenBusiness: { business in
+                    // A "Nearby Providers" row (username) or a business author (id) → `/business/:key`.
+                    Task { @MainActor in path.append(.businessProfile(businessId: business)) }
                 }
             )
         case .myBids:
@@ -1676,6 +1700,10 @@ public struct YouTabRoot: View {
                     },
                     onRepost: { _ in
                         path.append(.composeTask)
+                    },
+                    // This stack's composer route takes no category, so a rebook opens it unfilled.
+                    onRebook: { _ in
+                        path.append(.composeTask)
                     }
                 )
             )
@@ -1751,6 +1779,9 @@ public struct YouTabRoot: View {
                 onOpenManage: { Task { @MainActor in path.append(.manageTrain(trainId: supportTrainId)) } },
                 onMessageHost: { host in
                     Task { @MainActor in path.append(Self.chatRoute(toHost: host)) }
+                },
+                onOpenChat: { destination in
+                    Task { @MainActor in path.append(.chatConversation(destination)) }
                 }
             )
         case .searchSupportTrains:
@@ -2101,7 +2132,8 @@ public struct YouTabRoot: View {
                     mode: Self.chatMode(for: dest.mode),
                     counterparty: Self.chatCounterparty(for: dest),
                     currentUserId: currentUserId ?? "",
-                    initialTopic: dest.initialTopic
+                    initialTopic: dest.initialTopic,
+                    asBusinessUserId: dest.asBusinessUserId
                 ),
                 mode: dest.kind,
                 onOpenProfile: { userId in
@@ -2760,7 +2792,8 @@ public struct YouTabRoot: View {
                     Task { @MainActor in
                         if !path.isEmpty { path.removeLast() }
                     }
-                }
+                },
+                onClosed: { Task { @MainActor in showMyBusinesses(afterClosing: businessId) } }
             )
         case let .businessPages(businessId):
             BusinessPagesView(
@@ -2897,7 +2930,8 @@ public struct YouTabRoot: View {
                             displayName: name,
                             initials: Self.initials(from: name),
                             identityKind: nil,
-                            verified: false
+                            verified: false,
+                            asBusinessUserId: businessId
                         )))
                     }
                 },

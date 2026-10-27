@@ -76,7 +76,7 @@ function InvoiceContent() {
   const canPay = invoice && ['sent', 'viewed', 'overdue'].includes(invoice.status);
   const sc = invoice ? (STATUS_BADGE[invoice.status] || STATUS_BADGE.sent) : STATUS_BADGE.sent;
 
-  if (loading) return <div className="flex items-center justify-center min-h-[50vh]"><div className="animate-spin h-8 w-8 border-3 border-emerald-600 border-t-transparent rounded-full" /></div>;
+  if (loading) return <div className="flex items-center justify-center min-h-[50vh]"><div className="animate-spin h-8 w-8 border-2 border-emerald-600 border-t-transparent rounded-full" /></div>;
 
   if (!invoice) {
     return (
@@ -107,14 +107,15 @@ function InvoiceContent() {
 
         <div className="flex items-center justify-between mt-4">
           <div>
-            <p className="text-xs text-app-text-muted">Amount Due</p>
+            <p className="text-xs text-app-text-muted">{canPay ? 'Amount Due' : 'Invoice Amount'}</p>
             <p className="text-3xl font-extrabold text-app-text">{formatCents(invoice.total_cents)}</p>
           </div>
           <span className={`text-xs font-semibold px-3 py-1 rounded-full ${sc.bg} ${sc.color}`}>{sc.label}</span>
         </div>
 
-        {invoice.due_date && (
-          <p className="text-sm text-app-text-secondary mt-2">Due: {new Date(invoice.due_date).toLocaleDateString()}</p>
+        {canPay && invoice.due_date && (
+          // A due date is a calendar day stored as midnight UTC: shown in local time it was the day before in the US.
+          <p className="text-sm text-app-text-secondary mt-2">Due: {new Date(invoice.due_date).toLocaleDateString(undefined, { timeZone: 'UTC' })}</p>
         )}
       </div>
 

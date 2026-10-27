@@ -1,6 +1,8 @@
 package app.pantopus.android.ui.screens.place.today
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,9 +11,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -27,10 +32,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.layout.boundsInWindow
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -38,8 +44,10 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.perf.ReportContentShown
+import app.pantopus.android.data.ai.AIScreenContext
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.GhostButton
+import app.pantopus.android.ui.components.NavigationMenuButton
 import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.components.RefreshFailedLine
 import app.pantopus.android.ui.components.RefreshNotice
@@ -56,6 +64,7 @@ import app.pantopus.android.ui.screens.plans.today.PlansTodayCards
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
+import app.pantopus.android.ui.theme.Radii
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -74,40 +83,43 @@ fun TodayTabScreen(
     onClaim: () -> Unit,
     onOpenPlace: ((homeId: String) -> Unit)? = null,
     plans: PlansTodayActions? = null,
+    onAsk: ((AIScreenContext) -> Unit)? = null,
+    /** The side menu, on every tab (founder decision 2026-10-20); null hides the button. */
+    onOpenMenu: (() -> Unit)? = null,
     viewModel: TodayTabViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     ReportContentShown("today", state is TodayTabUiState.Loaded || state == TodayTabUiState.NoPlace)
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
-    val showMorningCard by viewModel.showMorningCard.collectAsStateWithLifecycle()
-    val preferenceBusy by viewModel.preferenceBusy.collectAsStateWithLifecycle()
-    val preferenceError by viewModel.preferenceError.collectAsStateWithLifecycle()
     // Coming back keeps what's on screen; the view model reads again only once it is out of date.
     HomeCopyLifecycle(viewModel::load, viewModel::suspendContent)
     RefreshOnStoreChange(viewModel::load)
     // Pull to refresh, like iOS's Today tab (`.refreshable`): it always reads now, with the pull indicator
     // over the content instead of placeholders. The indicator shows only for a pull, not the first load.
     var pulled by remember { mutableStateOf(false) }
-    var visibleFrame by remember { mutableStateOf(Rect.Zero) }
     LaunchedEffect(refreshing) { if (!refreshing) pulled = false }
     val placeNow = rememberMinuteClock(todayPlaceZone(state))
     val nowMs = placeNow.toInstant().toEpochMilli()
     Column(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg).testTag("todayTab")) {
-        Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp)) {
-            Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Today", fontSize = 22.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.4).sp, color = PantopusColors.appText)
-                // The date beside the title (the f1-today-tab design); it turns over at midnight.
-                Text(
-                    placeNow.format(DateTimeFormatter.ofPattern("EEE, MMM d", Locale.getDefault())),
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = PantopusColors.appTextMuted,
-                    modifier = Modifier.padding(bottom = 3.dp),
-                )
+        // The title, date and address, with the side menu at the end of the title line.
+        Row(modifier = Modifier.padding(start = 18.dp, end = 6.dp, top = 10.dp, bottom = 10.dp)) {
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Today", fontSize = 22.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.4).sp, color = PantopusColors.appText)
+                    // The date beside the title (the f1-today-tab design); it turns over at midnight.
+                    Text(
+                        placeNow.format(DateTimeFormatter.ofPattern("EEE, MMM d", Locale.getDefault())),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = PantopusColors.appTextMuted,
+                        modifier = Modifier.padding(bottom = 3.dp),
+                    )
+                }
+                (state as? TodayTabUiState.Loaded)?.intelligence?.place?.label?.let {
+                    Text(it, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = PantopusColors.appTextMuted, maxLines = 1)
+                }
             }
-            (state as? TodayTabUiState.Loaded)?.intelligence?.place?.label?.let {
-                Text(it, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = PantopusColors.appTextMuted, maxLines = 1)
-            }
+            onOpenMenu?.let { NavigationMenuButton(onClick = it, testTag = "today.menu", modifier = Modifier.offset(y = (-10).dp)) }
         }
         PullToRefreshBox(
             isRefreshing = pulled && refreshing,
@@ -115,7 +127,7 @@ fun TodayTabScreen(
                 pulled = true
                 viewModel.refresh()
             },
-            modifier = Modifier.fillMaxSize().onGloballyPositioned { visibleFrame = it.boundsInWindow() },
+            modifier = Modifier.fillMaxSize(),
         ) {
             when (val current = state) {
                 TodayTabUiState.Loading -> TodayPlaceholders()
@@ -132,6 +144,7 @@ fun TodayTabScreen(
                         if (current.savedAnchorMatches) {
                             StatusChip("Saved place · Only you", modifier = Modifier.padding(bottom = 12.dp))
                         }
+                        onAsk?.let { ask -> TodayAskBox(onAsk = { ask(AIScreenContext.today(viewModel.homeId)) }) }
                         // Nearby Plans (A1, A2, A5): today's plan and the day-after card, above the weather.
                         plans?.let { PlansTodayCards(actions = it, modifier = Modifier.padding(bottom = 16.dp)) }
                         CompositionLocalProvider(LocalPlaceDetailRetry provides viewModel::refresh) {
@@ -148,9 +161,6 @@ fun TodayTabScreen(
                         }
                         if (current.savedPlace != null) {
                             SavedPlaceReminders(onClaim)
-                        }
-                        if (showMorningCard && current.savedAnchorMatches) {
-                            MorningOptInCard(preferenceBusy, preferenceError, viewModel, visibleFrame)
                         }
                         Spacer(modifier = Modifier.height(96.dp))
                     }
@@ -193,39 +203,6 @@ private fun SavedPlaceReminders(onAddHome: () -> Unit) {
 }
 
 @Composable
-private fun MorningOptInCard(
-    busy: Boolean,
-    error: String?,
-    viewModel: TodayTabViewModel,
-    visibleFrame: Rect,
-) {
-    var cardFrame by remember { mutableStateOf(Rect.Zero) }
-    val visible = !cardFrame.isEmpty && cardFrame.overlaps(visibleFrame)
-    LaunchedEffect(visible) { if (visible) viewModel.markPromptDisplayed() }
-    Column(
-        modifier =
-            Modifier.padding(top = 12.dp).fillMaxWidth().placeCard().padding(16.dp).testTag("todayMorningOptIn")
-                .onGloballyPositioned { cardFrame = it.boundsInWindow() },
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Text("A morning heads-up?", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
-        Text(
-            "Weather, air and alerts for this address, only when something's worth knowing.",
-            fontSize = 14.sp,
-            lineHeight = 20.sp,
-            color = PantopusColors.appTextSecondary,
-        )
-        if (error != null) {
-            Text(error, fontSize = 13.sp, color = PantopusColors.error)
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            GhostButton("Turn on", onClick = viewModel::turnOnMorning, modifier = Modifier.weight(1f), isLoading = busy)
-            GhostButton("Not now", onClick = viewModel::hideMorningCard, modifier = Modifier.weight(1f), isEnabled = !busy)
-        }
-    }
-}
-
-@Composable
 private fun TodayPlaceholders() {
     Column(modifier = Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         repeat(PLACEHOLDER_ROWS) {
@@ -264,5 +241,40 @@ private fun NoPlaceCard(onClaim: () -> Unit) {
             color = PantopusColors.appTextSecondary,
         )
         PrimaryButton(title = "Claim your address", onClick = onClaim, modifier = Modifier.fillMaxWidth())
+    }
+}
+
+/** The box at the top of Today (AI assistant phase 1): it opens the assistant about today, nothing sent yet. */
+@Composable
+private fun TodayAskBox(onAsk: () -> Unit) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp)
+                .clip(RoundedCornerShape(Radii.xl))
+                .background(PantopusColors.appSurface)
+                .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.xl))
+                .clickable(onClick = onAsk)
+                .heightIn(min = 48.dp)
+                .padding(horizontal = 14.dp, vertical = 12.dp)
+                .clearAndSetSemantics {
+                    contentDescription = "Ask Pantopus about your day"
+                    role = Role.Button
+                }.testTag("todayAskPantopus"),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Box(
+            modifier = Modifier.size(32.dp).clip(CircleShape).background(PantopusColors.magicBg),
+            contentAlignment = Alignment.Center,
+        ) {
+            PantopusIconImage(icon = PantopusIcon.Sparkles, contentDescription = null, size = 16.dp, tint = PantopusColors.magic)
+        }
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            Text("Ask Pantopus", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
+            Text("About today at your place", fontSize = 13.sp, color = PantopusColors.appTextSecondary, maxLines = 1)
+        }
+        PantopusIconImage(icon = PantopusIcon.ChevronRight, contentDescription = null, size = 16.dp, tint = PantopusColors.appTextMuted)
     }
 }

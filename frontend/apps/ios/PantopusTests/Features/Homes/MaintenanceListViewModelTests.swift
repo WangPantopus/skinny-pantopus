@@ -133,7 +133,7 @@ final class MaintenanceListViewModelTests: XCTestCase {
             XCTFail("Expected amountWithChip trailing, got \(String(describing: row.trailing))")
             return
         }
-        XCTAssertEqual(amount, "$185")
+        XCTAssertEqual(amount, "$185.00")
         XCTAssertEqual(chipText, "Scheduled")
     }
 
@@ -192,7 +192,7 @@ final class MaintenanceListViewModelTests: XCTestCase {
         XCTAssertEqual(projection.chipText, "Scheduled")
         XCTAssertEqual(projection.chipVariant, .info)
         XCTAssertEqual(projection.subtitle, "Riverside HVAC · Yearly")
-        XCTAssertEqual(projection.amount, "$185")
+        XCTAssertEqual(projection.amount, "$185.00")
         XCTAssertEqual(projection.category, .hvac)
         let explicit = MaintenanceTaskDTO(id: "scalar", homeId: "home-1", task: "Unclassified work", category: "hvac")
         XCTAssertEqual(MaintenanceListViewModel.project(task: explicit, now: Self.fixedNow).category, .hvac)
@@ -200,7 +200,7 @@ final class MaintenanceListViewModelTests: XCTestCase {
         XCTAssertEqual(MaintenanceListViewModel.project(task: generic, now: Self.fixedNow).category, .generic)
     }
 
-    func testProjectionDIYRendersZeroCostAsDIY() {
+    func testProjectionRendersZeroCostExactly() {
         let projection = MaintenanceListViewModel.project(
             task: makeTask(
                 task: "Smoke & CO alarm test",
@@ -212,7 +212,7 @@ final class MaintenanceListViewModelTests: XCTestCase {
             ),
             now: Self.fixedNow
         )
-        XCTAssertEqual(projection.amount, "DIY")
+        XCTAssertEqual(projection.amount, "$0.00")
         XCTAssertEqual(projection.subtitle, "Self-managed · Quarterly")
         XCTAssertEqual(projection.category, .safety)
     }
@@ -235,7 +235,7 @@ final class MaintenanceListViewModelTests: XCTestCase {
         )
         XCTAssertEqual(projection.chipText, "Completed")
         XCTAssertEqual(projection.chipVariant, .success)
-        XCTAssertEqual(projection.amount, "$240")
+        XCTAssertEqual(projection.amount, "$240.00")
     }
 
     func testProjectionCancelledMutedHighlight() {
@@ -315,7 +315,7 @@ final class MaintenanceListViewModelTests: XCTestCase {
         ]
         let summary = MaintenanceListViewModel.summarize(tasks: tasks, now: Self.fixedNow)
         XCTAssertEqual(summary.overdueCount, 1)
-        XCTAssertEqual(summary.ytdSpendLabel, "$240")
+        XCTAssertEqual(summary.ytdSpendLabel, "$240.00")
         XCTAssertTrue(summary.hasContent)
     }
 

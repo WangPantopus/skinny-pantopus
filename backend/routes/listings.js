@@ -12,13 +12,20 @@ const Joi = require('joi');
 const logger = require('../utils/logger');
 const { checkHomePermission } = require('../utils/homePermissions');
 const { createNotification, notifyAddressRevealed } = require('../services/notificationService');
+const blockService = require('../services/blockService');
 const savedSearchService = require('../services/marketplace/savedSearchService');
+const { assertListingInteractionAllowed } = require('../services/marketplace/listingBlocks');
 const { LISTING_LIST } = require('../utils/columns');
 const { applyLocationPrecision } = require('../utils/locationPrivacy');
 const { haversineMiles } = require('../utils/geo');
-const { hydrateListingCreatorIdentities } = require('../utils/listingCreatorIdentity');
+const {
+  hydrateListingCreatorIdentities,
+  hydrateTaskPeople,
+  serializeTaskPerson,
+} = require('../utils/listingCreatorIdentity');
 const {
   AREA_SEARCH_CANDIDATE_LIMIT,
+  applyMuteAndBlockFilters,
   browseListings,
   discoverListings,
   searchListings,
@@ -38,7 +45,6 @@ const discoveryCacheService = require('../services/marketplace/discoveryCacheSer
 const {
   SAFE_CREATOR_SELECT,
   serializeListingAuthorForViewer,
-  serializeUserAsLocalIdentity,
   serializeUserIdentityForViewer,
 } = require('../serializers/identitySerializers');
 
@@ -304,18 +310,13 @@ const FIELD_MAP = {
   preorderFulfillmentDate: 'preorder_fulfillment_date',
 };
 
+// A seller whose account can't be read is a Pantopus member. The nearby search's own seller columns (username, user_name,
+// user_profile_picture) are their account's and are never shown: a listing names its seller only as
+// hydrateListingCreatorIdentities does.
 function normalizeListing(row) {
   const creator = row.creator
     ? serializeUserIdentityForViewer(row.creator)
-    : serializeListingAuthorForViewer({
-        identity_context_type: 'local',
-        creator: {
-          id: row.user_id,
-          username: row.username,
-          name: row.user_name,
-          profile_picture_url: row.user_profile_picture,
-        },
-      });
+    : serializeListingAuthorForViewer({ identity_context_type: 'local', creator: { id: row.user_id } });
 
   return {
     id: row.id,
@@ -376,20 +377,24 @@ async function normalizeListingsWithHydratedCreators(rows) {
   return (rows || []).map(normalizeListing);
 }
 
+// The people on a listing are named as the listing names its seller, and as tasks name theirs: a person by their Local
+// Profile, a business as the business, with `id` the account id. That is the asker and the answerer (the seller) here
+// (hydrateTaskPeople, before this).
 function serializeListingQuestionForViewer(question) {
   if (!question) return null;
   const { asker, answerer, ...safe } = question;
   return {
     ...safe,
-    asker: serializeUserAsLocalIdentity(asker),
-    answerer: serializeUserIdentityForViewer(answerer),
+    asker: serializeTaskPerson(asker),
+    answerer: serializeTaskPerson(answerer),
   };
 }
 
+// The buyer, named by their Local Profile as above (hydrateTaskPeople, before this).
 function serializeListingMessageForViewer(message) {
   if (!message) return null;
   const { buyer, ...safe } = message;
-  const buyerIdentity = serializeUserAsLocalIdentity(buyer);
+  const buyerIdentity = serializeTaskPerson(buyer);
   return {
     ...safe,
     buyer: buyerIdentity,
@@ -1121,10 +1126,12 @@ router.get('/search', optionalAuth, async (req, res) => {
       resultCount: listings?.length || 0, latencyMs: Date.now() - start,
     });
 
+    const viewerUserId = req.user?.id || null;
+    const shown = await applyMuteAndBlockFilters(listings || [], viewerUserId);
     res.json({
       listings: await applyLocationPrivacyBatch(
-        await normalizeListingsWithHydratedCreators(listings || []),
-        req.user?.id || null
+        await normalizeListingsWithHydratedCreators(shown),
+        viewerUserId
       ),
       pagination: { limit: parseInt(limit), offset: parseInt(offset), hasMore: listings && listings.length === parseInt(limit) },
     });
@@ -1449,7 +1456,7 @@ router.get('/:id/similar', optionalAuth, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch similar listings' });
     }
 
-    const results = (candidates || []).filter((row) => {
+    const results = (await applyMuteAndBlockFilters(candidates || [], viewerUserId)).filter((row) => {
       const point = applyLocationPrivacy(row, null);
       if (point.latitude == null || point.longitude == null) return false;
       const distance = haversineMiles(center.latitude, center.longitude, point.latitude, point.longitude);
@@ -1510,6 +1517,11 @@ router.get('/:id', optionalAuth, async (req, res) => {
     }
 
     const isOwner = viewerUserId && listing.user_id === viewerUserId;
+
+    // Profile blocks (UserBlock) hide a listing in both directions, as browse does and as posts are hidden.
+    if (viewerUserId && !isOwner && await blockService.isBlocked(listing.user_id, viewerUserId)) {
+      return res.status(404).json({ error: 'Listing not found' });
+    }
 
     // Check address grants for progressive disclosure
     let grantedUserIds = null;
@@ -1592,6 +1604,9 @@ router.get('/:id', optionalAuth, async (req, res) => {
       },
     });
   } catch (err) {
+    if (err.code === 'BLOCK_CHECK_UNAVAILABLE') {
+      return res.status(503).json({ error: 'This listing could not be loaded. Please try again.' });
+    }
     logger.error('Listing fetch error', { error: err.message, listingId: req.params.id });
     res.status(500).json({ error: 'Failed to fetch listing' });
   }
@@ -1874,6 +1889,7 @@ router.post('/:id/message', verifyToken, validate(messageListingSchema), async (
     if (!listing) return res.status(404).json({ error: 'Listing not found' });
     if (listing.status !== 'active') return res.status(400).json({ error: 'Listing is no longer active' });
     if (listing.user_id === buyerId) return res.status(400).json({ error: 'You cannot message your own listing' });
+    await assertListingInteractionAllowed(listing.user_id, buyerId);
 
     // Check for existing pending message from this buyer
     const { data: existing } = await supabaseAdmin
@@ -1924,6 +1940,7 @@ router.post('/:id/message', verifyToken, validate(messageListingSchema), async (
 
     res.status(201).json({ message: 'Interest sent successfully', inquiry: msg });
   } catch (err) {
+    if (err.listingBlockRefusal) return res.status(err.status).json({ error: err.message });
     logger.error('marketplace.message.error', { error: err.message });
     res.status(500).json({ error: 'Failed to send message' });
   }
@@ -1955,6 +1972,7 @@ router.get('/:id/messages', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch messages' });
     }
 
+    await hydrateTaskPeople(messages, ['buyer']);
     res.json({ messages: (messages || []).map(serializeListingMessageForViewer) });
   } catch (err) {
     logger.error('Listing messages fetch error', { error: err.message });
@@ -2078,6 +2096,7 @@ router.get('/:listingId/questions', async (req, res) => {
       [owner?.first_name, owner?.last_name].filter(Boolean).join(' ') ||
       owner?.username ||
       'Seller';
+    await hydrateTaskPeople(questions, ['asker', 'answerer']);
 
     const normalized = (questions || []).map((q) => ({
       ...serializeListingQuestionForViewer(q),
@@ -2124,6 +2143,7 @@ router.post('/:listingId/questions', verifyToken, async (req, res) => {
       .single();
 
     if (listingErr || !listing) return res.status(404).json({ error: 'Listing not found' });
+    await assertListingInteractionAllowed(listing.user_id, userId);
 
     // Rate limit: max 5 questions per user per listing
     const { count } = await supabaseAdmin
@@ -2155,14 +2175,10 @@ router.post('/:listingId/questions', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to post question' });
     }
 
-    // Notify listing seller
+    // Notify listing seller, naming the asker as the question does
+    await hydrateTaskPeople([q], ['asker']);
     if (String(listing.user_id) !== String(userId)) {
-      const { data: asker } = await supabaseAdmin
-        .from('User')
-        .select('name, username')
-        .eq('id', userId)
-        .single();
-      const askerName = asker?.name || asker?.username || 'Someone';
+      const askerName = serializeTaskPerson(q.asker)?.displayName || 'Someone';
 
       createNotification({
         userId: listing.user_id,
@@ -2177,6 +2193,7 @@ router.post('/:listingId/questions', verifyToken, async (req, res) => {
 
     res.status(201).json({ question: serializeListingQuestionForViewer(q) });
   } catch (err) {
+    if (err.listingBlockRefusal) return res.status(err.status).json({ error: err.message });
     logger.error('Listing question create error', { error: err.message });
     res.status(500).json({ error: 'Failed to post question' });
   }
@@ -2214,6 +2231,20 @@ router.post('/:listingId/questions/:questionId/answer', verifyToken, async (req,
     if (String(listing.user_id) !== String(userId)) {
       return res.status(403).json({ error: 'Only the seller can answer questions' });
     }
+
+    // The asker is notified of the answer.
+    const { data: asked, error: askedErr } = await supabaseAdmin
+      .from('ListingQuestion')
+      .select('asked_by')
+      .eq('id', questionId)
+      .eq('listing_id', listingId)
+      .maybeSingle();
+    if (askedErr) {
+      logger.error('Error reading listing question', { error: askedErr.message });
+      return res.status(500).json({ error: 'Failed to answer question' });
+    }
+    if (!asked) return res.status(404).json({ error: 'Question not found' });
+    await assertListingInteractionAllowed(userId, asked.asked_by);
 
     const nowIso = new Date().toISOString();
     const { data: updated, error } = await supabaseAdmin
@@ -2260,6 +2291,7 @@ router.post('/:listingId/questions/:questionId/answer', verifyToken, async (req,
       [owner?.first_name, owner?.last_name].filter(Boolean).join(' ') ||
       owner?.username ||
       'Seller';
+    await hydrateTaskPeople([updated], ['asker', 'answerer']);
 
     res.json({
       question: {
@@ -2270,6 +2302,7 @@ router.post('/:listingId/questions/:questionId/answer', verifyToken, async (req,
       }
     });
   } catch (err) {
+    if (err.listingBlockRefusal) return res.status(err.status).json({ error: err.message });
     logger.error('Answer listing question error', { error: err.message });
     res.status(500).json({ error: 'Failed to answer question' });
   }
@@ -2486,6 +2519,10 @@ router.post('/:id/reveal-address', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to reveal address' });
     }
 
+    // A reveal posts in the buyer's chat with the seller and notifies the buyer. (After the grant read,
+    // which refuses an id that isn't a UUID.)
+    await assertListingInteractionAllowed(authorId, granteeUserId);
+
     let grantCreated = false;
     if (!existingGrant) {
       const { error: grantErr } = await supabaseAdmin
@@ -2570,6 +2607,7 @@ router.post('/:id/reveal-address', verifyToken, async (req, res) => {
       message: grantCreated ? 'Address revealed to buyer' : 'Address was already available to buyer',
     });
   } catch (err) {
+    if (err.listingBlockRefusal) return res.status(err.status).json({ error: err.message });
     logger.error('Reveal address error', { error: err.message });
     res.status(500).json({ error: 'Failed to reveal address' });
   }

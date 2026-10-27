@@ -253,7 +253,7 @@ struct BeaconAboutSection: View {
                         .foregroundStyle(Theme.Color.appTextSecondary)
                     ForEach(payload.links) { link in
                         Button {
-                            if let url = URL(string: link.url) { onOpenLink(url) }
+                            if let url = ExternalLink.webURL(link.url) { onOpenLink(url) }
                         } label: {
                             HStack(spacing: Spacing.s2) {
                                 Icon(.link, size: 14, color: Theme.Color.primaryInk)

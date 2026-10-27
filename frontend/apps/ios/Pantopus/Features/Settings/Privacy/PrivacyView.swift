@@ -13,6 +13,8 @@ import SwiftUI
 
 public struct PrivacyView: View {
     @State private var viewModel: PrivacySettingsViewModel
+    /// How neighbors see you, the card in the list's header slot.
+    @State private var neighbors = NeighborsSeeYouViewModel()
     private let onBack: @MainActor () -> Void
 
     public init(
@@ -24,8 +26,12 @@ public struct PrivacyView: View {
     }
 
     public var body: some View {
-        GroupedListView(dataSource: viewModel, onBack: onBack)
+        GroupedListView(dataSource: viewModel, onBack: onBack, headerView: AnyView(NeighborsSeeYouCard(viewModel: neighbors)))
             .accessibilityIdentifier("privacySettings")
+            .task {
+                neighbors.onToast = { [weak viewModel] toast in viewModel?.toast = toast }
+                await neighbors.load()
+            }
             .sheet(isPresented: $viewModel.isDeleteSheetPresented) {
                 AccountDeleteSheet(
                     isDeleting: viewModel.isDeletingAccount,
@@ -51,9 +57,11 @@ public struct PrivacyView: View {
                 }
             }
             .pantopusAnimation(.componentState, value: viewModel.toast?.text)
-            // Your privacy settings changed on another device (`profile:me`).
+            // Your privacy settings changed on another device (`profile:me`), or your account did: an account edit
+            // moves the name and photo neighbors see while they are still the account's.
             .refreshesOnStoreChange(affects: { $0.names(topic: ScreenTopic.profileMe) }, perform: {
                 await viewModel.refreshFromSignal()
+                await neighbors.load()
             })
     }
 }

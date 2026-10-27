@@ -77,7 +77,10 @@ internal fun whereLine(plan: PlanDto): String {
     return listOfNotNull(plan.area?.label, PlanFormat.distance(plan.distanceBand), at).joinToString(" · ")
 }
 
-/** "Casual · extra paddles", "Easy pace · dogs welcome" (board J6, as on iOS): the per-type facts, or null. */
+/**
+ * "Casual · extra paddles", "Easy pace · dogs welcome" (board J6, as on iOS), "Spanish · Quiet study" for a study
+ * group: the per-type facts, or null.
+ */
 internal fun detailsLine(plan: PlanDto): String? {
     val d = plan.details ?: return null
     val parts =
@@ -101,6 +104,7 @@ internal fun detailsLine(plan: PlanDto): String? {
                     },
                     if (d.dogsWelcome == true) "dogs welcome" else null,
                 )
+            PlanKind.STUDY_GROUP -> PlanFormat.studyParts(plan)
             else -> emptyList()
         }
     return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ")
@@ -167,11 +171,11 @@ internal fun PlanSpots(
         if (plan.isFull) {
             val noun =
                 if (plan.isPlaydate) {
-                    "families"
+                    if (plan.spots == 1) "family" else "families"
                 } else if (plan.planKind == PlanKind.PICKUP_GAME) {
-                    "players"
+                    if (plan.spots == 1) "player" else "players"
                 } else {
-                    "people"
+                    if (plan.spots == 1) "person" else "people"
                 }
             PlanSpotsCaption(going = "Full", left = "${plan.spots} of ${plan.spots} $noun", note = note, noteMuted = true)
         } else {
@@ -420,7 +424,7 @@ internal fun PlanNotThisTime(
     val status = PlanRequestStatus.from(plan.viewer?.requestStatus ?: plan.myRequest?.status)
     val (title, subtitle) =
         when (status) {
-            PlanRequestStatus.EXPIRED -> "This one didn't work out" to "It started before ${plan.hostFirst} could answer."
+            PlanRequestStatus.EXPIRED -> "This one didn't work out" to "Joining closed before you got a spot."
             PlanRequestStatus.REMOVED -> "You're no longer on this plan" to "${plan.hostFirst} made a change to who's coming."
             else -> "This one didn't work out" to "${plan.hostFirst} couldn't fit you this time."
         }

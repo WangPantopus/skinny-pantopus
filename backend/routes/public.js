@@ -1,7 +1,11 @@
+const crypto = require('crypto');
 const express = require('express');
 const router = express.Router();
 const supabaseAdmin = require('../config/supabaseAdmin');
 const geo = require('../services/geo');
+const signedOutBudget = require('../services/geo/signedOutBudget');
+const optionalAuth = require('../middleware/optionalAuth');
+const { placeLookupKey, placeLookupLimiter, shareCardRenderLimiter } = require('../middleware/rateLimiter');
 const { bucketForCount } = require('../services/place/densityReader');
 const {
   geocodeToTractCached,
@@ -160,8 +164,13 @@ router.get('/listings/:id', async (req, res) => {
 // the stateless fetchers directly (not getProfile) so the preview neither
 // writes the shared profile cache nor triggers the Walk Score dependency.
 //
-// Statuses: ready | partial | unsupported_region | rate_limited
-//   • rate_limited is surfaced by previewLimiter as HTTP 429.
+// Statuses: ready | partial | unsupported_region | could_not_place, and
+// HTTP 429 when a limit says no:
+//   • PLACE_LOOKUP_LIMIT — five lookups a day per account, else per network
+//     (placeLookupLimiter); a person's own repeat within ten minutes is free;
+//   • GEO_BUSY — the hourly Mapbox budget for everyone signed out is spent
+//     (services/geo/signedOutBudget.js);
+//   • the mount-level previewLimiter (60 a minute per IP) as before.
 // ============================================================
 
 // Density buckets are floored server-side from the raw verified-home count so
@@ -234,10 +243,14 @@ const geoKey = (address) => `geo:${address.toLowerCase().replace(/\s+/g, ' ')}`;
 //   'unplaceable'   → no result, or nonsense coordinates
 //   'lookup_failed' → the geocoder could not answer (down, no key, rate limit)
 //   'outside_us'    → we placed it, and it is genuinely not in the US
-async function geocodeUsAddress(address) {
+//   'busy'          → a signed-out lookup the hourly Mapbox budget refused
+//                     (only when `signedOut`; nothing was sent to Mapbox)
+async function geocodeUsAddress(address, { signedOut = false } = {}) {
   const key = geoKey(address);
   const cached = previewCache.get(key);
   if (cached) return cached;
+
+  if (signedOut && !signedOutBudget.take()) return { ok: false, reason: 'busy' };
 
   let result;
   try {
@@ -503,6 +516,9 @@ async function buildPlacePreview(place) {
     if (!tractPromise) tractPromise = geocodeToTractCached(place.lat, place.lng).catch(() => null);
     return tractPromise;
   };
+  // While Ballot is on, the election row is Ballot's, from the teaser's
+  // in-memory boundary lookup (nothing is written for the point).
+  const ballot = await ballotOnForEveryone() ? { lookup: lookupGovernmentsCached } : null;
 
   const [floodSettled, areaSettled, bucketSettled, moneySettled, remoteSettled, foundingSettled] = await Promise.allSettled([
     fetchFloodCached(place.lat, place.lng),
@@ -513,7 +529,7 @@ async function buildPlacePreview(place) {
     // civic), each on its own time budget — a slow provider degrades
     // only its own section (placePreviewService).
     placePreviewService.composePreviewSections({
-      lat: place.lat, lng: place.lng, city: place.city, state: place.state, resolveTract,
+      lat: place.lat, lng: place.lng, city: place.city, state: place.state, resolveTract, ballot,
     }),
     // Are Founding Neighbor slots genuinely open in this cell? A boolean,
     // never a count — it only chooses the density card's invitation line.
@@ -591,16 +607,38 @@ async function buildPlacePreview(place) {
 // The teaser's boundary lookup, kept in the preview's in-memory cache like
 // the flood and Census facts beside it: a fact about a point of land, keyed
 // by the point (~5 m), never by the address typed, held 24 h on this instance
-// only. It keeps the time it was made so the card never looks fresher.
+// only. It keeps the time it was made so the card never looks fresher. The
+// teaser and the preview's election row ask at once and share one call.
+const governmentsInFlight = new Map();
+
 async function lookupGovernmentsCached(lat, lng, options) {
   const key = `ballot-governments:${encodeGeohash(lat, lng, 9)}`;
   const cached = previewCache.get(key);
   if (cached) return cached;
-  const result = await ballotGovernments.governmentsForPoint(lat, lng, options);
-  if (!result) return { result: null, lookedUpAt: null };
-  const entry = { result, lookedUpAt: new Date().toISOString() };
-  previewCache.set(key, entry, AREA_TTL_MS);
-  return entry;
+  let call = governmentsInFlight.get(key);
+  if (!call) {
+    call = (async () => {
+      const result = await ballotGovernments.governmentsForPoint(lat, lng, options);
+      if (!result) return { result: null, lookedUpAt: null };
+      const entry = { result, lookedUpAt: new Date().toISOString() };
+      previewCache.set(key, entry, AREA_TTL_MS);
+      return entry;
+    })().finally(() => governmentsInFlight.delete(key));
+    governmentsInFlight.set(key, call);
+  }
+  return call;
+}
+
+// Ballot in a preview follows the flag's GLOBAL switch only: a preview reads
+// the same for everyone who asks about a point. Any failure reads as off.
+async function ballotOnForEveryone() {
+  try {
+    const flag = await featureFlagService.getFlag('ballot_p0');
+    return Boolean(flag && flag.enabled_globally);
+  } catch (err) {
+    console.warn('[public/place] ballot flag read failed:', err.message);
+    return false;
+  }
 }
 
 // Ballot P0 teaser (docs/ballot-implementation-plan-2026-09-24.md §5.3).
@@ -609,15 +647,14 @@ async function lookupGovernmentsCached(lat, lng, options) {
 // preview's per-section time budget. `undefined` = flag off (key omitted).
 async function ballotTeaserFor(place) {
   try {
-    const flag = await featureFlagService.getFlag('ballot_p0');
-    if (!flag || !flag.enabled_globally) return undefined;
+    if (!await ballotOnForEveryone()) return undefined;
     const budgetMs = placePreviewService.sectionBudgetMs();
     const [teaser] = await placePreviewService.withBudget(
-      // The lookup stops when the budget does, so no upstream call runs on
-      // after the response.
+      // The lookup stops before the budget does, so no upstream call runs on
+      // after the response (the election row shares it, on the same clock).
       async () => [await ballotSummary.teaserForPoint(
         { lat: place.lat, lng: place.lng, state: place.state },
-        { timeoutMs: budgetMs, lookup: lookupGovernmentsCached },
+        { timeoutMs: placePreviewService.ballotLookupMs(budgetMs), lookup: lookupGovernmentsCached },
       )],
       budgetMs,
       () => [null],
@@ -629,7 +666,46 @@ async function ballotTeaserFor(place) {
   }
 }
 
-router.get('/place', async (req, res) => {
+// The preview a client renders, with the Ballot teaser beside it while
+// ballot_p0 is on: a typed address's (GET /place) and a saved address's
+// (routes/savedPlaces.js), whose Place tab is this preview.
+async function placePreviewWithBallot(place) {
+  const [preview, ballotTeaser] = await Promise.all([
+    buildPlacePreview(place),
+    ballotTeaserFor(place),
+  ]);
+  return ballotTeaser !== undefined ? { ...preview, ballot_teaser: ballotTeaser } : preview;
+}
+
+// A person's own repeat of an address they looked up in the last ten minutes
+// doesn't spend their daily lookups: its geocode is still cached here, so it
+// costs nothing (going back and forth, the confirmation after sign-up). Kept
+// in memory for the geocode's own lifetime under a hash of the caller and the
+// address, never a record of who looked up what. Only the caller's OWN lookups
+// count, so the allowance can't tell anyone that someone else looked an
+// address up.
+const ownRecentLookups = new GeoCache(5000);
+const ownLookupKey = (req, address) => crypto.createHash('sha256')
+  .update(`${placeLookupKey(req)}\n${geoKey(address)}`)
+  .digest('hex');
+
+// Which allowance this lookup spends (middleware/rateLimiter.js). A share-card
+// render is marked by the web's own server (app/api/og/place), trusted only
+// with the edge secret (req.viaWebEdge); the web strips the marker from
+// visitors' requests.
+function classifyPlaceLookup(req, _res, next) {
+  const address = typeof req.query.address === 'string' ? req.query.address.trim() : '';
+  const shareCard = req.viaWebEdge === true && req.get('x-pantopus-share-card') === '1';
+  const ownRepeat = Boolean(address) && ownRecentLookups.get(ownLookupKey(req, address)) === true;
+  req.placeLookup = { shareCard, free: shareCard || ownRepeat };
+  next();
+}
+
+router.get('/place', optionalAuth, classifyPlaceLookup, placeLookupLimiter, shareCardRenderLimiter, async (req, res) => {
+  // A counted lookup that cost nothing goes back to the caller.
+  const refund = () => {
+    if (!req.placeLookup.free) placeLookupLimiter.refund(req);
+  };
   try {
     // Same reason as /unlisted: a 200 with an ETag and no Cache-Control is
     // storable, and the cache key is the full URL — which on this route
@@ -638,9 +714,11 @@ router.get('/place', async (req, res) => {
 
     const rawAddress = typeof req.query.address === 'string' ? req.query.address.trim() : '';
     if (!rawAddress) {
+      refund();
       return res.status(400).json({ error: 'An address query parameter is required.' });
     }
     if (rawAddress.length > 200) {
+      refund();
       return res.status(400).json({ error: 'That address is too long.' });
     }
 
@@ -653,13 +731,21 @@ router.get('/place', async (req, res) => {
     // anonymous surface in the product, was left collapsing them, so a
     // geocoder outage still tells every US visitor at once that the
     // product is not for them.
-    const place = await geocodeUsAddress(rawAddress);
+    const place = await geocodeUsAddress(rawAddress, { signedOut: !req.user });
     if (!place.ok) {
+      // Nothing went to Mapbox: the hourly budget for everyone signed out is spent.
+      if (place.reason === 'busy') {
+        refund();
+        return signedOutBudget.refuse(res, 'Address lookups are busy right now. Please try again in a few minutes.');
+      }
       // A lookup outage is not "we could not find that address": answer it as
       // a failed read so every client offers Try again instead of blaming the input.
       if (place.reason === 'lookup_failed') {
+        refund();
         return res.status(503).json({ error: 'We couldn\u2019t look up that address right now. Please try again.' });
       }
+      // "Could not place" and "outside the US" still count: Mapbox answered,
+      // and charged for it.
       const unplaceable = place.reason !== 'outside_us';
       return res.json({
         status: unplaceable ? 'could_not_place' : 'unsupported_region',
@@ -671,13 +757,8 @@ router.get('/place', async (req, res) => {
       });
     }
 
-    // The Ballot teaser rides beside the preview of a typed address only; a
-    // saved place's preview (routes/savedPlaces.js) carries no Ballot.
-    const [preview, ballotTeaser] = await Promise.all([
-      buildPlacePreview(place),
-      ballotTeaserFor(place),
-    ]);
-    return res.json(ballotTeaser !== undefined ? { ...preview, ballot_teaser: ballotTeaser } : preview);
+    if (!req.placeLookup.shareCard) ownRecentLookups.set(ownLookupKey(req, rawAddress), true, GEO_TTL_MS);
+    return res.json(await placePreviewWithBallot(place));
   } catch (err) {
     console.error('[public/place] Error:', err.message);
     res.status(500).json({ error: 'Internal server error' });
@@ -891,6 +972,12 @@ module.exports = router;
 // Shared with Scout (routes/scout.js): one geocoder, one cache, one set of
 // US-bounds rules. A second copy would drift and double the Mapbox spend.
 module.exports.geocodeUsAddress = geocodeUsAddress;
-module.exports.buildPlacePreview = buildPlacePreview;
-// Test-only hook: reset the in-memory preview caches between cases.
-module.exports.__clearPreviewCaches = () => previewCache.clear();
+// A saved address's preview (routes/savedPlaces.js) is the same preview.
+module.exports.placePreviewWithBallot = placePreviewWithBallot;
+// Test-only hook: reset the in-memory preview caches between cases, and the
+// daily lookup allowances, which are per process like them.
+module.exports.__clearPreviewCaches = () => {
+  previewCache.clear();
+  ownRecentLookups.clear();
+  placeLookupLimiter.resetAll();
+};

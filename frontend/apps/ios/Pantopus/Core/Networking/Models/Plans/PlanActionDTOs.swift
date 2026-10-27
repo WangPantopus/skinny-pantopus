@@ -20,9 +20,10 @@ public struct AskToJoinBody: Encodable, Sendable {
     public let kidsCount: Int?
     public let kidsAgeBands: [PlanKidsAgeBand]?
     public let staysWithKids: Bool?
+    public var gps: PlanGPSBody?
 
     enum CodingKeys: String, CodingKey {
-        case note
+        case note, gps
         case partySize = "party_size"
         case kidsCount = "kids_count"
         case kidsAgeBands = "kids_age_bands"
@@ -34,13 +35,15 @@ public struct AskToJoinBody: Encodable, Sendable {
         note: String?,
         kidsCount: Int? = nil,
         kidsAgeBands: [PlanKidsAgeBand]? = nil,
-        staysWithKids: Bool? = nil
+        staysWithKids: Bool? = nil,
+        gps: PlanGPSBody? = nil
     ) {
         self.partySize = partySize
         self.note = note
         self.kidsCount = kidsCount
         self.kidsAgeBands = kidsAgeBands
         self.staysWithKids = staysWithKids
+        self.gps = gps
     }
 }
 
@@ -196,9 +199,10 @@ public struct UpdatePlanBody: Encodable, Sendable {
     public var spots: Int?
     public var autoRules: [PlanAutoRule]?
     public var guestNote: String?
+    public var gps: PlanGPSBody?
 
     enum CodingKeys: String, CodingKey {
-        case title, about, place, spots
+        case title, about, place, spots, gps
         case startsAt = "starts_at"
         case endsAt = "ends_at"
         case autoRules = "auto_rules"
@@ -314,17 +318,56 @@ public struct PlanRequestsResponse: Decodable, Sendable, Hashable {
 
 // MARK: - Composer helpers
 
+/// The game a watch party is for.
+public struct PlanGameDTO: Codable, Sendable, Hashable {
+    public let label: String
+    public let startsAt: String?
+    public let id: String?
+    public let team: String?
+    public let opponent: String?
+    public let home: Bool?
+    public let endsAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case label, id, team, opponent, home
+        case startsAt = "starts_at"
+        case endsAt = "ends_at"
+    }
+
+    public init(
+        label: String,
+        startsAt: String?,
+        id: String? = nil,
+        team: String? = nil,
+        opponent: String? = nil,
+        home: Bool? = nil,
+        endsAt: String? = nil
+    ) {
+        self.label = label
+        self.startsAt = startsAt
+        self.id = id
+        self.team = team
+        self.opponent = opponent
+        self.home = home
+        self.endsAt = endsAt
+    }
+}
+
 /// An upcoming game for a watch party (`GET /api/plans/games`).
 public struct PlanGameOptionDTO: Decodable, Sendable, Hashable, Identifiable {
     public let id: String
     public let label: String
     public let team: String?
+    public let opponent: String?
+    public let home: Bool?
+    public let preseason: Bool?
+    public let followed: Bool?
     public let startsAt: String
     public let endsAt: String?
     public let source: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, label, team, source
+        case id, label, team, opponent, home, preseason, source, followed
         case startsAt = "starts_at"
         case endsAt = "ends_at"
     }
@@ -336,93 +379,43 @@ public struct PlanGameOptionDTO: Decodable, Sendable, Hashable, Identifiable {
     public var endsAtDate: Date? {
         PlanTime.parse(endsAt)
     }
+
+    public var matchupLabel: String {
+        guard let opponent, !opponent.isEmpty else { return label }
+        return "\(label) \(home == false ? "at" : "vs") \(opponent)"
+    }
+
+    public var reference: PlanGameDTO {
+        PlanGameDTO(
+            label: label,
+            startsAt: startsAt,
+            id: id,
+            team: team,
+            opponent: opponent,
+            home: home,
+            endsAt: endsAt
+        )
+    }
+
+    public func isAvailable(at now: Date) -> Bool {
+        guard let end = endsAtDate else { return startsAtDate.map { $0 > now } ?? false }
+        return end.addingTimeInterval(-30 * 60) > now
+    }
 }
 
 /// `GET /api/plans/games`. Empty is fine: the composer offers "Another game".
 public struct PlanGamesResponse: Decodable, Sendable, Hashable {
     public let games: [PlanGameOptionDTO]
+    public let sports: PlansSportsDTO?
 
     enum CodingKeys: String, CodingKey {
-        case games
+        case games, sports
     }
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         games = try container.decodeIfPresent(LossyList<PlanGameOptionDTO>.self, forKey: .games)?.items ?? []
-    }
-}
-
-/// A public place for H6 (parks, playgrounds, libraries, courts, trails,
-/// cafés, bars and restaurants). Accepts the geo service's `center` shape or
-/// flat coordinates.
-public struct PlanPlaceOptionDTO: Decodable, Sendable, Hashable, Identifiable {
-    public let placeId: String?
-    public let name: String
-    public let category: String?
-    public let address: String?
-    public let latitude: Double
-    public let longitude: Double
-    public let distanceMeters: Double?
-
-    public var id: String {
-        placeId ?? "\(name)@\(latitude),\(longitude)"
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case name, category, address, latitude, longitude, center
-        case placeId = "place_id"
-        case distanceMeters = "distance_m"
-    }
-
-    private struct Center: Decodable {
-        let lat: Double
-        let lng: Double
-    }
-
-    public init(from decoder: any Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        placeId = try container.decodeIfPresent(String.self, forKey: .placeId)
-        name = try container.decode(String.self, forKey: .name)
-        category = try container.decodeIfPresent(String.self, forKey: .category)
-        address = try container.decodeIfPresent(String.self, forKey: .address)
-        if let center = try container.decodeIfPresent(Center.self, forKey: .center) {
-            latitude = center.lat
-            longitude = center.lng
-        } else {
-            latitude = try container.decode(Double.self, forKey: .latitude)
-            longitude = try container.decode(Double.self, forKey: .longitude)
-        }
-        distanceMeters = try container.decodeIfPresent(Double.self, forKey: .distanceMeters)
-    }
-
-    public init(placeId: String?, name: String, category: String?, address: String?, latitude: Double, longitude: Double) {
-        self.placeId = placeId
-        self.name = name
-        self.category = category
-        self.address = address
-        self.latitude = latitude
-        self.longitude = longitude
-        distanceMeters = nil
-    }
-}
-
-/// `GET /api/plans/places/nearby` (and the geo search used by H6's box).
-public struct PlanPlacesResponse: Decodable, Sendable, Hashable {
-    public let places: [PlanPlaceOptionDTO]
-    /// The area is asked for the first time and still loading (202): ask again in a few seconds.
-    public let loading: Bool
-    /// "© OpenStreetMap contributors": shown small under the list.
-    public let attribution: String?
-
-    enum CodingKeys: String, CodingKey {
-        case places, loading, attribution
-    }
-
-    public init(from decoder: any Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        places = try container.decodeIfPresent(LossyList<PlanPlaceOptionDTO>.self, forKey: .places)?.items ?? []
-        loading = try container.decodeIfPresent(Bool.self, forKey: .loading) ?? false
-        attribution = try container.decodeIfPresent(String.self, forKey: .attribution)
+        sports = try container.decodeIfPresent(PlansSportsDTO.self, forKey: .sports)
     }
 }
 

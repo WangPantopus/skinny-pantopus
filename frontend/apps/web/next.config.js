@@ -1,4 +1,5 @@
 const { PHASE_DEVELOPMENT_SERVER } = require('next/constants');
+const { mediaCspSources, mediaRemotePatterns } = require('./src/lib/media-hosts');
 
 const defaultApiUrl =
   process.env.NEXT_PUBLIC_API_URL ||
@@ -32,12 +33,12 @@ const createNextConfig = (phase) => ({
     // Next.js 16+: every `quality` passed to <Image /> must appear here (dev warning today).
     // Repo uses 75 (avatars/thumbs) and 80 (larger media / posts / listings).
     qualities: [75, 80],
-    // Uploaded files live in S3/CloudFront or Supabase Storage. An <Image> whose
-    // host is missing here throws and takes the whole page down.
+    // Uploaded files live in Pantopus's own Supabase Storage or S3/CloudFront
+    // (src/lib/media-hosts.js); /_next/image refuses every other host, so it
+    // can't be used as a free image proxy. In development an <Image> whose host
+    // is missing here throws and takes the whole page down.
     remotePatterns: [
-      { protocol: 'https', hostname: '**.amazonaws.com' },
-      { protocol: 'https', hostname: '**.cloudfront.net' },
-      { protocol: 'https', hostname: '**.supabase.co' },
+      ...mediaRemotePatterns(),
       { protocol: 'https', hostname: 'pantopus.com' },
       { protocol: 'https', hostname: 'www.pantopus.com' },
       // Local storage only in development: in production these would let the
@@ -58,15 +59,43 @@ const createNextConfig = (phase) => ({
   // Deploy this app on BOTH https://www.pantopus.com and https://pantopus.com (or ensure
   // apex serves these URLs with 200 + same JSON — redirects on /.well-known can break verification).
   async headers() {
+    // Every page: no plugin content and no <base> pointing elsewhere. The only
+    // <object>s are PDF viewers (a post's attachment in the lightbox, private
+    // claim evidence as checked in-memory bytes), so object-src admits this
+    // site, blob: and Pantopus's own storage rather than 'none', which would
+    // blank them; the fallback link inside <object> is what Android Chrome shows.
+    const objectSources = [
+      "'self'",
+      'blob:',
+      ...mediaCspSources(),
+      ...(phase === PHASE_DEVELOPMENT_SERVER ? ['http://localhost:*', 'http://127.0.0.1:*'] : []),
+    ];
+    const pageCsp = `object-src ${objectSources.join(' ')}; base-uri 'self'`;
     return [
+      {
+        source: '/chat-offline',
+        headers: [
+          { key: 'X-Pantopus-Chat-Shell', value: '1' },
+          { key: 'X-Robots-Tag', value: 'noindex, nofollow' },
+        ],
+      },
+      {
+        source: '/chat-service-worker.js',
+        headers: [{ key: 'Cache-Control', value: 'no-cache' }],
+      },
       // Clickjacking protection for every page except booking embeds, which
       // other sites frame on purpose. Rules below override these per path.
       {
         source: '/((?!book/[^/]+/embed).*)',
         headers: [
           { key: 'X-Frame-Options', value: 'DENY' },
-          { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" },
+          { key: 'Content-Security-Policy', value: `frame-ancestors 'none'; ${pageCsp}` },
         ],
+      },
+      // Booking embeds keep every directive but frame-ancestors.
+      {
+        source: '/book/:slug/embed',
+        headers: [{ key: 'Content-Security-Policy', value: pageCsp }],
       },
       {
         source: '/:path*',
@@ -77,6 +106,15 @@ const createNextConfig = (phase) => ({
       },
       {
         source: '/status/:token',
+        headers: [
+          { key: 'Cache-Control', value: 'private, no-store' },
+          { key: 'Referrer-Policy', value: 'no-referrer' },
+          { key: 'X-Robots-Tag', value: 'noindex, nofollow' },
+        ],
+      },
+      // A letter's claim page: its link carries the claim token.
+      {
+        source: '/open/:path*',
         headers: [
           { key: 'Cache-Control', value: 'private, no-store' },
           { key: 'Referrer-Policy', value: 'no-referrer' },

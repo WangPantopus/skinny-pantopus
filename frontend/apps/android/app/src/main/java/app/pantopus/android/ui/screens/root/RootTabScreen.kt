@@ -56,6 +56,7 @@ import app.pantopus.android.core.LaunchFeature
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.core.perf.ScreenTiming
 import app.pantopus.android.core.routing.DeepLinkRouter
+import app.pantopus.android.data.ai.AIScreenContext
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.InviteLinks
 import app.pantopus.android.ui.components.NavigationDrawer
@@ -102,7 +103,9 @@ import app.pantopus.android.ui.screens.compose.gig.GigComposeViewModel
 import app.pantopus.android.ui.screens.compose.gig.GigComposeWizardScreen
 import app.pantopus.android.ui.screens.compose.listing.ListingComposeStep
 import app.pantopus.android.ui.screens.compose.listing.ListingComposeWizardScreen
+import app.pantopus.android.ui.screens.compose.pulse.PulseComposeDraftFields
 import app.pantopus.android.ui.screens.compose.pulse.PulseComposeFlowScreen
+import app.pantopus.android.ui.screens.compose.pulse.PulseComposeViewModel
 import app.pantopus.android.ui.screens.connections.ConnectionsChatTarget
 import app.pantopus.android.ui.screens.connections.ConnectionsScreen
 import app.pantopus.android.ui.screens.contentdetail.GigDetailScreen
@@ -317,8 +320,12 @@ import app.pantopus.android.ui.screens.membership.MembershipDetailScreen
 import app.pantopus.android.ui.screens.my_bids.MyBidsScreen
 import app.pantopus.android.ui.screens.my_posts.MyPostsScreen
 import app.pantopus.android.ui.screens.my_tasks.MyTasksScreen
-import app.pantopus.android.ui.screens.nearby.NearbyScreen
+import app.pantopus.android.ui.screens.nearby.NEIGHBORHOOD_INVITE_MESSAGE
+import app.pantopus.android.ui.screens.nearby.NearbySegment
+import app.pantopus.android.ui.screens.nearby.NearbySegmentRequests
+import app.pantopus.android.ui.screens.nearby.NearbyTab
 import app.pantopus.android.ui.screens.nearby.NearbyViewModel
+import app.pantopus.android.ui.screens.nearby.NeighborhoodScreen
 import app.pantopus.android.ui.screens.nearby.pulseQuietStateCard
 import app.pantopus.android.ui.screens.notifications.NotificationsScreen
 import app.pantopus.android.ui.screens.offers.OffersScreen
@@ -335,6 +342,7 @@ import app.pantopus.android.ui.screens.place.PlaceRootBar
 import app.pantopus.android.ui.screens.place.PlaceRootViewed
 import app.pantopus.android.ui.screens.place.SavedPlaceRootScreen
 import app.pantopus.android.ui.screens.place.detail.PLACE_DETAIL_HOME_ID_KEY
+import app.pantopus.android.ui.screens.place.detail.PLACE_DETAIL_SAVED_ID_KEY
 import app.pantopus.android.ui.screens.place.detail.PLACE_DETAIL_SLUG_KEY
 import app.pantopus.android.ui.screens.place.detail.PlaceDetailScreen
 import app.pantopus.android.ui.screens.place.launch.PendingPlaceScreen
@@ -435,10 +443,13 @@ import app.pantopus.android.ui.screens.scheduling.setup.FirstRunWizardScreen
 import app.pantopus.android.ui.screens.scheduling.setup.OnboardingHomeBusinessScreen
 import app.pantopus.android.ui.screens.scheduling.visits.VisitDetailScreen
 import app.pantopus.android.ui.screens.scheduling.visits.VisitSetupScreen
+import app.pantopus.android.ui.screens.settings.BriefingNotice
+import app.pantopus.android.ui.screens.settings.BriefingNoticeViewModel
 import app.pantopus.android.ui.screens.settings.NotificationSettingsScreen
 import app.pantopus.android.ui.screens.settings.PrivacySettingsScreen
 import app.pantopus.android.ui.screens.settings.SettingsIndexScreen
 import app.pantopus.android.ui.screens.settings.SettingsRoute
+import app.pantopus.android.ui.screens.settings.SuggestionsNotice
 import app.pantopus.android.ui.screens.settings.about.AboutScreen
 import app.pantopus.android.ui.screens.settings.blocks.BlockedUsersScreen
 import app.pantopus.android.ui.screens.settings.data_export.DataExportScreen
@@ -466,6 +477,7 @@ import app.pantopus.android.ui.screens.support_trains.start_train.StartSupportTr
 import app.pantopus.android.ui.screens.token_accept.TokenAcceptScreen
 import app.pantopus.android.ui.screens.universal_search.UniversalSearchDestination
 import app.pantopus.android.ui.screens.universal_search.UniversalSearchScreen
+import app.pantopus.android.ui.screens.wallet.ReceivedInvoicesScreen
 import app.pantopus.android.ui.screens.wallet.WalletActivityListScreen
 import app.pantopus.android.ui.screens.wallet.WalletScreen
 import app.pantopus.android.ui.screens.wallet.scheduling.PaymentsSetupScreen
@@ -552,6 +564,13 @@ private object ChildRoutes {
         homeId: String,
         slug: String,
     ): String = "place/$homeId/detail/$slug"
+
+    const val SAVED_PLACE_DETAIL = "saved-place/{$PLACE_DETAIL_SAVED_ID_KEY}/detail/{$PLACE_DETAIL_SLUG_KEY}"
+
+    fun savedPlaceDetail(
+        id: String,
+        slug: String,
+    ): String = "saved-place/$id/detail/$slug"
 
     /** W4 — the full Today's Pulse signal stream. */
     const val PLACE_PULSE = "place/{$PLACE_PULSE_HOME_ID_KEY}/pulse"
@@ -1399,6 +1418,16 @@ private object ChildRoutes {
     /** The room a chat link named when it opened as a person thread, so the
      *  link's arrival still completes (empty for every other open). */
     const val CHAT_ARRIVAL_ROOM_KEY = "arrivalRoom"
+    const val CHAT_BUSINESS_ID_KEY = "asBusinessUserId"
+
+    /** Ask Pantopus: the screen the assistant thread was opened from ([AIScreenContext.encode]; empty otherwise). */
+    const val CHAT_AI_CONTEXT_KEY = "aiContext"
+
+    /** A brief's or nudge's notification id: the assistant thread opens at its message (empty otherwise). */
+    const val CHAT_AI_NUDGE_KEY = "aiNudge"
+
+    /** The conversation that brief or nudge was added to: the assistant thread opens and continues it (empty otherwise). */
+    const val CHAT_AI_CONVERSATION_KEY = "aiConversation"
     const val CHAT_CONVERSATION =
         "chat/{$CHAT_KIND_KEY}/{$CHAT_ID_KEY}?" +
             "$CHAT_NAME_KEY={$CHAT_NAME_KEY}" +
@@ -1415,7 +1444,11 @@ private object ChildRoutes {
             "&$CHAT_TOPIC_REF_ID_KEY={$CHAT_TOPIC_REF_ID_KEY}" +
             "&$CHAT_TOPIC_TITLE_KEY={$CHAT_TOPIC_TITLE_KEY}" +
             "&$CHAT_GIG_ID_KEY={$CHAT_GIG_ID_KEY}" +
-            "&$CHAT_ARRIVAL_ROOM_KEY={$CHAT_ARRIVAL_ROOM_KEY}"
+            "&$CHAT_ARRIVAL_ROOM_KEY={$CHAT_ARRIVAL_ROOM_KEY}" +
+            "&$CHAT_BUSINESS_ID_KEY={$CHAT_BUSINESS_ID_KEY}" +
+            "&$CHAT_AI_CONTEXT_KEY={$CHAT_AI_CONTEXT_KEY}" +
+            "&$CHAT_AI_NUDGE_KEY={$CHAT_AI_NUDGE_KEY}" +
+            "&$CHAT_AI_CONVERSATION_KEY={$CHAT_AI_CONVERSATION_KEY}"
 
     /** New message contact picker (T6.6b P25). Reached from Chat list
      *  compose button + empty-state CTA. */
@@ -1432,9 +1465,12 @@ private object ChildRoutes {
 
     /** Optional headline seeded into the draft (a Pantopus AI post draft's title). */
     const val COMPOSE_TITLE_KEY = "prefillTitle"
+
+    /** A Pantopus AI post draft's type and other fields ([PulseComposeDraftFields.encode]; empty otherwise). */
+    const val COMPOSE_DRAFT_FIELDS_KEY = PulseComposeViewModel.PREFILL_DRAFT_FIELDS_KEY
     const val COMPOSE_POST =
         "feed/compose?$COMPOSE_INTENT_KEY={$COMPOSE_INTENT_KEY}&$COMPOSE_BODY_KEY={$COMPOSE_BODY_KEY}" +
-            "&$COMPOSE_TITLE_KEY={$COMPOSE_TITLE_KEY}"
+            "&$COMPOSE_TITLE_KEY={$COMPOSE_TITLE_KEY}&$COMPOSE_DRAFT_FIELDS_KEY={$COMPOSE_DRAFT_FIELDS_KEY}"
 
     /** P3.5 — Edit an existing Pulse post. Re-uses the compose flow. */
     const val EDIT_POST_POST_ID_KEY = "postId"
@@ -1519,10 +1555,13 @@ private object ChildRoutes {
         intent: String,
         prefillBody: String = "",
         prefillTitle: String = "",
+        draftFields: PulseComposeDraftFields? = null,
     ): String =
         "feed/compose?$COMPOSE_INTENT_KEY=${java.net.URLEncoder.encode(intent, "UTF-8").replace("+", "%20")}" +
             "&$COMPOSE_BODY_KEY=${java.net.URLEncoder.encode(prefillBody, "UTF-8").replace("+", "%20")}" +
-            "&$COMPOSE_TITLE_KEY=${java.net.URLEncoder.encode(prefillTitle, "UTF-8").replace("+", "%20")}"
+            "&$COMPOSE_TITLE_KEY=${java.net.URLEncoder.encode(prefillTitle, "UTF-8").replace("+", "%20")}" +
+            draftFields?.let { "&$COMPOSE_DRAFT_FIELDS_KEY=${java.net.URLEncoder.encode(it.encode(), "UTF-8").replace("+", "%20")}" }
+                .orEmpty()
 
     /** Build the start-a-Support-Train path with a story to start from. */
     fun startSupportTrain(story: String): String =
@@ -1600,6 +1639,29 @@ private object ChildRoutes {
             "&$CHAT_GIG_ID_KEY=${enc(row.gigId ?: "")}"
     }
 
+    /**
+     * Ask Pantopus from a screen: the assistant thread (the one the Messages row opens) with that screen's
+     * context and starter prompts, nothing sent yet (AI assistant phase 1 contract, section 7).
+     */
+    fun askPantopus(context: AIScreenContext): String {
+        fun enc(value: String) = java.net.URLEncoder.encode(value, "UTF-8").replace("+", "%20")
+        return "chat/ai/ai_assistant?$CHAT_NAME_KEY=${enc("Pantopus AI")}&$CHAT_INITIALS_KEY=AI" +
+            "&$CHAT_AI_CONTEXT_KEY=${enc(context.encode())}"
+    }
+
+    /**
+     * `pantopus://assistant` (AI assistant phase 2 contract §8.2): the assistant thread, in [conversationId] when the
+     * link names one, at the brief or nudge [nudgeId] names when there is one.
+     */
+    fun assistantThread(
+        nudgeId: String?,
+        conversationId: String?,
+    ): String {
+        fun enc(value: String) = java.net.URLEncoder.encode(value, "UTF-8").replace("+", "%20")
+        return "chat/ai/ai_assistant?$CHAT_NAME_KEY=${enc("Pantopus AI")}&$CHAT_INITIALS_KEY=AI" +
+            "&$CHAT_AI_NUDGE_KEY=${enc(nudgeId.orEmpty())}&$CHAT_AI_CONVERSATION_KEY=${enc(conversationId.orEmpty())}"
+    }
+
     // A Creator Inbox row no longer builds a generic-chat path. Persona DMs
     // are addressed by thread id (`personaDmThread`) because the DM
     // serializer emits no user_id for either party — the previous
@@ -1658,6 +1720,7 @@ private object ChildRoutes {
         displayName: String,
         initials: String,
         verified: Boolean,
+        asBusinessUserId: String? = null,
     ): String {
         fun enc(value: String) = java.net.URLEncoder.encode(value, "UTF-8").replace("+", "%20")
         return "chat/room/${enc(roomId)}?" +
@@ -1672,7 +1735,8 @@ private object ChildRoutes {
             "&$CHAT_SCROLL_TO_KEY=" +
             "&$CHAT_TOPIC_TYPE_KEY=" +
             "&$CHAT_TOPIC_REF_ID_KEY=" +
-            "&$CHAT_TOPIC_TITLE_KEY="
+            "&$CHAT_TOPIC_TITLE_KEY=" +
+            "&$CHAT_BUSINESS_ID_KEY=${enc(asBusinessUserId.orEmpty())}"
     }
 
     /** Build the chat-conversation path for a Chat Search result. Carries
@@ -1739,6 +1803,9 @@ private object ChildRoutes {
 
     /** WS5.1 — full wallet transaction history. */
     const val WALLET_ACTIVITY = "wallet/activity"
+
+    /** Invoices businesses sent you (`GET api/businesses/invoices/received`), from the Wallet's Invoices row. */
+    const val RECEIVED_INVOICES = "wallet/invoices"
 
     /** WS5.3 — GDPR data-export request (mailto until backend job ships). */
     const val SETTINGS_DATA_EXPORT = "settings/data-export"
@@ -2118,9 +2185,11 @@ private fun routeForAIDraft(draft: ChatAIDraftCard): String =
     when (draft.type) {
         "gig" -> ChildRoutes.composeGig(GigsCategory.All.key)
         "listing" -> ChildRoutes.COMPOSE_LISTING
+        // The draft's exact type, dates, place and kinds go along too (AI assistant phase 1 contract, section 8).
         "post" ->
-            draft.prefill?.let { ChildRoutes.composePost(PulseIntent.fromPostType(it.postType).key, it.body, it.title.orEmpty()) }
-                ?: ChildRoutes.composePost(PulseIntent.Ask.key)
+            draft.prefill?.let {
+                ChildRoutes.composePost(PulseIntent.fromPostType(it.postType).key, it.body, it.title.orEmpty(), it.post)
+            } ?: ChildRoutes.composePost(PulseIntent.Ask.key)
         "support_train" -> ChildRoutes.startSupportTrain(draft.prefill?.body.orEmpty())
         else -> ChildRoutes.composePost(PulseIntent.Ask.key)
     }
@@ -2161,6 +2230,7 @@ private val SAVED_PAGE_OFFLINE_STRIP_ROUTES =
     setOf(
         PantopusRoute.Place.path, PantopusRoute.Today.path, PantopusRoute.Nearby.path, PantopusRoute.Mail.path,
         PantopusRoute.Messages.path, PantopusRoute.Pulse.path, ChildRoutes.PLACE_DASHBOARD, ChildRoutes.PLACE_DETAIL,
+        ChildRoutes.SAVED_PLACE_DETAIL,
         ChildRoutes.PULSE_FEED, ChildRoutes.PULSE_POST, ChildRoutes.CHAT_CONVERSATION, ChildRoutes.PROFILE,
         ChildRoutes.PUBLIC_PROFILE, ChildRoutes.NOTIFICATIONS_ROUTE, ChildRoutes.CONNECTIONS_ROUTE, ChildRoutes.MY_POSTS,
         ChildRoutes.SAVED_PLACES, ChildRoutes.MENU, ChildRoutes.EXPLORE_ROUTE,
@@ -2178,18 +2248,36 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
         ) { uri ->
             if (uri != null) appContext.shareText(InviteLinks.INVITE_MESSAGE, "Invite to Pantopus")
         }
+    val briefingNotice: BriefingNoticeViewModel = hiltViewModel()
+    BriefingNotice(onManage = { navController.navigate(ChildRoutes.SETTINGS_NOTIFICATIONS) }, viewModel = briefingNotice)
+    // AI assistant phase 2: asks once whether to turn on Suggestions from Pantopus, after the briefing notice.
+    val briefingNoticeShowing by briefingNotice.preferences.collectAsStateWithLifecycle()
+    SuggestionsNotice(waiting = briefingNoticeShowing != null)
     val sessionViewModel: RootSessionViewModel = hiltViewModel()
     val chatBadgeViewModel: ChatBadgeViewModel = hiltViewModel()
     val currentHandle by sessionViewModel.currentHandle.collectAsStateWithLifecycle()
     val online by sessionViewModel.isOnline.collectAsStateWithLifecycle()
-    val plansMapFlags by hiltViewModel<PlansGateViewModel>().flags.collectAsStateWithLifecycle()
     val liveInboxBadgeCount by chatBadgeViewModel.unreadMessages.collectAsStateWithLifecycle()
     // §1C-b — context-aware navigation drawer, opened from the Hub menu button
     // (repurposed from "open Settings"; Settings now lives as a drawer row).
     val navDrawerState = rememberDrawerState(DrawerValue.Closed)
     val navDrawerScope = rememberCoroutineScope()
+    // The side menu opens from every tab's top screen (founder decision 2026-10-20).
+    val openMenu: () -> Unit = { navDrawerScope.launch { navDrawerState.open() } }
+
+    // Where Pulse opens: its own tab with the Pulse redesign on; with it off, the Nearby tab on its Pulse segment
+    // (founder decision 2026-10-20), or its Neighborhood segment for a `/nearby` link.
+    val openNearbySegment: (NearbySegment) -> Unit = { segment ->
+        if (LaunchFeatures.pulseRedesign) {
+            navController.navigateToRootTab(PantopusRoute.Pulse)
+        } else {
+            NearbySegmentRequests.request(segment)
+            navController.navigateToRootTab(PantopusRoute.Nearby)
+        }
+    }
     // Place tapped again on its root: one event, which scrolls the root back to the top.
     val placeReselects = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
+    var ballotHomeId by rememberSaveable { mutableStateOf<String?>(null) }
     // Child screens keep the tab they were opened from lit (they used to fall
     // back to Place, which also swallowed taps on Place from those screens).
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -2205,11 +2293,12 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
     val plansFlags by plansGate.flags.collectAsStateWithLifecycle()
     val plansSettled by plansGate.settled.collectAsStateWithLifecycle()
     val barTabs = remember(plansFlags.plans) { PantopusRoute.barTabs(plansFlags.plans) }
-    // Standing on Plans when the switch turns off lands on Pulse. It waits for the person's answer, so a relaunch
-    // that restores the Plans tab isn't moved off it by the moment before the answer is read.
+    // Standing on Plans when the switch turns off lands on Pulse (Nearby with the Pulse redesign off). It waits for
+    // the person's answer, so a relaunch that restores the Plans tab isn't moved off it by the moment before the
+    // answer is read.
     LaunchedEffect(plansFlags.plans, plansSettled, currentRoute) {
         if (plansSettled && !plansFlags.plans && currentRoute == PantopusRoute.Plans) {
-            navController.navigateToRootTab(PantopusRoute.Pulse)
+            navController.navigateToRootTab(PantopusRoute.plansOffTab)
         }
     }
     val resolvedInboxBadgeCount = maxOf(inboxBadgeCount, liveInboxBadgeCount)
@@ -2239,6 +2328,17 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
             DeepLinkRouter.consume()
             return@LaunchedEffect
         }
+
+        // A Plans page from a link or push: the Plans tab with [route] on top, so Back lands on Plans; while the `plans`
+        // flag is off, Pulse (Nearby with the Pulse redesign off) instead.
+        fun openPlansLink(route: String) {
+            if (DeepLinkRouter.plansEnabled()) {
+                navController.navigateToRootTab(PantopusRoute.Plans)
+                navController.navigate(route)
+            } else {
+                navController.navigateToRootTab(PantopusRoute.plansOffTab)
+            }
+        }
         when (val pending = pendingDeepLink) {
             null -> Unit
             is DeepLinkRouter.Destination.Invite -> {
@@ -2254,7 +2354,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 DeepLinkRouter.consume()
             }
             DeepLinkRouter.Destination.Feed -> {
-                navController.navigateToRootTab(PantopusRoute.Pulse)
+                openNearbySegment(NearbySegment.Pulse)
                 DeepLinkRouter.consume()
             }
             DeepLinkRouter.Destination.Home -> {
@@ -2262,20 +2362,14 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 DeepLinkRouter.consume()
             }
             // Nearby is no longer a tab: its links, pushes and saved state open Pulse (Pulse build S3). With the Pulse
-            // redesign off Nearby is the tab, as on October 13.
+            // redesign off Nearby is the tab, and a `/nearby` link (the neighborhood milestone push among them) opens
+            // its Neighborhood segment (founder decision 2026-10-20).
             DeepLinkRouter.Destination.Nearby -> {
-                navController.navigateToRootTab(if (LaunchFeatures.pulseRedesign) PantopusRoute.Pulse else PantopusRoute.Nearby)
+                openNearbySegment(NearbySegment.Neighborhood)
                 DeepLinkRouter.consume()
             }
             DeepLinkRouter.Destination.PlansTab -> {
-                // With the Pulse redesign off the Plans map is the Nearby tab (October 13).
-                navController.navigateToRootTab(
-                    when {
-                        !LaunchFeatures.pulseRedesign -> PantopusRoute.Nearby
-                        DeepLinkRouter.plansEnabled() -> PantopusRoute.Plans
-                        else -> PantopusRoute.Pulse
-                    },
-                )
+                navController.navigateToRootTab(if (DeepLinkRouter.plansEnabled()) PantopusRoute.Plans else PantopusRoute.plansOffTab)
                 DeepLinkRouter.consume()
             }
             is DeepLinkRouter.Destination.Connections -> {
@@ -2304,12 +2398,24 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 navController.navigate(ChildRoutes.SETTINGS_DEVICES)
                 DeepLinkRouter.consume()
             }
+            DeepLinkRouter.Destination.NotificationSettings -> {
+                navController.navigate(ChildRoutes.MENU)
+                navController.navigate(ChildRoutes.SETTINGS_NOTIFICATIONS)
+                DeepLinkRouter.consume()
+            }
+            // A brief or a nudge (push or notification row): the assistant thread over Messages, where its row is, so
+            // Back lands on the conversation list. Messages opens fresh, so an earlier assistant thread isn't kept under it.
+            is DeepLinkRouter.Destination.Assistant -> {
+                navController.navigateToRootTab(PantopusRoute.messagesTab, restoreState = false)
+                navController.navigate(ChildRoutes.assistantThread(pending.nudgeId, pending.conversationId))
+                DeepLinkRouter.consume()
+            }
             DeepLinkRouter.Destination.CreateBusiness -> {
                 navController.navigate(ChildRoutes.CREATE_BUSINESS)
                 DeepLinkRouter.consume()
             }
             is DeepLinkRouter.Destination.Post -> {
-                navController.navigateToRootTab(PantopusRoute.Pulse)
+                openNearbySegment(NearbySegment.Pulse)
                 navController.navigate(ChildRoutes.pulsePost(pending.id))
                 DeepLinkRouter.consume()
             }
@@ -2346,7 +2452,11 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         ),
                     )
                 } else if (pending.id.isNotBlank()) {
-                    val display = pending.name?.takeIf { it.isNotBlank() } ?: "Conversation"
+                    // A room the Messages list shows under its own name (a Support Train's) opens under it.
+                    val display =
+                        deepLinkChatResolver.roomName(pending.id)
+                            ?: pending.name?.takeIf { it.isNotBlank() }
+                            ?: "Conversation"
                     val initials =
                         display
                             .split(" ")
@@ -2437,7 +2547,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 DeepLinkRouter.consume()
             }
             is DeepLinkRouter.Destination.HomeClaimReview -> {
-                navController.navigate(ChildRoutes.homeClaimReview(pending.id, residency = true))
+                navController.navigate(ChildRoutes.homeClaimReview(pending.id, residency = pending.residency))
                 DeepLinkRouter.consume()
             }
             is DeepLinkRouter.Destination.HomeOwnersTransfer -> {
@@ -2540,6 +2650,23 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 navController.navigate(ChildRoutes.businessOwner(pending.businessId))
                 DeepLinkRouter.consume()
             }
+            is DeepLinkRouter.Destination.BusinessConversation -> {
+                // A business inbox notice: the owner view underneath, so Back
+                // lands on the business, then the thread acting as the business.
+                navController.navigate(ChildRoutes.businessOwner(pending.businessId))
+                val display =
+                    deepLinkChatResolver.businessCounterpartName(pending.roomId, pending.businessId) ?: "Conversation"
+                navController.navigate(
+                    ChildRoutes.chatConversationRoom(
+                        roomId = pending.roomId,
+                        displayName = display,
+                        initials = initialsFromName(display),
+                        verified = false,
+                        asBusinessUserId = pending.businessId,
+                    ),
+                )
+                DeepLinkRouter.consume()
+            }
             is DeepLinkRouter.Destination.BusinessProfile -> {
                 navController.navigate(ChildRoutes.businessProfile(pending.businessId))
                 DeepLinkRouter.consume()
@@ -2608,34 +2735,19 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 navController.navigate(ChildRoutes.CREATOR_AUDIENCE_MEMBERS)
                 DeepLinkRouter.consume()
             }
-            // Plans: a plan link opens the Plans tab with the plan on top, so Back lands on Plans; while the `plans`
-            // flag is off it opens Pulse instead. With the Pulse redesign off it opens as on October 13: the plan over
-            // the current screen, or Nearby while the flag is off.
+            // Plans: a plan link (a push, or one of its buttons' failure notices) opens the Plans tab with the plan on
+            // top, so Back lands on Plans; while the `plans` flag is off it opens Pulse (Nearby with the Pulse redesign
+            // off) instead.
             is DeepLinkRouter.Destination.Plan -> {
-                if (DeepLinkRouter.plansEnabled()) {
-                    if (LaunchFeatures.pulseRedesign) navController.navigateToRootTab(PantopusRoute.Plans)
-                    navController.navigate(PlansRoutes.plan(pending.id))
-                } else {
-                    navController.navigateToRootTab(if (LaunchFeatures.pulseRedesign) PantopusRoute.Pulse else PantopusRoute.Nearby)
-                }
+                openPlansLink(PlansRoutes.plan(pending.id))
                 DeepLinkRouter.consume()
             }
             is DeepLinkRouter.Destination.PlanRequests -> {
-                if (DeepLinkRouter.plansEnabled()) {
-                    if (LaunchFeatures.pulseRedesign) navController.navigateToRootTab(PantopusRoute.Plans)
-                    navController.navigate(PlansRoutes.requests(pending.id))
-                } else {
-                    navController.navigateToRootTab(if (LaunchFeatures.pulseRedesign) PantopusRoute.Pulse else PantopusRoute.Nearby)
-                }
+                openPlansLink(PlansRoutes.requests(pending.id))
                 DeepLinkRouter.consume()
             }
             DeepLinkRouter.Destination.NewPlan -> {
-                if (DeepLinkRouter.plansEnabled()) {
-                    if (LaunchFeatures.pulseRedesign) navController.navigateToRootTab(PantopusRoute.Plans)
-                    navController.navigate(PlansRoutes.host())
-                } else {
-                    navController.navigateToRootTab(if (LaunchFeatures.pulseRedesign) PantopusRoute.Pulse else PantopusRoute.Nearby)
-                }
+                openPlansLink(PlansRoutes.host())
                 DeepLinkRouter.consume()
             }
             is DeepLinkRouter.Destination.ResetPassword,
@@ -2682,9 +2794,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
         Scaffold(
             topBar = {
                 val route = backStackEntry?.destination?.route
-                // Nearby while `plans` is on is the Plans map, which floats its own strip over the map.
-                val plansMap = plansMapFlags.plans && route == PantopusRoute.Nearby.path
-                if (!online && route in SAVED_PAGE_OFFLINE_STRIP_ROUTES && !plansMap) {
+                if (!online && route in SAVED_PAGE_OFFLINE_STRIP_ROUTES) {
                     OfflineBannerHost(isOffline = true, modifier = Modifier.statusBarsPadding()) { }
                 }
             },
@@ -2720,10 +2830,12 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     PlaceTabRoot(
                         navController = navController,
                         scrollToTop = placeReselects,
-                        onOpenMenu = { navDrawerScope.launch { navDrawerState.open() } },
+                        ballotHomeId = ballotHomeId,
+                        onBallotOpened = { ballotHomeId = null },
+                        onOpenMenu = openMenu,
                     )
                 }
-                // ── Pulse build S3: Place · Today · Pulse · Plans · Mail (Place · Today · Nearby · Mail with the redesign off) ──
+                // ── Pulse build S3: Place · Today · Pulse · Plans · Mail (Place · Today · Nearby · Plans · Mail with the redesign off) ──
                 composable(PantopusRoute.Today.path) {
                     // Today's plan cards open in the Plans tab, as on iOS: the tab comes back on its map with [routes] on
                     // top, so Back lands on the map. Other Plans pages left open there give way; a plan being composed
@@ -2740,76 +2852,88 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     ) = ChildRoutes.chatConversationRoom(roomId, title, title.trim().take(1).uppercase(), verified = false)
                     TodayTabScreen(
                         onClaim = { navController.navigate(ChildRoutes.ADD_HOME) },
+                        onAsk = { context -> navController.navigate(ChildRoutes.askPantopus(context)) },
+                        onOpenMenu = openMenu,
                         onOpenPlace = { homeId ->
-                            // The ballot card is on this home's Your Place: a link to it, as a push would open it.
-                            placeLinkScope.launch { currentPlaceHost?.let { navController.openPlaceLink(it, homeId, null) } }
+                            placeLinkScope.launch {
+                                currentPlaceHost?.let {
+                                    ballotHomeId = homeId
+                                    navController.openPlaceLink(it, homeId, null)
+                                }
+                            }
                         },
                         plans =
-                            if (LaunchFeatures.pulseRedesign) {
-                                PlansTodayActions(
-                                    onOpenPlan = { id -> openInPlansTab(PlansRoutes.plan(id)) },
-                                    // "Message guests": the plan's chat over the plan, so Back goes to the plan, then the map.
-                                    onOpenChat = { roomId, title, planId ->
-                                        openInPlansTab(PlansRoutes.plan(planId), planChat(roomId, title))
-                                    },
-                                    // "Host again" opens over whatever the Plans tab shows, as iOS's composer does.
-                                    onHostAgain = { kind, planId ->
-                                        navController.navigateToRootTab(PantopusRoute.Plans)
-                                        navController.navigate(PlansRoutes.host(kind = kind, again = planId))
-                                    },
-                                )
-                            } else {
-                                // With the Pulse redesign off there is no Plans tab: the cards open over Today (October 13).
-                                PlansTodayActions(
-                                    onOpenPlan = { id -> navController.navigate(PlansRoutes.plan(id)) },
-                                    onOpenChat = { roomId, title, _ -> navController.navigate(planChat(roomId, title)) },
-                                    onHostAgain = { kind, planId ->
-                                        navController.navigate(PlansRoutes.host(kind = kind, again = planId))
-                                    },
-                                )
-                            },
+                            PlansTodayActions(
+                                onOpenPlan = { id -> openInPlansTab(PlansRoutes.plan(id)) },
+                                // "Message guests": the plan's chat over the plan, so Back goes to the plan, then the map.
+                                onOpenChat = { roomId, title, planId ->
+                                    openInPlansTab(PlansRoutes.plan(planId), planChat(roomId, title))
+                                },
+                                // "Host again" opens over whatever the Plans tab shows, as iOS's composer does.
+                                onHostAgain = { kind, planId ->
+                                    navController.navigateToRootTab(PantopusRoute.Plans)
+                                    navController.navigate(PlansRoutes.host(kind = kind, again = planId))
+                                },
+                            ),
                     )
                 }
 
-                // The Plans map: the Plans tab, or the Nearby tab with the Pulse redesign off ([onOpenPulse] differs).
-                fun plansMapActions(onOpenPulse: () -> Unit) =
-                    PlansMapActions(
-                        onOpenPlan = { id -> navController.navigate(PlansRoutes.plan(id)) },
-                        onAsk = { id -> navController.navigate(PlansRoutes.plan(id, ask = true)) },
-                        onHost = { kind, game -> navController.navigate(PlansRoutes.host(kind = kind?.wire, game = game?.id)) },
-                        onOpenPulse = onOpenPulse,
-                        onOpenConnections = { navController.navigate(ChildRoutes.CONNECTIONS) },
-                        onInvite = { appContext.shareText(PLANS_INVITE_MESSAGE, "Invite a neighbor") },
-                    )
                 composable(PantopusRoute.Plans.path) {
-                    // With the Pulse redesign off Plans is not a tab: its map is the Nearby tab (October 13).
-                    if (!LaunchFeatures.pulseRedesign) {
-                        LaunchedEffect(Unit) { navController.navigateToRootTab(PantopusRoute.Nearby) }
-                        return@composable
-                    }
-                    // Plans (the map and list of what's on) is a tab only while the `plans` flag is on. With it off there
-                    // is nothing to show here: the switch watch above moves a person standing here to Pulse.
+                    // Plans (the map and list of what's on) is a tab only while the `plans` flag is on, with the Pulse
+                    // redesign on or off (founder, 2026-10-17). With it off there is nothing to show here: the switch
+                    // watch above moves a person standing here to Pulse (Nearby with the redesign off).
                     if (plansFlags.plans) {
-                        PlansMapScreen(actions = plansMapActions(onOpenPulse = { navController.navigateToRootTab(PantopusRoute.Pulse) }))
+                        PlansMapScreen(
+                            actions =
+                                PlansMapActions(
+                                    onOpenPlan = { id -> navController.navigate(PlansRoutes.plan(id)) },
+                                    onAsk = { id -> navController.navigate(PlansRoutes.plan(id, ask = true)) },
+                                    onHost = { kind, game ->
+                                        navController.navigate(PlansRoutes.host(kind = kind?.wire, game = game?.id))
+                                    },
+                                    // The list's "More nearby" rows: only with the Pulse redesign on (Nearby has them).
+                                    onOpenPulse = { navController.navigateToRootTab(PantopusRoute.Pulse) },
+                                    onOpenConnections = { navController.navigate(ChildRoutes.CONNECTIONS) },
+                                    onInvite = { appContext.shareText(PLANS_INVITE_MESSAGE, "Invite a neighbor") },
+                                    onAskPantopus = { context -> navController.navigate(ChildRoutes.askPantopus(context)) },
+                                    onOpenMenu = openMenu,
+                                ),
+                        )
                     }
                 }
                 composable(PantopusRoute.Nearby.path) {
-                    when {
-                        // Nearby is no longer a tab; its old route (saved state, a stale entry) opens Pulse.
-                        LaunchFeatures.pulseRedesign -> LaunchedEffect(Unit) { navController.navigateToRootTab(PantopusRoute.Pulse) }
-                        // With the Pulse redesign off it is the October 13 tab: the Plans map while the `plans` flag is
-                        // on (decision D1), and the Nearby screen while it is off.
-                        plansFlags.plans ->
-                            PlansMapScreen(actions = plansMapActions(onOpenPulse = { navController.navigate(ChildRoutes.PULSE_FEED) }))
-                        else ->
-                            NearbyScreen(
-                                onClaim = { navController.navigate(ChildRoutes.ADD_HOME) },
-                                onOpenPulse = { navController.navigate(PantopusRoute.Pulse.path) },
-                                onOpenBeacons = { navController.navigate(ChildRoutes.BEACONS_FEED) },
-                                onOpenConnections = { navController.navigate(ChildRoutes.CONNECTIONS) },
-                                onOpenMarketplace = { navController.navigate(PantopusRoute.Marketplace.path) },
-                                onOpenTasks = { navController.navigate(PantopusRoute.Tasks.path) },
-                            )
+                    // Nearby is no longer a tab with the Pulse redesign on; its old route (saved state, a stale entry)
+                    // opens Pulse. With it off Nearby is the tab, Plans its own tab beside it, and (founder decision
+                    // 2026-10-20) no door page: the Pulse | Neighborhood switch and the side menu over the October 13
+                    // feed and the density window. Connections is in the side menu.
+                    if (LaunchFeatures.pulseRedesign) {
+                        LaunchedEffect(Unit) { navController.navigateToRootTab(PantopusRoute.Pulse) }
+                    } else {
+                        NearbyTab(
+                            onOpenMenu = openMenu,
+                            // The segment row is the first row of the feed's collapsible header.
+                            pulse = { segmentRow ->
+                                FeedScreen(
+                                    header = segmentRow,
+                                    onOpenPost = { postId -> navController.navigate(ChildRoutes.pulsePost(postId)) },
+                                    onCompose = { intent -> navController.navigate(ChildRoutes.composePost(intent.key)) },
+                                    onComposeStarter = { starter ->
+                                        navController.navigate(
+                                            ChildRoutes.composePost(PulseIntent.Ask.key, starter.placeholder),
+                                        )
+                                    },
+                                    onAsk = { context -> navController.navigate(ChildRoutes.askPantopus(context)) },
+                                )
+                            },
+                            neighborhood = {
+                                NeighborhoodScreen(
+                                    onClaim = { navController.navigate(ChildRoutes.ADD_HOME) },
+                                    onOpenMarketplace = { navController.navigate(PantopusRoute.Marketplace.path) },
+                                    onOpenTasks = { navController.navigate(PantopusRoute.Tasks.path) },
+                                    onInvite = { appContext.shareText(NEIGHBORHOOD_INVITE_MESSAGE, "Invite your neighbors") },
+                                )
+                            },
+                        )
                     }
                 }
                 plansRoutes(
@@ -2845,11 +2969,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                     },
                                 )
                             },
-                            openNearby = {
-                                navController.navigateToRootTab(
-                                    if (LaunchFeatures.pulseRedesign) PantopusRoute.Plans else PantopusRoute.Nearby,
-                                )
-                            },
+                            openNearby = { navController.navigateToRootTab(PantopusRoute.Plans) },
+                            askPantopus = { context -> navController.navigate(ChildRoutes.askPantopus(context)) },
                         ),
                 )
                 composable(PantopusRoute.Mail.path) {
@@ -2859,6 +2980,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             onOpenConversation = { row -> navController.navigate(ChildRoutes.chatConversation(row)) },
                             onCompose = { navController.navigate(ChildRoutes.NEW_MESSAGE) },
                             onOpenSearch = { navController.navigate(ChildRoutes.CHAT_SEARCH) },
+                            onOpenMenu = openMenu,
                         )
                     }
                     MailboxRootScreen(
@@ -2885,17 +3007,11 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 composable(PantopusRoute.Pulse.path) {
                     // Nearby's other content lives here now: the neighborhood meter or "Set up a home" as one
                     // quiet-state card, and Connections (Beacons too, while that launch cut is off) in the top menu.
-                    // With the Pulse redesign off this is the October 13 feed, opened from Nearby: neither.
+                    // With the Pulse redesign off the October 13 feed is the Nearby tab's Pulse segment (founder
+                    // decision 2026-10-20): this route (saved state, a stale entry) opens it there.
                     if (!LaunchFeatures.pulseRedesign) {
-                        return@composable FeedScreen(
-                            onOpenPost = { postId -> navController.navigate(ChildRoutes.pulsePost(postId)) },
-                            onCompose = { intent -> navController.navigate(ChildRoutes.composePost(intent.key)) },
-                            onComposeStarter = { starter ->
-                                navController.navigate(
-                                    ChildRoutes.composePost(PulseIntent.Ask.key, starter.placeholder),
-                                )
-                            },
-                        )
+                        LaunchedEffect(Unit) { openNearbySegment(NearbySegment.Pulse) }
+                        return@composable
                     }
                     val quietMeter: NearbyViewModel = hiltViewModel()
                     val quietStateCard =
@@ -3096,7 +3212,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     PlaceDashboardDestination(
                         navController = navController,
                         homeId = homeId,
-                        onOpenMenu = { navDrawerScope.launch { navDrawerState.open() } },
+                        scrollToBallot = ballotHomeId == homeId,
+                        onBallotOpened = { ballotHomeId = null },
+                        onOpenMenu = openMenu,
                         onSwitchHome = { id ->
                             currentPlaceHost?.switchHome(id)
                             navController.openPlaceRoot()
@@ -3117,6 +3235,16 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     PlacePrivacyMirrorScreen(onBack = { navController.popBackStack() })
                 }
                 composable(
+                    route = ChildRoutes.SAVED_PLACE_DETAIL,
+                    arguments =
+                        listOf(
+                            navArgument(PLACE_DETAIL_SAVED_ID_KEY) { type = NavType.StringType },
+                            navArgument(PLACE_DETAIL_SLUG_KEY) { type = NavType.StringType },
+                        ),
+                ) {
+                    PlaceDetailScreen(onBack = { navController.popBackStack() })
+                }
+                composable(
                     route = ChildRoutes.PLACE_DETAIL,
                     arguments =
                         listOf(
@@ -3127,9 +3255,14 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     val homeId = entry.arguments?.getString(PLACE_DETAIL_HOME_ID_KEY).orEmpty()
                     PlaceDetailScreen(
                         onBack = { navController.popBackStack() },
+                        onOpenBallot = {
+                            ballotHomeId = homeId
+                            navController.popBackStack()
+                        },
                         // A locked section's "Verify address" opens the dashboard's verify sheet and its real flows.
                         onStartVerify = { method -> navController.openPlaceVerify(method, homeId) },
                         onOpenVerificationStatus = { navController.navigate(ChildRoutes.waitingRoom(homeId)) },
+                        onAsk = { context -> navController.navigate(ChildRoutes.askPantopus(context)) },
                     )
                 }
                 composable(
@@ -4726,6 +4859,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onOpenSenderProfile = { userId ->
                             navController.navigate(ChildRoutes.publicProfile(userId))
                         },
+                        onOpenSenderBusiness = { businessId ->
+                            navController.navigate(ChildRoutes.businessProfile(businessId))
+                        },
                         onOpenExtractedTask = { sourceMailId ->
                             // A17.12 — the certified-notice "view task" affordance
                             // opens the mail-derived task keyed by its source mail.
@@ -4822,10 +4958,19 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 composable(
                     route = ChildRoutes.EDIT_BUSINESS_PAGE,
                     arguments = listOf(navArgument(EDIT_BUSINESS_PAGE_BUSINESS_ID_KEY) { type = NavType.StringType }),
-                ) {
+                ) { backStackEntry ->
+                    val businessId = backStackEntry.arguments?.getString(EDIT_BUSINESS_PAGE_BUSINESS_ID_KEY).orEmpty()
                     EditBusinessPageScreen(
                         onBack = { navController.popBackStack() },
-                        onPreview = { navController.popBackStack() },
+                        onPreview = { navController.navigate(ChildRoutes.businessProfile(businessId)) },
+                        onBusinessClosed = {
+                            if (!navController.popBackStack(ChildRoutes.MY_BUSINESSES, false)) {
+                                if (!navController.popBackStack(ChildRoutes.businessOwner(businessId), true)) {
+                                    navController.popBackStack()
+                                }
+                                navController.navigate(ChildRoutes.MY_BUSINESSES) { launchSingleTop = true }
+                            }
+                        },
                     )
                 }
                 // C4 — public profile opened on a named custom page
@@ -4909,10 +5054,12 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onEdit = { postId ->
                             navController.navigate(ChildRoutes.editPost(postId))
                         },
-                        onOpenBusiness = { username ->
-                            // "Nearby Providers" row → `/business/:username`.
-                            navController.navigate(ChildRoutes.businessProfile(username))
+                        onOpenBusiness = { business ->
+                            // A "Nearby Providers" row (username) or a business author (id) → `/business/:key`.
+                            navController.navigate(ChildRoutes.businessProfile(business))
                         },
+                        onAsk = { context -> navController.navigate(ChildRoutes.askPantopus(context)) },
+                        plansOn = plansFlags.plans,
                     )
                 }
                 composable(
@@ -5030,6 +5177,22 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 type = NavType.StringType
                                 defaultValue = ""
                             },
+                            navArgument(ChildRoutes.CHAT_BUSINESS_ID_KEY) {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
+                            navArgument(ChildRoutes.CHAT_AI_CONTEXT_KEY) {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
+                            navArgument(ChildRoutes.CHAT_AI_NUDGE_KEY) {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
+                            navArgument(ChildRoutes.CHAT_AI_CONVERSATION_KEY) {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
                         ),
                 ) { entry ->
                     val args = entry.arguments ?: return@composable
@@ -5049,6 +5212,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     val topicTitle = args.getString(ChildRoutes.CHAT_TOPIC_TITLE_KEY).orEmpty().takeIf { it.isNotEmpty() }
                     val gigId = args.getString(ChildRoutes.CHAT_GIG_ID_KEY).orEmpty().takeIf { it.isNotEmpty() }
                     val arrivalRoomId = args.getString(ChildRoutes.CHAT_ARRIVAL_ROOM_KEY).orEmpty().takeIf { it.isNotEmpty() }
+                    val asBusinessUserId = args.getString(ChildRoutes.CHAT_BUSINESS_ID_KEY)?.takeIf { it.isNotBlank() }
                     val initialTopic =
                         if (topicType != null && topicTitle != null) {
                             ChatInitialTopic(topicType = topicType, topicRefId = topicRefId, title = topicTitle)
@@ -5058,7 +5222,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     val mode: ChatThreadMode =
                         when (kind) {
                             "ai" -> ChatThreadMode.Ai
-                            "room" -> ChatThreadMode.Room(id)
+                            "room" -> ChatThreadMode.Room(id, asBusinessUserId)
                             "creator" -> ChatThreadMode.Person(otherUserId = id)
                             else -> ChatThreadMode.Person(otherUserId = id)
                         }
@@ -5125,6 +5289,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         arrivalRoomId = arrivalRoomId,
                         onOpenProfile = { userId -> navController.navigate(ChildRoutes.publicProfile(userId)) },
                         onOpenPlan = { planId -> navController.navigate(PlansRoutes.plan(planId)) },
+                        aiContext = if (kind == "ai") AIScreenContext.decode(args.getString(ChildRoutes.CHAT_AI_CONTEXT_KEY)) else null,
+                        aiNudgeId = args.getString(ChildRoutes.CHAT_AI_NUDGE_KEY)?.takeIf { kind == "ai" && it.isNotBlank() },
+                        aiConversationId = args.getString(ChildRoutes.CHAT_AI_CONVERSATION_KEY)?.takeIf { kind == "ai" && it.isNotBlank() },
                     )
                 }
                 composable(ChildRoutes.CHAT_SEARCH) {
@@ -5386,13 +5553,14 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     GigDetailScreen(
                         onBack = { navController.popBackStack() },
                         onOpenPayouts = { navController.navigate(ChildRoutes.SETTINGS_PAYMENTS) },
-                        onOpenChat = { roomId, displayName, initials, verified ->
+                        onOpenChat = { roomId, displayName, initials, verified, asBusinessUserId ->
                             navController.navigate(
                                 ChildRoutes.chatConversationRoom(
                                     roomId = roomId,
                                     displayName = displayName,
                                     initials = initials,
                                     verified = verified,
+                                    asBusinessUserId = asBusinessUserId,
                                 ),
                             )
                         },
@@ -5496,6 +5664,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 type = NavType.StringType
                                 defaultValue = ""
                             },
+                            navArgument(ChildRoutes.COMPOSE_DRAFT_FIELDS_KEY) {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
                         ),
                 ) { entry ->
                     val raw = entry.arguments?.getString(ChildRoutes.COMPOSE_INTENT_KEY) ?: PulseIntent.All.key
@@ -5503,6 +5675,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     PulseComposeFlowScreen(
                         onBack = { navController.popBackStack() },
                         prefillFeedIntent = feedIntent,
+                        prefillDraft = PulseComposeDraftFields.decode(entry.arguments?.getString(ChildRoutes.COMPOSE_DRAFT_FIELDS_KEY)),
+                        // "Before you ask": the post opens on top; back returns to the draft.
+                        onOpenPost = { postId -> navController.navigate(ChildRoutes.pulsePost(postId)) },
                     )
                 }
                 composable(
@@ -6155,6 +6330,18 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                         ),
                                     )
                                 },
+                                // The train's group chat opens under the train's title.
+                                onOpenChat = { roomId, title ->
+                                    val initials = title.split(" ").take(2).mapNotNull { it.firstOrNull()?.uppercase() }
+                                    navController.navigate(
+                                        ChildRoutes.chatConversationRoom(
+                                            roomId = roomId,
+                                            displayName = title,
+                                            initials = initials.joinToString(""),
+                                            verified = false,
+                                        ),
+                                    )
+                                },
                             ),
                     )
                 }
@@ -6318,10 +6505,17 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             navController.navigate(ChildRoutes.placeholder("Tax documents"))
                         },
                         onSeeAllActivity = { navController.navigate(ChildRoutes.WALLET_ACTIVITY) },
+                        onOpenInvoices = { navController.navigate(ChildRoutes.RECEIVED_INVOICES) },
                     )
                 }
                 composable(ChildRoutes.WALLET_ACTIVITY) {
                     WalletActivityListScreen(onBack = { navController.popBackStack() })
+                }
+                composable(ChildRoutes.RECEIVED_INVOICES) {
+                    ReceivedInvoicesScreen(
+                        onOpenInvoice = { invoiceId -> navController.navigate(ChildRoutes.invoiceDetail(invoiceId)) },
+                        onBack = { navController.popBackStack() },
+                    )
                 }
                 composable(
                     route = ChildRoutes.PROPERTY_DETAILS,
@@ -6704,6 +6898,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                     displayName = name,
                                     initials = initialsFromName(name),
                                     verified = false,
+                                    asBusinessUserId = businessId,
                                 ),
                             )
                         },
@@ -7085,6 +7280,11 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     composable(ChildRoutes.TOKEN_GALLERY) { TokenGalleryScreen() }
                 }
             }
+            // Register when the drawer opens, after the current destination's handlers (including Plans' sheet).
+            // Keeping a disabled handler registered lets subsequently mounted destinations take Back instead.
+            if (navDrawerState.isOpen) {
+                androidx.activity.compose.BackHandler { navDrawerScope.launch { navDrawerState.close() } }
+            }
         }
     }
 }
@@ -7099,6 +7299,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
 private fun PlaceTabRoot(
     navController: NavHostController,
     scrollToTop: Flow<Unit>,
+    ballotHomeId: String?,
+    onBallotOpened: () -> Unit,
     onOpenMenu: () -> Unit,
     host: HomeTabHostViewModel = hiltViewModel(),
 ) {
@@ -7155,6 +7357,8 @@ private fun PlaceTabRoot(
                         onSwitchHome = host::switchHome,
                         onPlaceUnavailable = host::replaceUnavailable,
                         scrollToTop = scrollToTop,
+                        scrollToBallot = ballotHomeId == current.homeId,
+                        onBallotOpened = onBallotOpened,
                         // A new default changes where Place lands next time, not the Home on screen now.
                         onDefaultHomeChange = { host.switchHome(current.homeId) },
                     )
@@ -7184,6 +7388,7 @@ private fun PlaceTabRoot(
                         onOpenMenu = onOpenMenu,
                         onSetUpHome = { navController.navigate(ChildRoutes.addHomeAt(current.place.label)) },
                         onLookUpAddress = { navController.navigate(ChildRoutes.SAVE_PLACE) },
+                        onOpenDetail = { navController.navigate(ChildRoutes.savedPlaceDetail(current.place.id, it.slug)) },
                         scrollToTop = scrollToTop,
                     )
                 }
@@ -7212,6 +7417,8 @@ private fun PlaceDashboardDestination(
     onPlaceUnavailable: (String) -> Unit,
     scrollToTop: Flow<Unit>? = null,
     onDefaultHomeChange: () -> Unit = {},
+    scrollToBallot: Boolean = false,
+    onBallotOpened: () -> Unit = {},
 ) {
     PlaceDashboardScreen(
         homeId = homeId,
@@ -7244,6 +7451,9 @@ private fun PlaceDashboardDestination(
         onManageHomes = { navController.navigate(ChildRoutes.MY_HOMES) },
         onDefaultHomeChange = onDefaultHomeChange,
         scrollToTop = scrollToTop,
+        scrollToBallot = scrollToBallot,
+        onBallotOpened = onBallotOpened,
+        onAsk = { context -> navController.navigate(ChildRoutes.askPantopus(context)) },
     )
 }
 

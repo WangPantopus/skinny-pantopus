@@ -22,9 +22,332 @@ import UniformTypeIdentifiers
 /// reference (via @State) so per-frame writes during scrolling don't
 /// invalidate the view tree.
 private final class ChatScrollMetrics {
-    /// How far the user has scrolled below the top of the loaded
-    /// history, in points. Drives the near-top pagination trigger.
+    /// How far the user has scrolled below the first row, in points. Drives
+    /// the near-top pagination trigger.
     var distanceFromTop: CGFloat = .greatestFiniteMagnitude
+    /// Where the content's bottom edge sits below the viewport's top, as of
+    /// the last layout.
+    var contentMaxY: CGFloat = 0
+    var viewportHeight: CGFloat = 0
+    /// The timeline landed on a search match or brief and the reader has not
+    /// scrolled since: older pages wait. The first page joining above after a
+    /// `ScrollViewProxy` scroll has its offset fix undone (the scroll view
+    /// goes back to where that scroll left it), and a match's context is
+    /// short, so the reader lands near its top.
+    var isLanding = false
+}
+
+/// Keeps the rows on screen where they are when rows change above them (an
+/// older page joins, the oldest rows leave): on the layout that changes the
+/// content's height, the timeline's UIKit scroll view moves its offset by as
+/// much, so the frame that shows the new rows shows the old place. A SwiftUI
+/// scroll restore lands a frame later, and a finger on the timeline, moving
+/// or resting, undoes it; an offset set here holds under a finger and in a
+/// fling. It also takes the reader at the latest message to the end of the
+/// content (`followEnd`, `holdEnd`), and tells how far that end is
+/// (`distanceToEnd`).
+@MainActor
+private final class ChatTimelinePlace: NSObject {
+    /// The timeline's scroll view, once `ChatScrollViewProbe` has found it.
+    weak var scrollView: UIScrollView? {
+        didSet {
+            guard scrollView !== oldValue else { return }
+            observation = scrollView?.observe(\.contentSize) { [weak self] view, _ in
+                MainActor.assumeIsolated { self?.contentSizeChanged(view) }
+            }
+        }
+    }
+
+    /// The bottom anchor's view while it is laid out (`ChatTimelineEndProbe`):
+    /// where the content really ends. The lazy stack sizes the rows it has not
+    /// laid out from estimates, and its height can lag the rows it has just
+    /// laid out, so the content height can run past the newest rows, or stop
+    /// short of them, for a while.
+    weak var endView: UIView?
+
+    private var observation: NSKeyValueObservation?
+    /// Where the content's bottom edge sat below the viewport's top before the
+    /// rows above changed. The rows below are the same, so it stays there.
+    private var bottomEdge: CGFloat?
+    /// For a moment after rows joined above, rows near the viewport that took
+    /// estimated heights on that layout take their measured ones on the next:
+    /// each of those changes moves the offset by as much, from the content
+    /// height the last one left.
+    private var settling: (until: CFTimeInterval, height: CGFloat)?
+    /// The scroll to the end in flight (`followEnd`, `holdEnd`), stepped once a frame.
+    private var endScroll: ChatEndScroll?
+    private var endScrollLink: CADisplayLink?
+
+    /// A finger is on the timeline.
+    var isTracking: Bool {
+        scrollView?.isTracking ?? false
+    }
+
+    /// Returns once the timeline is at rest: no finger on it, no fling or
+    /// bounce, the content not pulled past its top, and the viewport the same
+    /// height for 0.2 s; after a second at most. Cancelling the calling task
+    /// doesn't end it early.
+    func settled() async {
+        let start = CACurrentMediaTime()
+        var height = scrollView?.bounds.height ?? 0
+        var stableSince = start
+        while CACurrentMediaTime() - start < 1 {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { continuation.resume() }
+            }
+            guard let scrollView else { return }
+            let now = CACurrentMediaTime()
+            if abs(scrollView.bounds.height - height) > 0.5 {
+                height = scrollView.bounds.height
+                stableSince = now
+            }
+            let atRest = !scrollView.isDragging && !scrollView.isDecelerating
+                && scrollView.contentOffset.y >= -scrollView.adjustedContentInset.top - 0.5
+            if atRest, now - stableSince >= 0.2 { return }
+        }
+    }
+
+    /// The rows changed: what the next layouts change is that change, not
+    /// rows that joined above taking their measured heights.
+    func rowsChanged() {
+        settling = nil
+    }
+
+    /// Rows join below the reader at the latest message, the last row grows,
+    /// or the timeline lands on its latest message: once this update has laid
+    /// them out, the offset eases from where it is then to the end of the
+    /// content, read on every frame, and holds it a moment while the rows
+    /// settle. A `ScrollViewProxy` scroll to the bottom anchor resolves the end
+    /// from the lazy stack's height, which can lag the rows it has just laid
+    /// out. A finger dragging the timeline takes it over.
+    func followEnd(animated: Bool) {
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 16_000_000)
+            self?.startEndScroll(duration: animated ? 0.2 : 0, hold: 0.3)
+        }
+    }
+
+    /// The viewport changes height with the reader at the latest message (the
+    /// keyboard, a notice or the typing line takes room from below or gives it
+    /// back): the offset stays at the end of the content until the height has
+    /// stopped changing. On iOS 17 the viewport animates with the keyboard
+    /// frame by frame, and a `ScrollViewProxy` scroll resolves the end from the
+    /// height before it.
+    func holdEnd() {
+        startEndScroll(duration: 0, hold: 0.25)
+    }
+
+    private func startEndScroll(duration: CFTimeInterval, hold: CFTimeInterval) {
+        // A tap (one that dismisses the keyboard) holds on; a drag takes over.
+        guard let scrollView, !scrollView.isDragging else { return }
+        let now = CACurrentMediaTime()
+        let end = end(of: scrollView)
+        endScroll = ChatEndScroll(
+            distance: end - scrollView.contentOffset.y,
+            end: end,
+            start: now,
+            duration: duration,
+            hold: hold,
+            until: now + duration + hold,
+            deadline: now + duration + 2,
+            height: scrollView.bounds.height
+        )
+        if endScrollLink == nil {
+            let link = CADisplayLink(target: self, selector: #selector(step(_:)))
+            link.add(to: .main, forMode: .common)
+            endScrollLink = link
+        }
+        stepToEnd()
+    }
+
+    @objc private func step(_: CADisplayLink) {
+        stepToEnd()
+    }
+
+    /// One frame of the scroll to the end. A finger dragging the timeline takes it over.
+    private func stepToEnd() {
+        let now = CACurrentMediaTime()
+        guard let scrollView, let started = endScroll, now < started.until, now < started.deadline,
+              !scrollView.isDragging, !scrollView.isDecelerating else {
+            endScrollLink?.invalidate()
+            endScrollLink = nil
+            endScroll = nil
+            return
+        }
+        // While the viewport keeps changing height, the end holds on.
+        if abs(scrollView.bounds.height - started.height) > 0.5 {
+            endScroll?.height = scrollView.bounds.height
+            endScroll?.until = max(started.until, now + started.hold)
+        }
+        let end = end(of: scrollView)
+        if abs(end - started.end) > 0.5 {
+            spreadRest(to: end, in: scrollView)
+        }
+        guard let endScroll else { return }
+        let offset = end - endScroll.distance * endScroll.left
+        if abs(scrollView.contentOffset.y - offset) > 0.25 {
+            scrollView.contentOffset.y = offset
+        }
+    }
+
+    /// The end moved during the scroll to it (the newest rows took their
+    /// measured heights, or the viewport changed height): what is left to
+    /// scroll spreads over the rest of the scroll, so nothing on screen jumps.
+    private func spreadRest(to end: CGFloat, in scrollView: UIScrollView) {
+        guard let endScroll, endScroll.left > 0.0001 else { return }
+        self.endScroll?.distance = (end - scrollView.contentOffset.y) / endScroll.left
+        self.endScroll?.end = end
+    }
+
+    /// How far the end of the content sits below the bottom of a viewport of
+    /// this height at the current offset (negative: blank below the latest
+    /// row). Nil while the bottom anchor is not laid out: the reader is far
+    /// from the end.
+    func distanceToEnd(viewportHeight: CGFloat? = nil) -> CGFloat? {
+        guard let scrollView, let contentEnd = contentEnd(in: scrollView) else { return nil }
+        return contentEnd + scrollView.adjustedContentInset.bottom - scrollView.contentOffset.y
+            - (viewportHeight ?? scrollView.bounds.height)
+    }
+
+    private func contentEnd(in scrollView: UIScrollView) -> CGFloat? {
+        guard let endView, endView.window != nil else { return nil }
+        return endView.convert(endView.bounds, to: scrollView).maxY
+    }
+
+    private func end(of scrollView: UIScrollView) -> CGFloat {
+        max(
+            -scrollView.adjustedContentInset.top,
+            (contentEnd(in: scrollView) ?? scrollView.contentSize.height) + scrollView.adjustedContentInset.bottom
+                - scrollView.bounds.height
+        )
+    }
+
+    /// Rows above the viewport change on this update: its layout keeps the
+    /// rows below them in place.
+    func keepPlace() {
+        guard let scrollView else { return }
+        bottomEdge = scrollView.contentSize.height - scrollView.contentOffset.y
+        // This update's layout only: one that leaves the height as it was moves nothing.
+        Task { [weak self] in
+            self?.bottomEdge = nil
+        }
+    }
+
+    private func contentSizeChanged(_ scrollView: UIScrollView) {
+        if bottomEdge != nil {
+            keepRowsBelow(scrollView)
+        } else if let settling, CACurrentMediaTime() < settling.until {
+            let grew = scrollView.contentSize.height - settling.height
+            scrollView.contentOffset.y += grew
+            self.settling?.height = scrollView.contentSize.height
+            ChatPerformance.signposter.emitEvent("PlaceSettle", "grew=\(Int(grew)) tracking=\(scrollView.isTracking)")
+        }
+        if endScroll != nil {
+            spreadRest(to: end(of: scrollView), in: scrollView)
+        }
+    }
+
+    private func keepRowsBelow(_ scrollView: UIScrollView) {
+        guard let bottomEdge else { return }
+        self.bottomEdge = nil
+        let grew = scrollView.contentSize.height - bottomEdge - scrollView.contentOffset.y
+        scrollView.contentOffset.y += grew
+        settling = (CACurrentMediaTime() + 0.4, scrollView.contentSize.height)
+        let tracking = scrollView.isTracking
+        Task { [weak scrollView] in
+            // Where the place is a few frames on: off only by the reader's own motion.
+            try? await Task.sleep(nanoseconds: 60_000_000)
+            guard let scrollView else { return }
+            let shift = scrollView.contentSize.height - scrollView.contentOffset.y - bottomEdge
+            ChatPerformance.signposter.emitEvent("PrependPlace", "grew=\(Int(grew)) shift=\(Int(shift)) tracking=\(tracking)")
+        }
+    }
+}
+
+/// A scroll to the end of the timeline (`ChatTimelinePlace.followEnd`, `holdEnd`).
+private struct ChatEndScroll {
+    /// How far above the end the offset was when it started.
+    var distance: CGFloat
+    /// The end `distance` was measured to.
+    var end: CGFloat
+    let start: CFTimeInterval
+    let duration: CFTimeInterval
+    /// How long the end holds after the scroll, and after the viewport last
+    /// changed height.
+    let hold: CFTimeInterval
+    var until: CFTimeInterval
+    /// The latest it holds, however long the viewport keeps changing.
+    let deadline: CFTimeInterval
+    /// The viewport height last seen.
+    var height: CGFloat
+
+    /// The share of `distance` still to go: easing out, like the scroll it replaces.
+    var left: CGFloat {
+        let progress = duration > 0 ? min(1, (CACurrentMediaTime() - start) / duration) : 1
+        return (1 - progress) * (1 - progress)
+    }
+}
+
+/// How the view model's rows changed around the messages the old and the new
+/// rows share: above the first of them, and below the last.
+private struct ChatRowChange {
+    let above: Bool
+    let below: Bool
+    /// The old rows above with the new ones from that first message on: the
+    /// change below only.
+    let belowFirst: [ChatTimelineRow]
+}
+
+/// Hands the timeline's UIKit scroll view to `ChatTimelinePlace`. It sits in
+/// the scroll content, so the scroll view is its nearest ancestor of that kind.
+private struct ChatScrollViewProbe: UIViewRepresentable {
+    let place: ChatTimelinePlace
+
+    func makeUIView(context _: Context) -> ProbeView {
+        let view = ProbeView()
+        view.place = place
+        view.isUserInteractionEnabled = false
+        return view
+    }
+
+    func updateUIView(_ view: ProbeView, context _: Context) {
+        view.place = place
+    }
+
+    final class ProbeView: UIView {
+        weak var place: ChatTimelinePlace?
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            // A timeline on its way out (a topic switch puts up the new one
+            // first) hands nothing over: its scroll view is about to go.
+            guard window != nil else { return }
+            var ancestor = superview
+            while let view = ancestor, !(view is UIScrollView) {
+                ancestor = view.superview
+            }
+            if let scrollView = ancestor as? UIScrollView {
+                place?.scrollView = scrollView
+            }
+        }
+    }
+}
+
+/// Hands the bottom anchor's UIKit view to `ChatTimelinePlace`, which reads
+/// where the content ends from it.
+private struct ChatTimelineEndProbe: UIViewRepresentable {
+    let place: ChatTimelinePlace
+
+    func makeUIView(context _: Context) -> UIView {
+        let view = UIView()
+        view.isUserInteractionEnabled = false
+        place.endView = view
+        return view
+    }
+
+    func updateUIView(_ view: UIView, context _: Context) {
+        place.endView = view
+    }
 }
 
 /// A photo message's photos for the full-screen viewer, opened at the
@@ -41,6 +364,7 @@ public struct ChatConversationView: View {
     @State private var attachmentsPresented = false
     @State private var photosPickerSelection: [PhotosPickerItem] = []
     @State private var photosPickerPresented = false
+    @State private var chatMediaPickerPresented = false
     @State private var cameraPresented = false
     @State private var documentImporterPresented = false
     @State private var gigPickerPresented = false
@@ -56,6 +380,8 @@ public struct ChatConversationView: View {
     @State private var bulkDeleteConfirmPresented = false
     /// Message awaiting the single-delete confirm.
     @State private var pendingDeleteId: String?
+    /// The assistant's "Delete conversation" awaiting its confirm.
+    @State private var aiDeleteConfirmPresented = false
     /// Photos shown in the full-screen viewer.
     @State private var viewerPhotos: ChatPhotoViewerItem?
     /// Gates the scroll-to-top pagination trigger: armed ~0.5s after the
@@ -63,9 +389,9 @@ public struct ChatConversationView: View {
     /// (which briefly report near-top geometry before the bottom anchor
     /// settles) can't fetch an older page unprompted.
     @State private var isLoadOlderArmed = false
-    /// True while an older-page fetch + scroll restore is in flight —
-    /// the near-top geometry check fires continuously during a scroll,
-    /// and must not stack requests.
+    /// True while an older-page fetch is in flight — the near-top
+    /// geometry check fires continuously during a scroll, and must not
+    /// stack requests.
     @State private var isLoadingOlder = false
     /// Scroll metrics held by reference: they update on every scrolled
     /// frame, and a per-frame @State write would re-render the whole
@@ -75,13 +401,32 @@ public struct ChatConversationView: View {
     /// message. Gates stay-pinned-on-new-rows scrolling. Only flips on
     /// actual boundary crossings, so it stays a cheap @State.
     @State private var isAtBottom = false
+    @State private var visibleReadMessageIds: Set<String> = []
     /// The thread opened at its latest message once; coming back (a pushed
     /// profile, a tab switch) keeps the reading position (Instant Screens).
     @State private var hasLandedAtLatest = false
+    /// For one pass after the view model's rows changed both above and below
+    /// the rows on screen, the rows the timeline shows instead: the change
+    /// below only (`takeRows`). Empty otherwise.
+    @State private var timelineRows: [ChatTimelineRow] = []
+    /// The first of the newest rows, which lay out together as one item of the
+    /// lazy stack (`timelineStack`, `keepTailSplit`).
+    @State private var tailFirstId: String?
+    /// The row a search match or brief lands on (`scrollToPendingTarget`): the
+    /// newest rows laid out together start below it.
+    @State private var landingTargetId: String?
+    /// Keeps the rows on screen in place when rows change above them, and the
+    /// latest message in view while the viewport changes height.
+    @State private var timelinePlace = ChatTimelinePlace()
+    /// Debug builds note missed frames while the thread is on screen.
+    @State private var frameGapMonitor = ChatFrameGapMonitor()
     @Environment(\.openURL) private var openURL
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// A Nearby Plan's chat (board A4): the plan above the messages.
     @Environment(\.chatPlanContext) private var planContext
+    /// Opens a screen in the app from the assistant (closing the Ask sheet first).
+    @Environment(\.openPantopusLink) private var openPantopusLink
     /// Presentation mode — drives the AI chrome (avatar, welcome card,
     /// reply bubbles). Default `.dm`.
     private let mode: ChatConversationMode
@@ -137,6 +482,8 @@ public struct ChatConversationView: View {
                 onBack: onBack,
                 onOpenDetails: { detailsPresented = true },
                 onNewAIChat: { viewModel.startNewAIConversation() },
+                onDeleteAIChat: { aiDeleteConfirmPresented = true },
+                isDeletingAIChat: viewModel.isDeletingAIConversation,
                 onOpenProfile: headerProfileTap
             )
             if isSelecting {
@@ -144,6 +491,8 @@ public struct ChatConversationView: View {
             }
             gigContextStrip
             if let planContext { PlanChatStrip(context: planContext) }
+            // Ask on a screen: what the thread is about.
+            if let topic = viewModel.aiTopic { AIAboutStrip(about: topic.about) }
             if mode == .creatorThread {
                 ChatCreatorAudienceStrip(
                     context: resolvedCreatorContext,
@@ -182,6 +531,21 @@ public struct ChatConversationView: View {
                     Task { await viewModel.selectTopic(topicId) }
                 }
             }
+            if viewModel.isViewingSearchContext || viewModel.isViewingEarlierHistory {
+                HStack {
+                    Text(viewModel.isViewingSearchContext ? "Showing a search match" : "Showing earlier messages")
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                    Spacer()
+                    Button("Return to latest") {
+                        hasLandedAtLatest = false
+                        Task { await viewModel.returnToLatest() }
+                    }
+                }
+                .font(.footnote)
+                .padding(.horizontal, Spacing.s4)
+                .frame(minHeight: 44)
+                .accessibilityIdentifier("chatReturnToLatest")
+            }
             content
             if viewModel.isCounterpartyTyping {
                 ChatTypingIndicator(initials: incomingInitials ?? initials(of: viewModel.counterparty.displayName))
@@ -200,28 +564,33 @@ public struct ChatConversationView: View {
                 ChatSelectionDeleteBar(selectedCount: selectedMessageIds.count) {
                     bulkDeleteConfirmPresented = true
                 }
-            } else if let closed = planContext?.closedNote {
+            } else if let closed = viewModel.roomClosedNote ?? planContext?.closedNote {
                 PlanChatClosedLine(text: closed)
             } else {
                 actionBanner
                 sendLimitBanner
-                ChatComposer(
-                    text: Binding(
-                        get: { viewModel.composerText },
-                        set: { viewModel.composerText = $0 }
-                    ),
-                    placeholder: composerPlaceholder,
-                    canSend: viewModel.canSend && !isCreatorQuotaLocked,
-                    // The "−1" send-cost badge is a claim about the fan's
-                    // quota — only shown once the allowance is known.
-                    showsSendCost: mode == .fanThread && viewModel.fanEntitlement != nil && !isFanReplyLocked,
-                    isLockedAction: isFanReplyLocked || isCreatorQuotaLocked,
-                    isStreaming: viewModel.isAIStreaming,
-                    onAttach: { attachmentsPresented = true },
-                    onEmoji: { emojiPickerPresented = true },
-                    onSend: { sendOrPromptForUpgrade() },
-                    onStop: { viewModel.cancelAIStream() }
-                )
+                if viewModel.isBusinessReply {
+                    Text("Replying as this business")
+                        .font(.footnote)
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                        .accessibilityIdentifier("chatBusinessReplyIdentity")
+                }
+                ChatComposerReader(viewModel: viewModel) { text, canSend in
+                    ChatComposer(
+                        text: text,
+                        placeholder: composerPlaceholder,
+                        canSend: canSend && !isCreatorQuotaLocked,
+                        // The "−1" send-cost badge is a claim about the fan's
+                        // quota — only shown once the allowance is known.
+                        showsSendCost: mode == .fanThread && viewModel.fanEntitlement != nil && !isFanReplyLocked,
+                        isLockedAction: isFanReplyLocked || isCreatorQuotaLocked,
+                        isStreaming: viewModel.isAIStreaming,
+                        onAttach: { attachmentsPresented = true },
+                        onEmoji: { emojiPickerPresented = true },
+                        onSend: { sendOrPromptForUpgrade() },
+                        onStop: { viewModel.cancelAIStream() }
+                    )
+                }
                 if isCreatorQuotaLocked {
                     CreatorQuotaLockRow(
                         tierName: resolvedCreatorContext.fanTierName,
@@ -232,11 +601,33 @@ public struct ChatConversationView: View {
         }
         .background(Theme.Color.appSurface)
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
+        // Action cards' taps and "Not now" (`AIActionCardView`). The handlers
+        // hold the view-model weakly: UIKit keeps the composer's text view, and
+        // the environment it was handed, after the thread closes (until another
+        // field takes the keyboard), so a strong capture kept the view-model
+        // and its messages alive.
+        .environment(\.chatAIActions, ChatAIActionHandlers(
+            run: { [weak viewModel] cardId, itemId, actionId in
+                Task { await viewModel?.runAIAction(cardId: cardId, itemId: itemId, actionId: actionId) }
+            },
+            dismiss: { [weak viewModel] cardId in viewModel?.dismissAIAction(cardId: cardId) }
+        ))
         .task { await viewModel.load() }
         .onChange(of: hasLoadedContent, initial: true) { _, loaded in
             if loaded { onContentLoaded() }
         }
-        .onDisappear { viewModel.teardown() }
+        .onAppear { frameGapMonitor.start() }
+        .onDisappear {
+            frameGapMonitor.stop()
+            viewModel.teardown()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            viewModel.setVisibleReadBoundaries(phase == .active ? visibleReadMessageIds : [])
+            if phase == .active {
+                ChatPerformance.signposter.emitEvent("Foreground")
+                Task { await viewModel.refresh() }
+            }
+        }
         // RN attach-grid parity: Camera / Photos / Document / Location /
         // Task / Marketplace. Camera hides itself where no capture device
         // exists (simulator).
@@ -248,7 +639,9 @@ public struct ChatConversationView: View {
             if UIImagePickerController.isSourceTypeAvailable(.camera) {
                 Button("Camera") { cameraPresented = true }
             }
-            Button("Photos") { photosPickerPresented = true }
+            Button("Photos and videos") {
+                if mode == .aiAssistant { photosPickerPresented = true } else { chatMediaPickerPresented = true }
+            }
             Button("Document") { documentImporterPresented = true }
             Button("Location") { Task { await viewModel.sendCurrentLocation() } }
             // Launch cuts #4 (Open gigs) / #3 (Marketplace): no task or listing shares.
@@ -272,6 +665,22 @@ public struct ChatConversationView: View {
         .sheet(isPresented: $listingPickerPresented) {
             ChatShareListingPickerSheet(viewModel: viewModel) { listingPickerPresented = false }
         }
+        .sheet(isPresented: $chatMediaPickerPresented) {
+            PulseMediaPicker(limit: max(1, 5 - viewModel.queuedAttachments.count)) { media, error in
+                for item in media {
+                    viewModel.queueAttachment(
+                        kind: (item.mimeType ?? "").hasPrefix("image/") ? .image : .document,
+                        filename: item.filename ?? "photo.jpg",
+                        mimeType: item.mimeType ?? "image/jpeg",
+                        data: item.data,
+                        liveVideo: item.liveVideo
+                    )
+                }
+                if let error { viewModel.actionFailure = error }
+                chatMediaPickerPresented = false
+            }
+            .interactiveDismissDisabled()
+        }
         .photosPicker(
             isPresented: $photosPickerPresented,
             selection: $photosPickerSelection,
@@ -286,7 +695,8 @@ public struct ChatConversationView: View {
         }
         .fileImporter(
             isPresented: $documentImporterPresented,
-            allowedContentTypes: [.item],
+            // The assistant reads PDFs (photos come through Photos and Camera).
+            allowedContentTypes: mode == .aiAssistant ? [.pdf] : [.item],
             allowsMultipleSelection: true
         ) { result in
             handlePickedDocuments(result)
@@ -329,7 +739,7 @@ public struct ChatConversationView: View {
             Text("Deleted messages are removed for everyone in this conversation.")
         }
         .alert(
-            "Delete message?",
+            pendingDeleteId?.hasPrefix("client_") == true ? "Discard unsent message?" : "Delete message?",
             isPresented: Binding(
                 get: { pendingDeleteId != nil },
                 set: { if !$0 { pendingDeleteId = nil } }
@@ -337,11 +747,21 @@ public struct ChatConversationView: View {
             presenting: pendingDeleteId
         ) { messageId in
             Button("Cancel", role: .cancel) {}
-            Button("Delete", role: .destructive) {
+            Button(messageId.hasPrefix("client_") ? "Discard" : "Delete", role: .destructive) {
                 Task { await viewModel.delete(messageId: messageId) }
             }
-        } message: { _ in
-            Text("Deleted messages are removed for everyone in this conversation.")
+        } message: { messageId in
+            Text(messageId.hasPrefix("client_")
+                ? "This stops retries. If it has already been sent, it will remain in the conversation."
+                : "Deleted messages are removed for everyone in this conversation.")
+        }
+        .alert("Delete this conversation?", isPresented: $aiDeleteConfirmPresented) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) {
+                Task { await viewModel.deleteAIConversations() }
+            }
+        } message: {
+            Text("Pantopus AI won\u{2019}t remember it. Any earlier chats with Pantopus AI are deleted too.")
         }
         .fullScreenCover(item: $viewerPhotos) { photos in
             MediaViewerView(
@@ -352,6 +772,10 @@ public struct ChatConversationView: View {
             )
         }
         .quickLookPreview($viewModel.previewFileURL)
+        .onReceive(NotificationCenter.default.publisher(for: ChatLocalStore.historyRetired)) { _ in
+            viewerPhotos = nil
+            viewModel.previewFileURL = nil
+        }
         .refreshFailureToast($viewModel.actionFailure)
         .accessibilityIdentifier("chatConversation")
     }
@@ -409,7 +833,8 @@ public struct ChatConversationView: View {
     }
 
     /// Dismissible banner shown when a send was rejected by the gig
-    /// room's pre-bid message cap (429 `PRE_BID_LIMIT`).
+    /// room's pre-bid message cap (429 `PRE_BID_LIMIT`) or refused, or the
+    /// assistant's upload wouldn't take a file.
     @ViewBuilder private var sendLimitBanner: some View {
         if let notice = viewModel.sendLimitNotice {
             HStack(spacing: Spacing.s2) {
@@ -425,7 +850,7 @@ public struct ChatConversationView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Dismiss message limit notice")
+                .accessibilityLabel("Dismiss notice")
             }
             .padding(.leading, Spacing.s3)
             .frame(minHeight: 44)
@@ -543,23 +968,29 @@ public struct ChatConversationView: View {
 
     private func handlePickedDocuments(_ result: Result<[URL], any Error>) {
         guard case let .success(urls) = result else { return }
+        let generation = AuthManager.shared.requestSessionGeneration
+        let isAssistant = mode == .aiAssistant
         Task {
             for url in urls.prefix(5) {
-                let didStart = url.startAccessingSecurityScopedResource()
-                defer {
-                    if didStart { url.stopAccessingSecurityScopedResource() }
-                }
-                guard let data = try? Data(contentsOf: url) else { continue }
-                let values = try? url.resourceValues(forKeys: [.contentTypeKey, .localizedNameKey])
-                let mimeType = values?.contentType?.preferredMIMEType ?? "application/octet-stream"
-                let filename = values?.localizedName ?? url.lastPathComponent
-                await MainActor.run {
-                    viewModel.queueAttachment(
-                        kind: mimeType.hasPrefix("image/") ? .image : .document,
-                        filename: filename,
-                        mimeType: mimeType,
-                        data: data
-                    )
+                do {
+                    let document = try await Task.detached(priority: .userInitiated) {
+                        try ChatMediaURL.readDocument(url, isAssistant: isAssistant)
+                    }.value
+                    guard !Task.isCancelled, AuthManager.shared.requestSessionGeneration == generation else { return }
+                    if isAssistant {
+                        viewModel.queueAIDocument(filename: document.filename, data: document.data)
+                    } else {
+                        viewModel.queueAttachment(
+                            kind: document.mimeType.hasPrefix("image/") ? .image : .document,
+                            filename: document.filename,
+                            mimeType: document.mimeType,
+                            data: document.data
+                        )
+                    }
+                } catch {
+                    guard AuthManager.shared.requestSessionGeneration == generation else { return }
+                    viewModel.actionFailure = (error as? ChatLocalStorageError)?.localizedDescription
+                        ?? "Couldn't open this file. Try choosing it again."
                 }
             }
         }
@@ -589,12 +1020,24 @@ public struct ChatConversationView: View {
         }
     }
 
-    @ViewBuilder private var content: some View {
-        switch viewModel.state {
-        case .loading: loadingFrame
-        case .empty: emptyFrame
-        case let .loaded(rows): populatedFrame(rows)
-        case let .error(message): errorFrame(message)
+    /// The thread between the header and the composer. With the keyboard up,
+    /// dragging the thread down pulls the keyboard away with the finger (as in
+    /// Messages) and a tap on the thread puts it away, so the whole
+    /// conversation shows again. Buttons and links in the thread keep their
+    /// own taps: a tap there does what it did before, keyboard and all.
+    private var content: some View {
+        Group {
+            switch viewModel.state {
+            case .loading: loadingFrame
+            case .empty: emptyFrame
+            case let .loaded(rows): populatedFrame(rows)
+            case let .error(message): errorFrame(message)
+            }
+        }
+        .scrollDismissesKeyboard(.interactively)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         }
     }
 
@@ -788,8 +1231,13 @@ extension ChatConversationView {
                     .padding(.top, 6)
                 aiPrivacyRow
                     .padding(.top, 10)
-                aiPromptGrid
-                    .padding(.top, 18)
+                if viewModel.aiTopic != nil {
+                    aiStarterPrompts
+                        .padding(.top, 18)
+                } else {
+                    aiPromptGrid
+                        .padding(.top, 18)
+                }
             }
             .padding(.horizontal, 28)
             .padding(.top, Spacing.s10)
@@ -843,6 +1291,40 @@ extension ChatConversationView {
                 .buttonStyle(.plain)
                 .accessibilityLabel(card.question)
                 .accessibilityIdentifier("chatAIPromptCard_\(card.id)")
+            }
+        }
+    }
+
+    /// Ask on a screen: that screen's starter prompts, in the suggestion
+    /// cards' style. One ending in "…" goes into the composer to finish.
+    private var aiStarterPrompts: some View {
+        VStack(spacing: Spacing.s2) {
+            ForEach(viewModel.aiPrompts) { chip in
+                Button {
+                    Task { await viewModel.sendCapabilityPrompt(chip) }
+                } label: {
+                    HStack(spacing: Spacing.s2) {
+                        Icon(.sparkles, size: 13, color: Theme.Color.magic)
+                        Text(chip.label)
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.Color.appText)
+                            .multilineTextAlignment(.leading)
+                        Spacer(minLength: Spacing.s2)
+                        Icon(.arrowUpRight, size: 14, color: Theme.Color.appTextMuted)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .background(Theme.Color.appSurface)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(Theme.Color.appBorder, lineWidth: 1)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .shadow(color: .black.opacity(0.04), radius: 1.5, y: 1)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("chatAIStarter_\(chip.id)")
             }
         }
     }
@@ -981,64 +1463,56 @@ extension ChatConversationView {
     private static let scrollSpaceName = "chatConversationScroll"
 
     private func populatedFrame(_ rows: [ChatTimelineRow]) -> some View {
+        // Resolve the accepted room tails once per rendered snapshot, not per row.
+        let readBoundaryIds = viewModel.latestAcceptedMessageIds
+        // For one pass after rows changed on both sides of the reader, the rows
+        // below the change first (`takeRows`).
+        let shown = timelineRows.isEmpty ? rows : timelineRows
+        let tailStart = Self.tailStart(in: shown, firstId: tailFirstId, below: landingTargetId)
         // Gig context strip is loaded by `ChatConversationViewModel.loadGigContextIfNeeded`.
-        GeometryReader { geo in
+        return GeometryReader { geo in
             ScrollViewReader { proxy in
                 ScrollView {
-                    // A plain (non-lazy) VStack on purpose: pages are
-                    // bounded (60 rows/fetch) and exact row heights are
-                    // what make `.defaultScrollAnchor(.bottom)` land on
-                    // the newest message. LazyVStack positions by
-                    // *estimated* heights, which left the first frame in
-                    // blank space past the real content and made every
-                    // scrollTo land short.
-                    VStack(spacing: Spacing.s0) {
-                        // A15.5's "Auto-welcome · free" card is omitted:
-                        // no persona welcome-message exists on the wire,
-                        // and the design's copy is fixture identity.
-                        if mode == .aiAssistant {
-                            // A15.3 — the welcome card stays pinned at the top
-                            // of the populated AI thread.
-                            aiWelcomeCard
-                                .padding(.bottom, 10)
+                    timelineStack(shown, tailStart: tailStart, geo: geo, readBoundaryIds: readBoundaryIds)
+                        .padding(.horizontal, 12)
+                        .padding(.top, Spacing.s3)
+                        .background(alignment: .topLeading) {
+                            ChatScrollViewProbe(place: timelinePlace)
+                                .frame(width: 0, height: 0)
                         }
-                        ForEach(rows) { row in
-                            // Row width is measured once at the list level
-                            // (viewport minus the 12pt side paddings) — a
-                            // per-row GeometryReader made every bubble lay
-                            // out twice and snap from the fallback width
-                            // while scrolling.
-                            timelineRowView(row, rowWidth: max(0, geo.size.width - 24))
-                        }
-                        Color.clear
-                            .frame(height: 4)
-                            .id(Self.bottomAnchorId)
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.top, Spacing.s3)
-                    .background(
-                        // Scroll tracking. `onAppear`/`onDisappear` row
-                        // sentinels only work in lazy stacks, so the
-                        // pagination trigger and at-bottom state read the
-                        // content frame instead.
-                        GeometryReader { contentGeo in
-                            let frame = contentGeo.frame(in: .named(Self.scrollSpaceName))
-                            Color.clear
-                                .onAppear {
-                                    handleScrollGeometry(frame: frame, viewportHeight: geo.size.height, rows: rows, proxy: proxy)
-                                }
-                                .onChange(of: frame) { _, newFrame in
-                                    handleScrollGeometry(frame: newFrame, viewportHeight: geo.size.height, rows: rows, proxy: proxy)
-                                }
-                        }
-                    )
+                        .background(
+                            // Scroll tracking: the pagination trigger and the
+                            // at-bottom state read the content frame.
+                            GeometryReader { contentGeo in
+                                let frame = contentGeo.frame(in: .named(Self.scrollSpaceName))
+                                Color.clear
+                                    .onAppear {
+                                        handleScrollGeometry(frame: frame, viewportHeight: geo.size.height)
+                                    }
+                                    .onChange(of: frame) { _, newFrame in
+                                        handleScrollGeometry(frame: newFrame, viewportHeight: geo.size.height)
+                                    }
+                            }
+                        )
                 }
                 .coordinateSpace(name: Self.scrollSpaceName)
+                .onAppear {
+                    ChatPerformance.mark("ThreadRows", rows: rows.count)
+                }
                 // Threads open at the latest message (rows project
                 // oldest-first), and the bottom stays anchored when new
                 // rows land while the user is already at the bottom.
                 .defaultScrollAnchor(.bottom)
-                .refreshable { await viewModel.refresh() }
+                // Dragged down in a short thread, the keyboard pulls the
+                // content as it goes and starts a refresh, and SwiftUI cancels
+                // the refresh as the keyboard resizes the timeline. Ended in
+                // mid-flight, the control leaves its spinner animating, hidden
+                // (iOS 26). The refresh runs on, and the control ends once the
+                // timeline is at rest.
+                .refreshable {
+                    await Task { await viewModel.refresh(retryRoomSubscriptions: true) }.value
+                    await timelinePlace.settled()
+                }
                 .accessibilityIdentifier("chatConversationContent")
                 .task {
                     guard !isLoadOlderArmed else { return }
@@ -1048,48 +1522,308 @@ extension ChatConversationView {
                     // scroll geometry, so the near-top check never
                     // re-fires — kick one fetch so backward pagination
                     // still works there.
-                    if scrollMetrics.distanceFromTop < 200, viewModel.canLoadOlder {
-                        loadOlderPreservingPosition(rows: rows, proxy: proxy)
+                    if scrollMetrics.distanceFromTop < 200 {
+                        loadOlderPreservingPosition()
                     }
                 }
                 .task { await landAtLatestMessage(proxy) }
+                .onChange(of: rows, initial: true) { oldRows, newRows in
+                    timelinePlace.rowsChanged()
+                    takeRows(from: oldRows, to: newRows)
+                    keepTailSplit(newRows)
+                }
+                // The second pass of a change on both sides: the rows above.
+                .onChange(of: timelineRows.isEmpty) { _, isEmpty in
+                    if isEmpty { timelinePlace.keepPlace() }
+                }
                 .onChange(of: rows.last) { oldLast, newLast in
                     pinToBottomIfNeeded(oldLast: oldLast, newLast: newLast, proxy: proxy)
                 }
-                .onChange(of: viewModel.pendingScrollTargetId) { _, target in
+                // A notice, the typing line or the keyboard takes room from
+                // below: the latest message stays in view when it was. When
+                // the room comes back, the viewport never stays past the end
+                // of the content, blank: a fresh scroll view stops at the end
+                // by itself, but once rows have joined above it keeps its
+                // offset as it grows.
+                .onChange(of: geo.size.height) { oldHeight, newHeight in
+                    // Where the content ended below the viewport before this
+                    // change, from the bottom anchor: on iOS 17 the at-bottom
+                    // state has been read with the new height by now.
+                    let toEnd = timelinePlace.distanceToEnd(viewportHeight: oldHeight)
+                        ?? scrollMetrics.contentMaxY - oldHeight
+                    // Given room back at the latest message, iOS 26 has moved
+                    // to the end by now, and puts the old offset back after
+                    // this layout (the lazy stack keeps its rows on screen in
+                    // place): the end holds all the same.
+                    let pastEnd = oldHeight + toEnd < newHeight - 1
+                        || timelinePlace.distanceToEnd().map { $0 < 1 } == true
+                    // A search match or brief on its way lands where it is: the
+                    // notice that opens with it takes room too, and a scroll to
+                    // the end under the landing left the first pages joining
+                    // above it thousands of points off on iOS 26.
+                    guard newHeight < oldHeight ? toEnd < 120 : pastEnd, !isLoadingOlder,
+                          !viewModel.hasPendingSearchTarget else { return }
+                    proxy.scrollTo(Self.bottomAnchorId, anchor: .bottom)
+                    timelinePlace.holdEnd()
+                }
+                // `initial`: a target published before this frame appeared
+                // (a slow first layout) still scrolls.
+                .onChange(of: viewModel.pendingScrollTargetId, initial: true) { _, target in
                     guard let target else { return }
-                    if reduceMotion {
-                        proxy.scrollTo(target, anchor: .center)
-                    } else {
-                        withAnimation(.easeOut(duration: 0.2)) {
-                            proxy.scrollTo(target, anchor: .center)
-                        }
-                    }
-                    viewModel.consumePendingScroll()
+                    scrollToPendingTarget(target, proxy: proxy)
                 }
             }
         }
     }
 
     /// React to the content frame moving inside the scroll viewport:
-    /// update the at-bottom flag and fire backward pagination when the
+    /// update the at-bottom flag and fetch the next older page when the
     /// user nears the top of the loaded history.
-    private func handleScrollGeometry(
-        frame: CGRect,
-        viewportHeight: CGFloat,
-        rows: [ChatTimelineRow],
-        proxy: ScrollViewProxy
-    ) {
+    private func handleScrollGeometry(frame: CGRect, viewportHeight: CGFloat) {
+        // The end of the latest row where the bottom anchor is laid out: the
+        // lazy stack's own height counts rows not laid out at estimates.
+        let toEnd = timelinePlace.distanceToEnd() ?? frame.maxY - viewportHeight
+        scrollMetrics.viewportHeight = viewportHeight
         scrollMetrics.distanceFromTop = -frame.minY
-        let nearBottom = (frame.maxY - viewportHeight) < 120
+        scrollMetrics.contentMaxY = viewportHeight + toEnd
+        let nearBottom = toEnd < 120
         if isAtBottom != nearBottom {
             isAtBottom = nearBottom
         }
-        guard isLoadOlderArmed,
-              !isLoadingOlder,
-              viewModel.canLoadOlder,
-              scrollMetrics.distanceFromTop < 200 else { return }
-        loadOlderPreservingPosition(rows: rows, proxy: proxy)
+        if scrollMetrics.isLanding, timelinePlace.isTracking {
+            scrollMetrics.isLanding = false
+        }
+        guard isLoadOlderArmed, !isLoadingOlder,
+              scrollMetrics.distanceFromTop < viewportHeight * Self.screensBeforeOlderPage else { return }
+        loadOlderPreservingPosition()
+    }
+
+    // MARK: - Rows joining
+
+    /// The next older page is fetched this many screens before the top of the
+    /// loaded history, so that it has usually joined by the time the reader
+    /// gets there and a fling up runs on through it.
+    private static let screensBeforeOlderPage: CGFloat = 2
+
+    /// At least this many of the newest rows lay out together, as one item of
+    /// the lazy stack: more than a screen of them, so the timeline at its
+    /// latest message shows rows that have laid out.
+    private static let laidOutTailRows = 30
+
+    /// Where the newest rows laid out together start: at `firstId` while the
+    /// rows keep it, and never fewer than `laidOutTailRows` of them, except
+    /// below a landing's target.
+    private static func tailStart(in rows: [ChatTimelineRow], firstId: String?, below targetId: String?) -> Int {
+        let newest = max(0, rows.count - laidOutTailRows)
+        var start = newest
+        if let firstId, let index = rows.firstIndex(where: { $0.id == firstId }) {
+            start = min(index, newest)
+        }
+        // On iOS 17 a `ScrollViewProxy` scroll finds a row of the lazy stack,
+        // but not one among the newest rows laid out together.
+        if let targetId, let target = rows.firstIndex(where: { $0.id == targetId }) {
+            start = max(start, target + 1)
+        }
+        return start
+    }
+
+    /// The newest rows laid out together start at the same row while rows join
+    /// below them, so no row leaves them under the reader: as a row of its own,
+    /// the lazy stack would size it from an estimate, and the rows on screen
+    /// would move by the difference. A new window (its first row gone) starts
+    /// them afresh, and so do newest rows grown many while the reader is at the
+    /// latest message, where the end holds.
+    private func keepTailSplit(_ rows: [ChatTimelineRow]) {
+        if let tailFirstId, let index = rows.firstIndex(where: { $0.id == tailFirstId }),
+           !(isAtBottom && rows.count - index > Self.laidOutTailRows * 5) {
+            return
+        }
+        let newest = max(0, rows.count - Self.laidOutTailRows)
+        tailFirstId = rows.indices.contains(newest) ? rows[newest].id : nil
+    }
+
+    /// The timeline's rows, oldest first, and the bottom anchor.
+    private func timelineStack(
+        _ shown: [ChatTimelineRow],
+        tailStart: Int,
+        geo: GeometryProxy,
+        readBoundaryIds: Set<String>
+    ) -> some View {
+        // Lazy: only the rows near the viewport lay out, so a long thread
+        // scrolls, and an older page joins, without a pass over every loaded
+        // row. Rows far from the viewport sit at estimated heights until they
+        // come near, so the landings scroll again once their rows have laid
+        // out (`landAtLatestMessage`, `scrollToPendingTarget`), rows joining
+        // above keep the reader's place, and the end is read from the bottom
+        // anchor (`ChatTimelinePlace`). Nothing sits below the lazy stack: with
+        // content below it, a lazy stack above the viewport drew its last row
+        // at the top of the viewport when the keyboard changed the viewport's
+        // height, and grew by as much.
+        LazyVStack(spacing: Spacing.s0) {
+            // A15.5's "Auto-welcome · free" card is omitted: no persona
+            // welcome-message exists on the wire, and the design's copy is
+            // fixture identity.
+            if mode == .aiAssistant {
+                // A15.3 — the welcome card stays pinned at the top of the
+                // populated AI thread.
+                aiWelcomeCard
+                    .padding(.bottom, 10)
+            }
+            ForEach(shown[..<tailStart]) { row in
+                timelineEntry(row, geo: geo, readBoundaryIds: readBoundaryIds)
+            }
+            // The newest rows and the bottom anchor, one item of the lazy
+            // stack, lay out together: opened at its end, a lazy stack whose
+            // newest rows are taller than its estimate laid out no rows there
+            // on iOS 17, and the timeline stayed blank until the reader
+            // scrolled.
+            VStack(spacing: Spacing.s0) {
+                ForEach(shown[tailStart...]) { row in
+                    timelineEntry(row, geo: geo, readBoundaryIds: readBoundaryIds)
+                }
+                Color.clear
+                    .frame(height: 4)
+                    .background { ChatTimelineEndProbe(place: timelinePlace) }
+                    .id(Self.bottomAnchorId)
+            }
+        }
+    }
+
+    /// One timeline row and its read-boundary tracking.
+    private func timelineEntry(_ row: ChatTimelineRow, geo: GeometryProxy, readBoundaryIds: Set<String>) -> some View {
+        // Row width is measured once at the list level (viewport minus the
+        // 12pt side paddings) — a per-row GeometryReader made every bubble
+        // lay out twice and snap from the fallback width while scrolling.
+        timelineRowView(row, rowWidth: max(0, geo.size.width - 24))
+            .background { readBoundaryTracker(row: row, acceptedIds: readBoundaryIds, viewportHeight: geo.size.height) }
+    }
+
+    private static func isBubble(_ row: ChatTimelineRow) -> Bool {
+        if case .bubble = row { return true }
+        return false
+    }
+
+    /// The view model's rows changed. Rows that change above the rows on
+    /// screen (an older page joins, the oldest rows leave) move the offset
+    /// with them on the same layout, so nothing on screen moves. Rows that
+    /// change on both sides at once (an older page past the retained window
+    /// drops the newest rows, or new rows push out the oldest) take two
+    /// passes: the rows below first, then the rows above, so that the pass
+    /// that moves the offset changes nothing below the reader.
+    private func takeRows(from old: [ChatTimelineRow], to new: [ChatTimelineRow]) {
+        guard let change = Self.rowChange(from: old, to: new), change.above else { return }
+        guard change.below else {
+            timelinePlace.keepPlace()
+            return
+        }
+        timelineRows = change.belowFirst
+        // The rows above on the next pass, after this one has laid out.
+        Task { timelineRows = [] }
+    }
+
+    /// How the rows changed around the messages both lists keep. Nil when they
+    /// share no message (a new window: the latest messages, a search match, a
+    /// topic).
+    private static func rowChange(from old: [ChatTimelineRow], to new: [ChatTimelineRow]) -> ChatRowChange? {
+        var newIndex: [String: Int] = [:]
+        for (index, row) in new.enumerated() where isBubble(row) {
+            newIndex[row.id] = index
+        }
+        guard let firstOld = old.firstIndex(where: { newIndex[$0.id] != nil }),
+              let lastOld = old.lastIndex(where: { newIndex[$0.id] != nil }),
+              let firstNew = newIndex[old[firstOld].id], let lastNew = newIndex[old[lastOld].id],
+              firstNew <= lastNew else { return nil }
+        return ChatRowChange(
+            above: !old[..<firstOld].map(\.id).elementsEqual(new[..<firstNew].map(\.id)),
+            below: !old[(lastOld + 1)...].map(\.id).elementsEqual(new[(lastNew + 1)...].map(\.id)),
+            belowFirst: Array(old[..<firstOld] + new[firstNew...])
+        )
+    }
+
+    /// The rendered rows just changed: go to the bottom once they have laid
+    /// out. Scrolling in the same pass resolves the bottom in the old layout
+    /// and can leave the viewport short of the new end.
+    private func scrollToBottomAfterLayout(_ proxy: ScrollViewProxy) async {
+        for delayMs: UInt64 in [16, 120] {
+            try? await Task.sleep(nanoseconds: delayMs * 1_000_000)
+            proxy.scrollTo(Self.bottomAnchorId, anchor: .bottom)
+        }
+        // The lazy stack's height can still lag its newest rows: the end itself.
+        timelinePlace.followEnd(animated: false)
+    }
+
+    /// A search match, a brief, or the latest message after a jump back.
+    private func scrollToPendingTarget(_ target: String, proxy: ScrollViewProxy) {
+        if target == Self.bottomAnchorId {
+            // Back at the latest message: the bottom, once its rows have laid out.
+            landingTargetId = nil
+            Task {
+                await scrollToBottomAfterLayout(proxy)
+                viewModel.consumePendingScroll()
+            }
+            return
+        }
+        // A brief or nudge opens at its start, its cards below it;
+        // a searched message sits in the middle.
+        let anchor: UnitPoint = mode == .aiAssistant ? .top : .center
+        // The target joins the lazy stack on the next layout (`tailStart`).
+        // The rows between here and the target sit at estimated heights until
+        // they come near: the first scroll brings the target's rows in, and the
+        // second, once they have laid out, lands on it exactly.
+        landingTargetId = target
+        scrollMetrics.isLanding = true
+        Task {
+            try? await Task.sleep(nanoseconds: 16_000_000)
+            proxy.scrollTo(target, anchor: anchor)
+            try? await Task.sleep(nanoseconds: 32_000_000)
+            if reduceMotion {
+                proxy.scrollTo(target, anchor: anchor)
+            } else {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    proxy.scrollTo(target, anchor: anchor)
+                }
+            }
+            viewModel.consumePendingScroll()
+        }
+    }
+
+    @ViewBuilder
+    private func readBoundaryTracker(row: ChatTimelineRow, acceptedIds: Set<String>, viewportHeight: CGFloat) -> some View {
+        let messageId: String? = switch row {
+        case let .bubble(bubble): bubble.id
+        case let .broadcastReference(reference): reference.id
+        case let .systemLine(line): line.id
+        case .dayDivider, .topicDivider: nil
+        }
+        if let messageId, acceptedIds.contains(messageId) {
+            GeometryReader { geometry in
+                let frame = geometry.frame(in: .named(Self.scrollSpaceName))
+                Color.clear
+                    .onAppear { updateReadBoundary(messageId, frame: frame, viewportHeight: viewportHeight) }
+                    .onChange(of: frame) { _, frame in
+                        updateReadBoundary(messageId, frame: frame, viewportHeight: viewportHeight)
+                    }
+                    .onChange(of: viewportHeight) { _, height in
+                        updateReadBoundary(messageId, frame: frame, viewportHeight: height)
+                    }
+                    .onDisappear {
+                        visibleReadMessageIds.remove(messageId)
+                        viewModel.setVisibleReadBoundaries(scenePhase == .active ? visibleReadMessageIds : [])
+                    }
+            }
+        }
+    }
+
+    private func updateReadBoundary(_ messageId: String, frame: CGRect, viewportHeight: CGFloat) {
+        guard viewModel.latestAcceptedMessageIds.contains(messageId) else { return }
+        // The message's trailing edge must be on-screen. A tall message can
+        // still be read at its end; typing and padding below it do not count.
+        let visible = frame.maxY > 0 && frame.maxY <= viewportHeight + 4 && frame.minY < viewportHeight
+        // Every scrolled frame lands here; only a change in what is visible
+        // is news for this view's state and the view model.
+        guard visible != visibleReadMessageIds.contains(messageId) else { return }
+        if visible { visibleReadMessageIds.insert(messageId) } else { visibleReadMessageIds.remove(messageId) }
+        viewModel.setVisibleReadBoundaries(scenePhase == .active ? visibleReadMessageIds : [])
     }
 
     /// Force the thread to open at the latest message. The bottom anchor
@@ -1099,63 +1833,47 @@ extension ChatConversationView {
     private func landAtLatestMessage(_ proxy: ScrollViewProxy) async {
         // Opened from Chat Search → the pendingScrollTargetId path
         // positions on the matched message instead.
-        guard !viewModel.hasPendingSearchTarget, !hasLandedAtLatest else { return }
+        guard !viewModel.hasPendingSearchTarget, !viewModel.isViewingEarlierHistory, !hasLandedAtLatest else { return }
         proxy.scrollTo(Self.bottomAnchorId, anchor: .bottom)
         for delayMs: UInt64 in [80, 250, 600] {
             try? await Task.sleep(nanoseconds: delayMs * 1_000_000)
             guard !Task.isCancelled else { return }
             proxy.scrollTo(Self.bottomAnchorId, anchor: .bottom)
         }
+        timelinePlace.followEnd(animated: false)
         hasLandedAtLatest = true
     }
 
     /// Keep the viewport pinned to the newest message: always follow the
     /// user's own outgoing send; otherwise only when they're already
     /// reading the latest messages (never yank them out of history).
-    private func pinToBottomIfNeeded(
-        oldLast: ChatTimelineRow?,
-        newLast: ChatTimelineRow?,
-        proxy: ScrollViewProxy
-    ) {
-        guard let newLast else { return }
+    private func pinToBottomIfNeeded(oldLast: ChatTimelineRow?, newLast: ChatTimelineRow?, proxy: ScrollViewProxy) {
+        guard let newLast, !viewModel.isViewingEarlierHistory else { return }
         let isNewRow = oldLast?.id != newLast.id
         let isOwnSend: Bool = {
             guard isNewRow, case let .bubble(bubble) = newLast else { return false }
             return bubble.side == .outgoing
         }()
         guard isAtBottom || isOwnSend else { return }
-        if isNewRow, !reduceMotion {
-            withAnimation(.easeOut(duration: 0.2)) {
-                proxy.scrollTo(Self.bottomAnchorId, anchor: .bottom)
-            }
-        } else {
-            // Same row growing in place (streamed AI reply) — track the
-            // bottom without animating every delta.
+        // Reading far back, an animated scroll would lay out every row on the
+        // way: go straight to the bottom, and again once its rows have laid out.
+        if scrollMetrics.contentMaxY - scrollMetrics.viewportHeight > scrollMetrics.viewportHeight * 2 {
             proxy.scrollTo(Self.bottomAnchorId, anchor: .bottom)
+            Task { await scrollToBottomAfterLayout(proxy) }
+            return
         }
+        // Same row growing in place (streamed AI reply): track the bottom
+        // without animating every delta.
+        timelinePlace.followEnd(animated: isNewRow && !reduceMotion)
     }
 
-    /// Fetch the next older page, then put the row that was at the top of
-    /// the viewport back there — prepending shifts the existing content
-    /// down, which otherwise lands the user on a random older message.
-    /// The anchor is the first BUBBLE row: divider ids (day keys) move to
-    /// the top of the merged day when older same-day messages prepend,
-    /// while a bubble id stays glued to its message.
-    private func loadOlderPreservingPosition(rows: [ChatTimelineRow], proxy: ScrollViewProxy) {
-        guard !isLoadingOlder else { return }
+    /// Fetch the next older page. It joins above the rows on screen in one
+    /// layout, and the reader's place stays (`takeRows`).
+    private func loadOlderPreservingPosition() {
+        guard !isLoadingOlder, !scrollMetrics.isLanding, viewModel.canLoadOlder else { return }
         isLoadingOlder = true
-        let anchorId = rows.first { row in
-            if case .bubble = row { return true }
-            return false
-        }?.id
         Task {
             await viewModel.loadOlder()
-            if let anchorId {
-                proxy.scrollTo(anchorId, anchor: .top)
-                // Second pass once the prepended rows have laid out.
-                try? await Task.sleep(nanoseconds: 50_000_000)
-                proxy.scrollTo(anchorId, anchor: .top)
-            }
             isLoadingOlder = false
         }
     }
@@ -1171,6 +1889,7 @@ extension ChatConversationView {
             ChatBroadcastReferenceCard(reference: reference)
         case let .bubble(bubble):
             bubbleRowView(bubble, rowWidth: rowWidth)
+                .onAppear { viewModel.noteRowAppeared(bubble.id) }
         case let .systemLine(line):
             ChatSystemLineRow(text: line.label)
         }
@@ -1184,7 +1903,8 @@ extension ChatConversationView {
         // Excludes in-flight (`client_`) rows and AI-thread local rows
         // (`ai_user_` / `ai_assistant_`) — neither is persisted, so the
         // bulk-delete loop could never delete them server-side.
-        let selectable = bubble.side == .outgoing && !bubble.id.hasPrefix("client_") && !bubble.id.hasPrefix("ai_")
+        let selectable = viewModel.canManageMessage(bubble.id)
+            && !bubble.id.hasPrefix("client_") && !bubble.id.hasPrefix("ai_")
         if isSelecting {
             let isSelected = selectedMessageIds.contains(bubble.id)
             HStack(alignment: .center, spacing: Spacing.s2) {
@@ -1222,6 +1942,8 @@ extension ChatConversationView {
             rowWidth: rowWidth,
             incomingInitials: incomingInitials,
             aiStatus: viewModel.aiStatus,
+            canManage: viewModel.canManageMessage(bubble.id),
+            canDiscard: viewModel.canDiscardMessage(bubble.id),
             onLockedAction: { upgradePromptPresented = true },
             onReply: { viewModel.beginReply(to: bubble.id) },
             onEdit: { viewModel.beginEdit(messageId: bubble.id) },
@@ -1237,7 +1959,7 @@ extension ChatConversationView {
                 // A pickup-days card saves here; once saved it opens Today, where the days show.
                 if let pickup = draft.pickup {
                     if pickup.save == .saved, let today = URL(string: "pantopus://today") {
-                        DeepLinkRouter.shared.handle(url: today)
+                        openPantopusLink(today)
                     } else {
                         Task { await viewModel.savePickupSchedule(draft) }
                     }
@@ -1260,6 +1982,7 @@ extension ChatConversationView {
                 Task { await viewModel.retry(clientId: bubble.id) }
             }
         }
+        .equatable()
     }
 
     private func errorFrame(_ message: String) -> some View {
@@ -1273,7 +1996,7 @@ extension ChatConversationView {
                 .font(.system(size: 13.5))
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .multilineTextAlignment(.center)
-            Button { Task { await viewModel.refresh() } } label: {
+            Button { Task { await viewModel.refresh(retryRoomSubscriptions: true) } } label: {
                 Text("Try again")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(Theme.Color.appTextInverse)
@@ -1598,6 +2321,10 @@ private struct ChatConversationHeader: View {
     var onOpenDetails: @MainActor () -> Void = {}
     /// The assistant's "New chat" (AI thread only).
     var onNewAIChat: @MainActor () -> Void = {}
+    /// The assistant's More menu: "Delete conversation" (AI thread only).
+    var onDeleteAIChat: @MainActor () -> Void = {}
+    /// True while that delete runs.
+    var isDeletingAIChat = false
     /// Opens the other person's profile from their avatar and name (person DMs only).
     var onOpenProfile: (@MainActor () -> Void)?
 
@@ -1736,7 +2463,7 @@ private struct ChatConversationHeader: View {
                 .accessibilityLabel("Conversation details")
             case .ai:
                 // A15.3 header actions: square-pen "New chat" then
-                // more-horizontal (decorative until it has actions).
+                // more-horizontal, whose menu deletes the conversation.
                 HStack(spacing: 2) {
                     Button {
                         onNewAIChat()
@@ -1748,9 +2475,21 @@ private struct ChatConversationHeader: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel("New chat")
                     .accessibilityIdentifier("chatAINewChat")
-                    Icon(.moreHorizontal, size: 18, color: Theme.Color.appTextStrong)
-                        .frame(width: 34, height: 34)
-                        .accessibilityHidden(true)
+                    Menu {
+                        Button(role: .destructive) {
+                            onDeleteAIChat()
+                        } label: {
+                            Label("Delete conversation", systemImage: "trash")
+                        }
+                        .accessibilityIdentifier("chatAIDeleteConversation")
+                    } label: {
+                        Icon(.moreHorizontal, size: 18, color: Theme.Color.appTextStrong)
+                            .frame(width: 34, height: 34)
+                            .contentShape(Rectangle())
+                    }
+                    .disabled(isDeletingAIChat)
+                    .accessibilityLabel("More options")
+                    .accessibilityIdentifier("chatAIMore")
                 }
             case .group:
                 Icon(.moreVertical, size: 18, color: Theme.Color.appText)
@@ -2423,51 +3162,39 @@ private struct ChatBroadcastReferenceCard: View {
 }
 
 /// A15.2 `.link-bubble` preview card — white surface, 1px hairline,
-/// 12pt radius, optional image strip, host overline + title +
-/// description. Tap opens the URL in the system browser.
+/// 12pt radius, site overline + title + description. Text only: the
+/// page's own image would load from a host the sender picked, showing it
+/// the recipient's IP address. Tap opens the URL in the system browser.
 private struct ChatLinkPreviewCard: View {
     let metadata: LinkPreviewMetadata
     @Environment(\.openURL) private var openURL
 
     var body: some View {
         Button { openURL(metadata.url) } label: {
-            VStack(alignment: .leading, spacing: Spacing.s0) {
-                if let imageURL = metadata.imageURL {
-                    CachedAsyncImage(url: imageURL) { phase in
-                        switch phase {
-                        case let .success(image):
-                            image.resizable().scaledToFill()
-                        default:
-                            Theme.Color.appSurfaceSunken
-                        }
-                    }
-                    .frame(height: 88)
-                    .frame(maxWidth: .infinity)
-                    .clipped()
-                }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(metadata.host)
-                        .font(.system(size: 9.5, weight: .bold))
-                        .tracking(0.4)
-                        .textCase(.uppercase)
-                        .foregroundStyle(Theme.Color.appTextMuted)
-                        .lineLimit(1)
-                    Text(metadata.title)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(metadata.site)
+                    .font(.system(size: 9.5, weight: .bold))
+                    .tracking(0.4)
+                    .textCase(.uppercase)
+                    .foregroundStyle(Theme.Color.appTextMuted)
+                    .lineLimit(1)
+                if let title = metadata.title {
+                    Text(title)
                         .font(.system(size: 12.5, weight: .bold))
                         .foregroundStyle(Theme.Color.appText)
                         .multilineTextAlignment(.leading)
                         .lineLimit(2)
-                    if let description = metadata.description {
-                        Text(description)
-                            .font(.system(size: 11))
-                            .foregroundStyle(Theme.Color.appTextSecondary)
-                            .multilineTextAlignment(.leading)
-                            .lineLimit(2)
-                    }
                 }
-                .padding(Spacing.s3)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                if let description = metadata.description {
+                    Text(description)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                        .multilineTextAlignment(.leading)
+                        .lineLimit(2)
+                }
             }
+            .padding(Spacing.s3)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(Theme.Color.appSurface)
             .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
             .overlay(
@@ -2476,7 +3203,7 @@ private struct ChatLinkPreviewCard: View {
             )
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Link preview: \(metadata.title)")
+        .accessibilityLabel("Link preview: \(metadata.title ?? metadata.description ?? metadata.site)")
         .accessibilityIdentifier("chatLinkPreview_\(metadata.url.absoluteString)")
     }
 }
@@ -2508,6 +3235,8 @@ private struct ChatBubbleRow: View {
     let incomingInitials: String?
     /// What the assistant is doing while a reply is pending ("Drafting your post…").
     var aiStatus: String?
+    let canManage: Bool
+    let canDiscard: Bool
     let onLockedAction: @MainActor () -> Void
     let onReply: @MainActor () -> Void
     let onEdit: @MainActor () -> Void
@@ -2536,8 +3265,8 @@ private struct ChatBubbleRow: View {
                 Spacer(minLength: 44)
                 bubbleStack
             } else {
-                if let incomingInitials, showsIncomingAvatarSlot {
-                    ChatMiniAvatar(initials: incomingInitials, hidden: content.isContinuation)
+                if let initials = senderInitials ?? incomingInitials, showsIncomingAvatarSlot {
+                    ChatMiniAvatar(initials: initials, hidden: content.isContinuation)
                 }
                 bubbleStack
                 Spacer(minLength: 44)
@@ -2564,7 +3293,7 @@ private struct ChatBubbleRow: View {
             // `client_` rows aren't persisted yet; `ai_`-prefixed rows
             // (AI-thread local messages) are never persisted server-side,
             // so Edit/Delete would PUT/DELETE an id that can't exist.
-            if content.side == .outgoing && !content.id.hasPrefix("client_") && !content.id.hasPrefix("ai_") {
+            if canManage && !content.id.hasPrefix("client_") && !content.id.hasPrefix("ai_") {
                 Button { onBeginSelect() } label: {
                     Text("Select")
                 }
@@ -2575,8 +3304,17 @@ private struct ChatBubbleRow: View {
                     Text("Delete")
                 }
             }
+            if canDiscard {
+                Button(role: .destructive) { onDelete() } label: { Text("Discard") }
+            }
         }
-        .accessibilityElement(children: .combine)
+        // A reply with action cards or link buttons keeps each button its own element.
+        .accessibilityElement(children: hasAIControls ? .contain : .combine)
+    }
+
+    private var hasAIControls: Bool {
+        guard case let .aiReply(_, _, drafts) = content.body else { return false }
+        return !content.aiLinks.isEmpty || drafts.contains { $0.action != nil }
     }
 
     /// Plain text carried by the bubble — the context menu's Copy
@@ -2586,7 +3324,7 @@ private struct ChatBubbleRow: View {
         switch content.body {
         case let .text(text):
             text.isEmpty ? nil : text
-        case let .textWithImages(text, _):
+        case let .textWithImages(text, _, _):
             text.isEmpty ? nil : text
         case let .aiReply(text, _, _):
             text.isEmpty ? nil : text
@@ -2599,8 +3337,22 @@ private struct ChatBubbleRow: View {
         }
     }
 
+    /// A room's incoming message carries its sender's initials, not the room's.
+    private var senderInitials: String? {
+        guard let name = content.senderName else { return nil }
+        let letters = name.split(separator: " ").prefix(2).compactMap { $0.first.map(String.init) }
+        return letters.isEmpty ? nil : letters.joined().uppercased()
+    }
+
     private var bubbleStack: some View {
         VStack(alignment: alignment, spacing: Spacing.s0) {
+            if content.side == .incoming, !content.isContinuation, let name = content.senderName {
+                Text(name)
+                    .pantopusTextStyle(.caption)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .lineLimit(1)
+                    .padding(.bottom, 2)
+            }
             bubbleBody
                 // A15 `.reaction` — pills float over the bubble's bottom
                 // edge: leading corner for outgoing, trailing for
@@ -2647,7 +3399,7 @@ private struct ChatBubbleRow: View {
         switch content.body {
         case let .text(text):
             ChatLinkDetection.firstURL(in: text)
-        case let .textWithImages(text, _):
+        case let .textWithImages(text, _, _):
             ChatLinkDetection.firstURL(in: text)
         default:
             nil
@@ -2655,6 +3407,26 @@ private struct ChatBubbleRow: View {
     }
 
     @ViewBuilder private var bubbleBody: some View {
+        if ChatAttachmentList.needsTypedViewer(content.attachments), content.lockedTier == nil || content.side == .outgoing {
+            bubbleContainer {
+                VStack(alignment: .leading, spacing: 8) {
+                    ChatAttachmentList(files: content.attachments, onOpenFile: onOpenAttachment)
+                    if let caption = attachmentCaption { textBody(caption) }
+                }
+            }
+        } else {
+            legacyBubbleBody
+        }
+    }
+
+    private var attachmentCaption: String? {
+        switch content.body {
+        case let .image(_, caption, _), let .attachment(_, _, _, _, caption): caption
+        default: nil
+        }
+    }
+
+    @ViewBuilder private var legacyBubbleBody: some View {
         switch content.body {
         case let .text(text):
             if Self.isEmojiOnly(text) {
@@ -2662,8 +3434,8 @@ private struct ChatBubbleRow: View {
             } else {
                 bubbleContainer { textBody(text) }
             }
-        case let .textWithImages(text, imageURLs):
-            bubbleContainer { textWithImagesBody(text: text, imageURLs: imageURLs) }
+        case let .textWithImages(text, imageURLs, files):
+            bubbleContainer { textWithImagesBody(text: text, imageURLs: imageURLs, files: files) }
         case let .image(url, caption, moreURLs):
             photoMessage(url: url, caption: caption, moreURLs: moreURLs)
         case let .attachment(filename, sizeLabel, fileURL, mimeType, caption):
@@ -2832,26 +3604,34 @@ private struct ChatBubbleRow: View {
             || (0x1F3FB...0x1F3FF).contains(value) // skin tones
     }
 
-    private func textWithImagesBody(text: String, imageURLs: [URL]) -> some View {
+    private func textWithImagesBody(text: String, imageURLs: [URL], files: [ChatSentFile]) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             if !text.isEmpty {
                 textBody(text)
             }
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 72), spacing: 6)], spacing: 6) {
-                ForEach(imageURLs, id: \.absoluteString) { url in
-                    CachedAsyncImage(url: url) { phase in
-                        switch phase {
-                        case let .success(image): image.resizable().scaledToFill()
-                        case .failure: PhotoBubblePlaceholder()
-                        case .empty: PhotoBubblePlaceholder()
-                        @unknown default: PhotoBubblePlaceholder()
+            if !imageURLs.isEmpty {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 72), spacing: 6)], spacing: 6) {
+                    ForEach(imageURLs, id: \.absoluteString) { url in
+                        CachedAsyncImage(url: url) { phase in
+                            switch phase {
+                            case let .success(image): image.resizable().scaledToFill()
+                            case .failure: PhotoBubblePlaceholder()
+                            case .empty: PhotoBubblePlaceholder()
+                            @unknown default: PhotoBubblePlaceholder()
+                            }
                         }
+                        .frame(width: 72, height: 72)
+                        .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                     }
-                    .frame(width: 72, height: 72)
-                    .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                 }
+                .frame(maxWidth: bubbleTextMaxWidth, alignment: .leading)
             }
-            .frame(maxWidth: bubbleTextMaxWidth, alignment: .leading)
+            // The PDFs sent to the assistant, one chip each.
+            ForEach(Array(files.enumerated()), id: \.offset) { _, file in
+                attachmentFileRow(filename: file.name, sizeLabel: file.sizeLabel)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("chatAISentFile")
+            }
         }
     }
 
@@ -2870,7 +3650,8 @@ private struct ChatBubbleRow: View {
     /// opens them all full screen) and its caption in a bubble below.
     private func photoMessage(url: URL?, caption: String?, moreURLs: [URL]) -> some View {
         VStack(alignment: alignment, spacing: 2) {
-            if let url, !isLockedIncoming {
+            // A photo still sending opens once it is sent.
+            if let url, !isLockedIncoming, url.scheme != ChatPhotoPreviews.scheme {
                 Button { onOpenPhotos([url] + moreURLs, 0) } label: {
                     photoBubble(url, moreCount: moreURLs.count)
                 }
@@ -2928,15 +3709,26 @@ private struct ChatBubbleRow: View {
 
     @ViewBuilder
     private func imageBody(_ url: URL?) -> some View {
-        if let url {
-            CachedAsyncImage(url: url) { phase in
+        if let url, url.scheme == ChatPhotoPreviews.scheme {
+            // Sending: the picture just picked, from memory.
+            previewOrPlaceholder(url)
+        } else if let url {
+            CachedAsyncImage(url: ChatMediaURL.thumbnail(url)) { phase in
                 switch phase {
                 case let .success(image): image.resizable().scaledToFill()
-                case .failure: PhotoBubblePlaceholder()
-                case .empty: PhotoBubblePlaceholder()
-                @unknown default: PhotoBubblePlaceholder()
+                // A photo just sent keeps its picked preview until its copy loads.
+                default: previewOrPlaceholder(url)
                 }
             }
+        } else {
+            PhotoBubblePlaceholder()
+        }
+    }
+
+    @ViewBuilder
+    private func previewOrPlaceholder(_ url: URL) -> some View {
+        if let preview = ChatPhotoPreviews.shared.image(for: url) {
+            Image(uiImage: preview).resizable().scaledToFill()
         } else {
             PhotoBubblePlaceholder()
         }
@@ -3117,7 +3909,14 @@ private struct ChatBubbleRow: View {
                 AIEstimateCard(estimate: estimate)
             }
             ForEach(drafts) { draft in
-                AIDraftCard(draft: draft, onUse: onUseAIDraft)
+                if let action = draft.action {
+                    AIActionCardView(cardId: draft.id, card: action)
+                } else {
+                    AIDraftCard(draft: draft, onUse: onUseAIDraft)
+                }
+            }
+            if !content.aiLinks.isEmpty {
+                AILinkButtons(links: content.aiLinks)
             }
         }
         .padding(.horizontal, 12)
@@ -3297,8 +4096,9 @@ private struct ChatBubbleRow: View {
                     switch content.deliveryState {
                     case .read:
                         EmptyView()
-                    case .delivered:
+                    case .sent, .delivered:
                         Icon(.check, size: 10, strokeWidth: 2.0, color: Theme.Color.appTextMuted)
+                            .accessibilityLabel(content.deliveryState == .delivered ? "Delivered" : "Sent")
                     case .sending:
                         ProgressView().scaleEffect(0.6).tint(Theme.Color.appTextMuted)
                     case .failed:
@@ -3329,8 +4129,8 @@ private struct ChatBubbleRow: View {
     private func stampString(_ raw: String) -> String {
         switch content.deliveryState {
         case .read: "Read \(raw)"
-        // Delivered is conveyed by the small check icon, not a loud word (RN).
-        case .delivered: raw
+        // A single check confirms the server accepted the message.
+        case .sent, .delivered: raw
         case .sending: "Sending..."
         case .failed: "Failed to send"
         case .refused: "Not sent"
@@ -3385,6 +4185,17 @@ private struct ChatBubbleRow: View {
         case .warning: Theme.Color.warningBg
         case .error: Theme.Color.errorBg
         }
+    }
+}
+
+extension ChatBubbleRow: Equatable {
+    /// A bubble re-renders only when what it shows changes. Its action
+    /// closures are rebuilt on every pass and act on this message, which
+    /// `content` already identifies, so they are left out of the comparison.
+    /// Without this, every update to the thread re-rendered every bubble.
+    nonisolated static func == (lhs: ChatBubbleRow, rhs: ChatBubbleRow) -> Bool {
+        lhs.content == rhs.content && lhs.rowWidth == rhs.rowWidth && lhs.incomingInitials == rhs.incomingInitials
+            && lhs.aiStatus == rhs.aiStatus && lhs.canManage == rhs.canManage && lhs.canDiscard == rhs.canDiscard
     }
 }
 
@@ -3590,6 +4401,10 @@ private struct AttachmentTile: View {
             .accessibilityIdentifier("chatAttachmentRemove_\(attachment.id)")
         }
         .frame(width: 64, height: 64)
+        .overlay(alignment: .bottomLeading) {
+            if attachment
+                .liveVideo != nil { Text("LIVE").font(.caption2).padding(2).background(.black.opacity(0.6)).foregroundStyle(.white) }
+        }
         .accessibilityElement(children: .contain)
     }
 
@@ -3616,6 +4431,20 @@ private struct AttachmentTile: View {
 
 // MARK: - Composer
 
+/// Reads the composer's text where it is typed, so a keystroke re-renders the
+/// composer instead of the whole conversation, timeline included.
+private struct ChatComposerReader<Content: View>: View {
+    let viewModel: ChatConversationViewModel
+    @ViewBuilder let content: (Binding<String>, Bool) -> Content
+
+    var body: some View {
+        content(
+            Binding(get: { viewModel.composerText }, set: { viewModel.updateComposerFromField($0) }),
+            viewModel.canSend
+        )
+    }
+}
+
 private struct ChatComposer: View {
     @Binding var text: String
     let placeholder: String
@@ -3629,6 +4458,8 @@ private struct ChatComposer: View {
     let onEmoji: @MainActor () -> Void
     let onSend: @MainActor () -> Void
     var onStop: @MainActor () -> Void = {}
+    /// The keyboard's Send, held only weakly by the field's `.onSubmit`.
+    @State private var returnKey = ChatComposerReturnKey()
 
     var body: some View {
         // A15 `.composer` — [+ disc] → [input pill with trailing smile]
@@ -3652,7 +4483,10 @@ private struct ChatComposer: View {
                     .foregroundStyle(Theme.Color.appText)
                     .lineLimit(1...4)
                     .submitLabel(.send)
-                    .onSubmit { if canSend { onSend() } }
+                    .onSubmit { [weak returnKey] in returnKey?.send() }
+                    .onChange(of: canSend, initial: true) { _, isEnabled in
+                        returnKey.send = isEnabled ? onSend : {}
+                    }
                     // A multi-line field exposes no name of its own; VoiceOver
                     // read just "text field".
                     .accessibilityLabel("Message")
@@ -3756,6 +4590,15 @@ private struct ChatComposer: View {
         guard canSend else { return Theme.Color.appSurfaceSunken }
         return isLockedAction ? Theme.Color.warningSolid : Theme.Color.primarySolid
     }
+}
+
+/// What the keyboard's Send does in the composer. SwiftUI keeps `.onSubmit`'s
+/// action in the field's environment, which UIKit keeps after the thread
+/// closes (see `chatAIActions`), so the action holds this box weakly instead
+/// of the composer's closures and, through them, the view-model.
+@MainActor
+private final class ChatComposerReturnKey {
+    var send: @MainActor () -> Void = {}
 }
 
 private struct ChatComposerContextBanner: View {

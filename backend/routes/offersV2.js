@@ -16,6 +16,7 @@ const verifyToken = require('../middleware/verifyToken');
 const logger = require('../utils/logger');
 const { scoreOffers } = require('../services/offerScoringService');
 const { hasPermission } = require('../utils/businessPermissions');
+const { hydrateListingCreatorIdentities, serializeTaskPerson } = require('../utils/listingCreatorIdentity');
 
 async function getGigOwnerAccess(ownerUserId, actorUserId, permission = 'gigs.manage') {
   if (String(ownerUserId) === String(actorUserId)) {
@@ -89,12 +90,17 @@ router.get('/gigs/:gigId/offers', verifyToken, async (req, res) => {
       return res.json({ gig, offers: [] });
     }
 
-    // 3. Fetch User data for each offer's user_id (batch query)
+    // 3. Fetch each bidder's track record (batch query), and name each by their Local Profile, as the task's bid
+    // list does (GET /api/gigs/:gigId/bids)
     const userIds = [...new Set(offers.map((o) => o.user_id))];
-    const { data: users, error: usersErr } = await supabaseAdmin
-      .from('User')
-      .select('id, username, name, first_name, last_name, profile_picture_url, verified, average_rating, review_count, gigs_completed, no_show_count, reliability_score')
-      .in('id', userIds);
+    const bidders = userIds.map((id) => ({ user_id: id }));
+    const [{ data: users, error: usersErr }] = await Promise.all([
+      supabaseAdmin
+        .from('User')
+        .select('id, verified, average_rating, review_count, gigs_completed, no_show_count, reliability_score')
+        .in('id', userIds),
+      hydrateListingCreatorIdentities(bidders),
+    ]);
 
     if (usersErr) {
       logger.error('Failed to fetch offer users', { gigId, error: usersErr.message });
@@ -105,6 +111,7 @@ router.get('/gigs/:gigId/offers', verifyToken, async (req, res) => {
     (users || []).forEach((u) => {
       userMap[u.id] = u;
     });
+    const identityById = new Map(bidders.map((b) => [String(b.user_id), serializeTaskPerson(b.creator, { counts: true })]));
 
     // 4. Enrich offers with user data for scoring
     const enrichedOffers = offers.map((offer) => {
@@ -116,12 +123,7 @@ router.get('/gigs/:gigId/offers', verifyToken, async (req, res) => {
         availability: offer.proposed_time ?? null,
         notes: null,
         bidder: {
-          id: user.id || offer.user_id,
-          username: user.username ?? null,
-          name: user.name ?? null,
-          first_name: user.first_name ?? null,
-          last_name: user.last_name ?? null,
-          profile_picture_url: user.profile_picture_url ?? null,
+          ...(identityById.get(String(offer.user_id)) || { id: offer.user_id }),
           average_rating: user.average_rating ?? null,
           review_count: user.review_count ?? 0,
           reliability_score: user.reliability_score ?? 100,
@@ -141,7 +143,6 @@ router.get('/gigs/:gigId/offers', verifyToken, async (req, res) => {
         avg_response_minutes: null,
         // For trust capsule
         _user_verified: user.verified === true,
-        _user_first_name: user.first_name ?? null,
       };
     });
 
@@ -166,7 +167,6 @@ router.get('/gigs/:gigId/offers', verifyToken, async (req, res) => {
       is_recommended: o.is_recommended,
       trust_capsule: {
         verified: o._user_verified,
-        first_name: o._user_first_name,
         average_rating: o.average_rating != null ? Number(o.average_rating) : null,
         rating: o.average_rating != null ? Number(o.average_rating) : null,
         review_count: o.review_count,

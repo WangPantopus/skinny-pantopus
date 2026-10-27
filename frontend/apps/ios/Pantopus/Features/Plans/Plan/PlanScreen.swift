@@ -25,6 +25,8 @@ struct PlanScreen: View {
     @State private var chatRoute: PlanChatRoute?
     @State private var toast: String?
     @State private var askedOnOpen = false
+    /// The assistant, opened about this plan ("Ask Pantopus", not asking to join).
+    @State private var pantopusTopic: AIAskTopic?
 
     init(planId: String, intent: PlanOpenIntent, path: Binding<[PlansRoute]>, onHost: @escaping (PlansHostStart?) -> Void) {
         _viewModel = State(initialValue: PlanScreenViewModel(planId: planId))
@@ -74,6 +76,7 @@ struct PlanScreen: View {
         .sheet(isPresented: $showsCancel) {
             PlanCancelSheet(viewModel: viewModel) { showsCancel = false }
         }
+        .askPantopus($pantopusTopic)
         .confirmationDialog("Report this plan", isPresented: $showsReport, titleVisibility: .visible) {
             ForEach(PlanReportReason.all, id: \.token) { reason in
                 Button(reason.label) {
@@ -196,6 +199,15 @@ struct PlanScreen: View {
             PlanGlassButton(icon: .chevronLeft, label: "Back", action: close)
                 .accessibilityIdentifier("planBack")
             Spacer()
+            AskPantopusButton(accessibilityIdentifier: "planAskPantopus") {
+                pantopusTopic = .plan(id: card.id, title: card.title, isHost: viewModel.mode == .hosting)
+            } label: {
+                AskPantopusGlyph()
+                    .frame(width: 44, height: 44)
+                    .background(Circle().fill(.regularMaterial))
+                    .shadow(color: .black.opacity(0.12), radius: 5, x: 0, y: 2)
+                    .contentShape(Circle())
+            }
             // Nothing to share once it's cancelled or over (as on Android).
             if card.state != .cancelled, card.state != .ended, let url = card.shareUrl.flatMap(URL.init(string:)) {
                 ShareLink(item: url, message: Text(card.title)) {

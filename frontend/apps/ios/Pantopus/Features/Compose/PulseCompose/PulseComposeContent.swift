@@ -46,6 +46,18 @@ public struct PulseComposeContentState: Equatable {
     public var postingTargetLabel: String?
     /// Composing a new post to the Connections target: the general form reads "Post" and speaks of connections.
     public var isNetworkTarget: Bool
+    /// "Before you ask": earlier questions and recommendations nearby matching the question being written.
+    public var earlierAnswers: [BeforeYouAskResponse.EarlierPost]
+    /// The AI assist card; nil hides it (editing a post).
+    public var assist: PulseComposeAssistState?
+    /// A photo or words in the form for the assist to write from.
+    public var assistHasMaterial: Bool
+    /// How many attachments the assist reads.
+    public var assistPhotoCount: Int
+    /// Undo on the assist card, until the person edits the suggestion.
+    public var assistCanUndo: Bool
+    /// The phone has a camera ("Take photo").
+    public var canTakePhoto: Bool
 
     public init(
         activeIntent: PulseComposeIntent,
@@ -69,7 +81,13 @@ public struct PulseComposeContentState: Equatable {
         isFlowMode: Bool = false,
         composePurpose: PulseComposePurpose? = nil,
         postingTargetLabel: String? = nil,
-        isNetworkTarget: Bool = false
+        isNetworkTarget: Bool = false,
+        earlierAnswers: [BeforeYouAskResponse.EarlierPost] = [],
+        assist: PulseComposeAssistState? = nil,
+        assistHasMaterial: Bool = false,
+        assistPhotoCount: Int = 0,
+        assistCanUndo: Bool = false,
+        canTakePhoto: Bool = false
     ) {
         self.activeIntent = activeIntent
         self.identity = identity
@@ -93,6 +111,12 @@ public struct PulseComposeContentState: Equatable {
         self.composePurpose = composePurpose
         self.postingTargetLabel = postingTargetLabel
         self.isNetworkTarget = isNetworkTarget
+        self.earlierAnswers = earlierAnswers
+        self.assist = assist
+        self.assistHasMaterial = assistHasMaterial
+        self.assistPhotoCount = assistPhotoCount
+        self.assistCanUndo = assistCanUndo
+        self.canTakePhoto = canTakePhoto
     }
 }
 
@@ -113,6 +137,7 @@ public struct PulseComposeContentActions {
     /// typist by a keystroke, and a text view reset to it jumps the cursor and scrambles the input.
     public var fieldValue: ((PulseComposeField) -> String)?
     public var onPickPhotos: () -> Void
+    public var onPickDocuments: () -> Void
     public var onRemovePhoto: (UUID) -> Void
     /// Body-field blur — runs `POST /api/posts/precheck`.
     public var onBodyEditingEnded: () -> Void
@@ -122,6 +147,17 @@ public struct PulseComposeContentActions {
     public var onAddLocation: () -> Void
     /// ✕ on the filled location row.
     public var onClearLocation: () -> Void
+    /// A "Before you ask" row: opens that earlier post.
+    public var onOpenEarlierPost: (String) -> Void
+    /// The AI assist: suggest the whole post from the photos, the place and the words.
+    public var onSuggest: () -> Void
+    /// Undo on the assist card: the form as it was before the suggestion.
+    public var onUndoSuggestion: () -> Void
+    /// The assist card's "Take photo" and "Choose photos": a suggestion follows the new photos.
+    public var onAssistTakePhoto: () -> Void
+    public var onAssistChoosePhotos: () -> Void
+    /// "Take photo" in the attachments menu.
+    public var onTakePhoto: () -> Void
 
     public init(
         onSelectIntent: @escaping (PulseComposeIntent) -> Void = { _ in },
@@ -137,11 +173,18 @@ public struct PulseComposeContentActions {
         onUpdateField: @escaping (PulseComposeField, String) -> Void = { _, _ in },
         fieldValue: ((PulseComposeField) -> String)? = nil,
         onPickPhotos: @escaping () -> Void = {},
+        onPickDocuments: @escaping () -> Void = {},
         onRemovePhoto: @escaping (UUID) -> Void = { _ in },
         onBodyEditingEnded: @escaping () -> Void = {},
         onDismissPrecheckNudge: @escaping () -> Void = {},
         onAddLocation: @escaping () -> Void = {},
-        onClearLocation: @escaping () -> Void = {}
+        onClearLocation: @escaping () -> Void = {},
+        onOpenEarlierPost: @escaping (String) -> Void = { _ in },
+        onSuggest: @escaping () -> Void = {},
+        onUndoSuggestion: @escaping () -> Void = {},
+        onAssistTakePhoto: @escaping () -> Void = {},
+        onAssistChoosePhotos: @escaping () -> Void = {},
+        onTakePhoto: @escaping () -> Void = {}
     ) {
         self.onSelectIntent = onSelectIntent
         self.onSelectIdentity = onSelectIdentity
@@ -156,11 +199,18 @@ public struct PulseComposeContentActions {
         self.onUpdateField = onUpdateField
         self.fieldValue = fieldValue
         self.onPickPhotos = onPickPhotos
+        self.onPickDocuments = onPickDocuments
         self.onRemovePhoto = onRemovePhoto
         self.onBodyEditingEnded = onBodyEditingEnded
         self.onDismissPrecheckNudge = onDismissPrecheckNudge
         self.onAddLocation = onAddLocation
         self.onClearLocation = onClearLocation
+        self.onOpenEarlierPost = onOpenEarlierPost
+        self.onSuggest = onSuggest
+        self.onUndoSuggestion = onUndoSuggestion
+        self.onAssistTakePhoto = onAssistTakePhoto
+        self.onAssistChoosePhotos = onAssistChoosePhotos
+        self.onTakePhoto = onTakePhoto
     }
 }
 
@@ -189,7 +239,25 @@ public struct PulseComposeContent: View {
                 identitySection
             }
             precheckBanners
+            if let assist = state.assist {
+                PulseComposeAssistCard(
+                    assist: assist,
+                    hasMaterial: state.assistHasMaterial,
+                    photoCount: state.assistPhotoCount,
+                    canUndo: state.assistCanUndo,
+                    canTakePhoto: state.canTakePhoto,
+                    onSuggest: {
+                        // The suggestion replaces the text being typed, so the keyboard goes first.
+                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                        actions.onSuggest()
+                    },
+                    onUndo: actions.onUndoSuggestion,
+                    onTakePhoto: actions.onAssistTakePhoto,
+                    onChoosePhotos: actions.onAssistChoosePhotos
+                )
+            }
             intentSpecificSection
+            beforeYouAskSection
             photosSection
             // Place tags are create-only (PostUpdateRequest carries no
             // location fields), so hide the row in edit mode — offering a
@@ -308,6 +376,76 @@ public struct PulseComposeContent: View {
             .padding(.horizontal, Spacing.s4)
             .accessibilityIdentifier("composePulsePrecheckNudge")
         }
+    }
+
+    /// "Before you ask" (AI phase 2 contract §6.5): what neighbors already
+    /// said about the question being written. A tap opens that post.
+    @ViewBuilder
+    private var beforeYouAskSection: some View {
+        if !state.earlierAnswers.isEmpty {
+            VStack(alignment: .leading, spacing: Spacing.s2) {
+                HStack(spacing: Spacing.s2) {
+                    Icon(.lightbulb, size: 16, strokeWidth: 2, color: Theme.Color.primary600)
+                    Text("Before you ask, neighbors already said")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Theme.Color.appText)
+                }
+                .accessibilityAddTraits(.isHeader)
+                ForEach(state.earlierAnswers) { post in
+                    Button { actions.onOpenEarlierPost(post.postId) } label: {
+                        earlierAnswerRow(post)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("composePulseEarlierAnswer")
+                }
+            }
+            .padding(Spacing.s3)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Theme.Color.primary50)
+            .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
+            .padding(.horizontal, Spacing.s4)
+            .accessibilityIdentifier("composePulseBeforeYouAsk")
+        }
+    }
+
+    private func earlierAnswerRow(_ post: BeforeYouAskResponse.EarlierPost) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.s1) {
+            Text(post.title ?? "")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Theme.Color.appText)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+            if let reply = post.bestReply?.text {
+                Text(reply)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.Color.appText)
+                    .lineLimit(3)
+                    .multilineTextAlignment(.leading)
+            } else if let body = post.body {
+                Text(body)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+            }
+            Text(earlierAnswerMeta(post))
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Theme.Color.appTextSecondary)
+        }
+        .padding(Spacing.s3)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.Color.appSurface)
+        .clipShape(RoundedRectangle(cornerRadius: Radii.sm, style: .continuous))
+        .contentShape(Rectangle())
+    }
+
+    /// "Solved · 3 replies", "Recommendation", "1 reply".
+    private func earlierAnswerMeta(_ post: BeforeYouAskResponse.EarlierPost) -> String {
+        var parts: [String] = []
+        if post.type == "recommendation" { parts.append("Recommendation") }
+        if post.solved == true { parts.append("Solved") }
+        if let count = post.replyCount, count > 0 { parts.append(count == 1 ? "1 reply" : "\(count) replies") }
+        return parts.joined(separator: " · ")
     }
 
     private func purposeFlowIcon(_ purpose: PulseComposePurpose) -> PantopusIcon {
@@ -609,8 +747,18 @@ public struct PulseComposeContent: View {
             textField(.lostLastSeenLocation, label: "Last seen location", placeholder: "Where?")
             lastSeenDateField
             contactPrefRow
-            if state.lostFoundContactPref == .phone {
+            // Editing shows the saved number read-only (none saved, no field).
+            if state.lostFoundContactPref == .phone,
+               !state.isIntentLocked || !(state.fields[.contactPhone]?.value ?? "").isEmpty {
                 textField(.contactPhone, label: "Phone number", placeholder: "(555) 555-0123", keyboardType: .phonePad)
+                    .disabled(state.isIntentLocked)
+            }
+            // The edit can't store a phone number, so the contact stays as posted, as on the web.
+            if state.isIntentLocked {
+                Text("Contact can't be changed after posting.")
+                    .pantopusTextStyle(.caption)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .accessibilityIdentifier("composePulseContactLockedNote")
             }
         }
     }
@@ -625,6 +773,7 @@ public struct PulseComposeContent: View {
                     chipPill(
                         label: pref.label,
                         isActive: state.lostFoundContactPref == pref,
+                        isLocked: state.isIntentLocked,
                         identifier: "composePulseContactPref_\(pref.rawValue)"
                     ) {
                         actions.onSelectContactPref(pref)
@@ -714,26 +863,49 @@ public struct PulseComposeContent: View {
                         .accessibilityIdentifier("composePulseField_lostLastSeenDate_clear")
                 }
             }
-            DatePicker(
-                "Last seen date",
-                selection: Binding(
-                    get: { Self.parseISO(snapshot.value) ?? Date() },
-                    set: { actions.onUpdateField(.lostLastSeenDate, Self.formatISO($0)) }
-                ),
-                in: ...Date(),
-                displayedComponents: .date
-            )
-            .labelsHidden()
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(Spacing.s3)
-            .frame(minHeight: 44)
-            .background(Theme.Color.appSurface)
-            .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
-                    .stroke(Theme.Color.appBorder, lineWidth: 1)
-            )
-            .accessibilityIdentifier("composePulseField_lostLastSeenDate")
+            if snapshot.value.isEmpty {
+                // An empty picker would show today, and picking the day it shows changes nothing, so today
+                // could never be chosen. Unset, the field is a button that sets today; the picker then adjusts it.
+                Button { actions.onUpdateField(.lostLastSeenDate, Self.formatISO(Date())) } label: {
+                    Text("Tap to pick")
+                        .pantopusTextStyle(.body)
+                        .foregroundStyle(Theme.Color.appTextMuted)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(Spacing.s3)
+                        .frame(minHeight: 44)
+                        .background(Theme.Color.appSurface)
+                        .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
+                                .stroke(Theme.Color.appBorder, lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Last seen date, not set")
+                .accessibilityHint("Sets today. You can then change it.")
+                .accessibilityIdentifier("composePulseField_lostLastSeenDate")
+            } else {
+                DatePicker(
+                    "Last seen date",
+                    selection: Binding(
+                        get: { Self.parseISO(snapshot.value) ?? Date() },
+                        set: { actions.onUpdateField(.lostLastSeenDate, Self.formatISO($0)) }
+                    ),
+                    in: ...Date(),
+                    displayedComponents: .date
+                )
+                .labelsHidden()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(Spacing.s3)
+                .frame(minHeight: 44)
+                .background(Theme.Color.appSurface)
+                .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
+                        .stroke(Theme.Color.appBorder, lineWidth: 1)
+                )
+                .accessibilityIdentifier("composePulseField_lostLastSeenDate")
+            }
         }
     }
 
@@ -816,17 +988,28 @@ public struct PulseComposeContent: View {
     // MARK: - Photos
 
     private var photosSection: some View {
-        FormFieldGroup("Photos (optional)") {
+        FormFieldGroup("Attachments (optional)") {
             VStack(alignment: .leading, spacing: Spacing.s2) {
-                HStack(spacing: Spacing.s2) {
+                ScrollView(.horizontal) { HStack(spacing: Spacing.s2) {
                     ForEach(state.photos) { photo in
                         photoThumbnail(photo)
                     }
                     if state.photos.count < pulseComposeMaxPhotos {
-                        addPhotoTile
+                        Menu {
+                            if state.canTakePhoto {
+                                Button("Take photo", action: actions.onTakePhoto)
+                            }
+                            Button("Photos and videos", action: actions.onPickPhotos)
+                            Button("PDF document", action: actions.onPickDocuments)
+                        } label: {
+                            Icon(.plus, size: 20, color: Theme.Color.appTextSecondary)
+                                .frame(width: 64, height: 64)
+                        }
+                        .accessibilityIdentifier("composePulseAddPhoto")
                     }
                 }
-                Text("Up to \(pulseComposeMaxPhotos) images. Tap a photo to remove it.")
+                }
+                Text("Up to \(pulseComposeMaxPhotos) photos, Live Photos, videos, or PDFs. Tap an attachment to remove it.")
                     .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextSecondary)
             }
@@ -846,6 +1029,15 @@ public struct PulseComposeContent: View {
                     RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
                         .fill(Theme.Color.appSurfaceSunken)
                         .frame(width: 64, height: 64)
+                        .overlay(Text(photo.mimeType == "application/pdf" ? "PDF" : "Video").font(.caption))
+                }
+                if photo.liveVideo != nil {
+                    Text("LIVE")
+                        .font(.system(size: 9, weight: .bold))
+                        .padding(3)
+                        .background(.black.opacity(0.6))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
                 }
                 Circle()
                     .fill(Theme.Color.appText.opacity(0.7))
@@ -857,27 +1049,8 @@ public struct PulseComposeContent: View {
             }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Remove photo")
+        .accessibilityLabel("Remove attachment")
         .accessibilityIdentifier("composePulsePhotoThumb_\(photo.id.uuidString)")
-    }
-
-    private var addPhotoTile: some View {
-        Button { actions.onPickPhotos() } label: {
-            RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
-                .stroke(Theme.Color.appBorderStrong, style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                .frame(width: 64, height: 64)
-                .overlay(
-                    VStack(spacing: 2) {
-                        Icon(.camera, size: 18, strokeWidth: 2, color: Theme.Color.appTextSecondary)
-                        Text("Add")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(Theme.Color.appTextSecondary)
-                    }
-                )
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Add photo")
-        .accessibilityIdentifier("composePulseAddPhoto")
     }
 
     // MARK: - Location
@@ -1059,8 +1232,16 @@ public struct PulseComposeContent: View {
         .accessibilityIdentifier("composePulseField_body")
     }
 
-    private func chipPill(label: String, isActive: Bool, identifier: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+    /// `isLocked` shows the choice without letting it change: the chosen chip at full strength (a disabled
+    /// plain button fades to about 2:1), the others dimmed like the post type when editing.
+    private func chipPill(
+        label: String,
+        isActive: Bool,
+        isLocked: Bool = false,
+        identifier: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        let button = Button(action: action) {
             Text(label)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(isActive ? Theme.Color.appTextInverse : Theme.Color.appTextStrong)
@@ -1073,7 +1254,14 @@ public struct PulseComposeContent: View {
                 )
                 .clipShape(RoundedRectangle(cornerRadius: Radii.pill, style: .continuous))
         }
-        .buttonStyle(.plain)
+        return Group {
+            if isLocked {
+                button.buttonStyle(UndimmedButtonStyle()).disabled(true)
+            } else {
+                button.buttonStyle(.plain)
+            }
+        }
+        .opacity(isLocked && !isActive ? 0.4 : 1)
         .accessibilityLabel(label)
         .accessibilityAddTraits(isActive ? [.isButton, .isSelected] : .isButton)
         .accessibilityIdentifier(identifier)
@@ -1087,11 +1275,13 @@ public struct PulseComposeContent: View {
 
     // MARK: - Date helpers
 
+    /// The Last seen date field's `yyyy-MM-dd` is the day the picker shows, in the phone's
+    /// time zone: in UTC, an evening pick in the Americas stored the next day.
     private static func makeISOFormatter() -> DateFormatter {
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .iso8601)
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.timeZone = .current
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter
     }

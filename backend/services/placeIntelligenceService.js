@@ -24,7 +24,7 @@
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const { encodeGeohash } = require('../utils/geohash');
-const { NON_RESIDENT_ROLES, resolveHomeRole } = require('../utils/homeAccessPolicy');
+const { NON_RESIDENT_ROLES, UNPROVEN_SOURCES, resolveHomeRole } = require('../utils/homeAccessPolicy');
 const claimsConfig = require('../config/householdClaims');
 const claimsPolicy = require('./homeClaimRoutingService');
 const {
@@ -67,7 +67,8 @@ const DENSITY_LABELS = {
 function resolveTier(access) {
   if (!access || !access.hasAccess) return 'T1';
   const vs = access.occupancy && access.occupancy.verification_status;
-  if (vs === 'verified' && access.occupancy.verification_source !== 'household') return 'T4';
+  // Household consent and claims are verified household access, not address proof (T3, "Claimed").
+  if (vs === 'verified' && !UNPROVEN_SOURCES.has(access.occupancy.verification_source)) return 'T4';
   return 'T3';
 }
 

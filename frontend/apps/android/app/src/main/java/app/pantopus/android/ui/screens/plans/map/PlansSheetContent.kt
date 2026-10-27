@@ -2,8 +2,11 @@
 
 package app.pantopus.android.ui.screens.plans.map
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -42,6 +45,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.plans.PlanDto
 import app.pantopus.android.data.api.models.plans.PlanGameDto
 import app.pantopus.android.data.plans.PlanFormat
@@ -58,6 +62,7 @@ import app.pantopus.android.ui.components.GhostButton
 import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.screens.plans.colors
+import app.pantopus.android.ui.screens.plans.components.LocalPlanSheet
 import app.pantopus.android.ui.screens.plans.components.PlanDivider
 import app.pantopus.android.ui.screens.plans.components.PlanHostRow
 import app.pantopus.android.ui.screens.plans.components.PlanIconTile
@@ -73,6 +78,7 @@ import app.pantopus.android.ui.screens.plans.components.PlanSwatch
 import app.pantopus.android.ui.screens.plans.components.PlanTextButton
 import app.pantopus.android.ui.screens.plans.components.PlanTypeTag
 import app.pantopus.android.ui.screens.plans.components.planCard
+import app.pantopus.android.ui.screens.plans.teams.PlansSportsEmpty
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -180,6 +186,42 @@ internal fun ColumnScope.PlansPeekContent(
     onRetry: () -> Unit,
 ) {
     val all = state.mineShown + state.others
+    val sheet = LocalPlanSheet.current
+    // The lowest stop shows the title and the soonest plan over the map (as on iOS); the next one waits just below it.
+    Column(modifier = Modifier.fillMaxWidth().onSizeChanged { sheet?.reportPeek(it.height) }) {
+        PeekTitle(state, all, onSeeAll)
+        when (state.listStatus) {
+            PlansListStatus.Loading -> PlanRowsSkeleton(rows = 2)
+            is PlansListStatus.Failed -> PlansFailed(state.listStatus.message, onRetry = onRetry)
+            PlansListStatus.Loaded -> {
+                val soonest = all.firstOrNull()
+                if (soonest == null) {
+                    Text(
+                        text = "Nothing within 5 miles ${state.window.phrase}. Plans farther away show on the map.",
+                        style = PantopusTextStyle.small,
+                        color = PantopusColors.appTextSecondary,
+                        modifier = Modifier.padding(vertical = Spacing.s3),
+                    )
+                } else {
+                    PlanListRow(soonest, first = true, mine = soonest in state.mineShown, onOpen = onOpen, peek = true)
+                }
+            }
+        }
+    }
+    if (state.listStatus == PlansListStatus.Loaded) {
+        all.drop(1).take(PEEK_ROWS - 1).forEach { plan ->
+            PlanListRow(plan, first = false, mine = plan in state.mineShown, onOpen = onOpen, peek = true)
+        }
+    }
+}
+
+/** "This week near you", and "See all" when the list holds more than the rows below (as on iOS). */
+@Composable
+private fun PeekTitle(
+    state: PlansMapUiState,
+    all: List<PlanDto>,
+    onSeeAll: () -> Unit,
+) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -190,7 +232,6 @@ internal fun ColumnScope.PlansPeekContent(
             color = PantopusColors.appText,
             modifier = Modifier.weight(1f).semantics { heading() },
         )
-        // Only when the list holds more than the rows below (as on iOS).
         if (all.size > PEEK_ROWS) {
             Text(
                 text = "See all ${all.size}",
@@ -204,29 +245,14 @@ internal fun ColumnScope.PlansPeekContent(
             )
         }
     }
-    when (state.listStatus) {
-        PlansListStatus.Loading -> PlanRowsSkeleton(rows = 2)
-        is PlansListStatus.Failed -> PlansFailed(state.listStatus.message, onRetry = onRetry)
-        PlansListStatus.Loaded ->
-            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                if (all.isEmpty()) {
-                    Text(
-                        text = "Nothing within 5 miles ${state.window.phrase}. Plans farther away show on the map.",
-                        style = PantopusTextStyle.small,
-                        color = PantopusColors.appTextSecondary,
-                        modifier = Modifier.padding(vertical = Spacing.s3),
-                    )
-                }
-                all.take(PEEK_ROWS).forEachIndexed { index, plan ->
-                    PlanListRow(plan, first = index == 0, mine = plan in state.mineShown, onOpen = onOpen, peek = true)
-                }
-            }
-    }
 }
 
 private const val PEEK_ROWS = 2
 
-/** The list pulled up (board F2): your plans, today, tomorrow, the rest of the week, then Pulse and Connections. */
+/**
+ * The list pulled up (board F2): your plans, today, tomorrow, the rest of the week, then Pulse and Connections. With the
+ * Pulse redesign off the list ends at the plans: Nearby is its own tab beside Plans, and it has Pulse and Connections.
+ */
 @Composable
 internal fun PlansListContent(
     state: PlansMapUiState,
@@ -271,9 +297,11 @@ internal fun PlansListContent(
             }
         }
         item(key = "more") {
-            SectionTitle("More nearby", top = 14.dp)
-            MoreNearbyRow(PantopusIcon.Megaphone, "Pulse", "Local posts and questions", first = true, onClick = onOpenPulse)
-            MoreNearbyRow(PantopusIcon.Users, "Connections", "Keep up with people you know", first = false, onClick = onOpenConnections)
+            if (LaunchFeatures.pulseRedesign) {
+                SectionTitle("More nearby", top = 14.dp)
+                MoreNearbyRow(PantopusIcon.Megaphone, "Pulse", "Local posts and questions", first = true, onClick = onOpenPulse)
+                MoreNearbyRow(PantopusIcon.Users, "Connections", "Keep up with people you know", first = false, onClick = onOpenConnections)
+            }
             Spacer(modifier = Modifier.height(Spacing.s6))
         }
     }
@@ -313,6 +341,7 @@ private fun PlansListHeader(
         ) {
             PantopusIconImage(icon = PantopusIcon.Map, contentDescription = null, size = 20.dp, tint = PantopusColors.appText)
         }
+        // Ask is the chrome's sparkle just above: the list stops under it now (as on iOS).
     }
 }
 
@@ -416,31 +445,32 @@ internal fun PlanCardContent(
     onClose: () -> Unit,
     onDetails: () -> Unit,
     onPrimary: () -> Unit,
-    onContentHeight: (Float) -> Unit = {},
 ) {
     val kind = plan.planKind ?: return
     val scroll = rememberScrollState()
-    var viewport by remember { mutableIntStateOf(0) }
-    // The card's whole height (what shows plus what scrolls), so the sheet can grow to show the buttons.
-    LaunchedEffect(scroll) {
-        snapshotFlow { viewport + scroll.maxValue }.collect { if (viewport > 0) onContentHeight(it.toFloat()) }
-    }
+    val sheet = LocalPlanSheet.current
     Column(
-        modifier = Modifier.fillMaxWidth().onSizeChanged { viewport = it.height }.verticalScroll(scroll),
+        modifier = Modifier.fillMaxWidth().reportsFit(scroll).verticalScroll(scroll),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            PlanTypeTag(kind)
-            Spacer(modifier = Modifier.weight(1f))
-            CardCloseButton(onClose)
+        // Pulled down, the card keeps its type, title, when and where over the map.
+        Column(
+            modifier = Modifier.onSizeChanged { sheet?.reportPeek(it.height) },
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                PlanTypeTag(kind)
+                Spacer(modifier = Modifier.weight(1f))
+                CardCloseButton(onClose)
+            }
+            Text(
+                text = plan.title,
+                style = planH3,
+                color = PantopusColors.appText,
+                modifier = Modifier.clickable(role = Role.Button, onClick = onDetails).semantics { heading() },
+            )
+            Text(text = cardWhereLine(plan), style = PantopusTextStyle.small, color = PantopusColors.appTextSecondary)
         }
-        Text(
-            text = plan.title,
-            style = planH3,
-            color = PantopusColors.appText,
-            modifier = Modifier.clickable(role = Role.Button, onClick = onDetails).semantics { heading() },
-        )
-        Text(text = cardWhereLine(plan), style = PantopusTextStyle.small, color = PantopusColors.appTextSecondary)
         plan.host?.let { host ->
             PlanHostRow(
                 name = host.displayName ?: "Neighbor",
@@ -575,22 +605,38 @@ internal fun PlansEmptyContent(
     onHost: (PlanKind, PlanGameDto?) -> Unit,
     onInvite: () -> Unit,
     onShowElsewhere: () -> Unit,
+    onGamesChanged: () -> Unit,
 ) {
+    val scroll = rememberScrollState()
+    val sheet = LocalPlanSheet.current
     Column(
-        modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+        // One drag up shows all of it: the middle stop fits the whole message.
+        modifier = Modifier.fillMaxWidth().reportsFit(scroll).verticalScroll(scroll),
         verticalArrangement = Arrangement.spacedBy(Spacing.s3),
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
-            Text(text = "Nothing planned yet", style = planH3, color = PantopusColors.appText, modifier = Modifier.semantics { heading() })
-            Text(
-                text = "Plans here start with one neighbor. Yours could be the first.",
-                style = PantopusTextStyle.small,
-                color = PantopusColors.appTextSecondary,
-            )
+        // The lowest stop shows down to here: the title and the suggestion over the map.
+        Column(
+            modifier = Modifier.onSizeChanged { sheet?.reportPeek(it.height) },
+            verticalArrangement = Arrangement.spacedBy(Spacing.s3),
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
+                Text(
+                    text = "Nothing planned yet",
+                    style = planH3,
+                    color = PantopusColors.appText,
+                    modifier = Modifier.semantics { heading() },
+                )
+                Text(
+                    text = "Plans here start with one neighbor. Yours could be the first.",
+                    style = PantopusTextStyle.small,
+                    color = PantopusColors.appTextSecondary,
+                )
+            }
+            // The next game as a watch-party nudge; without one, the plain invitation (as on iOS).
+            PlansSportsEmpty(state.games, state.sports, onGamesChanged) { game, onLongClick ->
+                GameSuggestion(game, onLongClick) { onHost(PlanKind.WATCH_PARTY, game) }
+            }
         }
-        // The next game as a watch-party nudge; without one, the plain invitation (as on iOS).
-        val game = state.games.firstOrNull()
-        GameSuggestion(game) { onHost(PlanKind.WATCH_PARTY, game) }
         val others = state.kinds.filter { it != PlanKind.WATCH_PARTY }
         Text(
             text = "Or start something else",
@@ -643,9 +689,11 @@ internal fun PlansEmptyContent(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun GameSuggestion(
     game: PlanGameDto?,
+    onLongClick: (() -> Unit)?,
     onClick: () -> Unit,
 ) {
     val colors = PlanKind.WATCH_PARTY.colors
@@ -657,7 +705,7 @@ private fun GameSuggestion(
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(Radii.xl))
                 .background(colors.tint)
-                .clickable(role = Role.Button, onClick = onClick)
+                .combinedClickable(role = Role.Button, onClick = onClick, onLongClick = onLongClick)
                 .padding(14.dp)
                 .semantics(mergeDescendants = true) { role = Role.Button },
         verticalAlignment = Alignment.CenterVertically,
@@ -681,7 +729,8 @@ internal fun gameLine(game: PlanGameDto): String {
             1L -> "tomorrow"
             else -> start.format(DateTimeFormatter.ofPattern("EEEE", Locale.US))
         }
-    return "${game.label} play $day at ${start.format(DateTimeFormatter.ofPattern("h:mm", Locale.US))}"
+    val matchup = if (game.opponent.isNullOrBlank()) "${game.label} play" else game.matchupLabel()
+    return "$matchup $day at ${start.format(DateTimeFormatter.ofPattern("h:mm", Locale.US))}"
 }
 
 /** No location yet (board F5); after a refusal it says location is off, with Settings when there's no home (as on iOS). */
@@ -693,8 +742,10 @@ internal fun PlansNoLocationContent(
     onUseHome: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
+    val scroll = rememberScrollState()
     Column(
-        modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(top = Spacing.s1),
+        // The question and its buttons all show at the middle stop when they fit.
+        modifier = Modifier.fillMaxWidth().reportsFit(scroll).verticalScroll(scroll).padding(top = Spacing.s1),
         verticalArrangement = Arrangement.spacedBy(Spacing.s4),
     ) {
         PlanIconTile(
@@ -735,6 +786,20 @@ internal fun PlansNoLocationContent(
     }
 }
 
+/**
+ * Reports this scrolling card or message's whole height (what shows plus what scrolls) to the sheet it sits in, so
+ * the middle stop can fit it. Put it before [verticalScroll], where the size is the visible part.
+ */
+@Composable
+private fun Modifier.reportsFit(scroll: ScrollState): Modifier {
+    val sheet = LocalPlanSheet.current ?: return this
+    var viewport by remember { mutableIntStateOf(0) }
+    LaunchedEffect(scroll, sheet) {
+        snapshotFlow { viewport + scroll.maxValue }.collect { if (viewport > 0) sheet.reportFit(it) }
+    }
+    return onSizeChanged { viewport = it.height }
+}
+
 /** The area pill's choices. */
 internal val windowChoices = listOf(PlanWindow.NOW, PlanWindow.TODAY, PlanWindow.WEEK, PlanWindow.WEEKEND)
 
@@ -746,8 +811,9 @@ internal fun PlanPostedContent(
     onSeePlan: () -> Unit,
     onDone: () -> Unit,
 ) {
+    val scroll = rememberScrollState()
     Column(
-        modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+        modifier = Modifier.fillMaxWidth().reportsFit(scroll).verticalScroll(scroll),
         verticalArrangement = Arrangement.spacedBy(Spacing.s4),
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {

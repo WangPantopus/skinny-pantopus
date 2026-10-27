@@ -124,6 +124,8 @@ public struct PulsePostCardContent: Sendable, Hashable, Identifiable {
     public let intent: PulseIntent
     public let title: String?
     public let body: String
+    /// When and where an Event happens; nil on other posts.
+    public let event: PulseEventDetails?
     public let reactions: [PulseReaction]
     public let attendees: PulseAttendeeStrip?
     public let userHasReacted: Bool
@@ -164,6 +166,7 @@ public struct PulsePostCardContent: Sendable, Hashable, Identifiable {
         intent: PulseIntent,
         title: String?,
         body: String,
+        event: PulseEventDetails? = nil,
         reactions: [PulseReaction],
         attendees: PulseAttendeeStrip?,
         userHasReacted: Bool,
@@ -185,6 +188,7 @@ public struct PulsePostCardContent: Sendable, Hashable, Identifiable {
         self.intent = intent
         self.title = title
         self.body = body
+        self.event = event
         self.reactions = reactions
         self.attendees = attendees
         self.userHasReacted = userHasReacted
@@ -266,50 +270,6 @@ public struct PulsePostCard: View {
                 .accessibilityActions { cardActions }
                 .accessibilityIdentifier("pulsePostCard_\(content.id)")
         }
-    }
-
-    private var card: some View {
-        VStack(alignment: .leading, spacing: Spacing.s2) {
-            header
-            if let title = content.title, !title.isEmpty {
-                Text(title)
-                    .font(.system(size: 13.5, weight: .semibold))
-                    .foregroundStyle(Theme.Color.appText)
-                    .lineLimit(1)
-            }
-            if !content.body.isEmpty {
-                Text(content.body)
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(Theme.Color.appTextStrong)
-                    .lineLimit(content.title?.isEmpty == false ? 2 : 3)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            if !content.media.isEmpty {
-                PostMediaGridView(
-                    items: content.media,
-                    style: .compact,
-                    accessibilityID: "pulsePostMedia_\(content.id)"
-                )
-            }
-            if let attendees = content.attendees {
-                attendeeStrip(attendees)
-            }
-            // On its own line, so the words are never cut short (Pulse S7).
-            if let status = content.status {
-                PulsePostStatusPill(status: status, postId: content.id)
-                    .padding(.top, Spacing.s1)
-            }
-            if !content.actions.isSeeded {
-                reactionStrip
-            }
-        }
-        .padding(Spacing.s3)
-        .background(Theme.Color.appSurface)
-        .clipShape(RoundedRectangle(cornerRadius: Radii.xl, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: Radii.xl, style: .continuous)
-                .stroke(Theme.Color.appBorder, lineWidth: 1)
-        )
     }
 
     private var header: some View {
@@ -524,10 +484,16 @@ public struct PulsePostCard: View {
         if let status = content.status { parts.append(status.text) }
         if let title = content.title, !title.isEmpty { parts.append(title) }
         if !content.body.isEmpty { parts.append(content.body) }
+        if let when = content.event?.when { parts.append(when) }
+        if let place = content.event?.place { parts.append(place) }
         if !content.media.isEmpty {
             parts.append("\(content.media.count) attached \(content.media.count == 1 ? "photo" : "photos")")
         }
-        return parts.joined(separator: ". ")
+        // A part that already ends a sentence keeps its own mark (as on Android): VoiceOver never hears "7..".
+        return parts.reduce("") { label, part in
+            guard let last = label.last else { return part }
+            return label + (".?!".contains(last) ? " " : ". ") + part
+        }
     }
 }
 
@@ -556,6 +522,16 @@ private extension PulsePostCard {
             .font(.system(size: 10.5))
             .foregroundStyle(Theme.Color.appTextSecondary)
             .lineLimit(1)
+    }
+
+    /// An Event's when and where, under its text (as on the web card).
+    func eventRows(_ event: PulseEventDetails) -> some View {
+        PulseEventDetailRows(
+            details: event,
+            style: .card,
+            whenIdentifier: "pulsePostEventWhen_\(content.id)",
+            placeIdentifier: "pulsePostEventPlace_\(content.id)"
+        )
     }
 
     /// The f9 export's neutral origin chip, without its out-of-scope explainer.
@@ -628,6 +604,24 @@ private struct PulseCuratorChip: View {
     }
 }
 
+public extension PulseIntent {
+    /// The intent's colour: the card chip's text and icon, and its map pin.
+    var tint: Color {
+        switch self {
+        case .all, .generic: Theme.Color.appTextSecondary
+        case .ask: Theme.Color.warmAmber
+        case .recommend: Theme.Color.success
+        case .event: Theme.Color.magic
+        case .lost: Theme.Color.rose
+        case .alert: Theme.Color.error
+        case .deal: Theme.Color.success
+        case .announce: Theme.Color.slate
+        case .neighborhoodWin: Theme.Color.warning
+        case .visitorGuide: Theme.Color.info
+        }
+    }
+}
+
 /// Right-aligned colored chip in the post header. Resolves intent →
 /// foreground/background tokens against the existing design system.
 public struct PulseIntentChip: View {
@@ -655,18 +649,7 @@ public struct PulseIntentChip: View {
     }
 
     private var foreground: Color {
-        switch intent {
-        case .all, .generic: Theme.Color.appTextSecondary
-        case .ask: Theme.Color.warmAmber
-        case .recommend: Theme.Color.success
-        case .event: Theme.Color.magic
-        case .lost: Theme.Color.rose
-        case .alert: Theme.Color.error
-        case .deal: Theme.Color.success
-        case .announce: Theme.Color.slate
-        case .neighborhoodWin: Theme.Color.warning
-        case .visitorGuide: Theme.Color.info
-        }
+        intent.tint
     }
 
     private var background: Color {
@@ -681,6 +664,62 @@ public struct PulseIntentChip: View {
         case .announce: Theme.Color.slateBg
         case .neighborhoodWin: Theme.Color.warningBg
         case .visitorGuide: Theme.Color.infoBg
+        }
+    }
+}
+
+private extension PulsePostCard {
+    var card: some View {
+        VStack(alignment: .leading, spacing: Spacing.s2) {
+            header
+                .padding(.horizontal, Spacing.s4)
+            if let title = content.title, !title.isEmpty {
+                Text(title)
+                    .font(.system(size: 13.5, weight: .semibold))
+                    .foregroundStyle(Theme.Color.appText)
+                    .lineLimit(1)
+                    .padding(.horizontal, Spacing.s4)
+            }
+            if !content.body.isEmpty {
+                PostLinkText(content.body)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Theme.Color.appTextStrong)
+                    .lineLimit(content.title?.isEmpty == false ? 2 : 3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, Spacing.s4)
+            }
+            if let event = content.event {
+                eventRows(event)
+                    .padding(.horizontal, Spacing.s4)
+            }
+            if !content.media.isEmpty {
+                PostMediaGridView(
+                    items: content.media,
+                    style: .compact,
+                    accessibilityID: "pulsePostMedia_\(content.id)",
+                    usesSharpPreviews: true,
+                    edgeToEdge: true
+                )
+            }
+            if let attendees = content.attendees {
+                attendeeStrip(attendees)
+                    .padding(.horizontal, Spacing.s4)
+            }
+            // On its own line, so the words are never cut short (Pulse S7).
+            if let status = content.status {
+                PulsePostStatusPill(status: status, postId: content.id)
+                    .padding(.top, Spacing.s1)
+                    .padding(.horizontal, Spacing.s4)
+            }
+            if !content.actions.isSeeded {
+                reactionStrip
+                    .padding(.horizontal, Spacing.s4)
+            }
+        }
+        .padding(.vertical, Spacing.s4)
+        .background(Theme.Color.appSurface)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(Theme.Color.appBorderSubtle).frame(height: 1)
         }
     }
 }

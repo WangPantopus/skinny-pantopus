@@ -1,12 +1,15 @@
 const express = require('express');
+const Joi = require('joi');
 const router = express.Router();
 const supabaseAdmin = require('../config/supabaseAdmin');
 const verifyToken = require('../middleware/verifyToken');
 const logger = require('../utils/logger');
-const { invalidateBlockCache } = require('../services/blockService');
+const { invalidateBlockCache, removeFollowsBetween } = require('../services/blockService');
 const { invalidateFilterCache } = require('../services/feedService');
+const marketplaceService = require('../services/marketplace/marketplaceService');
 const { writeIdentityAuditLog } = require('../utils/identityAudit');
 const { chosenUsernameOrNull } = require('../utils/personalUsername');
+const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
 
 /**
  * POST /api/users/:userId/block
@@ -22,16 +25,22 @@ router.post('/:userId/block', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'Cannot block yourself' });
     }
 
-    // Verify target user exists
-    const { data: targetUser } = await supabaseAdmin
+    // Verify target user exists (22P02: the id isn't one at all)
+    const { data: targetUser, error: targetError } = await supabaseAdmin
       .from('User')
       .select('id')
       .eq('id', blockedId)
-      .single();
+      .maybeSingle();
 
+    if (targetError && targetError.code !== '22P02') throw targetError;
     if (!targetUser) {
       return res.status(404).json({ error: 'User not found' });
     }
+
+    // The block ends their follows, both ways (blockService.removeFollowsBetween):
+    // first, so a failure (503) records nothing and Block is still offered for a
+    // retry, and again once the block is recorded, for a follow added in between.
+    await removeFollowsBetween(blockerId, blockedId);
 
     const { error } = await supabaseAdmin
       .from('UserBlock')
@@ -52,6 +61,10 @@ router.post('/:userId/block', verifyToken, async (req, res) => {
     invalidateBlockCache(blockerId, blockedId);
     invalidateFilterCache(blockerId);
     invalidateFilterCache(blockedId);
+    marketplaceService.invalidateFilterCache(blockerId);
+    marketplaceService.invalidateFilterCache(blockedId);
+
+    await removeFollowsBetween(blockerId, blockedId);
 
     // P1.14: audience-profile §9 + unified-IA §5.1 — personal-side
     // block cascades to every persona the blocker owns. The cascade
@@ -85,6 +98,7 @@ router.post('/:userId/block', verifyToken, async (req, res) => {
     });
     res.json({ success: true });
   } catch (err) {
+    if (err.code === 'BLOCK_INCOMPLETE') return res.status(503).json({ error: err.message, code: err.code });
     logger.error('Block user error', { error: err.message });
     res.status(500).json({ error: 'Failed to block user' });
   }
@@ -105,7 +119,23 @@ router.post('/:userId/block', verifyToken, async (req, res) => {
 router.delete('/:userId/block', verifyToken, async (req, res) => {
   try {
     const blockerId = req.user.id;
-    const blockedId = req.params.userId;
+    let blockedId = req.params.userId;
+    if (blockedId.startsWith('anonymous:')) {
+      const blockId = blockedId.slice('anonymous:'.length);
+      if (Joi.string().uuid().validate(blockId).error) {
+        return res.status(400).json({ error: 'Invalid block handle' });
+      }
+      const { data: anonymousBlock, error: lookupError } = await supabaseAdmin
+        .from('UserBlock')
+        .select('blocked_user_id')
+        .eq('id', blockId)
+        .eq('blocker_user_id', blockerId)
+        .eq('reason', 'neighbor_message')
+        .maybeSingle();
+      if (lookupError) throw lookupError;
+      if (!anonymousBlock) return res.json({ success: true });
+      blockedId = anonymousBlock.blocked_user_id;
+    }
 
     const { error } = await supabaseAdmin
       .from('UserBlock')
@@ -121,6 +151,8 @@ router.delete('/:userId/block', verifyToken, async (req, res) => {
     invalidateBlockCache(blockerId, blockedId);
     invalidateFilterCache(blockerId);
     invalidateFilterCache(blockedId);
+    marketplaceService.invalidateFilterCache(blockerId);
+    marketplaceService.invalidateFilterCache(blockedId);
     await writeIdentityAuditLog({
       req,
       actorUserId: blockerId,
@@ -137,10 +169,7 @@ router.delete('/:userId/block', verifyToken, async (req, res) => {
   }
 });
 
-/**
- * GET /api/users/blocked
- * List all users the current user has blocked.
- */
+// List personal blocks; anonymous notes never expose a sender identity.
 router.get('/blocked', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
@@ -156,8 +185,25 @@ router.get('/blocked', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch blocked users' });
     }
 
+    // A blocked person goes by the name, handle and photo neighbors see on their posts and in chats: their Local
+    // Profile's, or a business's (or anyone else's) account as before (services/chatPeople.js).
+    const people = await loadChatPeople((data || [])
+      .filter((b) => b.reason !== 'neighbor_message')
+      .map((b) => b.blocked_user_id));
+    const blocks = (data || []).map((b) => ({ ...b, blocked_user: chatPersonRow(b.blocked_user, people) }));
+
     res.json({
-      blocked: (data || []).map((b) => ({
+      // Keep the existing list/unblock contract, but never expose an anonymous
+      // note's sender. Older clients can still unblock using this opaque handle.
+      blocked: blocks.map((b) => b.reason === 'neighbor_message' ? {
+        id: b.id,
+        user_id: `anonymous:${b.id}`,
+        username: null,
+        name: 'Anonymous neighbor',
+        profile_picture_url: null,
+        reason: b.reason,
+        created_at: b.created_at,
+      } : ({
         id: b.id,
         user_id: b.blocked_user_id,
         // Only a username the person chose (a made-up one can show part of their email address).

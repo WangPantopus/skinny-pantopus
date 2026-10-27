@@ -1,15 +1,5 @@
-// ============================================================
-// TEST: the morning-briefing opt-in
-//
-// `daily_briefing_enabled` defaults false while `evening_briefing_enabled`
-// defaults true, so the morning briefing effectively never shipped — the
-// control sits in Settings → Notifications where almost nobody finds it.
-//
-// The fix is an explicit one-time ask, NOT a silent default flip: turning
-// on a push for existing users without asking is how a notification
-// channel gets burned. These pin that the ask happens once per ACCOUNT
-// and that a "no" is remembered permanently.
-// ============================================================
+// Briefing defaults and the existing per-account notice acknowledgement.
+// Existing explicit opt-outs must survive the default-on policy.
 
 jest.mock('../../config/supabaseAdmin', () => jest.requireActual('../__mocks__/supabaseAdmin'));
 jest.mock('../../utils/logger', () => ({
@@ -44,7 +34,7 @@ describe('daily briefing prompt', () => {
   test('defaults report never-asked, so the prompt can show exactly once', async () => {
     const res = await request(app()).get('/api/hub/preferences').set('x-test-user-id', USER);
     expect(res.status).toBe(200);
-    expect(res.body.preferences.daily_briefing_enabled).toBe(false);
+    expect(res.body.preferences.daily_briefing_enabled).toBe(true);
     expect(res.body.preferences.daily_briefing_prompted_at).toBeNull();
   });
 
@@ -78,7 +68,7 @@ describe('daily briefing prompt', () => {
     expect(row.daily_briefing_prompted_at).toBeTruthy();
   });
 
-  test('the timestamp is the server clock, not something the caller chose', async () => {
+  test('the notice uses the server clock, enables new defaults and preserves existing choices', async () => {
     seedTable('SavedPlace', [{id:'saved-place',user_id:USER}]);
     await request(app())
       .put('/api/hub/preferences')
@@ -88,16 +78,18 @@ describe('daily briefing prompt', () => {
     const stamped = Date.parse(prefsRow().daily_briefing_prompted_at);
     expect(Number.isFinite(stamped)).toBe(true);
     expect(Math.abs(Date.now() - stamped)).toBeLessThan(60_000);
-    expect(prefsRow().daily_briefing_enabled).toBe(false);
-    expect(prefsRow().evening_briefing_enabled).toBe(false);
+    expect(prefsRow().daily_briefing_enabled).toBe(true);
+    expect(prefsRow().evening_briefing_enabled).toBe(true);
     await request(app()).put('/api/hub/preferences').set('x-test-user-id',USER)
       .send({daily_briefing_enabled:true,daily_briefing_timezone:'Asia/Tokyo'});
     expect(prefsRow().daily_briefing_enabled).toBe(true);
     expect(prefsRow().daily_briefing_timezone).toBe('Asia/Tokyo');
-    expect(prefsRow().evening_briefing_enabled).toBe(false);
-    seedTable('UserNotificationPreferences', [{user_id:USER,evening_briefing_enabled:true}]);
-    await request(app()).put('/api/hub/preferences').set('x-test-user-id',USER).send({daily_briefing_prompted:true});
     expect(prefsRow().evening_briefing_enabled).toBe(true);
+    seedTable('UserNotificationPreferences', [{user_id:USER,daily_briefing_enabled:false,evening_briefing_enabled:false,daily_briefing_timezone:'America/New_York'}]);
+    await request(app()).put('/api/hub/preferences').set('x-test-user-id',USER).send({daily_briefing_prompted:true,device_timezone:'Pacific/Honolulu'});
+    expect(prefsRow().daily_briefing_timezone).toBe('America/New_York');
+    expect(prefsRow().daily_briefing_enabled).toBe(false);
+    expect(prefsRow().evening_briefing_enabled).toBe(false);
     seedTable('UserNotificationPreferences', []);
     await request(app()).put('/api/hub/preferences').set('x-test-user-id',USER).send({evening_briefing_enabled:true,daily_briefing_prompted:true});
     expect(prefsRow().evening_briefing_enabled).toBe(true);

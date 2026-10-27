@@ -49,15 +49,13 @@ const FLOOD_ZONE_DESC = {
  * @returns {Promise<Response|null>}
  */
 async function timedFetch(url, opts = {}) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  const deadline = AbortSignal.timeout(FETCH_TIMEOUT_MS);
+  const signal = opts.signal ? AbortSignal.any([opts.signal, deadline]) : deadline;
 
   try {
-    const res = await fetch(url, { ...opts, signal: controller.signal });
-    clearTimeout(timeout);
-    return res;
+    // Keep cancellation active while callers consume the response body.
+    return await fetch(url, { ...opts, signal });
   } catch (err) {
-    clearTimeout(timeout);
     // ENDPOINT ONLY, NEVER THE QUERY STRING.
     //
     // `url.slice(0, 120)` looked harmless and was not: these URLs carry
@@ -72,7 +70,7 @@ async function timedFetch(url, opts = {}) {
     // apart in the same stream, and together they reconstruct "this
     // account looked at this building".
     const endpoint = safeEndpoint(url);
-    if (err.name === 'AbortError') {
+    if (err.name === 'AbortError' || err.name === 'TimeoutError') {
       logger.warn('Neighborhood profile fetch timeout', { endpoint });
     } else {
       logger.error('Neighborhood profile fetch error', { endpoint, error: err.message });

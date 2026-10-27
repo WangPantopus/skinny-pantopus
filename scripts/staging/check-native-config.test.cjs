@@ -16,7 +16,7 @@ const env = {
 const firebase = {
   project_info: { project_id: 'pantopus-stage-fixture', project_number: '123456789' },
   client: [{ client_info: { mobilesdk_app_id: '1:123456789:android:abcdef123456',
-    android_client_info: { package_name: 'app.pantopus.android.debug' } },
+    android_client_info: { package_name: 'com.pantopus.app.debug' } },
   api_key: [{ current_key: 'synthetic_not_a_real_key' }] }],
 };
 const android = { platform: 'android', env, firebase, projectId: 'pantopus-stage-fixture' };
@@ -36,8 +36,8 @@ test('rejects the committed Android CI placeholder', () => {
 test('rejects project and package mismatches before any push', () => {
   assert.ok(checkConfig({ ...android, projectId: 'wrong-project' }).some(e => e.includes('match')));
   const releaseOnly = structuredClone(firebase);
-  releaseOnly.client[0].client_info.android_client_info.package_name = 'app.pantopus.android';
-  assert.ok(checkConfig({ ...android, firebase: releaseOnly }).some(e => e.includes('app.pantopus.android.debug')));
+  releaseOnly.client[0].client_info.android_client_info.package_name = 'com.pantopus.app';
+  assert.ok(checkConfig({ ...android, firebase: releaseOnly }).some(e => e.includes('com.pantopus.app.debug')));
   assert.ok(checkConfig({ ...android, firebase: undefined }).length);
 });
 

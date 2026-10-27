@@ -16,7 +16,7 @@ import * as api from '@pantopus/api';
 import { Trophy } from 'lucide-react';
 import PostLocationPicker from './PostLocationPicker';
 import type { SportsComposerMetadata, TopicKey } from '@/constants/feedTopics';
-import { SPORTS_COMPOSER_INLINE_INTENTS } from '@/constants/feedTopics';
+import { SPORTS_COMPOSER_INLINE_INTENTS, SPORTS_SCOPE_LABELS } from '@/constants/feedTopics';
 import { usePostForm, type PostFormState, type ProfileVisibilityScope } from './composer/usePostForm';
 import IntentSelector, { INTENTS } from './composer/IntentSelector';
 import EventFields from './composer/EventFields';
@@ -27,7 +27,7 @@ import ServiceOfferFields from './composer/ServiceOfferFields';
 import VisibilityPicker from './composer/VisibilityPicker';
 import PostPrecheck from './composer/PostPrecheck';
 import MediaUpload from './composer/MediaUpload';
-import { InlineDraftHelper } from '@/components/ai-assistant';
+import PostAssist, { usePostAssist } from './composer/PostAssist';
 import { PURPOSE_TO_POST_TYPE, getPostTypeConfig } from '@pantopus/ui-utils';
 
 const POST_TYPE_TO_API_PURPOSE: Record<PostType, string> = {
@@ -71,6 +71,15 @@ function storedWallClockToInput(value: string | null | undefined, kind: 'datetim
 
 function parseTags(value: string): string[] {
   return value.split(',').map((t) => t.trim()).filter(Boolean);
+}
+
+function eventTimeError(start: string, end: string): string | null {
+  if (!end) return null;
+  if (!start) return 'Add a start time before setting an end time.';
+  if (new Date(asStoredWallClock(end)).getTime() <= new Date(asStoredWallClock(start)).getTime()) {
+    return 'The event end time must be after its start time.';
+  }
+  return null;
 }
 
 const TITLE_POST_TYPES = ['event', 'alert', 'deal', 'service_offer', 'announcement', 'lost_found'];
@@ -356,6 +365,19 @@ export default function PostComposer({
     : (networkVisibility || f.visibility) === 'connections' ? 'connections' : 'nearby';
   const dealExpiryRequired = isEdit ? Boolean(editSeed?.dealExpires) : LOCAL_PUBLIC_AUDIENCES.has(createAudience);
 
+  // The AI assist card: the whole post from the photos, the place and the words. The place goes only as its area
+  // name ("Camas"): a picked or current address could be someone's home.
+  const assistPostType: PostType = isNetworkSurface ? 'general' : (f.selectedIntent ?? 'general');
+  const assistPlace = f.location?.locationName?.trim();
+  const postAssist = usePostAssist(f, setField, {
+    postType: assistPostType,
+    audience: createAudience === 'connections' ? 'connections' : 'nearby',
+    place: assistPlace && !/\d/.test(assistPlace) && !/^(your|selected) location$/i.test(assistPlace) ? assistPlace : undefined,
+    showsTitle: TITLE_POST_TYPES.includes(assistPostType),
+  });
+  // "Post this?": a post with words the AI suggested waits for the person to check it.
+  const [confirmingAIPost, setConfirmingAIPost] = useState(false);
+
   // A searched place (no GPS fix) takes posts only from someone with a verified home or business
   // near it. Ask when it's picked instead of refusing the finished post.
   const [searchedPlaceRefused, setSearchedPlaceRefused] = useState(false);
@@ -385,9 +407,12 @@ export default function PostComposer({
     ? 'Share something with your home neighborhood…'
     : activeIntent?.placeholder || 'Share something with your neighborhood…';
 
+  const resetPostAssist = postAssist.reset;
   const resetComposer = useCallback(() => {
     createCommand.current = null;
     reset();
+    resetPostAssist();
+    setConfirmingAIPost(false);
     setSubmitError(null);
     setShowPurposePicker(false);
     setShowTargetPicker(false);
@@ -397,7 +422,7 @@ export default function PostComposer({
     if (fallbackIdentity) {
       setSelectedAudience(defaultAudienceForIdentity(fallbackIdentity));
     }
-  }, [identities, isGlobalComposer, reset]);
+  }, [identities, isGlobalComposer, reset, resetPostAssist]);
 
   useEffect(() => {
     if (!isGlobalComposer) return;
@@ -559,10 +584,20 @@ export default function PostComposer({
     user?.username?.[0]?.toUpperCase() ||
     '?';
 
-  const handlePost = async () => {
-    if (!onPost || !f.content.trim() || !f.selectedIntent) return;
+  const handlePost = async (aiConfirmed = false) => {
+    if (!onPost || !f.content.trim() || !f.selectedIntent || postAssist.assist.kind === 'writing') return;
 
     setSubmitError(null);
+
+    const timeError = f.selectedIntent === 'event' ? eventTimeError(f.eventDate, f.eventEndDate) : null;
+    if (timeError) {
+      setSubmitError(timeError);
+      return;
+    }
+    if (parseTags(f.tags).length > 3) {
+      setSubmitError('Use up to 3 tags.');
+      return;
+    }
 
     if (isGlobalComposer && !selectedIdentity) {
       setSubmitError('Loading posting identities…');
@@ -586,6 +621,11 @@ export default function PostComposer({
       targetPostType = f.selectedIntent;
       if (selectedIdentity.type === 'home') homeId = selectedIdentity.id;
       if (selectedIdentity.type === 'business') businessId = selectedIdentity.id;
+    }
+
+    if (canUseGlobalAudience && targetPostAs === 'business') {
+      setSubmitError('Business identities cannot create Pulse posts. Choose your personal or Home identity.');
+      return;
     }
 
     if (canUseGlobalAudience && !allowedPostTypes.includes(targetPostType)) {
@@ -627,6 +667,13 @@ export default function PostComposer({
         return;
       }
     }
+
+    // Words the AI suggested are checked before they go out under the person's name.
+    if (postAssist.hasAISuggestion && !aiConfirmed) {
+      setConfirmingAIPost(true);
+      return;
+    }
+    setConfirmingAIPost(false);
 
     const shouldIncludeLocation = Boolean(f.location && showLocationControl(targetPostAs, targetAudience));
     const parsedTags = f.tags.split(',').map((t) => t.trim()).filter(Boolean);
@@ -691,6 +738,11 @@ export default function PostComposer({
 
   const handleSaveEdit = async () => {
     if (!editPatch || !editChanged || !onSaveEdit || savingEdit || !f.content.trim()) return;
+    const timeError = editPost?.post_type === 'event' ? eventTimeError(f.eventDate, f.eventEndDate) : null;
+    if (timeError) {
+      setSubmitError(timeError);
+      return;
+    }
     if (parseTags(f.tags).length > 3) {
       setSubmitError('Use up to 3 tags.');
       return;
@@ -724,8 +776,8 @@ export default function PostComposer({
         <div className="mb-2 flex items-center gap-2 rounded-lg border border-primary-200 bg-primary-50 px-3 py-1.5 text-xs font-medium text-primary-700 dark:border-primary-700/40 dark:bg-primary-500/10 dark:text-primary-200">
           <Trophy className="h-3.5 w-3.5" />
           <span>Posting to Sports</span>
-          {composeSportsScope && (
-            <span className="text-primary-600/80 dark:text-primary-300/80">· scope: {composeSportsScope}</span>
+          {composeSportsScope && SPORTS_SCOPE_LABELS[composeSportsScope] && (
+            <span className="text-primary-600/80 dark:text-primary-300/80">· {SPORTS_SCOPE_LABELS[composeSportsScope]}</span>
           )}
           <button
             type="button"
@@ -750,8 +802,8 @@ export default function PostComposer({
           onSelect={selectIntent}
           user={user}
           activeSurface={activeSurface}
-          // Service and Announce aren't Place post types; the Place feed would refuse them.
-          allowedTypes={activeSurface === 'place' ? allowedPostTypes : undefined}
+          // Match submission rules in both the Place and global composers.
+          allowedTypes={activeSurface === 'place' || isGlobalComposer ? allowedPostTypes : undefined}
         />
       )}
 
@@ -823,12 +875,14 @@ export default function PostComposer({
                             key={`${identity.type}-${identity.id}`}
                             type="button"
                             data-testid={`posting-identity-${identity.type}`}
+                            disabled={identity.type === 'business'}
+                            title={identity.type === 'business' ? 'Business identities cannot create Pulse posts.' : undefined}
                             onClick={() => {
                               setSelectedIdentity(identity);
                               setSelectedAudience(defaultAudienceForIdentity(identity));
                               setSubmitError(null);
                             }}
-                            className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs transition ${
+                            className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs transition disabled:cursor-not-allowed disabled:opacity-45 ${
                               isActive
                                 ? 'border-primary-500 bg-primary-50 text-primary-700'
                                 : 'border-app bg-surface text-app-muted hover-bg-app'
@@ -845,6 +899,9 @@ export default function PostComposer({
                         );
                       })}
                     </div>
+                    {identities.some((identity) => identity.type === 'business') && (
+                      <p className="mt-2 text-xs text-app-muted">Business identities cannot create Pulse posts.</p>
+                    )}
                   </div>
 
                   <div>
@@ -930,16 +987,22 @@ export default function PostComposer({
           </div>
 
           {!isEdit && (
-            <div className="px-4 pb-1">
-              <InlineDraftHelper
-                mode="post"
-                compact
-                seed={f.content}
-                context={{ postType: f.selectedIntent || undefined, existingContent: f.content || undefined }}
-                onDraft={(fields) => {
-                  if (fields.content) setField('content', fields.content);
-                  if (fields.title) setField('title', fields.title);
+            <div className="px-4 pb-2">
+              <PostAssist
+                assist={postAssist.assist}
+                hasMaterial={postAssist.hasMaterial}
+                photoCount={postAssist.photoCount}
+                canUndo={postAssist.canUndo}
+                remainingAttachments={Math.max(0, 9 - f.mediaFiles.length)}
+                onSuggest={(added) => {
+                  setConfirmingAIPost(false);
+                  void postAssist.suggest(added);
                 }}
+                onUndo={() => {
+                  setConfirmingAIPost(false);
+                  postAssist.undo();
+                }}
+                onAddPhotos={addMedia}
               />
             </div>
           )}
@@ -1120,8 +1183,43 @@ export default function PostComposer({
 
           <div className="space-y-2 border-t border-app bg-surface-muted/60 px-4 py-3">
             {submitError && (
-              <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+              <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
                 {submitError}
+              </div>
+            )}
+
+            {confirmingAIPost && !isEdit && (
+              <div
+                role="alertdialog"
+                aria-labelledby="composer-ai-confirm-title"
+                aria-describedby="composer-ai-confirm-message"
+                className="space-y-2 rounded-xl border border-primary-200 bg-primary-50 px-3 py-2 text-xs text-app dark:border-primary-700/40 dark:bg-primary-500/10"
+                data-testid="composer-ai-confirm"
+              >
+                <p id="composer-ai-confirm-title" className="text-sm font-semibold">Post this?</p>
+                <p id="composer-ai-confirm-message" className="text-app-secondary">
+                  {createAudience === 'connections'
+                    ? 'Pantopus AI wrote parts of this post. Check that it’s right before your connections see it.'
+                    : 'Pantopus AI wrote parts of this post. Check that it’s right before neighbors see it.'}
+                </p>
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingAIPost(false)}
+                    className="rounded-lg px-3 py-1.5 text-xs font-medium text-app-muted transition hover:text-app"
+                  >
+                    Keep editing
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handlePost(true)}
+                    disabled={isPosting}
+                    className="rounded-lg px-4 py-1.5 text-xs font-semibold text-white transition-all hover:shadow-md active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+                    style={{ background: activeIntent.color }}
+                  >
+                    {isPosting ? 'Posting…' : 'Post'}
+                  </button>
+                </div>
               </div>
             )}
 
@@ -1212,8 +1310,8 @@ export default function PostComposer({
                   </button>
                 ) : (
                   <button
-                    onClick={handlePost}
-                    disabled={!f.content.trim() || isPosting || searchedPlaceRefused}
+                    onClick={() => void handlePost()}
+                    disabled={!f.content.trim() || isPosting || searchedPlaceRefused || postAssist.assist.kind === 'writing'}
                     className="rounded-lg px-4 py-1.5 text-xs font-semibold text-white transition-all hover:shadow-md active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
                     style={{ background: activeIntent.color }}
                   >

@@ -33,7 +33,8 @@ const QUEUE_OPTIONS = {
   retryBackoff: true,
   expireInSeconds: 60 * 60,
   retentionSeconds: 7 * 24 * 60 * 60,
-  deleteAfterSeconds: 7 * 24 * 60 * 60,
+  // Finished history is independent of pending/retry retention above.
+  deleteAfterSeconds: 24 * 60 * 60,
 };
 
 const JOBS = [
@@ -61,8 +62,11 @@ const JOBS = [
 ];
 
 async function registerPgBossJobs(boss) {
+  // policy is immutable; refresh the remaining settings on existing queues too.
+  const { policy, ...mutableQueueOptions } = QUEUE_OPTIONS;
   for (const job of JOBS) {
     await boss.createQueue(job.name, QUEUE_OPTIONS);
+    await boss.updateQueue(job.name, mutableQueueOptions);
 
     // Schedule recurring job
     await boss.schedule(job.name, job.cron, null, {
@@ -70,8 +74,9 @@ async function registerPgBossJobs(boss) {
       singletonKey: job.name,
     });
 
-    // Register worker
-    await boss.work(job.name, { pollingIntervalSeconds: 5 }, async ([pgJob]) => {
+    // These schedules run at most once a minute. Avoid polling every queue
+    // twelve times a minute when idle; pickup can take up to 30 seconds.
+    await boss.work(job.name, { pollingIntervalSeconds: 30 }, async ([pgJob]) => {
       const start = Date.now();
       logger.info(`[pg-boss] Starting: ${job.name}`, { jobId: pgJob.id });
       try {

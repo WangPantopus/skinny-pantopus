@@ -28,7 +28,9 @@ const verifyToken = require('../middleware/verifyToken');
 const requireBusinessSeat = require('../middleware/requireBusinessSeat');
 const validate = require('../middleware/validate');
 const logger = require('../utils/logger');
+const membershipService = require('../services/businessMembershipService');
 const { escapeIlike } = require('../utils/escapeIlike');
+const { authorizationUnavailable } = require('../utils/businessPermissions');
 const {
   getSeatForUser,
   getBusinessSeats,
@@ -109,6 +111,38 @@ function hashToken(raw) {
   return crypto.createHash('sha256').update(raw).digest('hex');
 }
 
+// A seat change that could not be read or finished answers 503 with what didn't happen; trying again finishes it.
+function seatUnavailable(res, error) {
+  return res.status(503).json({ error, code: 'BUSINESS_TEAM_UNAVAILABLE' });
+}
+
+/**
+ * Who holds a seat (internal only, never returned) and their role on their team row. The seat and the team row
+ * both grant access, so a held seat's role change and removal go to both (businessMembershipService), and a rank
+ * check compares the higher of the two roles. Throws a 503 error when a read fails.
+ */
+async function seatHolder(businessId, seatId) {
+  const { data: binding, error } = await supabaseAdmin
+    .from('SeatBinding')
+    .select('user_id')
+    .eq('seat_id', seatId)
+    .maybeSingle();
+  if (error) throw authorizationUnavailable();
+  if (!binding) return null;
+
+  const { data: team, error: teamError } = await supabaseAdmin
+    .from('BusinessTeam')
+    .select('role_base')
+    .eq('business_user_id', businessId)
+    .eq('user_id', binding.user_id)
+    .eq('is_active', true)
+    .maybeSingle();
+  if (teamError) throw authorizationUnavailable();
+  return { userId: binding.user_id, teamRole: team?.role_base || null };
+}
+
+const higherRole = (a, b) => (getRoleRank(b) > getRoleRank(a) ? b : a);
+
 
 // ====================================================================
 // TOP-LEVEL ROUTES (no :businessId param) — must be defined FIRST
@@ -151,6 +185,7 @@ router.get('/seats/invite-details', verifyToken, async (req, res) => {
         id, business_user_id, display_name, role_base, invite_status, invite_email, invite_expires_at, created_at
       `)
       .eq('invite_token_hash', tokenHash)
+      .eq('is_active', true)
       .maybeSingle();
 
     if (error) {
@@ -216,6 +251,7 @@ router.post('/seats/accept-invite', verifyToken, validate(acceptInviteSchema), a
       .from('BusinessSeat')
       .select(SEAT_DETAIL)
       .eq('invite_token_hash', tokenHash)
+      .eq('is_active', true)
       .maybeSingle();
 
     if (seatErr) {
@@ -305,27 +341,21 @@ router.post('/seats/accept-invite', verifyToken, validate(acceptInviteSchema), a
       return res.status(500).json({ error: 'Failed to bind seat' });
     }
 
-    // 5) Dual-write: also insert into BusinessTeam for backward compatibility
-    try {
-      await supabaseAdmin
-        .from('BusinessTeam')
-        .upsert({
-          id: seat.id, // use same ID for consistency
-          business_user_id: seat.business_user_id,
-          user_id: userId,
-          role_base: seat.role_base,
-          title: seat.display_name,
-          notes: seat.notes,
-          is_active: true,
-          invited_by: null, // could resolve from invited_by_seat_id but not critical
-          invited_at: seat.created_at,
-          joined_at: now,
-        }, { onConflict: 'id' });
-    } catch (dualWriteErr) {
-      logger.warn('accept-invite dual-write to BusinessTeam failed (non-fatal)', {
-        error: dualWriteErr.message,
-        seatId: seat.id,
-      });
+    // Membership is required by the app's IAM routes. Reuse the service's
+    // reactivation path when a removed teammate accepts a new seat invite.
+    const membership = await membershipService.addMember({
+      businessUserId: seat.business_user_id,
+      userId,
+      roleBase: seat.role_base,
+      displayName: display_name || seat.display_name,
+      notes: seat.notes,
+    });
+    if (membership.error) {
+      await supabaseAdmin.from('SeatBinding').delete().eq('seat_id', seat.id).eq('user_id', userId);
+      await supabaseAdmin.from('BusinessSeat').update({
+        invite_status: 'pending', accepted_at: null, invite_token_hash: tokenHash, updated_at: now,
+      }).eq('id', seat.id).eq('is_active', true);
+      return seatUnavailable(res, 'Could not join the team. Please try again.');
     }
 
     // 6) Audit log
@@ -347,6 +377,7 @@ router.post('/seats/accept-invite', verifyToken, validate(acceptInviteSchema), a
     });
   } catch (err) {
     logger.error('POST /seats/accept-invite error', { error: err.message });
+    if (err.code === 'AUTHORIZATION_UNAVAILABLE') return seatUnavailable(res, err.message);
     res.status(500).json({ error: 'Failed to accept invite' });
   }
 });
@@ -363,8 +394,9 @@ router.post('/seats/decline-invite', verifyToken, validate(declineInviteSchema),
 
     const { data: seat, error: seatErr } = await supabaseAdmin
       .from('BusinessSeat')
-      .select('id, business_user_id, invite_status')
+      .select('id, business_user_id, invite_status, invite_email, invite_expires_at')
       .eq('invite_token_hash', tokenHash)
+      .eq('is_active', true)
       .maybeSingle();
 
     if (seatErr) {
@@ -378,6 +410,14 @@ router.post('/seats/decline-invite', verifyToken, validate(declineInviteSchema),
 
     if (seat.invite_status !== 'pending') {
       return res.status(410).json({ error: `Invite already ${seat.invite_status}` });
+    }
+
+    // Declining consumes the same recipient-bound token as accepting it.
+    if (seat.invite_email && seat.invite_email.toLowerCase().trim() !== (req.user.email || '').toLowerCase().trim()) {
+      return res.status(403).json({ error: 'This invitation was sent to a different email address' });
+    }
+    if (seat.invite_expires_at && new Date(seat.invite_expires_at) < new Date()) {
+      return res.status(410).json({ error: 'Invite has expired' });
     }
 
     const { error: updateErr } = await supabaseAdmin
@@ -428,10 +468,13 @@ router.get('/:businessId/seats', verifyToken, requireBusinessSeat('team.view'), 
     const { businessId } = req.params;
     const callerSeatId = req.businessSeat.id;
 
+    // Not the seats of people removed from the team (deactivated after they joined): the Team tab lists accepted
+    // seats as active members. Declined and expired invites stay listed as inactive.
     const { data: seats, error } = await supabaseAdmin
       .from('BusinessSeat')
       .select(SEAT_LIST)
       .eq('business_user_id', businessId)
+      .or('is_active.eq.true,invite_status.neq.accepted')
       .order('created_at', { ascending: true });
 
     if (error) {
@@ -525,6 +568,7 @@ router.post('/:businessId/seats/invite', verifyToken, requireBusinessSeat('team.
         .eq('business_user_id', businessId)
         .ilike('invite_email', escapeIlike(invite_email))
         .eq('invite_status', 'pending')
+        .eq('is_active', true)
         .order('created_at', { ascending: false })
         .limit(1);
       if (error) throw error;
@@ -555,6 +599,7 @@ router.post('/:businessId/seats/invite', verifyToken, requireBusinessSeat('team.
           })
           .eq('id', current.id)
           .eq('invite_status', 'pending')
+          .eq('is_active', true)
           .eq('invite_token_hash', current.invite_token_hash)
           .select(SEAT_LIST);
         if (renewErr) throw renewErr;
@@ -578,6 +623,17 @@ router.post('/:businessId/seats/invite', verifyToken, requireBusinessSeat('team.
       }
       return res.status(409).json({ error: 'This invite just changed. Refresh and try again.' });
     };
+
+    // Older cancellations only deactivated the seat. Retire their pending
+    // status so the existing unique email index permits a fresh invitation.
+    const { error: retireError } = await supabaseAdmin
+      .from('BusinessSeat')
+      .update({ invite_status: 'expired', invite_token_hash: null, updated_at: new Date().toISOString() })
+      .eq('business_user_id', businessId)
+      .ilike('invite_email', escapeIlike(invite_email))
+      .eq('invite_status', 'pending')
+      .eq('is_active', false);
+    if (retireError) throw retireError;
 
     const existingInvite = await findPendingInvite();
     if (existingInvite) return await renewOrRefuse(existingInvite);
@@ -662,7 +718,7 @@ router.patch('/:businessId/seats/:seatId', verifyToken, requireBusinessSeat('tea
 
     if (fetchErr) {
       logger.error('PATCH seat fetch error', { error: fetchErr.message, seatId });
-      return res.status(500).json({ error: 'Failed to fetch seat' });
+      return seatUnavailable(res, "Couldn't load this seat right now. Please try again.");
     }
 
     if (!targetSeat) {
@@ -673,9 +729,11 @@ router.patch('/:businessId/seats/:seatId', verifyToken, requireBusinessSeat('tea
       return res.status(400).json({ error: 'Cannot modify a deactivated seat' });
     }
 
+    const holder = await seatHolder(businessId, seatId);
+
     // Role hierarchy enforcement
     if (req.body.role_base) {
-      const targetCurrentRank = getRoleRank(targetSeat.role_base);
+      const targetCurrentRank = getRoleRank(higherRole(targetSeat.role_base, holder?.teamRole));
       const callerRank = getRoleRank(callerRole);
       const newRank = getRoleRank(req.body.role_base);
 
@@ -695,12 +753,27 @@ router.patch('/:businessId/seats/:seatId', verifyToken, requireBusinessSeat('tea
       }
     }
 
+    const failed = "Couldn't finish updating this seat. Please try again.";
+
     // Build update payload
     const updatePayload = { updated_at: new Date().toISOString() };
     if (req.body.display_name !== undefined) updatePayload.display_name = req.body.display_name;
-    if (req.body.role_base !== undefined) updatePayload.role_base = req.body.role_base;
     if (req.body.contact_method !== undefined) updatePayload.contact_method = req.body.contact_method || null;
     if (req.body.notes !== undefined) updatePayload.notes = req.body.notes || null;
+
+    // A held seat's role changes on the holder's team row and their seats here together (AUTH-2.3); a pending
+    // invite, or a seat whose holder has no team row, only on the seat.
+    if (req.body.role_base !== undefined) {
+      const roleResult = holder
+        ? await membershipService.updateMemberRole({
+          businessUserId: businessId,
+          userId: holder.userId,
+          newRoleBase: req.body.role_base,
+        })
+        : { notMember: true };
+      if (roleResult.notMember) updatePayload.role_base = req.body.role_base;
+      else if (roleResult.error) return seatUnavailable(res, failed);
+    }
 
     const { data: updatedSeat, error: updateErr } = await supabaseAdmin
       .from('BusinessSeat')
@@ -711,25 +784,20 @@ router.patch('/:businessId/seats/:seatId', verifyToken, requireBusinessSeat('tea
 
     if (updateErr) {
       logger.error('PATCH seat update error', { error: updateErr.message, seatId });
-      return res.status(500).json({ error: 'Failed to update seat' });
+      return seatUnavailable(res, failed);
     }
 
-    // Dual-write: update BusinessTeam if role changed
-    if (req.body.role_base || req.body.display_name) {
-      try {
-        const btUpdate = { updated_at: new Date().toISOString() };
-        if (req.body.role_base) btUpdate.role_base = req.body.role_base;
-        if (req.body.display_name) btUpdate.title = req.body.display_name;
-
-        await supabaseAdmin
-          .from('BusinessTeam')
-          .update(btUpdate)
-          .eq('id', seatId); // using same ID due to migration
-      } catch (dualWriteErr) {
-        logger.warn('PATCH seat dual-write to BusinessTeam failed (non-fatal)', {
-          error: dualWriteErr.message,
-          seatId,
-        });
+    // Dual-write: the holder's team title follows the seat's name, as a seat is named from it
+    if (req.body.display_name && holder?.teamRole) {
+      const { error: titleErr } = await supabaseAdmin
+        .from('BusinessTeam')
+        .update({ title: req.body.display_name, updated_at: new Date().toISOString() })
+        .eq('business_user_id', businessId)
+        .eq('user_id', holder.userId)
+        .eq('is_active', true);
+      if (titleErr) {
+        logger.error('PATCH seat title dual-write failed', { error: titleErr.message, seatId });
+        return seatUnavailable(res, failed);
       }
     }
 
@@ -746,6 +814,7 @@ router.patch('/:businessId/seats/:seatId', verifyToken, requireBusinessSeat('tea
     res.json({ message: 'Seat updated', seat: updatedSeat });
   } catch (err) {
     logger.error('PATCH seat error', { error: err.message });
+    if (err.code === 'AUTHORIZATION_UNAVAILABLE') return seatUnavailable(res, err.message);
     res.status(500).json({ error: 'Failed to update seat' });
   }
 });
@@ -768,34 +837,40 @@ router.delete('/:businessId/seats/:seatId', verifyToken, requireBusinessSeat('te
     // Fetch target seat
     const { data: targetSeat, error: fetchErr } = await supabaseAdmin
       .from('BusinessSeat')
-      .select('id, role_base, is_active, business_user_id')
+      .select('id, role_base, is_active, business_user_id, invite_status')
       .eq('id', seatId)
       .eq('business_user_id', businessId)
       .maybeSingle();
 
     if (fetchErr) {
       logger.error('DELETE seat fetch error', { error: fetchErr.message, seatId });
-      return res.status(500).json({ error: 'Failed to fetch seat' });
+      return seatUnavailable(res, "Couldn't load this seat right now. Please try again.");
     }
 
     if (!targetSeat) {
       return res.status(404).json({ error: 'Seat not found' });
     }
 
-    if (!targetSeat.is_active) {
+    // Read before any write: the removal goes to the holder's team row too, and their roles bound the rank check.
+    const holder = await seatHolder(businessId, seatId);
+
+    // A seat whose removal failed part way is deactivated but still held: removing it again finishes the work.
+    if (!targetSeat.is_active && !holder) {
       return res.status(400).json({ error: 'Seat is already deactivated' });
     }
 
+    const targetRole = higherRole(targetSeat.role_base, holder?.teamRole);
+
     // Prevent removing a higher-ranked seat (unless you're the owner)
     if (!isSelf && callerRole !== 'owner') {
-      if (getRoleRank(targetSeat.role_base) >= getRoleRank(callerRole)) {
+      if (getRoleRank(targetRole) >= getRoleRank(callerRole)) {
         return res.status(403).json({ error: 'Cannot remove a seat with a role equal to or higher than your own' });
       }
     }
 
     // If target is an owner, check they're not the sole owner
-    if (targetSeat.role_base === 'owner') {
-      const { data: otherOwners } = await supabaseAdmin
+    if (targetRole === 'owner' && targetSeat.is_active) {
+      const { data: otherOwners, error: ownersErr } = await supabaseAdmin
         .from('BusinessSeat')
         .select('id')
         .eq('business_user_id', businessId)
@@ -803,80 +878,44 @@ router.delete('/:businessId/seats/:seatId', verifyToken, requireBusinessSeat('te
         .eq('is_active', true)
         .neq('id', seatId);
 
+      if (ownersErr) {
+        return seatUnavailable(res, "Couldn't check the business's other owners right now. Please try again.");
+      }
       if (!otherOwners || otherOwners.length === 0) {
         return res.status(400).json({ error: 'Cannot remove the sole owner. Transfer ownership first.' });
       }
     }
 
-    const now = new Date().toISOString();
+    const reason = isSelf ? 'Self-removal' : 'Removed by team manager';
 
-    // Resolve the bound user_id BEFORE deleting the binding
-    // (needed for dual-write and override cleanup)
-    let boundUserId = null;
-    try {
-      const { data: binding } = await supabaseAdmin
-        .from('SeatBinding')
-        .select('user_id')
-        .eq('seat_id', seatId)
-        .maybeSingle();
-      boundUserId = binding?.user_id || null;
-    } catch {
-      // Binding may not exist (pending invite)
-    }
-
-    // Deactivate the seat
-    const { error: updateErr } = await supabaseAdmin
-      .from('BusinessSeat')
-      .update({
-        is_active: false,
-        deactivated_at: now,
-        deactivated_reason: isSelf ? 'Self-removal' : 'Removed by team manager',
-        updated_at: now,
-      })
-      .eq('id', seatId);
-
-    if (updateErr) {
-      logger.error('DELETE seat update error', { error: updateErr.message, seatId });
-      return res.status(500).json({ error: 'Failed to deactivate seat' });
-    }
-
-    // Remove the SeatBinding
-    if (boundUserId) {
-      const { error: bindErr } = await supabaseAdmin
-        .from('SeatBinding')
-        .delete()
-        .eq('seat_id', seatId);
-
-      if (bindErr) {
-        logger.warn('DELETE seat binding removal failed (non-fatal)', {
-          error: bindErr.message,
-          seatId,
-        });
+    if (holder) {
+      // The holder leaves the team: their team row, their seats here, their permission overrides and the seat
+      // bindings, each checked (AUTH-2.3).
+      const removeResult = await membershipService.removeMember({ businessUserId: businessId, userId: holder.userId, reason });
+      if (removeResult.error) {
+        return seatUnavailable(res, isSelf
+          ? "Couldn't finish leaving this business. Please try again."
+          : "Couldn't finish removing this seat. Please try again.");
       }
-
-      // Clean up permission overrides (still keyed by user_id during transition)
-      await supabaseAdmin
-        .from('BusinessPermissionOverride')
-        .delete()
-        .eq('business_user_id', businessId)
-        .eq('user_id', boundUserId);
-    }
-
-    // Dual-write: deactivate in BusinessTeam
-    try {
-      await supabaseAdmin
-        .from('BusinessTeam')
+    } else {
+      // Nobody holds it (a pending invite): deactivate the seat and retire its link
+      const now = new Date().toISOString();
+      const { error: updateErr } = await supabaseAdmin
+        .from('BusinessSeat')
         .update({
           is_active: false,
-          left_at: now,
+          invite_token_hash: null,
+          ...(targetSeat.invite_status === 'pending' ? { invite_status: 'expired' } : {}),
+          deactivated_at: now,
+          deactivated_reason: reason,
           updated_at: now,
         })
         .eq('id', seatId);
-    } catch (dualWriteErr) {
-      logger.warn('DELETE seat dual-write to BusinessTeam failed (non-fatal)', {
-        error: dualWriteErr.message,
-        seatId,
-      });
+
+      if (updateErr) {
+        logger.error('DELETE seat update error', { error: updateErr.message, seatId });
+        return seatUnavailable(res, "Couldn't finish removing this seat. Please try again.");
+      }
     }
 
     // Audit log
@@ -892,6 +931,7 @@ router.delete('/:businessId/seats/:seatId', verifyToken, requireBusinessSeat('te
     res.json({ message: isSelf ? 'You have left the business' : 'Seat deactivated' });
   } catch (err) {
     logger.error('DELETE seat error', { error: err.message });
+    if (err.code === 'AUTHORIZATION_UNAVAILABLE') return seatUnavailable(res, err.message);
     res.status(500).json({ error: 'Failed to deactivate seat' });
   }
 });

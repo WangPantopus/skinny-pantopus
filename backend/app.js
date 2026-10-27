@@ -3,7 +3,6 @@ const http = require('http');
 const socketIo = require('socket.io');
 const cors = require('cors');
 const helmet = require('helmet');
-const bodyParser = require('body-parser');
 const cookieParser = require('cookie-parser');
 const compression = require('compression');
 const fs = require('fs');
@@ -79,6 +78,7 @@ const { registerPgBossJobs } = require('./jobs/pgBossJobs');
 
 // Import logger
 const logger = require('./utils/logger');
+const { isUserFacing } = require('./utils/userFacingError');
 
 // Verify Supabase connection
 const supabaseAdmin = require('./config/supabaseAdmin');
@@ -172,6 +172,11 @@ const io = socketIo(server, {
   // redirects /socket.io/ to /socket.io, which used to 404 here, so the web's
   // realtime never connected off localhost. The apps keep the default path.
   addTrailingSlash: false,
+  // A connection that dies silently (a phone changing networks, a NAT dropping it) is noticed by
+  // both ends after pingInterval + pingTimeout. The defaults (25 s + 20 s) left a client up to about
+  // 45 s without live messages; a ping is a few bytes and runs only while a socket is open.
+  pingInterval: 10_000,
+  pingTimeout: 10_000,
   cors: {
     origin: (origin, callback) => {
       if (isAllowedOrigin(origin)) return callback(null, true);
@@ -239,11 +244,8 @@ app.use(
   require('./routes/internalEmailInbound'),
 );
 
-// Body parsing middleware
-app.use(bodyParser.json({ limit: '20mb' }));
-app.use(bodyParser.urlencoded({ extended: true, limit: '20mb' }));
-
-// Cookie parsing (AUTH-3.3) — after body parsers, after webhook routes
+// Cookie parsing (AUTH-3.3) — after webhook routes. JSON and urlencoded bodies are read
+// only after the rate limiters below (REQUEST BODIES).
 app.use(cookieParser());
 
 // Compress JSON answers over 1 KB for clients that accept it (the apps' HTTP stacks and browsers do, and decompress
@@ -290,7 +292,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// APM: response time tracking (before routes, after body parsing)
+// APM: response time tracking (before routes)
 app.use(apmMiddleware);
 
 // ============ HEALTH CHECK ============
@@ -367,6 +369,11 @@ app.use('/api/reviews', contentCreationLimiter);
 app.use('/api/homes', homeCreationLimiter);
 app.use('/api/users/login', authEndpointLimiter);
 app.use('/api/users/register', authEndpointLimiter);
+
+// ============ REQUEST BODIES ============
+// Read only once a write is through the limiters above: 1 MB of JSON by default,
+// more only on the routes that need it (middleware/bodyLimits.js).
+app.use('/api', require('./middleware/bodyLimits'));
 
 // ============ API ROUTES ============
 
@@ -522,14 +529,23 @@ app.use((req, res) => {
 app.use((err, req, res, next) => {
   // Refused origins and rejected uploads are the client's problem, not server faults.
   let status = err.status || err.statusCode || 500;
-  if (err.message === 'Not allowed by CORS') status = 403;
+  let safeMessage = err.message || 'Internal server error';
+  // JSON parser messages include fragments of the submitted body, which may
+  // contain credentials. Keep that content out of both responses and logs.
+  if (err.type === 'entity.parse.failed') {
+    status = 400;
+    safeMessage = 'Request body must contain valid JSON.';
+  } else if (err.type === 'entity.too.large') {
+    status = 413;
+    safeMessage = 'Request body is too large.';
+  } else if (err.message === 'Not allowed by CORS') status = 403;
   else if (err.name === 'MulterError') status = err.code === 'LIMIT_FILE_SIZE' ? 413 : 400;
   else if (/^File type not allowed/.test(err.message || '')) status = 415;
 
   if (status >= 500) {
     logger.error('Unhandled error', { error: err.message, stack: err.stack, path: req.path, method: req.method });
   } else {
-    logger.warn('Request rejected', { error: err.message, status, path: req.path, method: req.method });
+    logger.warn('Request rejected', { error: safeMessage, status, path: req.path, method: req.method });
   }
 
   if (res.headersSent) {
@@ -537,13 +553,19 @@ app.use((err, req, res, next) => {
   }
 
   // Internal error messages can describe the database or providers; production
-  // clients get a generic one for server faults.
-  const message = status >= 500 && process.env.NODE_ENV === 'production'
+  // clients get a generic one for server faults. Only an error the app marked
+  // as fixed copy (utils/userFacingError) keeps its message and code; the
+  // status alone never does, since provider SDK errors carry their own.
+  const userFacing = isUserFacing(err);
+  const message = status >= 500 && process.env.NODE_ENV === 'production' && !userFacing
     ? 'Internal server error'
-    : (err.message || 'Internal server error');
+    : safeMessage;
   return res.status(status).json({
     error: message,
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+    ...(userFacing && typeof err.code === 'string' && { code: err.code }),
+    ...(process.env.NODE_ENV === 'development'
+      && !['entity.parse.failed', 'entity.too.large'].includes(err.type)
+      && { stack: err.stack })
   });
 });
 
@@ -598,6 +620,8 @@ server.listen(PORT, HOST, async () => {
   // Compile the AI response schemas ahead of the first draft after a quiet day (staging and production only).
   if (process.env.NODE_ENV !== 'test') require('./services/ai/warmup').startSchemaWarmup();
 
+  require('./services/chatPushDelivery').start();
+
   // Start pg-boss queue workers (Tier 2 jobs)
   // Set PGBOSS_ENABLED=false when running a separate worker container.
   let pgBossBackedJobsStarted = false;
@@ -632,6 +656,7 @@ const gracefulShutdown = async (signal) => {
   await stopPgBoss().catch((err) => {
     logger.error('[pg-boss] Error during shutdown:', { error: err.message });
   });
+  require('./services/chatPushDelivery').stop();
   await require('./services/syncChangedService').stop();
 
   server.close(() => {

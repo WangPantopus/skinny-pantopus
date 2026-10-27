@@ -11,12 +11,12 @@ const { homeOutboundLimiter } = require('../middleware/rateLimiter');
 const validate = require('../middleware/validate');
 const Joi = require('joi');
 const logger = require('../utils/logger');
-const { chosenUsernameOrNull, nameUnlessMadeUp } = require('../utils/personalUsername');
 const { escapeIlike } = require('../utils/escapeIlike');
 const { computeAddressHash } = require('../utils/normalizeAddress');
 const homeAuthorityService = require('../services/homeAuthorityService');
 const homeListService = require('../services/homeListService');
 const homeCreateService = require('../services/homeCreateService');
+const homeInstantClaimService = require('../services/homeInstantClaimService');
 const { ensureRegionCoverage } = require('../services/seederProvisioningService');
 const homeDetailService = require('../services/homeDetailService');
 const homeResidencyService = require('../services/homeResidencyService');
@@ -24,6 +24,7 @@ const homeResidencyReviewService = require('../services/homeResidencyReviewServi
 const homeInvitationService = require('../services/homeInvitationService');
 const homeInvitationDecisions = require('../services/homeInvitationDecisionService');
 const homeInvitationSender = require('../services/homeInvitationSenderService');
+const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
 const homeAccessSecretService = require('../services/homeAccessSecretService');
 const homeRecordService = require('../services/homeRecordService');
 const { getRequestSessionScope, requireExpectedSessionScope } = require('../utils/requestSessionScope');
@@ -35,6 +36,8 @@ const {
   assertCanMutateTarget,
 } = require('../utils/homePermissions');
 const { HOME_DOCUMENT_VISIBILITIES, HOME_DOCUMENT_TYPES, homeDocumentVisibilities, serializeHomeDocument } = require('../utils/homeDocumentAccess');
+const { createHomeAssetSchema } = require('../utils/homeAssetFields');
+const { unpublishedBusinessIds, isUnpublishedBusiness } = require('../utils/visibilityPolicy');
 const homeClaimMergeService = require('../services/homeClaimMergeService');
 const homeClaimRoutingService = require('../services/homeClaimRoutingService');
 const propertySuggestionsService = require('../services/ai/propertySuggestionsService');
@@ -53,6 +56,7 @@ const addressVerificationObservability = require('../services/addressValidation/
 const { redactStreet, queryKnowsNumber } = require('../utils/addressRedaction');
 const { serializeHomeForViewer, serializeOwnerForViewer } = require('../serializers/homeProfileSerializer');
 const { displayNameFromUser } = require('../serializers/identitySerializers');
+const { withoutAccountPoster } = require('../utils/listingCreatorIdentity');
 
 // Public previews still use this flag-aware personal claim predicate. It does
 // not grant shared detail access or expose an owner/occupant identity.
@@ -1320,10 +1324,33 @@ router.post('/', verifyToken, (req, res, next) => {
         }
       }
     }
+    // Instant Claimed status (home_instant_claim, off by default): the new private setup becomes a claimed home
+    // at once unless the address watch holds it. A retry of the same request tries again; a claim is idempotent.
+    if (result.state === 'completed' && result.role !== 'property_manager') {
+      const claim = await homeInstantClaimService.claimPrivateSetup({ homeId: result.home_id, user: req.user,
+        source: 'home_create' });
+      if (claim.reason !== 'off') {
+        result.instant_claim = { claimed: claim.claimed, held: claim.reason === 'held', settles_at: claim.settlesAt || null };
+      }
+    }
     return homeCreateService.send(res, result, error);
   } catch (error) {
     return homeCreateService.sendError(res, error);
   }
+});
+
+/**
+ * POST /api/homes/:id/instant-claim
+ * Claims the caller's own private setup at once (home_instant_claim). A held claim stays a private setup.
+ */
+router.post('/:id/instant-claim', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  if (Joi.string().uuid().validate(req.params.id).error) return res.status(400).json({ error: 'Invalid home.' });
+  const claim = await homeInstantClaimService.claimPrivateSetup({ homeId: req.params.id.toLowerCase(), user: req.user,
+    source: 'home_claim' });
+  if (claim.claimed) return res.json({ claimed: true, home_id: claim.homeId, settles_at: claim.settlesAt });
+  if (claim.reason === 'held') return res.json({ claimed: false, held: true, message: claim.message });
+  return res.status(claim.status).json({ error: claim.message, code: claim.reason === 'off' ? 'HOME_CLAIM_OFF' : claim.reason });
 });
 
 
@@ -1363,11 +1390,11 @@ router.put('/default', verifyToken, validate(defaultHomeSchema), async (req, res
     if (!homes.some(home => home.id === homeId && ['shared', 'private_setup'].includes(home.access_kind))) {
       return res.status(404).json({ error: 'You can only make a Home you can open your default.', code: 'DEFAULT_HOME_NOT_OPENABLE' });
     }
-    // Insert only, briefings off: choosing a default must never opt someone into briefings or overwrite
-    // their notification choices (the POST /api/saved-places pattern).
+    // Insert only: new preferences start with both briefings on; choosing a
+    // default home must never overwrite existing notification choices.
     const { error: rowError } = await supabaseAdmin
       .from('UserNotificationPreferences')
-      .upsert({ user_id: userId, daily_briefing_enabled: false, evening_briefing_enabled: false },
+      .upsert({ user_id: userId, daily_briefing_enabled: true, evening_briefing_enabled: true },
         { onConflict: 'user_id', ignoreDuplicates: true });
     if (rowError) throw rowError;
     const { error } = await supabaseAdmin
@@ -1670,6 +1697,9 @@ router.get('/discover', verifyToken, async (req, res) => {
     const ownerMap = new Map((ownersRes.data || []).map((o) => [o.id, o]));
     const memberSet = new Set((membershipRes.data || []).map((m) => m.home_id));
     const claimMap = new Map((claimsRes.data || []).map((c) => [c.home_id, c.status]));
+    // A member sees the owner by the Local Profile they show neighbors (services/chatPeople.js).
+    const ownerPeople = await loadChatPeople(rows
+      .filter((h) => memberSet.has(h.id) || h.owner_id === userId).map((h) => h.owner_id));
 
     const ranked = rows
       .map((h) => {
@@ -1722,7 +1752,7 @@ router.get('/discover', verifyToken, async (req, res) => {
           home_type: h.home_type || null,
           visibility: h.visibility,
           // Knowing an address is not permission to link its resident's account.
-          owner: serializeOwnerForViewer(owner, { reveal: member }),
+          owner: serializeOwnerForViewer(chatPersonRow(owner, ownerPeople), { reveal: member }),
           is_member: memberSet.has(h.id),
           claim_status: claimMap.get(h.id) || null,
           _score: score,
@@ -1820,7 +1850,9 @@ router.get('/:id/public-profile', verifyToken, async (req, res) => {
 
     // One projection for outsiders, shared with the privacy mirror
     // (identity-center view-as?surface=home) so the two can never drift.
-    const owner = serializeOwnerForViewer(ownerRes.data, { reveal });
+    // Household members see the owner by the Local Profile they show neighbors (services/chatPeople.js).
+    const owner = serializeOwnerForViewer(reveal && ownerRes.data
+      ? chatPersonRow(ownerRes.data, await loadChatPeople([ownerRes.data.id])) : ownerRes.data, { reveal });
 
     res.json({
       home: serializeHomeForViewer(home, { reveal }),
@@ -1845,7 +1877,7 @@ router.post('/:id/request-household-from-owner', verifyToken, validate(requestHo
       action: 'request', payload: { requested_identity: req.body.requested_identity } });
     try {
       await require('../services/notificationService').notifyHouseholdAccessRequest({
-        ownerUserIds: result.notify_user_ids, requesterName: nameUnlessMadeUp(result.actor_name, 'Someone'), homeLabel: result.home_label,
+        ownerUserIds: result.notify_user_ids, requesterName: await homeInvitationService.personName(req.user.id, 'Someone'), homeLabel: result.home_label,
         homeId: req.params.id, requesterUserId: req.user.id, requestedIdentity: req.body.requested_identity,
         requestId: result.request_id,
       });
@@ -1890,7 +1922,8 @@ router.post('/:id/household-access-requests/:requestId/reject', verifyToken, asy
     if (!result.replayed) {
       try {
         await require('../services/notificationService').notifyHouseholdAccessRequestRejected({
-          requesterUserId: result.target_id, homeLabel: result.home_label, resolverName: nameUnlessMadeUp(result.actor_name, 'Someone'),
+          requesterUserId: result.target_id, homeLabel: result.home_label,
+          resolverName: await homeInvitationService.personName(req.user.id, 'A home manager'),
         });
       } catch (err) { logger.error('Household rejection notification failed after commit', { errorCode: err.code }); }
     }
@@ -2065,10 +2098,12 @@ router.post('/:id/attach', verifyToken, validate(attachDetachSchema), async (req
   try {
     const result = await homeResidencyService.review({ homeId: req.params.id, actorId: req.user.id,
       action: 'attach', targetId: req.body.userId });
+    // The SQL names the person by the account; they go by their Local Profile (services/chatPeople.js).
+    const user = chatPersonRow(result.user, await loadChatPeople([result.target_id]));
     res.json({
-      message: result.replayed ? 'User is already attached to this home' : `${result.user.name} attached to home successfully`,
+      message: result.replayed ? 'User is already attached to this home' : `${user.name} attached to home successfully`,
       occupancy: { id: result.occupancy.id, homeId: req.params.id, userId: result.target_id,
-        username: result.user.username, name: result.user.name, attachedAt: result.occupancy.created_at },
+        username: user.username, name: user.name, attachedAt: result.occupancy.created_at },
     });
   } catch (err) {
     logger.error('Attach user error', { errorCode: err.code, homeId: req.params.id });
@@ -2105,9 +2140,7 @@ router.post('/:id/move-out', verifyToken, async (req, res) => {
     // the current recipients returned by that transaction after it succeeds.
     if (result.notify_user_ids?.length) {
       try {
-        const { data: user } = await supabaseAdmin.from('User').select('username, name, first_name')
-          .eq('id', req.user.id).single();
-        const userName = user?.name || user?.first_name || chosenUsernameOrNull(user?.username) || 'A member';
+        const userName = await homeInvitationService.personName(req.user.id, 'A member');
         await require('../services/notificationService').createBulkNotifications(result.notify_user_ids.map(userId => ({
           userId, type: 'member_moved_out', title: 'Member moved out', body: `${userName} has moved out.`,
           link: `/homes/${req.params.id}/members`, metadata: { home_id: req.params.id, moved_out_user_id: req.user.id },
@@ -2541,7 +2574,7 @@ router.get('/:id/nearby-gigs', verifyToken, async (req, res) => {
     // Limit results
     const limitedGigs = (gigs || []).slice(0, parseInt(limit) || 10);
 
-    res.json({ gigs: limitedGigs });
+    res.json({ gigs: limitedGigs.map(withoutAccountPoster) });
   } catch (err) {
     logger.error('Nearby gigs fetch error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch nearby gigs' });
@@ -2981,7 +3014,9 @@ router.get('/:id/bills/:billId/splits', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch bill splits' });
     }
 
-    res.json({ splits: data || [] });
+    // Each member goes by the Local Profile they show neighbors (services/chatPeople.js).
+    const people = await loadChatPeople((data || []).map(split => split.user?.id));
+    res.json({ splits: (data || []).map(split => ({ ...split, user: chatPersonRow(split.user, people) })) });
   } catch (err) {
     logger.error('Bill splits fetch error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch bill splits' });
@@ -3011,6 +3046,8 @@ const MAINTENANCE_CATEGORY_VALUES = new Set([
   'hvac', 'plumbing', 'electrical', 'roof', 'gutter', 'appliance', 'pest',
   'landscape', 'cleaning', 'painting', 'safety', 'chimney', 'generic'
 ]);
+const maintenanceCostSchema = Joi.number().min(0).max(9999999999.99)
+  .precision(2).strict().allow(null).optional();
 
 /**
  * GET /api/homes/:id/maintenance
@@ -3075,6 +3112,9 @@ router.post('/:id/maintenance', verifyToken, async (req, res) => {
     if (!access.hasAccess) return res.status(403).json({ error: 'No permission to manage maintenance' });
 
     const { task, vendor, cost, recurrence, due_date, status, performed_at, notes, category, performer_contact, clientRequestId } = req.body || {};
+    if (maintenanceCostSchema.validate(cost).error) {
+      return res.status(400).json({ error: 'Cost must be a non-negative amount below $10 billion, with at most two decimal places.' });
+    }
     if (Joi.string().max(4000).allow('', null).optional().validate(notes).error) {
       return res.status(400).json({ error: 'Notes must be text up to 4000 characters' });
     }
@@ -3191,6 +3231,10 @@ router.put('/:id/maintenance/:taskId', verifyToken, async (req, res) => {
     const updates = {};
     for (const key of allowed) {
       if (req.body && req.body[key] !== undefined) updates[key] = req.body[key];
+    }
+
+    if (maintenanceCostSchema.validate(updates.cost).error) {
+      return res.status(400).json({ error: 'Cost must be a non-negative amount below $10 billion, with at most two decimal places.' });
     }
 
     if (Joi.string().max(4000).allow('', null).optional().validate(updates.notes).error) {
@@ -3496,12 +3540,15 @@ router.get('/:id/documents', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch documents' });
     }
 
-    // The apps' "Uploaded by" reads `uploaded_by_name`, the uploader's display name (never the raw user id). Only the
-    // name leaves the server, as the Home timeline's `actor_name` does; a deleted account leaves it null.
+    // The apps' "Uploaded by" reads `uploaded_by_name`, the uploader's display name (never the raw user id): the Local
+    // Profile name they show neighbors (services/chatPeople.js). Only the name leaves the server, as the Home timeline's
+    // `actor_name` does; a deleted account leaves it null.
+    const people = await loadChatPeople((data || []).map(document => document.uploader?.id));
     res.json({
+      permissions: (access.permissions || []).filter(permission => ['docs.view', 'docs.upload', 'docs.manage'].includes(permission)),
       documents: (data || []).map(({ uploader, ...document }) => ({
         ...serializeHomeDocument(document),
-        uploaded_by_name: uploader ? displayNameFromUser(uploader) : null,
+        uploaded_by_name: uploader ? people.get(String(uploader.id))?.displayName || displayNameFromUser(uploader) : null,
       })),
     });
   } catch (err) {
@@ -3699,8 +3746,12 @@ router.get('/:id/businesses', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch linked businesses' });
     }
 
+    // A business that closed or went back to draft after it was linked leaves the list, as its profile does.
+    const hidden = await unpublishedBusinessIds((data || []).map(l => l.business_user_id));
+    const links = (data || []).filter(l => !hidden.has(String(l.business_user_id)));
+
     // Enrich with business user info
-    const businessIds = (data || []).map(l => l.business_user_id);
+    const businessIds = links.map(l => l.business_user_id);
     let businesses = [];
     if (businessIds.length > 0) {
       const { data: bizUsers } = await supabaseAdmin
@@ -3718,13 +3769,13 @@ router.get('/:id/businesses', verifyToken, async (req, res) => {
       const profMap = {};
       for (const p of (profiles || [])) profMap[p.business_user_id] = p;
 
-      businesses = (data || []).map(link => ({
+      businesses = links.map(link => ({
         ...link,
         business: bizMap[link.business_user_id] || null,
         profile: profMap[link.business_user_id] || null,
       }));
     } else {
-      businesses = data || [];
+      businesses = links;
     }
 
     res.json({ links: businesses });
@@ -3752,7 +3803,6 @@ router.post('/:id/businesses', verifyToken, validate(linkBusinessSchema), async 
 
     const access = await checkHomePermission(homeId, userId, 'vendors.manage');
     if (!access.hasAccess) return res.status(403).json({ error: 'No access' });
-    if (!access.hasPermission) return res.status(403).json({ error: 'Missing vendors.manage permission' });
 
     let businessUserId = req.body.business_user_id;
 
@@ -3778,6 +3828,10 @@ router.post('/:id/businesses', verifyToken, validate(linkBusinessSchema), async 
 
     if (!targetUser || targetUser.account_type !== 'business') {
       return res.status(400).json({ error: 'Target user is not a business account' });
+    }
+    // A draft isn't public (its profile answers 404, and search leaves it out), so it can't be linked.
+    if (await isUnpublishedBusiness(businessUserId)) {
+      return res.status(404).json({ error: 'Business not found' });
     }
 
     const { data, error } = await supabaseAdmin
@@ -3818,7 +3872,6 @@ router.patch('/:id/businesses/:linkId', verifyToken, async (req, res) => {
 
     const access = await checkHomePermission(homeId, userId, 'vendors.manage');
     if (!access.hasAccess) return res.status(403).json({ error: 'No access' });
-    if (!access.hasPermission) return res.status(403).json({ error: 'Missing vendors.manage permission' });
 
     const allowed = ['kind', 'notes'];
     const updates = {};
@@ -3861,7 +3914,6 @@ router.delete('/:id/businesses/:linkId', verifyToken, async (req, res) => {
 
     const access = await checkHomePermission(homeId, userId, 'vendors.manage');
     if (!access.hasAccess) return res.status(403).json({ error: 'No access' });
-    if (!access.hasPermission) return res.status(403).json({ error: 'Missing vendors.manage permission' });
 
     const { error } = await supabaseAdmin
       .from('HomeBusinessLink')
@@ -4311,14 +4363,18 @@ router.post('/:id/devices', verifyToken, async (req, res) => {
 
 /**
  * GET /api/homes/:id/assets
+ * The home's records of appliances and valuables (with serial numbers, prices and warranty
+ * dates) need assets.view, as the table's own policy and the records photo reads require;
+ * being in the home (a guest, a service provider) isn't enough.
  */
 router.get('/:id/assets', verifyToken, async (req, res) => {
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
+    if (Joi.string().uuid().validate(homeId).error) return res.status(400).json({ error: 'Invalid Home id' });
 
-    const access = await checkHomePermission(homeId, userId);
-    if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
+    const access = await checkHomePermission(homeId, userId, 'assets.view');
+    if (!access.hasAccess) return res.status(403).json({ error: "You do not have permission to see this home's records." });
 
     const { data, error } = await supabaseAdmin
       .from('HomeAsset')
@@ -4331,8 +4387,10 @@ router.get('/:id/assets', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch assets' });
     }
 
+    res.set('Cache-Control', 'private, no-store');
     res.json({ assets: data || [] });
   } catch (err) {
+    if (err.code === 'HOME_ACCESS_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
     logger.error('Assets fetch error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch assets' });
   }
@@ -4340,48 +4398,71 @@ router.get('/:id/assets', verifyToken, async (req, res) => {
 
 /**
  * POST /api/homes/:id/assets
+ * Adding an appliance or other item to the Home's records needs assets.manage, as the
+ * table's own policy and the records photo route require.
+ * With `request_id` (the assistant card's id), the same request for this home and person
+ * answers 200 with the item it added (`replayed: true`) instead of adding it again.
  */
-router.post('/:id/assets', verifyToken, async (req, res) => {
+router.post('/:id/assets', verifyToken, validate(createHomeAssetSchema), async (req, res) => {
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
+    if (Joi.string().uuid().validate(homeId).error) return res.status(400).json({ error: 'Invalid Home id' });
 
-    const access = await checkHomePermission(homeId, userId);
-    if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
+    const access = await checkHomePermission(homeId, userId, 'assets.manage');
+    if (!access.hasAccess) return res.status(403).json({ error: 'You do not have permission to add items to this home.' });
 
-    const { category, name, room, brand, model, serial_number, purchase_date, purchase_price, warranty_expires_at, notes, details } = req.body;
+    const { category, name, room, brand, model, serial_number, purchase_date, purchase_price, warranty_expires_at, notes, details, request_id: requestId } = req.body;
 
-    if (!category || !name) {
-      return res.status(400).json({ error: 'category and name are required' });
+    // One request for this actor and Home reuses the same primary key, as issues do.
+    const assetId = requestId ? crypto.createHash('sha256')
+      .update('pantopus:home-asset:v1:' + homeId.toLowerCase() + ':' + userId.toLowerCase() + ':' + requestId.toLowerCase())
+      .digest('hex').slice(0, 32) : null;
+    const readAdded = async () => {
+      const { data: added, error: readError } = await supabaseAdmin.from('HomeAsset').select('*')
+        .eq('id', assetId).eq('home_id', homeId).maybeSingle();
+      if (readError) throw readError;
+      return added;
+    };
+    if (assetId) {
+      const added = await readAdded();
+      if (added) return res.status(200).json({ asset: added, replayed: true });
     }
 
-    const { data, error } = await supabaseAdmin
-      .from('HomeAsset')
-      .insert({
-        home_id: homeId,
-        category,
-        name,
-        room: room || null,
-        brand: brand || null,
-        model: model || null,
-        serial_number: serial_number || null,
-        purchase_date: purchase_date || null,
-        purchase_price: purchase_price || null,
-        warranty_expires_at: warranty_expires_at || null,
-        notes: notes || null,
-        details: details || {},
-        created_by: userId,
-      })
-      .select()
-      .single();
+    const row = {
+      ...(assetId ? { id: assetId } : {}),
+      home_id: homeId,
+      category,
+      name,
+      room: room || null,
+      brand: brand || null,
+      model: model || null,
+      serial_number: serial_number || null,
+      purchase_date: purchase_date || null,
+      purchase_price: purchase_price || null,
+      warranty_expires_at: warranty_expires_at || null,
+      notes: notes || null,
+      details: details || {},
+      created_by: userId,
+    };
+    const { data, error } = assetId
+      ? await supabaseAdmin.from('HomeAsset').upsert(row, { onConflict: 'id', ignoreDuplicates: true }).select().maybeSingle()
+      : await supabaseAdmin.from('HomeAsset').insert(row).select().single();
 
     if (error) {
       logger.error('Error creating home asset', { error: error.message, homeId });
       return res.status(500).json({ error: 'Failed to create asset' });
     }
+    // Two runs at once: the other one added it.
+    if (!data && assetId) {
+      const added = await readAdded();
+      if (added) return res.status(200).json({ asset: added, replayed: true });
+    }
+    if (!data) return res.status(500).json({ error: 'Failed to create asset' });
 
     res.status(201).json({ asset: data });
   } catch (err) {
+    if (err.code === 'HOME_ACCESS_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
     logger.error('Asset creation error', { error: err.message });
     res.status(500).json({ error: 'Failed to create asset' });
   }
@@ -4529,11 +4610,17 @@ router.post('/:id/claim/:claimId/reject', verifyToken, validate(residencyRejecti
       action: 'reject', claimId: req.params.claimId, reason: req.body.reason,
       requestId: req.body.request_id, reviewToken: req.body.review_token });
     if (!result.replayed) {
+      // Home claims PR 4: a no ends probation (the membership is suspended), and asking again is refused. Their way
+      // back is proof by mail, which goes to Pantopus review; the residency page offers it.
+      const probationEnded = result.occupancy?.verification_source === 'probation'
+        && result.occupancy.is_active === false && result.occupancy.verification_status === 'suspended_challenged';
       try {
         await require('../services/notificationService').createNotification({
-          userId: result.target_id, type: 'residency_rejected', title: 'Verification update',
-          body: "We couldn't verify you for this home. You can try again or verify by mail.",
-          icon: '📬', link: `/homes/${req.params.id}/waiting-room`,
+          userId: result.target_id, type: 'residency_rejected', title: probationEnded ? 'Your probation ended' : 'Verification update',
+          body: probationEnded
+            ? "Someone in the household said you don't live there, so your probation ended. If you do live there, verify your address by mail and Pantopus will review it."
+            : "We couldn't verify you for this home. You can try again or verify by mail.",
+          icon: '📬', link: `/homes/${req.params.id}/${probationEnded ? 'residency' : 'waiting-room'}`,
           metadata: { home_id: req.params.id, claim_id: req.params.claimId },
         });
       } catch (err) { logger.error('Residency rejection notification failed', { errorCode: err.code }); }
@@ -5290,12 +5377,14 @@ router.get('/:id/timeline', verifyToken, async (req, res) => {
     }
     const rows = (dataRes.status === 'fulfilled' ? dataRes.value.data : null) || [];
     const total = (countRes.status === 'fulfilled' ? countRes.value.count : null) ?? 0;
+    // Actors go by the Local Profile name they show neighbors (services/chatPeople.js).
+    const people = await loadChatPeople(rows.map(row => row.actor?.id));
     const items = rows.map(row => ({
       id: row.id,
       action: row.action,
       description: describeHomeActivity(row),
       actor_id: row.actor_user_id || null,
-      actor_name: row.actor ? displayNameFromUser(row.actor) : null,
+      actor_name: row.actor ? people.get(String(row.actor.id))?.displayName || displayNameFromUser(row.actor) : null,
       metadata: row.metadata || {},
       created_at: row.created_at,
     }));

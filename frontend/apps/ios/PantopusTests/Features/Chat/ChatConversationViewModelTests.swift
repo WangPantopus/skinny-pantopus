@@ -99,6 +99,15 @@ final class ChatConversationViewModelTests: XCTestCase {
         return decoder
     }
 
+    /// `GET /api/chat/rooms/:id`: a room of `type` whose members are u_me and u_other, both active.
+    private static func roomDetailJSON(type: String) -> String {
+        """
+        {"room":{"type":"\(type)","name":null,"is_active":true,"participants":[
+        {"user_id":"u_me","is_active":true,"left_at":null},
+        {"user_id":"u_other","is_active":true,"left_at":null}]}}
+        """
+    }
+
     func testLoadDecodesCanonicalBackendMessageField() async {
         URLProtocolStub.stub(
             path: "/api/chat/conversations/u_other/messages",
@@ -320,7 +329,7 @@ final class ChatConversationViewModelTests: XCTestCase {
         URLProtocolStub.stub(
             path: "/api/upload/ai-media",
             response: .json("""
-            {"message":"1 image(s) uploaded","images":[{"url":"https://cdn.example/image.jpg","key":"k","name":"photo.jpg","mime_type":"image/jpeg","size":3}]}
+            {"message":"1 image(s) uploaded","images":[{"url":"ai-photo:photo.jpg","name":"photo.jpg","mime_type":"image/jpeg","size":3}]}
             """)
         )
         let fakeAI = FakeAIChatStreamClient(events: [.textDelta("Nice image"), .done])
@@ -336,15 +345,17 @@ final class ChatConversationViewModelTests: XCTestCase {
         vm.queueAttachment(kind: .image, filename: "photo.jpg", mimeType: "image/jpeg", data: Data("jpg".utf8))
         vm.composerText = "Look"
         await vm.send()
-        XCTAssertEqual(fakeAI.lastRequest?.images, ["https://cdn.example/image.jpg"])
+        XCTAssertEqual(fakeAI.lastRequest?.images, ["ai-photo:photo.jpg"])
         guard case let .loaded(rows) = vm.state,
               case let .bubble(content)? = rows.first(where: { $0.id.hasPrefix("bubble_ai_user_") }),
-              case let .textWithImages(text, urls) = content.body else {
+              case let .textWithImages(text, urls, _) = content.body else {
             XCTFail("Expected outgoing image prompt bubble")
             return
         }
         XCTAssertEqual(text, "Look")
-        XCTAssertEqual(urls.first?.absoluteString, "https://cdn.example/image.jpg")
+        // The phone's own copy: the server deletes the photo once read, and its reference never loads.
+        XCTAssertEqual(urls.count, 1)
+        XCTAssertEqual(urls.first?.isFileURL, true)
     }
 
     func testAIActiveSampleRendersStructuredReplyWithEstimate() {
@@ -606,16 +617,20 @@ final class ChatConversationViewModelTests: XCTestCase {
     }
 
     /// Person threads aggregate messages from every shared room (direct
-    /// + gig + group), but Phase 1 always sends to the direct room.
-    /// Replying to a bubble that lives in a different room must drop
-    /// replyToId — otherwise the backend 400s "Reply target not found in
-    /// this room" and the row fails forever.
+    /// + gig + group). A reply goes to its message's own room, and only
+    /// when that room is the direct conversation with this person: a reply
+    /// to a message from another audience (here a gig room) is not sent at
+    /// all, the draft and the reply stay, and the person is told to open the
+    /// original conversation or cancel the reply. Cancelled, the message
+    /// goes to the direct room without a replyToId, so no send can fail on
+    /// "Reply target not found in this room".
     func testReplyToCrossRoomMessageDropsReplyToId() async throws {
         let gigRow = """
         {"id":"m_gig","room_id":"rGig","user_id":"u_other","message_text":"about the gig","message_type":"text","created_at":"2026-04-20T10:00:00.000Z"}
         """
         URLProtocolStub.stub(path: "/api/chat/conversations/u_other/messages", response: .json(Self.messagesJSON(gigRow)))
         URLProtocolStub.stub(path: "/api/chat/conversations/u_other/read", response: .json("{}"))
+        URLProtocolStub.stub(path: "/api/chat/rooms/rGig", response: .json(Self.roomDetailJSON(type: "gig")))
         URLProtocolStub.stub(path: "/api/chat/direct", response: .json("{\"roomId\":\"r1\"}"))
         URLProtocolStub.stub(
             path: "/api/chat/messages",
@@ -631,14 +646,22 @@ final class ChatConversationViewModelTests: XCTestCase {
         vm.beginReply(to: "m_gig")
         vm.composerText = "reply"
         await vm.send()
-        let sendRequest = try XCTUnwrap(
-            URLProtocolStub.capturedRequests.first {
-                $0.url?.path == "/api/chat/messages" && $0.httpMethod == "POST"
-            }
+        let posts = { URLProtocolStub.capturedRequests.filter { $0.url?.path == "/api/chat/messages" && $0.httpMethod == "POST" } }
+        XCTAssertTrue(
+            URLProtocolStub.capturedRequests.contains { $0.url?.path == "/api/chat/rooms/rGig" },
+            "the reply's own room is checked before anything is sent"
         )
+        XCTAssertTrue(posts().isEmpty, "a reply to another audience is never sent here")
+        XCTAssertEqual(vm.actionFailure, ChatReplyScopeError.differentAudience.errorDescription)
+        XCTAssertEqual(vm.composerText, "reply", "the draft stays")
+        XCTAssertEqual(vm.replyingTo?.messageId, "m_gig", "the reply stays until cancelled")
+
+        vm.cancelMessageAction()
+        await vm.send()
+        let sendRequest = try XCTUnwrap(posts().first)
         let body = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(sendRequest.httpBodyData())) as? [String: Any])
         XCTAssertEqual(body["roomId"] as? String, "r1")
-        XCTAssertNil(body["replyToId"], "a cross-room reply target must be dropped to avoid a 400")
+        XCTAssertNil(body["replyToId"], "a cross-room reply target never reaches the direct room")
     }
 
     /// Replying to one's own still-sending / failed optimistic row must
@@ -774,10 +797,16 @@ final class ChatConversationViewModelTests: XCTestCase {
                     Self.messageJSON(id: "m1", userId: "u_other", text: "older", createdAt: "2026-04-20T09:59:00.000Z"),
                     hasMore: false
                 )),
-                // refresh() (socket echo): newest page again plus a reply.
+                // refresh() (socket echo): newest page again plus a reply; older history remains.
                 .json(Self.messagesJSON(
                     Self.messageJSON(id: "m3", userId: "u_other", text: "reply", createdAt: "2026-04-20T10:01:00.000Z"),
-                    Self.messageJSON(id: "m2", userId: "u_other", text: "newest")
+                    Self.messageJSON(id: "m2", userId: "u_other", text: "newest"),
+                    hasMore: true
+                )),
+                // The refresh reads back to the oldest message it holds: m1 still exists.
+                .json(Self.messagesJSON(
+                    Self.messageJSON(id: "m1", userId: "u_other", text: "older", createdAt: "2026-04-20T09:59:00.000Z"),
+                    hasMore: false
                 ))
             ]
         )
@@ -790,6 +819,7 @@ final class ChatConversationViewModelTests: XCTestCase {
         )
         await vm.load()
         await vm.loadOlder()
+        let beforeRefresh = URLProtocolStub.capturedRequests.count
         await vm.refresh()
         guard case let .loaded(rows) = vm.state else {
             XCTFail("Expected .loaded after refresh")
@@ -799,14 +829,26 @@ final class ChatConversationViewModelTests: XCTestCase {
             if case let .bubble(content) = row { return content.id } else { return nil }
         }
         XCTAssertEqual(bubbleIds, ["m1", "m2", "m3"], "refresh must keep the paginated older page and append the new reply in order")
+        let refreshPages = URLProtocolStub.capturedRequests[beforeRefresh...].filter {
+            $0.url?.path == "/api/chat/conversations/u_other/messages"
+        }
+        let cursors = refreshPages.map { request in
+            request.url.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false) }?.queryItems?.first { $0.name == "before" }?.value
+        }
+        XCTAssertEqual(cursors.count, 2, "the refresh reads the newest page, then the page before it")
+        XCTAssertEqual(cursors.first, .some(nil), "the refresh starts at the newest page")
+        XCTAssertNotNil(cursors.last.flatMap(\.self), "and reads back before m2 to the oldest message it holds")
     }
 
-    func testReplySendIncludesReplyToId() async {
+    /// A reply goes to its message's own room once that room is confirmed
+    /// to be the direct conversation between the two people (same audience).
+    func testReplySendIncludesReplyToId() async throws {
         URLProtocolStub.stub(
             path: "/api/chat/conversations/u_other/messages",
             response: .json(Self.messagesJSON(Self.messageJSON(id: "m1", userId: "u_other", text: "hi")))
         )
         URLProtocolStub.stub(path: "/api/chat/conversations/u_other/read", response: .json("{}"))
+        URLProtocolStub.stub(path: "/api/chat/rooms/r1", response: .json(Self.roomDetailJSON(type: "direct")))
         URLProtocolStub.stub(path: "/api/chat/direct", response: .json("{\"roomId\":\"r1\"}"))
         URLProtocolStub.stub(
             path: "/api/chat/messages",
@@ -829,6 +871,18 @@ final class ChatConversationViewModelTests: XCTestCase {
         }
         XCTAssertEqual(content.replyPreview?.messageId, "m1")
         XCTAssertEqual(content.replyPreview?.text, "hi")
+        let roomCheck = URLProtocolStub.capturedRequests.firstIndex { $0.url?.path == "/api/chat/rooms/r1" }
+        let sendIndex = URLProtocolStub.capturedRequests.firstIndex {
+            $0.url?.path == "/api/chat/messages" && $0.httpMethod == "POST"
+        }
+        XCTAssertNotNil(roomCheck, "the reply's room is checked")
+        XCTAssertLessThan(try XCTUnwrap(roomCheck), try XCTUnwrap(sendIndex), "the room is checked before the send")
+        let body = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: XCTUnwrap(URLProtocolStub.capturedRequests[XCTUnwrap(sendIndex)].httpBodyData()))
+                as? [String: Any]
+        )
+        XCTAssertEqual(body["roomId"] as? String, "r1", "the reply goes to its message's room")
+        XCTAssertEqual(body["replyToId"] as? String, "m1")
     }
 
     func testEditUpdatesMessageAndClearsEditState() async {
@@ -883,8 +937,9 @@ final class ChatConversationViewModelTests: XCTestCase {
     }
 
     func testQueuedAttachmentUploadsAndRendersAttachmentBubble() async throws {
-        URLProtocolStub.stub(path: "/api/chat/conversations/u_other/messages", response: .json(Self.messagesJSON()))
-        URLProtocolStub.stub(path: "/api/chat/conversations/u_other/read", response: .json("{}"))
+        // A room thread reads its own history; one the server refuses (404) accepts no rows.
+        URLProtocolStub.stub(path: "/api/chat/rooms/r1/messages", response: .json(Self.messagesJSON()))
+        URLProtocolStub.stub(path: "/api/chat/rooms/r1/read", response: .json("{}"))
         URLProtocolStub.stub(
             path: "/api/upload/chat-media/r1",
             responses: [
@@ -911,6 +966,7 @@ final class ChatConversationViewModelTests: XCTestCase {
             uploader: MultipartUploader(session: TestSession.make())
         )
         await vm.load()
+        guard case .empty = vm.state else { return XCTFail("Expected the room's empty history to load, got \(vm.state)") }
         vm.queueAttachment(kind: .document, filename: "note.pdf", mimeType: "application/pdf", data: Data("pdf".utf8))
         await vm.send()
         guard case let .loaded(failedRows) = vm.state,

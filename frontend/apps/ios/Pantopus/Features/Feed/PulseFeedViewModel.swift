@@ -564,8 +564,10 @@ public final class PulseFeedViewModel {
                 FeedActionsEndpoints.dismissSeededFact(factId: factId),
                 as: FeedSeededDismissResponse.self
             )
+            await refreshSavedOpeningPage()
         } catch {
             removedPostIds.remove(factId)
+            toastMessage = "Couldn't dismiss that suggestion. Try again."
             rebuildLoadedState()
         }
     }
@@ -638,7 +640,7 @@ public final class PulseFeedViewModel {
         }
     }
 
-    /// After a topic mute: saved feed pages still hold the topic's posts, so
+    /// After a topic mute or suggestion dismissal: saved pages still hold those posts, so
     /// they read again when next opened, and the page Pulse opens on (every
     /// topic and type) is read again now, so a relaunch never shows the
     /// muted posts from the saved copy. The rows on screen stay as they are.
@@ -1107,6 +1109,12 @@ public final class PulseFeedViewModel {
             intent: intent,
             title: intent == .event ? post.title : nil,
             body: post.content,
+            event: PulseEventDetails(
+                postType: post.postType,
+                startsAt: post.eventDate,
+                endsAt: post.eventEndDate,
+                venue: post.eventVenue
+            ),
             // The backend persists a single like counter; the secondary
             // verb is display-only and has no count source, so it stays 0
             // (comment count lives on the Reply affordance instead).

@@ -180,7 +180,7 @@ public struct TasksMapView: View {
     private var categoryChipStrip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                ForEach(GigsCategory.allCases, id: \.self) { category in
+                ForEach(GigsCategory.filterCases(including: viewModel.activeCategory), id: \.self) { category in
                     categoryChipButton(category)
                 }
             }

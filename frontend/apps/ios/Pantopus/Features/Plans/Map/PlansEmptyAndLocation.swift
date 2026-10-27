@@ -13,21 +13,28 @@ struct PlansEmptyCard: View {
     let viewModel: PlansMapViewModel
     let actions: PlansMapActions
     @State private var flags = PlansFlags.shared
+    @State private var showsTeams = false
+    @State private var teams = PlanTeamsModel()
+    @AppStorage("plans.sports.askDismissed") private var sportsAskDismissed = false
 
     var body: some View {
-        ScrollView {
+        PlansSheetScroll {
             VStack(alignment: .leading, spacing: Spacing.s3) {
-                VStack(alignment: .leading, spacing: Spacing.s1) {
-                    Text("Nothing planned yet")
-                        .planFont(.h3)
-                        .foregroundStyle(Theme.Color.appText)
-                        .accessibilityAddTraits(.isHeader)
-                    Text("Plans here start with one neighbor. Yours could be the first.")
-                        .planFont(.small)
-                        .foregroundStyle(Theme.Color.appTextSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                // The lowest stop shows the title and the suggestion over the map.
+                VStack(alignment: .leading, spacing: Spacing.s3) {
+                    VStack(alignment: .leading, spacing: Spacing.s1) {
+                        Text("Nothing planned yet")
+                            .planFont(.h3)
+                            .foregroundStyle(Theme.Color.appText)
+                            .accessibilityAddTraits(.isHeader)
+                        Text("Plans here start with one neighbor. Yours could be the first.")
+                            .planFont(.small)
+                            .foregroundStyle(Theme.Color.appTextSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    watchNudge
                 }
-                watchNudge
+                .plansSheetPeek(.empty)
                 Text("Or start something else")
                     .planFont(.small)
                     .foregroundStyle(Theme.Color.appTextSecondary)
@@ -58,15 +65,56 @@ struct PlansEmptyCard: View {
                 .accessibilityIdentifier("plansInviteNeighbor")
             }
             .padding(.bottom, Spacing.s4)
+            // One drag up shows all of it: the middle stop fits the whole message.
+            .plansSheetFit(.empty)
         }
-        .scrollIndicators(.hidden)
         .accessibilityIdentifier("plansEmpty")
+        .sheet(isPresented: $showsTeams, onDismiss: { Task { await viewModel.loadGames() } }, content: { PlanTeamsSheet() })
     }
 
     /// "Seahawks play Sunday at 1:25 · Host a watch party", from the next
     /// game on the checked list; without one, the plain invitation.
     private var watchNudge: some View {
-        let game = viewModel.games.first
+        TimelineView(.periodic(from: .now, by: 30)) { context in
+            VStack(alignment: .leading, spacing: Spacing.s2) {
+                if viewModel.sports?.canChoose == true {
+                    if viewModel.sports?.state == "unset", !sportsAskDismissed {
+                        sportsAsk
+                    } else if viewModel.sports?.state == "on", viewModel.games.contains(where: { $0.isAvailable(at: context.date) }) {
+                        watchNudge(at: context.date)
+                    }
+                    if let attribution = viewModel.sports?.attribution,
+                       viewModel.games.contains(where: { $0.isAvailable(at: context.date) }) {
+                        Text(attribution).planFont(.caption).foregroundStyle(Theme.Color.appTextSecondary)
+                    }
+                    if let error = teams.error { Text(error).planFont(.small).foregroundStyle(Theme.Color.warning) }
+                } else {
+                    watchNudge(at: context.date)
+                }
+            }
+        }
+    }
+
+    private var sportsAsk: some View {
+        PlanFormCard {
+            VStack(alignment: .leading, spacing: Spacing.s2) {
+                HStack {
+                    Text("Watch games with neighbors?").planFont(.bodyStrong)
+                    Spacer()
+                    Button("×") { sportsAskDismissed = true }
+                        .frame(minWidth: 44, minHeight: 44).accessibilityLabel("Dismiss sports suggestions")
+                }
+                Button("Choose teams") { showsTeams = true }.planButton(.primary)
+                Button("Not into sports") {
+                    Task { if await teams.save(SportsPreferencesDTO(watch: "off")) { await viewModel.loadGames() } }
+                }
+                .planButton(.text)
+            }
+        }
+    }
+
+    private func watchNudge(at now: Date) -> some View {
+        let game = viewModel.games.first { $0.isAvailable(at: now) }
         return Button {
             actions.host(PlansHostStart(kind: .watchParty, game: game))
         } label: {
@@ -90,6 +138,11 @@ struct PlansEmptyCard: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("plansEmptyWatch")
+        .contextMenu {
+            if viewModel.sports?.canChoose == true {
+                PlanSportsMenu(game: game, model: teams) { await viewModel.loadGames() }
+            }
+        }
     }
 
     /// "Seahawks play Sunday at 1:25".
@@ -98,7 +151,8 @@ struct PlansEmptyCard: View {
         let day = PlanFormat.dayHeading(start)
         let when = day == "Today" ? "today" : day == "Tomorrow" ? "tomorrow" : day
         let time = PlanFormat.time(start).replacingOccurrences(of: " PM", with: "").replacingOccurrences(of: " AM", with: "")
-        return "\(game.label) play \(when) at \(time)"
+        let matchup = game.opponent == nil ? "\(game.label) play" : game.matchupLabel
+        return "\(matchup) \(when) at \(time)"
     }
 
     private var otherKinds: some View {
@@ -123,7 +177,7 @@ struct PlansLocationCard: View {
     @State private var isAsking = false
 
     var body: some View {
-        ScrollView {
+        PlansSheetScroll {
             VStack(alignment: .leading, spacing: Spacing.s4) {
                 RoundedRectangle(cornerRadius: 15, style: .continuous)
                     .fill(Theme.Color.primary100)
@@ -178,8 +232,9 @@ struct PlansLocationCard: View {
             }
             .padding(.top, Spacing.s1)
             .padding(.bottom, Spacing.s4)
+            // The question and its buttons all show at the middle stop when they fit.
+            .plansSheetFit(.location)
         }
-        .scrollIndicators(.hidden)
         .accessibilityIdentifier("plansNeedsLocation")
     }
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Reply, Copy, Trash2, Flag, Smile } from 'lucide-react';
 
 const QUICK_REACTIONS = ['\uD83D\uDC4D', '\u2764\uFE0F', '\uD83D\uDE02', '\uD83D\uDE2E', '\uD83D\uDE22', '\uD83D\uDD25'];
@@ -64,7 +65,8 @@ export default function MessageActionMenu({
     ? { position: 'fixed' as const, top: anchorPosition.top, left: anchorPosition.left, zIndex: 9999 }
     : { position: 'fixed' as const, top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 9999 };
 
-  return (
+  // Virtualized rows use transforms; the menu stays anchored to the viewport.
+  return createPortal(
     <>
       {/* Backdrop for mobile */}
       <div className="fixed inset-0 z-[9998] bg-black/20 sm:bg-transparent" onClick={onClose} />
@@ -103,6 +105,6 @@ export default function MessageActionMenu({
           })}
         </div>
       </div>
-    </>
+    </>, document.body
   );
 }

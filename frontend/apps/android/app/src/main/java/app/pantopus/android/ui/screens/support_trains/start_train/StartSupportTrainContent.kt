@@ -159,7 +159,7 @@ enum class StartSupportTrainVisibility(
     Connections(
         "invited_only",
         "My connections",
-        "Only people you're connected to can find this.",
+        "Your connections and people you invite can find this.",
         PantopusIcon.UserPlus,
         "your connections",
     ),
@@ -173,8 +173,7 @@ enum class StartSupportTrainVisibility(
     ;
 
     companion object {
-        /** Step 1's switches as one choice: "Invite only" is My connections,
-         *  "Block-visible" is Nearby neighbors, and neither is Link only. */
+        /** Step 1's audience switches as one choice; neither selected means Link only. */
         fun from(
             inviteOnly: Boolean,
             blockVisible: Boolean,
@@ -212,7 +211,6 @@ data class StartSupportTrainFormState(
     val startDateMillis: Long = defaultStartMillis(),
     val endDateMillis: Long = defaultEndMillis(),
     val slotDuration: StartSupportTrainSlotDuration = StartSupportTrainSlotDuration.Sixty,
-    val allowComments: Boolean = true,
     // Matches "Invite only", which is on by default.
     val visibility: StartSupportTrainVisibility = StartSupportTrainVisibility.Connections,
 ) {

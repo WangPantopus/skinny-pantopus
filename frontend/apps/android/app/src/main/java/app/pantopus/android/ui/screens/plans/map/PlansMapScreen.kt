@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -39,7 +40,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,6 +51,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -70,6 +71,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.R
+import app.pantopus.android.data.ai.AIScreenContext
 import app.pantopus.android.data.api.models.plans.PlanDto
 import app.pantopus.android.data.api.models.plans.PlanGameDto
 import app.pantopus.android.data.api.models.plans.PlanPinDto
@@ -87,6 +89,7 @@ import app.pantopus.android.ui.screens.plans.PlansGateViewModel
 import app.pantopus.android.ui.screens.plans.components.PlanPinBadge
 import app.pantopus.android.ui.screens.plans.components.PlanScopeChip
 import app.pantopus.android.ui.screens.plans.components.PlanSheet
+import app.pantopus.android.ui.screens.plans.components.PlanSheetState
 import app.pantopus.android.ui.screens.plans.components.PlanSheetStop
 import app.pantopus.android.ui.screens.plans.components.PlanSwatch
 import app.pantopus.android.ui.screens.plans.components.aboveSheet
@@ -121,7 +124,7 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
-/** What the Nearby map opens from it. */
+/** What the Plans map opens from it. */
 data class PlansMapActions(
     val onOpenPlan: (String) -> Unit,
     val onAsk: (String) -> Unit,
@@ -129,11 +132,16 @@ data class PlansMapActions(
     val onOpenPulse: () -> Unit,
     val onOpenConnections: () -> Unit,
     val onInvite: () -> Unit,
+    /** Ask Pantopus about plans (AI assistant phase 1); null hides the button. */
+    val onAskPantopus: ((AIScreenContext) -> Unit)? = null,
+    /** The side menu, on every tab (founder decision 2026-10-20); null hides the button. */
+    val onOpenMenu: (() -> Unit)? = null,
 )
 
 /**
- * Nearby on the map (boards F1 to F5): the area pill and the type chips over the map, plan pins on their areas,
- * the Host button, and the list sheet. Shown in place of today's Nearby screen while the `plans` flag is on.
+ * Plans on the map (boards F1 to F5): the area pill and the type chips over the map, plan pins on their areas, the
+ * Host button, and the list sheet. The Plans tab, shown while the `plans` flag is on (beside Nearby, with the Pulse
+ * redesign on or off).
  */
 @Composable
 fun PlansMapScreen(
@@ -158,7 +166,8 @@ fun PlansMapScreen(
     fun askLocation() = permission.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
 
     var stop by rememberSaveable { mutableStateOf(PlanSheetStop.Peek) }
-    var sheetHeight by remember { mutableFloatStateOf(0f) }
+    // The sheet's live position: the Host button follows it in layout, so a drag frame recomposes nothing here.
+    val sheet = remember { PlanSheetState() }
     var recenter by remember { mutableIntStateOf(0) }
     var zoomOutMiles by remember { mutableIntStateOf(0) }
     // The area pill and the chips cover the top of the map: the map keeps its center below them.
@@ -167,9 +176,15 @@ fun PlansMapScreen(
         if (state.selectedId != null) viewModel.select(null) else stop = PlanSheetStop.Peek
     }
     LaunchedEffect(state.selectedId) { if (state.selectedId != null) stop = PlanSheetStop.Half }
-    // The no-location (F5), empty (F4) and posted (H8) sheets rest at their own middle height.
-    val restsHalf = state.locationStatus == PlansLocationStatus.Missing || state.isEmpty || state.postedId != null
+    // The no-location (F5) and posted (H8) sheets rest at their own middle height. "Nothing planned yet" (F4) opens
+    // low like the list, its title and suggestion over the map (founder, 2026-10-23: the map leads).
+    val restsHalf = state.locationStatus == PlansLocationStatus.Missing || state.postedId != null
     LaunchedEffect(restsHalf) { stop = if (restsHalf) PlanSheetStop.Half else PlanSheetStop.Peek }
+    // The map keeps its center above the sheet where the sheet rests for the map: the card or message in the middle,
+    // otherwise the lowest stop. Raising the list doesn't move the map under it.
+    val mapStop = if (restsHalf || state.selectedId != null) PlanSheetStop.Half else PlanSheetStop.Peek
+    val mapBottomPx = sheet.tops?.visible(mapStop) ?: 0f
+    val fullTopPx = if (chromeHeight > 0) chromeHeight + with(LocalDensity.current) { Spacing.s2.toPx() } else 0f
 
     Box(modifier = Modifier.fillMaxSize().testTag("plansMap")) {
         PlansMap(
@@ -177,14 +192,14 @@ fun PlansMapScreen(
             recenter = recenter,
             zoomOutMiles = zoomOutMiles,
             onZoomedOut = { zoomOutMiles = 0 },
-            sheetHeightPx = sheetHeight,
+            bottomPaddingPx = mapBottomPx,
             topPaddingPx = chromeHeight,
             reduceMotion = reduceMotion,
             onViewport = viewModel::setViewport,
             onPin = { viewModel.select(it) },
         )
-        // The full list (F2) covers the map: its controls go, for TalkBack too.
-        if (state.postedId == null && stop != PlanSheetStop.Full) {
+        // The controls stay at every stop: the sheet pulled all the way up stops under them (F2).
+        if (state.postedId == null) {
             PlansTopChrome(
                 offline = !online,
                 state = state,
@@ -200,6 +215,8 @@ fun PlansMapScreen(
                 },
                 onUseHome = viewModel::useHome,
                 onBackFromCard = { viewModel.select(null) },
+                onOpenMenu = actions.onOpenMenu,
+                onAskPantopus = actions.onAskPantopus?.let { ask -> { ask(AIScreenContext.plans()) } },
                 modifier =
                     Modifier.align(Alignment.TopCenter).onSizeChanged { size ->
                         // Measured with the full controls only, so selecting a pin doesn't shift the map.
@@ -214,14 +231,15 @@ fun PlansMapScreen(
                     Modifier
                         .align(Alignment.BottomEnd)
                         .padding(end = Spacing.s4)
-                        .aboveSheet(sheetHeight, with(LocalDensity.current) { 18.dp.toPx() }),
+                        .aboveSheet(sheet, with(LocalDensity.current) { 18.dp.toPx() }),
             )
         }
         PlansSheetHost(
             state = state,
             stop = stop,
             onStop = { stop = it },
-            onHeight = { sheetHeight = it },
+            sheet = sheet,
+            fullTopPx = fullTopPx,
             reduceMotion = reduceMotion,
             viewModel = viewModel,
             actions = actions,
@@ -236,7 +254,8 @@ private fun PlansSheetHost(
     state: PlansMapUiState,
     stop: PlanSheetStop,
     onStop: (PlanSheetStop) -> Unit,
-    onHeight: (Float) -> Unit,
+    sheet: PlanSheetState,
+    fullTopPx: Float,
     reduceMotion: Boolean,
     viewModel: PlansMapViewModel,
     actions: PlansMapActions,
@@ -245,24 +264,18 @@ private fun PlansSheetHost(
 ) {
     val selected = state.selected
     val context = LocalContext.current
-    val half =
-        when {
-            state.postedId != null -> 0.55f
-            state.locationStatus == PlansLocationStatus.Missing -> 0.56f
-            state.selectedId != null -> 0.5f
-            state.isEmpty -> 0.6f
-            else -> PlanSheetStop.Half.fraction
-        }
-    // The plan card's own height: on a small screen the middle stop grows so its buttons show.
-    var cardPx by remember(state.selectedId) { mutableFloatStateOf(0f) }
-    val showsCard = state.postedId == null && state.locationStatus != PlansLocationStatus.Missing && selected != null
+    val missing = state.locationStatus == PlansLocationStatus.Missing
     PlanSheet(
         stop = stop,
         onStop = onStop,
-        halfFraction = half,
-        halfContentPx = if (showsCard && state.selectedId != null) cardPx else 0f,
+        state = sheet,
+        fullTopPx = fullTopPx,
+        // A plan's card (F3), "Nothing planned yet" (F4), the location question (F5) and "Your plan is on the map"
+        // (H8) take their own height in the middle; the list about half.
+        fits = state.postedId != null || missing || state.selectedId != null || state.isEmpty,
+        // The location question and the posted plan hold buttons: they never go below the middle.
+        lowest = if (state.postedId != null || missing) PlanSheetStop.Half else PlanSheetStop.Peek,
         reduceMotion = reduceMotion,
-        onHeight = onHeight,
         modifier = Modifier.fillMaxSize(),
     ) { current ->
         when {
@@ -289,7 +302,6 @@ private fun PlansSheetHost(
                     plan = selected,
                     onClose = { viewModel.select(null) },
                     onDetails = { actions.onOpenPlan(selected.id) },
-                    onContentHeight = { cardPx = it },
                     onPrimary = {
                         if (mainAction(selected)?.asks == true) actions.onAsk(selected.id) else actions.onOpenPlan(selected.id)
                     },
@@ -301,7 +313,12 @@ private fun PlansSheetHost(
                     state,
                     onHost = actions.onHost,
                     onInvite = actions.onInvite,
-                    onShowElsewhere = { onZoomOut(state.elsewhere?.miles ?: ELSEWHERE_DEFAULT_MILES) },
+                    onGamesChanged = viewModel::loadGames,
+                    // The sheet goes down so the town with plans shows in the open map (as on iOS).
+                    onShowElsewhere = {
+                        onStop(PlanSheetStop.Peek)
+                        onZoomOut(state.elsewhere?.miles ?: ELSEWHERE_DEFAULT_MILES)
+                    },
                 )
             current == PlanSheetStop.Peek ->
                 PlansPeekContent(
@@ -331,7 +348,7 @@ private fun PlansMap(
     recenter: Int,
     zoomOutMiles: Int,
     onZoomedOut: () -> Unit,
-    sheetHeightPx: Float,
+    bottomPaddingPx: Float,
     topPaddingPx: Int,
     reduceMotion: Boolean,
     onViewport: (Double, Double, Double, Double) -> Unit,
@@ -358,16 +375,6 @@ private fun PlansMap(
             val point = map.projection.toScreenLocation(now.target)
             if (point != liveTargetPoint) liveTargetPoint = point
             delay(CAMERA_POLL_MS)
-        }
-    }
-    // The map keeps its center above the sheet, but only where the sheet comes to rest: following every frame of a
-    // drag would slide the whole map under the person's finger.
-    val currentSheet by rememberUpdatedState(sheetHeightPx)
-    var restingSheetPx by remember { mutableFloatStateOf(sheetHeightPx) }
-    LaunchedEffect(Unit) {
-        snapshotFlow { currentSheet }.collectLatest { height ->
-            delay(SHEET_REST_MS)
-            restingSheetPx = height
         }
     }
     val viewport by rememberUpdatedState(onViewport)
@@ -423,7 +430,6 @@ private fun PlansMap(
     }
     LaunchedEffect(zoomOutMiles) {
         if (zoomOutMiles <= 0 || location == null) return@LaunchedEffect
-        onZoomedOut()
         // Show a town 5 to 15 miles away (F4 "Show"): zoom out until that radius fits.
         val zoom =
             (START_ZOOM - kotlin.math.log2((zoomOutMiles + 1) / START_RADIUS_MILES)).toFloat().coerceIn(
@@ -436,6 +442,8 @@ private fun PlansMap(
         )
         delay(VIEWPORT_SETTLE_MS)
         reportViewport()
+        // Last: clearing the request changes this effect's key, which cancels the zoom still running.
+        onZoomedOut()
     }
     LaunchedEffect(recenter) {
         if (recenter == 0 || location == null) return@LaunchedEffect
@@ -479,7 +487,8 @@ private fun PlansMap(
         remember {
             MapUiSettings(myLocationButtonEnabled = false, zoomControlsEnabled = false, compassEnabled = false, mapToolbarEnabled = false)
         }
-    val bottomPadding = with(density) { restingSheetPx.toDp() }
+    // Where the sheet rests for the map (never a drag frame: that would slide the whole map under the finger).
+    val bottomPadding = with(density) { bottomPaddingPx.toDp() }
     val topPadding = with(density) { topPaddingPx.toDp() }
     val dim = state.locationStatus == PlansLocationStatus.Missing || state.isEmpty
     Box(modifier = Modifier.fillMaxSize()) {
@@ -550,7 +559,6 @@ private const val SELECT_MS = 350
 private const val CLUSTER_MS = 400
 private const val ANIMATE_GRACE_MS = 400L
 private const val CAMERA_POLL_MS = 120L
-private const val SHEET_REST_MS = 150L
 private const val ZOOM_OUT_MS = 500
 private const val RECENTER_MS = 400
 
@@ -643,7 +651,15 @@ private fun PlansTopChrome(
     onUseHome: () -> Unit,
     onBackFromCard: () -> Unit,
     modifier: Modifier = Modifier,
+    onAskPantopus: (() -> Unit)? = null,
+    onOpenMenu: (() -> Unit)? = null,
 ) {
+    // The side menu keeps its place at the end of the top row in every state (founder decision 2026-10-20).
+    val menu: @Composable () -> Unit = {
+        onOpenMenu?.let {
+            GlassCircleButton(icon = PantopusIcon.Menu, label = "Menu", onClick = it, modifier = Modifier.testTag("plans.menu"))
+        }
+    }
     Column(
         modifier =
             modifier
@@ -668,15 +684,33 @@ private fun PlansTopChrome(
                             },
                     )
                 }
+                if (onOpenMenu != null) Spacer(modifier = Modifier.width(Spacing.s2))
+                menu()
             }
             return@Column
         }
-        if (state.locationStatus == PlansLocationStatus.Missing) return@Column
+        if (state.locationStatus == PlansLocationStatus.Missing) {
+            Row {
+                Spacer(modifier = Modifier.weight(1f))
+                menu()
+            }
+            return@Column
+        }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
             AreaPill(state = state, onWindow = onWindow, onLocate = onLocate, onUseHome = onUseHome, modifier = Modifier.weight(1f))
             if (!state.isEmpty) GlassCircleButton(icon = PantopusIcon.Navigation, label = "Show my location", onClick = onLocate)
+            onAskPantopus?.let {
+                GlassCircleButton(
+                    icon = PantopusIcon.Sparkles,
+                    label = "Ask Pantopus",
+                    onClick = it,
+                    modifier = Modifier.testTag("plansAskPantopus"),
+                    iconTint = PantopusColors.magic,
+                )
+            }
+            menu()
         }
-        if (!state.isEmpty) KindChips(state = state, onKind = onKind)
+        if (!state.isEmpty || state.kind != null) KindChips(state = state, onKind = onKind)
     }
 }
 
@@ -829,10 +863,12 @@ private fun GlassCircleButton(
     icon: PantopusIcon,
     label: String,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    iconTint: Color = PantopusColors.appText,
 ) {
     Box(
         modifier =
-            Modifier
+            modifier
                 .size(48.dp)
                 .pantopusShadow(PantopusElevations.md, CircleShape)
                 .clip(CircleShape)
@@ -844,7 +880,7 @@ private fun GlassCircleButton(
                 },
         contentAlignment = Alignment.Center,
     ) {
-        PantopusIconImage(icon = icon, contentDescription = null, size = 20.dp, tint = PantopusColors.appText)
+        PantopusIconImage(icon = icon, contentDescription = null, size = 20.dp, tint = iconTint)
     }
 }
 

@@ -348,7 +348,7 @@ class ListingOffersViewModel
                     leading =
                         RowLeading.AvatarWithBadge(
                             name = buyerName,
-                            imageUrl = offer.buyer?.profilePictureUrl,
+                            imageUrl = offer.buyer?.avatarUrl ?: offer.buyer?.profilePictureUrl,
                             background = tone.background(),
                             size = AvatarBadgeSize.Large,
                             verified = false,
@@ -472,6 +472,8 @@ class ListingOffersViewModel
             }
 
             fun displayName(user: ListingOfferUserDto?): String {
+                val display = user?.displayName?.takeIf { it.isNotEmpty() }
+                if (display != null) return display
                 val first = user?.firstName?.takeIf { it.isNotEmpty() }
                 if (first != null) {
                     val last = user.lastName?.takeIf { it.isNotEmpty() }

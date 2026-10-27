@@ -43,5 +43,8 @@ region = "us-west-2"
 confirm_changeset = true
 capabilities = "CAPABILITY_IAM"
 resolve_s3 = true
-parameter_overrides = "Environment=production"
+# Matches production after the founder-approved live-payment setup on 2026-10-26:
+# briefings, local seeding, Home/weather reminders, maintenance and payments on;
+# sports, Mail and no-bid off.
+parameter_overrides = "Environment=production SchedulesEnabled=false BriefingsEnabled=true SeederEnabled=true HomeRemindersEnabled=true AlertsEnabled=true MaintenanceJobsEnabled=true PaymentJobsEnabled=true HealthMonitoringEnabled=true"
 disable_rollback = false

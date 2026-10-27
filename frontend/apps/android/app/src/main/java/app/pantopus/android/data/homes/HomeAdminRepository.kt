@@ -2,6 +2,7 @@ package app.pantopus.android.data.homes
 
 import app.pantopus.android.data.api.models.homes.ChangeMemberRoleRequest
 import app.pantopus.android.data.api.models.homes.ChangeMemberRoleResponse
+import app.pantopus.android.data.api.models.homes.ConfirmClaimMemberResponse
 import app.pantopus.android.data.api.models.homes.DeleteHomeResponse
 import app.pantopus.android.data.api.models.homes.HomeAccessDto
 import app.pantopus.android.data.api.models.homes.HomeAuditLogResponse
@@ -79,6 +80,12 @@ open class HomeAdminRepository
             safeApiCall {
                 api.changeMemberRole(homeId, userId, ChangeMemberRoleRequest(roleBase = roleBase))
             }.also { changed(homeId, it) }
+
+        /** `POST /api/homes/:id/members/:userId/confirm-claim` — "Yes, they live here". */
+        open suspend fun confirmClaimMember(
+            homeId: String,
+            userId: String,
+        ): NetworkResult<ConfirmClaimMemberResponse> = safeApiCall { api.confirmClaimMember(homeId, userId) }.also { changed(homeId, it) }
 
         /** `GET /api/homes/:id/household-access-requests?status=…`. */
         open suspend fun householdAccessRequests(

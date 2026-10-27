@@ -11,7 +11,7 @@ const {
   getLocalProfileByHandle,
   getActivePersonaForUser,
   getBridgeSetting,
-  normalizeHandle,
+  ownLocalProfileView,
   localProfileVisibilityFor,
 } = require('../utils/identityProfiles');
 const {
@@ -21,9 +21,10 @@ const {
 } = require('../serializers/identitySerializers');
 const { applyLocationPrecision, leastPrecise } = require('../utils/locationPrivacy');
 const { requireIdentityFirewallEnabled } = require('../utils/featureFlags');
-const { isSearchable, isScopedBlocked } = require('../utils/visibilityPolicy');
+const { isSearchable, isScopedBlocked, isUnpublishedBusiness } = require('../utils/visibilityPolicy');
 const { hasBlocked } = require('../services/blockService');
-const { isPublicStorageUrl } = require('../services/s3Service');
+const { writeIdentityAuditLog } = require('../utils/identityAudit');
+const { isKnownMadeUpUsername } = require('../utils/personalUsername');
 const { readablePosts, postScopeAccess } = require('../services/pulse/readAccess');
 
 router.use(requireIdentityFirewallEnabled);
@@ -164,8 +165,8 @@ const FORBIDDEN_PUBLIC_METADATA_KEY = /(^|_)(user|author|actor|owner|email|phone
 
 function parseLimit(value, fallback = 20, max = 50) {
   const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
-  return Math.min(Math.floor(parsed), max);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) return fallback;
+  return Math.min(parsed, max);
 }
 
 function sanitizePublicMetadata(metadata) {
@@ -226,14 +227,22 @@ async function canViewLocalProfile(profile, context) {
   return true;
 }
 
+// A profile, block or privacy read that fails refuses the profile with 503 (try again), never a guess.
 async function resolveViewableLocalProfile(handle, viewerId) {
-  const profile = await getLocalProfileByHandle(handle);
-  if (!profile) return { errorStatus: 404, error: 'Local profile not found' };
-  const viewerContext = await getLocalProfileViewerContext(profile, viewerId);
-  if (!(await canViewLocalProfile(profile, viewerContext))) {
-    return { errorStatus: 404, error: 'Local profile not found' };
+  try {
+    const profile = await getLocalProfileByHandle(handle);
+    if (!profile || await isUnpublishedBusiness(profile.user_id)) {
+      return { errorStatus: 404, error: 'Local profile not found' };
+    }
+    const viewerContext = await getLocalProfileViewerContext(profile, viewerId);
+    if (!(await canViewLocalProfile(profile, viewerContext))) {
+      return { errorStatus: 404, error: 'Local profile not found' };
+    }
+    return { profile, viewerContext };
+  } catch (err) {
+    logger.warn('localProfiles.resolve_unavailable', { errorCode: err.code || null, error: err.message });
+    return { errorStatus: 503, error: 'This profile can\'t be loaded right now. Please try again.' };
   }
-  return { profile, viewerContext };
 }
 
 async function getLocalProfileBridgePersona(profile) {
@@ -356,28 +365,21 @@ function serializeLocalOwnedRecord(record, profile, authorField = 'author', view
   };
 }
 
+// How neighbors see you: the name and photo a person shows on posts, comments, chats, tasks and notices. The rest of
+// the Local Profile follows other settings, so it isn't set here: the handle is the username (Edit profile), the place
+// follows the Neighborhood privacy setting and visibility the account's Profile visibility.
 const updateLocalProfileSchema = Joi.object({
-  handle: Joi.string().trim().min(3).max(40).pattern(/^[a-zA-Z0-9_.-]+$/).optional(),
-  display_name: Joi.string().trim().min(1).max(100).optional(),
-  avatar_url: Joi.string().uri().allow('', null).optional(),
-  bio: Joi.string().max(1000).allow('', null).optional(),
-  tagline: Joi.string().max(160).allow('', null).optional(),
-  public_city: Joi.string().max(120).allow('', null).optional(),
-  public_state: Joi.string().max(80).allow('', null).optional(),
-  public_neighborhood: Joi.string().max(120).allow('', null).optional(),
-  show_verified_resident_badge: Joi.boolean().optional(),
-  show_home_affiliation: Joi.boolean().optional(),
-  show_neighborhood: Joi.boolean().optional(),
-  show_gig_history: Joi.boolean().optional(),
-  profile_visibility: Joi.string().valid('public', 'followers', 'connections', 'private').optional(),
-  search_visibility: Joi.string().valid('everyone', 'mutuals', 'nobody').optional(),
+  // The account name rules (users.js updateProfileSchema): required once sent, at most 255 characters.
+  display_name: Joi.string().trim().min(1).max(255).optional(),
+  // null: no photo. A new photo is uploaded (POST /api/upload/local-profile-picture).
+  avatar_url: Joi.string().uri().allow(null).optional(),
 }).min(1);
 
 router.get('/me', verifyToken, async (req, res) => {
   try {
     const profile = await ensureLocalProfile(req.user.id);
     if (!profile) return res.status(404).json({ error: 'Local profile not found' });
-    res.json({ profile: serializeLocalProfileForViewer(profile, { includeLegacyUserId: true }) });
+    res.json(await ownLocalProfileView(profile, req.user.id));
   } catch (err) {
     logger.error('localProfiles.me.error', { error: err.message, userId: req.user?.id });
     res.status(500).json({ error: 'Failed to load profile' });
@@ -388,15 +390,35 @@ router.patch('/me', verifyToken, validate(updateLocalProfileSchema), async (req,
   try {
     const existing = await ensureLocalProfile(req.user.id);
     if (!existing) return res.status(404).json({ error: 'Local profile not found' });
-    // An uploaded photo or the one the profile already has: an outside link would show its owner who viewed the
-    // profile and when.
-    const avatarUrl = req.body.avatar_url;
-    if (avatarUrl && avatarUrl !== existing.avatar_url && !isPublicStorageUrl(avatarUrl)) {
-      return res.status(400).json({ error: 'Add a profile photo by uploading it.' });
-    }
 
-    const updates = { ...req.body, updated_at: new Date().toISOString() };
-    if (updates.handle) updates.handle_normalized = normalizeHandle(updates.handle);
+    const updates = {};
+    if (req.body.display_name !== undefined) {
+      // Spaces as in an account name (users.js buildFullName). A made-up username is not shown as anyone's name: the
+      // apps would show the account name instead.
+      const displayName = req.body.display_name.replace(/\s+/g, ' ').trim();
+      if (isKnownMadeUpUsername(displayName)) {
+        return res.status(400).json({ code: 'DISPLAY_NAME_INVALID', error: 'Choose a name for neighbors to see.' });
+      }
+      updates.display_name = displayName;
+    }
+    if (req.body.avatar_url !== undefined) {
+      // No photo, the one the profile has, or the account's ("Use my account photo"). Any other photo is uploaded for
+      // the profile: a link elsewhere could be someone else's photo, or show its owner who viewed the profile and when.
+      const avatarUrl = req.body.avatar_url;
+      if (avatarUrl && avatarUrl !== existing.avatar_url) {
+        const { data: account, error: accountErr } = await supabaseAdmin
+          .from('User')
+          .select('profile_picture_url')
+          .eq('id', req.user.id)
+          .maybeSingle();
+        if (accountErr) throw accountErr;
+        if (avatarUrl !== account?.profile_picture_url) {
+          return res.status(400).json({ code: 'AVATAR_NOT_UPLOADED', error: 'Add a profile photo by uploading it.' });
+        }
+      }
+      updates.avatar_url = avatarUrl;
+    }
+    updates.updated_at = new Date().toISOString();
 
     const { data: profile, error } = await supabaseAdmin
       .from('LocalProfile')
@@ -410,7 +432,17 @@ router.patch('/me', verifyToken, validate(updateLocalProfileSchema), async (req,
       return res.status(500).json({ error: 'Failed to update profile' });
     }
 
-    res.json({ profile: serializeLocalProfileForViewer(profile, { includeLegacyUserId: true }) });
+    await writeIdentityAuditLog({
+      req,
+      actorUserId: req.user.id,
+      targetUserId: req.user.id,
+      action: 'local_profile.updated',
+      targetType: 'LocalProfile',
+      targetId: profile.id,
+      metadata: { fields: Object.keys(updates).filter((field) => field !== 'updated_at') },
+    });
+
+    res.json(await ownLocalProfileView(profile, req.user.id));
   } catch (err) {
     logger.error('localProfiles.patch.exception', { error: err.message, userId: req.user?.id });
     res.status(500).json({ error: 'Failed to update profile' });
@@ -447,6 +479,8 @@ router.get('/:handle/activity', optionalAuth, async (req, res) => {
       .eq('user_id', profile.user_id)
       .eq('show_on_profile', true)
       .not('profile_visibility_scope', 'eq', 'hidden')
+      // A post written for a business is the business's, never its writer's.
+      .or('post_as.is.null,post_as.neq.business')
       .order('created_at', { ascending: false })
       .limit(parseLimit(req.query.limit));
 
@@ -474,7 +508,7 @@ router.get('/:handle/gigs', optionalAuth, async (req, res) => {
       .select('*')
       .eq('user_id', profile.user_id)
       .order('created_at', { ascending: false })
-      .limit(Number(req.query.limit) || 20);
+      .limit(parseLimit(req.query.limit));
 
     if (error) return res.status(500).json({ error: 'Failed to load local gigs' });
     res.json({ gigs: (data || []).map((gig) => serializeLocalOwnedRecord(gig, profile, 'author', req.user?.id || null)) });
@@ -495,7 +529,7 @@ router.get('/:handle/listings', optionalAuth, async (req, res) => {
       .eq('user_id', profile.user_id)
       .eq('status', 'active')
       .order('created_at', { ascending: false })
-      .limit(Number(req.query.limit) || 20);
+      .limit(parseLimit(req.query.limit));
 
     if (error) return res.status(500).json({ error: 'Failed to load local listings' });
     res.json({ listings: (data || []).map((listing) => serializeLocalOwnedRecord(listing, profile, 'author', req.user?.id || null)) });

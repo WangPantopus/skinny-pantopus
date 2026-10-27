@@ -54,7 +54,15 @@ internal fun HomeResidencyReviewInputs(
             HomeResidencyReviewRole.entries.map { it.title to { viewModel.changeRole(it) } },
         )
     } else {
-        Text("Rejecting declines this request. It doesn’t change anyone’s current access.", style = MaterialTheme.typography.bodySmall)
+        Text(
+            if (state.review?.onProbation == true) {
+                "They’re on probation, so rejecting also ends their membership here, and they can’t ask again. " +
+                    "If they prove the address by mail, Pantopus reviews it."
+            } else {
+                "Rejecting declines this request. It doesn’t change anyone’s current access."
+            },
+            style = MaterialTheme.typography.bodySmall,
+        )
         OutlinedTextField(
             value = state.reason,
             onValueChange = viewModel::changeReason,

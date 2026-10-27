@@ -3,7 +3,7 @@ const media = require('../services/homeTaskMediaService');
 const { MAX_BYTES } = require('../services/homeTaskMediaStorage');
 const { UUID } = require('../services/homeTaskMediaStorage');
 const { getRequestSessionScope, requireExpectedSessionScope } = require('../utils/requestSessionScope');
-const multipart = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_BYTES, files: 1, fields: 1, fieldSize: 100, parts: 3 } }).single('file');
+const multipart = multer({ storage: multer.memoryStorage(), limits: { fieldNameSize: 100, fieldNestingDepth: 3, fieldArrayIndexLimit: 32, fileSize: MAX_BYTES, files: 1, fields: 1, fieldSize: 100, parts: 3 } }).single('file');
 const args = req => ({ homeId: req.params.homeId, taskId: req.params.taskId, actorId: req.user.id, uploadId: req.params.mediaId });
 
 module.exports = function registerHomeTaskMediaRoutes(router, { verifyToken, uploadLimiter }) {

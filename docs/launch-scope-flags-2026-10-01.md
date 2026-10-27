@@ -103,7 +103,9 @@ Tests run with every feature on (`backend/jest.config.js`, `frontend/apps/web/te
    `/api/internal/briefing/reminder-push`.
 14. **Letters to a contact need both mail keys:** the email or text that tells a non-member about a letter, and the
    `mail_claimed` / `mail_escrow_*` notices, go out only with `mailbox` and `mail_extras` both on (a surface of two cut
-   features).
+   features). With either key off, `POST /api/mailbox/send` refuses a letter to an email address or phone number
+   (403 `MAIL_EXTRAS_UNAVAILABLE`), and the web page the email's link opens (`/open/<mail id>`, where the person
+   previews the letter and signs in or signs up to claim it) is hidden.
 15. **What stays while `pulse_redesign` is off (2026-10-15, founder decision):**
    - **Two rules from the Pulse build stay in force:**
      - Heads-ups about crime or suspicious people stay refused (`ALERT_KIND_NOT_ALLOWED`). Old posts of those kinds
@@ -129,3 +131,15 @@ Tests run with every feature on (`backend/jest.config.js`, `frontend/apps/web/te
 - Mail that arrives while `mailbox` is off is stored as before; nobody is told about it until the mailbox returns.
 - The Pulse redesign's tables and columns stay in the database (its migrations are additive). Resuming the build
   and switching it back on is in `docs/product/pulse-build/README.md`.
+
+## Database switches for new rules (not launch cuts)
+
+Some newer rules are switched in the database instead, so they can be turned off in about a minute without a
+deploy or an app build. Each is a `FeatureFlag` row; an admin flips it with
+`POST /api/admin/feature-flags/<name>` and a body such as `{"enabled_globally": true}`.
+
+| Flag | Default | What it turns on |
+|---|---|---|
+| `home_instant_claim` | off | Instant Claimed status (home claims plan, PR 3; founder decision 2026-10-25). Someone who adds a home where nobody else is on Pantopus, saying "I live here" or "I own it", gets it as a claimed home at once: household tools, the Home's own sections and invitations. Verifying the address is still what opens letters, neighbors' real rent, neighbor messages, mail and owner powers. The address watch holds high-risk claims for review (they stay a private setup), and a claim counts on the Neighborhood meter after 14 days. Turning it off stops new claims at once; homes already claimed keep their access. |
+| `home_residency_probation` | off | Probation join (home claims plan, PR 4; founder decision 2026-10-25, residents only, never ownership). It ships off; the founder turns it on after testing with `POST /api/admin/feature-flags/home_residency_probation`. A request to join a household that nobody has answered for 7 days becomes probation (only requests saved in the last 30 days: when it's turned on, older unanswered requests stay pending, and the household can still answer them): the person stays provisional with no household records, mail or Plans trust, and the household is told. A reviewer's yes makes them a member, a no (or a challenge in the 7-day window, 14 days for a medium address watch) suspends them, and proving the address by postcard starts the usual postcard review. After a no they can't ask again; proving the address by postcard then opens a dispute in the Pantopus address review queue (`probation_dispute`) instead of restoring access: approving it restores their membership; after a rejection (the household's no stands) or a dismissal they can send proof again, which opens a new review. A high address watch holds the request. Turning it off again stops new probation at once; people already on probation stay until someone decides. |
+| `home_removal_vote` | off | Resident removal vote (home claims plan, PR 5; founder decision 2026-10-25). It ships off; the founder turns it on only after testing and after the iOS and Android apps have voting screens (today only the web Members page has one), with `POST /api/admin/feature-flags/home_removal_vote` and `{"enabled_globally": true}`. Settled residents (verified adult members for at least 7 days since they were admitted) can vote to remove a current verified member below a manager who isn't an owner: a majority of the other settled residents, and at least 2 of them, within 7 days, one vote per Home at a time. The person keeps access while the vote is open and is told it's open and the result, never who voted. A vote to remove takes effect only when it closes after the full 7 days (founder, 2026-10-26; the hourly job applies it), so the person has time to prove the address by mail and contest first; a vote that can no longer reach a majority ends at once. Someone with proof of the address can contest, and a vote that passes then goes to Pantopus review: an admin is emailed (`ADMIN_ALERT_EMAIL`), and resolving the case with `POST /api/admin/address-review/:caseId/resolve` decides the vote (approved removes them; rejected or dismissed keeps them). Turning it off again stops new votes at once; votes already open run to their end. |

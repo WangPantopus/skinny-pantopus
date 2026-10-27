@@ -51,18 +51,28 @@ struct PantopusApp: App {
                 .onOpenURL { url in
                     guard !StripeAPI.handleURLCallback(with: url) else { return }
                     guard !AuthManager.isOAuthCallback(url) else { return }
+                    // SwiftUI also delivers HTTPS universal links through this entry point.
+                    guard !WebLinkFallback.openIfNeeded(url) else { return }
                     DeepLinkRouter.shared.handle(url: url)
                 }
                 .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
                     if let url = activity.webpageURL {
                         guard !AuthManager.isOAuthCallback(url) else { return }
+                        guard !WebLinkFallback.openIfNeeded(url) else { return }
                         DeepLinkRouter.shared.handle(url: url)
                     }
+                }
+                // The network is back: reconnect now rather than at the end of
+                // a long backoff, so open threads catch up at once.
+                .onChange(of: NetworkMonitor.shared.isOnline) { _, online in
+                    if online { SocketClient.shared.reconnectNowIfWaiting() }
                 }
                 .onChange(of: scenePhase) { _, phase in
                     switch phase {
                     case .active:
                         PilotEvents.shared.enterForeground()
+                        SocketClient.shared.reconnectNowIfWaiting()
+                        ChatOutbox.shared.enteredForeground()
                         capturePrivacy.coversAppSwitcher = false
                         appLock.appDidBecomeActive()
                         // Proactive DPoP refresh when < 120 s of access-token
@@ -81,6 +91,7 @@ struct PantopusApp: App {
                         capturePrivacy.coversAppSwitcher = true
                     case .background:
                         PilotEvents.shared.enterBackground()
+                        ChatOutbox.shared.enteredBackground()
                         capturePrivacy.coversAppSwitcher = true
                         appLock.appDidEnterBackground()
                     @unknown default:

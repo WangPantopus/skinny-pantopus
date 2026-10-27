@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.perf.ReportContentShown
+import app.pantopus.android.data.ai.AIScreenContext
 import app.pantopus.android.data.api.models.place.BallotGovernments
 import app.pantopus.android.data.api.models.place.PlaceGroupBlock
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
@@ -118,8 +119,12 @@ fun PlaceDashboardScreen(
     onDefaultHomeChange: () -> Unit = {},
     /** The Place tab tapped again while this dashboard is its root: back to the top. */
     scrollToTop: Flow<Unit>? = null,
+    scrollToBallot: Boolean = false,
+    onBallotOpened: () -> Unit = {},
     /** The status of a residency document already in review (the Waiting Room). */
     onOpenVerificationStatus: () -> Unit = {},
+    /** Ask Pantopus about this Home (AI assistant phase 1); null hides the button. */
+    onAsk: ((AIScreenContext) -> Unit)? = null,
     viewModel: PlaceDashboardViewModel = hiltViewModel(key = "place-$homeId"),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -193,6 +198,9 @@ fun PlaceDashboardScreen(
                     onRetry = viewModel::refresh,
                     refreshNotice = refreshNotice,
                     listState = listState,
+                    scrollToBallot = scrollToBallot,
+                    onBallotOpened = onBallotOpened,
+                    onAsk = onAsk?.let { ask -> { ask(AIScreenContext.place(homeId, null, "Your Place")) } },
                 )
         }
     }
@@ -261,6 +269,9 @@ internal fun PlaceDashboardContent(
     onRetry: (() -> Unit)? = null,
     refreshNotice: RefreshNotice? = null,
     listState: LazyListState = rememberLazyListState(),
+    scrollToBallot: Boolean = false,
+    onBallotOpened: () -> Unit = {},
+    onAsk: (() -> Unit)? = null,
 ) {
     val isVerified = intel.tier == PlaceTier.T4
     // Verifying is the next step for a claimed resident and for a private setup (by mail). Guests and service
@@ -269,6 +280,16 @@ internal fun PlaceDashboardContent(
     val pulse = PlacePresentation.derivePulse(intel)
     val ballot = BallotPlacement.ballot(intel)
     var ballotGovernments by remember { mutableStateOf<BallotGovernments?>(null) }
+    LaunchedEffect(scrollToBallot, ballot) {
+        if (scrollToBallot) {
+            if (ballot != null) {
+                // Header, tools, moving checklist, Pulse, spacer and privacy row always precede the card.
+                val precedingItems = BALLOT_PRECEDING_FIXED_ITEMS + listOf(refreshNotice != null, showsVerify, isVerified).count { it }
+                listState.scrollToItem(precedingItems)
+            }
+            onBallotOpened()
+        }
+    }
 
     LazyColumn(state = listState, modifier = modifier.fillMaxSize()) {
         item {
@@ -280,6 +301,7 @@ internal fun PlaceDashboardContent(
                 onOpenNotifications = onOpenNotifications,
                 unreadCount = unreadCount,
                 modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp),
+                onAsk = onAsk,
             )
         }
         // Instant Screens contract §3: a read failed on a copy more than a day old.
@@ -399,6 +421,8 @@ internal fun PlaceDashboardContent(
         )
     }
 }
+
+private const val BALLOT_PRECEDING_FIXED_ITEMS = 6
 
 /** "Private by default. See what neighbors see of this address." (Wedge v2 §2). */
 @Composable
@@ -540,6 +564,7 @@ internal fun PlaceDashboardHeader(
     modifier: Modifier = Modifier,
     status: PlaceChipModel? = null,
     onOpenSwitcher: (() -> Unit)? = null,
+    onAsk: (() -> Unit)? = null,
 ) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -561,7 +586,7 @@ internal fun PlaceDashboardHeader(
                 )
                 status?.let { Box(modifier = Modifier.testTag("place.status")) { PlaceChip(it) } }
             }
-            PlaceBellAndMenu(unreadCount, onOpenNotifications, onOpenMenu)
+            PlaceBellAndMenu(unreadCount, onOpenNotifications, onOpenMenu, onAsk)
         }
         if (onOpenSwitcher != null) {
             PlaceAddressSwitcher(label = label, onClick = onOpenSwitcher)
@@ -648,14 +673,25 @@ private fun PlaceAddressSwitcher(
     }
 }
 
-/** The bell (with the unread dot) and the menu, as every Place-tab root shows them. */
+/** The bell (with the unread dot) and the menu, as every Place-tab root shows them; on a Home, Ask Pantopus first. */
 @Composable
 internal fun PlaceBellAndMenu(
     unreadCount: Int,
     onOpenNotifications: () -> Unit,
     onOpenMenu: () -> Unit,
+    onAsk: (() -> Unit)? = null,
 ) {
     Row {
+        if (onAsk != null) {
+            IconButton(onClick = onAsk, modifier = Modifier.size(Spacing.s12).testTag("place.askPantopus")) {
+                PantopusIconImage(
+                    icon = PantopusIcon.Sparkles,
+                    contentDescription = "Ask Pantopus",
+                    size = Spacing.s5,
+                    tint = PantopusColors.magic,
+                )
+            }
+        }
         IconButton(
             onClick = onOpenNotifications,
             modifier =

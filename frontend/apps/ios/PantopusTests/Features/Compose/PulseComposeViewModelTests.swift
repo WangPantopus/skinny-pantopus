@@ -34,6 +34,8 @@ final class PulseComposeViewModelTests: XCTestCase {
     {"message":"Post created successfully","post":{"id":"p_42"}}
     """
 
+    /// The check before posting (`stage: "post"`) found nothing, so the post goes out.
+    private static let nothingFoundResponse = "{\"ok\":true,\"canPost\":true,\"findings\":[]}"
     private static let legacySuccessResponse = """
     {"message":"Posted","post_id":"p_42"}
     """
@@ -409,7 +411,7 @@ final class PulseComposeViewModelTests: XCTestCase {
     // MARK: - Submit pipeline
 
     func testSubmitHappyPathSucceedsAndDismisses() async {
-        SequencedURLProtocol.sequence = [.status(201, body: Self.successResponse)]
+        SequencedURLProtocol.sequence = [.status(200, body: Self.nothingFoundResponse), .status(201, body: Self.successResponse)]
         let vm = PulseComposeViewModel(intent: .ask, api: makeAPI())
         vm.update(.title, to: "Need a plumber")
         vm.update(.body, to: "Pipe is leaking.")
@@ -422,7 +424,7 @@ final class PulseComposeViewModelTests: XCTestCase {
     }
 
     func testSubmitAcceptsLegacyPostIdField() async {
-        SequencedURLProtocol.sequence = [.status(201, body: Self.legacySuccessResponse)]
+        SequencedURLProtocol.sequence = [.status(200, body: Self.nothingFoundResponse), .status(201, body: Self.legacySuccessResponse)]
         let vm = PulseComposeViewModel(intent: .ask, api: makeAPI())
         vm.update(.title, to: "Need a plumber")
         vm.update(.body, to: "Pipe is leaking.")
@@ -433,6 +435,7 @@ final class PulseComposeViewModelTests: XCTestCase {
 
     func testSubmitUploadsPhotosAfterCreate() async {
         SequencedURLProtocol.sequence = [
+            .status(200, body: Self.nothingFoundResponse),
             .status(201, body: Self.successResponse),
             .status(200, body: """
             {"message":"1 file(s) uploaded","media_urls":["https://cdn.example.com/p.jpg"],\
@@ -446,7 +449,7 @@ final class PulseComposeViewModelTests: XCTestCase {
         vm.append(photo: PulseComposePhoto(data: Data([0xFF, 0xD8, 0xFF, 0x00])))
         let ok = await vm.submit()
         XCTAssertTrue(ok)
-        XCTAssertEqual(SequencedURLProtocol.capturedRequests.count, 2)
+        XCTAssertEqual(SequencedURLProtocol.capturedRequests.count, 3)
         XCTAssertTrue(
             SequencedURLProtocol.capturedRequests.last?.url?.path.contains("/api/upload/post-media/p_42") ?? false
         )
@@ -454,6 +457,7 @@ final class PulseComposeViewModelTests: XCTestCase {
 
     func testSubmitErrorSurfacesToast() async {
         SequencedURLProtocol.sequence = [
+            .status(200, body: Self.nothingFoundResponse),
             .status(500, body: "{\"error\":\"upstream\"}"),
             .status(500, body: "{\"error\":\"upstream\"}")
         ]

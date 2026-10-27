@@ -42,6 +42,8 @@ struct PlaceSectionCard: View {
     /// Compact single-line layout (denser rhythm, Today group).
     var inline: Bool = false
     var compact: Bool = false
+    /// Opens the section's detail page. Without it the card draws no
+    /// chevron: a card never promises a page it can't open.
     var onTap: (() -> Void)?
     var onAction: (() -> Void)?
     var onRetry: (() -> Void)?
@@ -99,7 +101,9 @@ struct PlaceSectionCard: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
-            PlaceChevron()
+            if onTap != nil {
+                PlaceChevron()
+            }
         }
         .padding(.vertical, 12)
         .padding(.horizontal, 14)
@@ -137,7 +141,7 @@ struct PlaceSectionCard: View {
                         .lineLimit(1)
                 }
             }
-            if state != .loading {
+            if onTap != nil, state != .loading {
                 PlaceChevron()
             }
         }

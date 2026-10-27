@@ -22,8 +22,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -42,6 +45,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.core.perf.ReportContentShown
+import app.pantopus.android.ui.components.NavigationMenuButton
 import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.theme.PantopusColors
@@ -62,6 +66,8 @@ fun ChatListScreen(
     onOpenConversation: (ConversationRowContent) -> Unit = {},
     onCompose: () -> Unit = {},
     onOpenSearch: () -> Unit = {},
+    /** The side menu, on every tab (founder decision 2026-10-20); null hides the button. */
+    onOpenMenu: (() -> Unit)? = null,
     viewModel: ChatListViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -69,6 +75,16 @@ fun ChatListScreen(
     val activeFilter by viewModel.activeFilter.collectAsStateWithLifecycle()
     val unreadByFilter by viewModel.unreadByFilter.collectAsStateWithLifecycle()
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
+    val actionError by viewModel.actionError.collectAsStateWithLifecycle()
+    val paging by viewModel.paging.collectAsStateWithLifecycle()
+    actionError?.let { message ->
+        AlertDialog(
+            onDismissRequest = viewModel::dismissActionError,
+            title = { Text("Couldn't update notifications") },
+            text = { Text(message) },
+            confirmButton = { TextButton(onClick = viewModel::dismissActionError) { Text("OK") } },
+        )
+    }
 
     LaunchedEffect(Unit) { viewModel.load() }
     RefreshOnStoreChange(viewModel::load)
@@ -83,7 +99,7 @@ fun ChatListScreen(
                 .background(PantopusColors.appSurface)
                 .testTag("chatList"),
     ) {
-        TopBar(onCompose = onCompose)
+        TopBar(onCompose = onCompose, onOpenMenu = onOpenMenu)
         SearchBar(skeleton = state is ChatListUiState.Loading, onTap = onOpenSearch)
         FilterTabs(
             active = activeFilter,
@@ -114,6 +130,8 @@ fun ChatListScreen(
                         onHide = viewModel::hideConversation,
                         emptyFilter = s.emptyFilter,
                         onViewAll = { viewModel.selectFilter(ChatFilter.All) },
+                        paging = paging,
+                        onLoadMore = viewModel::loadMore,
                     )
                 }
             is ChatListUiState.Error -> ErrorFrame(message = s.message, onRetry = viewModel::refresh)
@@ -122,13 +140,17 @@ fun ChatListScreen(
 }
 
 @Composable
-private fun TopBar(onCompose: () -> Unit) {
+private fun TopBar(
+    onCompose: () -> Unit,
+    onOpenMenu: (() -> Unit)? = null,
+) {
     Row(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .background(PantopusColors.appSurface)
-                .padding(start = Spacing.s4, end = Spacing.s2, top = 10.dp, bottom = Spacing.s1),
+                // The menu button's 48 dp keep the bar's height with less padding above it.
+                .padding(start = Spacing.s4, end = Spacing.s2, top = if (onOpenMenu != null) Spacing.s1 else 10.dp, bottom = Spacing.s1),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
@@ -155,6 +177,7 @@ private fun TopBar(onCompose: () -> Unit) {
                 tint = PantopusColors.appText,
             )
         }
+        onOpenMenu?.let { NavigationMenuButton(onClick = it, testTag = "messages.menu") }
     }
 }
 
@@ -434,6 +457,7 @@ private fun EmptyMessage(
 }
 
 @Composable
+@Suppress("LongParameterList") // Existing row actions and the paging footer share this list.
 internal fun PopulatedFrame(
     rows: List<ConversationRowContent>,
     onTap: (ConversationRowContent) -> Unit,
@@ -441,9 +465,11 @@ internal fun PopulatedFrame(
     onHide: (String) -> Unit = {},
     emptyFilter: ChatFilter? = null,
     onViewAll: () -> Unit = {},
+    paging: ChatListPaging = ChatListPaging(),
+    onLoadMore: () -> Unit = {},
 ) {
     LazyColumn(modifier = Modifier.fillMaxSize().testTag("chatListContent")) {
-        items(items = rows, key = { it.id }) { row ->
+        items(items = rows, key = { it.storageKey }) { row ->
             if (row.variant == ConversationRowVariant.AiAssistant) {
                 ConversationRow(content = row, onTap = { onTap(row) })
             } else {
@@ -455,7 +481,21 @@ internal fun PopulatedFrame(
                 )
             }
         }
-        if (emptyFilter != null) {
+        if (paging.hasMore) {
+            item(key = "loadMore") {
+                LaunchedEffect(rows.size, paging.loading, paging.error) {
+                    if (!paging.loading && paging.error == null) onLoadMore()
+                }
+                Box(Modifier.fillMaxWidth().padding(Spacing.s3), contentAlignment = Alignment.Center) {
+                    if (paging.error != null) {
+                        TextButton(onClick = onLoadMore) { Text("Couldn't load more. Try again") }
+                    } else {
+                        CircularProgressIndicator(Modifier.size(24.dp))
+                    }
+                }
+            }
+        }
+        if (emptyFilter != null && !paging.hasMore) {
             item(key = "filterEmpty") { FilterEmptyLine(filter = emptyFilter, onViewAll = onViewAll) }
         }
     }

@@ -13,10 +13,11 @@ import Foundation
 
 // swiftlint:disable file_length
 
-/// One-of-nine category the user can pick in step 1. Mirrors the chip
-/// palette in `gigs-frames.jsx` CATS plus an `other` bucket the
-/// composer surfaces but the feed filter does not (we route `other` to
-/// the backend's free-form `category` field).
+/// The category the user picks in step 1: every category the backend
+/// accepts (`VALID_CATEGORIES`, web's `GIG_CATEGORIES`). The first
+/// eight mirror the chip palette in `gigs-frames.jsx` CATS; `other` is
+/// the catch-all the composer keeps but doesn't offer as a tile. Raw
+/// values match `GigsCategory`.
 public enum GigComposeCategory: String, CaseIterable, Sendable, Codable, Hashable {
     case handyman
     case cleaning
@@ -26,20 +27,31 @@ public enum GigComposeCategory: String, CaseIterable, Sendable, Codable, Hashabl
     case tutoring
     case delivery
     case tech
+    case photography
+    case cooking
+    case gardening
+    case eventHelp = "eventhelp"
+    case errands
+    case groceryPickup = "grocerypickup"
+    case plumbing
+    case electrical
+    case hvac
+    case roofing
+    case generalContractor = "generalcontractor"
+    case landscapingPro = "landscapingpro"
+    case homeInspector = "homeinspector"
+    case paintingPro = "paintingpro"
+    case flooring
     case other
 
+    /// The feed's category for this one (same raw value): its label,
+    /// color and glyph.
+    public var gigsCategory: GigsCategory {
+        GigsCategory(rawValue: rawValue) ?? .other
+    }
+
     public var label: String {
-        switch self {
-        case .handyman: "Handyman"
-        case .cleaning: "Cleaning"
-        case .moving: "Moving"
-        case .petcare: "Pet care"
-        case .childcare: "Child care"
-        case .tutoring: "Tutoring"
-        case .delivery: "Delivery"
-        case .tech: "Tech"
-        case .other: "Other"
-        }
+        gigsCategory.label
     }
 
     /// The backend's `VALID_CATEGORIES` spelling
@@ -55,6 +67,21 @@ public enum GigComposeCategory: String, CaseIterable, Sendable, Codable, Hashabl
         case .tutoring: "Tutoring"
         case .delivery: "Delivery"
         case .tech: "Tech Support"
+        case .photography: "Photography"
+        case .cooking: "Cooking"
+        case .gardening: "Gardening"
+        case .eventHelp: "Event Help"
+        case .errands: "Errands"
+        case .groceryPickup: "Grocery Pickup"
+        case .plumbing: "Plumbing"
+        case .electrical: "Electrical"
+        case .hvac: "HVAC"
+        case .roofing: "Roofing"
+        case .generalContractor: "General Contractor"
+        case .landscapingPro: "Landscaping Pro"
+        case .homeInspector: "Home Inspector"
+        case .paintingPro: "Painting Pro"
+        case .flooring: "Flooring"
         case .other: "Other"
         }
     }
@@ -68,27 +95,19 @@ public enum GigComposeCategory: String, CaseIterable, Sendable, Codable, Hashabl
     }
 
     /// Maps a Magic Task backend category ("Handyman", "Pet Care",
-    /// "Tech Support", …, see `backend/services/magicTaskService.js`
-    /// `VALID_CATEGORIES`) onto the compose enum. Unknown non-empty
-    /// values land on `.other` (the composer's catch-all bucket);
-    /// nil/empty returns nil so the keyword fallback can take over.
+    /// "Tech Support", "Event Help", …, see
+    /// `backend/services/magicTaskService.js` `VALID_CATEGORIES`) onto
+    /// the compose enum. Unknown non-empty values land on `.other` (the
+    /// composer's catch-all bucket); nil/empty returns nil so the
+    /// keyword fallback can take over.
     public static func from(backendCategory raw: String?) -> GigComposeCategory? {
         guard let raw, !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
         let key = raw.lowercased()
             .replacingOccurrences(of: "_", with: "")
             .replacingOccurrences(of: "-", with: "")
             .replacingOccurrences(of: " ", with: "")
-        switch key {
-        case "handyman": return .handyman
-        case "cleaning": return .cleaning
-        case "moving": return .moving
-        case "petcare": return .petcare
-        case "childcare": return .childcare
-        case "tutoring": return .tutoring
-        case "delivery", "errands", "grocerypickup": return .delivery
-        case "tech", "techsupport": return .tech
-        default: return .other
-        }
+        if key == "techsupport" { return .tech }
+        return GigComposeCategory(rawValue: key) ?? .other
     }
 }
 

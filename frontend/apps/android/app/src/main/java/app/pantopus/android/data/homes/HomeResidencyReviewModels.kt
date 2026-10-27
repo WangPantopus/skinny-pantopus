@@ -49,6 +49,14 @@ data class HomeResidencyCurrentReview(
     val reviewToken: String get() = claim["review_token"] as String
     val status: String get() = claim["status"] as String
 
+    /**
+     * Nobody answered their request in 7 days (home claims PR 4), so a rejection also ends their membership. Older
+     * servers omit `verification_source`.
+     */
+    val onProbation: Boolean get() =
+        occupancy?.get("verification_source") == "probation" && occupancy["is_active"] == true &&
+            occupancy["verification_status"] == "provisional"
+
     fun canDecide(actor: String): Boolean = status == "pending" && applicantId != actor
 }
 

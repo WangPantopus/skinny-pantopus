@@ -17,6 +17,17 @@ const notificationService = require('../services/notificationService');
 const taskMediaStorage = require('../services/homeTaskMediaStorage');
 const { checkHomePermission } = require('../utils/homePermissions');
 const { getAccessibleHomeIds, canAccessMail, readableMail, visibleMailFilter } = require('../utils/homeMailAccess');
+// A letter sent as a business names the business to everyone it reaches, never the person who sent it; a person who
+// sent one in their own name is named as neighbors see them (their Local Profile).
+const { presentMailSenders, nameMailSenders } = require('../utils/mailSenderView');
+
+// Letters read with sender_name aliased from sender_display, each person who sent one named as neighbors see them; the
+// sender fields read for that (MAIL_SENDER_FIELDS) stay out of the response.
+const MAIL_SENDER_FIELDS = 'sender_user_id, sender_entity_id, sender_business_name';
+async function withSenderNames(rows, viewerId) {
+  return (await nameMailSenders(rows || [], viewerId, { field: 'sender_name' }))
+    .map(({ sender_user_id: _u, sender_entity_id: _e, sender_business_name: _b, ...row }) => row);
+}
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const Joi = require('joi');
@@ -232,7 +243,7 @@ const PHOTO_URL_TTL_SECONDS = 300;
 const PHOTO_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']);
 const photoMultipart = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: taskMediaStorage.MAX_BYTES, files: 1, fields: 1, fieldSize: 100, parts: 3 },
+  limits: { fieldNameSize: 100, fieldNestingDepth: 3, fieldArrayIndexLimit: 32, fileSize: taskMediaStorage.MAX_BYTES, files: 1, fields: 1, fieldSize: 100, parts: 3 },
 }).single('file');
 
 async function photoBucket() {
@@ -406,7 +417,7 @@ router.get('/records/asset/:id/mail', verifyToken, async (req, res) => {
       linked_gig_count: 0,
     };
 
-    res.json({ asset: enrichedAsset, mail, gigs: [], photos: photos || [] });
+    res.json({ asset: enrichedAsset, mail: presentMailSenders(await nameMailSenders(mail, userId), userId), gigs: [], photos: photos || [] });
   } catch (err) {
     logger.error('[P3] GET /records/asset/:id/mail failed', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch asset details' });
@@ -1067,6 +1078,21 @@ function categoryCommunityType(category) {
 // The mail interface keeps its legacy pending/completed labels; persisted
 // Home tasks use canonical open/done status and immutable source provenance.
 const mailTaskDto = task => ({ ...task, status: ({ open: 'pending', done: 'completed' })[task.status] || task.status });
+// get_home_records gives a task's letter as mail_sender, the name stored when the letter came: a person who sent it is
+// named again as neighbors see them now (their Local Profile). A letter that can't be read keeps the stored name.
+async function withTaskMailSenders(tasks, viewerId) {
+  const mailIds = [...new Set(tasks.filter(t => t.mail_sender && t.source_mail_id).map(t => t.source_mail_id))];
+  if (!mailIds.length) return tasks;
+  const { data: stored, error } = await supabaseAdmin.from('Mail')
+    .select(`id, sender_display, ${MAIL_SENDER_FIELDS}`).in('id', mailIds);
+  if (error) {
+    logger.warn('[P3] task letter senders not read', { error: error.message });
+    return tasks;
+  }
+  const named = await nameMailSenders(stored || [], viewerId);
+  const names = new Map(named.filter((letter, i) => letter !== stored[i]).map(letter => [letter.id, letter.sender_display]));
+  return tasks.map(t => (t.mail_sender && names.has(t.source_mail_id) ? { ...t, mail_sender: names.get(t.source_mail_id) } : t));
+}
 router.get('/tasks', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
@@ -1076,7 +1102,7 @@ router.get('/tasks', verifyToken, async (req, res) => {
     const sets = await Promise.all(homeIds.map(id => homeId
       ? homeRecordService.list({ homeId: id, actorId: userId, kind: 'task', mailOnly: true }).then(r => r.records)
       : homeRecordService.visibleRecords({ homeId: id, actorId: userId, kind: 'task', mailOnly: true })));
-    const tasks = sets.flat().map(mailTaskDto);
+    const tasks = (await withTaskMailSenders(sets.flat(), userId)).map(mailTaskDto);
     res.json({ active: tasks.filter(t => !['completed', 'canceled'].includes(t.status)),
       completed: tasks.filter(t => t.status === 'completed') });
   } catch (error) { homeRecordService.sendError(res, error); }
@@ -1199,7 +1225,7 @@ router.get('/mailday/summary', verifyToken, async (req, res) => {
     const dayStr = `${oneYearAgo.month}-${oneYearAgo.day}`;
     const { data: oldMail, error: oldErr } = await supabaseAdmin
       .from('Mail')
-      .select('id, subject, sender_name:sender_display, delivered_at:created_at')
+      .select(`id, subject, sender_name:sender_display, delivered_at:created_at, ${MAIL_SENDER_FIELDS}`)
       .eq('recipient_user_id', userId)
       .is('deleted_at', null)
       .gte('created_at', oneYearAgo.startOf('day').toJSDate().toISOString())
@@ -1214,7 +1240,7 @@ router.get('/mailday/summary', verifyToken, async (req, res) => {
         reference_date: oneYearAgo.toJSDate().toISOString(),
         headline: `This day last year`,
         body: `You received ${oldMail.length} item${oldMail.length > 1 ? 's' : ''}`,
-        mail_items: oldMail,
+        mail_items: await withSenderNames(oldMail, userId),
         dismissed: false,
       };
     }
@@ -1223,8 +1249,8 @@ router.get('/mailday/summary', verifyToken, async (req, res) => {
     res.json({
       greeting,
       total_new: (newMail || []).length,
-      arrivals: newMail || [],
-      needs_attention: attention || [],
+      arrivals: presentMailSenders(await nameMailSenders(newMail || [], userId), userId),
+      needs_attention: presentMailSenders(await nameMailSenders(attention || [], userId), userId),
       earn_count: earnCount || 0,
       community_count: communityCount,
       memory,
@@ -1510,7 +1536,7 @@ router.get('/memory/on-this-day', verifyToken, async (req, res) => {
 
       const { data: items, error: itemsErr } = await supabaseAdmin
         .from('Mail')
-        .select('id, subject, sender_name:sender_display, category, delivered_at:created_at')
+        .select(`id, subject, sender_name:sender_display, category, delivered_at:created_at, ${MAIL_SENDER_FIELDS}`)
         .eq('recipient_user_id', userId)
         .is('deleted_at', null)
         .gte('created_at', targetDate.toISOString())
@@ -1526,7 +1552,7 @@ router.get('/memory/on-this-day', verifyToken, async (req, res) => {
           reference_date: targetDate.toISOString(),
           headline: `${yearsBack} year${yearsBack > 1 ? 's' : ''} ago today`,
           body: `You received ${items.length} item${items.length > 1 ? 's' : ''}`,
-          mail_items: items,
+          mail_items: await withSenderNames(items, userId),
           mail_ids: items.map(item => item.id),
           dismissed: false,
         });
@@ -1607,7 +1633,7 @@ router.get('/memory/year/:year', verifyToken, async (req, res) => {
     // Top senders
     const { data: senders, error: sendersErr } = await supabaseAdmin
       .from('Mail')
-      .select('sender_name:sender_display, sender_business_name, sender_trust, category')
+      .select('sender_name:sender_display, sender_business_name, sender_trust, category, sender_user_id, sender_entity_id')
       .eq('recipient_user_id', userId)
       .is('deleted_at', null)
       .gte('created_at', yearStart)
@@ -1615,7 +1641,7 @@ router.get('/memory/year/:year', verifyToken, async (req, res) => {
     if (sendersErr) throw sendersErr;
 
     const senderMap = {};
-    (senders || []).forEach(m => {
+    (await nameMailSenders(senders || [], userId, { field: 'sender_name' })).forEach(m => {
       const key = m.sender_name || m.sender_business_name || 'Unknown';
       if (!senderMap[key]) senderMap[key] = { count: 0, trust: m.sender_trust, category: m.category };
       senderMap[key].count++;

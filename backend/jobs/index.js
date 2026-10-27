@@ -18,6 +18,9 @@
 //   - recomputeUtilityScores     → every 15 minutes (Social Layer)
 //   - monthlyReceiptJob          → 1st of month at 9:00 AM PT (17:00 UTC)
 //   - authRegistryPrune          → hourly at :50 (persistent login)
+//   - nearbyNudges               → hourly at :27 (AI assistant phase 2)
+//   - assistantPickupRules       → hourly at :12 (AI assistant phase 3 standing rules)
+//   - processQuorumActions       → hourly at :33 (owner votes nobody opened)
 // ============================================================
 
 const cron = require('node-cron');
@@ -59,6 +62,7 @@ const processClaimWindows = require('./processClaimWindows');
 const validateHomeCoordinates = require('./validateHomeCoordinates');
 const notifyClaimWindowExpiry = require('./notifyClaimWindowExpiry');
 const expireInitiatedHomeClaims = require('./expireInitiatedHomeClaims');
+const processQuorumActions = require('./processQuorumActions');
 const evidenceRetentionSweep = require('./evidenceRetentionSweep');
 const homeDocumentRecovery = require('./homeDocumentRecovery');
 const homeClaimEvidenceRecovery = require('./homeClaimEvidenceRecovery');
@@ -70,6 +74,10 @@ const purgeAddressVerificationEvents = require('./purgeAddressVerificationEvents
 const reconcileHomeHouseholdResolution = require('./reconcileHomeHouseholdResolution');
 // Chat jobs
 const chatRedactionJob = require('./chatRedactionJob');
+const aiChatPhotoSweep = require('./aiChatPhotoSweep');
+const assistantAgentPurge = require('./assistantAgentPurge');
+// Assistant suggestions about homes: waiting tasks, papers ending, radon follow-through
+const { runHomeNudges } = require('../services/ai/nudges/home');
 // Business cleanup
 const cleanupGhostBusinesses = require('./cleanupGhostBusinesses');
 // Pop-up business expiry
@@ -104,6 +112,8 @@ const authRegistryPrune = require('./authRegistryPrune');
 const { runSupportTrainReminders } = require('./supportTrainReminders');
 // Nearby Plans: held pushes, reminders, lifecycle and the host's summary
 const { runPlansTick } = require('./planJobs');
+// Assistant nudges and briefs: pushes held for quiet hours
+const { releaseHeldNudges } = require('../services/ai/nudges/engine');
 const { runBookingReminders } = require('./bookingReminders');
 // Payment health alerting
 const { checkAndAlertStuckPayments } = require('../routes/paymentOps');
@@ -455,6 +465,15 @@ function startJobs(options = {}) {
     timezone: 'UTC',
   });
 
+  // ─── Process Quorum Actions (owner votes) ───
+  // Runs hourly at :33.
+  // Settles owner votes nobody opened: expiry, the 7-day waiting period
+  // for tier 1-2 changes, and approved changes not applied yet.
+  scheduleCron('33 * * * *', wrapJob('processQuorumActions', processQuorumActions), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+
   scheduleCron('*/5 * * * *', wrapJob('homeDocumentRecovery', async () => {
     const results = await Promise.allSettled([homeDocumentRecovery(), homeDocumentRecovery.completionFiles(), homeDocumentRecovery.chatFiles()]);
     if (results.some(result => result.status === 'rejected')) throw new Error('Private file recovery incomplete');
@@ -533,6 +552,39 @@ function startJobs(options = {}) {
   // Permanently redacts soft-deleted messages past their retention period.
   // Replaces message text and clears attachments in batches.
   scheduleCron('30 * * * *', wrapJob('chatRedactionJob', chatRedactionJob), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+
+  // ─── AI Chat Photo Sweep ───
+  // Runs every 15 minutes at :04/:19/:34/:49.
+  // Deletes photos uploaded for the assistant that no request read within an hour.
+  scheduleCron('4,19,34,49 * * * *', wrapJob('aiChatPhotoSweep', aiChatPhotoSweep), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+
+  // ─── Assistant record purge ───
+  // Daily at 04:45 UTC. Deletes the assistant's tool and push steps after 90 days, and chat-turn
+  // requests left with no steps (cards live as long as their conversation).
+  scheduleCron('45 4 * * *', wrapJob('assistantAgentPurge', assistantAgentPurge), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+
+  // ─── Assistant: the yearly memory review ───
+  // Daily at 17:00 UTC: one notice a calendar year to people with an item they haven't reviewed
+  // in a year (services/ai/memory.js). Its push waits out quiet hours (released with the nudges).
+  scheduleCron('0 17 * * *', wrapJob('assistantMemoryReview', () => require('../services/ai/memory').runMemoryReview()), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+
+  // ─── Assistant: Home nudges ───
+  // Every 15 minutes at :07/:22/:37/:52, for people who turned Suggestions on, once a day after
+  // their brief time: Monday's waiting tasks, papers ending in 30 and 7 days, radon follow-through
+  // (services/ai/nudges/home.js; the engine keeps to the day's cap and holds pushes in quiet hours).
+  scheduleCron('7,22,37,52 * * * *', wrapJob('homeNudges', runHomeNudges), {
     scheduled: true,
     timezone: 'UTC',
   });
@@ -690,9 +742,44 @@ function startJobs(options = {}) {
 
   // ─── Nearby Plans ───
   // Every 5 minutes: held pushes (quiet hours, ask bundles), expiring asks, ending
-  // plans, closing chats 24h after the end, reminders and the 8 AM host summary.
+  // plans, closing chats 24h after the end, reminders and the 8 AM host summary,
+  // then the assistant's nudges for hosts (weather, requests waiting, after the plan).
   // Every send is claimed first, so overlapping runners don't repeat a notice.
   scheduleCron('*/5 * * * *', wrapJob('plansTick', runPlansTick), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+
+  // ─── Assistant suggestions ───
+  // Every 5 minutes: nudge and brief pushes held for quiet hours go out once they end,
+  // or are dropped if the nudge expired or Suggestions was turned off meanwhile.
+  // Each send is claimed first, like the Plans tick's.
+  scheduleCron('*/5 * * * *', wrapJob('assistantHeldPushes', releaseHeldNudges), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+
+  // ─── Assistant follow-ups ───
+  // Every 5 minutes: check-backs the person asked for that are due, each claimed first so two
+  // servers never run one, sent as requested nudges (services/ai/followUps.js).
+  scheduleCron('*/5 * * * *', wrapJob('assistantFollowUps', () => require('../services/ai/followUps').runFollowUps()), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+
+  // ─── Assistant: standing pickup reminders ───
+  // Hourly at :12: household members someone asked Pantopus to remind, at the member's evening
+  // briefing time the evening before each pickup day the household set (services/ai/rules.js).
+  // Weekly plans run in the Plans tick. Rules are claimed first, so two servers never run one.
+  scheduleCron('12 * * * *', wrapJob('assistantPickupRules', () => require('../services/ai/rules').runPickupReminders()), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+
+  // ─── Nearby nudges (AI assistant phase 2) ───
+  // Hourly at :27: lost-and-found pairs judged by the model (a pair at most once in 7
+  // days), and open questions that got answers. They go out through the nudge engine.
+  scheduleCron('27 * * * *', wrapJob('nearbyNudges', () => require('../services/ai/nudges/nearby').runNearbyNudges()), {
     scheduled: true,
     timezone: 'UTC',
   });

@@ -1,26 +1,23 @@
 Know what matters for your home, and stay on top of it.
 
-Pantopus keeps the things that come around again and again at your home in one calm place, and reminds you before they slip.
+Pantopus brings your place, household tasks, and nearby community together.
 
 Today, for your address
-See today's weather, air quality and active alerts for where you live, with the source of each fact.
+See weather, air quality, and local information with sources, plus useful reminders for your household.
 
-Trash night, handled
-Tell Pantopus your pickup days once. The evening before each pickup you get one reminder, with a "Bins out" button. Evenings without a pickup stay quiet.
+A home you can manage together
+Keep household tasks and home information in one place. Invite the people you live with, assign tasks, and keep track of what needs doing.
 
-Radon, checked
-Pantopus shows whether radon testing matters where you live. If your home hasn't been tested, it becomes a dated task with a reminder.
+Pickup days and home reminders
+Save your trash and recycling schedule, manage notification preferences, and make a plan for recurring home tasks such as radon testing.
 
-Home tasks for the whole household
-Invite the people you live with. Assign tasks, get a reminder the morning they're due, and hear when someone finishes one.
+Nearby plans and conversations
+See nearby posts and local updates, organize a small plan, request to join, and message people directly. Exact meeting details are shared according to the plan’s privacy and approval settings.
 
 Support Trains
-Organize meals or help for a friend or neighbor: share a schedule, let people sign up for a slot, and Pantopus reminds every helper.
+Organize meals or practical help for someone you care about, share a schedule, and coordinate volunteers.
 
-Nearby
-See what's happening around you, from neighbors and clearly labeled local updates.
+Privacy and control
+Choose what you share, manage notification settings, and control access to your household information.
 
-Private by default
-Your address stays private, and you choose what neighbors can see.
-
-Pantopus is starting with first-time homeowners in Vancouver, Camas and Washougal, Washington, and works for any address in the United States.
+Pantopus is available across the United States. Local information and service availability vary by address.

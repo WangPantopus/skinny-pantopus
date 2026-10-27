@@ -79,11 +79,14 @@ public final class MultipartUploader: @unchecked Sendable {
     private func performUpload(
         to url: URL,
         boundary: String,
-        body: Data,
-        headers: [String: String] = [:]
+        body: Data = Data(),
+        bodyFile: URL? = nil,
+        headers: [String: String] = [:],
+        expectedSessionGeneration: Int? = nil
     ) async throws -> (Data, HTTPURLResponse) {
         let sessionOwner = auth
         let generation = sessionOwner.requestSessionGeneration
+        if let expectedSessionGeneration, generation != expectedSessionGeneration { throw CancellationError() }
         let checkSession: @MainActor () throws -> Void = { [self] in
             guard auth === sessionOwner else { throw CancellationError() }
             try sessionOwner.requireRequestSession(generation)
@@ -121,7 +124,7 @@ public final class MultipartUploader: @unchecked Sendable {
 
         let deviceId = sessionOwner.deviceId
         let token = sessionOwner.accessToken
-        var (data, response) = try await session.upload(for: makeRequest(token: token, deviceId: deviceId), from: body)
+        var (data, response) = try await uploadPayload(makeRequest(token: token, deviceId: deviceId), body: body, file: bodyFile)
         try checkSession()
         guard var http = response as? HTTPURLResponse else { throw APIError.invalidResponse }
 
@@ -131,7 +134,7 @@ public final class MultipartUploader: @unchecked Sendable {
             switch outcome {
             case .rotated:
                 let refreshed = sessionOwner.accessToken
-                (data, response) = try await session.upload(for: makeRequest(token: refreshed, deviceId: deviceId), from: body)
+                (data, response) = try await uploadPayload(makeRequest(token: refreshed, deviceId: deviceId), body: body, file: bodyFile)
                 try checkSession()
                 guard let retryHTTP = response as? HTTPURLResponse else { throw APIError.invalidResponse }
                 http = retryHTTP
@@ -153,6 +156,11 @@ public final class MultipartUploader: @unchecked Sendable {
             await sessionOwner.handleUnauthorized()
         }
         return (data, http)
+    }
+
+    private func uploadPayload(_ request: URLRequest, body: Data, file: URL?) async throws -> (Data, URLResponse) {
+        if let file { return try await session.upload(for: request, fromFile: file) }
+        return try await session.upload(for: request, from: body)
     }
 
     /// Upload a single file to `POST /api/files/upload`. Optional form
@@ -338,14 +346,15 @@ public final class MultipartUploader: @unchecked Sendable {
     /// Each part uses the field name `files`, matching the web client.
     public func uploadPostMedia(
         postId: String,
-        files: [MultipartFile]
+        files: [MultipartFile],
+        media: String? = nil
     ) async throws -> PostMediaUploadResponse {
         guard !files.isEmpty else {
             throw APIError.clientError(status: 400, message: "No files provided")
         }
         let boundary = "PantopusBoundary-\(UUID().uuidString)"
         let url = environment.apiBaseURL.appendingPathComponent("/api/upload/post-media/\(postId)")
-        let body = Self.buildBody(boundary: boundary, files: files)
+        let body = Self.buildBody(boundary: boundary, files: files, fields: media.map { ["media": $0] } ?? [:])
         let (data, http) = try await performUpload(to: url, boundary: boundary, body: body)
         switch http.statusCode {
         case 200..<300:
@@ -412,19 +421,37 @@ public final class MultipartUploader: @unchecked Sendable {
     public func uploadChatMedia(
         roomId: String,
         files: [MultipartFile],
-        clientRequestId: String? = nil
+        clientRequestId: String? = nil,
+        media: String? = nil
     ) async throws -> ChatMediaUploadResponse {
         guard !files.isEmpty else {
             throw APIError.clientError(status: 400, message: "No files provided")
         }
         let boundary = "PantopusBoundary-\(UUID().uuidString)"
         let url = environment.apiBaseURL.appendingPathComponent("/api/upload/chat-media/\(roomId)")
+        var fields = clientRequestId.map { ["client_request_id": $0] } ?? [:]
+        if let media { fields["media"] = media }
         let body = Self.buildBody(
             boundary: boundary,
             files: files,
-            fields: clientRequestId.map { ["client_request_id": $0] } ?? [:]
+            fields: fields
         )
         let (data, http) = try await performUpload(to: url, boundary: boundary, body: body)
+        return try decodeChatMedia(data, response: http)
+    }
+
+    func uploadChatMedia(
+        roomId: String, prepared: ChatOutboxUpload, expectedSessionGeneration: Int
+    ) async throws -> ChatMediaUploadResponse {
+        defer { try? FileManager.default.removeItem(at: prepared.url) }
+        let url = environment.apiBaseURL.appendingPathComponent("/api/upload/chat-media/\(roomId)")
+        let (data, http) = try await performUpload(
+            to: url, boundary: prepared.boundary, bodyFile: prepared.url, expectedSessionGeneration: expectedSessionGeneration
+        )
+        return try decodeChatMedia(data, response: http)
+    }
+
+    private func decodeChatMedia(_ data: Data, response http: HTTPURLResponse) throws -> ChatMediaUploadResponse {
         switch http.statusCode {
         case 200..<300:
             do {
@@ -464,6 +491,37 @@ public final class MultipartUploader: @unchecked Sendable {
                 return try JSONDecoder().decode(ProfilePictureUploadResponse.self, from: data)
             } catch {
                 logger.error("Profile picture upload decode failed: \(error)")
+                throw APIError.decoding(underlying: error)
+            }
+        case 401:
+            throw APIError.unauthorized
+        case 413:
+            throw APIError.clientError(status: 413, message: "That photo is too large.")
+        case 415:
+            throw APIError.clientError(status: 415, message: "Profile picture must be an image.")
+        case 400..<500:
+            let message = String(data: data, encoding: .utf8)
+            throw APIError.clientError(status: http.statusCode, message: message)
+        default:
+            throw APIError.server(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
+        }
+    }
+
+    /// Set the photo neighbors see (How neighbors see you) via
+    /// `POST /api/upload/local-profile-picture` (`backend/routes/upload.js:343`).
+    /// Single file, field name `file`; it goes on the Local Profile only,
+    /// never the account. Answers like `LocalProfileEndpoints.me`.
+    public func uploadLocalProfilePicture(_ file: MultipartFile) async throws -> OwnLocalProfileResponse {
+        let boundary = "PantopusBoundary-\(UUID().uuidString)"
+        let url = environment.apiBaseURL.appendingPathComponent("/api/upload/local-profile-picture")
+        let body = Self.buildBody(boundary: boundary, file: file)
+        let (data, http) = try await performUpload(to: url, boundary: boundary, body: body)
+        switch http.statusCode {
+        case 200..<300:
+            do {
+                return try JSONDecoder().decode(OwnLocalProfileResponse.self, from: data)
+            } catch {
+                logger.error("Local profile picture upload decode failed: \(error)")
                 throw APIError.decoding(underlying: error)
             }
         case 401:
@@ -651,6 +709,27 @@ public final class MultipartUploader: @unchecked Sendable {
         switch http.statusCode {
         case 200..<300:
             return try JSONDecoder().decode(AIRadonReportResponse.self, from: data)
+        case 401:
+            throw APIError.unauthorized
+        case 400..<500:
+            throw APIError.clientError(status: http.statusCode, message: String(data: data, encoding: .utf8))
+        default:
+            throw APIError.server(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
+        }
+    }
+
+    /// The whole post suggested from the person's photos (JPEGs, field `photos`,
+    /// up to 4) and the composer's fields (`postType`, what they've written, the
+    /// place) (`POST /api/ai/draft/post-suggestion`; route `backend/routes/ai.js:333`).
+    /// The server reads the photos in memory and doesn't keep them; nothing is posted.
+    public func suggestPost(photos: [MultipartFile], fields: [String: String]) async throws -> AIPostSuggestionResponse {
+        let boundary = "PantopusBoundary-\(UUID().uuidString)"
+        let url = environment.apiBaseURL.appendingPathComponent("/api/ai/draft/post-suggestion")
+        let body = Self.buildBody(boundary: boundary, files: photos, fields: fields)
+        let (data, http) = try await performUpload(to: url, boundary: boundary, body: body)
+        switch http.statusCode {
+        case 200..<300:
+            return try JSONDecoder().decode(AIPostSuggestionResponse.self, from: data)
         case 401:
             throw APIError.unauthorized
         case 400..<500:

@@ -10,7 +10,7 @@
 
 const { haversineMeters } = require('../../utils/trustState');
 
-const KINDS = ['watch_party', 'playdate', 'pickup_game', 'walk_coffee'];
+const KINDS = ['watch_party', 'playdate', 'pickup_game', 'walk_coffee', 'study_group'];
 const AUTO_RULES = ['verified', 'hosted_before', 'anyone_nearby'];
 const KIDS_AGE_BANDS = ['under_2', '2_3', '4_5', '6_8', '9_12'];
 const DISTANCE_BANDS = ['under_1_mi', 'about_1_mi', 'about_2_mi', 'about_3_mi', 'about_5_mi'];
@@ -18,6 +18,7 @@ const SPORTS = ['pickleball', 'basketball', 'soccer', 'tennis', 'volleyball', 'r
 const LEVELS = ['any', 'casual', 'competitive'];
 const WALK_KINDS = ['walk', 'dog_walk', 'stroller_walk', 'coffee'];
 const PACES = ['easy', 'brisk'];
+const STUDY_STYLES = ['quiet', 'together'];
 const WINDOWS = ['now', 'today', 'week', 'weekend'];
 
 const MILE_METERS = 1609.344;
@@ -186,6 +187,7 @@ module.exports = {
   LEVELS,
   WALK_KINDS,
   PACES,
+  STUDY_STYLES,
   WINDOWS,
   LIMITS,
   MILE_METERS,

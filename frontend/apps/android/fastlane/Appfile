@@ -1,2 +1,2 @@
-package_name("app.pantopus.android")
+package_name("com.pantopus.app")
 # json_key_file is read from ./play-service-account.json — gitignored.

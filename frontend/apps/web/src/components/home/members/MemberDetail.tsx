@@ -84,7 +84,7 @@ const ROLE_OPTIONS = [
   { value: 'admin', label: 'Admin', description: 'Full control over home settings and members' },
   { value: 'manager', label: 'Manager', description: 'Manage tasks, issues, bills. No member control' },
   { value: 'member', label: 'Member', description: 'View and contribute to home life' },
-  { value: 'restricted_member', label: 'Restricted', description: 'Limited access (chores, basic info)' },
+  { value: 'restricted_member', label: 'Restricted', description: 'Basic home information; additional access by permission' },
   { value: 'guest', label: 'Guest', description: 'Read-only access to shared info' },
 ];
 
@@ -93,6 +93,7 @@ interface MemberData {
   role?: string;
   role_base?: string;
   name?: string | null;
+  display_name?: string | null;
   created_at?: string;
   start_at?: string | null;
   end_at?: string | null;
@@ -140,7 +141,8 @@ export default function MemberDetail({
   const [expiryDate, setExpiryDate] = useState('');
   const expiryInputId = useId();
 
-  const memberName = member?.user?.displayName || chosenUsername(member?.user?.handle) || member?.user?.name || chosenUsername(member?.user?.username) || member?.name || 'Member';
+  // The name the member's row shows: the one they show neighbors (display_name) first.
+  const memberName = member?.display_name || member?.user?.displayName || chosenUsername(member?.user?.handle) || member?.user?.name || chosenUsername(member?.user?.username) || member?.name || 'Member';
   const memberUsername = chosenUsername(member?.user?.handle || member?.user?.username);
   const profilePic = member?.user?.avatarUrl || member?.user?.profile_picture_url || member?.user?.avatar_url;
   const isTargetOwner = member?.role === 'owner' || member?.role_base === 'owner';

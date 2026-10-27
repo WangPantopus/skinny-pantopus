@@ -176,26 +176,27 @@ private struct RepRow: View {
                 Spacer(minLength: 0)
                 HStack(spacing: 8) {
                     if let phone = rep.phone, let url = URL(string: "tel:\(phone.filter(\.isNumber))") {
-                        contactButton(.bell, url: url)
+                        contactButton(.bell, url: url, label: "Call \(rep.name)")
                     }
                     if let email = rep.email, let url = URL(string: "mailto:\(email)") {
-                        contactButton(.mail, url: url)
+                        contactButton(.mail, url: url, label: "Email \(rep.name)")
                     }
-                    if let website = rep.website, let url = URL(string: website) {
-                        contactButton(.mapPin, url: url)
+                    if let url = ExternalLink.webURL(rep.website) {
+                        contactButton(.mapPin, url: url, label: "Visit \(rep.name)'s website")
                     }
                 }
             }
         }
     }
 
-    private func contactButton(_ icon: PantopusIcon, url: URL) -> some View {
+    private func contactButton(_ icon: PantopusIcon, url: URL, label: String) -> some View {
         Link(destination: url) {
             Icon(icon, size: 15, strokeWidth: 2, color: Theme.Color.primaryInk)
                 .frame(width: 30, height: 30)
                 .background(Theme.Color.primary100)
                 .clipShape(Circle())
         }
+        .accessibilityLabel(label)
     }
 
     private var initials: String {

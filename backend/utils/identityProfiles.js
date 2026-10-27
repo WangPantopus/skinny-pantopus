@@ -3,6 +3,7 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('./logger');
 const verificationAge = require('./verificationAge');
 const { chosenUsernameOrNull, isKnownMadeUpUsername } = require('./personalUsername');
+const { serializeLocalProfileForViewer } = require('../serializers/identitySerializers');
 
 /**
  * Which of these users are verified residents, for the public "verified_resident" badge: an ACTIVE HomeOccupancy
@@ -22,7 +23,9 @@ async function verifiedResidentUserIds(userIds) {
     .select('user_id, verified_at')
     .in('user_id', ids)
     .eq('is_active', true)
-    .eq('verification_status', 'verified');
+    .eq('verification_status', 'verified')
+    // A claim (home claims PR 3) is not a verified residence.
+    .neq('verification_source', 'claim');
   if (error) {
     logger.warn('identity.verified_resident_lookup_error', { error: error.message });
     return new Set();
@@ -162,13 +165,16 @@ async function localDisplayNames(userIds) {
   return names;
 }
 
+// A failed read throws: syncLocalProfileLocality would otherwise clear the person's public place as if they had hidden
+// it, and public_neighborhood can't be derived again.
 async function canExposePublicLocality(userId) {
   if (!userId) return false;
-  const { data } = await supabaseAdmin
+  const { data, error } = await supabaseAdmin
     .from('UserPrivacySettings')
     .select('show_neighborhood')
     .eq('user_id', userId)
     .maybeSingle();
+  if (error) throw error;
   return data?.show_neighborhood === 'public';
 }
 
@@ -207,21 +213,40 @@ async function getLocalProfileByUserId(userId) {
   return data || null;
 }
 
+// A Local Profile read that failed. The caller refuses (503): guessing would show the private account instead.
+function localProfileUnavailable(cause) {
+  return Object.assign(new Error('This profile can\'t be loaded right now. Please try again.'), {
+    code: 'LOCAL_PROFILE_UNAVAILABLE', status: 503, cause,
+  });
+}
+
+// The Local Profile a handle names. An account username finds its person's Local Profile too, and only someone who
+// has none is shown by a profile made from their account. A failed read throws: the account's name, photo and bio,
+// with none of the Local Profile's visibility settings, are never shown in its place.
 async function getLocalProfileByHandle(handle) {
   const normalized = normalizeHandle(handle);
-  const { data } = await supabaseAdmin
+  const { data, error } = await supabaseAdmin
     .from('LocalProfile')
     .select('*')
     .eq('handle_normalized', normalized)
     .maybeSingle();
+  if (error) throw localProfileUnavailable(error);
   if (data) return data;
 
-  const { data: user } = await supabaseAdmin
+  const { data: user, error: userError } = await supabaseAdmin
     .from('User')
     .select('id, username, name, first_name, middle_name, last_name, profile_picture_url, bio, city, state, verified')
     .eq('username', handle)
     .maybeSingle();
+  if (userError) throw localProfileUnavailable(userError);
   if (!user) return null;
+  const { data: own, error: ownError } = await supabaseAdmin
+    .from('LocalProfile')
+    .select('*')
+    .eq('user_id', user.id)
+    .maybeSingle();
+  if (ownError) throw localProfileUnavailable(ownError);
+  if (own) return own;
   const exposeLocality = await canExposePublicLocality(user.id);
   return {
     id: `legacy-local-${user.id}`,
@@ -282,15 +307,73 @@ async function ensureLocalProfile(userId) {
   return created;
 }
 
-// ensureLocalProfile copies the account's name, photo and bio into the LocalProfile, and no app edits them there, so
-// an account edit has to move the copies too; otherwise posts, comments, search and the privacy preview keep the old
-// ones. `changed` lists the account columns the edit wrote (name, bio, profile_picture_url); only their copies move.
-// A user without a LocalProfile is left alone: it is created from the current account when first needed.
-async function syncLocalProfileFromAccount(user, changed) {
+// What ensureLocalProfile copies from an account into its LocalProfile: the name, bio and photo.
+function localProfileCopyOfAccount(user) {
+  return {
+    display_name: displayNameFromUser(user),
+    bio: user?.bio || null,
+    avatar_url: user?.profile_picture_url || null,
+  };
+}
+
+// Which of a LocalProfile's name, bio and photo are still the account's copy. The others are what the person chose to
+// show neighbors (How neighbors see you: PATCH /api/local-profiles/me, POST /api/upload/local-profile-picture). A
+// value that equals the account's counts as a copy, and so does a name that isn't one (blank, or a username the
+// server made up). `user` is the account as the copies were made from it.
+function localProfileFollowsAccount(profile, user) {
+  const copy = localProfileCopyOfAccount(user);
+  return {
+    display_name: !nameText(profile?.display_name) || cleanIdentityText(profile.display_name) === copy.display_name,
+    bio: (profile?.bio || null) === copy.bio,
+    avatar_url: (profile?.avatar_url || null) === copy.avatar_url,
+  };
+}
+
+// The person's own Local Profile as How neighbors see you shows it (GET and PATCH /api/local-profiles/me, POST
+// /api/upload/local-profile-picture): what neighbors see, the account's name and photo (for "Use my account name"
+// and "Use my account photo"), and which of the two still follow account edits.
+async function ownLocalProfileView(profile, userId) {
+  const { data: account, error } = await supabaseAdmin
+    .from('User')
+    .select('id, username, name, first_name, middle_name, last_name, bio, profile_picture_url')
+    .eq('id', userId)
+    .maybeSingle();
+  if (error) throw error;
+  const copy = localProfileCopyOfAccount(account);
+  const follows = localProfileFollowsAccount(profile, account);
+  return {
+    profile: serializeLocalProfileForViewer(profile, { includeLegacyUserId: true }),
+    account: { displayName: copy.display_name, avatarUrl: copy.avatar_url },
+    followsAccount: { displayName: follows.display_name, avatarUrl: follows.avatar_url },
+  };
+}
+
+// ensureLocalProfile copies the account's name, photo and bio into the LocalProfile, so an account edit has to move
+// the copies too; otherwise posts, comments, search and the privacy preview keep the old ones. A name or photo the
+// person chose for neighbors is theirs: it stays. `changed` lists the account columns the edit wrote (name, bio,
+// profile_picture_url) and `previous` is the account as it was before the edit (null if it couldn't be read: then
+// nothing that isn't plainly a copy moves). A user without a LocalProfile is left alone: it is created from the
+// current account when first needed.
+async function syncLocalProfileFromAccount(user, changed, previous) {
+  const fields = [
+    changed.includes('name') && 'display_name',
+    changed.includes('bio') && 'bio',
+    changed.includes('profile_picture_url') && 'avatar_url',
+  ].filter(Boolean);
+  if (fields.length === 0) return;
+  const { data: profile, error: readError } = await supabaseAdmin
+    .from('LocalProfile')
+    .select('display_name, bio, avatar_url')
+    .eq('user_id', user.id)
+    .maybeSingle();
+  if (readError) throw readError;
+  if (!profile) return;
+  const follows = localProfileFollowsAccount(profile, previous);
+  const copy = localProfileCopyOfAccount(user);
   const updates = {};
-  if (changed.includes('name')) updates.display_name = displayNameFromUser(user);
-  if (changed.includes('bio')) updates.bio = user.bio || null;
-  if (changed.includes('profile_picture_url')) updates.avatar_url = user.profile_picture_url || null;
+  for (const field of fields) {
+    if (follows[field]) updates[field] = copy[field];
+  }
   if (Object.keys(updates).length === 0) return;
   updates.updated_at = new Date().toISOString();
   const { error } = await supabaseAdmin
@@ -683,6 +766,9 @@ module.exports = {
   displayNameFromUser,
   localDisplayNames,
   ensureLocalProfile,
+  localProfileCopyOfAccount,
+  localProfileFollowsAccount,
+  ownLocalProfileView,
   syncLocalProfileFromAccount,
   localProfileVisibilityFor,
   getLocalProfileByUserId,

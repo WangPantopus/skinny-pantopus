@@ -45,9 +45,17 @@ export async function GET(req: NextRequest) {
   const address = (req.nextUrl.searchParams.get('address') || '').trim().slice(0, 200);
   let preview: Preview | null = null;
   if (address) {
+    // The card renders for whoever fetched the image, usually a link-preview crawler,
+    // not a visitor's own lookup. With the edge secret the API counts it under the
+    // share cards' hourly budget instead of the crawler's daily lookups; past that
+    // budget the card renders without the preview.
+    const edgeSecret = process.env.EDGE_PROXY_SECRET;
     try {
       const res = await fetch(`${API_BASE}/api/public/place?address=${encodeURIComponent(address)}`, {
-        headers: { accept: 'application/json' },
+        headers: {
+          accept: 'application/json',
+          ...(edgeSecret ? { 'x-pantopus-edge': edgeSecret, 'x-pantopus-share-card': '1' } : {}),
+        },
         cache: 'no-store',
       });
       if (res.ok) preview = (await res.json()) as Preview;

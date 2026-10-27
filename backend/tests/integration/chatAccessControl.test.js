@@ -65,7 +65,21 @@ function createApp() {
   };
   app.set('io', mockIo);
   app.use('/api/chat', require('../../routes/chats'));
+  // Committed messages fan out through the realtime service, which the socket server starts with the app's io.
+  require('../../services/chatRealtime').init(mockIo);
   return { app, mockIo };
+}
+
+// Committed changes fan out asynchronously, and an earlier test's delivery can still arrive. Wait for the emit that
+// matches, and report the connection io.to() named for it (the call made just before that emit).
+async function deliveredTo(mockIo, matches) {
+  const find = () => mockIo.emit.mock.calls.findIndex((call) => matches(...call));
+  for (let i = 0; i < 400 && find() < 0; i += 1) await new Promise((r) => setTimeout(r, 5));
+  const index = find();
+  if (index < 0) return null;
+  const emitted = mockIo.emit.mock.invocationCallOrder[index];
+  const toIndex = mockIo.to.mock.invocationCallOrder.findLastIndex((order) => order < emitted);
+  return { target: mockIo.to.mock.calls[toIndex]?.[0], payload: mockIo.emit.mock.calls[index][1] };
 }
 
 function seedBaseData() {
@@ -115,11 +129,20 @@ function seedBaseData() {
   seedTable('BusinessSeat', []);
   seedTable('SeatBinding', []);
   seedTable('BusinessTeam', []);
+  // A published business: a draft can't message people as itself.
+  seedTable('BusinessProfile', [{ business_user_id: U_BIZ, is_published: true }]);
 }
+
+// The chat write limiters (12 sends per 5 s and 120 per minute per person) keep counting across this file's
+// tests. Each test runs a minute after the previous one, so one test's sends never count against the next.
+const realNow = Date.now.bind(Date);
+let limiterClock = 0;
 
 beforeEach(() => {
   resetTables();
   jest.clearAllMocks();
+  limiterClock += 61_000;
+  jest.spyOn(Date, 'now').mockImplementation(() => realNow() + limiterClock);
   seedBaseData();
 });
 
@@ -782,12 +805,13 @@ describe('Direct send denied at the persistence boundary', () => {
     connectedUsers.set(U2, new Set(['socket-u2']));
     try {
       const response = await send(app);
-      for (let i = 0; i < 50 && !mockIo.emit.mock.calls.length; i += 1) await new Promise((r) => setTimeout(r, 5));
+      const delivery = await deliveredTo(mockIo, (event, payload) => event === 'message:new' && payload?.id === response.body.message?.id);
 
       expect(response.status).toBe(201);
       expect(insertSpy).toHaveBeenCalledTimes(2);
       expect(getTable('ChatMessage')).toHaveLength(before + 1);
-      expect(mockIo.emit).toHaveBeenCalledWith('message:new', expect.anything());
+      expect(delivery).not.toBeNull();
+      expect(delivery.target).toBe('socket-u2');
     } finally {
       connectedUsers.delete(U2);
     }

@@ -31,27 +31,31 @@ struct PlanPinCard: View {
     }
 
     private func content(_ card: PlanCardDTO) -> some View {
-        ScrollView {
+        PlansSheetScroll {
             VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    PlanTypeTag(kind: card.kind)
-                    Spacer()
-                    closeButton
+                // Pulled down, the card keeps its type, title, when and where over the map.
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        PlanTypeTag(kind: card.kind)
+                        Spacer()
+                        closeButton
+                    }
+                    Button { actions.openPlan(card, card.id, .view) } label: {
+                        Text(card.title)
+                            .planFont(.h3)
+                            .foregroundStyle(Theme.Color.appText)
+                            .multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Opens the plan")
+                    Text(PlanCardLines.whenWhere(card))
+                        .planFont(.small)
+                        .monospacedDigit()
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                Button { actions.openPlan(card, card.id, .view) } label: {
-                    Text(card.title)
-                        .planFont(.h3)
-                        .foregroundStyle(Theme.Color.appText)
-                        .multilineTextAlignment(.leading)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .buttonStyle(.plain)
-                .accessibilityHint("Opens the plan")
-                Text(PlanCardLines.whenWhere(card))
-                    .planFont(.small)
-                    .monospacedDigit()
-                    .foregroundStyle(Theme.Color.appTextSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                .plansSheetPeek(.card(planId))
                 PlanHostRow(host: card.host, kind: card.kind)
                 // Someone already in (or hosting) doesn't need to hear how to get in.
                 PlanSpotsBlock(
@@ -63,9 +67,9 @@ struct PlanPinCard: View {
                     .padding(.top, 2)
             }
             .padding(.bottom, Spacing.s4)
-            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { viewModel.cardHeight = $0 }
+            // The card's sheet takes its height in the middle, up to a little over half (board F3).
+            .plansSheetFit(.card(planId))
         }
-        .scrollIndicators(.hidden)
     }
 
     private var closeButton: some View {
@@ -107,6 +111,10 @@ struct PlanPinCard: View {
             Shimmer(width: 220, height: 14, cornerRadius: Radii.xs)
             Shimmer(width: nil, height: 40, cornerRadius: Radii.lg)
         }
+        .padding(.bottom, Spacing.s4)
+        .plansSheetPeek(.card(planId))
+        .plansSheetFit(.card(planId))
+        .plansSheetDragArea()
         .accessibilityElement()
         .accessibilityLabel("Loading the plan")
     }
@@ -124,6 +132,10 @@ struct PlanPinCard: View {
                 .planFont(.small)
                 .foregroundStyle(Theme.Color.appTextSecondary)
         }
+        .padding(.bottom, Spacing.s4)
+        .plansSheetPeek(.card(planId))
+        .plansSheetFit(.card(planId))
+        .plansSheetDragArea()
     }
 }
 
@@ -198,7 +210,17 @@ enum PlanCardLines {
             case "stroller_walk": "stroller walk"
             default: "walk"
             }
+        case .studyGroup: "study group"
         }
+    }
+
+    /// A study group's subject and style, ["Spanish", "Quiet study"], shown
+    /// as "Spanish · Quiet study" on the plan page and the rows. Empty
+    /// without a subject.
+    static func study(_ details: PlanDetailsDTO?) -> [String] {
+        guard let subject = details?.subject?.trimmingCharacters(in: .whitespacesAndNewlines), !subject.isEmpty else { return [] }
+        // Quiet study unless the plan says otherwise (the server's default).
+        return [subject, PlanComposerOptions.studyStyleLabel(details?.studyStyle ?? "quiet")].compactMap { $0 }
     }
 
     /// "Sam usually answers within an hour", when the server knows.

@@ -255,7 +255,8 @@ class WaitingRoomViewModel
                         // Household-verified members (an invitation) can still verify the address by mail.
                         addressVerified =
                             detail.data.home.residencyStatus == "verified" &&
-                                detail.data.home.residencySource != "household",
+                                detail.data.home.residencySource != "household" &&
+                                detail.data.home.residencySource != "claim",
                     )
                 is NetworkResult.Failure ->
                     HomeContext(

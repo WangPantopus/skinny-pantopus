@@ -20,6 +20,7 @@ import Observation
 @MainActor
 @Observable
 public final class BusinessCatalogViewModel {
+    public private(set) var mutationError: String?
     /// Render state.
     public private(set) var state: BusinessCatalogState = .loading
 
@@ -102,7 +103,8 @@ public final class BusinessCatalogViewModel {
     @discardableResult
     public func createItem(_ draft: BusinessCatalogItemDraft) async -> Bool {
         guard draft.isValid else {
-            toast = ToastMessage(text: "Name is required", kind: .error)
+            mutationError = draft.validationError
+            toast = ToastMessage(text: draft.validationError ?? "Check the item details.", kind: .error)
             return false
         }
         let body = draft.asRequest()
@@ -125,7 +127,8 @@ public final class BusinessCatalogViewModel {
     @discardableResult
     public func updateItem(id: String, draft: BusinessCatalogItemDraft) async -> Bool {
         guard draft.isValid else {
-            toast = ToastMessage(text: "Name is required", kind: .error)
+            mutationError = draft.validationError
+            toast = ToastMessage(text: draft.validationError ?? "Check the item details.", kind: .error)
             return false
         }
         return await mutate(successText: "Item saved") {
@@ -187,8 +190,9 @@ public final class BusinessCatalogViewModel {
     @discardableResult
     public func createCategory(name: String) async -> Bool {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            toast = ToastMessage(text: "Category name is required", kind: .error)
+        guard (1...100).contains(trimmed.count) else {
+            mutationError = "Use 1 to 100 characters for the category name."
+            toast = ToastMessage(text: "Use 1 to 100 characters for the category name.", kind: .error)
             return false
         }
         if pendingCategoryCreate?.name != trimmed { pendingCategoryCreate = (trimmed, UUID().uuidString) }
@@ -210,8 +214,9 @@ public final class BusinessCatalogViewModel {
     @discardableResult
     public func renameCategory(id: String, name: String) async -> Bool {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            toast = ToastMessage(text: "Category name is required", kind: .error)
+        guard (1...100).contains(trimmed.count) else {
+            mutationError = "Use 1 to 100 characters for the category name."
+            toast = ToastMessage(text: "Use 1 to 100 characters for the category name.", kind: .error)
             return false
         }
         return await mutate(successText: "Category renamed") {
@@ -249,6 +254,7 @@ public final class BusinessCatalogViewModel {
         _ body: @escaping () async throws -> Void
     ) async -> Bool {
         guard !isMutating else { return false }
+        mutationError = nil
         isMutating = true
         defer { isMutating = false }
         do {
@@ -260,14 +266,20 @@ public final class BusinessCatalogViewModel {
             return true
         } catch let error as APIError {
             let text = message(for: error, fallback: "Something went wrong. Try again.")
+            mutationError = text
             logger.warning("Catalog mutation failed: \(error)")
             toast = ToastMessage(text: text, kind: .error)
             return false
         } catch {
             logger.warning("Catalog mutation failed: \(error)")
+            mutationError = "Something went wrong. Try again."
             toast = ToastMessage(text: "Something went wrong. Try again.", kind: .error)
             return false
         }
+    }
+
+    public func clearMutationError() {
+        mutationError = nil
     }
 
     private func message(for error: APIError, fallback: String) -> String {

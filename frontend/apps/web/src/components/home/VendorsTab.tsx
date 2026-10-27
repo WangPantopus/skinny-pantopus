@@ -10,9 +10,12 @@ import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
 import ErrorState from '@/components/ui/ErrorState';
 import { failureMessage } from './share/shareFailure';
+import { useHomePermissions } from './useHomePermissions';
 
 export default function VendorsTab({ homeId }: { homeId: string }) {
   type BusinessLinkKind = HomeBusinessLink['kind'];
+  const { can } = useHomePermissions();
+  const canManageLinks = can('vendors.manage');
   const [linkedBusinesses, setLinkedBusinesses] = useState<HomeBusinessLink[]>([]);
   const [legacyVendors, setLegacyVendors] = useState<HomeVendor[]>([]);
   const [loading, setLoading] = useState(true);
@@ -138,12 +141,12 @@ export default function VendorsTab({ homeId }: { homeId: string }) {
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-app">Vendors & Businesses</h2>
         <div className="flex gap-2">
-          <button
+          {canManageLinks && <button
             onClick={() => { setShowSearch(!showSearch); setShowAddManual(false); }}
             className="px-3 py-1.5 rounded-lg bg-violet-600 text-white text-xs font-semibold hover:bg-violet-700 transition"
           >
             + Link Business
-          </button>
+          </button>}
           <button
             onClick={() => { setShowAddManual(!showAddManual); setShowSearch(false); }}
             className="px-3 py-1.5 rounded-lg border border-app-strong text-xs font-semibold text-app-strong hover:bg-surface-raised transition"
@@ -153,7 +156,7 @@ export default function VendorsTab({ homeId }: { homeId: string }) {
         </div>
       </div>
 
-      {showSearch && (
+      {showSearch && canManageLinks && (
         <div className="bg-surface rounded-xl border border-app p-4 space-y-3">
           <div className="flex items-center gap-2">
             <input
@@ -290,15 +293,16 @@ export default function VendorsTab({ homeId }: { homeId: string }) {
                     )}
                   </div>
                 </div>
-                <button
+                {canManageLinks && <button
                   onClick={() => handleRemoveLink(link.id)}
                   className="text-app-muted hover:text-red-500 p-1 flex-shrink-0"
                   title="Remove"
+                  aria-label={`Remove ${link.business?.name || 'business link'}`}
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
-                </button>
+                </button>}
               </div>
             ))}
           </div>

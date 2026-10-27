@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -77,6 +78,7 @@ fun NewMessageScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val searchText by viewModel.searchText.collectAsStateWithLifecycle()
+    val isSearching by viewModel.isSearching.collectAsStateWithLifecycle()
     val destination by viewModel.destination.collectAsStateWithLifecycle()
 
     LifecycleResumeEffect(Unit) {
@@ -102,6 +104,7 @@ fun NewMessageScreen(
         TopBar(title = title, onCancel = onCancel)
         SearchBar(
             query = searchText,
+            isSearching = isSearching,
             onChange = viewModel::updateSearch,
             onClear = viewModel::clearSearch,
         )
@@ -116,7 +119,12 @@ fun NewMessageScreen(
                         onInvite = onInvite,
                     )
                 is NewMessageUiState.Loaded ->
-                    LoadedFrame(sections = s.sections, onTap = viewModel::tapRow)
+                    LoadedFrame(
+                        sections = s.sections,
+                        onTap = viewModel::tapRow,
+                        isSearching = isSearching,
+                        queryLength = searchText.trim().trimStart('@').length,
+                    )
                 NewMessageUiState.SearchFailed ->
                     ErrorFrame(
                         title = "Couldn't search right now",
@@ -194,6 +202,7 @@ private fun TopBar(
 @Composable
 private fun SearchBar(
     query: String,
+    isSearching: Boolean,
     onChange: (String) -> Unit,
     onClear: () -> Unit,
 ) {
@@ -219,7 +228,7 @@ private fun SearchBar(
             Box(modifier = Modifier.weight(1f)) {
                 if (query.isEmpty()) {
                     Text(
-                        text = "Search by name or neighborhood",
+                        text = "Search by name, username or area",
                         fontSize = 13.sp,
                         color = PantopusColors.appTextMuted,
                     )
@@ -240,6 +249,13 @@ private fun SearchBar(
                         Modifier
                             .fillMaxWidth()
                             .testTag("newMessageSearchField"),
+                )
+            }
+            if (isSearching) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(16.dp).semantics { contentDescription = "Searching" },
+                    color = PantopusColors.primary600,
+                    strokeWidth = 2.dp,
                 )
             }
             if (hasText) {
@@ -470,10 +486,12 @@ private fun HintChip(label: String) {
 @Composable
 private fun LoadedFrame(
     sections: List<NewMessageSection>,
+    isSearching: Boolean,
+    queryLength: Int,
     onTap: (NewMessageContactRow) -> Unit,
 ) {
     if (sections.isEmpty()) {
-        SearchEmptyState()
+        SearchEmptyState(isSearching, queryLength)
         return
     }
     LazyColumn(
@@ -491,7 +509,10 @@ private fun LoadedFrame(
 }
 
 @Composable
-private fun SearchEmptyState() {
+private fun SearchEmptyState(
+    isSearching: Boolean,
+    queryLength: Int,
+) {
     Column(
         modifier =
             Modifier
@@ -518,14 +539,24 @@ private fun SearchEmptyState() {
         }
         Spacer(modifier = Modifier.size(12.dp))
         Text(
-            text = "No matches",
+            text =
+                when {
+                    isSearching -> "Searching…"
+                    queryLength < 2 -> "Keep typing"
+                    else -> "No matches"
+                },
             fontSize = 16.sp,
             fontWeight = FontWeight.SemiBold,
             color = PantopusColors.appText,
         )
         Spacer(modifier = Modifier.size(6.dp))
         Text(
-            text = "Try a different name or neighborhood.",
+            text =
+                when {
+                    isSearching -> "Finding people on Pantopus."
+                    queryLength < 2 -> "Enter at least 2 characters to search."
+                    else -> "Try a different name, username or area."
+                },
             fontSize = 12.5.sp,
             color = PantopusColors.appTextSecondary,
         )

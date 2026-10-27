@@ -62,7 +62,21 @@ function createApp() {
   };
   app.set('io', mockIo);
   app.use('/api/chat', require('../../routes/chats'));
+  // Committed messages fan out through the realtime service, which the socket server starts with the app's io.
+  require('../../services/chatRealtime').init(mockIo);
   return { app, mockIo };
+}
+
+// Committed changes fan out asynchronously, and an earlier test's delivery can still arrive. Wait for the emit that
+// matches, and report the connection io.to() named for it (the call made just before that emit).
+async function deliveredTo(mockIo, matches) {
+  const find = () => mockIo.emit.mock.calls.findIndex((call) => matches(...call));
+  for (let i = 0; i < 400 && find() < 0; i += 1) await new Promise((r) => setTimeout(r, 5));
+  const index = find();
+  if (index < 0) return null;
+  const emitted = mockIo.emit.mock.invocationCallOrder[index];
+  const toIndex = mockIo.to.mock.invocationCallOrder.findLastIndex((order) => order < emitted);
+  return { target: mockIo.to.mock.calls[toIndex]?.[0], payload: mockIo.emit.mock.calls[index][1] };
 }
 
 // ── Seed data ────────────────────────────────────────────────
@@ -185,9 +199,16 @@ function seedBaseData() {
   seedTable('ConversationTopic', []);
 }
 
+// The chat write limiters (12 sends per 5 s and 120 per minute per person) keep counting across this file's
+// tests. Each test runs a minute after the previous one, so one test's sends never count against the next.
+const realNow = Date.now.bind(Date);
+let limiterClock = 0;
+
 beforeEach(() => {
   resetTables();
   jest.clearAllMocks();
+  limiterClock += 61_000;
+  jest.spyOn(Date, 'now').mockImplementation(() => realNow() + limiterClock);
   seedBaseData();
 });
 
@@ -224,7 +245,7 @@ describe('POST /api/chat/messages', () => {
     const { connectedUsers } = require('../../socket/chatSocketio');
     connectedUsers.set(U2, new Set(['socket-u2']));
     try {
-      await request(app)
+      const sent = await request(app)
         .post('/api/chat/messages')
         .set('Authorization', 'Bearer test-token')
         .send({
@@ -232,11 +253,13 @@ describe('POST /api/chat/messages', () => {
           messageText: 'Socket test',
           messageType: 'text',
         });
-      // Delivered after the reply, once the room's members are read.
-      for (let i = 0; i < 50 && !mockIo.emit.mock.calls.length; i += 1) await new Promise((r) => setTimeout(r, 5));
+      expect(sent.status).toBe(201);
+      // Delivered after the reply, once the room's members are read (normally within a few milliseconds).
+      const delivery = await deliveredTo(mockIo, (event, payload) => event === 'message:new' && payload?.id === sent.body.message.id);
 
-      expect(mockIo.to).toHaveBeenCalledWith('socket-u2');
-      expect(mockIo.emit).toHaveBeenCalledWith('message:new', expect.objectContaining({
+      expect(delivery).not.toBeNull();
+      expect(delivery.target).toBe('socket-u2');
+      expect(delivery.payload).toEqual(expect.objectContaining({
         message: 'Socket test',
         preview: 'Socket test',
         other_user_id: U1,
@@ -497,7 +520,8 @@ describe('POST /api/chat/messages', () => {
     expect(res.status).toBe(201);
   });
 
-  test('resets sender unread_count to 0 after sending', async () => {
+  // Approved: a send never marks the sender's unseen incoming messages read; only an explicit visible read boundary does.
+  test("keeps the sender's unseen unread_count after sending", async () => {
     const participants = getTable('ChatParticipant');
     const p = participants.find(r => r.user_id === U1 && r.room_id === ROOM_D);
     if (p) p.unread_count = 5;
@@ -515,15 +539,22 @@ describe('POST /api/chat/messages', () => {
 
     const updated = getTable('ChatParticipant')
       .find(r => r.user_id === U1 && r.room_id === ROOM_D);
-    expect(updated.unread_count).toBe(0);
+    expect(updated.unread_count).toBe(5);
+    expect(getTable('ChatMessage').filter(m => m.message === 'Reset my unread')).toHaveLength(1);
   });
 
-  test('updates room updated_at timestamp after sending', async () => {
+  // The room's activity time and revision advance in the inserting transaction (advance_chat_message_revision);
+  // the route writes no separate room update. What the sender sees: the room moves to the top of the list, under
+  // the new message.
+  test('moves the room to the top of the rooms list after sending', async () => {
+    seedTable('ChatMessage', [{ id: MSG_ORIG, room_id: ROOM_G, user_id: U2, message: 'Earlier gig news', type: 'text',
+      deleted: false, created_at: '2026-01-05T00:00:00Z', attachments: [] }]);
     const { app } = createApp();
+    const before = await request(app).get('/api/chat/rooms').set('Authorization', 'Bearer test-token');
+    expect(before.body.rooms.map(r => r.id)).toEqual([ROOM_G, ROOM_D]);
+    const roomBefore = { ...getTable('ChatRoom').find(r => r.id === ROOM_D) };
 
-    const beforeSend = ROOM_DIRECT.updated_at;
-
-    await request(app)
+    const sent = await request(app)
       .post('/api/chat/messages')
       .set('Authorization', 'Bearer test-token')
       .send({
@@ -532,8 +563,14 @@ describe('POST /api/chat/messages', () => {
         messageType: 'text',
       });
 
-    const room = getTable('ChatRoom').find(r => r.id === ROOM_D);
-    expect(room.updated_at).not.toBe(beforeSend);
+    expect(sent.status).toBe(201);
+    const after = await request(app).get('/api/chat/rooms').set('Authorization', 'Bearer test-token');
+    expect(after.body.rooms.map(r => r.id)).toEqual([ROOM_D, ROOM_G]);
+    expect(after.body.rooms[0].last_message_preview).toBe('Timestamp test');
+    expect(after.body.rooms[0].last_message_at).toBe(sent.body.message.created_at);
+    const { message_revision: _revision, ...roomFields } = getTable('ChatRoom').find(r => r.id === ROOM_D);
+    const { message_revision: _before, ...roomFieldsBefore } = roomBefore;
+    expect(roomFields).toEqual(roomFieldsBefore);
   });
 });
 
@@ -579,20 +616,8 @@ describe('GET /api/chat/rooms', () => {
       attachments: [],
     }]);
 
-    // The rooms endpoint uses an RPC to fetch last-message previews
-    setRpcMock(async (fnName, params) => {
-      if (fnName === 'get_room_previews') {
-        const roomIds = params.p_room_ids || [];
-        const msgs = getTable('ChatMessage') || [];
-        const previews = [];
-        for (const rid of roomIds) {
-          const last = msgs.filter(m => m.room_id === rid).sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
-          if (last) previews.push(last);
-        }
-        return { data: previews, error: null };
-      }
-      return { data: null, error: { message: 'Unknown RPC' } };
-    });
+    // The rooms endpoint pages rooms with get_user_chat_rooms and reads last-message previews with
+    // get_room_previews; the shared mock answers both from the tables as their SQL does.
 
     const { app } = createApp();
 
@@ -712,7 +737,8 @@ describe('GET /api/chat/rooms/:roomId/messages', () => {
     expect(res.body.messages).toEqual([]);
   });
 
-  test('includes hasMore flag when at message limit', async () => {
+  // The page reads one row past the limit: hasMore means an older message exists, not merely a full page.
+  test('includes hasMore flag only when older messages exist beyond the limit', async () => {
     seedTable('ChatMessage', [
       { id: 'msg-1', room_id: ROOM_D, user_id: U1, message: 'A', type: 'text', deleted: false, created_at: '2026-01-01T10:00:00Z' },
       { id: 'msg-2', room_id: ROOM_D, user_id: U1, message: 'B', type: 'text', deleted: false, created_at: '2026-01-01T11:00:00Z' },
@@ -720,11 +746,21 @@ describe('GET /api/chat/rooms/:roomId/messages', () => {
 
     const { app } = createApp();
 
+    const full = await request(app)
+      .get(`/api/chat/rooms/${ROOM_D}/messages?limit=2`)
+      .set('Authorization', 'Bearer test-token');
+
+    expect(full.status).toBe(200);
+    expect(full.body.messages).toHaveLength(2);
+    expect(full.body.hasMore).toBe(false);
+
+    getTable('ChatMessage').push({ id: 'msg-3', room_id: ROOM_D, user_id: U1, message: 'C', type: 'text', deleted: false, created_at: '2026-01-01T12:00:00Z' });
     const res = await request(app)
       .get(`/api/chat/rooms/${ROOM_D}/messages?limit=2`)
       .set('Authorization', 'Bearer test-token');
 
     expect(res.status).toBe(200);
+    expect(res.body.messages).toHaveLength(2);
     expect(res.body.hasMore).toBe(true);
   });
 });
@@ -787,6 +823,17 @@ jest.mock('../../services/s3Service', () => ({
   MAX_FILE_SIZES: { document: 25 * 1024 * 1024 },
 }));
 
+// The streamed attachment path identifies content with file-type's ESM build, which Jest's CommonJS runtime
+// cannot import (the suite runs without VM modules). These attachments are plain text with no file signature, so
+// they get the answer file-type gives them: unidentified, which validateFileMime allows for declared non-media
+// types and refuses for declared images, video and audio.
+jest.mock('../../services/chatMediaUpload', () => {
+  const actual = jest.requireActual('../../services/chatMediaUpload');
+  const unidentified = async (file) => (/^(image|video|audio)\//.test(file.mimetype || '')
+    ? { valid: false, detected: null, declared: file.mimetype } : { valid: true });
+  return Object.assign((deps) => actual({ ...deps, validateFileMime: unidentified }), actual);
+});
+
 // The chat attachment route shares the existing chat File/authorization
 // contract; extend this suite without a new test file.
 describe('chat attachment retry identity', () => {
@@ -804,10 +851,18 @@ describe('chat attachment retry identity', () => {
     if (intent !== null) r.field('client_request_id', intent);
     return r.attach('files', Buffer.from(body), { filename: 'note.txt', contentType: 'text/plain' });
   }
+  // Storage reads the streamed upload as S3 does; keep what each key received.
+  const stored = new Map();
   beforeEach(() => {
     db.resetTables();
     db.seedTable('ChatParticipant', [{ id: 'p', room_id: room, user_id: user, is_active: true }]);
-    s3.uploadToS3.mockReset().mockImplementation(async (_, objectKey) => ({ key: objectKey, url: 'https://storage.example/' + objectKey }));
+    stored.clear();
+    s3.uploadToS3.mockReset().mockImplementation(async (body, objectKey) => {
+      const chunks = [];
+      if (Buffer.isBuffer(body)) chunks.push(body); else for await (const chunk of body) chunks.push(chunk);
+      stored.set(objectKey, Buffer.concat(chunks));
+      return { key: objectKey, url: 'https://storage.example/' + objectKey };
+    });
     s3.uploadGeneral.mockReset().mockImplementation(async () => ({ key: require('crypto').randomUUID(), url: 'https://storage.example/file' }));
     s3.deleteFromS3.mockReset().mockResolvedValue(undefined);
   });
@@ -827,10 +882,23 @@ describe('chat attachment retry identity', () => {
     expect((await upload()).status).toBe(409);
     expect(s3.uploadToS3).toHaveBeenCalledTimes(1);
   });
+  // Approved admission: at most two attachment uploads per person run at once; the rest are refused as busy and
+  // retried. Every admitted copy and every retry of the same intent lands on one File and one object.
   test('overlapping identical requests share the existing primary key', async () => {
     const responses = await Promise.all([upload(), upload(), upload(), upload()]);
-    expect(responses.map(r => r.status)).toEqual([200, 200, 200, 200]);
-    expect(new Set(responses.map(r => r.body.media[0].id)).size).toBe(1);
+    const admitted = responses.filter(r => r.status === 200);
+    const busy = responses.filter(r => r.status !== 200);
+    expect(admitted.length).toBeGreaterThanOrEqual(1);
+    expect(admitted.length).toBeLessThanOrEqual(2);
+    for (const r of busy) {
+      expect(r.status).toBe(429);
+      expect(r.body.code).toBe('CHAT_UPLOAD_BUSY');
+      expect(r.headers['retry-after']).toBe('2');
+    }
+    const retried = [];
+    for (let i = 0; i < busy.length; i += 1) retried.push(await upload());
+    expect(retried.map(r => r.status)).toEqual(busy.map(() => 200));
+    expect(new Set([...admitted, ...retried].map(r => r.body.media[0].id)).size).toBe(1);
     expect(db.getTable('File')).toHaveLength(1);
     expect(new Set(s3.uploadToS3.mock.calls.map(c => c[1])).size).toBe(1);
     expect(s3.deleteFromS3).not.toHaveBeenCalled();
@@ -857,7 +925,10 @@ describe('chat attachment retry identity', () => {
   });
   test('storage provenance is server authored and binds object metadata to the File', async () => {
     const response = await upload(); expect(response.status).toBe(200);
-    const file = db.getTable('File')[0], [bytes, objectKey, , metadata] = s3.uploadToS3.mock.calls[0];
+    const file = db.getTable('File')[0], [, objectKey, , metadata] = s3.uploadToS3.mock.calls[0];
+    // The upload streams from disk: hash exactly the bytes storage received, which are the bytes that were sent.
+    const bytes = stored.get(objectKey);
+    expect(bytes.equals(Buffer.from('document'))).toBe(true);
     expect(file.metadata).toMatchObject({ storage_contract: 'chat_upload_s3_v1', storage_key: objectKey,
       storage_sha256: require('crypto').createHash('sha256').update(bytes).digest('hex') });
     expect(metadata).toEqual({ 'pantopus-file-id': file.id, 'pantopus-owner-id': user,

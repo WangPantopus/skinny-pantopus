@@ -172,7 +172,7 @@ class PulseComposeSnapshotTest {
                         seedFields(
                             title = "Summer block party",
                             body = "Bring chairs, snacks, and good vibes. Music starts at 6.",
-                            eventDate = "2030-08-15",
+                            eventDate = "2030-08-15 18:30",
                             eventLocation = "Elm Park, near the fountain",
                             eventCapacity = "60",
                         ),

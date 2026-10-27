@@ -13,6 +13,7 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -26,6 +27,7 @@ import app.pantopus.android.data.plans.KidsAgeBand
 import app.pantopus.android.data.plans.PlanAutoRule
 import app.pantopus.android.data.plans.PlanFormat
 import app.pantopus.android.data.plans.PlanKind
+import app.pantopus.android.data.plans.PlanStudyStyle
 import app.pantopus.android.ui.screens.plans.colors
 import app.pantopus.android.ui.screens.plans.components.PlanChoice
 import app.pantopus.android.ui.screens.plans.components.PlanChoiceGroup
@@ -42,6 +44,7 @@ import app.pantopus.android.ui.screens.plans.components.PlanTextArea
 import app.pantopus.android.ui.screens.plans.components.PlanTile
 import app.pantopus.android.ui.screens.plans.components.PlanWhenCard
 import app.pantopus.android.ui.screens.plans.detail.extraGearWord
+import app.pantopus.android.ui.screens.plans.teams.PlanWatchGameFields
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -72,11 +75,10 @@ internal fun HostDetailsStep(
             PlanKind.PLAYDATE -> PlaydateFields(ui, vm)
             PlanKind.PICKUP_GAME -> PickupFields(ui, vm)
             PlanKind.WALK_COFFEE -> WalkFields(ui, vm)
+            PlanKind.STUDY_GROUP -> StudyFields(ui, vm)
         }
     }
 }
-
-private const val GAME_CHIPS = 3
 
 /** H2: watch party. */
 @Composable
@@ -85,25 +87,7 @@ private fun ColumnScope.WatchFields(
     vm: HostFlowViewModel,
 ) {
     val draft = ui.draft
-    PlanField(label = "Game") {
-        // The three soonest games (and the one already picked), then "Another game" (as on iOS).
-        val shown = (ui.games.take(GAME_CHIPS) + ui.games.filter { it.id == draft.gameId }).distinctBy { it.id }
-        val choices =
-            shown.map { game ->
-                val time = PlanFormat.instant(game.startsAt)?.let { PlanFormat.shortWhen(it, ui.zone) }
-                PlanChoice(game.id, listOfNotNull(game.label, time).joinToString(" · "))
-            } + PlanChoice(ANOTHER_GAME, "Another game")
-        PlanChoiceGroup(
-            choices = choices,
-            isSelected = { it.id == (draft.gameId ?: ANOTHER_GAME) },
-            onSelect = { choice -> vm.pickGame(ui.games.firstOrNull { it.id == choice.id }) },
-        )
-        Text(
-            text = "Picking a game fills in the title and the time.",
-            style = PantopusTextStyle.caption,
-            color = PantopusColors.appTextSecondary,
-        )
-    }
+    PlanWatchGameFields(ui, vm)
     TitleField(draft.title, vm::setTitle)
     WhenField(ui, vm)
     WhereField(ui, vm, homeLabel = "My place")
@@ -299,7 +283,52 @@ private fun ColumnScope.WalkFields(
     }
 }
 
-private const val ANOTHER_GAME = "another"
+/** Study group (founder, 2026-10-17): what you're studying and how, always at a public place. */
+@Composable
+private fun ColumnScope.StudyFields(
+    ui: HostUi,
+    vm: HostFlowViewModel,
+) {
+    val draft = ui.draft
+    PlanField(label = "Subject") {
+        PlanTextArea(
+            value = draft.subject,
+            onValue = vm::setSubject,
+            placeholder = "Spanish",
+            label = "Subject",
+            singleLine = true,
+        )
+    }
+    PlanField(label = "How you'll study") {
+        PlanChoiceGroup(
+            choices = PlanStudyStyle.entries.map { PlanChoice(it.wire, it.label) },
+            isSelected = { it.id == draft.studyStyle.wire },
+            onSelect = { choice -> vm.edit { it.copy(studyStyle = PlanStudyStyle.from(choice.id)) } },
+        )
+    }
+    TitleField(draft.title, vm::setTitle, placeholder = "Spanish practice at the library")
+    WhenField(ui, vm)
+    // Always a public place, so no "A public place / My place" choice (and, as for a watch party, no line under it).
+    PlanField(label = "Where") {
+        PlaceRow(ui, onClick = vm::openPlaces)
+    }
+    PlanStepperRow(
+        title = "Spots",
+        caption = "People who can join, besides you",
+        value = draft.spots,
+        range = 1..MAX_SPOTS,
+        onChange = { value -> vm.edit { it.copy(spots = value) } },
+    )
+    HowPeopleGetIn(ui, vm)
+    NoteField(
+        draft.note,
+        label = "Note for people who are in",
+        placeholder = "Second floor, the long table by the windows.",
+    ) { text ->
+        vm.edit { it.copy(note = text) }
+    }
+}
+
 private const val MAX_SPOTS = 30
 private const val MAX_FAMILIES = 10
 private const val ABOUT_MAX = 500
@@ -330,9 +359,10 @@ private val walkKinds =
 private fun TitleField(
     title: String,
     onTitle: (String) -> Unit,
+    placeholder: String = "Give it a short title",
 ) {
     PlanField(label = "Title") {
-        PlanTextArea(value = title, onValue = onTitle, placeholder = "Give it a short title", label = "Title", singleLine = true)
+        PlanTextArea(value = title, onValue = onTitle, placeholder = placeholder, label = "Title", singleLine = true)
     }
 }
 
@@ -413,7 +443,7 @@ private fun PlaceRow(
             Column(modifier = Modifier.weight(1f)) {
                 Text(text = place?.name ?: "Choose a place", style = semibold, color = PantopusColors.appText)
                 Text(
-                    text = place?.let { placeCaption(it) } ?: "Parks, courts, trails, libraries, cafés",
+                    text = place?.let { placeCaption(it) } ?: placeHint(kind),
                     style = PantopusTextStyle.small,
                     color = PantopusColors.appTextSecondary,
                 )
@@ -422,6 +452,10 @@ private fun PlaceRow(
         }
     }
 }
+
+/** The place row's second line before a place is picked: the places that suit the kind. */
+private fun placeHint(kind: PlanKind): String =
+    if (kind == PlanKind.STUDY_GROUP) "Libraries, cafés, community centers" else "Parks, courts, trails, libraries, cafés"
 
 /** "Also let in people I've hosted" with its second line under it, as board H2 draws the row (and iOS). */
 @Composable

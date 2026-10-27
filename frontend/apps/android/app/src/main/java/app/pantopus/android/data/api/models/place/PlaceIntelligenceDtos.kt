@@ -465,7 +465,12 @@ data class PlaceEpaFacility(
     val name: String,
     /** Regulating program, e.g. "Clean Water Act". */
     val program: String,
-    @Json(name = "distance_mi") val distanceMi: Double,
+    /**
+     * Null when ECHO sends no coordinates for the site (its default columns
+     * carry none). A required distance failed the whole section and left
+     * the Environment card with only its title.
+     */
+    @Json(name = "distance_mi") val distanceMi: Double? = null,
 )
 
 /**

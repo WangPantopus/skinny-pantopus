@@ -112,7 +112,7 @@ export const fetchPublicBookingByToken = cache(
 /** A Nearby Plans share link: the plan's public card (area only), or `{ kind: 'playdate', city }`. */
 export type PublicPlan = {
   id?: string;
-  kind: 'watch_party' | 'playdate' | 'pickup_game' | 'walk_coffee';
+  kind: 'watch_party' | 'playdate' | 'pickup_game' | 'walk_coffee' | 'study_group';
   title?: string;
   about?: string;
   starts_at?: string | null;
@@ -150,10 +150,13 @@ export const fetchPublicUser = cache(async (username: string): Promise<PublicFet
   const identifier = normalizePublicProfileIdentifier(username);
   if (!identifier) return { data: null, status: 404 };
 
+  // Not cached: Next keeps serving the last 200 after the API answers 403 or 404, so a profile made
+  // private, a deleted account or a closed business would stay in the page title.
   const result = await fetchPublicJson<any>(
     UUID_REGEX.test(identifier)
       ? `/api/users/id/${encodeURIComponent(identifier)}`
-      : `/api/users/username/${encodeURIComponent(identifier)}`
+      : `/api/users/username/${encodeURIComponent(identifier)}`,
+    { noStore: true },
   );
 
   if (result.data || result.status !== 404 || UUID_REGEX.test(identifier)) {
@@ -161,7 +164,8 @@ export const fetchPublicUser = cache(async (username: string): Promise<PublicFet
   }
 
   const legacyResult = await fetchPublicJson<any>(
-    `/api/users/${encodeURIComponent(identifier)}`
+    `/api/users/${encodeURIComponent(identifier)}`,
+    { noStore: true },
   );
   return {
     data: legacyResult.data?.user ?? legacyResult.data ?? null,
@@ -280,12 +284,14 @@ export function buildShareMetadata(opts: {
   };
 }
 
+// Posts, tasks and listings name their author with the public identity the signed-in app shows (type, handle,
+// displayName, avatarUrl); profiles and Support Train organizers send the person's name and username.
 export function displayNameForUser(user: any, fallback = 'Pantopus member'): string {
   if (!user || typeof user !== 'object') return fallback;
   // A made-up username is never shown as the person's name: user_…, or one the server flags (the pre-October-7 kind
   // built from the email address).
-  const handle = user.usernameIsGenerated ? null : chosenUsername(user.username);
-  return user.name || user.first_name || user.firstName || handle || fallback;
+  const handle = user.usernameIsGenerated ? null : chosenUsername(user.username || user.handle);
+  return user.displayName || user.name || user.first_name || user.firstName || handle || fallback;
 }
 
 export function formatMoney(value: unknown): string | null {

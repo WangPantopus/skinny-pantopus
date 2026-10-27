@@ -4,7 +4,7 @@
  * PropertiesDashboard — Card grid of properties where the user has landlord authority.
  *
  * Each card shows: address, verification tier badge, unit count, pending requests,
- * active leases. "Add Property" CTA to start address entry with authority request.
+ * active leases. Home setup is separate from verified landlord authority.
  */
 
 import { useEffect, useState, useCallback } from 'react';
@@ -50,13 +50,13 @@ function StatusBadge({ status }: { status: string }) {
 
 // ── Stat pill ───────────────────────────────────────────────
 
-function StatPill({ icon, label, count, accent }: { icon: React.ReactNode; label: string; count: number; accent?: boolean }) {
+function StatPill({ icon, label, count, accent }: { icon: React.ReactNode; label: string; count?: number; accent?: boolean }) {
   return (
     <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium ${
       accent ? 'bg-amber-50 text-amber-700' : 'bg-app-surface-raised text-app-text-secondary'
     }`}>
       {icon}
-      <span>{count}</span>
+      <span>{count ?? '—'}</span>
       <span className="text-app-text-muted font-normal">{label}</span>
     </div>
   );
@@ -103,20 +103,25 @@ function PropertyCard({
         <StatPill
           icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" /></svg>}
           label="units"
-          count={property._unitCount ?? 0}
+          count={property._unitCount}
         />
         <StatPill
           icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" /></svg>}
           label="requests"
-          count={property._requestCount ?? 0}
+          count={property._requestCount}
           accent={(property._requestCount ?? 0) > 0}
         />
         <StatPill
           icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" /></svg>}
           label="leases"
-          count={property._leaseCount ?? 0}
+          count={property._leaseCount}
         />
       </div>
+      {property._unitCount === undefined && (
+        <p className="mt-2 text-xs text-app-text-secondary">
+          {property.status === 'verified' ? 'Counts unavailable. Open the property to check access or retry.' : 'Counts require verified landlord authority.'}
+        </p>
+      )}
 
       {/* Authority status */}
       {property.status !== 'verified' && (
@@ -140,7 +145,7 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
       </div>
       <h3 className="text-lg font-semibold text-app-text mb-1">No properties yet</h3>
       <p className="text-sm text-app-text-secondary mb-6 max-w-sm mx-auto">
-        Add a property to start managing units, tenants, and leases from one place.
+        No landlord properties are linked to this account. You can add a home through Home setup; landlord access requires separate verification.
       </p>
       <button
         type="button"
@@ -150,7 +155,7 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
           <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
         </svg>
-        Add Property
+        Add Home
       </button>
     </div>
   );
@@ -186,10 +191,11 @@ export default function PropertiesDashboard() {
         const homeId = res.properties[i]?.home_id;
         if (homeId && result.status === 'fulfilled') {
           const detail = result.value;
+          if (detail.home?.id !== homeId || ![detail.units, detail.pending_requests, detail.leases].every(Array.isArray)) return;
           newStats[homeId] = {
-            units: detail.units?.length ?? 0,
-            requests: detail.pending_requests?.length ?? 0,
-            leases: detail.leases?.filter((l) => l.state === 'active').length ?? 0,
+            units: detail.units.length,
+            requests: detail.pending_requests.length,
+            leases: detail.leases.filter((l) => l.state === 'active').length,
           };
         }
       });
@@ -206,7 +212,7 @@ export default function PropertiesDashboard() {
   }, [loadProperties]);
 
   const handleAddProperty = () => {
-    router.push('/app/landlord/properties/new');
+    router.push('/app/homes/new');
   };
 
   const handlePropertyClick = (homeId: string) => {
@@ -234,7 +240,7 @@ export default function PropertiesDashboard() {
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
             </svg>
-            Add Property
+            Add Home
           </button>
         )}
       </div>
@@ -242,7 +248,7 @@ export default function PropertiesDashboard() {
       {/* Loading */}
       {loading && (
         <div className="flex flex-col items-center justify-center py-16">
-          <div className="w-10 h-10 border-3 border-app-border border-t-primary-500 rounded-full animate-spin" />
+          <div className="w-10 h-10 border-2 border-app-border border-t-primary-500 rounded-full animate-spin" />
           <p className="text-sm text-app-text-secondary mt-4">Loading properties...</p>
         </div>
       )}
@@ -273,9 +279,9 @@ export default function PropertiesDashboard() {
             const s = stats[property.home_id];
             const enriched = {
               ...property,
-              _unitCount: s?.units ?? 0,
-              _requestCount: s?.requests ?? 0,
-              _leaseCount: s?.leases ?? 0,
+              _unitCount: s?.units,
+              _requestCount: s?.requests,
+              _leaseCount: s?.leases,
             };
             return (
               <PropertyCard

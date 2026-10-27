@@ -88,7 +88,7 @@ describe('tools/gen-association-files.mjs', () => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
-  test('upserts the native Android statement, keeps legacy entries, is idempotent, --check agrees', () => {
+  test('upserts the published Android statement, keeps pilot entries, is idempotent, --check agrees', () => {
     const fp1 = 'aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899';
     const fp2 = '11:22:33:44:55:66:77:88:99:00:aa:bb:cc:dd:ee:ff:11:22:33:44:55:66:77:88:99:00:aa:bb:cc:dd:ee:ff';
     const env = { WELL_KNOWN_DIR: dir, APPLE_TEAM_ID: '6UYZBA546R', ANDROID_SHA256_FINGERPRINTS: `${fp1}, ${fp2}` };
@@ -97,8 +97,10 @@ describe('tools/gen-association-files.mjs', () => {
     expect(runGenerator(env).code).toBe(0);
 
     const list = readJson(path.join(dir, 'assetlinks.json'));
-    expect(list.find((s: any) => s.target.package_name === LEGACY_ANDROID)).toBeTruthy();
-    const native = list.find((s: any) => s.target.package_name === NATIVE_ANDROID);
+    expect(list.find((s: any) => s.target.package_name === NATIVE_ANDROID)).toEqual(
+      readJson(ASSETLINKS).find((s: any) => s.target.package_name === NATIVE_ANDROID),
+    );
+    const native = list.find((s: any) => s.target.package_name === LEGACY_ANDROID);
     expect(native.relation).toEqual([
       'delegate_permission/common.handle_all_urls',
       'delegate_permission/common.get_login_creds',
@@ -123,7 +125,7 @@ describe('tools/gen-association-files.mjs', () => {
     const env = { WELL_KNOWN_DIR: dir, APPLE_TEAM_ID: 'ZZZZZZZZZZ' };
     expect(runGenerator(env).code).toBe(0);
     const aasa = readJson(path.join(dir, 'apple-app-site-association'));
-    expect(aasa.applinks.details.map((d: any) => d.appID)).toEqual([LEGACY_IOS, NATIVE_IOS, 'ZZZZZZZZZZ.app.pantopus.ios']);
+    expect(aasa.applinks.details.map((d: any) => d.appID)).toEqual([LEGACY_IOS, NATIVE_IOS, 'ZZZZZZZZZZ.com.pantopus.app']);
   });
 
   test('rejects malformed fingerprints / team ids and refuses to run with nothing to do', () => {

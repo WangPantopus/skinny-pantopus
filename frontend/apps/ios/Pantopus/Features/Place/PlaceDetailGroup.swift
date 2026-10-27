@@ -47,6 +47,11 @@ public enum PlaceDetailGroup: String, Hashable, CaseIterable, Sendable {
         }
     }
 
+    /// Saved addresses expose only the public detail layouts.
+    public var supportsSavedPlace: Bool {
+        [.today, .risk, .civic].contains(self)
+    }
+
     /// The detail page a dashboard card in `group` taps through to.
     public static func forGroup(_ group: PlaceGroup) -> PlaceDetailGroup? {
         switch group {

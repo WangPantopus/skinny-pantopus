@@ -476,8 +476,8 @@ data class GigFilterCriteria(
         /** Meters per statute mile — converts `distance_miles` for the chips. */
         const val METERS_PER_MILE = 1_609.344
 
-        /** Concrete categories the chip group offers (`All` is a sentinel). */
-        val categoryOptions: List<GigsCategory> = GigsCategory.entries.filter { it != GigsCategory.All }
+        /** Concrete categories the chip group offers: web's browse list (`All` is a sentinel). */
+        val categoryOptions: List<GigsCategory> = GigsCategory.filterCases.filter { it != GigsCategory.All }
 
         /**
          * P6a — `schedule_type` values the saved-search create schema

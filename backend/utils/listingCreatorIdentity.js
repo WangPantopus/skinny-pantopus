@@ -1,4 +1,6 @@
 const supabaseAdmin = require('../config/supabaseAdmin');
+const { serializeUserIdentityForViewer } = require('../serializers/identitySerializers');
+const { isKnownMadeUpUsername } = require('./personalUsername');
 
 const LISTING_CREATOR_USER_SELECT = [
   'id',
@@ -28,18 +30,11 @@ function cleanIdentityText(value) {
   return text || null;
 }
 
-function sameDisplayValue(a, b) {
-  const left = cleanIdentityText(a);
-  const right = cleanIdentityText(b);
-  if (!left || !right) return false;
-  return left.toLowerCase() === right.toLowerCase();
-}
-
-function hasCustomLocalDisplayName(profile, user) {
+// The name the person shows neighbors, as they set it (their handle included): only a blank one, or a username the
+// server made up, leaves them named by the account.
+function hasCustomLocalDisplayName(profile) {
   const displayName = cleanIdentityText(profile?.display_name);
-  if (!displayName) return false;
-  return !sameDisplayValue(displayName, profile?.handle)
-    && !sameDisplayValue(displayName, user?.username);
+  return !!displayName && !isKnownMadeUpUsername(displayName);
 }
 
 async function hydrateListingCreatorIdentities(input) {
@@ -79,8 +74,14 @@ async function hydrateListingCreatorIdentities(input) {
     if (profile) {
       creator.local_profile_id = profile.id;
       creator.handle = profile.handle || creator.username;
-      creator.avatar_url = profile.avatar_url || creator.profile_picture_url || null;
-      if (hasCustomLocalDisplayName(profile, user)) {
+      if (user.account_type === 'business') {
+        creator.avatar_url = profile.avatar_url || creator.profile_picture_url || null;
+      } else {
+        // A person is shown with the photo they show neighbors, or none if they removed it: never the account's.
+        creator.avatar_url = profile.avatar_url || null;
+        creator.profile_picture_url = creator.avatar_url;
+      }
+      if (hasCustomLocalDisplayName(profile)) {
         creator.display_name = profile.display_name;
       } else {
         delete creator.display_name;
@@ -93,7 +94,70 @@ async function hydrateListingCreatorIdentities(input) {
   return input;
 }
 
+// Tasks name the people on them as listings name their seller: a person by their Local Profile (the name, handle and
+// photo they show neighbors), a business as the business. That is the poster, the people who ask, the bidders and the
+// worker. Only identity fields are passed on, so a task says no more about anyone than before (no bio or counts; with
+// `counts`, a bidder's review and completed-task counts, which the bid list always showed), and `id` stays the account
+// id the web follows and connects by.
+function serializeTaskPerson(person, { counts = false } = {}) {
+  if (!person) return null;
+  const { id, username, name, first_name, middle_name, last_name, profile_picture_url, account_type } = person;
+  const account = { id, username, name, first_name, middle_name, last_name, profile_picture_url, account_type };
+  if (counts) Object.assign(account, { review_count: person.review_count, gigs_completed: person.gigs_completed });
+  if (account_type === 'business') return serializeUserIdentityForViewer(account);
+  const { handle, display_name, avatar_url } = person;
+  return serializeUserIdentityForViewer({ ...account, handle, display_name, avatar_url });
+}
+
+// The name a task's notices give a person: the name serializeTaskPerson gives them on the task, or `fallback` when
+// their account can't be read.
+async function loadTaskPersonName(userId, fallback) {
+  const person = { user_id: userId };
+  await hydrateListingCreatorIdentities(person);
+  return serializeTaskPerson(person.creator)?.displayName || fallback;
+}
+
+// Gives each row's person under `keys` (e.g. a question's asker, a bid's bidder) the Local Profile they are named by.
+async function hydrateTaskPeople(rows, keys) {
+  const holders = (rows || []).flatMap((row) => keys.filter((key) => row?.[key])
+    .map((key) => ({ row, key, creator: row[key] })));
+  await hydrateListingCreatorIdentities(holders);
+  for (const { row, key, creator } of holders) row[key] = creator;
+}
+
+// The flat poster fields of task list rows, from each row's user_id: the poster as serializeTaskPerson names them,
+// read in one batch. A poster whose account can't be read is 'Anonymous', as before.
+async function loadTaskPosterFields(rows) {
+  const holders = [...new Set((rows || []).map((row) => row?.user_id).filter(Boolean).map(String))]
+    .map((userId) => ({ user_id: userId }));
+  await hydrateListingCreatorIdentities(holders);
+  const fieldsByUserId = new Map(holders.map((holder) => {
+    const poster = serializeTaskPerson(holder.creator);
+    return [holder.user_id, poster && {
+      poster_display_name: poster.displayName,
+      poster_username: poster.handle || null,
+      poster_profile_picture_url: poster.avatarUrl || null,
+    }];
+  }));
+  return (row) => fieldsByUserId.get(String(row?.user_id)) || {
+    poster_display_name: 'Anonymous',
+    poster_username: null,
+    poster_profile_picture_url: null,
+  };
+}
+
+// The task RPCs also return each poster's account name, username and photo. Rows are sent without them: a task names
+// its poster only as above.
+function withoutAccountPoster({ creator_name, creator_username, profile_picture_url, ...row }) {
+  return row;
+}
+
 module.exports = {
   LISTING_CREATOR_USER_SELECT,
   hydrateListingCreatorIdentities,
+  hydrateTaskPeople,
+  loadTaskPersonName,
+  loadTaskPosterFields,
+  serializeTaskPerson,
+  withoutAccountPoster,
 };

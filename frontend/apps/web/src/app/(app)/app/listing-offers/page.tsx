@@ -123,9 +123,11 @@ function ListingOffersContent() {
         rowSpacing={3}
         keyExtractor={(offer) => offer.id}
         renderRow={(offer: any) => {
+          // The server names the buyer by their Local Profile (displayName, avatarUrl); older servers sent the
+          // account row (first_name, username, profile_picture_url).
           const buyer = offer.buyer || {};
-          const buyerName = buyer.first_name || buyer.name || buyer.username || 'Anonymous';
-          const avatarUrl = buyer.profile_picture_url;
+          const buyerName = buyer.displayName || buyer.first_name || buyer.name || buyer.username || 'Anonymous';
+          const avatarUrl = buyer.avatarUrl || buyer.profile_picture_url;
           const meta = STATUS_META[offer.status] || STATUS_META.pending;
           const StatusIcon = meta.icon;
           const isPending = offer.status === 'pending';

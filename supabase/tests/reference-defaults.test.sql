@@ -9,7 +9,7 @@ SELECT lives_ok($contract$
 SET LOCAL statement_timeout = '30s';
 SET LOCAL ROLE service_role;
 DO $$ BEGIN
-  IF (SELECT count(*) FROM public."HomeRolePermission") <> 31
+  IF (SELECT count(*) FROM public."HomeRolePermission") <> 33
     OR (SELECT count(*) FROM public."PostCategoryTTL") <> 20
     OR (SELECT count(*) FROM public."AddressCalendarRule") <> 106
     OR (SELECT count(*) FROM public."CountyRadonZone") <> 3143
@@ -21,9 +21,13 @@ DO $$ BEGIN
     RAISE EXCEPTION 'Existing owner permission was lost';
   END IF;
   IF EXISTS (SELECT FROM public."HomeRolePermission"
-    WHERE role_base = 'admin' AND permission = 'ownership.manage' AND allowed)
-    OR EXISTS (SELECT FROM public."BusinessRolePermission") THEN
+    WHERE role_base = 'admin' AND permission = 'ownership.manage' AND allowed) THEN
     RAISE EXCEPTION 'Baseline introduced new permission grants';
+  END IF;
+  -- Exactly the reviewed business role defaults (20261020210000_business_role_defaults.sql): 116 rows, 64 grants.
+  IF (SELECT md5(string_agg(role_base || ':' || permission || '=' || allowed, ',' ORDER BY role_base, permission))
+    FROM public."BusinessRolePermission") IS DISTINCT FROM '4f0bc6a5ebc79250adaa8fa2eb3c6603' THEN
+    RAISE EXCEPTION 'Business role defaults differ from the reviewed matrix';
   END IF;
   IF NOT EXISTS (SELECT FROM public."PostCategoryTTL" WHERE post_type = 'personal_update' AND ttl_days = 7) THEN
     RAISE EXCEPTION 'Post expiry reference changed';

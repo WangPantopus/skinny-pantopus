@@ -4,13 +4,26 @@ import { useEffect, useState } from 'react';
 import { ExternalLink } from 'lucide-react';
 import * as api from '@pantopus/api';
 import type { LinkPreviewData } from '@pantopus/api';
-import FeedMediaImage from './FeedMediaImage';
 
-const URL_REGEX = /(https?:\/\/[^\s]+)/gi;
+const URL_REGEX = /(?:https?:\/\/|www\.)[^\s<>"']+/gi;
 const INTERNAL_HOSTS = new Set(['pantopus.com', 'www.pantopus.com', 'localhost', '127.0.0.1']);
 
-// In-memory cache to avoid refetching on re-renders
-const previewCache = new Map<string, LinkPreviewData | null>();
+// One request per link for the page's life, shared by every card that shows it.
+const previewRequests = new Map<string, Promise<LinkPreviewData | null>>();
+
+function loadPreview(url: string): Promise<LinkPreviewData | null> {
+  let request = previewRequests.get(url);
+  if (!request) {
+    request = api.linkPreview.getLinkPreview(url).catch((error) => {
+      // A busy, slow or offline moment passes, so a later card may ask again.
+      const status = (error as { statusCode?: number } | undefined)?.statusCode;
+      if (!status || status === 429 || status >= 500) previewRequests.delete(url);
+      return null;
+    });
+    previewRequests.set(url, request);
+  }
+  return request;
+}
 
 function getHostname(url: string): string | null {
   try {
@@ -20,17 +33,33 @@ function getHostname(url: string): string | null {
   }
 }
 
-function findFirstExternalUrl(content: string): string | null {
-  for (const match of content.matchAll(URL_REGEX)) {
-    const url = match[0];
-    try {
-      const parsed = new URL(url);
-      if (!INTERNAL_HOSTS.has(parsed.hostname)) return url;
-    } catch {
-      continue;
+function postLinks(content: string) {
+  return Array.from(content.matchAll(URL_REGEX)).flatMap(match => {
+    let text = match[0].replace(/[.,!?;:]+$/, '');
+    for (const [open, close] of [['(', ')'], ['[', ']'], ['{', '}']]) {
+      while (text.endsWith(close) && text.split(close).length > text.split(open).length) text = text.slice(0, -1);
     }
-  }
-  return null;
+    try {
+      const url = new URL(/^https?:\/\//i.test(text) ? text : `https://${text}`);
+      return ['http:', 'https:'].includes(url.protocol) ? [{ text, url: url.href, index: match.index! }] : [];
+    } catch { return []; }
+  });
+}
+
+function findFirstExternalUrl(content: string): string | null {
+  return postLinks(content).find(link => !INTERNAL_HOSTS.has(new URL(link.url).hostname))?.url ?? null;
+}
+
+/** All links stay usable even when a site doesn't provide preview metadata. */
+export function PostLinkContent({ content }: { content: string }) {
+  let cursor = 0;
+  const parts = postLinks(content).flatMap(link => {
+    const before = content.slice(cursor, link.index);
+    cursor = link.index + link.text.length;
+    return [before, <a key={link.index} href={link.url} target="_blank" rel="noopener noreferrer"
+      className="text-app-link underline" onClick={event => event.stopPropagation()}>{link.text}</a>];
+  });
+  return <>{parts}{content.slice(cursor)}</>;
 }
 
 interface LinkPreviewCardProps {
@@ -49,23 +78,11 @@ export default function LinkPreviewCard({ content }: LinkPreviewCardProps) {
       return;
     }
     setUrl(externalUrl);
-
-    // Check cache
-    if (previewCache.has(externalUrl)) {
-      setPreview(previewCache.get(externalUrl) ?? null);
-      return;
-    }
+    setPreview(null);
 
     let cancelled = false;
-    api.linkPreview.getLinkPreview(externalUrl).then((data) => {
-      if (!cancelled) {
-        previewCache.set(externalUrl, data);
-        setPreview(data);
-      }
-    }).catch(() => {
-      if (!cancelled) {
-        previewCache.set(externalUrl, null);
-      }
+    loadPreview(externalUrl).then((data) => {
+      if (!cancelled) setPreview(data);
     });
 
     return () => { cancelled = true; };
@@ -75,6 +92,8 @@ export default function LinkPreviewCard({ content }: LinkPreviewCardProps) {
 
   const hostname = preview.siteName || getHostname(url);
 
+  // Text only: the page's own image would load from a host the poster picked,
+  // showing it every viewer's IP address.
   return (
     <a
       href={url}
@@ -82,16 +101,6 @@ export default function LinkPreviewCard({ content }: LinkPreviewCardProps) {
       rel="noopener noreferrer"
       className="mx-4 mb-3 block overflow-hidden rounded-2xl border border-app bg-app-surface-hover transition hover:shadow-md"
     >
-      {preview.image && (
-        <div className="relative aspect-[2/1] w-full overflow-hidden bg-app-surface-sunken">
-          <FeedMediaImage
-            src={preview.image}
-            alt=""
-            className="h-full w-full object-cover"
-            loading="lazy"
-          />
-        </div>
-      )}
       <div className="space-y-1 px-4 py-3">
         {hostname && (
           <p className="text-[11px] font-semibold uppercase tracking-wide text-app-link">

@@ -168,20 +168,6 @@ export async function getMailLinks(mailId: string): Promise<{ links: MailLink[] 
 }
 
 /**
- * Get inbox summary counts for InboxEarnCard
- */
-export async function getSummary(params?: {
-  scope?: string;
-  homeId?: string;
-}): Promise<{ total: number; unread: number; bills: number; notices: number; offers: number }> {
-  const searchParams = new URLSearchParams();
-  if (params?.scope) searchParams.append('scope', params.scope);
-  if (params?.homeId) searchParams.append('homeId', params.homeId);
-  const qs = searchParams.toString();
-  return get(`/mailbox/summary${qs ? `?${qs}` : ''}`);
-}
-
-/**
  * Mark mail as read/viewed (earns credits for ads)
  */
 export async function markMailAsRead(mailId: string): Promise<{ 

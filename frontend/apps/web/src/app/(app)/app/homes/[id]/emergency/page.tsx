@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Plus, Phone, Droplets, DoorOpen, HeartPulse, AlertCircle, Trash2 } from 'lucide-react';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
-import type { HomeEmergency } from '@pantopus/types';
+import type { HomeEmergency, HomeEmergencyType } from '@pantopus/types';
 import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
 import { failureMessage, shareFailure } from '@/components/home/share/shareFailure';
@@ -32,9 +32,7 @@ function EmergencyContent() {
 
   const [newTitle, setNewTitle] = useState('');
   const [newCategory, setNewCategory] = useState<EmergencyCategory>('contact');
-  // Shutoffs are stored per utility (shutoff_water, shutoff_gas, ...). Until a
-  // utility choice is approved for this form, a Shutoffs entry cannot be saved
-  // here (the submit stays disabled); every other category maps to one type.
+  const [newShutoffType, setNewShutoffType] = useState<HomeEmergencyType | ''>('');
   const [newDetails, setNewDetails] = useState('');
   const [newPhone, setNewPhone] = useState('');
   const [creating, setCreating] = useState(false);
@@ -80,13 +78,13 @@ function EmergencyContent() {
   // the free-form details object the native forms also write; the row shown is
   // the one the server returned, never a local placeholder.
   const handleCreate = useCallback(async () => {
-    if (!newTitle.trim() || !homeId || creating || newCategory === 'shutoff') return;
+    if (!newTitle.trim() || !homeId || creating || (newCategory === 'shutoff' && !newShutoffType)) return;
     setCreating(true);
     const details: Record<string, string> = {};
     if (newPhone.trim()) details.phone = newPhone.trim();
     if (newDetails.trim()) details.notes = newDetails.trim();
     try {
-      const payload = { type: CATEGORY_CREATE_TYPE[newCategory], label: newTitle.trim(), details };
+      const payload = { type: newCategory === 'shutoff' ? newShutoffType as HomeEmergencyType : CATEGORY_CREATE_TYPE[newCategory], label: newTitle.trim(), details };
       const draft = JSON.stringify(payload);
       if (pendingCreate.current?.draft !== draft) pendingCreate.current = { draft, id: crypto.randomUUID() };
       const res = await api.homeProfile.createHomeEmergency(homeId, { ...payload, clientRequestId: pendingCreate.current.id });
@@ -94,12 +92,12 @@ function EmergencyContent() {
       if (!created?.id) throw new Error('Malformed create response');
       pendingCreate.current = null;
       setItems((prev) => [created, ...prev.filter((i) => i.id !== created.id)]);
-      setNewTitle(''); setNewDetails(''); setNewPhone(''); setShowCreate(false);
+      setNewTitle(''); setNewShutoffType(''); setNewDetails(''); setNewPhone(''); setShowCreate(false);
       toast.success('Emergency info added');
     } catch (err: unknown) {
       toast.error(failureMessage(err, 'Failed to add emergency info'));
     } finally { setCreating(false); }
-  }, [homeId, creating, newTitle, newCategory, newDetails, newPhone]);
+  }, [homeId, creating, newTitle, newCategory, newShutoffType, newDetails, newPhone]);
 
   const handleDelete = useCallback(async (itemId: string) => {
     const yes = await confirmStore.open({ title: 'Delete', description: 'Remove this emergency info?', confirmLabel: 'Delete', variant: 'destructive' });
@@ -125,7 +123,7 @@ function EmergencyContent() {
     return acc;
   }, {});
 
-  if (loading) return <div className="flex items-center justify-center min-h-[50vh]"><div className="animate-spin h-8 w-8 border-3 border-emerald-600 border-t-transparent rounded-full" /></div>;
+  if (loading) return <div className="flex items-center justify-center min-h-[50vh]"><div className="animate-spin h-8 w-8 border-2 border-emerald-600 border-t-transparent rounded-full" /></div>;
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-6">
@@ -154,7 +152,7 @@ function EmergencyContent() {
               const meta = CATEGORY_META[key];
               const CatIcon = meta.icon;
               return (
-                <button key={key} type="button" onClick={() => setNewCategory(key)}
+                <button key={key} type="button" onClick={() => setNewCategory(key)} aria-pressed={newCategory === key}
                   className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition ${newCategory === key ? 'border-current' : 'border-app-border text-app-text-secondary'}`}
                   style={newCategory === key ? { color: meta.color, backgroundColor: meta.color + '12', borderColor: meta.color } : undefined}>
                   <CatIcon className="w-3 h-3" />{meta.label}
@@ -162,9 +160,22 @@ function EmergencyContent() {
               );
             })}
           </div>
+          {newCategory === 'shutoff' && (
+            <label className="block text-sm text-app-text">
+              Utility or map
+              <select value={newShutoffType} onChange={(e) => setNewShutoffType(e.target.value as HomeEmergencyType | '')}
+                className="mt-1 w-full px-3 py-2 border border-app-border rounded-lg text-sm text-app-text bg-app-surface">
+                <option value="">Choose a utility or breaker map</option>
+                <option value="shutoff_water">Water shutoff</option>
+                <option value="shutoff_gas">Gas shutoff</option>
+                <option value="shutoff_electric">Electrical shutoff</option>
+                <option value="breaker_map">Breaker map</option>
+              </select>
+            </label>
+          )}
           <input type="tel" value={newPhone} onChange={(e) => setNewPhone(e.target.value)} placeholder="Phone number (optional)" className="w-full px-3 py-2 border border-app-border rounded-lg text-sm text-app-text bg-app-surface placeholder:text-app-text-muted focus:outline-none focus:ring-2 focus:ring-emerald-400" />
           <textarea value={newDetails} onChange={(e) => setNewDetails(e.target.value)} placeholder="Details (optional)" rows={2} className="w-full px-3 py-2 border border-app-border rounded-lg text-sm text-app-text bg-app-surface placeholder:text-app-text-muted focus:outline-none focus:ring-2 focus:ring-emerald-400 resize-none" />
-          <button onClick={handleCreate} disabled={creating || !newTitle.trim() || newCategory === 'shutoff'} className="w-full py-2.5 bg-emerald-600 text-white rounded-lg font-semibold text-sm hover:bg-emerald-700 disabled:opacity-50 transition">
+          <button onClick={handleCreate} disabled={creating || !newTitle.trim() || (newCategory === 'shutoff' && !newShutoffType)} className="w-full py-2.5 bg-emerald-600 text-white rounded-lg font-semibold text-sm hover:bg-emerald-700 disabled:opacity-50 transition">
             {creating ? 'Adding...' : 'Add Emergency Info'}
           </button>
         </div>

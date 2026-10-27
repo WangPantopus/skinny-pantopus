@@ -9,6 +9,7 @@ import app.pantopus.android.data.auth.OAuthSessionStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.net.URLDecoder
 
 /**
  * Mirrors iOS `Core/Routing/DeepLinkRouter.swift`. The host activity
@@ -32,6 +33,8 @@ import kotlinx.coroutines.flow.asStateFlow
 // Arrival completion shares this router's account binding and path resolver.
 @Suppress("TooManyFunctions")
 object DeepLinkRouter {
+    private const val BUSINESS_CONVERSATION_SEGMENTS = 4
+
     /**
      * How a resolved destination should be handled relative to auth.
      */
@@ -115,9 +118,9 @@ object DeepLinkRouter {
 
         /**
          * `pantopus://homes/:id/owners/review-claim` — the owner's claim
-         * review on its Residency tab (`residency_claim`).
+         * review on Ownership for `tab=ownership`, otherwise Residency.
          */
-        data class HomeClaimReview(val id: String) : Destination
+        data class HomeClaimReview(val id: String, val residency: Boolean = true) : Destination
 
         /**
          * `pantopus://homes/:id/owners/transfer` — A13.4 Transfer
@@ -224,6 +227,12 @@ object DeepLinkRouter {
         data object SecurityDevices : Destination
 
         /**
+         * `pantopus://settings/notifications` — Settings → Notifications, where the assistant's
+         * "Open notification settings" button goes (AI assistant phase 1 link catalog).
+         */
+        data object NotificationSettings : Destination
+
+        /**
          * A14.8 — `pantopus://mailbox/vacation` opens the Vacation hold
          * screen (scheduling or active variant depending on server state
          * once the persistence layer lands).
@@ -272,6 +281,14 @@ object DeepLinkRouter {
          * routed to [BusinessProfile].
          */
         data class BusinessOwner(val businessId: String) : Destination
+
+        /**
+         * `/app/businesses/:id/chat/:roomId` — a conversation in the business's
+         * inbox (the `business_message` notice its owner and staff get). Opens
+         * the owner view, then the thread acting as the business; never the
+         * person's own Messages. Mirrors iOS `businessConversation`.
+         */
+        data class BusinessConversation(val businessId: String, val roomId: String) : Destination
 
         /**
          * `pantopus://business/:username` — A10.6 public business profile
@@ -379,6 +396,16 @@ object DeepLinkRouter {
 
         /** `/plans` opens the Plans tab (Pulse build S3). Behind the `plans` flag. */
         data object PlansTab : Destination
+
+        /**
+         * `pantopus://assistant` opens the assistant thread; `?nudge=<notificationId>` opens it at that brief's or
+         * nudge's message (AI assistant phase 2 contract §8.2), and `&conversation=<id>` names the conversation it was
+         * added to. Each is null without one, or when it isn't a UUID.
+         */
+        data class Assistant(
+            val nudgeId: String? = null,
+            val conversationId: String? = null,
+        ) : Destination
 
         data class Unknown(val uri: String) : Destination
     }
@@ -715,6 +742,10 @@ object DeepLinkRouter {
             }
         val segments = if (rawSegments.firstOrNull() == "app") rawSegments.drop(1) else rawSegments
         if (segments.isEmpty()) return Destination.Unknown(raw)
+        // A link's ids go into API paths and nav routes, decoded: one carrying `/` (`%2F`), a `.` or `..` segment
+        // (which Retrofit refuses by throwing), a control character or an overlong id would reach another route, so
+        // the link resolves to nothing. Mirrors iOS `DeepLinkRouter.isSafeSegment`.
+        if (!segments.all(Paths::isSafeSegment)) return Destination.Unknown(raw)
         val first = segments.first()
         if (first.startsWith("@") && first.length > 1) {
             return Destination.BeaconProfile(first.drop(1))
@@ -734,12 +765,12 @@ object DeepLinkRouter {
         val emailQuery =
             Paths.queryParam(queryPart, "email") ?: Paths.queryParam(fragmentPart, "email")
         // B1.6 — `?id=` seeds the translation / unboxing mailbox sub-screens.
-        val idQuery = Paths.queryParam(queryPart, "id")
+        val idQuery = Paths.queryParam(queryPart, "id")?.takeIf(Paths::isSafeSegment)
 
         return when (segments.first()) {
             // `/app/pulse` is the Pulse tab, as `/app/feed` is.
             "feed", "pulse" -> {
-                val post = Paths.queryParam(queryPart, "post")
+                val post = Paths.queryParam(queryPart, "post")?.takeIf(Paths::isSafeSegment)
                 when {
                     !post.isNullOrBlank() -> Destination.Post(post)
                     Paths.queryParam(queryPart, "surface") == "personas" -> Destination.Beacons
@@ -750,6 +781,15 @@ object DeepLinkRouter {
             "nearby" -> if (segments.size == 1) Destination.Nearby else Destination.Unknown(raw)
             "notifications" -> Destination.Notifications
             "today" -> if (segments.size == 1) Destination.TodayTab else Destination.Unknown(raw)
+            "assistant" ->
+                if (segments.size == 1) {
+                    Destination.Assistant(
+                        nudgeId = Paths.queryParam(queryPart, "nudge")?.takeIf(MAIL_UUID::matches),
+                        conversationId = Paths.queryParam(queryPart, "conversation")?.takeIf(MAIL_UUID::matches),
+                    )
+                } else {
+                    Destination.Unknown(raw)
+                }
             "hub-today", "hub_today" ->
                 // `?deliveryId=` + `?kind=` ride the Morning/Evening Briefing push.
                 Destination.HubToday(
@@ -868,7 +908,7 @@ object DeepLinkRouter {
                     "owners" ->
                         when (trailing.getOrNull(1)) {
                             "transfer" -> Destination.HomeOwnersTransfer(id)
-                            "review-claim" -> Destination.HomeClaimReview(id)
+                            "review-claim" -> Destination.HomeClaimReview(id, residency = tabQuery != "ownership")
                             null -> Destination.HomeOwners(id)
                             else -> Destination.HomeDetail(id)
                         }
@@ -911,15 +951,20 @@ object DeepLinkRouter {
             "businesses" -> {
                 // `pantopus://businesses/new` opens the Create Business wizard.
                 // `pantopus://businesses/:id/page-editor` opens the owner-only
-                // A13.10 editor. `pantopus://businesses/:id` opens the A10.7
-                // Business owner view. Mirrors iOS `businessesDestination`.
+                // A13.10 editor. `pantopus://businesses/:id/chat/:roomId` opens
+                // a thread of the business inbox. `pantopus://businesses/:id`
+                // opens the A10.7 Business owner view. Mirrors iOS
+                // `businessesDestination`.
                 val id = segments.getOrNull(1)
                 val trailing = segments.getOrNull(2)
+                val roomId = segments.getOrNull(3)
                 when {
                     id == "new" -> Destination.CreateBusiness
                     id.isNullOrBlank() -> Destination.Unknown(raw)
                     trailing == "page-editor" || trailing == "page_editor" ->
                         Destination.EditBusinessPage(id)
+                    trailing == "chat" && segments.size == BUSINESS_CONVERSATION_SEGMENTS && roomId != null && MAIL_UUID.matches(roomId) ->
+                        Destination.BusinessConversation(id, roomId.lowercase())
                     else -> Destination.BusinessOwner(id)
                 }
             }
@@ -927,7 +972,7 @@ object DeepLinkRouter {
                 // Singular `business/:username` is the A10.6 public profile.
                 // `?pageSlug=` is RN's redirect target for `/b/:username/:slug`.
                 val id = segments.getOrNull(1)
-                val pageSlug = Paths.queryParam(queryPart, "pageSlug")
+                val pageSlug = Paths.queryParam(queryPart, "pageSlug")?.takeIf(Paths::isSafeSegment)
                 when {
                     id.isNullOrBlank() -> Destination.Unknown(raw)
                     !pageSlug.isNullOrBlank() -> Destination.BusinessPage(id, pageSlug)
@@ -974,7 +1019,14 @@ object DeepLinkRouter {
             }
             "invite" -> {
                 val token = segments.getOrNull(1)
-                if (token == "lease") {
+                if (token == "seat") {
+                    // Business share links carry the token in the query; "seat" is the invitation kind, not the token.
+                    if (segments.size == 2 && !tokenQuery.isNullOrEmpty()) {
+                        Destination.Invite(tokenQuery)
+                    } else {
+                        Destination.Unknown(raw)
+                    }
+                } else if (token == "lease") {
                     val proof = segments.getOrNull(2)
                     if (segments.size == 3 && proof?.matches(Regex("[a-fA-F0-9]{64}")) == true) {
                         Destination.Invite(proof, leaseInvitation = true)
@@ -1069,13 +1121,15 @@ object DeepLinkRouter {
                     Destination.VerifyEmail(token = tokenQuery, email = emailQuery)
                 }
             "settings" ->
-                // `pantopus://settings/payments` — A14.6, and
-                // `pantopus://settings/security` — Devices & sessions. Other
-                // settings sub-routes aren't deep-linkable yet; the bare host
+                // `pantopus://settings/payments` — A14.6,
+                // `pantopus://settings/security` — Devices & sessions, and
+                // `pantopus://settings/notifications`. Other settings
+                // sub-routes aren't deep-linkable yet; the bare host
                 // `pantopus://settings` falls through to `.Unknown`.
                 when (segments.getOrNull(1)) {
                     "payments" -> Destination.PaymentsSettings
                     "security" -> Destination.SecurityDevices
+                    "notifications" -> Destination.NotificationSettings
                     else -> Destination.Unknown(raw)
                 }
             else -> Destination.Unknown(raw)
@@ -1095,6 +1149,28 @@ object DeepLinkRouter {
         if (ownerKind == null) return Destination.BookingDetail(bookingId)
         val owner = HomeTaskNotificationRoute.canonicalId(ownerId)?.takeIf { ownerKind == "home" || ownerKind == "business" }
         return owner?.let { Destination.BookingDetail(bookingId, ownerKind, it) }
+    }
+
+    /** Briefs and nudges: the notification types the assistant sends first (AI assistant phase 2 contract §3.2). */
+    private val ASSISTANT_NOTIFICATION_TYPES = setOf("assistant_brief", "assistant_nudge")
+
+    /**
+     * A brief or nudge (a push or a notification row) opens the assistant at its message, whatever its stored link
+     * says (AI assistant phase 2 contract §8.3): `pantopus://assistant?nudge=<notificationId>`, with
+     * `&conversation=<id>` when the notification names the conversation it was added to. Null for other types.
+     */
+    fun assistantNotificationPath(
+        type: String?,
+        notificationId: String?,
+        link: String?,
+        conversationId: String? = null,
+    ): String? {
+        if (type?.lowercase() !in ASSISTANT_NOTIFICATION_TYPES) return null
+        val linked = link?.let { resolveString(Paths.normalizeIncoming(it)) as? Destination.Assistant }
+        val nudgeId = notificationId?.takeIf(MAIL_UUID::matches) ?: linked?.nudgeId
+        val conversation = conversationId?.takeIf(MAIL_UUID::matches) ?: linked?.conversationId
+        val query = listOfNotNull(nudgeId?.let { "nudge=$it" }, conversation?.let { "conversation=$it" }).joinToString("&")
+        return if (query.isEmpty()) "pantopus://assistant" else "pantopus://assistant?$query"
     }
 
     /**
@@ -1122,6 +1198,16 @@ object DeepLinkRouter {
      */
     private object Paths {
         private const val SCHEME_SEPARATOR = "://"
+
+        /** The longest id a link may carry: UUIDs are 36 characters, invite and booking tokens 64. */
+        private const val MAX_SEGMENT_LENGTH = 128
+
+        /** Whether [segment] (raw, still percent-encoded), once decoded into an API path, stays one segment of its route. */
+        fun isSafeSegment(segment: String): Boolean {
+            val decoded = runCatching { URLDecoder.decode(segment, "UTF-8") }.getOrNull() ?: return false
+            return decoded.length <= MAX_SEGMENT_LENGTH && decoded != "." && decoded != ".." &&
+                '/' !in decoded && '\\' !in decoded && decoded.none(Char::isISOControl)
+        }
 
         /**
          * String-shaped sibling of [OAuthSessionStore.isOAuthCallback], for the

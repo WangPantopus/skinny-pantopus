@@ -27,7 +27,7 @@ const SEND_ORDER = ['apns', 'fcm', 'expo'];
  * @param {{title?:string,body?:string,data?:object}} message
  * @returns {Promise<{invalidTokens:string[], counts:Record<string,number>}>}
  */
-async function dispatchToTokens(rows, senders, message, { receipt = false } = {}) {
+async function dispatchToTokens(rows, senders, message, { receipt = false, registrationReceipts = false } = {}) {
   const groups = { apns: [], fcm: [], expo: [] };
   for (const row of rows || []) {
     if (!row || !row.token) continue;
@@ -36,6 +36,7 @@ async function dispatchToTokens(rows, senders, message, { receipt = false } = {}
   }
 
   const invalidTokens = [];
+  const acceptedTokens = [];
   const counts = { apns: 0, fcm: 0, expo: 0 };
   let acceptedCount = 0;
   let unresolvedCount = (rows || []).filter((row) => row?.token && !groups[classifyProvider(row)]).length;
@@ -62,6 +63,7 @@ async function dispatchToTokens(rows, senders, message, { receipt = false } = {}
       const accepted = new Set(Array.isArray(result?.acceptedTokens) ? result.acceptedTokens : []);
       const invalid = new Set(Array.isArray(result?.invalidTokens) ? result.invalidTokens : []);
       acceptedCount += tokens.filter((token) => accepted.has(token)).length;
+      if (registrationReceipts) acceptedTokens.push(...tokens.filter((token) => accepted.has(token)));
       unresolvedCount += tokens.filter((token) => !accepted.has(token) && !invalid.has(token)).length;
       // Correlate provider acceptance with a stored notification without
       // recording device tokens, message text, or private recipient identity.
@@ -87,7 +89,7 @@ async function dispatchToTokens(rows, senders, message, { receipt = false } = {}
     }
   }
 
-  return { invalidTokens, counts, ...(receipt ? { acceptedCount, unresolvedCount } : {}) };
+  return { invalidTokens, counts, ...(receipt ? { acceptedCount, unresolvedCount } : {}), ...(registrationReceipts ? { acceptedTokens } : {}) };
 }
 
 module.exports = { dispatchToTokens, SEND_ORDER };

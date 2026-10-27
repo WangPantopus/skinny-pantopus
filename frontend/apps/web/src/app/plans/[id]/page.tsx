@@ -1,10 +1,11 @@
 import type { Metadata } from 'next';
 import type { CSSProperties, ReactNode } from 'react';
-import { headers } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import {
   ANDROID_PLAY_STORE_URL,
+  API_BASE_URL,
   IOS_APP_STORE_URL,
   buildPlanAppUrl,
   buildPlanPath,
@@ -27,11 +28,43 @@ export const dynamic = 'force-dynamic';
 
 type Kind = PublicPlan['kind'];
 
+/** The signed-in person's part in the plan: host, in (guest), or neither, with their request's status. */
+type PlanViewer = { role: 'host' | 'guest' | 'none'; requestStatus: string | null; requestsWaiting: number };
+
+/**
+ * Who is looking, when they're signed in on the web. A host's "requests waiting" notices open this
+ * page, so the host and people already in get words that fit them. It's the app's own plan read
+ * (GET /api/plans/:id) with the person's session cookie, never cached; signed out, or when that read
+ * fails, the page reads as it does for everyone.
+ */
+async function fetchPlanViewer(id: string): Promise<PlanViewer | null> {
+  const access = (await cookies()).get('pantopus_access')?.value;
+  if (!access) return null;
+  try {
+    const response = await fetch(`${API_BASE_URL.replace(/\/+$/, '')}/api/plans/${encodeURIComponent(id)}`, {
+      cache: 'no-store',
+      headers: { Accept: 'application/json', Cookie: `pantopus_access=${access}` },
+    });
+    if (!response.ok) return null;
+    const plan = await response.json();
+    const role = plan?.viewer?.role;
+    if (role !== 'host' && role !== 'guest' && role !== 'none') return null;
+    return {
+      role,
+      requestStatus: typeof plan.viewer.request_status === 'string' ? plan.viewer.request_status : null,
+      requestsWaiting: Number(plan.requests_count) || 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
 const KIND_LABEL: Record<Kind, string> = {
   watch_party: 'Watch party',
   playdate: 'Playdate',
   pickup_game: 'Pickup game',
   walk_coffee: 'Walk & coffee',
+  study_group: 'Study group',
 };
 
 const KIND_TOKEN: Record<Kind, string> = {
@@ -39,6 +72,7 @@ const KIND_TOKEN: Record<Kind, string> = {
   playdate: 'playdate',
   pickup_game: 'pickup',
   walk_coffee: 'walk',
+  study_group: 'study',
 };
 
 function kindColors(kind: Kind): CSSProperties {
@@ -90,6 +124,13 @@ function KindGlyph({ kind, className }: { kind: Kind; className?: string }) {
           <path d="M4 9.5h12v4a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z" />
           <path d="M16 11h1.5a2.5 2.5 0 0 1 0 5H16" />
           <path d="M8 3.5v3M12 3.5v3" />
+        </Icon>
+      );
+    case 'study_group':
+      return (
+        <Icon className={className}>
+          <path d="M2 4h6a4 4 0 0 1 4 4v12a3 3 0 0 0-3-3H2z" />
+          <path d="M22 4h-6a4 4 0 0 0-4 4v12a3 3 0 0 1 3-3h7z" />
         </Icon>
       );
     default:
@@ -181,6 +222,21 @@ function whenText(plan: PublicPlan): string | null {
   const day = new Intl.DateTimeFormat('en-US', { timeZone, weekday: 'long', month: 'short', day: 'numeric' }).format(start);
   const time = new Intl.DateTimeFormat('en-US', { timeZone, hour: 'numeric', minute: '2-digit' }).format(start);
   return `${day} · ${time}`;
+}
+
+/** The line above the card: an invitation, unless the person is the host, is in, or already asked. */
+function introText(plan: PublicPlan, hostName: string, viewer: PlanViewer | null, over: boolean): string {
+  const near = nearPhrase(plan);
+  const host = firstNameOf(hostName);
+  if (viewer?.role === 'host') {
+    const waiting = over ? 0 : viewer.requestsWaiting;
+    if (waiting > 0) return `Your plan ${near}. ${waiting} ${waiting === 1 ? 'person is' : 'people are'} waiting for your answer.`;
+    return `Your plan ${near}.`;
+  }
+  if (viewer?.role === 'guest') return over ? `You joined ${host}'s plan ${near}.` : `You're in ${host}'s plan ${near}.`;
+  if (!over && viewer?.requestStatus === 'pending') return `You asked to join ${host}'s plan ${near}.`;
+  if (!over && viewer?.requestStatus === 'waitlisted') return `You're on the waitlist for ${host}'s plan ${near}.`;
+  return `${host} invited you to a plan ${near}.`;
 }
 
 function goingText(plan: PublicPlan): string {
@@ -291,7 +347,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
 export default async function PublicPlanPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const result = await fetchPublicPlan(id);
+  const [result, viewer] = await Promise.all([fetchPublicPlan(id), fetchPlanViewer(id)]);
   const plan = result.data;
   const userAgent = (await headers()).get('user-agent') || '';
   const fallbackUrl = getStoreDownloadCta(userAgent)?.href ?? null;
@@ -316,22 +372,31 @@ export default async function PublicPlanPage({ params }: { params: Promise<{ id:
   }
 
   if (plan.kind === 'playdate') {
+    // The host and families who are in see their own playdate's details in the app, as everyone does.
+    const mine = viewer?.role === 'host' || viewer?.role === 'guest';
     return (
       <main className="min-h-screen bg-app text-app-text">
         <div className="mx-auto w-full max-w-md pb-10">
           <TopBar id={id} fallbackUrl={fallbackUrl} />
           <div className="flex flex-col gap-4 px-4 pt-[18px]">
             <KindTag kind="playdate" />
-            <h1 className="text-2xl font-bold leading-[30px] tracking-[-0.015em]">A playdate {nearPhrase(plan)}</h1>
+            <h1 className="text-2xl font-bold leading-[30px] tracking-[-0.015em]">
+              {viewer?.role === 'host' ? 'Your playdate' : 'A playdate'} {nearPhrase(plan)}
+            </h1>
             <div className="flex flex-col gap-3 rounded-[20px] border border-app-border bg-app-surface p-4 shadow-sm">
               <span className="grid h-12 w-12 place-items-center rounded-[13px] bg-app-surface-sunken text-app-text-strong">
                 <LockIcon className="h-[22px] w-[22px]" />
               </span>
               <div className="flex flex-col gap-1">
-                <h2 className="text-[17px] font-semibold leading-[22px]">Playdates are for verified neighbors</h2>
+                <h2 className="text-[17px] font-semibold leading-[22px]">
+                  {mine ? 'Playdate details stay in the app' : 'Playdates are for verified neighbors'}
+                </h2>
                 <p className="text-sm leading-5 text-app-text-secondary">
-                  Open it in the Pantopus app with a verified address to see the time, the place and who&apos;s going,
-                  and to ask to join.
+                  {viewer?.role === 'host'
+                    ? "Open it in the Pantopus app to see who asked to join and who's going."
+                    : viewer?.role === 'guest'
+                      ? "You're in. Open it in the Pantopus app to see the time, the place and who's going."
+                      : "Open it in the Pantopus app with a verified address to see the time, the place and who's going, and to ask to join."}
                 </p>
               </div>
             </div>
@@ -354,15 +419,16 @@ export default async function PublicPlanPage({ params }: { params: Promise<{ id:
   const hostName = plan.host?.display_name || 'A neighbor';
   const when = whenText(plan);
   const over = plan.state === 'cancelled' || plan.state === 'ended';
+  // Someone who is in, or already asked, opens the plan in the app rather than joining.
+  const joined = viewer?.role === 'host' || viewer?.role === 'guest'
+    || (!over && (viewer?.requestStatus === 'pending' || viewer?.requestStatus === 'waitlisted'));
 
   return (
     <main className="min-h-screen bg-app text-app-text">
       <div className="mx-auto w-full max-w-md pb-10">
         <TopBar id={id} fallbackUrl={fallbackUrl} />
         <div className="flex flex-col gap-4 px-4 pt-[18px]">
-          <p className="text-sm leading-5 text-app-text-secondary">
-            {firstNameOf(hostName)} invited you to a plan {nearPhrase(plan)}.
-          </p>
+          <p className="text-sm leading-5 text-app-text-secondary">{introText(plan, hostName, viewer, over)}</p>
 
           <section
             className="overflow-hidden rounded-[20px] border border-app-border bg-app-surface shadow-sm"
@@ -396,7 +462,13 @@ export default async function PublicPlanPage({ params }: { params: Promise<{ id:
 
           <div className="flex items-start gap-[10px] text-sm leading-5 text-app-text-secondary">
             <LockIcon className="mt-0.5 h-4 w-4" />
-            <span>The exact place goes only to people the host lets in.</span>
+            <span>
+              {viewer?.role === 'host'
+                ? 'The exact place goes only to people you let in.'
+                : viewer?.role === 'guest'
+                  ? 'You see the exact place in the app.'
+                  : 'The exact place goes only to people the host lets in.'}
+            </span>
           </div>
 
           <OpenInAppButton
@@ -405,7 +477,7 @@ export default async function PublicPlanPage({ params }: { params: Promise<{ id:
             fallbackUrl={fallbackUrl}
             className={PRIMARY_BUTTON}
           >
-            {over ? 'See plans near you in Pantopus' : 'Open in Pantopus to join'}
+            {joined ? 'Open in Pantopus' : over ? 'See plans near you in Pantopus' : 'Open in Pantopus to join'}
           </OpenInAppButton>
           <StoreButtons />
           <p className="text-center text-xs leading-4 text-app-text-secondary">{PLAYDATE_CAPTION}</p>

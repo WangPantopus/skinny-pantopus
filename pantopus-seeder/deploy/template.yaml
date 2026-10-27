@@ -11,6 +11,46 @@ Parameters:
       - staging
       - dev
     Description: Deployment environment — controls resource naming and scheduling
+  SchedulesEnabled:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: Keep all scheduled jobs paused while validating a deployment.
+  BriefingsEnabled:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: Enable only briefings and their housekeeping while other jobs remain paused.
+  SeederEnabled:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: Enable local content fetching, posting and region discovery. Requires curator credentials and seeded regions; excludes national sports.
+  HomeRemindersEnabled:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: Enable recipient-local Home bill, task and calendar reminders.
+  AlertsEnabled:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: Enable weather and air-quality alert checks.
+  MaintenanceJobsEnabled:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: Enable post expiry, Ask reminders, chat redaction, business cleanup, response statistics and trust checks.
+  PaymentJobsEnabled:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: Enable payment authorization, transfer, capture retry, expiry and stuck-payment checks. Review payment mode before activation.
+  HealthMonitoringEnabled:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: Independently probe API and database health every minute; does not enable any business jobs.
   SecretName:
     Type: String
     Default: ''
@@ -26,8 +66,30 @@ Parameters:
       after the backfill is complete.
 
 Conditions:
+  RunHealthMonitoring: !Equals [!Ref HealthMonitoringEnabled, 'true']
+  RunSchedules: !Equals [!Ref SchedulesEnabled, 'true']
+  RunBriefings: !Or
+    - !Equals [!Ref SchedulesEnabled, 'true']
+    - !Equals [!Ref BriefingsEnabled, 'true']
+  RunSeeder: !Or
+    - !Equals [!Ref SchedulesEnabled, 'true']
+    - !Equals [!Ref SeederEnabled, 'true']
+  RunHomeReminders: !Or
+    - !Equals [!Ref SchedulesEnabled, 'true']
+    - !Equals [!Ref HomeRemindersEnabled, 'true']
+  RunAlerts: !Or
+    - !Equals [!Ref SchedulesEnabled, 'true']
+    - !Equals [!Ref AlertsEnabled, 'true']
+  RunMaintenanceJobs: !Or
+    - !Equals [!Ref SchedulesEnabled, 'true']
+    - !Equals [!Ref MaintenanceJobsEnabled, 'true']
+  RunPaymentJobs: !Or
+    - !Equals [!Ref SchedulesEnabled, 'true']
+    - !Equals [!Ref PaymentJobsEnabled, 'true']
+  RunJobs: !Or
+    - !Condition RunMaintenanceJobs
+    - !Condition RunPaymentJobs
   UseDefaultSecretName: !Equals [!Ref SecretName, '']
-  IsProduction: !Equals [!Ref Environment, 'production']
 
 Globals:
   Function:
@@ -46,6 +108,133 @@ Globals:
         ENVIRONMENT: !Ref Environment
 
 Resources:
+  BackendHealthFunction:
+    Type: AWS::Serverless::Function
+    Condition: RunHealthMonitoring
+    DependsOn: BackendHealthLogGroup
+    Properties:
+      FunctionName: !Sub pantopus-backend-health-${Environment}
+      Handler: src.handlers.backend_health.handler
+      Description: Read-only API/database readiness probes and resource metrics
+      CodeUri: ../build/
+      Timeout: 20
+      MemorySize: 128
+      ReservedConcurrentExecutions: 1
+      EventInvokeConfig:
+        MaximumRetryAttempts: 0
+        MaximumEventAgeInSeconds: 60
+      Events:
+        HealthSchedule:
+          Type: Schedule
+          Properties:
+            Name: !Sub pantopus-backend-health-${Environment}
+            Schedule: rate(1 minute)
+            State: ENABLED
+            RetryPolicy:
+              MaximumRetryAttempts: 0
+              MaximumEventAgeInSeconds: 60
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: secretsmanager:GetSecretValue
+              Resource: !Ref SeederSecret
+
+  BackendHealthLogGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: RunHealthMonitoring
+    Properties:
+      LogGroupName: !Sub /aws/lambda/pantopus-backend-health-${Environment}
+      RetentionInDays: 30
+
+  ApiHealthAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: RunHealthMonitoring
+    Properties:
+      AlarmName: !Sub pantopus-api-health-${Environment}
+      AlarmDescription: 'Public API /health failed or monitoring stopped for two of three minutes. Check the direct database alarm to distinguish API-host and database failures.'
+      Namespace: !Sub Pantopus/Backend/${Environment}
+      MetricName: ApiHealthy
+      Statistic: Minimum
+      Period: 60
+      EvaluationPeriods: 3
+      DatapointsToAlarm: 2
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+      AlarmActions: [!Ref JobAlarmTopic]
+      OKActions: [!Ref JobAlarmTopic]
+
+  DatabaseHealthAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: RunHealthMonitoring
+    Properties:
+      AlarmName: !Sub pantopus-database-health-${Environment}
+      AlarmDescription: 'Direct Supabase database HEAD query failed or monitoring stopped for two of three minutes. Independent of the backend host; no user rows returned.'
+      Namespace: !Sub Pantopus/Backend/${Environment}
+      MetricName: DatabaseHealthy
+      Statistic: Minimum
+      Period: 60
+      EvaluationPeriods: 3
+      DatapointsToAlarm: 2
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+      AlarmActions: [!Ref JobAlarmTopic]
+      OKActions: [!Ref JobAlarmTopic]
+
+  DatabaseTelemetryAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: RunHealthMonitoring
+    Properties:
+      AlarmName: !Sub pantopus-database-telemetry-${Environment}
+      AlarmDescription: 'Database resource telemetry failed or the monitor stopped for three minutes. Do not interpret missing resource samples as healthy.'
+      Namespace: !Sub Pantopus/Backend/${Environment}
+      MetricName: TelemetryHealthy
+      Statistic: Minimum
+      Period: 60
+      EvaluationPeriods: 3
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+      AlarmActions: [!Ref JobAlarmTopic]
+      OKActions: [!Ref JobAlarmTopic]
+
+  DatabaseMemoryAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: RunHealthMonitoring
+    Properties:
+      AlarmName: !Sub pantopus-database-memory-${Environment}
+      AlarmDescription: 'Available database VM memory below 10 percent in three of five minutes. Review swap rates, I/O wait and queue load before sizing compute.'
+      Namespace: !Sub Pantopus/Backend/${Environment}
+      MetricName: MemoryAvailablePercent
+      Statistic: Minimum
+      Period: 60
+      EvaluationPeriods: 5
+      DatapointsToAlarm: 3
+      Threshold: 10
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref JobAlarmTopic]
+      OKActions: [!Ref JobAlarmTopic]
+
+  DatabaseIoWaitAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: RunHealthMonitoring
+    Properties:
+      AlarmName: !Sub pantopus-database-io-wait-${Environment}
+      AlarmDescription: 'Database CPU spent over 25 percent waiting for I/O in three of five minutes. Rates are absent on cold start or exporter counter reset; telemetry availability has its own alarm.'
+      Namespace: !Sub Pantopus/Backend/${Environment}
+      MetricName: IoWaitPercent
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 5
+      DatapointsToAlarm: 3
+      Threshold: 25
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref JobAlarmTopic]
+      OKActions: [!Ref JobAlarmTopic]
+
   # ---------------------------------------------------------------------------
   # Fetcher Lambda — pulls content from RSS feeds and sources into the queue
   # ---------------------------------------------------------------------------
@@ -64,7 +253,7 @@ Resources:
             Name: !Sub pantopus-seeder-fetch-${Environment}
             Schedule: rate(2 hours)
             Description: !Sub 'Run fetcher every 2 hours [${Environment}]'
-            Enabled: true
+            State: !If [RunSeeder, ENABLED, DISABLED]
       Policies:
         - Statement:
             - Effect: Allow
@@ -87,7 +276,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub pantopus-seeder-poster-${Environment}
-      ReservedConcurrentExecutions: 1
+      ReservedConcurrentExecutions: !If [RunSeeder, 1, !Ref 'AWS::NoValue']
       Handler: src.handlers.poster.handler
       Description: !Sub 'Selects, humanizes, and posts content from the seeder queue [${Environment}]'
       CodeUri: ../build/
@@ -99,7 +288,7 @@ Resources:
             # The handler selects 7 AM/noon/5 PM independently per region.
             Schedule: cron(0 * * * ? *)
             Description: !Sub 'Hourly during posting windows [${Environment}]'
-            Enabled: true
+            State: !If [RunSeeder, ENABLED, DISABLED]
       Policies:
         - Statement:
             - Effect: Allow
@@ -131,7 +320,7 @@ Resources:
             # fresh items without thrashing Google News or the queue.
             Schedule: rate(3 hours)
             Description: !Sub 'Sports national fetcher — every 3 hours [${Environment}]'
-            Enabled: true
+            State: !If [RunSchedules, ENABLED, DISABLED]
       Policies:
         - Statement:
             - Effect: Allow
@@ -170,14 +359,14 @@ Resources:
             # compete for auth tokens. 14:30 UTC = ~7:30am PT.
             Schedule: cron(30 14 * * ? *)
             Description: !Sub 'Sports national poster — morning window [${Environment}]'
-            Enabled: true
+            State: !If [RunSchedules, ENABLED, DISABLED]
         SportsPostMidday:
           Type: Schedule
           Properties:
             Name: !Sub pantopus-seeder-sports-midday-${Environment}
             Schedule: cron(30 19 * * ? *)
             Description: !Sub 'Sports national poster — midday window [${Environment}]'
-            Enabled: true
+            State: !If [RunSchedules, ENABLED, DISABLED]
         SportsPostEvening:
           Type: Schedule
           Properties:
@@ -185,7 +374,7 @@ Resources:
             # 00:30 UTC = ~5:30pm PT — after most game tip-offs on the West coast.
             Schedule: cron(30 0 * * ? *)
             Description: !Sub 'Sports national poster — evening window [${Environment}]'
-            Enabled: true
+            State: !If [RunSchedules, ENABLED, DISABLED]
       Policies:
         - Statement:
             - Effect: Allow
@@ -220,7 +409,7 @@ Resources:
             Name: !Sub pantopus-seeder-discovery-${Environment}
             Schedule: rate(1 day)
             Description: !Sub 'Run region discovery daily [${Environment}]'
-            Enabled: true
+            State: !If [RunSeeder, ENABLED, DISABLED]
       Policies:
         - Statement:
             - Effect: Allow
@@ -235,7 +424,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub pantopus-briefing-scheduler-${Environment}
-      ReservedConcurrentExecutions: 1
+      ReservedConcurrentExecutions: !If [RunBriefings, 1, !Ref 'AWS::NoValue']
       Handler: src.handlers.briefing.handler
       Description: !Sub 'Finds eligible users and triggers daily briefing delivery [${Environment}]'
       CodeUri: ../build/
@@ -248,7 +437,7 @@ Resources:
             Name: !Sub pantopus-briefing-schedule-${Environment}
             Schedule: cron(* * * * ? *)
             Description: !Sub 'Check local briefing times each minute [${Environment}]'
-            Enabled: true
+            State: !If [RunBriefings, ENABLED, DISABLED]
       Policies:
         - Statement:
             - Effect: Allow
@@ -265,14 +454,14 @@ Resources:
                   cloudwatch:namespace: !Sub Pantopus/Briefing/${Environment}
 
   # ---------------------------------------------------------------------------
-  # Briefing Cleanup Lambda — purges old delivery logs and retries failures
+  # Briefing Cleanup Lambda — purges old delivery logs and resets stale attempts
   # ---------------------------------------------------------------------------
   BriefingCleanupFunction:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub pantopus-briefing-cleanup-${Environment}
       Handler: src.handlers.briefing_cleanup.handler
-      Description: !Sub 'Purges old delivery logs and retries failed briefings [${Environment}]'
+      Description: !Sub 'Purges old delivery logs and resets stale attempts [${Environment}]'
       CodeUri: ../build/
       Timeout: 120
       MemorySize: 256
@@ -283,7 +472,7 @@ Resources:
             Name: !Sub pantopus-briefing-cleanup-${Environment}
             Schedule: rate(1 day)
             Description: !Sub 'Run briefing cleanup daily [${Environment}]'
-            Enabled: true
+            State: !If [RunBriefings, ENABLED, DISABLED]
       Policies:
         - Statement:
             - Effect: Allow
@@ -310,7 +499,7 @@ Resources:
             Name: !Sub pantopus-alert-check-${Environment}
             Schedule: rate(10 minutes)
             Description: !Sub 'Check weather/AQI alerts every 10 minutes [${Environment}]'
-            Enabled: true
+            State: !If [RunAlerts, ENABLED, DISABLED]
       Policies:
         - Statement:
             - Effect: Allow
@@ -333,7 +522,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub pantopus-home-reminders-${Environment}
-      ReservedConcurrentExecutions: 1
+      ReservedConcurrentExecutions: !If [RunHomeReminders, 1, !Ref 'AWS::NoValue']
       Handler: src.handlers.home_reminders.handler
       Description: !Sub 'Sends push for bills due, tasks due, and upcoming calendar events [${Environment}]'
       CodeUri: ../build/
@@ -350,7 +539,7 @@ Resources:
             Input: '{"time": "<aws.scheduler.scheduled-time>"}'
             RetryPolicy:
               MaximumEventAgeInSeconds: 3600
-            State: ENABLED
+            State: !If [RunHomeReminders, ENABLED, DISABLED]
       Policies:
         - Statement:
             - Effect: Allow
@@ -385,7 +574,7 @@ Resources:
             Name: !Sub pantopus-mail-notifications-${Environment}
             Schedule: rate(5 minutes)
             Description: !Sub 'Check for urgent mail every 5 minutes [${Environment}]'
-            Enabled: true
+            State: !If [RunSchedules, ENABLED, DISABLED]
       Policies:
         - Statement:
             - Effect: Allow
@@ -423,7 +612,7 @@ Resources:
             Name: !Sub pantopus-no-bid-nudge-${Environment}
             Schedule: rate(6 hours)
             Description: !Sub 'Check for no-bid gigs every 6 hours [${Environment}]'
-            Enabled: true
+            State: !If [RunSchedules, ENABLED, DISABLED]
       Policies:
         - Statement:
             - Effect: Allow
@@ -459,7 +648,7 @@ Resources:
             Schedule: cron(15 * * * ? *)
             Description: !Sub 'Escrow release — hourly at :15 [${Environment}]'
             Input: '{"job": "process-pending-transfers"}'
-            Enabled: true
+            State: !If [RunPaymentJobs, ENABLED, DISABLED]
         RetryCaptureFailures:
           Type: Schedule
           Properties:
@@ -467,7 +656,7 @@ Resources:
             Schedule: rate(15 minutes)
             Description: !Sub 'Retry failed Stripe captures [${Environment}]'
             Input: '{"job": "retry-capture-failures"}'
-            Enabled: true
+            State: !If [RunPaymentJobs, ENABLED, DISABLED]
         AuthorizeUpcomingGigs:
           Type: Schedule
           Properties:
@@ -475,7 +664,7 @@ Resources:
             Schedule: cron(5 * * * ? *)
             Description: !Sub 'Create PaymentIntents for upcoming gigs — hourly at :05 [${Environment}]'
             Input: '{"job": "authorize-upcoming-gigs"}'
-            Enabled: true
+            State: !If [RunPaymentJobs, ENABLED, DISABLED]
         ExpireUncapturedAuth:
           Type: Schedule
           Properties:
@@ -483,7 +672,7 @@ Resources:
             Schedule: cron(0 3 * * ? *)
             Description: !Sub 'Cancel gigs with expiring auths — daily 3:00 AM [${Environment}]'
             Input: '{"job": "expire-uncaptured-authorizations"}'
-            Enabled: true
+            State: !If [RunPaymentJobs, ENABLED, DISABLED]
         CheckStuckPayments:
           Type: Schedule
           Properties:
@@ -491,7 +680,7 @@ Resources:
             Schedule: rate(15 minutes)
             Description: !Sub 'Alert on stuck payments [${Environment}]'
             Input: '{"job": "check-stuck-payments"}'
-            Enabled: true
+            State: !If [RunPaymentJobs, ENABLED, DISABLED]
         CleanupGhostBusinesses:
           Type: Schedule
           Properties:
@@ -499,7 +688,7 @@ Resources:
             Schedule: cron(30 2 * * ? *)
             Description: !Sub 'Remove orphaned business accounts — daily 2:30 AM [${Environment}]'
             Input: '{"job": "cleanup-ghost-businesses"}'
-            Enabled: true
+            State: !If [RunMaintenanceJobs, ENABLED, DISABLED]
         ChatRedaction:
           Type: Schedule
           Properties:
@@ -507,7 +696,7 @@ Resources:
             Schedule: cron(30 * * * ? *)
             Description: !Sub 'GDPR message redaction — hourly at :30 [${Environment}]'
             Input: '{"job": "chat-redaction"}'
-            Enabled: true
+            State: !If [RunMaintenanceJobs, ENABLED, DISABLED]
         TrustAnomalyDetection:
           Type: Schedule
           Properties:
@@ -515,7 +704,7 @@ Resources:
             Schedule: cron(45 */6 * * ? *)
             Description: !Sub 'Flag suspicious neighbor growth — every 6h [${Environment}]'
             Input: '{"job": "trust-anomaly-detection"}'
-            Enabled: true
+            State: !If [RunMaintenanceJobs, ENABLED, DISABLED]
         ComputeAvgResponseTime:
           Type: Schedule
           Properties:
@@ -523,7 +712,7 @@ Resources:
             Schedule: cron(0 5 * * ? *)
             Description: !Sub 'Business response time stats — daily 5:00 AM [${Environment}]'
             Input: '{"job": "compute-avg-response-time"}'
-            Enabled: true
+            State: !If [RunMaintenanceJobs, ENABLED, DISABLED]
         AutoArchivePosts:
           Type: Schedule
           Properties:
@@ -531,7 +720,7 @@ Resources:
             Schedule: cron(23 * * * ? *)
             Description: !Sub 'End expired local posts — hourly at :23 [${Environment}]'
             Input: '{"job": "auto-archive-posts"}'
-            Enabled: true
+            State: !If [RunMaintenanceJobs, ENABLED, DISABLED]
         AskStillOpenReminders:
           Type: Schedule
           Properties:
@@ -539,7 +728,7 @@ Resources:
             Schedule: cron(41 * * * ? *)
             Description: !Sub 'Day-6 reminders for open Asks — hourly at :41 [${Environment}]'
             Input: '{"job": "ask-still-open-reminders"}'
-            Enabled: true
+            State: !If [RunMaintenanceJobs, ENABLED, DISABLED]
       Policies:
         - Statement:
             - Effect: Allow
@@ -626,14 +815,33 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub pantopus-alert-checker-errors-${Environment}
-      AlarmDescription: !Sub 'pantopus-alert-checker-${Environment} failed: weather and air-quality alerts. Check its CloudWatch logs.'
-      Namespace: AWS/Lambda
-      MetricName: Errors
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref AlertCheckerFunction
-      Statistic: Sum
-      Period: 900
+      AlarmDescription: 'A scheduled run crashed or reported a caught/partial failure. Check CloudWatch logs; quiet days are successful.'
+      Metrics:
+        - Id: failures
+          Expression: crashes + outcomes
+          ReturnData: true
+        - Id: crashes
+          ReturnData: false
+          MetricStat:
+            Metric:
+              Namespace: AWS/Lambda
+              MetricName: Errors
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref AlertCheckerFunction
+            Period: 900
+            Stat: Sum
+        - Id: outcomes
+          ReturnData: false
+          MetricStat:
+            Metric:
+              Namespace: !Sub Pantopus/ScheduledJobs/${Environment}
+              MetricName: RunFailures
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref AlertCheckerFunction
+            Period: 900
+            Stat: Sum
       EvaluationPeriods: 1
       Threshold: 1
       ComparisonOperator: GreaterThanOrEqualToThreshold
@@ -645,7 +853,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub pantopus-briefing-cleanup-errors-${Environment}
-      AlarmDescription: !Sub 'pantopus-briefing-cleanup-${Environment} failed: the daily retry of failed briefings. Check its CloudWatch logs.'
+      AlarmDescription: !Sub 'pantopus-briefing-cleanup-${Environment} failed: daily briefing housekeeping. Check its CloudWatch logs.'
       Namespace: AWS/Lambda
       MetricName: Errors
       Dimensions:
@@ -676,6 +884,283 @@ Resources:
       Threshold: 1
       ComparisonOperator: GreaterThanOrEqualToThreshold
       TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref JobAlarmTopic
+
+  # Local jobs report partial failures without retrying already published content.
+  SeederFetcherErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub pantopus-seeder-fetcher-errors-${Environment}
+      AlarmDescription: 'A scheduled run crashed or reported a caught/partial failure. Check CloudWatch logs; quiet days are successful.'
+      Metrics:
+        - Id: failures
+          Expression: crashes + outcomes
+          ReturnData: true
+        - Id: crashes
+          ReturnData: false
+          MetricStat:
+            Metric:
+              Namespace: AWS/Lambda
+              MetricName: Errors
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref SeederFetcherFunction
+            Period: 900
+            Stat: Sum
+        - Id: outcomes
+          ReturnData: false
+          MetricStat:
+            Metric:
+              Namespace: !Sub Pantopus/ScheduledJobs/${Environment}
+              MetricName: RunFailures
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref SeederFetcherFunction
+            Period: 900
+            Stat: Sum
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref JobAlarmTopic
+
+  SeederPosterErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub pantopus-seeder-poster-errors-${Environment}
+      AlarmDescription: 'A scheduled run crashed or reported a caught/partial failure. Check CloudWatch logs; quiet days are successful.'
+      Metrics:
+        - Id: failures
+          Expression: crashes + outcomes
+          ReturnData: true
+        - Id: crashes
+          ReturnData: false
+          MetricStat:
+            Metric:
+              Namespace: AWS/Lambda
+              MetricName: Errors
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref SeederPosterFunction
+            Period: 900
+            Stat: Sum
+        - Id: outcomes
+          ReturnData: false
+          MetricStat:
+            Metric:
+              Namespace: !Sub Pantopus/ScheduledJobs/${Environment}
+              MetricName: RunFailures
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref SeederPosterFunction
+            Period: 900
+            Stat: Sum
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref JobAlarmTopic
+
+  SeederDiscoveryErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub pantopus-seeder-discovery-errors-${Environment}
+      AlarmDescription: 'A scheduled run crashed or reported a caught/partial failure. Check CloudWatch logs; quiet days are successful.'
+      Metrics:
+        - Id: failures
+          Expression: crashes + outcomes
+          ReturnData: true
+        - Id: crashes
+          ReturnData: false
+          MetricStat:
+            Metric:
+              Namespace: AWS/Lambda
+              MetricName: Errors
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref SeederDiscoveryFunction
+            Period: 900
+            Stat: Sum
+        - Id: outcomes
+          ReturnData: false
+          MetricStat:
+            Metric:
+              Namespace: !Sub Pantopus/ScheduledJobs/${Environment}
+              MetricName: RunFailures
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref SeederDiscoveryFunction
+            Period: 900
+            Stat: Sum
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref JobAlarmTopic
+
+  # Missing invocations detect stopped schedules, regardless of eligible recipients.
+  # Actions follow the same switches as the schedules; intentional pauses are silent.
+  FetcherMissingRunsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub pantopus-seeder-fetcher-missing-runs-${Environment}
+      AlarmDescription: 'No scheduled invocation in the expected window. Check schedule state, invocation permissions, throttles and Lambda logs.'
+      ActionsEnabled: !If [RunSeeder, true, false]
+      Namespace: AWS/Lambda
+      MetricName: Invocations
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref SeederFetcherFunction
+      Statistic: Sum
+      Period: 21600
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+      AlarmActions:
+        - !Ref JobAlarmTopic
+
+  PosterMissingRunsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub pantopus-seeder-poster-missing-runs-${Environment}
+      AlarmDescription: 'No scheduled invocation in the expected window. Check schedule state, invocation permissions, throttles and Lambda logs.'
+      ActionsEnabled: !If [RunSeeder, true, false]
+      Namespace: AWS/Lambda
+      MetricName: Invocations
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref SeederPosterFunction
+      Statistic: Sum
+      Period: 10800
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+      AlarmActions:
+        - !Ref JobAlarmTopic
+
+  DiscoveryMissingRunsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub pantopus-seeder-discovery-missing-runs-${Environment}
+      AlarmDescription: 'No scheduled invocation in the expected window. Check schedule state, invocation permissions, throttles and Lambda logs.'
+      ActionsEnabled: !If [RunSeeder, true, false]
+      Namespace: AWS/Lambda
+      MetricName: Invocations
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref SeederDiscoveryFunction
+      Statistic: Sum
+      Period: 86400
+      EvaluationPeriods: 2
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+      AlarmActions:
+        - !Ref JobAlarmTopic
+
+  BriefingMissingRunsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub pantopus-briefing-scheduler-missing-runs-${Environment}
+      AlarmDescription: 'No scheduled invocation in the expected window. Check schedule state, invocation permissions, throttles and Lambda logs.'
+      ActionsEnabled: !If [RunBriefings, true, false]
+      Namespace: AWS/Lambda
+      MetricName: Invocations
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref BriefingSchedulerFunction
+      Statistic: Sum
+      Period: 900
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+      AlarmActions:
+        - !Ref JobAlarmTopic
+
+  CleanupMissingRunsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub pantopus-briefing-cleanup-missing-runs-${Environment}
+      AlarmDescription: 'No scheduled invocation in the expected window. Check schedule state, invocation permissions, throttles and Lambda logs.'
+      ActionsEnabled: !If [RunBriefings, true, false]
+      Namespace: AWS/Lambda
+      MetricName: Invocations
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref BriefingCleanupFunction
+      Statistic: Sum
+      Period: 86400
+      EvaluationPeriods: 2
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+      AlarmActions:
+        - !Ref JobAlarmTopic
+
+  HomeMissingRunsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub pantopus-home-reminders-missing-runs-${Environment}
+      AlarmDescription: 'No scheduled invocation in the expected window. Check schedule state, invocation permissions, throttles and Lambda logs.'
+      ActionsEnabled: !If [RunHomeReminders, true, false]
+      Namespace: AWS/Lambda
+      MetricName: Invocations
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref HomeRemindersFunction
+      Statistic: Sum
+      Period: 3600
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+      AlarmActions:
+        - !Ref JobAlarmTopic
+
+  AlertsMissingRunsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub pantopus-alert-checker-missing-runs-${Environment}
+      AlarmDescription: 'No scheduled invocation in the expected window. Check schedule state, invocation permissions, throttles and Lambda logs.'
+      ActionsEnabled: !If [RunAlerts, true, false]
+      Namespace: AWS/Lambda
+      MetricName: Invocations
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AlertCheckerFunction
+      Statistic: Sum
+      Period: 1800
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+      AlarmActions:
+        - !Ref JobAlarmTopic
+
+  JobsMissingRunsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub pantopus-job-trigger-missing-runs-${Environment}
+      AlarmDescription: 'No scheduled invocation in the expected window. Check schedule state, invocation permissions, throttles and Lambda logs.'
+      ActionsEnabled: !If [RunJobs, true, false]
+      Namespace: AWS/Lambda
+      MetricName: Invocations
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref JobTriggerFunction
+      Statistic: Sum
+      Period: 10800
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
       AlarmActions:
         - !Ref JobAlarmTopic
 

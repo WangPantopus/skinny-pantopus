@@ -14,12 +14,15 @@ const logger = require('../../utils/logger');
 const { canPostToPlace } = require('../../utils/trustState');
 const { recordFunnelEvent } = require('../funnelEvents');
 const { filePostReport } = require('../postReportService');
+const blockService = require('../blockService');
 const rules = require('./planRules');
 const planService = require('./planService');
+const { loadChatPeople } = require('../chatPeople');
 const { loadViewer, verifiedUserIds } = require('./planViewer');
 const planPlace = require('./planPlace');
 const planChat = require('./planChat');
 const planNotify = require('./planNotifications');
+const { findGame } = require('./planGames');
 
 class PlanError extends Error {
   constructor(status, code, message, extra = {}) {
@@ -68,6 +71,17 @@ async function activeRequests(postId) {
     .in('status', planService.ACTIVE_REQUEST_STATUSES);
   if (error) throw new Error(`Failed to load requests: ${error.message}`);
   return data || [];
+}
+
+/**
+ * Requests still waiting for the host's answer, without people on either side of a block
+ * (the requests screen hides them): for the host's summary and the assistant's nudge.
+ */
+async function waitingRequests(plan, requests) {
+  const pending = (requests || []).filter((r) => r.status === 'pending');
+  if (pending.length === 0) return pending;
+  const blocked = await blockService.blockedUserIds(plan.host_user_id).catch(() => new Set());
+  return pending.filter((r) => !blocked.has(String(r.user_id)));
 }
 
 async function loadRequest(requestId, postId) {
@@ -150,15 +164,21 @@ function bool(value, label) {
   return value;
 }
 
-function normalizeDetails(kind, details) {
+function normalizeDetails(kind, details, resolvedGame = null) {
   const input = details && typeof details === 'object' ? details : {};
   const out = {};
   if (kind === 'watch_party') {
     if (input.game && typeof input.game === 'object') {
-      const label = String(input.game.label || '').trim().slice(0, 60);
-      if (label) out.game = { label };
-      const at = input.game.starts_at ? new Date(input.game.starts_at) : null;
-      if (out.game && at && !Number.isNaN(at.getTime())) out.game.starts_at = at.toISOString();
+      const known = resolvedGame || findGame(input.game.id);
+      if (known) out.game = known;
+      else {
+        // Unknown ids and old clients keep the free-text game contract. Never trust
+        // client-supplied team identity or times as a verified schedule record.
+        const label = String(input.game.label || '').trim().slice(0, 60);
+        if (label) out.game = { label };
+        const at = input.game.starts_at ? new Date(input.game.starts_at) : null;
+        if (out.game && at && !Number.isNaN(at.getTime())) out.game.starts_at = at.toISOString();
+      }
     }
   } else if (kind === 'pickup_game') {
     out.sport = oneOf(input.sport, rules.SPORTS, 'sport') || 'other';
@@ -175,6 +195,12 @@ function normalizeDetails(kind, details) {
     out.pace = oneOf(input.pace, rules.PACES, 'pace') || 'easy';
     const dogs = bool(input.dogs_welcome, 'Dogs welcome');
     if (dogs !== undefined) out.dogs_welcome = dogs;
+  } else if (kind === 'study_group') {
+    const subject = String(input.subject || '').replace(/\s+/g, ' ').trim();
+    if (!subject) fail(422, 'validation', 'Add what you’re studying.');
+    if (subject.length > 60) fail(422, 'validation', 'Keep the subject under 60 characters.');
+    out.subject = subject;
+    out.study_style = oneOf(input.study_style, rules.STUDY_STYLES, 'way to study') || 'quiet';
   }
   return out;
 }
@@ -193,12 +219,14 @@ function cleanText(value, max, label) {
   return text || null;
 }
 
-// Watch parties and walks may be hosted at home (decision D6); pickup games and playdates meet in public.
+// Watch parties and walks may be hosted at home (decision D6); pickup games, playdates and study groups
+// (founder, 2026-10-17) meet in public.
 const AT_HOME_MESSAGES = {
   watch_party: 'That’s at your home. To host there, choose “My place”: only people you accept see your address.',
   walk_coffee: 'That’s at your home. To host there, choose “My porch”: only people you accept see your address.',
   pickup_game: 'That’s at your home. Choose a public place nearby, like a park or a court.',
   playdate: 'That’s at your home. Playdates meet in public places: choose one nearby.',
+  study_group: 'That’s at your home. Study groups meet in public places, like a library or a café.',
   // H11 moves a public plan to another public place only.
   move: 'That’s at your home. Choose another public place nearby.',
 };
@@ -208,6 +236,7 @@ function resolvePlace(viewer, kind, place, { moving = false } = {}) {
   if (!place || typeof place !== 'object') fail(422, 'validation', 'Choose where the plan happens.');
   if (place.kind === 'home') {
     if (kind === 'playdate') fail(422, 'validation', 'Playdates meet in public places.');
+    if (kind === 'study_group') fail(422, 'validation', 'Study groups meet in public places.');
     const home = viewer.homes.find((h) => String(h.id) === String(place.home_id));
     if (!home || !home.trusted) fail(403, 'not_your_home', 'You can host at home only at a home you live in on Pantopus.');
     if (!home.point) fail(422, 'validation', "We couldn't find your home on the map.");
@@ -295,8 +324,8 @@ async function assertHostLimits(userId) {
 
 // ── Create ───────────────────────────────────────────────────
 
-async function createPlan(user, input) {
-  const viewer = await loadViewer(user, { gps: input.gps });
+/** A new plan's input checked by the hosting rules: what createPlan would save, or a PlanError. */
+async function checkedPlanInput(viewer, input) {
   const kind = input.kind;
   if (!rules.KINDS.includes(kind)) fail(422, 'validation', 'Choose what kind of plan this is.');
   if (kind === 'playdate' && !viewer.playdatesFlag) fail(404, 'not_found', "Playdates aren't available yet.");
@@ -312,8 +341,59 @@ async function createPlan(user, input) {
   const autoRules = normalizeAutoRules(kind, place.kind, input.auto_rules);
   const joinRequirement = kind === 'playdate' ? 'verified'
     : (oneOf(input.join_requirement, ['located', 'verified'], 'who can ask') || 'located');
-  const details = normalizeDetails(kind, input.details);
+  const resolvedGame = viewer.sportsFlag && kind === 'watch_party'
+    ? await require('./planGames').resolveGame(input.details?.game?.id, input.details?.game?.team) : null;
+  if (viewer.sportsFlag && kind === 'watch_party' && /^(tsdb|cfbd):/.test(input.details?.game?.id || '') && !resolvedGame) {
+    fail(409, 'game_unavailable', 'This game is no longer available. Choose another game or enter your own.');
+  }
+  const details = normalizeDetails(kind, input.details, resolvedGame);
   await assertHostLimits(viewer.id);
+  return { kind, title, about, guestNote, spots, place, autoRules, joinRequirement, details };
+}
+
+/**
+ * The plan this host posted in the last ten minutes with the same kind, title and
+ * start, or null: a second tap on the same "Post plan" (the assistant's card, a
+ * retried request) gets the plan already posted instead of a copy.
+ */
+async function recentSamePlan(hostId, input) {
+  const start = new Date(input?.starts_at);
+  const title = typeof input?.title === 'string' ? input.title.replace(/\s+/g, ' ').trim() : '';
+  if (!rules.KINDS.includes(input?.kind) || !title || Number.isNaN(start.getTime())) return null;
+  const { data, error } = await supabaseAdmin.from('Plan')
+    .select('post_id, post:Post!inner(title, event_date)')
+    .eq('host_user_id', hostId)
+    .eq('kind', input.kind)
+    .eq('status', 'open')
+    .eq('post.title', title)
+    .eq('post.event_date', start.toISOString())
+    .gt('created_at', new Date(Date.now() - 10 * 60 * 1000).toISOString())
+    .limit(1);
+  if (error) return null;
+  return data && data[0] ? data[0].post_id : null;
+}
+
+/**
+ * What createPlan would save from `input`, checked by the same rules, without
+ * saving anything. The assistant's plan card is built from it, so the card never
+ * offers a plan the server would refuse.
+ */
+async function previewPlan(user, input) {
+  const viewer = await loadViewer(user, { gps: input.gps });
+  const checked = await checkedPlanInput(viewer, input);
+  return {
+    ...checked,
+    startsAt: new Date(input.starts_at).toISOString(),
+    endsAt: new Date(input.ends_at).toISOString(),
+    timezone: planPlace.timezoneFor(checked.place.latitude, checked.place.longitude),
+  };
+}
+
+async function createPlan(user, input) {
+  const viewer = await loadViewer(user, { gps: input.gps });
+  const repeat = await recentSamePlan(viewer.id, input);
+  if (repeat) return planBodyFor(repeat, viewer);
+  const { kind, title, about, guestNote, spots, place, autoRules, joinRequirement, details } = await checkedPlanInput(viewer, input);
 
   const area = planPlace.areaPointFor(kind, place.latitude, place.longitude);
   const fallbackCity = place.home?.city || viewer.homes.find((h) => h.city)?.city || null;
@@ -387,11 +467,34 @@ async function createPlan(user, input) {
   return planBodyFor(post.id, viewer);
 }
 
+// Schedule cards are snapshots. A later provider update or host edit requires
+// another review; saving old party times with new game metadata hides the drift.
+async function checkedSportsRevision(viewer, plan, revision, cancelling = false) {
+  if (revision === undefined) return null;
+  const stale = () => fail(409, 'sports_revision_changed', 'The game or your plan changed. Review a new card before saving.');
+  if (!viewer.sportsFlag || plan.kind !== 'watch_party' || !revision?.game
+    || revision.game.id !== plan.details?.game?.id || revision.game.team !== plan.details?.game?.team
+    || revision.plan_updated_at !== plan.updated_at
+    || Date.parse(revision.plan_starts_at) !== Date.parse(planService.startsAt(plan))
+    || Date.parse(revision.plan_ends_at) !== Date.parse(planService.endsAt(plan))) stale();
+  const { games } = await require('../sports/schedule').gamesForTeams([revision.game.team]);
+  const current = games.find((game) => game.id === revision.game.id && game.team === revision.game.team);
+  const { scheduleRevision, gameDetails } = require('./planGames');
+  if (!current || !require('node:util').isDeepStrictEqual(scheduleRevision(current), revision.game)) stale();
+  if (cancelling) {
+    if (!['cancelled', 'postponed'].includes(current.status)) stale();
+    return null;
+  }
+  if (current.status !== 'scheduled' || current.time_tbd || !current.starts_at || !current.ends_at) stale();
+  return gameDetails(current);
+}
+
 // ── Edit ─────────────────────────────────────────────────────
 
 async function editPlan(user, postId, patch, { io = null } = {}) {
   const viewer = await loadViewer(user, { gps: patch.gps });
   const plan = await loadHostedPlan(postId, viewer);
+  const reviewedGame = await checkedSportsRevision(viewer, plan, patch.sports_revision);
   const state = rules.planState(plan, plan.post.event_date, plan.post.event_end_date);
   if (state === 'ended' || state === 'cancelled') fail(409, 'ended', 'This plan is over, so it can’t change.');
 
@@ -463,7 +566,14 @@ async function editPlan(user, postId, patch, { io = null } = {}) {
   if (patch.join_requirement !== undefined && plan.kind !== 'playdate') {
     planUpdate.join_requirement = oneOf(patch.join_requirement, ['located', 'verified'], 'who can ask');
   }
-  if (patch.details !== undefined) planUpdate.details = normalizeDetails(plan.kind, patch.details);
+  if (patch.details !== undefined) {
+    const resolvedGame = reviewedGame || (viewer.sportsFlag && plan.kind === 'watch_party'
+      ? await require('./planGames').resolveGame(patch.details?.game?.id, patch.details?.game?.team) : null);
+    if (viewer.sportsFlag && plan.kind === 'watch_party' && /^(tsdb|cfbd):/.test(patch.details?.game?.id || '') && !resolvedGame) {
+      fail(409, 'game_unavailable', 'This game is no longer available. Choose another game or enter your own.');
+    }
+    planUpdate.details = normalizeDetails(plan.kind, patch.details, resolvedGame);
+  }
 
   // A plan moved to another time is reminded again (when its new reminder time is still
   // ahead) and, moved to a later day, gets that day's morning summary.
@@ -520,10 +630,11 @@ async function editPlan(user, postId, patch, { io = null } = {}) {
 
 // ── Cancel ───────────────────────────────────────────────────
 
-async function cancelPlan(user, postId, { note } = {}) {
+async function cancelPlan(user, postId, { note, sports_revision: sportsRevision } = {}) {
   const viewer = await loadViewer(user);
   const plan = await loadHostedPlan(postId, viewer);
   if (plan.status === 'cancelled') return planBodyFor(postId, viewer);
+  await checkedSportsRevision(viewer, plan, sportsRevision, true);
   const state = rules.planState(plan, plan.post.event_date, plan.post.event_end_date);
   if (state === 'ended') fail(409, 'ended', 'This plan is already over.');
   const cancelNote = cleanText(note, 280, 'The note');
@@ -573,9 +684,10 @@ async function enforceCapacity(plan) {
     if (seats > plan.spots) overflow.push(request.id);
   }
   if (overflow.length > 0) {
-    await supabaseAdmin.from('PlanRequest')
+    const { error } = await supabaseAdmin.from('PlanRequest')
       .update({ status: 'waitlisted', decided_by: null, decided_at: null, updated_at: nowIso() })
       .in('id', overflow).eq('status', 'accepted');
+    if (error) throw new Error(`Failed to keep the plan to its spots: ${error.message}`);
   }
   return new Set(overflow);
 }
@@ -595,8 +707,21 @@ async function ruleFor(plan, userId) {
   return null;
 }
 
-/** Let someone in: the chat, the grey line, the notice. */
-async function admit(plan, request, { byRule, hostFirst, io, viaWaitlist = false }) {
+/**
+ * Someone who leaves or is removed is out of the plan's chat before their request changes, so a failure leaves
+ * them in the plan and doing it again finishes the job, never an "out" answer while they can still read the room.
+ */
+async function leaveChat(plan, userId, { io, message }) {
+  try {
+    await planChat.removeMember(plan.chat_room_id, userId, { io });
+  } catch (err) {
+    logger.error('plans.chat.remove_failed', { planId: plan.post_id, error: err.message });
+    fail(503, 'unavailable', message);
+  }
+}
+
+/** Let someone in: the chat, the grey line, the notice. When a rule did it, the host hears who is in. */
+async function admit(plan, request, { byRule, hostFirst, io, viaWaitlist = false, rule = null }) {
   const roomId = await planChat.ensureRoom(plan, { io });
   await planChat.addMember(roomId, request.user_id, { io });
   const names = await userNames([request.user_id]);
@@ -607,6 +732,13 @@ async function admit(plan, request, { byRule, hostFirst, io, viaWaitlist = false
     await planNotify.spotOpened({ plan, request, hostFirst, nowIn: true });
   } else {
     await planNotify.accepted({ plan, request, hostFirst, byRule });
+  }
+  if (byRule) {
+    await activeRequests(plan.post_id)
+      .then((requests) => planNotify.guestAutoJoined({
+        plan, request, guestName: who, rule, goingCount: planService.seatsTaken(plan, requests), viaWaitlist,
+      }))
+      .catch((err) => logger.warn('plans.notify.auto_joined_failed', { planId: plan.post_id, error: err.message }));
   }
   recordFunnelEvent('plan_accepted', { userId: request.user_id, meta: { plan_id: plan.post_id, kind: plan.kind, by: byRule ? 'rule' : 'host' } });
 }
@@ -633,7 +765,7 @@ async function offerOpenSpots(plan, { io = null } = {}) {
       if (!moved || moved.length === 0) continue;
       const overflow = await enforceCapacity(plan);
       if (overflow.has(next.id)) return;
-      await admit(plan, moved[0], { byRule: true, hostFirst, io, viaWaitlist: true });
+      await admit(plan, moved[0], { byRule: true, hostFirst, io, viaWaitlist: true, rule });
       continue;
     }
     const { data: moved } = await supabaseAdmin.from('PlanRequest')
@@ -726,8 +858,9 @@ async function askToJoin(user, postId, body, { io = null } = {}) {
   const seats = rules.seatsFor(plan.kind, ask.party_size);
   let status = 'waitlisted';
   let decidedBy = null;
+  let rule = null;
   if (seats <= spotsLeft) {
-    const rule = planService.matchingAutoRule(plan, viewer, ctx);
+    rule = planService.matchingAutoRule(plan, viewer, ctx);
     if (rule) {
       status = 'accepted';
       decidedBy = 'rule';
@@ -779,7 +912,7 @@ async function askToJoin(user, postId, body, { io = null } = {}) {
   if (request.status === 'accepted') {
     const overflow = await enforceCapacity(plan);
     if (!overflow.has(request.id)) {
-      await admit(plan, request, { byRule: true, hostFirst, io });
+      await admit(plan, request, { byRule: true, hostFirst, io, rule });
     }
   } else if (request.status === 'pending') {
     await planNotify.requestReceived({ plan, request, hostFirst, requesterFirst: firstOf(names.get(viewer.id)) });
@@ -799,6 +932,7 @@ async function withdrawMine(user, postId, { io = null, reason = 'withdraw' } = {
 
   const stamp = nowIso();
   const leaving = mine.status === 'accepted';
+  if (leaving) await leaveChat(plan, viewer.id, { io, message: "We couldn't take you out of the plan. Please try again." });
   const patch = { status: leaving ? 'left' : 'withdrawn', updated_at: stamp };
   if (reason === 'not_coming') patch.reconfirmed = false;
   const { data: changed, error: updateError } = await supabaseAdmin.from('PlanRequest')
@@ -806,10 +940,14 @@ async function withdrawMine(user, postId, { io = null, reason = 'withdraw' } = {
   if (updateError) throw new Error(`Failed to update your request: ${updateError.message}`);
   if (changed && changed.length > 0 && leaving) {
     const names = await userNames([viewer.id]);
+    const who = partyLabel(names.get(viewer.id), mine.party_size);
     if (plan.chat_room_id) {
-      await planChat.systemLine(plan.chat_room_id, viewer.id, `${partyLabel(names.get(viewer.id), mine.party_size)} can't make it`);
-      await planChat.removeMember(plan.chat_room_id, viewer.id, { io });
+      await planChat.systemLine(plan.chat_room_id, viewer.id, `${who} can't make it`);
     }
+    // The host hears it before a spot goes to someone waiting (who then has their own notice).
+    await activeRequests(postId)
+      .then((requests) => planNotify.guestLeft({ plan, request: mine, guestName: who, goingCount: planService.seatsTaken(plan, requests) }))
+      .catch((err) => logger.warn('plans.notify.guest_left_failed', { planId: postId, error: err.message }));
     await offerOpenSpots(plan, { io });
   }
   return requestResult(postId, viewer, mine.id);
@@ -824,9 +962,10 @@ async function listRequests(user, postId) {
     .filter((r) => r.status === 'pending' || r.status === 'waitlisted')
     .filter((r) => !viewer.blockedUserIds.has(String(r.user_id)));
   const userIds = requests.map((r) => String(r.user_id));
-  const [users, names, verified, stats, mutual] = await Promise.all([
+  const [users, names, people, verified, stats, mutual] = await Promise.all([
     userIds.length ? supabaseAdmin.from('User').select('id, profile_picture_url, created_at').in('id', userIds) : { data: [] },
     userNames(userIds),
+    loadChatPeople(userIds),
     verifiedUserIds(userIds),
     planService.requesterStats(viewer.id, userIds),
     planService.mutualConnectionCounts(viewer.id, userIds),
@@ -842,7 +981,7 @@ async function listRequests(user, postId) {
       user: {
         user_id: id,
         display_name: names.get(id) || 'A neighbor',
-        avatar_url: row?.profile_picture_url || null,
+        avatar_url: planService.avatarUrl(planService.withLocalAvatar(row || { id }, people)),
         verified_address: verified.has(id),
         distance_band: r.distance_band || null,
         plans_joined: stat.plans_joined,
@@ -905,12 +1044,12 @@ async function decide(user, postId, requestId, action, body = {}, { io = null } 
   } else if (action === 'remove') {
     if (request.status !== 'removed') {
       if (request.status !== 'accepted') fail(409, 'not_in', 'This person isn’t in the plan.');
+      await leaveChat(plan, request.user_id, { io, message: "We couldn't remove them from the plan. Please try again." });
       const { data: moved, error } = await supabaseAdmin.from('PlanRequest')
         .update({ status: 'removed', decided_by: 'host', decided_at: stamp, updated_at: stamp })
         .eq('id', request.id).eq('status', 'accepted').select('id');
       if (error) throw new Error(`Failed to remove: ${error.message}`);
       if (moved && moved.length > 0) {
-        await planChat.removeMember(plan.chat_room_id, request.user_id, { io });
         await planNotify.declined({ plan, request, hostFirst });
         await offerOpenSpots(plan, { io });
       }
@@ -939,8 +1078,9 @@ async function onMyWay(user, postId) {
   const state = rules.planState(plan, plan.post.event_date, plan.post.event_end_date);
   if (state === 'ended' || state === 'cancelled') fail(409, 'ended', 'This plan is over.');
   if (!mine.on_my_way_at) {
-    const { data: changed } = await supabaseAdmin.from('PlanRequest')
+    const { data: changed, error } = await supabaseAdmin.from('PlanRequest')
       .update({ on_my_way_at: nowIso(), updated_at: nowIso() }).eq('id', mine.id).is('on_my_way_at', null).select('id');
+    if (error) throw new Error(`Failed to say you're on the way: ${error.message}`);
     if (changed && changed.length > 0 && plan.chat_room_id) {
       const names = await userNames([viewer.id]);
       await planChat.systemLine(plan.chat_room_id, viewer.id, `${firstOf(names.get(viewer.id))} is on the way`);
@@ -955,7 +1095,8 @@ async function stillComing(user, postId, { coming }, { io = null } = {}) {
   await loadVisiblePlan(postId, viewer);
   const mine = await myAcceptedRequest(viewer, postId);
   if (!coming) return withdrawMine(user, postId, { io, reason: 'not_coming' });
-  await supabaseAdmin.from('PlanRequest').update({ reconfirmed: true, updated_at: nowIso() }).eq('id', mine.id);
+  const { error } = await supabaseAdmin.from('PlanRequest').update({ reconfirmed: true, updated_at: nowIso() }).eq('id', mine.id);
+  if (error) throw new Error(`Failed to save that you're coming: ${error.message}`);
   return requestResult(postId, viewer, mine.id);
 }
 
@@ -969,9 +1110,10 @@ async function giveFeedback(user, postId, { answer, note }) {
   if (state === 'upcoming') fail(409, 'not_started', 'You can say how it went once it starts.');
   const cleanNote = cleanText(note, 500, 'Your note');
   const first = !mine.feedback;
-  await supabaseAdmin.from('PlanRequest')
+  const { error } = await supabaseAdmin.from('PlanRequest')
     .update({ feedback: answer, feedback_note: cleanNote, feedback_at: nowIso(), updated_at: nowIso() })
     .eq('id', mine.id);
+  if (error) throw new Error(`Failed to save how it went: ${error.message}`);
   if (first && answer !== 'not_right') {
     recordFunnelEvent('plan_attended', { userId: viewer.id, meta: { plan_id: postId, kind: plan.kind, answer } });
   }
@@ -999,6 +1141,7 @@ async function reportPlan(user, postId, { reason, details }) {
 module.exports = {
   PlanError,
   createPlan,
+  previewPlan,
   editPlan,
   cancelPlan,
   askToJoin,
@@ -1013,6 +1156,8 @@ module.exports = {
   enforceCapacity,
   // For the jobs.
   activeRequests,
+  waitingRequests,
   firstOf,
   userNames,
+  partyLabel,
 };

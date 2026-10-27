@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { ArrowLeft, CheckCircle, FileText, RefreshCw, ShieldAlert } from 'lucide-react';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
+import { getEntityTypeConfig } from '@pantopus/types';
 import { formatTimeAgo } from '@pantopus/ui-utils';
 import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
@@ -111,7 +112,7 @@ export default function AdminVerificationPage() {
             </Link>
           </div>
         ) : loading ? (
-          <div className="flex items-center justify-center py-24"><div className="animate-spin h-8 w-8 border-3 border-violet-600 border-t-transparent rounded-full" /></div>
+          <div className="flex items-center justify-center py-24"><div className="animate-spin h-8 w-8 border-2 border-violet-600 border-t-transparent rounded-full" /></div>
         ) : items.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24">
             <CheckCircle className="w-14 h-14 text-emerald-500 mb-4" />
@@ -126,9 +127,19 @@ export default function AdminVerificationPage() {
                   <span className="text-[10px] font-semibold uppercase px-2 py-1 rounded bg-slate-100 text-slate-700">
                     {EVIDENCE_LABELS[item.evidence_type] || item.evidence_type.replace(/_/g, ' ')}
                   </span>
+                  {item.business?.business_type && (
+                    <span className="text-[10px] font-semibold uppercase px-2 py-1 rounded bg-violet-50 text-violet-700">
+                      {getEntityTypeConfig(item.business.business_type).label}
+                    </span>
+                  )}
                   <span className="text-xs text-app-text-muted ml-auto">Submitted {formatTimeAgo(item.created_at)}</span>
                 </div>
                 <p className="text-sm font-medium text-app-text">{businessLabel(item)}</p>
+                {item.fee_on_approval_pct != null && (
+                  <p className="text-xs text-app-text-secondary mt-1">
+                    Approving verifies it as this type and sets its platform fee to {item.fee_on_approval_pct}%.
+                  </p>
+                )}
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   {item.document_url ? (
                     <a

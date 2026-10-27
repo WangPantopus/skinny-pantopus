@@ -12,6 +12,7 @@ import app.pantopus.android.data.api.models.businesses.BusinessUserDetailDto
 import app.pantopus.android.data.api.models.profile.PublicProfileDto
 import app.pantopus.android.data.api.models.profile.PublicProfileReview
 import app.pantopus.android.ui.screens.businesses.MyBusinessesViewModel
+import app.pantopus.android.ui.screens.businesses.create_business.BusinessCategory
 import app.pantopus.android.ui.screens.saved_places.PendingSavePlace
 import app.pantopus.android.ui.theme.PantopusIcon
 import java.time.Duration
@@ -36,16 +37,14 @@ object BusinessProfileMapper {
         detail: BusinessDetailResponse,
         publicResponse: BusinessPublicResponse?,
         reviewsResponse: PublicProfileDto?,
-        now: LocalDateTime = LocalDateTime.now(),
+        now: LocalDateTime? = null,
     ): BusinessProfileContent {
         val business = detail.business
         val profile = detail.profile
-        val primaryLocation =
-            profile?.primaryLocation
-                ?: detail.locations.firstOrNull { it.isPrimary == true }
-                ?: detail.locations.firstOrNull()
+        val primaryLocation = primaryLocation(detail)
 
-        val weekday = now.dayOfWeek.value % 7
+        val businessNow = now ?: businessTime(primaryLocation)
+        val weekday = businessNow.dayOfWeek.value % 7
 
         // Newly claimed = no track record yet (no reviews, no jobs).
         val reviewCount = business.reviewCount ?: reviewsResponse?.reviewCount ?: 0
@@ -65,10 +64,12 @@ object BusinessProfileMapper {
                 // the business's verification, so it never earns the mark on its own.
                 isVerified = MyBusinessesViewModel.isVerified(profile?.identityVerificationTier),
                 logoIcon = null,
+                logoUrl = business.profilePictureUrl,
+                bannerUrl = business.coverPhotoUrl,
             )
 
         val scoped = scopedHours(publicResponse?.hours.orEmpty(), primaryLocation?.id)
-        val status = computeOpenState(scoped, now)
+        val status = computeOpenState(scoped, businessNow)
         val hours = buildHours(scoped, weekday)
 
         val about =
@@ -101,6 +102,16 @@ object BusinessProfileMapper {
             viewerIsOwner = detail.access?.isOwner == true,
             hasPublicPage = publicResponse != null,
         )
+    }
+
+    private fun primaryLocation(detail: BusinessDetailResponse): BusinessLocationDto? =
+        detail.profile?.primaryLocation
+            ?: detail.locations.firstOrNull { it.isPrimary == true }
+            ?: detail.locations.firstOrNull()
+
+    private fun businessTime(location: BusinessLocationDto?): LocalDateTime {
+        val zone = location?.timezone?.let { runCatching { ZoneId.of(it) }.getOrNull() } ?: ZoneId.systemDefault()
+        return LocalDateTime.now(zone)
     }
 
     private fun locality(
@@ -175,7 +186,7 @@ object BusinessProfileMapper {
         categories.take(4).mapIndexed { index, name ->
             BusinessCategoryChip(
                 id = name,
-                label = name,
+                label = BusinessCategory.entries.firstOrNull { it.backendSlug == name }?.label ?: name,
                 icon = categoryIcon(name),
                 accent = if (index == 0) categoryAccent(name) else BusinessCategoryAccent.Neutral,
             )
@@ -237,11 +248,13 @@ object BusinessProfileMapper {
         rows.sortedBy { it.dayOfWeek }.map { row ->
             val dayIndex = row.dayOfWeek.coerceIn(0, 6)
             val isClosed = row.isClosed == true
+            val overnight =
+                minutes(row.closeTime)?.let { close -> minutes(row.openTime)?.let { open -> close < open } } == true
             val time =
                 when {
                     isClosed -> "Closed"
                     row.openTime != null && row.closeTime != null ->
-                        "${formatTime(row.openTime)} – ${formatTime(row.closeTime)}"
+                        "${formatTime(row.openTime)} – ${formatTime(row.closeTime)}" + if (overnight) " (next day)" else ""
                     else -> "—"
                 }
             BusinessHoursRow(
@@ -263,6 +276,7 @@ object BusinessProfileMapper {
         val minutesNow = now.hour * 60 + now.minute
         val byDay = rows.groupBy { it.dayOfWeek.coerceIn(0, 6) }
 
+        overnightCarryover(byDay[(weekday + 6) % 7]?.firstOrNull(), minutesNow)?.let { return it }
         val today = byDay[weekday]?.firstOrNull()
         if (today != null) {
             val state = todayOpenState(today, minutesNow)
@@ -274,6 +288,22 @@ object BusinessProfileMapper {
         return BusinessOpenState(false, "Closed", "Hours vary", "Closed")
     }
 
+    private fun overnightCarryover(
+        previous: BusinessHoursDto?,
+        minutesNow: Int,
+    ): BusinessOpenState? {
+        if (previous == null || previous.isClosed == true) return null
+        val open = minutes(previous.openTime) ?: return null
+        val close = minutes(previous.closeTime) ?: return null
+        if (close >= open || minutesNow >= close) return null
+        return BusinessOpenState(
+            isOpen = true,
+            statusLabel = "Open now",
+            statusDetail = "Closes ${formatTime(previous.closeTime.orEmpty())}",
+            chipLabel = "Open now",
+        )
+    }
+
     private fun todayOpenState(
         today: BusinessHoursDto,
         minutesNow: Int,
@@ -281,11 +311,13 @@ object BusinessProfileMapper {
         if (today.isClosed == true) return null
         val openM = minutes(today.openTime) ?: return null
         val closeM = minutes(today.closeTime) ?: return null
-        if (minutesNow in openM until closeM) {
+        val overnight = closeM < openM
+        val isOpen = if (overnight) minutesNow >= openM else minutesNow in openM until closeM
+        if (isOpen) {
             return BusinessOpenState(
                 isOpen = true,
                 statusLabel = "Open now",
-                statusDetail = "Closes ${formatTime(today.closeTime.orEmpty())}",
+                statusDetail = "Closes ${formatTime(today.closeTime.orEmpty())}" + if (overnight) " tomorrow" else "",
                 chipLabel = "Open now",
             )
         }
@@ -423,12 +455,10 @@ object BusinessProfileMapper {
         }
         val min = item.priceCents
         val max = item.priceMaxCents
+        val unit = item.priceUnit?.takeIf(String::isNotBlank)?.let { "/$it" }.orEmpty()
         return when {
-            min != null && max != null && max > min -> "${formatDollars(min)} – ${formatDollars(max)}"
-            min != null -> {
-                val unit = item.priceUnit?.let { "/$it" } ?: ""
-                "${formatDollars(min)}$unit"
-            }
+            min != null && max != null && max > min -> "${formatDollars(min)} – ${formatDollars(max)}$unit"
+            min != null -> "${formatDollars(min)}$unit"
             item.kind == "donation" -> "Suggested"
             else -> "Contact"
         }
@@ -452,7 +482,7 @@ object BusinessProfileMapper {
             reviewerName = review.reviewerName ?: "Anonymous",
             reviewerAvatarUrl = review.reviewerAvatar,
             rating = review.rating.coerceIn(0, 5),
-            body = review.content.orEmpty(),
+            body = (review.comment ?: review.content).orEmpty(),
             timestamp = relativeTimestamp(review.createdAt),
             verified = false,
         )

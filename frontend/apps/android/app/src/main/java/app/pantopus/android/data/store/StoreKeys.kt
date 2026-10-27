@@ -2,6 +2,7 @@ package app.pantopus.android.data.store
 
 import app.pantopus.android.data.api.models.businesses.MyBusinessesResponse
 import app.pantopus.android.data.api.models.chats.ChatMessagesResponse
+import app.pantopus.android.data.api.models.chats.ConversationTopicsResponse
 import app.pantopus.android.data.api.models.chats.UnifiedConversationsResponse
 import app.pantopus.android.data.api.models.connections.BlockedRelationshipsResponse
 import app.pantopus.android.data.api.models.connections.SentRequestsResponse
@@ -18,6 +19,7 @@ import app.pantopus.android.data.api.models.neighborhood.NeighborhoodMeter
 import app.pantopus.android.data.api.models.notifications.NotificationUnreadCountResponse
 import app.pantopus.android.data.api.models.notifications.NotificationsListResponse
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
+import app.pantopus.android.data.api.models.place.PlacePreview
 import app.pantopus.android.data.api.models.place.PlaceSectionId
 import app.pantopus.android.data.api.models.posts.MyPostsResponse
 import app.pantopus.android.data.api.models.posts.PostDetailResponse
@@ -123,6 +125,15 @@ object StoreKeys {
             type = PlaceIntelligence::class.java,
         )
 
+    /** Public preview shared by the saved-address root and its details. */
+    fun savedPlacePreview(id: String) =
+        StoreKey<PlacePreview>(
+            "api/saved-places/$id/preview",
+            kind = StoreKind.TODAY,
+            topics = setOf(StoreTopics.HOMES, StoreTopics.TODAY, "place:$id"),
+            type = PlacePreview::class.java,
+        )
+
     /** My Homes: one source for every screen that lists the viewer's homes. */
     val myHomes =
         StoreKey<MyHomesResponse>(
@@ -163,11 +174,11 @@ object StoreKeys {
             type = NotificationPreferences::class.java,
         )
 
-    /** Support Trains the viewer organizes or helps with (first page), for My trains and Invitations. */
+    /** All Support Trains the viewer participates in, for My trains and Invitations. */
     val mySupportTrains =
         StoreKey<SupportTrainsListResponse>(
             "api/activities/support-trains/me/support-trains",
-            mapOf("limit" to "20", "offset" to "0"),
+            mapOf("pages" to "all"),
             kind = StoreKind.SUPPORT_TRAINS,
             topics = setOf("supporttrain:*"),
         )
@@ -290,15 +301,17 @@ object StoreKeys {
     fun post(postId: String) =
         StoreKey<PostDetailResponse>("api/posts/$postId", kind = StoreKind.POST, topics = setOf("post:$postId", StoreTopics.POSTS))
 
-    /** Message history is memory only: no Moshi type means these keys can never be saved. */
+    /** The recent message window is saved only through the encrypted, account-scoped chat cache. */
     fun roomMessages(
         roomId: String,
         limit: Int,
+        asBusinessUserId: String? = null,
     ) = StoreKey<ChatMessagesResponse>(
         "api/chat/rooms/$roomId/messages",
-        mapOf("limit" to limit.toString()),
+        mapOf("limit" to limit.toString(), "asBusinessUserId" to asBusinessUserId),
         kind = StoreKind.CONVERSATION,
         topics = setOf("chat:$roomId", StoreTopics.CHATS),
+        type = ChatMessagesResponse::class.java,
     )
 
     fun conversationMessages(
@@ -310,11 +323,21 @@ object StoreKeys {
         mapOf("limit" to limit.toString(), "topicId" to topicId),
         kind = StoreKind.CONVERSATION,
         topics = setOf("chat:*", StoreTopics.CHATS),
+        type = ChatMessagesResponse::class.java,
     )
+
+    /** Topic navigation shares the encrypted history budget and the same account/access lifetime. */
+    fun conversationTopics(otherId: String) =
+        StoreKey<ConversationTopicsResponse>(
+            "api/chat/conversations/$otherId/topics",
+            kind = StoreKind.CONVERSATION,
+            topics = setOf("chat:*", StoreTopics.CHATS),
+            type = ConversationTopicsResponse::class.java,
+        )
 
     /**
      * The Messages list (contract §4 "Messages list"): names, last-message previews and unread counts, fresh for 30
-     * seconds, shared by the Messages tab and its badge. Message history never enters the store (founder decision 7).
+     * seconds, shared by the Messages tab and its badge. Recent message history has a separate encrypted budget.
      */
     val conversations =
         StoreKey<UnifiedConversationsResponse>(

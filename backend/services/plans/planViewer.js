@@ -70,7 +70,8 @@ async function loadHomes(userId) {
     homes.set(String(row.home.id), {
       ...row.home,
       verified: isVerifiedResident({ occupancy: row }),
-      trusted: TRUSTED_OCCUPANCY_STATUSES.includes(row.verification_status),
+      // Probation is provisional without proof (home claims PR 4), so it isn't trusted.
+      trusted: TRUSTED_OCCUPANCY_STATUSES.includes(row.verification_status) && row.verification_source !== 'probation',
     });
   }
   for (const home of owned.data || []) {
@@ -110,12 +111,13 @@ function parseGps(raw) {
  */
 async function loadViewer(user, opts = {}) {
   const userId = String(user.id);
-  const [playdatesFlag, filters, homes, savedPlaces, scopeAccess] = await Promise.all([
+  const [playdatesFlag, filters, homes, savedPlaces, scopeAccess, sportsFlag] = await Promise.all([
     isFeatureEnabled('plans_playdates', user),
     getMuteAndHideFilters(userId),
     loadHomes(userId),
     loadSavedPlaces(userId),
     postScopeAccess(userId),
+    isFeatureEnabled('plans_sports', user),
   ]);
   const gps = parseGps(opts.gps);
   const verified = homes.some((home) => home.verified);
@@ -151,6 +153,8 @@ async function loadViewer(user, opts = {}) {
     // Playdates exist for a viewer only with the flag on and a verified address.
     seesPlaydates: Boolean(playdatesFlag) && verified,
     playdatesFlag: Boolean(playdatesFlag),
+    sportsFlag: Boolean(sportsFlag),
+    sports: filters.sports || {},
     homes,
     savedPlaces,
     gps,

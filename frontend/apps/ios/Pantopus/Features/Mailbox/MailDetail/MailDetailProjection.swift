@@ -26,11 +26,13 @@ extension MailDetailViewModel {
             ?? item.senderAddress
             ?? "Unknown sender"
         let senderMeta = detail.sender.flatMap { MadeUpUsername.handle($0.username) } ?? item.senderAddress
+        let businessLetter = sentAsBusiness(item)
         let senderTypeLabel = senderTypeLabel(
             category: category,
             sender: detail.sender,
             businessName: item.senderBusinessName,
-            senderTrust: item.senderTrust
+            senderTrust: item.senderTrust,
+            sentAsBusiness: businessLetter
         )
         let carrierLine = "via \(carrierLabel(from: detail.object))"
         let referenceLabel = referenceLabel(from: detail.object, itemId: item.id)
@@ -63,7 +65,10 @@ extension MailDetailViewModel {
             senderTypeLabel: senderTypeLabel,
             carrierLine: carrierLine,
             senderInitials: makeInitials(from: senderDisplayName),
-            senderUserId: detail.sender?.id,
+            // A letter sent as a business comes with the business as its sender
+            // (its id, or none on letters stored before it was recorded).
+            senderUserId: businessLetter ? item.senderEntityId ?? detail.sender?.id : detail.sender?.id,
+            senderIsBusiness: businessLetter,
             title: item.displayTitle ?? item.subject ?? "Mail",
             excerpt: item.previewText,
             referenceLabel: referenceLabel,
@@ -115,6 +120,14 @@ extension MailDetailViewModel {
         return "unknown"
     }
 
+    /// The server's `sentAsBusiness` (`backend/utils/mailSenderView.js`): the
+    /// letter names the business it was sent as, or (letters stored before
+    /// that) carries a business name.
+    static func sentAsBusiness(_ item: MailItem) -> Bool {
+        if item.senderEntityId?.isEmpty == false { return true }
+        return item.senderBusinessName?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+    }
+
     static func makeInitials(from name: String) -> String {
         let parts = name.split(separator: " ").prefix(2)
         let result = parts.compactMap { $0.first.map(String.init) }.joined().uppercased()
@@ -161,15 +174,17 @@ extension MailDetailViewModel {
     }
 
     /// "Verified sender" only when the letter's stored `sender_trust` says so;
-    /// the category or a business name alone proves nothing.
+    /// the category or a business name alone proves nothing. A letter sent as
+    /// a business reads as the business's, not a Pantopus user's.
     static func senderTypeLabel(
         category: MailItemCategory,
         sender: MailDetailResponse.MailDetail.Sender?,
         businessName: String?,
-        senderTrust: String?
+        senderTrust: String?,
+        sentAsBusiness: Bool = false
     ) -> String {
-        if sender != nil { return "Pantopus user" }
-        if businessName != nil {
+        if sender != nil, !sentAsBusiness { return "Pantopus user" }
+        if businessName != nil || sentAsBusiness {
             let verified = ["verified_gov", "verified_utility", "verified_business"].contains(senderTrust ?? "")
             return verified ? "Verified sender" : "Business"
         }

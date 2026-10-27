@@ -4,6 +4,18 @@ const { clientIpKey } = require('../utils/clientIpKey');
 
 const isRead = (req) => req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS';
 
+// Visible-message acknowledgements are frequent during a conversation and must
+// not spend the same allowance as sending, editing, or unrelated app actions.
+function chatTrafficKind(req) {
+  const path = String(req.originalUrl || req.url || '').split('?')[0];
+  const id = '[0-9a-fA-F-]{36}';
+  if (req.method === 'POST' && new RegExp(`^/api/chat/(?:rooms|conversations)/${id}/read$`).test(path)) return 'read';
+  if ((req.method === 'POST' && (path === '/api/chat/messages'
+    || new RegExp(`^/api/chat/messages/${id}/react$`).test(path)))
+    || (['PUT', 'DELETE'].includes(req.method) && new RegExp(`^/api/chat/messages/${id}$`).test(path))) return 'message';
+  return null;
+}
+
 /**
  * Whether the request carries sign-in credentials (the app's bearer token, or the web's
  * access or refresh cookie, so a session refresh counts as signed in). Checked before
@@ -62,6 +74,8 @@ function perUserWriteLimit({ name, limit, windowMs, message }) {
 }
 
 const GLOBAL_WRITES = { name: 'writes', limit: 60, windowMs: 60 * 1000, message: 'Too many requests. Please try again shortly.' };
+const CHAT_WRITES = { name: 'chat-writes', limit: 240, windowMs: 60 * 1000, message: 'Too many chat requests. Please try again shortly.' };
+const CHAT_READS = { name: 'chat-reads', limit: 240, windowMs: 60 * 1000, message: 'Too many read updates. Please try again shortly.' };
 const PAYMENT_WRITES = { name: 'payments', limit: 10, windowMs: 60 * 1000, message: 'Too many payment requests. Please try again shortly.' };
 const CONTENT_WRITES = { name: 'content', limit: 20, windowMs: 60 * 1000, message: 'Too many submissions. Please slow down.' };
 const HOME_CREATION = { name: 'home-creation', limit: 5, windowMs: 60 * 60 * 1000, message: 'Too many home creation requests. Please try again later.' };
@@ -71,7 +85,10 @@ const HOME_CREATION = { name: 'home-creation', limit: 5, windowMs: 60 * 60 * 100
  * anonymous, 300 signed in), and 60 a minute per signed-in person in userWriteLimits.
  * Per-route limiters are stricter and still apply on their own routes.
  */
-const globalWriteLimiter = perIpWriteCap({ ...GLOBAL_WRITES, limit: 30 });
+const ordinaryIpWriteLimiter = perIpWriteCap({ ...GLOBAL_WRITES, limit: 30 });
+const chatIpWriteLimiter = perIpWriteCap({ ...CHAT_WRITES, limit: 120 });
+const globalWriteLimiter = (req, res, next) => (chatTrafficKind(req)
+  ? chatIpWriteLimiter(req, res, next) : ordinaryIpWriteLimiter(req, res, next));
 
 /**
  * Stricter limiter for sensitive financial/payment endpoints: 10 writes a minute per person
@@ -104,7 +121,9 @@ const homeCreationLimiter = perIpWriteCap({ ...HOME_CREATION, skip: (req) => !is
  * user is verified; `done` continues the request.
  */
 const USER_WRITE_LIMITS = [
-  { applies: () => true, limiter: perUserWriteLimit(GLOBAL_WRITES) },
+  { applies: (_path, req) => !chatTrafficKind(req), limiter: perUserWriteLimit(GLOBAL_WRITES) },
+  { applies: (_path, req) => chatTrafficKind(req) === 'message', limiter: perUserWriteLimit(CHAT_WRITES) },
+  { applies: (_path, req) => chatTrafficKind(req) === 'read', limiter: perUserWriteLimit(CHAT_READS) },
   { applies: (path) => /^\/api\/(payments|wallet)(\/|$)/.test(path), limiter: perUserWriteLimit(PAYMENT_WRITES) },
   { applies: (path) => /^\/api\/(posts|listings|reviews)(\/|$)/.test(path), limiter: perUserWriteLimit(CONTENT_WRITES) },
   { applies: (path, req) => isHomeCreation(req, path.replace(/^\/api\/homes/, '')), limiter: perUserWriteLimit(HOME_CREATION) },
@@ -233,6 +252,9 @@ const authEndpointLimiter = rateLimit({
  * Limiter for address validation calls (Google + Smarty are billed per call).
  * 10 requests per hour per user.
  */
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
+
 /**
  * Limiter for the geocoding proxy (/api/geo).
  *
@@ -244,21 +266,40 @@ const authEndpointLimiter = rateLimit({
  * /geo/resolve carry the signed-out acquisition funnel (the public /start page
  * and both native launch screens) and cannot require a session.
  *
- * The budget is per hour. A debounced typeahead spends roughly one call per
- * two keystrokes past the 3-character minimum, so entering one address costs
- * ~5-15 calls: a flat 60 locked a signed-in user out after four or five
- * addresses, which the Add Home wizard alone can reach. Signed-in callers are
- * individually accountable and get a realistic budget; anonymous callers share
- * an IP bucket and get a tighter one.
+ * A debounced typeahead spends roughly one call per two keystrokes past the
+ * 3-character minimum, so entering one address costs ~5-15 calls. Signed-out
+ * callers share an IP bucket of 60 calls a day: about four to six typed
+ * addresses, matching the five address lookups a day the preview allows
+ * (placeLookupLimiter). After that the apps take a fully typed address.
+ * Signed-in callers are individually accountable and get 300 an hour: a flat
+ * 60 locked a signed-in user out after four or five addresses, which the Add
+ * Home wizard alone can reach. The hourly Mapbox budget for everyone signed
+ * out together is in services/geo/signedOutBudget.js.
  */
-const geocodeLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  limit: (req) => (req.user?.id ? 300 : 60),
+const signedOutGeocodeLimiter = rateLimit({
+  windowMs: DAY_MS,
+  limit: 60,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
-  keyGenerator: (req) => req.user?.id || clientIpKey(req),
+  keyGenerator: clientIpKey,
+  skip: (req) => Boolean(req.user?.id),
+  message: {
+    error: 'GEO_LOOKUP_LIMIT',
+    message: "You've used today's free address suggestions. Sign in to keep going, or try again tomorrow.",
+  },
+});
+
+const signedInGeocodeLimiter = rateLimit({
+  windowMs: HOUR_MS,
+  limit: 300,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  keyGenerator: (req) => req.user.id,
+  skip: (req) => !req.user?.id,
   message: { error: 'Too many location lookups. Please try again later.' },
 });
+
+const geocodeLimiter = [signedOutGeocodeLimiter, signedInGeocodeLimiter];
 
 const addressValidationLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
@@ -297,11 +338,13 @@ const landlordLeaseLimiter = rateLimit({
 
 /**
  * Limiter for AI chat agent (streaming).
- * 20 requests per hour per user — LLM calls are expensive.
+ * 40 requests per hour per user: the Ask buttons on each tab make a few quick
+ * turns in a row normal. The daily budget per person and the global cap
+ * (services/ai/assistantBudget.js) bound the spend across servers.
  */
 const aiChatLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  limit: 20,
+  limit: 40,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   keyGenerator: (req) => req.user?.id || clientIpKey(req),
@@ -333,6 +376,72 @@ const previewLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: clientIpKey,
   message: { error: 'Too many preview requests. Please try again shortly.' },
+});
+
+/**
+ * Address lookups on the Place launch screen (GET /api/public/place): five a
+ * day per account when signed in, else per network (IP, IPv6 by /64). People
+ * look up their own home, and the suggestions make mistakes rare; the window
+ * is a day rather than a lifetime because networks are shared (households,
+ * carrier NAT: the API has no IPv6 address) and a lifetime count would need a
+ * stored record of every network, which the preview promises not to keep.
+ *
+ * Only lookups that cost money count. The route marks a person's own repeat of
+ * an address within ten minutes free (`req.placeLookup.free`; the geocode is
+ * still cached) and refunds lookups the geocoder never answered or the hourly
+ * budget refused. A refund comes from the route, not `skipFailedRequests`,
+ * which also refunds when the client hangs up: a script could abort every
+ * request after the geocode started and never be counted.
+ *
+ * Share-card renders are the card's viewers (link-preview crawlers), not the
+ * visitor's lookups, so they have their own hourly budget (shareCardRenderLimiter).
+ */
+const placeLookupStore = new rateLimit.MemoryStore();
+
+/** Whose allowance a lookup spends: the account when signed in, else the network. */
+const placeLookupKey = (req) => (req.user?.id ? `user:${req.user.id}` : `ip:${clientIpKey(req)}`);
+
+const placeLookupLimiter = rateLimit({
+  windowMs: DAY_MS,
+  limit: 5,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  store: placeLookupStore,
+  keyGenerator: placeLookupKey,
+  skip: (req) => Boolean(req.placeLookup?.free),
+  message: (req) => ({
+    error: 'PLACE_LOOKUP_LIMIT',
+    message: req.user?.id
+      ? "You've looked up a lot of addresses today. Please try again tomorrow."
+      : "You've used today's free address lookups. Create a free account to keep going, or try again tomorrow.",
+  }),
+});
+
+/** Give back a counted lookup that cost nothing. */
+placeLookupLimiter.refund = (req) => placeLookupStore.decrement(placeLookupKey(req));
+
+/** Forget every allowance (tests start each case from a fresh day). */
+placeLookupLimiter.resetAll = () => placeLookupStore.resetAll();
+
+/**
+ * Share-card images (web /api/og/place) render the address preview for
+ * whoever fetches the image, usually a link-preview crawler on a shared
+ * address, so they don't spend a visitor's daily lookups. They share one
+ * hourly budget instead (GEO_OG_HOURLY_RENDERS, default 100); their Mapbox
+ * calls also count in the signed-out hourly budget. Over it, the card renders
+ * without the preview.
+ */
+const shareCardRenderLimiter = rateLimit({
+  windowMs: HOUR_MS,
+  limit: () => {
+    const n = Number.parseInt(process.env.GEO_OG_HOURLY_RENDERS, 10);
+    return Number.isInteger(n) && n > 0 ? n : 100;
+  },
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  keyGenerator: () => 'share-card',
+  skip: (req) => !req.placeLookup?.shareCard,
+  message: { error: 'SHARE_CARD_BUSY', message: 'Share cards are busy right now. Please try again in a few minutes.' },
 });
 
 /**
@@ -472,6 +581,9 @@ module.exports = {
   aiChatLimiter,
   aiDraftLimiter,
   previewLimiter,
+  placeLookupKey,
+  placeLookupLimiter,
+  shareCardRenderLimiter,
   supportTrainWriteLimiter,
   supportTrainDraftLimiter,
   personaFollowLimiter,

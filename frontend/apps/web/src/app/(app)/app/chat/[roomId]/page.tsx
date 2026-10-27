@@ -3,6 +3,7 @@
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import ChatRoomView from '@/components/chat/ChatRoomView';
+import { safeRedirectPath } from '@/lib/auth-utils';
 
 export default function ChatRoomPage() {
   const params = useParams();
@@ -10,7 +11,10 @@ export default function ChatRoomPage() {
   const router = useRouter();
   const roomId = String(params.roomId || '');
   const asBusinessUserId = searchParams.get('asBusinessUserId') || undefined;
-  const returnTo = searchParams.get('returnTo') || '/app/chat';
+  // Back goes here, and anyone can put anything in a link: only our own pages
+  // (a `javascript:` value would run in this page, `//host` would leave the site).
+  const returnTo = safeRedirectPath(searchParams.get('returnTo'), '/app/chat');
+  const messageId = searchParams.get('message') || undefined;
 
   useEffect(() => {
     if (!roomId) router.replace('/app/chat');
@@ -23,6 +27,8 @@ export default function ChatRoomPage() {
       roomId={roomId}
       asBusinessUserId={asBusinessUserId}
       returnTo={returnTo}
+      initialMessageId={messageId}
+      key={messageId || 'latest'}
     />
   );
 }

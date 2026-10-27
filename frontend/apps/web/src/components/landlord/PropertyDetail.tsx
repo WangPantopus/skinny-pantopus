@@ -105,7 +105,7 @@ export default function PropertyDetail({ homeId }: Props) {
     return (
       <div className="max-w-5xl mx-auto px-4 py-6">
         <div className="flex flex-col items-center justify-center py-16">
-          <div className="w-10 h-10 border-3 border-app-border border-t-primary-500 rounded-full animate-spin" />
+          <div className="w-10 h-10 border-2 border-app-border border-t-primary-500 rounded-full animate-spin" />
           <p className="text-sm text-app-text-secondary mt-4">Loading property...</p>
         </div>
       </div>
@@ -131,6 +131,7 @@ export default function PropertyDetail({ homeId }: Props) {
   }
 
   const { home, units, leases, pending_requests, occupants, authority } = detail;
+  const homeNames = Object.fromEntries([home, ...units].map((item) => [item.id, item.name || 'Unnamed property']));
   const tierConfig = TIER_CONFIG[authority?.verification_tier || 'weak'] || TIER_CONFIG.weak;
 
   return (
@@ -212,6 +213,7 @@ export default function PropertyDetail({ homeId }: Props) {
         {tab === 'requests' && (
           <RequestsTab
             homeId={homeId}
+            homeNames={homeNames}
             authorityId={authority?.id || ''}
             requests={pending_requests as landlord.TenantRequest[]}
             onRefresh={refreshCurrent}
@@ -221,6 +223,7 @@ export default function PropertyDetail({ homeId }: Props) {
         {tab === 'leases' && (
           <LeasesTab
             homeId={homeId}
+            homeNames={homeNames}
             leases={leases}
             onRefresh={refreshCurrent}
             isCurrent={isCurrent}

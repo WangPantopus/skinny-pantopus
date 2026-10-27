@@ -4,6 +4,7 @@
 // ============================================================
 
 import apiClient, { get, del } from '../client';
+import type { OwnLocalProfile } from './localProfiles';
 import { assertHomeTaskSession, taskSessionHeaders, rethrowTaskSessionError, type HomeTaskSessionScope } from '../taskSessionScope';
 
 /**
@@ -119,6 +120,20 @@ export async function uploadProfilePicture(file: File | any): Promise<{
   await appendMultipartFile(formData, 'file', file, 'profile', 'image/jpeg');
 
   const response = await apiClient.post('/api/upload/profile-picture', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return response.data;
+}
+
+/**
+ * Upload the photo neighbors see (How neighbors see you): it goes on your Local Profile only, never your account.
+ * Answers like localProfiles.getMyLocalProfile, plus the photo's `url`.
+ */
+export async function uploadLocalProfilePicture(file: File | any): Promise<OwnLocalProfile & { url: string }> {
+  const formData = new FormData();
+  await appendMultipartFile(formData, 'file', file, 'profile', 'image/jpeg');
+
+  const response = await apiClient.post('/api/upload/local-profile-picture', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
   return response.data;
@@ -564,7 +579,8 @@ export async function uploadMailAttachments(
 
 /**
  * Upload images for AI assistant chat.
- * Returns public URLs to pass to the AI chat endpoint.
+ * Returns a private reference for each (`url`, `ai-photo:<name>`, not an address to open) to pass
+ * to the AI chat endpoint; the server deletes the photo once it has read it.
  */
 export async function uploadAIMedia(
   files: any[]
@@ -572,7 +588,6 @@ export async function uploadAIMedia(
   message: string;
   images: Array<{
     url: string;
-    key: string;
     name: string;
     mime_type: string;
     size: number;

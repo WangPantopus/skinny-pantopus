@@ -208,10 +208,6 @@ class StartSupportTrainViewModel
 
         // ─── Step 3 actions ─────────────────────────────────────────────
 
-        fun toggleAllowComments(value: Boolean) {
-            _form.value = _form.value.copy(allowComments = value)
-        }
-
         fun selectVisibility(value: StartSupportTrainVisibility) {
             _form.value =
                 _form.value.copy(

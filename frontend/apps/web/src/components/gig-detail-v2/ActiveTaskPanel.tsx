@@ -33,6 +33,8 @@ interface ActiveTaskPanelProps {
   currentUserId: string;
   gig: any;
   isOwner: boolean;
+  /** The owner manages the task as the business that posted it (its owner or staff), not as the poster. */
+  asBusiness?: boolean;
   isWorker: boolean;
   socket: Socket | null;
   onOpenChat: () => void;
@@ -81,6 +83,7 @@ export default function ActiveTaskPanel({
   currentUserId,
   gig,
   isOwner,
+  asBusiness = false,
   isWorker,
   socket,
   onOpenChat,
@@ -234,14 +237,15 @@ export default function ActiveTaskPanel({
 
   if (!session.active) return null;
 
-  // User info
+  // User info: the task names both people by their Local Profile (displayName, handle, avatarUrl), a business as the
+  // business; older payloads' account keys stay as fallbacks.
   const worker = gig.acceptedBy || gig.accepted_by_user;
-  const workerName = worker?.name || chosenUsername(worker?.username) || 'Helper';
-  const workerAvatar = worker?.profile_picture_url || null;
+  const workerName = worker?.displayName || worker?.name || chosenUsername(worker?.handle || worker?.username) || 'Helper';
+  const workerAvatar = worker?.avatarUrl || worker?.profile_picture_url || null;
   const workerRating = worker?.average_rating;
 
   const poster = gig.creator || gig.user || gig.poster;
-  const posterName = poster?.name || chosenUsername(poster?.username) || 'Poster';
+  const posterName = poster?.displayName || poster?.name || chosenUsername(poster?.handle || poster?.username) || 'Poster';
 
   const badge = getStatusBadge(fulfillmentStatus);
   const currentStepIndex = fulfillmentStatus
@@ -408,8 +412,9 @@ export default function ActiveTaskPanel({
               </button>
             )}
 
-          {/* Poster buttons */}
-          {isOwner && isUrgent && fulfillmentStatus === 'arrived' && (
+          {/* Poster buttons. The urgent status update is the poster's or the worker's (the API answers 403 to a
+              business's team members). */}
+          {isOwner && !asBusiness && isUrgent && fulfillmentStatus === 'arrived' && (
             <button
               onClick={() => updateStatus('in_progress')}
               className="w-full flex items-center justify-center gap-2 py-3.5 border border-emerald-600 text-emerald-600 rounded-lg font-semibold hover:bg-emerald-50 transition"

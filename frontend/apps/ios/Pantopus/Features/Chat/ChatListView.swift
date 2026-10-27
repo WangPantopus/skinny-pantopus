@@ -46,8 +46,14 @@ public struct ChatListView: View {
         .background(Theme.Color.appSurface)
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .refreshFailureToast($viewModel.refreshFailureMessage)
-        .task { await viewModel.load() }
-        .refreshesOnStoreChange(affects: { $0.names(topic: ScreenTopic.chats, kind: .messagesList) }, perform: { await viewModel.load() })
+        .task {
+            ChatPerformance.signposter.emitEvent("InboxLoad")
+            await viewModel.load()
+        }
+        .refreshesOnStoreChange(
+            affects: { $0.names(topic: ScreenTopic.chats, kind: .messagesList) },
+            perform: { viewModel.refreshAfterChange() }
+        )
         .onDisappear { viewModel.teardown() }
         .accessibilityIdentifier("chatList")
     }
@@ -148,9 +154,27 @@ public struct ChatListView: View {
                 if let filter = viewModel.emptyFilter {
                     filterEmptyLine(filter)
                 }
+                if let cursor = viewModel.nextPageCursor {
+                    Button {
+                        Task { await viewModel.loadMore() }
+                    } label: {
+                        if viewModel.isLoadingMore {
+                            ProgressView()
+                        } else {
+                            Text("Load more conversations")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundStyle(Theme.Color.primaryInk)
+                        }
+                    }
+                    .frame(minHeight: 44)
+                    .disabled(viewModel.isLoadingMore)
+                    .task(id: cursor) { await viewModel.loadMore() }
+                    .accessibilityIdentifier("chatListLoadMore")
+                }
             }
         }
         .refreshable { await viewModel.refresh() }
+        .onAppear { ChatPerformance.mark("InboxRows", rows: rows.count) }
         .accessibilityIdentifier("chatListContent")
     }
 
@@ -243,9 +267,13 @@ private struct ChatListTopBar: View {
             .buttonStyle(.plain)
             .accessibilityLabel("New message")
             .accessibilityIdentifier("chatListComposeButton")
+            // The side menu, on every tab (founder decision 2026-10-20).
+            NavigationMenuButton(accessibilityIdentifier: "messages.menu")
         }
-        .padding(.horizontal, Spacing.s4)
-        .padding(.vertical, 10)
+        .padding(.leading, Spacing.s4)
+        .padding(.trailing, Spacing.s2)
+        // The menu button's 44 points keep the bar's height with 6 above and below.
+        .padding(.vertical, 6)
         .background(Theme.Color.appSurface)
     }
 }

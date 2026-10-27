@@ -1,14 +1,21 @@
 'use client';
 
-import React, { useState } from 'react';
+import Link from 'next/link';
+import React, { useEffect, useRef, useState } from 'react';
+import { Copy, MoreHorizontal, Reply, Pencil, Trash2 } from 'lucide-react';
 import type { ChatMessage } from '@pantopus/types';
 import { chatPersonAvatar, chatPersonHandle, chatPersonName, extractAttachments, resolveMessageType } from '../../hooks/useChatMessages';
 import ChatRichCard from './ChatRichCard';
+import ImageLightbox from './ImageLightbox';
+import { PostLinkContent } from '../feed/LinkPreviewCard';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import MessageReactionBar from './MessageReactionBar';
 import QuickReactionPicker from './QuickReactionPicker';
 import EmojiPickerPopover from './EmojiPickerPopover';
+import MessageActionMenu from './MessageActionMenu';
+import type { MessageAction } from './MessageActionMenu';
 import { launchFeatures } from '@/lib/featureFlags';
+import { useChatMedia } from '@/hooks/useChatMedia';
 
 const EMOJI_ONLY_REGEX = /^(\p{Emoji_Presentation}|\p{Emoji}\uFE0F|\p{Emoji_Modifier_Base}\p{Emoji_Modifier}?){1,5}$/u;
 function isEmojiOnly(text?: string): boolean {
@@ -20,36 +27,102 @@ function isEmojiOnly(text?: string): boolean {
 
 export type { ChatMessage };
 
+/** The message a reply answers, as its quote shows it. */
+export interface ChatReplyQuote {
+  senderName: string;
+  text: string;
+  href?: string;
+}
+
 interface ChatMessageBubbleProps {
+  currentUserId?: string | null;
   msg: ChatMessage;
   isMine: boolean;
   showSender?: boolean;
-  onImageClick?: (url: string, title?: string) => void;
+  /** Set when this message replies to one that is loaded. */
+  reply?: ChatReplyQuote;
+  onImageClick?: (url: string, title?: string, roomId?: string, messageId?: string) => void;
   onReact?: (messageId: string, emoji: string) => void;
   onRetry?: (messageId: string) => void;
+  onRemovePending?: (messageId: string) => void;
+  /** Picked from the message's actions menu: the composer replies to this message. */
+  onReply?: (msg: ChatMessage) => void;
+  onEdit?: (msg: ChatMessage) => void;
+  onDelete?: (msg: ChatMessage) => void;
 }
 
-function ChatMessageBubble({ msg, isMine, showSender = false, onImageClick, onReact, onRetry }: ChatMessageBubbleProps) {
+// The actions menu's size (its row of quick reactions sets the width), to keep it on screen next to its button.
+const MENU_WIDTH = 304;
+
+/** Only private chat files support this bounded, authorization-checked preview. */
+function chatImagePreview(url: string): string {
+  try {
+    const parsed = new URL(url, 'https://pantopus.invalid');
+    if (!/^\/api\/chat\/files\/[a-f0-9-]+$/i.test(parsed.pathname)) return url;
+    parsed.searchParams.set('variant', 'thumbnail');
+    return url.startsWith('/') ? `${parsed.pathname}${parsed.search}${parsed.hash}` : parsed.href;
+  } catch { return url; }
+}
+
+
+function ChatImage({ url, accountId, roomId, messageId, alt }: { url: string; accountId?: string | null; roomId: string; messageId: string; alt: string }) {
+  const media = useChatMedia(chatImagePreview(url), accountId, roomId, messageId);
+  if (!media.url) return <span role="status" className="block p-3 text-xs">{media.loading ? 'Loading photo…' : 'Photo unavailable. Open to retry.'}</span>;
+  return <img src={media.url} onError={media.rejectMedia} alt={alt} className="rounded-lg transition-opacity hover:opacity-90"
+    loading="lazy" decoding="async" style={{ width: 'auto', height: 'auto', maxWidth: '100%', maxHeight: 'min(180px, 48vw)', objectFit: 'contain' }} />;
+}
+
+/** Videos play from the server and are never saved on this device. One that
+ * can't load (offline, or its file is gone) says so over the player, at the
+ * player's size, instead of looking playable; reconnecting loads it again. */
+function ChatVideo({ url, label }: { url: string; label: string }) {
+  const video = useRef<HTMLVideoElement>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    if (!failed) return;
+    const retry = () => { setFailed(false); video.current?.load(); };
+    window.addEventListener('online', retry);
+    return () => window.removeEventListener('online', retry);
+  }, [failed]);
+  return (
+    <div className="relative" style={{ width: 'min(100%, 280px)' }}>
+      <video ref={video} src={url} controls playsInline preload="metadata" aria-label={label} onError={() => setFailed(true)}
+        className="block w-full rounded-lg bg-black" style={{ maxHeight: 'min(220px, 56vw)' }} />
+      {failed && (
+        <span role="status" className="absolute inset-0 flex flex-col items-center justify-center gap-1 rounded-lg bg-black/70 p-3 text-center text-xs text-white">
+          {navigator.onLine ? 'Video unavailable.' : 'Video unavailable offline.'}
+          <button type="button" className="underline" onClick={() => { setFailed(false); video.current?.load(); }}>Retry</button>
+        </span>
+      )}
+    </div>
+  );
+}
+
+function ChatMessageBubble({ msg, currentUserId, isMine, showSender = false, reply, onImageClick, onReact, onRetry, onRemovePending, onReply, onEdit, onDelete }: ChatMessageBubbleProps) {
+  const [preview, setPreview] = useState<{ url: string; title?: string; mimeType?: string; liveUrl?: string } | null>(null);
   const [hovered, setHovered] = useState(false);
   const [showQuickPicker, setShowQuickPicker] = useState(false);
   const [showFullPicker, setShowFullPicker] = useState(false);
+  const [menuAt, setMenuAt] = useState<{ top: number; left: number } | null>(null);
 
   const who = chatPersonName(msg.sender) || 'Someone';
   const ts = msg.created_at
     ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : '';
   const msgText = msg.message_text || msg.message || msg.content || '';
-  const attachments = extractAttachments(msg);
+  const allAttachments = extractAttachments(msg);
+  const attachments = allAttachments.filter(a => !(a.id && a.live_photo_file_id && allAttachments.some(still => still.id && still.live_video_file_id === a.id && a.live_photo_file_id === still.id)));
   const metadata = msg.metadata || {};
   const msgType = resolveMessageType(msg);
   const isOptimistic = msg._optimistic;
   const isFailed = msg._failed;
   const isRefused = msg._refused;
+  const pending = msg as ChatMessage & { _queued?: boolean; _outbox?: boolean; _error?: string; _replyRoomHref?: string; _canRetryReply?: boolean };
+  const receipt = isMine ? ((msg as ChatMessage & { read_at?: string }).read_at ? 'Read' : 'Sent') : null;
   // Launch cut #3 (Marketplace): a shared listing card is not shown.
   if (msgType === 'listing_offer' && !launchFeatures.marketplace) return null;
 
   const isEdited = msg.edited || msg.is_edited;
-  const replyMeta = msg.reply_to_id ? (metadata as Record<string, any>)?.replyContext : null;
 
   // Text the server fills in for a message that is only attachments ("Photo",
   // "Document"), or an older client's "[1 attachment]"; not a caption.
@@ -84,6 +157,52 @@ function ChatMessageBubble({ msg, isMine, showSender = false, onImageClick, onRe
     </button>
   );
 
+  // Reply and Copy text, in the menu the message's actions button opens (with quick reactions on top).
+  const menuActions: MessageAction[] = [
+    ...(onReply ? [{ key: 'reply', label: 'Reply', icon: Reply }] : []),
+    ...(showText ? [{ key: 'copy', label: 'Copy text', icon: Copy }] : []),
+    ...(isMine && showText && onEdit && !['location', 'gig_offer', 'listing_offer'].includes(msgType) ? [{ key: 'edit', label: 'Edit', icon: Pencil }] : []),
+    ...(isMine && onDelete ? [{ key: 'delete', label: 'Delete', icon: Trash2, destructive: true }] : []),
+  ];
+  const openMenu = (e: React.MouseEvent<HTMLButtonElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const left = Math.max(8, Math.min(isMine ? rect.right - MENU_WIDTH : rect.left, window.innerWidth - MENU_WIDTH - 8));
+    const MENU_HEIGHT = 68 + menuActions.length * 40;
+    const top = rect.bottom + 4 + MENU_HEIGHT > window.innerHeight ? Math.max(8, rect.top - 4 - MENU_HEIGHT) : rect.bottom + 4;
+    setMenuAt({ top, left });
+  };
+  const handleMenuAction = (key: string) => {
+    if (key === 'reply') onReply?.(msg);
+    else if (key === 'edit') onEdit?.(msg);
+    else if (key === 'delete') onDelete?.(msg);
+    else if (key === 'copy') void navigator.clipboard?.writeText(msgText).catch(() => {});
+    else if (key === 'emoji_picker') setShowFullPicker(true);
+  };
+  const actionsTrigger = !isOptimistic && !isFailed && onReact && menuActions.length > 0 && (
+    <button
+      type="button"
+      onClick={openMenu}
+      aria-label="Message actions"
+      aria-haspopup="menu"
+      aria-expanded={menuAt !== null}
+      className={`absolute ${isMine ? '-left-16' : '-right-16'} top-0 w-7 h-7 flex items-center justify-center rounded-full bg-surface border border-app shadow-sm hover:bg-surface-muted transition-all focus-visible:opacity-100 focus-visible:scale-100 ${
+        hovered || menuAt ? 'opacity-100 scale-100' : 'opacity-0 scale-90'
+      }`}
+    >
+      <MoreHorizontal className="w-4 h-4 text-app-text-secondary" aria-hidden />
+    </button>
+  );
+  const actionsMenu = actionsTrigger && (
+    <MessageActionMenu
+      open={menuAt !== null}
+      onClose={() => setMenuAt(null)}
+      onAction={handleMenuAction}
+      onReact={(emoji) => onReact?.(msg.id, emoji)}
+      actions={menuActions}
+      anchorPosition={menuAt ?? undefined}
+    />
+  );
+
   const reactionOverlays = (showQuickPicker || showFullPicker) && (
     <div className={`absolute ${isMine ? 'right-0' : 'left-0'} bottom-full mb-1 z-20`}>
       {showFullPicker ? (
@@ -106,10 +225,54 @@ function ChatMessageBubble({ msg, isMine, showSender = false, onImageClick, onRe
     </div>
   );
 
+  const renderReply = (insideBubble = false) => {
+    if (!reply) return null;
+    const onPrimary = insideBubble && isMine;
+    return <div className={`border-l-[3px] rounded px-2 py-1 mb-1.5 text-xs ${
+      onPrimary ? 'border-white/50 bg-white/15' : 'border-primary-500 bg-primary-500/[0.08]'
+    }`}>
+      <div className={`font-semibold ${onPrimary ? 'text-white/90' : 'text-primary-600'}`}>{reply.senderName}</div>
+      <div className={`line-clamp-2 ${onPrimary ? 'text-white/70' : 'text-app-muted'}`}>{reply.text}</div>
+      {reply.href && <Link href={reply.href} prefetch={false} className="underline">Open original message</Link>}
+    </div>;
+  };
+
+  const deliveryStatus = (
+    <>
+      {isFailed && isRefused ? (
+        <span className="text-red-500">Not sent{' '}
+          {pending._canRetryReply && onRetry && <button type="button" className="underline hover:text-red-600 cursor-pointer"
+            onClick={() => onRetry(msg.id)}>Retry</button>}
+        </span>
+      ) : isFailed ? (
+        <span className="text-red-500">
+          Failed to send{' '}
+          {onRetry && (
+            <button
+              type="button"
+              className="underline hover:text-red-600 cursor-pointer"
+              onClick={() => onRetry(msg.id)}
+            >
+              Retry
+            </button>
+          )}
+        </span>
+      ) : isOptimistic ? (pending._queued ? 'Queued' : 'Sending…') : <>{isEdited && <span>edited · </span>}{ts}{receipt && ` · ${receipt}`}</>}
+      {pending._outbox && (isFailed || pending._queued) && onRemovePending && (
+        <button type="button" className="ml-2 underline" onClick={() => onRemovePending(msg.id)}>Remove</button>
+      )}
+      {(isFailed || pending._queued && pending._replyRoomHref) && pending._error && (
+        <div className="text-red-500">{pending._error}
+          {pending._replyRoomHref && <Link href={pending._replyRoomHref} className="ml-1 underline">Open original conversation</Link>}
+        </div>
+      )}
+    </>
+  );
+
   // Rich card types get a special rendering
   if (msgType === 'location' || msgType === 'gig_offer' || msgType === 'listing_offer') {
     return (
-      <div className={`flex mb-1 ${isMine ? 'justify-end' : 'justify-start'}`}>
+      <div data-chat-message-id={msg.id} className={`flex mb-1 ${isMine ? 'justify-end' : 'justify-start'}`}>
         <div
           className={`max-w-[75%] ${isMine ? 'order-1' : ''} relative`}
           onMouseEnter={() => setHovered(true)}
@@ -128,13 +291,16 @@ function ChatMessageBubble({ msg, isMine, showSender = false, onImageClick, onRe
           )}
           <div className="relative">
             {reactionTrigger}
+            {actionsTrigger}
             {reactionOverlays}
+            {renderReply()}
             <ChatRichCard msgType={msgType} metadata={metadata} msgText={msgText} isMine={isMine} />
           </div>
           <div className={`text-[10px] text-app-muted mt-0.5 ${isMine ? 'text-right mr-1' : 'ml-1'}`}>
-            {isEdited && <span>edited · </span>}{ts}
+            {deliveryStatus}
           </div>
           {reactionBar}
+          {actionsMenu}
         </div>
       </div>
     );
@@ -145,7 +311,7 @@ function ChatMessageBubble({ msg, isMine, showSender = false, onImageClick, onRe
 
   // Standard text + attachment message
   return (
-    <div className={`flex mb-1 ${isMine ? 'justify-end' : 'justify-start'}`}>
+    <div data-chat-message-id={msg.id} className={`flex mb-1 ${isMine ? 'justify-end' : 'justify-start'}`}>
       <div
         className={`max-w-[75%] ${isMine ? 'order-1' : ''} relative`}
         onMouseEnter={() => setHovered(true)}
@@ -164,11 +330,12 @@ function ChatMessageBubble({ msg, isMine, showSender = false, onImageClick, onRe
           )}
         <div className="relative">
           {reactionTrigger}
+          {actionsTrigger}
           {reactionOverlays}
           {emojiOnly ? (
-            <div className={`text-4xl leading-snug ${isOptimistic ? 'opacity-60' : ''} ${isFailed ? 'opacity-70 ring-1 ring-red-400' : ''}`}>
+            <>{renderReply()}<div className={`text-4xl leading-snug ${isOptimistic ? 'opacity-60' : ''} ${isFailed ? 'opacity-70 ring-1 ring-red-400' : ''}`}>
               {msgText}
-            </div>
+            </div></>
           ) : (
           <div
             className={`px-3.5 py-2 rounded-2xl text-sm whitespace-pre-wrap ${
@@ -177,74 +344,46 @@ function ChatMessageBubble({ msg, isMine, showSender = false, onImageClick, onRe
                 : 'bg-surface text-app border border-app rounded-bl-md'
             } ${isOptimistic ? 'opacity-60' : ''} ${isFailed ? 'opacity-70 ring-1 ring-red-400' : ''}`}
           >
-            {replyMeta && (
-              <div className={`border-l-[3px] rounded px-2 py-1 mb-1.5 text-xs ${
-                isMine
-                  ? 'border-white/50 bg-white/15'
-                  : 'border-primary-500 bg-primary-500/[0.08]'
-              }`}>
-                <div className={`font-semibold ${isMine ? 'text-white/90' : 'text-primary-600'}`}>
-                  {(replyMeta as Record<string, any>).senderName || 'Message'}
-                </div>
-                <div className={`line-clamp-2 ${isMine ? 'text-white/70' : 'text-app-muted'}`}>
-                  {(replyMeta as Record<string, any>).text || ''}
-                </div>
-              </div>
-            )}
-            {showText && msgText}
+            {renderReply(true)}
+            {showText && <span className="[&_a]:text-inherit"><PostLinkContent content={msgText} /></span>}
             {attachments.length > 0 && (
               <div className={`${showText ? 'mt-2' : ''} space-y-2`}>
                 {attachments.map((a: Record<string, any>, i: number) => {
                   const mime = String(a?.mime_type || '');
                   const isImage = mime.startsWith('image/');
                   const url = a?.file_url as string | undefined;
+                  const live = a.id && a.live_video_file_id
+                    ? allAttachments.find(clip => clip.id === a.live_video_file_id && clip.live_photo_file_id === a.id)
+                    : undefined;
+                  if (mime === 'application/pdf' && url) {
+                    return <button key={`${msg.id}-att-${i}`} type="button" className="block rounded-lg border p-3 text-left"
+                      onClick={() => setPreview({ url, title: a.original_filename, mimeType: mime })}>
+                      PDF · {a.original_filename || 'Tap to read'}
+                    </button>;
+                  }
                   if (isImage && url) {
                     return (
                       <button
                         key={`${msg.id}-att-${i}`}
                         type="button"
-                        onClick={() => onImageClick ? onImageClick(url, a.original_filename) : window.open(url, '_blank')}
+                        onClick={() => live || !onImageClick ? setPreview({ url, title: a.original_filename, liveUrl: live?.file_url }) : onImageClick(url, a.original_filename, msg.room_id, msg.id)}
                         className={`block max-w-[min(100%,240px)] overflow-hidden rounded-lg text-left ${
                           isMine ? 'bg-primary-700/40' : 'bg-black/[0.06]'
                         }`}
                       >
-                        {/* Native img: user URLs + cookies on /api/chat/files/; avoids next/image dev sizing warnings. */}
-                        <img
-                          src={url}
-                          alt={showText ? `Photo: ${msgText}` : 'Photo'}
-                          className="rounded-lg transition-opacity hover:opacity-90"
-                          loading="lazy"
-                          decoding="async"
-                          style={{
-                            width: 'auto',
-                            height: 'auto',
-                            maxWidth: '100%',
-                            maxHeight: 'min(180px, 48vw)',
-                            objectFit: 'contain',
-                          }}
-                        />
+                        {live && <span className="block px-2 py-1 text-xs">● LIVE</span>}
+                        <ChatImage url={url} accountId={currentUserId} roomId={msg.room_id} messageId={msg.id} alt={showText ? `Photo: ${msgText}` : 'Photo'} />
                       </button>
                     );
                   }
                   if (mime.startsWith('video/') && url) {
-                    return (
-                      <video
-                        key={`${msg.id}-att-${i}`}
-                        src={url}
-                        controls
-                        playsInline
-                        preload="metadata"
-                        aria-label={a.original_filename ? `Video: ${a.original_filename}` : 'Video'}
-                        className="block rounded-lg bg-black"
-                        style={{ width: 'min(100%, 280px)', maxHeight: 'min(220px, 56vw)' }}
-                      />
-                    );
+                    return <ChatVideo key={`${msg.id}-att-${i}`} url={url} label={a.original_filename ? `Video: ${a.original_filename}` : 'Video'} />;
                   }
                   return (
                     <a
                       key={`${msg.id}-att-${i}`}
                       href={url || '#'}
-                      target="_blank"
+                      download={a.original_filename as string || 'attachment'}
                       rel="noopener noreferrer"
                       className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs ${
                         isMine ? 'bg-primary-600 text-blue-100 hover:bg-primary-700' : 'bg-surface-muted text-app-text-strong hover-bg-app'
@@ -262,39 +401,30 @@ function ChatMessageBubble({ msg, isMine, showSender = false, onImageClick, onRe
           )}
         </div>
         <div className={`text-[10px] text-app-muted mt-0.5 ${isMine ? 'text-right mr-1' : 'ml-1'}`}>
-          {isFailed && isRefused ? (
-            <span className="text-red-500">Not sent</span>
-          ) : isFailed ? (
-            <span className="text-red-500">
-              Failed to send{' '}
-              {onRetry && (
-                <button
-                  type="button"
-                  className="underline hover:text-red-600 cursor-pointer"
-                  onClick={() => onRetry(msg.id)}
-                >
-                  Retry
-                </button>
-              )}
-            </span>
-          ) : isOptimistic ? 'Sending…' : <>{isEdited && <span>edited · </span>}{ts}</>}
+          {deliveryStatus}
         </div>
         {reactionBar}
+        {actionsMenu}
+        <ImageLightbox messageId={msg.id} currentUserId={currentUserId} roomId={msg.room_id} imageUrl={preview?.url ?? null} title={preview?.title} mimeType={preview?.mimeType}
+          liveUrl={preview?.liveUrl} onClose={() => setPreview(null)} />
       </div>
     </div>
   );
 }
 
 export default React.memo(ChatMessageBubble, (prev, next) => {
-  return prev.msg.id === next.msg.id
-    && prev.msg.is_edited === next.msg.is_edited
-    && prev.msg._optimistic === next.msg._optimistic
-    && prev.msg._failed === next.msg._failed
-    && prev.msg._refused === next.msg._refused
+  return prev.msg === next.msg
+    && prev.currentUserId === next.currentUserId
     && prev.isMine === next.isMine
     && prev.showSender === next.showSender
-    && prev.msg.reactions === next.msg.reactions
+    && prev.reply?.senderName === next.reply?.senderName
+    && prev.reply?.text === next.reply?.text
+    && prev.reply?.href === next.reply?.href
     && prev.onReact === next.onReact
     && prev.onImageClick === next.onImageClick
-    && prev.onRetry === next.onRetry;
+    && prev.onRetry === next.onRetry
+    && prev.onRemovePending === next.onRemovePending
+    && prev.onReply === next.onReply
+    && prev.onEdit === next.onEdit
+    && prev.onDelete === next.onDelete;
 });

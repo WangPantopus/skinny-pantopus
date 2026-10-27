@@ -4,8 +4,8 @@
 //
 //  What the Plans sheet holds: the first plans at its lowest stop (F1), the
 //  whole list pulled up (F2: Your plans, then each day, then More nearby
-//  with Pulse and Connections), a tapped pin's card (F3), "Nothing planned
-//  yet" (F4) and "See plans near you" (F5).
+//  with Pulse and Connections while the Pulse redesign is on), a tapped
+//  pin's card (F3), "Nothing planned yet" (F4) and "See plans near you" (F5).
 //
 
 import SwiftUI
@@ -51,37 +51,48 @@ struct PlansSheetContent: View {
 
     private var peek: some View {
         let cards = viewModel.visibleCards
+        // The two soonest near you (your own plans among them); one at the
+        // largest text sizes, so the row has room for its words.
+        let first = Array(cards.prefix(typeSize.isAccessibilitySize ? 1 : 2))
         return VStack(alignment: .leading, spacing: 2) {
-            // Side by side; stacked when the text is too large for one line.
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .firstTextBaseline) {
-                    peekTitleText
-                    Spacer(minLength: Spacing.s2)
-                    seeAll(count: cards.count)
+            // The lowest stop shows the title and the soonest plan over the map;
+            // the next one waits just below it, one drag away.
+            VStack(alignment: .leading, spacing: 2) {
+                // Side by side; stacked when the text is too large for one line.
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .firstTextBaseline) {
+                        peekTitleText
+                        Spacer(minLength: Spacing.s2)
+                        seeAll(count: cards.count)
+                    }
+                    VStack(alignment: .leading, spacing: 0) {
+                        peekTitleText
+                        seeAll(count: cards.count)
+                    }
                 }
-                VStack(alignment: .leading, spacing: 0) {
-                    peekTitleText
-                    seeAll(count: cards.count)
+                if let soonest = first.first {
+                    peekRow(soonest, showsDivider: false)
+                } else {
+                    Text("Nothing within 5 miles \(windowPhrase). Plans farther away show on the map.")
+                        .planFont(.small)
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                        .padding(.vertical, Spacing.s3)
                 }
             }
-            // The two soonest near you (your own plans among them); one at the
-            // largest text sizes, so the row has room for its words.
-            let first = Array(cards.prefix(typeSize.isAccessibilitySize ? 1 : 2))
-            ForEach(Array(first.enumerated()), id: \.element.id) { index, card in
-                PlanRow(model: rowModel(card).withTrailing(.chevron), showsDivider: index > 0) {
-                    actions.openPlan(card, card.id, .view)
-                }
-            }
-            if first.isEmpty {
-                Text("Nothing within 5 miles \(windowPhrase). Plans farther away show on the map.")
-                    .planFont(.small)
-                    .foregroundStyle(Theme.Color.appTextSecondary)
-                    .padding(.vertical, Spacing.s3)
+            .plansSheetPeek(.list)
+            ForEach(first.dropFirst(), id: \.id) { card in
+                peekRow(card, showsDivider: true)
             }
         }
         // Whole lines even when the stop is too short for them (the largest
         // text): the sheet cuts off the bottom instead of shrinking the words.
         .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func peekRow(_ card: PlanCardDTO, showsDivider: Bool) -> some View {
+        PlanRow(model: rowModel(card).withTrailing(.chevron), showsDivider: showsDivider) {
+            actions.openPlan(card, card.id, .view)
+        }
     }
 
     private var peekTitleText: some View {
@@ -142,6 +153,8 @@ struct PlansSheetContent: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .plansSheetPeek(.status)
+        .plansSheetDragArea()
         .accessibilityElement()
         .accessibilityLabel("Loading plans")
     }
@@ -159,6 +172,8 @@ struct PlansSheetContent: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.top, Spacing.s3)
+        .plansSheetPeek(.status)
+        .plansSheetDragArea()
     }
 }
 
@@ -177,8 +192,9 @@ struct PlansListSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
-            ScrollView {
+            // The header never scrolls: a drag on it moves the sheet at every stop.
+            header.plansSheetDragArea()
+            PlansSheetScroll {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     if !viewModel.visibleYourPlans.isEmpty {
                         section("Your plans", cards: viewModel.visibleYourPlans, mine: true)
@@ -192,12 +208,12 @@ struct PlansListSheet: View {
                             .foregroundStyle(Theme.Color.appTextSecondary)
                             .padding(.top, Spacing.s4)
                     }
-                    moreNearby
+                    if let openPulse = actions.openPulse, let openConnections = actions.openConnections {
+                        moreNearby(openPulse: openPulse, openConnections: openConnections)
+                    }
                 }
                 .padding(.bottom, Spacing.s6)
             }
-            .refreshable { await viewModel.refresh() }
-            .scrollIndicators(.hidden)
         }
     }
 
@@ -213,6 +229,7 @@ struct PlansListSheet: View {
                     .foregroundStyle(Theme.Color.appTextSecondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            // Ask is the chrome's sparkle just above: the list stops under it now.
             Button { onStop(.peek) } label: {
                 Icon(.map, size: 20, color: Theme.Color.appText)
                     .frame(width: 44, height: 44)
@@ -267,19 +284,22 @@ struct PlansListSheet: View {
         }
     }
 
-    private var moreNearby: some View {
+    private func moreNearby(
+        openPulse: @escaping @MainActor () -> Void,
+        openConnections: @escaping @MainActor () -> Void
+    ) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Text.planOverline("More nearby")
                 .padding(.top, Spacing.s4)
                 .padding(.bottom, 2)
-            doorRow(title: "Pulse", subtitle: "Local posts and questions", icon: .rss, divider: false, action: actions.openPulse)
+            doorRow(title: "Pulse", subtitle: "Local posts and questions", icon: .rss, divider: false, action: openPulse)
                 .accessibilityIdentifier("plansDoor.pulse")
             doorRow(
                 title: "Connections",
                 subtitle: "Keep up with people you know",
                 icon: .users,
                 divider: true,
-                action: actions.openConnections
+                action: openConnections
             )
             .accessibilityIdentifier("plansDoor.connections")
         }

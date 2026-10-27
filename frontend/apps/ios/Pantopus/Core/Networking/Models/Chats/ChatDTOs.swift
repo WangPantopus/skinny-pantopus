@@ -21,7 +21,7 @@ import Foundation
 /// One entry in the unified conversations list. The backend tags rows
 /// with `_type: "conversation" | "room"`; we map both into one struct
 /// so the view can render either with a `ConversationRow`.
-public struct UnifiedConversation: Decodable, Sendable, Hashable, Identifiable {
+public struct UnifiedConversation: Codable, Sendable, Hashable, Identifiable {
     public enum Kind: String, Sendable, Hashable {
         case conversation, room
     }
@@ -45,7 +45,9 @@ public struct UnifiedConversation: Decodable, Sendable, Hashable, Identifiable {
     /// ISO8601 timestamp of the last message in the conversation, if any.
     public let lastMessageAt: String?
     /// Aggregate unread across all rooms in this conversation.
-    public let totalUnread: Int
+    public private(set) var totalUnread: Int
+    public let notificationsEnabled: Bool?
+    public let unmutedUnread: Int?
     /// Topic tags attached to a person-conversation. `topic_type`
     /// values include `gig` and `marketplace`; we project them into
     /// `topicKinds` for filtering.
@@ -69,9 +71,12 @@ public struct UnifiedConversation: Decodable, Sendable, Hashable, Identifiable {
         case otherParticipantAvatar = "other_participant_avatar"
         case otherParticipantIdentity = "other_participant_identity"
         case totalUnread = "total_unread"
+        case notificationsEnabled = "notifications_enabled"
+        case unmutedUnread = "unmuted_unread"
         case lastMessageAt = "last_message_at"
         case lastMessagePreview = "last_message_preview"
         case topics
+        case cachedTopicKinds = "cached_topic_kinds"
         // .room keys
         case id, roomType = "room_type"
         case roomName = "room_name"
@@ -94,11 +99,15 @@ public struct UnifiedConversation: Decodable, Sendable, Hashable, Identifiable {
         let rawType = try c.decodeIfPresent(String.self, forKey: .type) ?? "conversation"
         kind = Kind(rawValue: rawType) ?? .conversation
         totalUnread = try c.decodeIfPresent(Int.self, forKey: .totalUnread) ?? 0
+        notificationsEnabled = try c.decodeIfPresent(Bool.self, forKey: .notificationsEnabled)
+        unmutedUnread = try c.decodeIfPresent(Int.self, forKey: .unmutedUnread)
         lastMessageAt = try c.decodeIfPresent(String.self, forKey: .lastMessageAt)
         lastMessagePreview = try c.decodeIfPresent(String.self, forKey: .lastMessagePreview)
 
         // Topics → kinds. Each topic object has a `topic_type`.
-        if let topics = try? c.decode([[String: JSONValue]].self, forKey: .topics) {
+        if let savedKinds = try c.decodeIfPresent([String].self, forKey: .cachedTopicKinds) {
+            topicKinds = savedKinds
+        } else if let topics = try? c.decode([[String: JSONValue]].self, forKey: .topics) {
             topicKinds = topics.compactMap { dict in
                 if case let .string(value) = dict["topic_type"] ?? .null { return value }
                 return nil
@@ -140,23 +149,69 @@ public struct UnifiedConversation: Decodable, Sendable, Hashable, Identifiable {
             isVerified = nil
         }
     }
+
+    /// Preserve the API representation and every projected topic when saving
+    /// the encrypted inbox, including minimal topic objects from older servers.
+    public func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: RootKeys.self)
+        try c.encode(kind.rawValue, forKey: .type)
+        try c.encode(totalUnread, forKey: .totalUnread)
+        try c.encodeIfPresent(notificationsEnabled, forKey: .notificationsEnabled)
+        try c.encodeIfPresent(unmutedUnread, forKey: .unmutedUnread)
+        try c.encodeIfPresent(lastMessageAt, forKey: .lastMessageAt)
+        try c.encodeIfPresent(lastMessagePreview, forKey: .lastMessagePreview)
+        try c.encode(topics, forKey: .topics)
+        try c.encode(topicKinds, forKey: .cachedTopicKinds)
+        switch kind {
+        case .conversation:
+            try c.encode(id, forKey: .otherParticipantId)
+            try c.encodeIfPresent(name, forKey: .otherParticipantName)
+            try c.encodeIfPresent(avatarURL, forKey: .otherParticipantAvatar)
+            var identity = c.nestedContainer(keyedBy: IdentityKeys.self, forKey: .otherParticipantIdentity)
+            try identity.encodeIfPresent(identityKind, forKey: .identityKind)
+            try identity.encodeIfPresent(isVerified, forKey: .verified)
+        case .room:
+            try c.encode(id, forKey: .id)
+            try c.encodeIfPresent(name, forKey: .roomName)
+            try c.encodeIfPresent(roomType, forKey: .roomType)
+            try c.encodeIfPresent(gigId, forKey: .gigId)
+            try c.encodeIfPresent(homeId, forKey: .homeId)
+        }
+    }
+
+    func withUnreadCount(_ count: Int) -> Self {
+        var copy = self
+        copy.totalUnread = max(0, count)
+        return copy
+    }
 }
 
-/// `GET /api/chat/rooms/:roomId` — only what a chat link needs to find a
-/// direct room's other participant.
+/// `GET /api/chat/rooms/:roomId` — room availability and participants.
 public struct ChatRoomDetailResponse: Decodable, Sendable {
     public struct Room: Decodable, Sendable {
         public let type: String?
+        /// The room's name; a Support Train's room goes by the train's title.
+        public let name: String?
+        public let isActive: Bool?
         public let participants: [Participant]?
+
+        private enum CodingKeys: String, CodingKey {
+            case type, name, participants
+            case isActive = "is_active"
+        }
     }
 
     public struct Participant: Decodable, Sendable {
         public let userId: String?
+        public let isActive: Bool?
+        public let leftAt: String?
         /// The local-identity projection (`serializeUserAsLocalIdentity`).
         public let user: Identity?
 
         private enum CodingKeys: String, CodingKey {
             case userId = "user_id"
+            case isActive = "is_active"
+            case leftAt = "left_at"
             case user
         }
     }
@@ -166,9 +221,21 @@ public struct ChatRoomDetailResponse: Decodable, Sendable {
     }
 
     public let room: Room
+
+    var hasCompleteReplyAudience: Bool {
+        guard room.type != nil, room.isActive != nil, let participants = room.participants else { return false }
+        return participants.allSatisfy { $0.userId != nil && $0.isActive != nil }
+    }
+
+    func isDirectConversation(senderId: String, peerId: String) -> Bool {
+        guard senderId != peerId, room.type == "direct", room.isActive == true,
+              let participants = room.participants, participants.count == 2,
+              participants.allSatisfy({ $0.isActive == true && $0.leftAt == nil }) else { return false }
+        return Set(participants.compactMap(\.userId)) == Set([senderId, peerId])
+    }
 }
 
-public struct ConversationTopicDTO: Decodable, Sendable, Hashable, Identifiable {
+public struct ConversationTopicDTO: Codable, Sendable, Hashable, Identifiable {
     public let id: String
     public let topicType: String
     public let topicRefId: String?
@@ -196,24 +263,28 @@ public struct FindOrCreateTopicResponse: Decodable, Sendable, Hashable {
 }
 
 /// `GET /api/chat/unified-conversations` envelope.
-public struct UnifiedConversationsResponse: Decodable, Sendable, Hashable {
+public struct UnifiedConversationsResponse: Codable, Sendable, Hashable {
     public let conversations: [UnifiedConversation]
     public let total: Int?
     public let totalUnread: Int?
+    public let totalUnmutedUnread: Int?
+    public var hasMore: Bool?
+    public var nextCursor: String?
 
     private enum CodingKeys: String, CodingKey {
-        case conversations, total, totalUnread
+        case conversations, total, totalUnread, totalUnmutedUnread, hasMore, nextCursor
     }
 }
 
 // MARK: - Stats
 
 /// `GET /api/chat/stats` envelope.
-public struct ChatStatsResponse: Decodable, Sendable, Hashable {
+public struct ChatStatsResponse: Codable, Sendable, Hashable {
     public let stats: Stats
 
-    public struct Stats: Decodable, Sendable, Hashable {
+    public struct Stats: Codable, Sendable, Hashable {
         public let totalUnread: Int
+        public let totalUnmutedUnread: Int?
         public let totalChats: Int?
         public let totalMessages: Int?
         public let directChats: Int?
@@ -222,6 +293,7 @@ public struct ChatStatsResponse: Decodable, Sendable, Hashable {
 
         private enum CodingKeys: String, CodingKey {
             case totalUnread = "total_unread"
+            case totalUnmutedUnread = "total_unmuted_unread"
             case totalChats = "total_chats"
             case totalMessages = "total_messages"
             case directChats = "direct_chats"
@@ -240,10 +312,12 @@ public struct ChatStatsResponse: Decodable, Sendable, Hashable {
 /// `badge:update` socket event payload.
 public struct ChatBadgeUpdate: Decodable, Sendable, Hashable {
     public let totalUnread: Int
+    public let totalUnmutedUnread: Int?
 
     private enum CodingKeys: String, CodingKey {
         case totalUnread
         case unreadMessages
+        case unmutedUnreadMessages
     }
 
     public init(from decoder: any Decoder) throws {
@@ -251,7 +325,20 @@ public struct ChatBadgeUpdate: Decodable, Sendable, Hashable {
         totalUnread = try c.decodeIfPresent(Int.self, forKey: .totalUnread)
             ?? c.decodeIfPresent(Int.self, forKey: .unreadMessages)
             ?? 0
+        totalUnmutedUnread = try c.decodeIfPresent(Int.self, forKey: .unmutedUnreadMessages)
     }
+}
+
+public struct ChatPreferencesResponse: Decodable, Sendable {
+    public let notificationsEnabled: Bool
+    public let roomIds: [String]
+}
+
+/// A read response describes only the requested room/person scope.
+struct ChatReadResponse: Decodable {
+    let unreadCount: Int?
+    let readScope: String?
+    let topicId: String?
 }
 
 /// `message:new` socket event payload — just the fields the chat list
@@ -259,6 +346,7 @@ public struct ChatBadgeUpdate: Decodable, Sendable, Hashable {
 /// conversation screen is richer; we only consume the room reference +
 /// preview here.
 public struct ChatMessageEvent: Decodable, Sendable, Hashable {
+    public let id: String?
     public let roomId: String
     public let otherUserId: String?
     public let preview: String?
@@ -270,25 +358,30 @@ public struct ChatMessageEvent: Decodable, Sendable, Hashable {
 
 /// One sender row inline on a `ChatMessageDTO`. Only the fields the
 /// conversation view actually reads.
-public struct ChatMessageSender: Decodable, Sendable, Hashable, Identifiable {
+public struct ChatMessageSender: Codable, Sendable, Hashable, Identifiable {
     public let id: String
     public let username: String?
     public let name: String?
     public let profilePictureURL: String?
+    /// The sender's public identity (`backend/serializers/identitySerializers.js`),
+    /// which the messages routes send now; older servers send `name` and
+    /// `username` instead.
+    public let displayName: String?
+    public let handle: String?
 
     private enum CodingKeys: String, CodingKey {
-        case id, username, name
+        case id, username, name, displayName, handle
         case profilePictureURL = "profile_picture_url"
     }
 }
 
 /// One message row in a chat thread. Backed by the `ChatMessage` row
 /// joined with its sender (`user_id` → `sender`).
-public struct ChatMessageDTO: Decodable, Sendable, Hashable, Identifiable {
+public struct ChatMessageDTO: Codable, Sendable, Hashable, Identifiable {
     public let id: String
     public let roomId: String
     public let userId: String?
-    public let messageText: String?
+    public private(set) var messageText: String?
     public let messageType: String
     public let metadata: JSONValue?
     public let replyToId: String?
@@ -298,13 +391,17 @@ public struct ChatMessageDTO: Decodable, Sendable, Hashable, Identifiable {
     public let topicId: String?
     public let clientMessageId: String?
     public let createdAt: String
-    public let editedAt: String?
+    public private(set) var editedAt: String?
     public let deletedAt: String?
     public let deliveredAt: String?
-    public let readAt: String?
+    public private(set) var readAt: String?
     public let sender: ChatMessageSender?
     public let reactions: [ChatReactionSummary]
     public let attachments: [ChatAttachmentDTO]
+    /// The person who wrote a message sent as a business (`actor_user_id`). The
+    /// server names that only to the writer, so it is set on the business's
+    /// messages you wrote yourself and nil everywhere else.
+    public let actorUserId: String?
 
     private enum CodingKeys: String, CodingKey {
         case id
@@ -326,6 +423,7 @@ public struct ChatMessageDTO: Decodable, Sendable, Hashable, Identifiable {
         case sender
         case reactions
         case attachments
+        case actorUserId = "actor_user_id"
     }
 
     public init(from decoder: any Decoder) throws {
@@ -352,6 +450,43 @@ public struct ChatMessageDTO: Decodable, Sendable, Hashable, Identifiable {
         sender = try c.decodeIfPresent(ChatMessageSender.self, forKey: .sender)
         reactions = try c.decodeIfPresent([ChatReactionSummary].self, forKey: .reactions) ?? []
         attachments = try c.decodeIfPresent([ChatAttachmentDTO].self, forKey: .attachments) ?? []
+        actorUserId = try c.decodeIfPresent(String.self, forKey: .actorUserId)
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(roomId, forKey: .roomId)
+        try c.encodeIfPresent(userId, forKey: .userId)
+        try c.encodeIfPresent(messageText, forKey: .messageText)
+        try c.encode(messageType, forKey: .messageType)
+        try c.encodeIfPresent(metadata, forKey: .metadata)
+        try c.encodeIfPresent(replyToId, forKey: .replyToId)
+        try c.encodeIfPresent(topicId, forKey: .topicId)
+        try c.encodeIfPresent(clientMessageId, forKey: .clientMessageId)
+        try c.encode(createdAt, forKey: .createdAt)
+        try c.encodeIfPresent(editedAt, forKey: .editedAt)
+        try c.encodeIfPresent(deletedAt, forKey: .deletedAt)
+        try c.encodeIfPresent(deliveredAt, forKey: .deliveredAt)
+        try c.encodeIfPresent(readAt, forKey: .readAt)
+        try c.encodeIfPresent(sender, forKey: .sender)
+        try c.encode(reactions, forKey: .reactions)
+        try c.encode(attachments, forKey: .attachments)
+        try c.encodeIfPresent(actorUserId, forKey: .actorUserId)
+    }
+
+    /// Edit responses carry the changed text, not hydrated files or viewer reactions.
+    public func applyingEdit(_ edited: ChatMessageDTO) -> ChatMessageDTO {
+        var updated = self
+        updated.messageText = edited.messageText
+        updated.editedAt = edited.editedAt
+        return updated
+    }
+
+    public func replacingReadAt(_ readAt: String?) -> ChatMessageDTO {
+        var updated = self
+        updated.readAt = readAt
+        return updated
     }
 
     public func replacingReactions(_ reactions: [ChatReactionSummary]) -> ChatMessageDTO {
@@ -372,7 +507,8 @@ public struct ChatMessageDTO: Decodable, Sendable, Hashable, Identifiable {
             readAt: readAt,
             sender: sender,
             reactions: reactions,
-            attachments: attachments
+            attachments: attachments,
+            actorUserId: actorUserId
         )
     }
 
@@ -393,7 +529,8 @@ public struct ChatMessageDTO: Decodable, Sendable, Hashable, Identifiable {
         readAt: String?,
         sender: ChatMessageSender?,
         reactions: [ChatReactionSummary] = [],
-        attachments: [ChatAttachmentDTO] = []
+        attachments: [ChatAttachmentDTO] = [],
+        actorUserId: String? = nil
     ) {
         self.id = id
         self.roomId = roomId
@@ -412,16 +549,19 @@ public struct ChatMessageDTO: Decodable, Sendable, Hashable, Identifiable {
         self.sender = sender
         self.reactions = reactions
         self.attachments = attachments
+        self.actorUserId = actorUserId
     }
 }
 
-public struct ChatAttachmentDTO: Decodable, Sendable, Hashable, Identifiable {
+public struct ChatAttachmentDTO: Codable, Sendable, Hashable, Identifiable {
     public let id: String
     public let fileURL: String?
     public let originalFilename: String?
     public let mimeType: String?
     public let fileSize: Int?
     public let fileType: String?
+    public let liveVideoFileId: String?
+    public let livePhotoFileId: String?
 
     private enum CodingKeys: String, CodingKey {
         case id
@@ -430,6 +570,8 @@ public struct ChatAttachmentDTO: Decodable, Sendable, Hashable, Identifiable {
         case mimeType = "mime_type"
         case fileSize = "file_size"
         case fileType = "file_type"
+        case liveVideoFileId = "live_video_file_id"
+        case livePhotoFileId = "live_photo_file_id"
     }
 }
 
@@ -456,7 +598,7 @@ public struct AIMediaUploadResponse: Decodable, Sendable, Hashable {
     public let images: [Image]
 }
 
-public struct ChatReactionSummary: Decodable, Sendable, Hashable, Identifiable {
+public struct ChatReactionSummary: Codable, Sendable, Hashable, Identifiable {
     public var id: String {
         reaction
     }
@@ -464,9 +606,33 @@ public struct ChatReactionSummary: Decodable, Sendable, Hashable, Identifiable {
     public let reaction: String
     public let count: Int
     public let reactedByMe: Bool
+    public let users: [User]?
+
+    public struct User: Codable, Sendable, Hashable {
+        public let id: String
+    }
+
+    public init(reaction: String, count: Int, reactedByMe: Bool, users: [User]? = nil) {
+        self.reaction = reaction
+        self.count = count
+        self.reactedByMe = reactedByMe
+        self.users = users
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        reaction = try container.decode(String.self, forKey: .reaction)
+        count = try container.decode(Int.self, forKey: .count)
+        reactedByMe = try container.decodeIfPresent(Bool.self, forKey: .reactedByMe) ?? false
+        users = try container.decodeIfPresent([User].self, forKey: .users)
+    }
+
+    public func includes(_ viewerId: String) -> Bool {
+        users.map { $0.contains { $0.id == viewerId } } ?? reactedByMe
+    }
 
     private enum CodingKeys: String, CodingKey {
-        case reaction, count
+        case reaction, count, users
         case reactedByMe = "reacted_by_me"
     }
 }
@@ -478,10 +644,79 @@ public struct ChatMessagesResponse: Decodable, Sendable, Hashable {
     public let hasMore: Bool?
     public let nextCursor: String?
     public let roomIds: [String]?
+    /// Set when the conversation takes no messages from you: a direct chat
+    /// with a draft or closed business (`code` NOT_PUBLISHED). Nil from
+    /// older servers, which leave the key out.
+    public var sendRefusal: ChatSendRefusal?
+    public var syncCursors: [String: Int64]?
+    public var anchorMessageId: String?
+    public var hasMoreAfter: Bool?
 
     private enum CodingKeys: String, CodingKey {
-        case messages, hasMore, nextCursor, roomIds
+        case messages, hasMore, nextCursor, roomIds, sendRefusal, syncCursors, anchorMessageId, hasMoreAfter
     }
+}
+
+public struct ChatSearchResponse: Decodable, Sendable {
+    public let messages: [ChatMessageDTO]
+    public let roomContexts: [String: ChatSearchRoomContext]
+    public let hasMore: Bool
+    public let nextCursor: String?
+}
+
+public struct ChatSearchRoomContext: Decodable, Sendable {
+    public let conversationId: String
+    public let kind: String
+    public let name: String
+    public let identity: Identity?
+
+    public struct Identity: Decodable, Sendable {
+        public let identityKind: String?
+        public let verified: Bool?
+        public let badges: [String]?
+
+        private enum CodingKeys: String, CodingKey {
+            case identityKind = "identity_kind"
+            case verified, badges
+        }
+    }
+}
+
+/// A delta row is either a complete accepted message or a deletion tombstone.
+public struct ChatMessageChange: Decodable, Sendable {
+    public let id: String
+    public let message: ChatMessageDTO?
+
+    private enum CodingKeys: String, CodingKey { case id, deleted }
+
+    public init(from decoder: any Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(String.self, forKey: .id)
+        message = try values.decodeIfPresent(Bool.self, forKey: .deleted) == true ? nil : ChatMessageDTO(from: decoder)
+    }
+}
+
+public struct ChatChangesResponse: Decodable, Sendable {
+    public let messages: [ChatMessageChange]
+    public let roomIds: [String]
+    public let resetRequired: Bool
+    public let hasMore: Bool
+    public let syncCursors: [String: Int64]
+    public let untilCursors: [String: Int64]
+    public let readReceipts: [ChatRealtimeRead]?
+    public let messageReadReceipts: [ChatMessageReadReceipt]?
+}
+
+public struct ChatMessageReadReceipt: Decodable, Sendable {
+    public let messageId: String
+    public let readAt: String?
+}
+
+/// Why a conversation takes no messages, as the server words it (`backend/routes/chats.js`
+/// `unpublishedDirectRoomRefusal`).
+public struct ChatSendRefusal: Decodable, Sendable, Hashable {
+    public let error: String
+    public let code: String?
 }
 
 /// `POST /api/chat/messages` envelope.
@@ -517,6 +752,21 @@ public struct ReactToChatMessageResponse: Decodable, Sendable, Hashable {
 /// `message:new` socket payload at the conversation view-model layer
 /// — richer than `ChatMessageEvent` used by the list. The socket
 /// decoder converts snake_case → camelCase automatically.
+/// Full socket row plus its recipient-specific person-thread routing hint.
+public struct ChatRealtimeMessageEnvelope: Decodable, Sendable {
+    public let message: ChatMessageDTO
+    public let otherUserId: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case otherUserId = "other_user_id"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        message = try ChatMessageDTO(from: decoder)
+        otherUserId = try decoder.container(keyedBy: CodingKeys.self).decodeIfPresent(String.self, forKey: .otherUserId)
+    }
+}
+
 public struct ChatRealtimeMessage: Decodable, Sendable, Hashable {
     public let id: String
     public let roomId: String
@@ -554,6 +804,7 @@ public struct ChatRealtimeMessage: Decodable, Sendable, Hashable {
 
 /// `message:edited` socket payload.
 public struct ChatRealtimeMessageUpdate: Decodable, Sendable, Hashable {
+    public let updatedMessage: ChatMessageDTO?
     public let id: String
     public let roomId: String?
     public let messageText: String?
@@ -574,6 +825,7 @@ public struct ChatRealtimeMessageUpdate: Decodable, Sendable, Hashable {
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        updatedMessage = try? c.decode(ChatMessageDTO.self, forKey: .message)
         let message = try c.decodeIfPresent([String: JSONValue].self, forKey: .message)
         id = try c.decodeIfPresent(String.self, forKey: .id)
             ?? c.decodeIfPresent(String.self, forKey: .messageId)
@@ -623,6 +875,38 @@ public struct ChatRealtimeReaction: Decodable, Sendable, Hashable {
     public let messageId: String
     public let reaction: String?
     public let counts: [String: Int]?
+    public let reactions: [Summary]?
+
+    public struct Summary: Decodable, Sendable, Hashable {
+        public let reaction: String
+        public let count: Int
+        public let users: [User]?
+
+        public struct User: Decodable, Sendable, Hashable {
+            public let id: String
+        }
+    }
+}
+
+/// A recipient acknowledged a bounded position, not every message in the room.
+public struct ChatRealtimeRead: Decodable, Sendable, Hashable {
+    public var directReceiptEligible: Bool?
+    public let userId: String
+    public let roomId: String
+    public let readAt: String?
+    public let throughMessageId: String?
+    public var throughCreatedAt: String?
+}
+
+/// Topic boundaries never imply reads outside this room and topic.
+public struct ChatRealtimeTopicRead: Decodable, Sendable {
+    public var directReceiptEligible: Bool?
+    public let userId: String
+    public let roomId: String
+    public let topicId: String
+    public let readAt: String?
+    public let throughMessageId: String?
+    public let throughCreatedAt: String?
 }
 
 /// `typing:user` / `typing:stopped` socket payloads — broadcast to a

@@ -12,11 +12,15 @@ package app.pantopus.android.ui.screens.compose.pulse
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.data.ai.readerMessage
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
 import app.pantopus.android.data.analytics.AnalyticsResult
+import app.pantopus.android.data.api.models.ai.AIPostSuggestionDto
+import app.pantopus.android.data.api.models.posts.EarlierPostDto
 import app.pantopus.android.data.api.models.posts.PostCreateRequest
 import app.pantopus.android.data.api.models.posts.PostDetailDto
+import app.pantopus.android.data.api.models.posts.PostPrecheckFinding
 import app.pantopus.android.data.api.models.posts.PostPrecheckRequest
 import app.pantopus.android.data.api.models.posts.PostUpdateRequest
 import app.pantopus.android.data.api.net.NetworkResult
@@ -27,7 +31,9 @@ import app.pantopus.android.data.network.NetworkMonitor
 import app.pantopus.android.data.posts.PostPrecheckRepository
 import app.pantopus.android.data.posts.PostsRepository
 import app.pantopus.android.data.posts.PulsePostsRefreshNotifier
+import app.pantopus.android.data.upload.UploadFile
 import app.pantopus.android.data.upload.UploadRepository
+import app.pantopus.android.ui.screens.compose.listing.ListingPhotoProcessor
 import app.pantopus.android.ui.screens.compose.placepicker.MediaCaptureLocation
 import app.pantopus.android.ui.screens.compose.placepicker.PostPlaceTag
 import app.pantopus.android.ui.screens.feed.pulse.PulseIntent
@@ -39,11 +45,20 @@ import app.pantopus.android.ui.screens.shared.form.isoDateOrEmpty
 import app.pantopus.android.ui.screens.shared.form.maxLength
 import app.pantopus.android.ui.screens.shared.form.required
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+import java.util.Locale
 import javax.inject.Inject
 
 /**
@@ -181,6 +196,7 @@ data class PulseComposePhoto(
     val data: ByteArray,
     val capturedLatitude: Double? = null,
     val capturedLongitude: Double? = null,
+    val mimeType: String = "image/jpeg",
 ) {
     override fun equals(other: Any?): Boolean = other is PulseComposePhoto && other.id == id
 
@@ -255,6 +271,13 @@ class PulseComposeViewModel
         private val _activeIntent = MutableStateFlow(initialIntent)
         val activeIntent: StateFlow<PulseComposeIntent> = _activeIntent.asStateFlow()
 
+        /**
+         * A Pantopus AI post draft's other fields (AI assistant phase 1 contract, section 8): the event's dates and
+         * place, the deal's end, lost or found, and the heads-up's kind seed the form.
+         */
+        private val prefillDraft: PulseComposeDraftFields? =
+            PulseComposeDraftFields.decode(savedStateHandle.get<String>(PREFILL_DRAFT_FIELDS_KEY))
+
         private val _prefillState =
             MutableStateFlow<PulseComposePrefillState>(
                 if (editingPostId == null) PulseComposePrefillState.Ready else PulseComposePrefillState.Loading,
@@ -267,14 +290,22 @@ class PulseComposeViewModel
         private val _visibility = MutableStateFlow(PulseComposeVisibility.Neighbors)
         val visibility: StateFlow<PulseComposeVisibility> = _visibility.asStateFlow()
 
-        private val _lostFoundKind = MutableStateFlow(PulseLostFoundKind.Lost)
+        private val _lostFoundKind =
+            MutableStateFlow(
+                prefillDraft?.lostFoundType?.let { type -> PulseLostFoundKind.entries.firstOrNull { it.key == type } }
+                    ?: PulseLostFoundKind.Lost,
+            )
         val lostFoundKind: StateFlow<PulseLostFoundKind> = _lostFoundKind.asStateFlow()
 
         private val _lostFoundContactPref = MutableStateFlow(PulseLostFoundContactPref.Dm)
         val lostFoundContactPref: StateFlow<PulseLostFoundContactPref> = _lostFoundContactPref.asStateFlow()
 
         /** Deal expiry — required by the backend for `postType == deal`. */
-        private val _dealExpiresAt = MutableStateFlow(LocalDateTime.now().plusDays(DEAL_DEFAULT_EXPIRY_DAYS))
+        private val _dealExpiresAt =
+            MutableStateFlow(
+                prefillDraft?.dealExpiresAt?.let { PulseComposeDraftFields.localEnd(it) }
+                    ?: LocalDateTime.now().plusDays(DEAL_DEFAULT_EXPIRY_DAYS),
+            )
         val dealExpiresAt: StateFlow<LocalDateTime> = _dealExpiresAt.asStateFlow()
 
         /** Place-eligibility warning surfaced as a banner on the draft step. */
@@ -311,10 +342,57 @@ class PulseComposeViewModel
          */
         private var precheckDone = false
 
+        // "Before you ask", and the check before posting (AI phase 2 contract §6.5, §6.6).
+
+        /** Earlier questions and recommendations nearby matching the question being written. Empty hides them. */
+        private val _earlierAnswers = MutableStateFlow<List<EarlierPostDto>>(emptyList())
+        val earlierAnswers: StateFlow<List<EarlierPostDto>> = _earlierAnswers.asStateFlow()
+        private var earlierAnswersQuery = ""
+        private var earlierAnswersJob: Job? = null
+
+        /** What the kindness and safety check found after Post was tapped. Non-null shows "Before you post". */
+        private val _postCheckFindings = MutableStateFlow<List<PostPrecheckFinding>?>(null)
+        val postCheckFindings: StateFlow<List<PostPrecheckFinding>?> = _postCheckFindings.asStateFlow()
+
+        /** The draft "Post anyway" was tapped for: that exact draft posts without another check. */
+        private var postAnywayDraft: String? = null
+
+        // AI assist (`POST /api/ai/draft/post-suggestion`, PulseComposeAssist.kt).
+
+        /** The composer's AI assist: idle, writing, a suggestion in the form, or why it couldn't write one. */
+        private val _assist = MutableStateFlow<PulseComposeAssistState>(PulseComposeAssistState.Idle)
+        val assist: StateFlow<PulseComposeAssistState> = _assist.asStateFlow()
+
+        private val _canUndoSuggestion = MutableStateFlow(false)
+
+        /** Undo on the assist card, until the person edits the suggestion. */
+        val canUndoSuggestion: StateFlow<Boolean> = _canUndoSuggestion.asStateFlow()
+
+        /** The form as it was before the suggestion went in, for Undo. Dropped once the person edits a field. */
+        private var assistUndo: PulseComposeAssistSnapshot? = null
+            set(value) {
+                field = value
+                _canUndoSuggestion.value = value != null
+            }
+
+        /** True while a suggestion is being put into the form, so those edits keep Undo. */
+        private var isApplyingSuggestion = false
+
+        /** True when the post has words the AI suggested: Post asks the person to check it first. */
+        private var hasAISuggestion = false
+
+        /** Non-null asks "Post this?" before a post with AI-suggested words goes out. */
+        private val _aiPostConfirmation = MutableStateFlow<String?>(null)
+        val aiPostConfirmation: StateFlow<String?> = _aiPostConfirmation.asStateFlow()
+
+        /** The draft the person confirmed: that exact draft posts without asking again. */
+        private var aiConfirmedDraft: String? = null
+
         private val _announceAudience = MutableStateFlow(PulseAnnounceAudience.Neighbors)
         val announceAudience: StateFlow<PulseAnnounceAudience> = _announceAudience.asStateFlow()
 
-        private val _safetyAlertKind = MutableStateFlow(PulseSafetyAlertKind.Hazard)
+        private val _safetyAlertKind =
+            MutableStateFlow(prefillDraft?.safetyAlertKind?.let(PulseSafetyAlertKind::fromKey) ?: PulseSafetyAlertKind.Hazard)
         val safetyAlertKind: StateFlow<PulseSafetyAlertKind> = _safetyAlertKind.asStateFlow()
 
         // New Asks start on Handyman; an edited Ask posted without a category has none selected.
@@ -342,6 +420,9 @@ class PulseComposeViewModel
                         when (field) {
                             PulseComposeField.Body -> prefillBody
                             PulseComposeField.Title -> prefillTitle
+                            PulseComposeField.EventLocation -> prefillDraft?.eventVenue
+                            PulseComposeField.EventDate -> prefillDraft?.eventDate?.let(::draftTimeShown)
+                            PulseComposeField.EventEndDate -> prefillDraft?.eventEndDate?.let(::draftTimeShown)
                             else -> null
                         }
                     FormFieldState(id = field.key, value = seed.orEmpty())
@@ -511,6 +592,7 @@ class PulseComposeViewModel
             if (isIntentLocked) return
             if (_activeIntent.value == intent) return
             _activeIntent.value = intent
+            scheduleEarlierAnswers()
         }
 
         fun selectIdentity(identity: PulseComposeIdentity) {
@@ -571,9 +653,12 @@ class PulseComposeViewModel
                     error = validator(field).validate(value),
                 )
             _fields.value = map
+            // The person's own edit keeps the suggestion's words but ends its Undo.
+            if (changed && !isApplyingSuggestion) assistUndo = null
             // RN re-arms the precheck whenever the body text changes
             // (`PostComposerModal.tsx:789`).
             if (field == PulseComposeField.Body && changed) precheckDone = false
+            if ((field == PulseComposeField.Title || field == PulseComposeField.Body) && changed) scheduleEarlierAnswers()
         }
 
         /** X on the precheck nudge banner. */
@@ -643,6 +728,19 @@ class PulseComposeViewModel
                     if (lat != null && lng != null) MediaCaptureLocation(latitude = lat, longitude = lng) else null
                 }
 
+        /** The camera permission was refused, so "Take photo" did nothing: say where to allow it. */
+        fun cameraRefused() {
+            _toast.value = PulseComposeToast("Pantopus can't use the camera. You can allow it in Settings.", isError = true)
+        }
+
+        fun attachmentReadFailed() {
+            _toast.value =
+                PulseComposeToast(
+                    "Couldn't read an attachment. Photos must be under 10 MB, videos under 100 MB, and PDFs under 25 MB.",
+                    isError = true,
+                )
+        }
+
         fun setPhotos(photos: List<PulseComposePhoto>) {
             _photos.value = photos.take(PULSE_COMPOSE_MAX_PHOTOS)
         }
@@ -707,12 +805,14 @@ class PulseComposeViewModel
                         PulseComposeField.EventCapacity,
                         PulseComposeField.Body,
                     )
+                // An edit shows the saved contact read-only (buildUpdateRequest never sends it), so its
+                // phone number neither blocks nor enables Save.
                 PulseComposeIntent.Lost ->
-                    listOf(
+                    listOfNotNull(
                         PulseComposeField.Body,
                         PulseComposeField.LostLastSeenLocation,
                         PulseComposeField.LostLastSeenDate,
-                        PulseComposeField.ContactPhone,
+                        PulseComposeField.ContactPhone.takeUnless { isEditing },
                     )
                 PulseComposeIntent.Announce ->
                     if (composePurpose == PulseComposePurpose.Deal) {
@@ -760,7 +860,7 @@ class PulseComposeViewModel
                         }
                     }
                 PulseComposeField.EventDate ->
-                    FormValidator.all(listOf(FormValidator.required("Event date"), FormValidator.isoDateOrEmpty()))
+                    FormValidator.all(listOf(FormValidator.required("Event date"), eventTimeOrEmpty("Pick a valid date and time.")))
                 PulseComposeField.EventLocation ->
                     FormValidator.all(listOf(FormValidator.required("Location"), FormValidator.maxLength(LOCATION_MAX)))
                 PulseComposeField.EventCapacity ->
@@ -777,18 +877,7 @@ class PulseComposeViewModel
                 PulseComposeField.LostLastSeenLocation ->
                     FormValidator.all(listOf(FormValidator.required("Last seen"), FormValidator.maxLength(LOCATION_MAX)))
                 PulseComposeField.LostLastSeenDate -> FormValidator.isoDateOrEmpty()
-                PulseComposeField.EventEndDate ->
-                    FormValidator { value ->
-                        val trimmed = value.trim()
-                        when {
-                            trimmed.isEmpty() -> null
-                            PICKER_DATE_TIME_PATTERN.matches(trimmed) -> null
-                            ISO_DATE_ONLY_PATTERN.matches(trimmed) -> null
-                            trimmed.contains('T') &&
-                                runCatching { java.time.Instant.parse(trimmed) }.isSuccess -> null
-                            else -> "Pick a valid end time."
-                        }
-                    }
+                PulseComposeField.EventEndDate -> eventTimeOrEmpty("Pick a valid end time.")
                 PulseComposeField.ContactPhone ->
                     FormValidator { value ->
                         val trimmed = value.trim()
@@ -801,6 +890,23 @@ class PulseComposeViewModel
                         }
                     }
                 PulseComposeField.DealBusinessName -> FormValidator.maxLength(BUSINESS_NAME_MAX)
+            }
+
+        /**
+         * An event time: empty, the pickers' `yyyy-MM-dd HH:mm`, a plain day (a draft without a time) or an
+         * ISO-8601 instant; anything else shows [message].
+         */
+        private fun eventTimeOrEmpty(message: String): FormValidator =
+            FormValidator { value ->
+                val trimmed = value.trim()
+                when {
+                    trimmed.isEmpty() -> null
+                    PICKER_DATE_TIME_PATTERN.matches(trimmed) -> null
+                    ISO_DATE_ONLY_PATTERN.matches(trimmed) -> null
+                    trimmed.contains('T') &&
+                        runCatching { java.time.Instant.parse(trimmed) }.isSuccess -> null
+                    else -> message
+                }
             }
 
         /** Touch every active field, return the first invalid id if any. */
@@ -836,14 +942,14 @@ class PulseComposeViewModel
             if (postId == null || _photos.value.isEmpty()) {
                 return (if (isEditing) "Saved" else "Posted") to false
             }
-            return when (uploadRepo.uploadPostMedia(postId, _photos.value.map { it.data })) {
+            return when (uploadRepo.uploadPostMediaFiles(postId, _photos.value.map { UploadFile("attachment", it.mimeType, it.data) })) {
                 is NetworkResult.Success -> (if (isEditing) "Saved" else "Posted") to false
                 is NetworkResult.Failure ->
                     (
                         if (isEditing) {
-                            "Saved. Photos could not be confirmed. Try again."
+                            "Saved. Attachments could not be confirmed. Try again."
                         } else {
-                            "Post saved. Photos could not be confirmed. Try again."
+                            "Post saved. Attachments could not be confirmed. Try again."
                         }
                     ) to true
             }
@@ -874,30 +980,315 @@ class PulseComposeViewModel
                 )
                 return
             }
-            // The precheck runs on body blur (RN `PostComposerModal.tsx:801`).
-            // When it came back with a live posting restriction the draft is
-            // refused here instead of round-tripping into a server rejection.
-            val cooldown = _precheckCooldown.value
-            if (cooldown != null) {
-                _toast.value = PulseComposeToast(cooldown, isError = true)
-                Analytics.track(
-                    AnalyticsEvent.FormPulseComposeSubmit(
-                        intent = _activeIntent.value.key,
-                        result = AnalyticsResult.ERROR,
-                    ),
-                )
-                return
-            }
+            // A live posting restriction refuses the draft; words the AI suggested wait for "Post this?" once per draft.
+            if (isBlockedByPrecheck() || needsAIConfirmation()) return
             _state.value = PulseComposeUiState.Submitting
+            // Earlier answers still on their way would only arrive behind the post.
+            earlierAnswersJob?.cancel()
+            earlierAnswersQuery = ""
             viewModelScope.launch {
                 val editingId = editingPostId
                 if (editingId != null) {
                     handleUpdate(editingId)
                 } else {
+                    if (needsSecondLook()) return@launch
                     refreshGpsFixIfNeeded()
                     handleCreate()
                 }
             }
+        }
+
+        // MARK: - Before you ask (`GET /api/posts/before-you-ask`)
+
+        /** A new question going to a place nearby: the only draft that looks for earlier answers. */
+        private val isWritingQuestion: Boolean
+            get() = !isEditing && effectivePostType() == "ask_local" && postingTarget?.isPlaceTarget != false
+
+        /**
+         * Looks for earlier answers once the question has 3 words, 600 ms after it stops changing; a shorter
+         * question or another kind of post clears them. Nothing is shown when the look fails.
+         */
+        private fun scheduleEarlierAnswers() {
+            val query =
+                if (isWritingQuestion) {
+                    "${trimmedValue(PulseComposeField.Title)} ${trimmedValue(PulseComposeField.Body)}".trim()
+                } else {
+                    ""
+                }
+            if (query.split(WHITESPACE).count { it.isNotEmpty() } < EARLIER_ANSWERS_MIN_WORDS) {
+                earlierAnswersJob?.cancel()
+                earlierAnswersQuery = ""
+                _earlierAnswers.value = emptyList()
+                return
+            }
+            if (query == earlierAnswersQuery) return
+            earlierAnswersQuery = query
+            earlierAnswersJob?.cancel()
+            earlierAnswersJob =
+                viewModelScope.launch {
+                    delay(EARLIER_ANSWERS_DEBOUNCE_MS)
+                    val target = postingTarget
+                    val result =
+                        precheckRepo.beforeYouAsk(
+                            query,
+                            target?.targetLatitude ?: freshGpsFix?.latitude,
+                            target?.targetLongitude ?: freshGpsFix?.longitude,
+                        )
+                    val posts = (result as? NetworkResult.Success)?.data?.posts ?: return@launch
+                    if (query == earlierAnswersQuery) _earlierAnswers.value = posts
+                }
+        }
+
+        // MARK: - The check before posting (`POST /api/posts/precheck`, `stage: "post"`)
+
+        /** The draft as the check reads it; "Post anyway" approves exactly this. */
+        private fun postCheckDraft(request: PostCreateRequest): String =
+            listOf(request.postType, request.safetyAlertKind.orEmpty(), request.title.orEmpty(), request.content)
+                .joinToString("\u001F")
+
+        /**
+         * Runs the kindness and safety check when Post is tapped on a new post to a place nearby. True when it
+         * found something: the composer is back to editing and shows the findings with Edit and Post anyway. A
+         * failed or slow check (10 s) posts as usual.
+         */
+        private suspend fun needsSecondLook(): Boolean {
+            if (businessAuthorId != null || postingTarget?.isPlaceTarget == false) return false
+            val request = buildRequest()
+            val draft = postCheckDraft(request)
+            if (draft == postAnywayDraft) return false
+            val target = postingTarget
+            val result =
+                withTimeoutOrNull(POST_CHECK_TIMEOUT_MS) {
+                    precheckRepo.precheck(
+                        PostPrecheckRequest(
+                            content = request.content,
+                            postType = request.postType,
+                            purpose = request.purpose,
+                            surface = "place",
+                            latitude = target?.targetLatitude ?: freshGpsFix?.latitude,
+                            longitude = target?.targetLongitude ?: freshGpsFix?.longitude,
+                            stage = "post",
+                            title = request.title,
+                            safetyAlertKind = request.safetyAlertKind,
+                        ),
+                    )
+                }
+            val findings = (result as? NetworkResult.Success)?.data?.findings.orEmpty()
+            if (findings.isEmpty()) return false
+            _state.value = PulseComposeUiState.Idle
+            _postCheckFindings.value = findings
+            return true
+        }
+
+        /** "Post anyway": posts this draft as it is. */
+        fun postAnyway() {
+            postAnywayDraft = postCheckDraft(buildRequest())
+            _postCheckFindings.value = null
+            submit()
+        }
+
+        /** "Edit": back to the composer, the words kept. */
+        fun editAfterPostCheck() {
+            _postCheckFindings.value = null
+        }
+
+        /**
+         * The precheck runs on body blur (RN `PostComposerModal.tsx:801`). When it came back with a live posting
+         * restriction the draft is refused here instead of round-tripping into a server rejection.
+         */
+        private fun isBlockedByPrecheck(): Boolean {
+            val cooldown = _precheckCooldown.value ?: return false
+            _toast.value = PulseComposeToast(cooldown, isError = true)
+            Analytics.track(
+                AnalyticsEvent.FormPulseComposeSubmit(
+                    intent = _activeIntent.value.key,
+                    result = AnalyticsResult.ERROR,
+                ),
+            )
+            return true
+        }
+
+        // MARK: - AI assist (`POST /api/ai/draft/post-suggestion`)
+
+        /** True while a suggestion is on its way. */
+        val isSuggesting: Boolean get() = _assist.value is PulseComposeAssistState.Writing
+
+        /** How many of the attachments a suggestion reads: pictures, not videos or PDFs. */
+        val assistPhotoCount: Int
+            get() = _photos.value.count { it.mimeType.startsWith("image/") }.coerceAtMost(ASSIST_MAX_PHOTOS)
+
+        /** True when there's something to write a post from: a photo, or words in the form. */
+        val assistHasMaterial: Boolean
+            get() {
+                if (assistPhotoCount > 0) return true
+                val active = activeIntentFields()
+                return ASSIST_WRITTEN_FIELDS.any { (field, _) -> field in active && trimmedValue(field).isNotEmpty() }
+            }
+
+        /**
+         * Asks for the whole post from the photos, the place and what's in the form, and puts it in the form. The
+         * person changes anything they like; Post asks them to check it first ("Post this?"). Mirrors iOS
+         * `PulseComposeViewModel.suggestPost`.
+         */
+        fun suggestPost() {
+            if (isEditing || isSuggesting) return
+            if (!networkMonitor.isOnline.value) {
+                _assist.value = PulseComposeAssistState.Failed("You're offline. Try again when you're back online.")
+                return
+            }
+            val request = suggestionRequest()
+            val stills = _photos.value.filter { it.mimeType.startsWith("image/") }.take(ASSIST_MAX_PHOTOS).map { it.data }
+            _assist.value = PulseComposeAssistState.Writing
+            viewModelScope.launch {
+                // Each photo goes as a JPEG of at most 1600px, re-encoded without its EXIF (where and when it was taken).
+                val files =
+                    withContext(Dispatchers.Default) {
+                        stills.mapIndexedNotNull { index, bytes ->
+                            ListingPhotoProcessor.uploadData(bytes)?.let { UploadFile("photo-$index.jpg", "image/jpeg", it) }
+                        }
+                    }
+                // Photos this phone couldn't read, and no words: there's nothing to send.
+                if (stills.isNotEmpty() && files.isEmpty() && ASSIST_WRITTEN_FIELDS.none { (_, name) -> name in request }) {
+                    _assist.value = PulseComposeAssistState.Failed("Couldn't read that photo. Try another one, or write a few words.")
+                    return@launch
+                }
+                when (val result = uploadRepo.suggestPost(files, request)) {
+                    is NetworkResult.Success -> {
+                        applySuggestion(result.data.suggestion)
+                        _assist.value = PulseComposeAssistState.Suggested(result.data.note?.trim()?.ifEmpty { null })
+                        runPrecheckSuspending()
+                    }
+                    is NetworkResult.Failure ->
+                        _assist.value = PulseComposeAssistState.Failed(result.error.readerMessage().ifBlank { ASSIST_FALLBACK })
+                }
+            }
+        }
+
+        /** Puts the form back as it was before the suggestion. */
+        fun undoSuggestion() {
+            val before = assistUndo ?: return
+            _fields.value = before.fields
+            _lostFoundKind.value = before.lostFoundKind
+            _safetyAlertKind.value = before.safetyAlertKind
+            _askCategory.value = before.askCategory
+            _dealExpiresAt.value = before.dealExpiresAt
+            assistUndo = null
+            hasAISuggestion = false
+            _assist.value = PulseComposeAssistState.Idle
+            precheckDone = false
+            scheduleEarlierAnswers()
+        }
+
+        /** The request's fields: the kind of post, who it goes to, what the person wrote and the place. */
+        private fun suggestionRequest(): Map<String, String> {
+            // "Try again" right after a suggestion starts over from what the person wrote, not from the suggestion.
+            val written = assistUndo?.fields ?: _fields.value
+            val active = activeIntentFields()
+            val request = mutableMapOf("postType" to effectivePostType(), "audience" to effectiveAudience())
+            for ((field, name) in ASSIST_WRITTEN_FIELDS) {
+                val value = written[field]?.value?.trim().orEmpty()
+                if (field in active && value.isNotEmpty()) request[name] = value
+            }
+            assistPlace()?.let { (name, address) ->
+                request["place"] = name
+                address?.let { request["placeAddress"] = it }
+            }
+            return request
+        }
+
+        /**
+         * The place the post is about, for the suggestion: a tagged venue with its address, or the area it's posted to
+         * ("Camas, WA"). A tagged street address or a home's address never goes: it could be someone's home.
+         */
+        private fun assistPlace(): Pair<String, String?>? {
+            val tag = _selectedPlaceTag.value
+            if (tag != null && tag.kind != "address") return tag.name to tag.address?.trim()?.ifEmpty { null }
+            val label = postingTarget?.takeIf { it.isPlaceTarget }?.displayLabel?.trim().orEmpty()
+            return if (label.isEmpty() || label.any { it.isDigit() }) null else label to null
+        }
+
+        /**
+         * Fills the form from a suggestion. The title and the text are replaced; a venue, business, place or date the
+         * person already filled in stays; the choices (lost or found, the kind of heads-up, the category, when a deal
+         * ends) follow the suggestion. Undo puts it all back.
+         */
+        @Suppress("CyclomaticComplexMethod")
+        private fun applySuggestion(suggestion: AIPostSuggestionDto) {
+            if (assistUndo == null) {
+                assistUndo =
+                    PulseComposeAssistSnapshot(
+                        fields = _fields.value,
+                        lostFoundKind = _lostFoundKind.value,
+                        safetyAlertKind = _safetyAlertKind.value,
+                        askCategory = _askCategory.value,
+                        dealExpiresAt = _dealExpiresAt.value,
+                    )
+            }
+            isApplyingSuggestion = true
+            val active = activeIntentFields()
+
+            fun fill(
+                field: PulseComposeField,
+                value: String?,
+                replacing: Boolean = false,
+            ) {
+                val text = value?.trim().orEmpty()
+                if (field !in active || text.isEmpty() || (!replacing && trimmedValue(field).isNotEmpty())) return
+                update(field, text)
+            }
+            fill(PulseComposeField.Title, suggestion.title, replacing = true)
+            fill(PulseComposeField.Body, suggestion.body, replacing = true)
+            fill(PulseComposeField.RecommendBusiness, suggestion.businessName)
+            fill(PulseComposeField.DealBusinessName, suggestion.businessName)
+            fill(PulseComposeField.EventLocation, suggestion.eventVenue)
+            // The event fields hold the pickers' local wall clock, `yyyy-MM-dd HH:mm`.
+            fill(PulseComposeField.EventDate, suggestion.eventDate?.replace('T', ' '))
+            fill(PulseComposeField.EventEndDate, suggestion.eventEndDate?.replace('T', ' '))
+            fill(PulseComposeField.LostLastSeenLocation, suggestion.lastSeenLocation)
+            fill(PulseComposeField.LostLastSeenDate, suggestion.lastSeenDate)
+            if (_activeIntent.value == PulseComposeIntent.Lost) {
+                PulseLostFoundKind.entries.firstOrNull { it.key == suggestion.lostFoundType }?.let { _lostFoundKind.value = it }
+            }
+            if (effectivePostType() == "alert") {
+                suggestion.safetyAlertKind?.let(PulseSafetyAlertKind::fromKey)?.let { _safetyAlertKind.value = it }
+            }
+            if (_activeIntent.value == PulseComposeIntent.Ask) {
+                PulseAskCategory.entries.firstOrNull { it.key == suggestion.askCategory }?.let { _askCategory.value = it }
+            }
+            if (effectivePostType() == "deal") {
+                suggestion.dealExpiresAt?.let { PulseComposeDraftFields.localEnd(it) }?.let { _dealExpiresAt.value = it }
+            }
+            isApplyingSuggestion = false
+            hasAISuggestion = true
+        }
+
+        /**
+         * A new post with words the AI suggested asks "Post this?" once per draft, so the person checks what goes out
+         * under their name. True when it is asking.
+         */
+        private fun needsAIConfirmation(): Boolean {
+            if (!hasAISuggestion || isEditing) return false
+            val draft = postCheckDraft(buildRequest())
+            if (draft == aiConfirmedDraft) return false
+            _aiPostConfirmation.value =
+                if (effectiveAudience() == "connections") {
+                    "Pantopus AI wrote parts of this post. Check that it's right before your connections see it."
+                } else {
+                    "Pantopus AI wrote parts of this post. Check that it's right before neighbors see it."
+                }
+            return true
+        }
+
+        /** "Post" on "Post this?": posts this draft as it is. */
+        fun confirmAIPost() {
+            aiConfirmedDraft = postCheckDraft(buildRequest())
+            _aiPostConfirmation.value = null
+            submit()
+        }
+
+        /** "Keep editing" on "Post this?": back to the composer. */
+        fun keepEditingAIPost() {
+            _aiPostConfirmation.value = null
         }
 
         /**
@@ -1067,16 +1458,31 @@ class PulseComposeViewModel
                     seedField(PulseComposeField.Title, post.title.orEmpty())
                     seedField(PulseComposeField.Body, post.content)
                     seedField(PulseComposeField.EventDate, formatEventDateForPicker(post.eventDate))
+                    seedField(PulseComposeField.EventEndDate, formatEventDateForPicker(post.eventEndDate))
                     seedField(PulseComposeField.EventLocation, post.eventVenue.orEmpty())
                 }
                 PulseComposeIntent.Lost -> {
-                    val (location, body) = unwrapLostBody(post.content)
+                    val (lastSeen, body) = unwrapLostBody(post.content)
+                    val (location, lastSeenDate) = splitLastSeenLine(lastSeen.orEmpty())
                     seedField(PulseComposeField.Body, body)
-                    seedField(PulseComposeField.LostLastSeenLocation, location.orEmpty())
+                    seedField(PulseComposeField.LostLastSeenLocation, location)
+                    seedField(PulseComposeField.LostLastSeenDate, lastSeenDate)
                     post.lostFoundType
                         ?.let { raw -> PulseLostFoundKind.entries.firstOrNull { it.key == raw } }
                         ?.let { _lostFoundKind.value = it }
                     baselineLostFoundKind = _lostFoundKind.value
+                    // The saved contact ("dm", "comment", "phone" or "phone|<digits>"), shown read-only: the edit
+                    // can't store a phone number. A post saved without one reads as Direct message, as on the web.
+                    val savedContact = post.lostFoundContactPref.orEmpty()
+                    _lostFoundContactPref.value =
+                        PulseLostFoundContactPref.entries.firstOrNull { it.key == savedContact.substringBefore('|') }
+                            ?: PulseLostFoundContactPref.Dm
+                    baselineLostFoundContactPref = _lostFoundContactPref.value
+                    val savedNumber = savedContact.substringAfter('|', missingDelimiterValue = "")
+                    seedField(
+                        PulseComposeField.ContactPhone,
+                        savedNumber.takeIf { _lostFoundContactPref.value == PulseLostFoundContactPref.Phone }.orEmpty(),
+                    )
                 }
                 PulseComposeIntent.Announce -> {
                     seedField(PulseComposeField.Title, post.title.orEmpty())
@@ -1131,15 +1537,29 @@ class PulseComposeViewModel
         }
 
         /**
+         * Splits the Last seen line `prefixLastSeen` wrote, "<loc> · <date>", into the
+         * location and the picker's `yyyy-MM-dd`. A last part that isn't a date in this
+         * phone's locale (an older post, or another locale's) stays in the location.
+         */
+        private fun splitLastSeenLine(line: String): Pair<String, String> {
+            val lastPart = line.substringAfterLast(LAST_SEEN_SEPARATOR)
+            val day = runCatching { LocalDate.parse(lastPart, lastSeenDayFormatter()) }.getOrNull() ?: return line to ""
+            return line.substringBeforeLast(LAST_SEEN_SEPARATOR, missingDelimiterValue = "") to day.toString()
+        }
+
+        /**
          * Convert an ISO-8601 wire date into the `yyyy-MM-dd HH:mm` shape
          * the Event date picker emits. Returns "" when the wire value is
-         * missing or unparsable.
+         * missing, and an unreadable one unchanged. The API sends
+         * `…+00:00`, which `Instant.parse` refuses before Android 14.
          */
         private fun formatEventDateForPicker(raw: String?): String {
             if (raw.isNullOrEmpty()) return ""
             val instant =
                 runCatching {
-                    java.time.Instant.parse(raw)
+                    java.time.OffsetDateTime
+                        .parse(raw)
+                        .toInstant()
                 }.getOrNull() ?: return raw
             val dt = instant.atZone(java.time.ZoneOffset.UTC).toLocalDateTime()
             return "%04d-%02d-%02d %02d:%02d".format(
@@ -1180,17 +1600,21 @@ class PulseComposeViewModel
                 PulseComposeIntent.Event -> {
                     val venue = trimmedValue(PulseComposeField.EventLocation)
                     val dateRaw = trimmedValue(PulseComposeField.EventDate)
+                    val endRaw = trimmedValue(PulseComposeField.EventEndDate)
                     PostUpdateRequest(
                         content = bodyValue,
                         title = titleValue.ifEmpty { null },
                         eventDate = dateRaw.ifEmpty { null }?.let { isoDateTime(it) },
+                        eventEndDate = endRaw.ifEmpty { null }?.let { isoDateTime(it) },
+                        // A cleared End field removes the saved end.
+                        clearEventEndDate = endRaw.isEmpty() && _fields.value[PulseComposeField.EventEndDate]?.isDirty == true,
                         eventVenue = venue.ifEmpty { null },
                     )
                 }
                 PulseComposeIntent.Lost -> {
                     val lastSeen = trimmedValue(PulseComposeField.LostLastSeenLocation)
                     PostUpdateRequest(
-                        content = prefixLastSeen(bodyValue, lastSeen),
+                        content = prefixLastSeen(bodyValue, lastSeen, trimmedValue(PulseComposeField.LostLastSeenDate)),
                         lostFoundType = _lostFoundKind.value.key,
                     )
                 }
@@ -1262,7 +1686,7 @@ class PulseComposeViewModel
                         val lastSeen = trimmedValue(PulseComposeField.LostLastSeenLocation)
                         val phone = trimmedValue(PulseComposeField.ContactPhone)
                         PostCreateRequest(
-                            content = prefixLastSeen(bodyValue, lastSeen),
+                            content = prefixLastSeen(bodyValue, lastSeen, trimmedValue(PulseComposeField.LostLastSeenDate)),
                             postType = postType,
                             visibility = vis,
                             postAs = postAs,
@@ -1399,10 +1823,23 @@ class PulseComposeViewModel
             return if (body.isEmpty()) row else "$row\n\n$body"
         }
 
+        /**
+         * "Last seen: <loc> · <date>\n\n<body>", the date in the poster's own
+         * locale. [date] is the picker's `yyyy-MM-dd`; an empty one leaves just the place.
+         */
         private fun prefixLastSeen(
             body: String,
             location: String,
-        ): String = if (location.isEmpty()) body else "Last seen: $location\n\n$body"
+            date: String,
+        ): String {
+            val day = runCatching { LocalDate.parse(date).format(lastSeenDayFormatter()) }.getOrNull()
+            val line = listOf(location, day.orEmpty()).filter { it.isNotEmpty() }.joinToString(LAST_SEEN_SEPARATOR)
+            return if (line.isEmpty()) body else "Last seen: $line\n\n$body"
+        }
+
+        /** The day as the post shows it, in the poster's own locale ("Oct 20, 2026"). */
+        private fun lastSeenDayFormatter(): DateTimeFormatter =
+            DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(Locale.getDefault())
 
         /**
          * Normalize an event date to ISO-8601. Accepts the picker-emitted
@@ -1415,6 +1852,22 @@ class PulseComposeViewModel
             if (PICKER_DATE_TIME_PATTERN.matches(raw)) return raw.replaceFirst(" ", "T") + ":00Z"
             return "${raw}T09:00:00Z"
         }
+
+        /**
+         * A drafted event time as its field shows it: the draft's moment on this phone's wall clock, as the pickers
+         * write it (`yyyy-MM-dd HH:mm`), or just the day for a date without a time; null when unreadable. It posts
+         * like a pick, through [isoDateTime]: "10:00 AM" goes out as `…T10:00:00Z`, which `pulseEventDetails` reads
+         * back as 10:00 AM, as every composer posts an event's time. The drafted instant itself would show shifted by
+         * the zone's offset.
+         */
+        private fun draftTimeShown(raw: String): String? =
+            PulseComposeDraftFields.localTime(raw)?.let { time ->
+                if (time.instant == null) time.local.toLocalDate().toString() else pickerDateTime(time.local)
+            }
+
+        /** The `yyyy-MM-dd HH:mm` shape the date-and-time pickers write. */
+        private fun pickerDateTime(value: LocalDateTime): String =
+            "%04d-%02d-%02d %02d:%02d".format(value.year, value.monthValue, value.dayOfMonth, value.hour, value.minute)
 
         /** Encode a local date-time as an ISO-8601 UTC instant. */
         private fun isoTimestamp(value: LocalDateTime): String =
@@ -1433,6 +1886,9 @@ class PulseComposeViewModel
 
             /** Nav arg carrying a Pantopus AI post draft's headline. */
             const val PREFILL_TITLE_KEY = "prefillTitle"
+
+            /** Nav arg carrying a Pantopus AI post draft's type and other fields ([PulseComposeDraftFields.encode]). */
+            const val PREFILL_DRAFT_FIELDS_KEY = "prefillDraft"
             private const val TITLE_MAX = 255
             private const val BODY_MAX = 5000
             private const val LOCATION_MAX = 255
@@ -1443,6 +1899,26 @@ class PulseComposeViewModel
             private const val PHONE_MAX_DIGITS = 15
             private const val DEAL_DEFAULT_EXPIRY_DAYS = 7L
             private const val GPS_REFRESH_TIMEOUT_MS = 3_000L
+            private const val EARLIER_ANSWERS_MIN_WORDS = 3
+            private const val EARLIER_ANSWERS_DEBOUNCE_MS = 600L
+            private const val POST_CHECK_TIMEOUT_MS = 10_000L
+
+            /** How many photos a suggestion reads (`postSuggestion.MAX_PHOTOS` on the server). */
+            private const val ASSIST_MAX_PHOTOS = 4
+
+            /** The typed fields a suggestion reads, with the request's name for each. */
+            private val ASSIST_WRITTEN_FIELDS =
+                listOf(
+                    PulseComposeField.Title to "title",
+                    PulseComposeField.Body to "body",
+                    PulseComposeField.RecommendBusiness to "businessName",
+                    PulseComposeField.DealBusinessName to "businessName",
+                    PulseComposeField.EventLocation to "eventVenue",
+                    PulseComposeField.LostLastSeenLocation to "lastSeenLocation",
+                )
+            private const val ASSIST_FALLBACK = "Couldn't write a suggestion. Try again, or write the post yourself."
+            private val WHITESPACE = Regex("\\s+")
+            private const val LAST_SEEN_SEPARATOR = " · "
             private val PICKER_DATE_TIME_PATTERN = Regex("""^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$""")
             private val ISO_DATE_ONLY_PATTERN = Regex("""^\d{4}-\d{2}-\d{2}$""")
         }

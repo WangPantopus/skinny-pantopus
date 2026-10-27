@@ -44,7 +44,9 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import app.pantopus.android.core.LaunchFeatures
+import app.pantopus.android.data.ai.AIScreenContext
 import app.pantopus.android.data.api.models.posts.PostDetailDto
+import app.pantopus.android.data.plans.PlanFormat
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.RefreshFailedLine
 import app.pantopus.android.ui.components.RefreshNotice
@@ -55,6 +57,8 @@ import app.pantopus.android.ui.components.ToastMessage
 import app.pantopus.android.ui.screens.compose.pulse.PulseLostFoundContactPref
 import app.pantopus.android.ui.screens.compose.pulse.PulseLostFoundKind
 import app.pantopus.android.ui.screens.feed.pulse.PostStatusPill
+import app.pantopus.android.ui.screens.feed.pulse.PulseEventDetails
+import app.pantopus.android.ui.screens.feed.pulse.pulseEventDetails
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailShell
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailTopBar
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailTopBarAction
@@ -68,6 +72,8 @@ import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
 import kotlinx.coroutines.delay
+import java.time.Instant
+import java.time.ZoneId
 
 /** Report reasons mirrored from the iOS reasons dialog. */
 private val reportReasons =
@@ -79,6 +85,13 @@ private val reportReasons =
         "safety" to "Safety concern",
         "other" to "Other",
     )
+
+/**
+ * An Event's when and where ("Sunday, Oct 18 · 7:00–9:00 PM", the place), as the web post page shows them;
+ * null for other posts.
+ */
+internal fun eventDetails(post: PostDetailDto): PulseEventDetails? =
+    pulseEventDetails(post.postType, post.eventDate, post.eventEndDate, post.eventVenue, long = true)
 
 /**
  * "Lost · Contact: Phone 5555550123" for a Lost & Found post, as the web card and post page show it;
@@ -113,6 +126,10 @@ fun PulsePostDetailScreen(
     /** "Nearby Providers" tap-through. Carries the business *username*. */
     onOpenBusiness: (String) -> Unit = {},
     onContentLoaded: () -> Unit = {},
+    /** Ask Pantopus about this post (AI assistant phase 1); null hides the button. */
+    onAsk: ((AIScreenContext) -> Unit)? = null,
+    /** Plans is on for the person, so Ask on an event that hasn't ended offers "Make this a plan". */
+    plansOn: Boolean = false,
     viewModel: PulsePostDetailViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
@@ -215,6 +232,19 @@ fun PulsePostDetailScreen(
                                 icon = PantopusIcon.Share,
                                 contentDescription = "Share post",
                                 onClick = { launchShareSheet() },
+                            )
+                        },
+                    topBarTertiaryAction =
+                        onAsk?.let { ask ->
+                            ContentDetailTopBarAction(
+                                icon = PantopusIcon.Sparkles,
+                                contentDescription = "Ask Pantopus",
+                                onClick = {
+                                    val makesPlan = plansOn && isEventAhead(content.post)
+                                    ask(AIScreenContext.post(content.post.id, postAskLabel(content.post), makesPlan))
+                                },
+                                testTag = "postAskPantopus",
+                                tint = PantopusColors.magic,
                             )
                         },
                     onBack = onBack,
@@ -448,6 +478,7 @@ fun PulsePostDetailLoadedContent(
     actionPending: Boolean = false,
     topBarAction: ContentDetailTopBarAction? = null,
     topBarSecondaryAction: ContentDetailTopBarAction? = null,
+    topBarTertiaryAction: ContentDetailTopBarAction? = null,
     onBack: () -> Unit = {},
     onOpenProfile: (String) -> Unit = {},
     /** Organically matched local businesses — empty hides the card. */
@@ -472,6 +503,7 @@ fun PulsePostDetailLoadedContent(
         onBack = onBack,
         topBarAction = topBarAction,
         topBarSecondaryAction = topBarSecondaryAction,
+        topBarTertiaryAction = topBarTertiaryAction,
         cta = { InlineReplyCta() },
         header = {
             Column(verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
@@ -479,6 +511,7 @@ fun PulsePostDetailLoadedContent(
                 if (content.post.isRemovedByModerator) {
                     RemovedPostNotice(modifier = Modifier.padding(horizontal = Spacing.s4))
                 }
+                val businessAuthor = content.post.creator?.takeIf { it.identityType == "business" }
                 PostAuthorHeader(
                     displayName = content.authorDisplayName,
                     avatarUrl = content.authorAvatarUrl,
@@ -486,7 +519,13 @@ fun PulsePostDetailLoadedContent(
                     identity = content.authorIdentity,
                     timeAndLocality = content.timeAndLocality,
                     intent = content.intent,
-                    onAvatarTap = { onOpenProfile(content.post.userId) },
+                    // A business author opens its page, and only while it has a published one (the web links none).
+                    onAvatarTap =
+                        if (businessAuthor != null) {
+                            businessAuthor.businessPageId?.let { businessId -> { onOpenBusiness(businessId) } }
+                        } else {
+                            { onOpenProfile(content.post.userId) }
+                        },
                 )
                 content.status?.let { status ->
                     PostStatusPill(
@@ -508,6 +547,7 @@ fun PulsePostDetailLoadedContent(
             BodyReactionsBody(
                 body = content.post.content,
                 detailLine = lostFoundDetailLine(content.post),
+                eventDetails = eventDetails(content.post),
                 media = content.media,
                 intent = content.intent,
                 reactions = content.reactions,
@@ -631,3 +671,24 @@ private fun ErrorLayout(
         )
     }
 }
+
+/**
+ * An event that hasn't ended: its end, else its start, is still ahead. Composers post the poster's wall clock
+ * labelled UTC, so it compares with the phone's own wall clock read the same way (`pulseEventDetails`).
+ */
+private fun isEventAhead(
+    post: PostDetailDto,
+    now: Instant = Instant.now(),
+): Boolean {
+    if (post.postType != "event") return false
+    val last = PlanFormat.instant(post.eventEndDate) ?: PlanFormat.instant(post.eventDate) ?: return true
+    return last.isAfter(now.plusSeconds(ZoneId.systemDefault().rules.getOffset(now).totalSeconds.toLong()))
+}
+
+/** The assistant thread's "About: …" line for a post: its headline, or the start of its text. */
+private fun postAskLabel(post: PostDetailDto): String =
+    post.title?.trim()?.ifEmpty { null }
+        ?: post.content.trim().lineSequence().firstOrNull()?.take(POST_ASK_LABEL_MAX)?.ifEmpty { null }
+        ?: "This post"
+
+private const val POST_ASK_LABEL_MAX = 60

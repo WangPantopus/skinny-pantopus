@@ -10,9 +10,11 @@ interface LocationsTabProps {
   locations: BusinessLocation[];
   businessId: string;
   onUpdate: () => void;
+  canManage: boolean;
+  canEditHours: boolean;
 }
 
-export default function LocationsTab({ locations, businessId, onUpdate }: LocationsTabProps) {
+export default function LocationsTab({ locations, businessId, onUpdate, canManage, canEditHours }: LocationsTabProps) {
   const [showAdd, setShowAdd] = useState(false);
   const [addForm, setAddForm] = useState({ label: '', address: '', city: '', state: '', zipcode: '', country: 'US' });
   const [saving, setSaving] = useState(false);
@@ -55,18 +57,19 @@ export default function LocationsTab({ locations, businessId, onUpdate }: Locati
 
   return (
     <div className="space-y-4">
+      {!canManage && !canEditHours && <p className="text-sm text-app-secondary">You have view-only access to this section.</p>}
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-app">Locations & Hours</h2>
-        <button
+        {canManage && <button
           onClick={() => setShowAdd(!showAdd)}
           className="px-3 py-1.5 rounded-lg bg-violet-600 text-white text-sm font-semibold hover:bg-violet-700 transition"
         >
           {showAdd ? 'Cancel' : 'Add location'}
-        </button>
+        </button>}
       </div>
 
       {/* Add form */}
-      {showAdd && (
+      {canManage && showAdd && (
         <div className="rounded-xl border border-violet-200 bg-violet-50 p-5 space-y-3">
           <Field label="Label" value={addForm.label} onChange={(v) => setAddForm({ ...addForm, label: v })} placeholder="e.g. Downtown, Main Office" />
           <Field label="Address *" value={addForm.address} onChange={(v) => setAddForm({ ...addForm, address: v })} />
@@ -87,7 +90,7 @@ export default function LocationsTab({ locations, businessId, onUpdate }: Locati
       {/* Locations list */}
       {locations.length === 0 ? (
         <div className="rounded-xl border border-app bg-surface p-6 text-center text-app-secondary">
-          No locations yet. Add your first location to show on your profile.
+          No locations yet.{canManage ? ' Add your first location to show on your profile.' : ''}
         </div>
       ) : (
         <div className="space-y-3">
@@ -111,18 +114,18 @@ export default function LocationsTab({ locations, businessId, onUpdate }: Locati
                 </div>
                 <div className="flex items-center gap-3">
                   {/* The weekly and special hours editor (the Overview checklist's "Set business hours" lands here). */}
-                  <Link
+                  {canEditHours && <Link
                     href={`/app/business/${businessId}/locations/${loc.id}/hours`}
                     className="text-xs font-medium text-violet-600 hover:underline"
                   >
                     Hours
-                  </Link>
-                  <button
+                  </Link>}
+                  {canManage && <button
                     onClick={() => removeLocation(loc.id)}
                     className="text-xs text-red-500 hover:text-red-700"
                   >
                     Remove
-                  </button>
+                  </button>}
                 </div>
               </div>
             </div>

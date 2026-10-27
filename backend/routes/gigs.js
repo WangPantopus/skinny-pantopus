@@ -32,6 +32,7 @@ const {
 } = require('../utils/moduleSchemas');
 const stripeService = require('../stripe/stripeService');
 const blockService = require('../services/blockService');
+const { canActAsBusiness } = require('../services/chatBusinessAccess');
 const { escapeIlike } = require('../utils/escapeIlike');
 const { publicPayment, payeePayment, publicGigFee } = require('../stripe/gigPaymentProof');
 const paidGigAcceptance = require('../services/gigPaymentAcceptance');
@@ -50,9 +51,17 @@ const { hasUsableCoordinates } = require('../services/seederProvisioningService'
 const { checkHomePermission } = require('../utils/homePermissions');
 const {
   serializeGigAuthorForViewer,
+  serializeLocalProfileForViewer,
   serializeUserAsLocalIdentity,
-  serializeUserIdentityForViewer,
 } = require('../serializers/identitySerializers');
+const {
+  hydrateListingCreatorIdentities,
+  hydrateTaskPeople,
+  loadTaskPersonName,
+  loadTaskPosterFields,
+  serializeTaskPerson,
+  withoutAccountPoster,
+} = require('../utils/listingCreatorIdentity');
 
 // ============ HELPERS ============
 
@@ -308,29 +317,18 @@ function summarizeGigBids(bids) {
 // `+N` overflow tile next to the status chip. To avoid an N+1 fetch
 // from the client, the `/api/gigs/my-gigs` handler inlines the top-3
 // bidders per gig as a `top_bidders[≤3]: {id, initials, color}` array
-// derived from the GigBid → User join. Initials and tone are computed
+// derived from the GigBid rows. Initials and tone are computed
 // server-side so iOS, Android, and web all render identical avatars
 // without each platform reinventing the derivation.
 
 const BIDDER_TONES = ['sky', 'teal', 'amber', 'rose', 'violet', 'slate'];
 
-function bidderInitialsFromUser(user) {
-  if (!user) return '?';
-  const first = (user.first_name || '').trim();
-  const last = (user.last_name || '').trim();
-  if (first && last) {
-    return `${first[0]}${last[0]}`.toUpperCase();
-  }
-  const name = (user.name || '').trim();
-  if (name) {
-    const parts = name.split(/\s+/);
-    if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-    return name.slice(0, 2).toUpperCase();
-  }
-  const username = chosenUsernameOrNull(user.username) || '';
-  if (username) {
-    return username.slice(0, 2).toUpperCase();
-  }
+// The initials of the name the bid list shows a bidder by (their Local Profile's), never their account's first and
+// last name. Split by code point, so a name that starts with an emoji keeps it whole.
+function bidderInitials(displayName) {
+  const parts = String(displayName || '').trim().split(/\s+/).filter(Boolean).map((part) => Array.from(part));
+  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  if (parts.length === 1) return parts[0].slice(0, 2).join('').toUpperCase();
   return '?';
 }
 
@@ -359,7 +357,7 @@ async function topBiddersByGig(gigIds) {
   // before truncating to 3 per gig.
   const { data: bidRows, error: bidsError } = await supabaseAdmin
     .from('GigBid')
-    .select('gig_id, user_id, created_at, User:user_id(id, first_name, last_name, name, username)')
+    .select('gig_id, user_id, created_at')
     .in('gig_id', gigIds)
     .order('created_at', { ascending: false });
 
@@ -382,13 +380,19 @@ async function topBiddersByGig(gigIds) {
     const userId = String(row?.user_id || '');
     if (!userId) continue;
     if (byGigId[gigId].some((b) => b.id === userId)) continue;
-    const user = row.User || {};
     byGigId[gigId].push({
       id: userId,
-      initials: bidderInitialsFromUser(user),
+      initials: '?',
       color: bidderToneFromId(userId),
     });
   }
+
+  // Each bidder is named by their Local Profile, as on the task's bid list. A bidder whose account can't be read
+  // keeps '?'.
+  const bidders = [...new Set(Object.values(byGigId).flat().map((b) => b.id))].map((id) => ({ user_id: id }));
+  await hydrateListingCreatorIdentities(bidders);
+  const initialsById = new Map(bidders.map((b) => [b.user_id, bidderInitials(serializeTaskPerson(b.creator)?.displayName)]));
+  for (const bidder of Object.values(byGigId).flat()) bidder.initials = initialsById.get(bidder.id) || '?';
   return byGigId;
 }
 
@@ -408,10 +412,17 @@ function normalizeGigItems(items) {
   return [];
 }
 
-function redactGigTracking(gig, canViewPrivateWork = false) {
+function redactGigTracking(gig, canViewPrivateWork = false, viewerId = null) {
   if (!gig) return null;
   const safe = { ...gig };
   if ('items' in safe) safe.items = normalizeGigItems(safe.items);
+  // A task posted for a business (created_by is the team member who posted it) names the business, never the person
+  // behind it: who posted or cancelled it reads as the business, except to that person themselves.
+  if (safe.created_by && safe.user_id && String(safe.created_by) !== String(safe.user_id)) {
+    const forBusiness = (id) => id && ![safe.user_id, gig.accepted_by, viewerId].some((known) => known && String(known) === String(id));
+    if (forBusiness(safe.created_by)) safe.created_by = safe.user_id;
+    if (forBusiness(safe.cancelled_by)) safe.cancelled_by = safe.user_id;
+  }
   // Share credentials belong only to the explicit share command. Exact helper
   // coordinates belong to the existing consent-gated active-status reader.
   for (const key of ['status_share_token', 'status_share_expires_at', 'helper_last_location']) delete safe[key];
@@ -464,9 +475,9 @@ function taskDay(value) {
   return `${day}T19:00:00.000Z`;
 }
 
-function serializeGigForViewer(gig, { canViewPrivateWork = false } = {}) {
+function serializeGigForViewer(gig, { canViewPrivateWork = false, viewerId = null } = {}) {
   if (!gig) return null;
-  const { creator, acceptedBy, ...safe } = redactGigTracking(gig, canViewPrivateWork);
+  const { creator, acceptedBy, ...safe } = redactGigTracking(gig, canViewPrivateWork, viewerId);
   if (!canViewPrivateWork) {
     // Payment details stay with the poster, their managers and the worker, as on GET /:gigId/payment.
     for (const key of ['completion_note', 'completion_photos', 'completion_checklist',
@@ -483,7 +494,7 @@ function serializeGigForViewer(gig, { canViewPrivateWork = false } = {}) {
     ...safe,
     ...(canViewPrivateWork ? { completion_review: paidGigAcceptance.completionReview(gig) } : {}),
     creator: creator
-      ? serializeUserIdentityForViewer(creator)
+      ? serializeTaskPerson(creator)
       : serializeGigAuthorForViewer({
           identity_context_type: 'local',
           creator: {
@@ -493,24 +504,41 @@ function serializeGigForViewer(gig, { canViewPrivateWork = false } = {}) {
             profile_picture_url: gig.profile_picture_url,
           },
         }),
-    acceptedBy: canViewPrivateWork ? serializeUserAsLocalIdentity(acceptedBy) : null,
+    acceptedBy: canViewPrivateWork ? serializeTaskPerson(acceptedBy) : null,
   };
 }
 
-function serializeGigQuestionForViewer(question) {
+// On a business's task the answers are the business's: `business` (the task's owner) is named as the answerer, never
+// the team member who wrote the answer. On a person's task the answerer is the poster. The asker and the poster are
+// named by their Local Profile (hydrateTaskPeople, before this).
+function serializeGigQuestionForViewer(question, { business = null } = {}) {
   if (!question) return null;
   const { asker, answerer, ...safe } = question;
   return {
     ...safe,
-    asker: serializeUserAsLocalIdentity(asker),
-    answerer: serializeUserIdentityForViewer(answerer),
+    asker: serializeTaskPerson(asker),
+    answerer: serializeTaskPerson(business && answerer ? business : answerer),
   };
 }
 
+// The person who asked for a change, and the one who answered it, are named by their Local Profile, a business as the
+// business (hydrateTaskPeople, before this).
+function serializeGigChangeOrderForViewer(order) {
+  if (!order) return null;
+  const { requester, reviewer, ...safe } = order;
+  return {
+    ...safe,
+    requester: serializeTaskPerson(requester),
+    reviewer: serializeTaskPerson(reviewer),
+  };
+}
+
+// The bidder is named by their Local Profile (hydrateTaskPeople, before this), with the track record the poster
+// weighs bids by.
 function serializeGigBidForViewer(bid) {
   if (!bid) return null;
   const { bidder, ...safe } = bid;
-  const bidderIdentity = serializeUserAsLocalIdentity(bidder);
+  const bidderIdentity = serializeTaskPerson(bidder, { counts: true });
   return {
     ...safe,
     bidder: bidderIdentity ? {
@@ -1439,7 +1467,7 @@ router.get('/nearby', async (req, res) => {
     }
 
     res.json({
-      gigs: limitedGigs,
+      gigs: limitedGigs.map(withoutAccountPoster),
       total: limitedGigs.length,
       searchCenter: { latitude: lat, longitude: lon },
       radiusMeters,
@@ -1521,6 +1549,7 @@ router.get('/assignments/me', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch your assignments' });
     }
 
+    await hydrateListingCreatorIdentities((assignments || []).map((assignment) => assignment.gig).filter(Boolean));
     res.json({
       assignments: (assignments || []).map((assignment) => ({
         ...assignment,
@@ -1623,6 +1652,8 @@ router.get('/my-gigs', verifyToken, async (req, res) => {
     });
   } catch (err) {
     logger.error('My gigs fetch error', { error: err.message, userId: req.user.id });
+    // The businesses' permissions couldn't be read: listing their tasks could show one a deny hides.
+    if (err.code === 'AUTHORIZATION_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
     res.status(500).json({ error: 'Failed to fetch your gigs' });
   }
 });
@@ -1977,31 +2008,25 @@ router.get('/received-offers', verifyToken, async (req, res) => {
 
     const safeBids = bids || [];
 
-    // 4) Get bidder user info
-    const bidderIds = [...new Set(safeBids.map((b) => b.user_id).filter(Boolean))];
-    let usersById = {};
-    if (bidderIds.length > 0) {
-      const { data: users } = await supabaseAdmin
-        .from('User')
-        .select('id, username, name, first_name, profile_picture_url, city, state')
-        .in('id', bidderIds);
-      for (const u of users || []) usersById[u.id] = u;
-    }
+    // 4) Each bidder, named by their Local Profile as on the task's bid list
+    const bidders = safeBids.map((b) => ({ user_id: b.user_id }));
+    await hydrateListingCreatorIdentities(bidders);
 
     // 5) Build gigs lookup
     const gigsById = {};
     for (const g of myGigs) gigsById[g.id] = g;
 
     // 6) Merge
-    const merged = safeBids.map((b) => ({
+    const merged = safeBids.map((b, i) => ({
       ...b,
       gig: gigsById[b.gig_id] || null,
-      bidder: usersById[b.user_id] || null,
+      bidder: serializeTaskPerson(bidders[i].creator),
     }));
 
     return res.json({ offers: merged, total: merged.length });
   } catch (err) {
     logger.error('Received offers error', { error: err?.message });
+    if (err?.code === 'AUTHORIZATION_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
     return res.status(500).json({ error: 'Failed to fetch received offers' });
   }
 });
@@ -2178,6 +2203,7 @@ router.get('/search', verifyToken, async (req, res) => {
         }
       }
 
+      const posterFields = await loadTaskPosterFields(rows);
       const result = rows.map((g) => ({
         id: g.id,
         title: g.title,
@@ -2190,9 +2216,7 @@ router.get('/search', verifyToken, async (req, res) => {
         status: g.status,
         accepted_by: g.accepted_by,
         created_at: g.created_at,
-        poster_display_name: g.creator_name || g.creator_username || 'Anonymous',
-        poster_username: g.creator_username || null,
-        poster_profile_picture_url: g.profile_picture_url || null,
+        ...posterFields(g),
         bidsCount: bidCountsByGigId[String(g.id)] || 0,
         distance_meters: g.distance_meters,
         exact_city: g.exact_city,
@@ -2242,17 +2266,7 @@ router.get('/search', verifyToken, async (req, res) => {
         remote_details,
         urgent_details,
         event_details,
-        User:user_id (
-          id,
-          username,
-          name,
-          first_name,
-          last_name,
-          profile_picture_url,
-          city,
-          state,
-          account_type
-        )
+        User:user_id ( account_type )
       `
     );
 
@@ -2299,13 +2313,6 @@ router.get('/search', verifyToken, async (req, res) => {
     // Score and rank results
     const ranked = rows
       .map((g) => {
-        const poster = g.User || null;
-        const posterDisplayName =
-          poster?.name ||
-          [poster?.first_name, poster?.last_name].filter(Boolean).join(' ') ||
-          chosenUsernameOrNull(poster?.username) ||
-          'Anonymous';
-
         const title = String(g.title || '').toLowerCase();
         const description = String(g.description || '').toLowerCase();
         const cat = String(g.category || '').toLowerCase();
@@ -2334,10 +2341,7 @@ router.get('/search', verifyToken, async (req, res) => {
           status: g.status,
           accepted_by: g.accepted_by,
           created_at: g.created_at,
-          poster_display_name: posterDisplayName,
-          poster_username: poster?.username || null,
-          poster_profile_picture_url: poster?.profile_picture_url || null,
-          poster_account_type: poster?.account_type || null,
+          poster_account_type: g.User?.account_type || null,
           bidsCount: bidCountsByGigId[String(g.id)] || 0,
           _score: score,
           _searchable: searchable,
@@ -2350,9 +2354,9 @@ router.get('/search', verifyToken, async (req, res) => {
       });
 
     const total = ranked.length;
-    const result = ranked
-      .slice(safeOffset, safeOffset + safeLimit)
-      .map(({ _score, _searchable, ...rest }) => rest);
+    const page = ranked.slice(safeOffset, safeOffset + safeLimit);
+    const posterFields = await loadTaskPosterFields(page);
+    const result = page.map(({ _score, _searchable, ...rest }) => ({ ...rest, ...posterFields(rest) }));
 
     return res.json({ gigs: result, total });
   } catch (err) {
@@ -2608,9 +2612,8 @@ router.get('/', optionalAuth, async (req, res) => {
         }
       }
 
+      const posterFields = await loadTaskPosterFields(rows);
       const gigsWithCounts = rows.map((g) => {
-        const posterDisplayName = g.creator_name || g.creator_username || 'Anonymous';
-
         // Apply per-viewer location privacy
         const { resolveGigPrecision, applyLocationPrecision } = require('../utils/locationPrivacy');
         const { precision, isOwner, locationUnlocked } = resolveGigPrecision(g, currentUserId);
@@ -2651,9 +2654,7 @@ router.get('/', optionalAuth, async (req, res) => {
           status: g.status,
           accepted_by: g.accepted_by,
           created_at: g.created_at,
-          poster_display_name: posterDisplayName,
-          poster_username: g.creator_username || null,
-          poster_profile_picture_url: g.profile_picture_url || null,
+          ...posterFields(g),
           bid_count: bidCountsByGigId[String(g.id)] || 0,
           bidsCount: bidCountsByGigId[String(g.id)] || 0,
           viewer_has_saved: savedGigIds.has(String(g.id)),
@@ -2745,18 +2746,7 @@ router.get('/', optionalAuth, async (req, res) => {
         logistics_details,
         remote_details,
         urgent_details,
-        event_details,
-        User:user_id (
-          id,
-          username,
-          name,
-          first_name,
-          last_name,
-          profile_picture_url,
-          city,
-          state,
-          account_type
-        )
+        event_details
       `,
       { count: 'exact' }
     );
@@ -2867,19 +2857,11 @@ router.get('/', optionalAuth, async (req, res) => {
 
     const savedGigIds = await getViewerSavedGigIds(currentUserId, gigIdsFromGigs);
 
+    const posterFields = await loadTaskPosterFields(gigs);
     const gigsWithCounts = (gigs || []).map((g) => {
-      const poster = g.User || null;
-      const posterDisplayName =
-        poster?.name ||
-        [poster?.first_name, poster?.last_name].filter(Boolean).join(' ') ||
-        chosenUsernameOrNull(poster?.username) ||
-        'Anonymous';
-
       return {
-        ...redactGigTracking(g, Boolean(currentUserId) && (g.user_id === currentUserId || g.accepted_by === currentUserId)),
-        poster_display_name: posterDisplayName,
-        poster_username: poster?.username || null,
-        poster_profile_picture_url: poster?.profile_picture_url || null,
+        ...redactGigTracking(g, Boolean(currentUserId) && (g.user_id === currentUserId || g.accepted_by === currentUserId), currentUserId),
+        ...posterFields(g),
         bid_count: bidCountsByGigId[String(g.id)] || 0,
         bidsCount: bidCountsByGigId[String(g.id)] || 0,
         viewer_has_saved: savedGigIds.has(String(g.id)),
@@ -2978,21 +2960,17 @@ router.get('/in-bounds', optionalAuth, async (req, res) => {
       }
     }
 
-    // v2 RPC already joins User for creator_name/creator_username/profile_picture_url
+    const posterFields = await loadTaskPosterFields(rows);
     const { resolveGigPrecision: _resolveBounds, applyLocationPrecision: _applyBounds } = require('../utils/locationPrivacy');
     const enriched = rows.map((gig) => {
-      const posterDisplayName = gig.creator_name || gig.creator_username || 'Anonymous';
-
       // Apply location privacy per viewer
       const { precision, isOwner, locationUnlocked } = _resolveBounds(gig, currentUserId);
       _applyBounds(gig, precision, isOwner);
 
       const exactCoords = locationUnlocked ? exactCoordsByGigIdBounds.get(String(gig.id)) : null;
       const out = {
-        ...gig,
-        poster_display_name: posterDisplayName,
-        poster_username: gig.creator_username || null,
-        poster_profile_picture_url: gig.profile_picture_url || null,
+        ...withoutAccountPoster(gig),
+        ...posterFields(gig),
         viewer_has_saved: savedGigIds.has(String(gig.id)),
         locationUnlocked,
       };
@@ -3109,17 +3087,7 @@ router.get('/saved', verifyToken, async (req, res) => {
           remote_details,
           urgent_details,
           event_details,
-          User:user_id (
-            id,
-            username,
-            name,
-            first_name,
-            last_name,
-            profile_picture_url,
-            city,
-            state,
-            account_type
-          )
+          User:user_id ( account_type )
         `
       )
       .in('id', savedGigIds);
@@ -3151,20 +3119,12 @@ router.get('/saved', verifyToken, async (req, res) => {
     }
 
     const savedOrder = new Map(savedGigIds.map((gigId, index) => [String(gigId), index]));
+    const posterFields = await loadTaskPosterFields(gigs);
     const enriched = (gigs || [])
-      .map((gig) => {
-        const poster = gig.User || null;
-        const posterDisplayName =
-          poster?.name ||
-          [poster?.first_name, poster?.last_name].filter(Boolean).join(' ') ||
-          chosenUsernameOrNull(poster?.username) ||
-          'Anonymous';
-
+      .map(({ User: poster, ...gig }) => {
         return {
-          ...redactGigTracking(gig, gig.user_id === userId || gig.accepted_by === userId),
-          poster_display_name: posterDisplayName,
-          poster_username: poster?.username || null,
-          poster_profile_picture_url: poster?.profile_picture_url || null,
+          ...redactGigTracking(gig, gig.user_id === userId || gig.accepted_by === userId, userId),
+          ...posterFields(gig),
           poster_account_type: poster?.account_type || null,
           bid_count: bidCountsByGigId[String(gig.id)] || 0,
           bidsCount: bidCountsByGigId[String(gig.id)] || 0,
@@ -3228,20 +3188,22 @@ router.get('/rebookable', verifyToken, async (req, res) => {
     }
     const limited = deduped.slice(0, 10);
 
-    // 3. Fetch worker profiles
+    // 3. Fetch workers: each is named by their Local Profile, as the task names them, with their rating
     const workerIds = [...new Set(limited.map(g => g.accepted_by))];
     const { data: workers, error: workersErr } = await supabaseAdmin
       .from('User')
-      .select('id, first_name, last_name, username, profile_picture_url, average_rating')
+      .select('id, average_rating')
       .in('id', workerIds);
 
     if (workersErr) {
       logger.error('Rebookable workers query error', { error: workersErr.message });
     }
 
+    const workerRows = (workers || []).map(w => ({ creator: w }));
+    await hydrateListingCreatorIdentities(workerRows);
     const workerMap = {};
-    for (const w of (workers || [])) {
-      workerMap[w.id] = w;
+    for (const { creator } of workerRows) {
+      workerMap[creator.id] = creator;
     }
 
     // 4. Fetch poster's reviews for these gigs (batch)
@@ -3270,14 +3232,7 @@ router.get('/rebookable', verifyToken, async (req, res) => {
         category: gig.category,
         price: gig.price,
         completedAt: gig.owner_confirmed_at,
-        worker: w ? {
-          id: w.id,
-          firstName: w.first_name,
-          lastName: w.last_name,
-          username: w.username,
-          avatarUrl: w.profile_picture_url,
-          rating: w.average_rating,
-        } : null,
+        worker: w ? { ...serializeTaskPerson(w), rating: w.average_rating } : null,
         myReview: reviewMap[gig.id] || null,
         city: gig.exact_city,
         state: gig.exact_state,
@@ -3498,7 +3453,6 @@ router.post('/:gigId/report', verifyToken, validate(reportGigSchema), async (req
 // ============ BROWSE SECTIONS ENDPOINT ============
 
 const { getGigClusters } = require('../services/gig/clusterService');
-const { chosenUsernameOrNull } = require('../utils/personalUsername');
 
 /**
  * GET /api/gigs/browse
@@ -3722,7 +3676,7 @@ router.get('/browse', optionalAuth, async (req, res) => {
     // Enrich gigs with first_image for thumbnails
     const addFirstImage = (gigs) =>
       gigs.map((g) => ({
-        ...g,
+        ...withoutAccountPoster(g),
         first_image: extractFirstImage(g.attachments),
       }));
 
@@ -3933,7 +3887,12 @@ router.get('/:id', optionalAuth, async (req, res) => {
       String(gig.accepted_by) === String(currentUserId)
       || (await getGigOwnerAccess(gig.user_id, currentUserId, 'gigs.manage')).allowed
     );
-    res.json({ gig: serializeGigForViewer(gig, { canViewPrivateWork }) });
+    // The poster, and the worker for those who see them, are named by their Local Profile, as on their listings and posts.
+    await Promise.all([
+      hydrateListingCreatorIdentities(gig),
+      canViewPrivateWork && hydrateTaskPeople([gig], ['acceptedBy']),
+    ]);
+    res.json({ gig: serializeGigForViewer(gig, { canViewPrivateWork, viewerId: currentUserId }) });
   } catch (err) {
     logger.error('Gig fetch error', { error: err.message, gigId: req.params.id });
     res.status(500).json({ error: 'Failed to fetch gig' });
@@ -4091,7 +4050,7 @@ router.post('/:gigId/bids', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'This gig is no longer accepting bids' });
     }
 
-    if (gig.user_id === userId) {
+    if (await canActAsBusiness(gig.user_id, userId)) {
       return res.status(400).json({ error: 'You cannot bid on your own gig' });
     }
 
@@ -4191,19 +4150,14 @@ router.post('/:gigId/bids', verifyToken, async (req, res) => {
     }
 
     // ─── Notify gig poster: new bid received ───
-    const [{ data: bidder }, bidCountResult] = await Promise.all([
-      supabaseAdmin
-        .from('User')
-        .select('name, username')
-        .eq('id', userId)
-        .single(),
+    const [bidderName, bidCountResult] = await Promise.all([
+      loadTaskPersonName(userId, 'Someone'),
       supabaseAdmin
         .from('GigBid')
         .select('id', { count: 'exact', head: true })
         .eq('gig_id', gigId)
         .in('status', ['pending', 'accepted', 'countered']),
     ]);
-    const bidderName = bidder?.name || bidder?.username || 'Someone';
     const activeBidCount = bidCountResult.error ? null : bidCountResult.count;
 
     notifyBidReceived({
@@ -4310,6 +4264,7 @@ router.get('/:gigId/bids', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch bids' });
     }
 
+    await hydrateTaskPeople(bids, ['bidder']);
     // Normalize 'assigned' → 'accepted' for backwards compat
     const normalizedBids = (bids || []).map((b) => ({
       ...serializeGigBidForViewer(b),
@@ -4457,6 +4412,16 @@ router.put('/:gigId/bids/:bidId', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'Only pending or countered bids can be updated' });
     }
 
+    const { data: gig, error: gigErr } = await supabaseAdmin
+      .from('Gig')
+      .select('user_id')
+      .eq('id', gigId)
+      .single();
+    if (gigErr || !gig) return res.status(404).json({ error: 'Gig not found' });
+    if (await canActAsBusiness(gig.user_id, userId)) {
+      return res.status(400).json({ error: 'You cannot bid on your own gig' });
+    }
+
     const { data: updatedBid, error: updErr } = await supabaseAdmin
       .from('GigBid')
       .update({
@@ -4533,6 +4498,11 @@ router.post('/:gigId/bids/:bidId/accept', verifyToken, async (req, res) => {
 
     if (String(bid.gig_id) !== String(gigId)) {
       return res.status(400).json({ error: 'Bid does not belong to this gig' });
+    }
+
+    // Recheck old bids and membership changes before payment or worker assignment.
+    if (await canActAsBusiness(gig.user_id, bid.user_id)) {
+      return res.status(400).json({ error: 'You cannot accept your own task' });
     }
 
     const agreedPrice = Number(bid.bid_amount);
@@ -4649,12 +4619,11 @@ router.post('/:gigId/bids/:bidId/accept', verifyToken, async (req, res) => {
       }
 
       if (roomId) {
+        // A business's staff who accepted aren't added: they answer as the business through its own row
+        // (services/chatBusinessAccess), so the worker never sees who they are.
         const participants = [
           { room_id: roomId, user_id: gig.user_id, role: 'owner', is_active: true },
           { room_id: roomId, user_id: bid.user_id, role: 'member', is_active: true },
-          ...(String(actorUserId) !== String(gig.user_id)
-            ? [{ room_id: roomId, user_id: actorUserId, role: 'member', is_active: true }]
-            : []),
         ];
 
         await supabaseAdmin
@@ -4777,6 +4746,11 @@ router.post('/:gigId/bids/:bidId/finalize-accept', verifyToken, async (req, res)
 
     if (String(bid.gig_id) !== String(gigId)) {
       return res.status(400).json({ error: 'Bid does not belong to this gig' });
+    }
+
+    // Recheck old bids and membership changes before payment or worker assignment.
+    if (await canActAsBusiness(gig.user_id, bid.user_id)) {
+      return res.status(400).json({ error: 'You cannot accept your own task' });
     }
 
     let finalized;
@@ -4989,7 +4963,8 @@ router.post('/:gigId/bids/:bidId/counter', verifyToken, async (req, res) => {
         counter_amount: parseFloat(amount),
         counter_message: counterMsg || null,
         countered_at: nowIso,
-        countered_by: userId,
+        // The bidder sees the bid row: a counter for a business is the business's, never its team member's.
+        countered_by: ownerAccess.viaBusiness ? gig.user_id : userId,
         counter_status: 'pending',
         status: 'countered',
         updated_at: nowIso,
@@ -5048,6 +5023,17 @@ router.post('/:gigId/bids/:bidId/counter/accept', verifyToken, async (req, res) 
       return res.status(400).json({ error: 'No pending counter-offer on this bid' });
     }
 
+    const { data: gig, error: gigErr } = await supabaseAdmin
+      .from('Gig')
+      .select('user_id, title')
+      .eq('id', gigId)
+      .single();
+
+    if (gigErr || !gig) return res.status(404).json({ error: 'Gig not found' });
+    if (await canActAsBusiness(gig.user_id, userId)) {
+      return res.status(400).json({ error: 'You cannot bid on your own gig' });
+    }
+
     const nowIso = new Date().toISOString();
     const { data: updatedBid, error: updateErr } = await supabaseAdmin
       .from('GigBid')
@@ -5069,19 +5055,8 @@ router.post('/:gigId/bids/:bidId/counter/accept', verifyToken, async (req, res) 
     }
 
     // Notify the requester
-    const { data: gig } = await supabaseAdmin
-      .from('Gig')
-      .select('user_id, title')
-      .eq('id', gigId)
-      .single();
-
     if (gig) {
-      const { data: bidder } = await supabaseAdmin
-        .from('User')
-        .select('name, username')
-        .eq('id', userId)
-        .single();
-      const bidderName = bidder?.name || bidder?.username || 'The bidder';
+      const bidderName = await loadTaskPersonName(userId, 'The bidder');
 
       createNotification({
         userId: gig.user_id,
@@ -5126,6 +5101,17 @@ router.post('/:gigId/bids/:bidId/counter/decline', verifyToken, async (req, res)
       return res.status(400).json({ error: 'No pending counter-offer on this bid' });
     }
 
+    const { data: gig, error: gigErr } = await supabaseAdmin
+      .from('Gig')
+      .select('user_id, title')
+      .eq('id', gigId)
+      .single();
+
+    if (gigErr || !gig) return res.status(404).json({ error: 'Gig not found' });
+    if (await canActAsBusiness(gig.user_id, userId)) {
+      return res.status(400).json({ error: 'You cannot bid on your own gig' });
+    }
+
     const nowIso = new Date().toISOString();
     const { data: updatedBid, error: updateErr } = await supabaseAdmin
       .from('GigBid')
@@ -5146,19 +5132,8 @@ router.post('/:gigId/bids/:bidId/counter/decline', verifyToken, async (req, res)
     }
 
     // Notify the requester
-    const { data: gig } = await supabaseAdmin
-      .from('Gig')
-      .select('user_id, title')
-      .eq('id', gigId)
-      .single();
-
     if (gig) {
-      const { data: bidder } = await supabaseAdmin
-        .from('User')
-        .select('name, username')
-        .eq('id', userId)
-        .single();
-      const bidderName = bidder?.name || bidder?.username || 'The bidder';
+      const bidderName = await loadTaskPersonName(userId, 'The bidder');
 
       createNotification({
         userId: gig.user_id,
@@ -5319,12 +5294,7 @@ router.delete('/:gigId/bids/:bidId', verifyToken, async (req, res) => {
       .single();
 
     if (gigData) {
-      const { data: bidder } = await supabaseAdmin
-        .from('User')
-        .select('name, username')
-        .eq('id', userId)
-        .single();
-      const bidderName = bidder?.name || bidder?.username || 'A bidder';
+      const bidderName = await loadTaskPersonName(userId, 'A bidder');
 
       createNotification({
         userId: gigData.user_id,
@@ -5444,12 +5414,7 @@ router.post('/:gigId/start', verifyToken, async (req, res) => {
     }
 
     // ─── Notify gig poster: worker started ───
-    const { data: worker } = await supabaseAdmin
-      .from('User')
-      .select('name, username')
-      .eq('id', userId)
-      .single();
-    const workerName = worker?.name || chosenUsernameOrNull(worker?.username) || 'The worker';
+    const workerName = await loadTaskPersonName(userId, 'The worker');
 
     const ownerRecipients = await getGigOwnerNotificationRecipients(gig.user_id, userId);
     if (ownerRecipients.length > 0) {
@@ -5578,7 +5543,8 @@ router.post('/:gigId/remind-worker', verifyToken, async (req, res) => {
       metadata: {
         gig_id: gigId,
         reminder_kind: 'start_work',
-        sent_by: actorUserId,
+        // The worker's notification names who reminded them: the business, for a business's task.
+        sent_by: ownerAccess.viaBusiness ? gig.user_id : actorUserId,
       },
     });
 
@@ -6172,7 +6138,8 @@ router.get('/:gigId/change-orders', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch change orders' });
     }
 
-    res.json({ change_orders: orders || [] });
+    await hydrateTaskPeople(orders, ['requester', 'reviewer']);
+    res.json({ change_orders: (orders || []).map(serializeGigChangeOrderForViewer) });
   } catch (err) {
     logger.error('Change orders fetch error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch change orders' });
@@ -6288,19 +6255,21 @@ router.post('/:gigId/change-orders', verifyToken, async (req, res) => {
         .order('created_at', { ascending: true })
         .limit(1)
         .maybeSingle();
-    const repeatedOrder = (changeOrder) =>
-      res.json({
-        change_order: changeOrder,
+    const repeatedOrder = async (changeOrder) => {
+      await hydrateTaskPeople([changeOrder], ['requester']);
+      return res.json({
+        change_order: serializeGigChangeOrderForViewer(changeOrder),
         already_requested: true,
         message: 'You already sent this change request. It is waiting for a reply.',
       });
+    };
 
     const { data: existingOrder, error: existingErr } = await findPendingRepeat();
     if (existingErr) {
       logger.error('Error checking for a repeated change order', { error: existingErr.message });
       return res.status(500).json({ error: 'Failed to create change order' });
     }
-    if (existingOrder) return repeatedOrder(existingOrder);
+    if (existingOrder) return await repeatedOrder(existingOrder);
 
     // Rate limit: max 5 pending change orders per gig
     const { count, error: countErr } = await supabaseAdmin
@@ -6356,7 +6325,7 @@ router.post('/:gigId/change-orders', verifyToken, async (req, res) => {
 
     if (insertErr?.code === '23505') {
       const { data: racedOrder, error: racedErr } = await findPendingRepeat();
-      if (!racedErr && racedOrder) return repeatedOrder(racedOrder);
+      if (!racedErr && racedOrder) return await repeatedOrder(racedOrder);
     }
     if (insertErr) {
       logger.error('Error creating change order', { error: insertErr.message });
@@ -6365,13 +6334,7 @@ router.post('/:gigId/change-orders', verifyToken, async (req, res) => {
 
     // Notify the other party
     const otherUserId = isPoster ? gig.accepted_by : gig.user_id;
-    const { data: requester } = await supabaseAdmin
-      .from('User')
-      .select('name, username')
-      .eq('id', userId)
-      .single();
-    const requesterName =
-      requester?.name || chosenUsernameOrNull(requester?.username) || (isPoster ? 'The poster' : 'The worker');
+    const requesterName = await loadTaskPersonName(userId, isPoster ? 'The poster' : 'The worker');
     const gigTitle = gig.title || 'a gig';
 
     const changeLabel =
@@ -6397,7 +6360,8 @@ router.post('/:gigId/change-orders', verifyToken, async (req, res) => {
     }
 
     emitGigUpdate(req, gigId, 'status-change');
-    res.status(201).json({ change_order: order });
+    await hydrateTaskPeople([order], ['requester']);
+    res.status(201).json({ change_order: serializeGigChangeOrderForViewer(order) });
   } catch (err) {
     logger.error('Change order create error', { error: err.message });
     res.status(500).json({ error: 'Failed to create change order' });
@@ -6457,8 +6421,10 @@ router.post('/:gigId/change-orders/:orderId/approve', verifyToken, async (req, r
       return res.status(400).json({ error: `Change order is already ${order.status}` });
     }
 
-    // The approver must be the OTHER party (not the requester)
-    if (String(order.requested_by) === String(userId)) {
+    // The business and anyone who can act for it are the same party.
+    if (String(order.requested_by) === String(userId)
+      || (await canActAsBusiness(gig.user_id, userId)
+        && await canActAsBusiness(gig.user_id, order.requested_by))) {
       return res.status(403).json({ error: 'You cannot approve your own change order' });
     }
 
@@ -6568,7 +6534,10 @@ router.post('/:gigId/change-orders/:orderId/reject', verifyToken, async (req, re
       return res.status(400).json({ error: `Change order is already ${order.status}` });
     }
 
-    if (String(order.requested_by) === String(userId)) {
+    // The business and anyone who can act for it are the same party.
+    if (String(order.requested_by) === String(userId)
+      || (await canActAsBusiness(gig.user_id, userId)
+        && await canActAsBusiness(gig.user_id, order.requested_by))) {
       return res
         .status(403)
         .json({ error: 'You cannot reject your own change order. Use withdraw instead.' });
@@ -6834,9 +6803,10 @@ router.get('/:gigId/questions', async (req, res) => {
       [owner?.first_name, owner?.last_name].filter(Boolean).join(' ') ||
       owner?.username ||
       'Business';
+    await hydrateTaskPeople(questions, ownerIsBusiness ? ['asker'] : ['asker', 'answerer']);
 
     const normalized = (questions || []).map((q) => ({
-      ...serializeGigQuestionForViewer(q),
+      ...serializeGigQuestionForViewer(q, { business: ownerIsBusiness ? owner : null }),
       question_attachments: q.question_attachments || [],
       answer_attachments: q.answer_attachments || [],
       answerer_display_name: ownerIsBusiness && q.answer ? ownerDisplayName : null,
@@ -6916,14 +6886,10 @@ router.post('/:gigId/questions', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to post question' });
     }
 
-    // Notify gig poster
+    // Notify gig poster, naming the asker as the question does
+    await hydrateTaskPeople([q], ['asker']);
     if (String(gig.user_id) !== String(userId)) {
-      const { data: asker } = await supabaseAdmin
-        .from('User')
-        .select('name, username')
-        .eq('id', userId)
-        .single();
-      const askerName = asker?.name || asker?.username || 'Someone';
+      const askerName = serializeTaskPerson(q.asker)?.displayName || 'Someone';
 
       createNotification({
         userId: gig.user_id,
@@ -7030,11 +6996,12 @@ router.post('/:gigId/questions/:questionId/answer', verifyToken, async (req, res
       [owner?.first_name, owner?.last_name].filter(Boolean).join(' ') ||
       owner?.username ||
       'Business';
+    await hydrateTaskPeople([updated], ownerIsBusiness ? ['asker'] : ['asker', 'answerer']);
 
     emitGigUpdate(req, gigId, 'qa-update');
     res.json({
       question: {
-        ...serializeGigQuestionForViewer(updated),
+        ...serializeGigQuestionForViewer(updated, { business: ownerIsBusiness ? owner : null }),
         answerer_display_name: ownerIsBusiness ? ownerDisplayName : null,
         answerer_display_id: ownerIsBusiness ? owner?.id : null,
         answerer_display_username: ownerIsBusiness ? owner?.username || null : null,
@@ -7535,12 +7502,7 @@ router.post('/:gigId/report-no-show', verifyToken, async (req, res) => {
     // 4) Notify the no-show party. The worker's report shares one notice per
     // task with its recovery paths, so a retry or a recorded webhook never repeats it.
     if (isPoster) {
-      const { data: reporter } = await supabaseAdmin
-        .from('User')
-        .select('name, username')
-        .eq('id', userId)
-        .single();
-      const reporterName = reporter?.name || chosenUsernameOrNull(reporter?.username) || 'The other party';
+      const reporterName = await loadTaskPersonName(userId, 'The other party');
       createNotification({
         userId: reportedAgainst,
         type: 'no_show_reported',
@@ -7670,6 +7632,16 @@ router.patch('/:id/my-bid', verifyToken, async (req, res) => {
     if (!existing) return res.status(404).json({ error: 'Bid not found' });
     if (existing.status !== 'pending')
       return res.status(400).json({ error: 'Only pending bids can be edited' });
+
+    const { data: gig, error: gigErr } = await supabaseAdmin
+      .from('Gig')
+      .select('user_id')
+      .eq('id', gigId)
+      .single();
+    if (gigErr || !gig) return res.status(404).json({ error: 'Gig not found' });
+    if (await canActAsBusiness(gig.user_id, userId)) {
+      return res.status(400).json({ error: 'You cannot bid on your own gig' });
+    }
 
     const patch = {};
     if (bid_amount !== undefined) patch.bid_amount = bid_amount;
@@ -7819,6 +7791,29 @@ async function openOwnerConversation(userId, gig) {
   return { directRoomId, topicId };
 }
 
+// For the owner and staff of the business that posted a task: they answer its room as the business
+// (services/chatBusinessAccess), so the apps open it with `asBusinessUserId` and, once the task is assigned, head it
+// with the worker's name as the business inbox lists it (routes/chats.js). A failed name read leaves the name out.
+async function taskBusinessChatContext(gig) {
+  const context = { asBusinessUserId: String(gig.user_id) };
+  if (!gig.accepted_by) return context;
+  try {
+    const [{ data: worker }, { data: profile }] = await Promise.all([
+      supabaseAdmin.from('User').select('id, username, name, first_name, middle_name, last_name')
+        .eq('id', gig.accepted_by).maybeSingle(),
+      supabaseAdmin.from('LocalProfile').select('id, user_id, handle, display_name')
+        .eq('user_id', gig.accepted_by).maybeSingle(),
+    ]);
+    const identity = profile && worker
+      ? serializeLocalProfileForViewer({ ...profile, user: worker })
+      : serializeUserAsLocalIdentity(worker);
+    if (identity?.displayName) context.workerName = identity.displayName;
+  } catch (err) {
+    logger.warn('Gig chat-room: worker name unavailable', { gigId: gig.id, error: err?.message });
+  }
+  return context;
+}
+
 /**
  * GET /api/gigs/:gigId/chat-room
  * Get (or create) the gig chat room, ensuring participants exist.
@@ -7826,6 +7821,9 @@ async function openOwnerConversation(userId, gig) {
  * Pre-bid users get added as participants but are message-limited.
  * Once a worker is assigned, the room is the owner's and the worker's conversation:
  * anyone else gets their direct room with the owner and is never added to it.
+ * A business owner's staff are never added either: they answer as the business through its
+ * own row (services/chatBusinessAccess), so the worker and askers never see who they are.
+ * For them the response adds `asBusinessUserId` and, once assigned, `workerName` (taskBusinessChatContext).
  */
 router.get('/:gigId/chat-room', verifyToken, async (req, res) => {
   const { gigId } = req.params;
@@ -7881,14 +7879,11 @@ router.get('/:gigId/chat-room', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to get chat room' });
     }
 
-    // Ensure participants
+    // Ensure participants: the owner, the worker, and anyone asking before the task is assigned.
     const participants = [
       { room_id: roomId, user_id: gig.user_id, role: 'owner' },
       ...(gig.accepted_by ? [{ room_id: roomId, user_id: gig.accepted_by, role: 'member' }] : []),
-      // Add current acting user as participant when different from canonical owner/worker.
-      ...(!isAcceptedWorker && String(userId) !== String(gig.user_id)
-        ? [{ room_id: roomId, user_id: userId, role: 'member' }]
-        : []),
+      ...(!isOwner && !isAcceptedWorker ? [{ room_id: roomId, user_id: userId, role: 'member' }] : []),
     ];
 
     const { error: partErr } = await supabaseAdmin
@@ -7961,9 +7956,11 @@ router.get('/:gigId/chat-room', verifyToken, async (req, res) => {
     }
 
     // ─── Unified conversation: also create direct room + task topic ───
-    const { topicId } = await openOwnerConversation(userId, gig);
+    // Not for the owner's staff: theirs would be a conversation with their own business.
+    const { topicId } = isOwner ? { topicId: null } : await openOwnerConversation(userId, gig);
+    const businessContext = ownerAccess.viaBusiness && !isAcceptedWorker ? await taskBusinessChatContext(gig) : {};
 
-    return res.json({ roomId, preBidInfo, topicId, gigOwnerId: gig.user_id });
+    return res.json({ roomId, preBidInfo, topicId, gigOwnerId: gig.user_id, ...businessContext });
   } catch (err) {
     logger.error('Gig chat-room: unexpected error', {
       error: err?.message,

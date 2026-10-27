@@ -115,6 +115,7 @@ class PlanDetailViewModel
         val ui: StateFlow<PlanDetailUi> = _ui.asStateFlow()
 
         private var loadJob: Job? = null
+        private var requestsJob: Job? = null
         private var askedOnOpen = false
 
         init {
@@ -165,9 +166,12 @@ class PlanDetailViewModel
         }
 
         private fun loadRequests() {
-            viewModelScope.launch {
-                (repository.requests(planId) as? NetworkResult.Success)?.data?.let { reply -> _ui.update { it.copy(requests = reply) } }
-            }
+            requestsJob?.cancel()
+            _ui.update { it.copy(requests = null) }
+            requestsJob =
+                viewModelScope.launch {
+                    (repository.requests(planId) as? NetworkResult.Success)?.data?.let { reply -> _ui.update { it.copy(requests = reply) } }
+                }
         }
 
         fun hasLocationPermission(): Boolean = locations.hasLocationPermission()
@@ -239,7 +243,8 @@ class PlanDetailViewModel
 
         fun openAsk() {
             val plan = (_ui.value.state as? PlanDetailUiState.Ready)?.plan ?: return
-            val mine = plan.myRequest
+            // Only a request still waiting fills the sheet ("Change who's coming"); a withdrawn or declined one starts fresh.
+            val mine = plan.myRequest?.takeIf { plan.standing == PlanViewerStanding.REQUESTED }
             _ui.update {
                 it.copy(
                     askOpen = true,

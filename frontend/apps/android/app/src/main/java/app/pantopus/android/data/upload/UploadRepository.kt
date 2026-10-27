@@ -1,5 +1,6 @@
 package app.pantopus.android.data.upload
 
+import app.pantopus.android.data.api.models.ai.AIPostSuggestionResponse
 import app.pantopus.android.data.api.models.ai.AIRadonReportResponse
 import app.pantopus.android.data.api.models.audience.PersonaMediaUploadResponse
 import app.pantopus.android.data.api.models.businesses.BusinessMediaUploadResponse
@@ -13,6 +14,7 @@ import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.UploadApi
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
+import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -52,7 +54,7 @@ class UploadRepository
                         MultipartBody.Part.createFormData(
                             name = "files",
                             filename = file.filename,
-                            body = file.bytes.toRequestBody(file.mimeType.toMediaTypeOrNull()),
+                            body = file.streamingBody ?: file.bytes.toRequestBody(file.mimeType.toMediaTypeOrNull()),
                         )
                     }
                 uploadApi.uploadChatMedia(roomId, parts, clientRequestId?.toRequestBody("text/plain".toMediaTypeOrNull()))
@@ -80,6 +82,27 @@ class UploadRepository
                         filename = file.filename,
                         body = file.bytes.toRequestBody(file.mimeType.toMediaTypeOrNull()),
                     ),
+                )
+            }
+
+        /**
+         * The composer's AI assist: the photos (JPEGs) and the composer's fields for
+         * `POST /api/ai/draft/post-suggestion`. Route `backend/routes/ai.js:333`.
+         */
+        suspend fun suggestPost(
+            photos: List<UploadFile>,
+            fields: Map<String, String>,
+        ): NetworkResult<AIPostSuggestionResponse> =
+            safeApiCall {
+                uploadApi.suggestPost(
+                    photos.map { photo ->
+                        MultipartBody.Part.createFormData(
+                            name = "photos",
+                            filename = photo.filename,
+                            body = photo.bytes.toRequestBody(photo.mimeType.toMediaTypeOrNull()),
+                        )
+                    },
+                    fields.mapValues { (_, value) -> value.toRequestBody("text/plain; charset=utf-8".toMediaTypeOrNull()) },
                 )
             }
 
@@ -185,7 +208,9 @@ class UploadRepository
 data class UploadFile(
     val filename: String,
     val mimeType: String,
-    val bytes: ByteArray,
+    val bytes: ByteArray = byteArrayOf(),
+    /** The durable chat queue decrypts a bounded chunk directly to the network, without a full plaintext buffer. */
+    val streamingBody: RequestBody? = null,
 ) {
     override fun equals(other: Any?): Boolean =
         this === other ||
@@ -193,13 +218,14 @@ data class UploadFile(
                 other is UploadFile &&
                     filename == other.filename &&
                     mimeType == other.mimeType &&
-                    bytes.contentEquals(other.bytes)
+                    bytes.contentEquals(other.bytes) && streamingBody === other.streamingBody
             )
 
     override fun hashCode(): Int {
         var result = filename.hashCode()
         result = 31 * result + mimeType.hashCode()
         result = 31 * result + bytes.contentHashCode()
+        result = 31 * result + (streamingBody?.hashCode() ?: 0)
         return result
     }
 }

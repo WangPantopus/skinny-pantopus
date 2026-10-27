@@ -163,6 +163,8 @@ public struct BidGigDTO: Decodable, Sendable, Hashable, Identifiable {
 /// profile_picture_url, city, state`).
 public struct BidderUserDTO: Decodable, Sendable, Hashable, Identifiable {
     public let id: String
+    /// The bidder's Local Profile name, as on the task's bid list.
+    public let displayName: String?
     public let username: String?
     public let name: String?
     public let firstName: String?
@@ -171,7 +173,7 @@ public struct BidderUserDTO: Decodable, Sendable, Hashable, Identifiable {
     public let state: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, username, name, city, state
+        case id, displayName, username, name, city, state
         case firstName = "first_name"
         case profilePictureUrl = "profile_picture_url"
     }

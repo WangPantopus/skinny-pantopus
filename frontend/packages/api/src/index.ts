@@ -216,6 +216,7 @@ export type {
   ClaimPhaseV2,
   ClaimRoutingClassification,
   HouseholdResolutionState,
+  HouseholdRemovalVote,
 } from './endpoints/homeOwnership';
 
 // Types from homes
@@ -236,7 +237,7 @@ export type { ActionItem, ActivityItem, DiscoveryItem, DiscoveryFilter, JumpBack
 export type { BusinessAuditEntry } from './endpoints/businessIam';
 
 // Types from homeIam
-export type { AuditEntry, GuestPass, ScopedGrant } from './endpoints/homeIam';
+export type { AuditEntry, GuestPass, ScopedGrant, MemberClaimReview } from './endpoints/homeIam';
 
 // Types from homeGuest
 export type { GuestPassView, SharedResourceView, PasscodeRequired } from './endpoints/homeGuest';
@@ -263,6 +264,7 @@ export { getMySeats, getBusinessSeats as getSeats, getSeatDetail, createSeatInvi
 // Convenience exports from privacy (Identity Firewall)
 export { getPrivacySettings, updatePrivacySettings, getBlocks, createBlock, removeBlock } from './endpoints/privacy';
 export { getMyLocalProfile, updateMyLocalProfile, getLocalProfile, getLocalProfileActivity, getLocalProfileGigs, getLocalProfileListings } from './endpoints/localProfiles';
+export type { OwnLocalProfile, UpdateLocalProfilePayload } from './endpoints/localProfiles';
 export { createPersona, getMyPersona, getMyAudienceIdentity, getPersonaCategoryPolicies, updatePersona, getPersona, getPersonaPosts, followPersona, unfollowPersona, getPersonaFollowStatus, updatePersonaFollowPreferences, getPersonaFollowers, updatePersonaFollower } from './endpoints/personas';
 export type { AudienceIdentity, PersonaCategoryPolicy } from './endpoints/personas';
 export { listOwnerTiers, listPublicTiers, updateTier, setTierVisibility, deleteTier } from './endpoints/personaTiers';
@@ -281,7 +283,7 @@ export { streamChat, draftListing, draftListingFromImages, draftPost, summarizeM
 export { sendComposedMail, searchRecipients, getRecipientHomeContext, requestAISuggestion, uploadVoicePostscript, getEscrowedMailPublic, claimEscrowedMail, withdrawEscrowedMail } from './endpoints/mailCompose';
 
 // Types from Mail Compose
-export type { SendMailResponse, RecipientSearchResult, HomeContext, EscrowedMailView } from './endpoints/mailCompose';
+export type { SendMailResponse, RecipientSearchResult, HomeContext, EscrowedMailView, EscrowClaimErrorCode, ClaimEscrowedMailResponse } from './endpoints/mailCompose';
 
 // Types from Magic Task
 export type { MagicDraftRequest, MagicDraftResponse, MagicTaskDraft, MagicPostRequest, MagicPostResponse, SmartTemplate, SavedTaskTemplate, MagicSettings, ClarifyingQuestion, TaskItem, ScheduleType, PayType, TaskSourceFlow, PrivacyLevel, LocationMode } from '@pantopus/types';

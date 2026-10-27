@@ -143,6 +143,54 @@ export function useAIChat() {
   }, []);
 
   /**
+   * "Delete conversation": every conversation the assistant keeps for this
+   * person goes (DELETE /api/ai/conversations/:id), this one and any earlier
+   * one (other visits, the apps), which the apps would otherwise show again.
+   * Then the thread starts over. If something is left, the thread stays and
+   * `error` says so.
+   */
+  const deleteConversations = useCallback(async (): Promise<boolean> => {
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
+    }
+    setIsStreaming(false);
+    setStatusText(null);
+    setError(null);
+    const deleted = new Set<string>();
+    const activeId = conversationId;
+    try {
+      // Read oldest first across every page, keeping the displayed thread until it is the only one left.
+      for (let round = 0; round < 20; round += 1) {
+        const { conversations } = await api.ai.getConversations({ order: 'oldest' });
+        const onlyActive = conversations.length === 1 && conversations[0].id === activeId;
+        const ids = conversations.map((c) => c.id).filter((id) => !deleted.has(id) && (id !== activeId || onlyActive));
+        if (conversations.length === 0) {
+          startNewConversation();
+          return true;
+        }
+        // Listed again after its delete went through: the server kept it.
+        if (ids.length === 0) break;
+        for (const id of ids) {
+          await api.ai.deleteConversation(id);
+          deleted.add(id);
+          // A later verification read can fail too; never keep showing a thread we know is gone.
+          if (id === activeId) startNewConversation();
+        }
+      }
+      setError("Couldn't delete the conversation. Try again.");
+    } catch (err) {
+      // The displayed thread goes only once it is the last one listed, so after its delete only the check failed.
+      if (activeId && deleted.has(activeId)) return true;
+      const status = (err as { statusCode?: number } | null)?.statusCode;
+      setError(status === 429
+        ? "Couldn't delete it all yet. Try again in a minute."
+        : "Couldn't delete the conversation. Try again.");
+    }
+    return false;
+  }, [conversationId, startNewConversation]);
+
+  /**
    * Load a previous conversation (messages are not stored server-side,
    * so this just sets the conversation ID for continuation).
    */
@@ -178,6 +226,7 @@ export function useAIChat() {
     error,
     sendMessage,
     startNewConversation,
+    deleteConversations,
     loadConversation,
     abort,
   };

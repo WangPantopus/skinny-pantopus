@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -42,6 +43,7 @@ import app.pantopus.android.ui.screens.shared.feed.FeedAvatarTint
 import app.pantopus.android.ui.screens.shared.media.PostMediaGridStyle
 import app.pantopus.android.ui.screens.shared.media.PostMediaGridWithViewer
 import app.pantopus.android.ui.screens.shared.media.PostMediaItem
+import app.pantopus.android.ui.screens.shared.media.postLinkedText
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -121,6 +123,8 @@ data class PulsePostCardContent(
     val reactions: List<PulseReaction>,
     val attendees: PulseAttendeeStrip?,
     val userHasReacted: Boolean,
+    /** When and where an Event happens; null on other posts. */
+    val event: PulseEventDetails? = null,
     val commentCount: Int = 0,
     val media: List<PostMediaItem> = emptyList(),
     /** Overflow-menu capability set for this viewer. */
@@ -176,68 +180,85 @@ fun PulsePostCard(
         modifier =
             modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(Radii.xl))
-                .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.xl))
                 .background(PantopusColors.appSurface)
                 .then(if (onTap != null) Modifier.clickable(onClick = onTap) else Modifier)
-                .padding(Spacing.s3)
+                .padding(top = Spacing.s4)
                 .semantics(mergeDescendants = true) {
                     contentDescription = buildA11yLabel(content)
                 }
                 .testTag("pulsePostCard_${content.id}"),
         verticalArrangement = Arrangement.spacedBy(Spacing.s2),
     ) {
-        CardHeader(
-            content = content,
-            onOverflow = onOverflow,
-            onDismissSeeded = onDismissSeeded,
-        )
-        if (!content.title.isNullOrEmpty()) {
-            Text(
-                text = content.title,
-                fontSize = 13.5.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = PantopusColors.appText,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+        Column(modifier = Modifier.padding(horizontal = Spacing.s4), verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+            CardHeader(
+                content = content,
+                onOverflow = onOverflow,
+                onDismissSeeded = onDismissSeeded,
             )
-        }
-        if (content.body.isNotEmpty()) {
-            Text(
-                text = content.body,
-                fontSize = 12.5.sp,
-                color = PantopusColors.appTextStrong,
-                maxLines = if (!content.title.isNullOrEmpty()) 2 else 3,
-                overflow = TextOverflow.Ellipsis,
-            )
+            if (!content.title.isNullOrEmpty()) {
+                Text(
+                    text = content.title,
+                    fontSize = 13.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = PantopusColors.appText,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (content.body.isNotEmpty()) {
+                Text(
+                    text = postLinkedText(content.body),
+                    fontSize = 12.5.sp,
+                    color = PantopusColors.appTextStrong,
+                    maxLines = if (!content.title.isNullOrEmpty()) 2 else 3,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            // An Event's when and where, under its text (as on the web card).
+            content.event?.let { event ->
+                PulseEventDetailRows(
+                    details = event,
+                    page = false,
+                    whenTag = "pulsePostEventWhen_${content.id}",
+                    placeTag = "pulsePostEventPlace_${content.id}",
+                )
+            }
         }
         if (content.media.isNotEmpty()) {
             PostMediaGridWithViewer(
                 items = content.media,
                 style = PostMediaGridStyle.Compact,
                 testTag = "pulsePostMedia_${content.id}",
+                usesSharpPreviews = true,
+                edgeToEdge = true,
             )
         }
-        content.attendees?.let { attendees ->
-            AttendeeStrip(attendees = attendees, onRSVP = onRSVP, postId = content.id)
-        }
-        // A tip has nothing to react to: its id isn't a post.
-        if (!content.actions.isSeeded) {
-            ReactionStrip(
-                content = content,
-                onPrimary = onPrimaryReaction,
-                onToggleSave = onToggleSave,
-                onToggleRepost = onToggleRepost,
-            )
-            if (content.likePending || content.savePending) {
-                Text(
-                    "Pending",
-                    fontSize = 11.sp,
-                    color = PantopusColors.appTextSecondary,
-                    modifier = Modifier.testTag("pulsePostPending_${content.id}"),
+        Column(
+            modifier = Modifier.padding(horizontal = Spacing.s4).padding(bottom = Spacing.s4),
+            verticalArrangement = Arrangement.spacedBy(Spacing.s2),
+        ) {
+            content.attendees?.let { attendees ->
+                AttendeeStrip(attendees = attendees, onRSVP = onRSVP, postId = content.id)
+            }
+            // A tip has nothing to react to: its id isn't a post.
+            if (!content.actions.isSeeded) {
+                ReactionStrip(
+                    content = content,
+                    onPrimary = onPrimaryReaction,
+                    onToggleSave = onToggleSave,
+                    onToggleRepost = onToggleRepost,
                 )
+                if (content.likePending || content.savePending) {
+                    Text(
+                        "Pending",
+                        fontSize = 11.sp,
+                        color = PantopusColors.appTextSecondary,
+                        modifier = Modifier.testTag("pulsePostPending_${content.id}"),
+                    )
+                }
             }
         }
+        HorizontalDivider(color = PantopusColors.appBorderSubtle, thickness = 1.dp)
     }
 }
 
@@ -676,7 +697,8 @@ fun PulseIntentChip(
 private val attendeeTints =
     listOf(FeedAvatarTint.Orange, FeedAvatarTint.Sky, FeedAvatarTint.Violet, FeedAvatarTint.Green)
 
-private fun PulseIntent.tintColors(): Pair<Color, Color> =
+/** The intent chip's foreground and background colours; the Pulse map's pins take the foreground. */
+internal fun PulseIntent.tintColors(): Pair<Color, Color> =
     when (this) {
         PulseIntent.All, PulseIntent.Generic -> PantopusColors.appTextSecondary to PantopusColors.appSurfaceSunken
         PulseIntent.Ask -> PantopusColors.warmAmber to PantopusColors.warmAmberBg
@@ -699,6 +721,8 @@ private fun buildA11yLabel(content: PulsePostCardContent): String {
     if (content.isVisitor) parts.add("Visitor")
     content.title?.takeIf { it.isNotEmpty() }?.let { parts.add(it) }
     if (content.body.isNotEmpty()) parts.add(content.body)
+    content.event?.whenText?.let { parts.add(it) }
+    content.event?.place?.let { parts.add(it) }
     content.status?.let { parts.add(it.spoken) }
     if (content.mediaUrls.isNotEmpty()) {
         parts.add("${content.mediaUrls.size} attached ${if (content.mediaUrls.size == 1) "photo" else "photos"}")

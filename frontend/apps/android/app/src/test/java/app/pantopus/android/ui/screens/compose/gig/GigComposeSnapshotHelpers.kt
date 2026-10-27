@@ -48,6 +48,7 @@ internal fun StaticCategoryTile(
             GigComposeCategory.Delivery -> PantopusIcon.Send
             GigComposeCategory.Tech -> PantopusIcon.Zap
             GigComposeCategory.Other -> PantopusIcon.MoreHorizontal
+            else -> category.tileIcon
         }
     val borderColor = if (isSelected) PantopusColors.primary600 else PantopusColors.appBorder
     val bg = if (isSelected) PantopusColors.primary50 else PantopusColors.appSurface

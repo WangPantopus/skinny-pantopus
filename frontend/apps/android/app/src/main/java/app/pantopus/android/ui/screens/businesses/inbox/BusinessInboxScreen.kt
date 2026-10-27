@@ -20,8 +20,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,6 +32,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.Shimmer
@@ -68,7 +69,10 @@ fun BusinessInboxScreen(
     val section by viewModel.section.collectAsStateWithLifecycle()
     val totalUnread by viewModel.totalUnread.collectAsStateWithLifecycle()
 
-    LaunchedEffect(Unit) { viewModel.load() }
+    LifecycleResumeEffect(Unit) {
+        viewModel.setForeground(true)
+        onPauseOrDispose { viewModel.setForeground(false) }
+    }
 
     Column(
         modifier =
@@ -111,6 +115,24 @@ fun BusinessInboxScreen(
                     ) {
                         items(current.rooms, key = { it.id }) { room ->
                             RoomCard(room = room, onOpen = { onOpenRoom(room.id, room.title, room.handle) })
+                        }
+                        if (current.hasMore || current.loadError != null) {
+                            item(key = "load-more-rooms") {
+                                Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    current.loadError?.let { error ->
+                                        Text(error, color = PantopusColors.appTextSecondary, modifier = Modifier.padding(Spacing.s2))
+                                    }
+                                    TextButton(onClick = viewModel::loadMoreRooms, enabled = !current.loadingMore) {
+                                        Text(
+                                            when {
+                                                current.loadingMore -> "Loading…"
+                                                current.loadError != null -> "Retry"
+                                                else -> "Load more"
+                                            },
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 is BusinessInboxUiState.LoadedMentions ->

@@ -188,9 +188,21 @@ export default function CreateGuestPass({
   // A new passcode needs at least 6 characters (the API refuses shorter ones).
   const passcodeTooShort = passcode.trim().length > 0 && passcode.trim().length < 6;
 
+  const validateDetails = () => {
+    const hours = Number(durationHours);
+    const views = Number(maxViews);
+    const message = !durationHours.trim() || !Number.isFinite(hours) || hours < 1 || hours > 720
+      ? 'Choose a duration between 1 and 720 hours.'
+      : maxViews.trim() && (!Number.isInteger(views) || views < 1 || views > 100000)
+        ? 'Max views must be a whole number between 1 and 100,000, or blank for unlimited.'
+        : customTitle.trim().length > 200 ? 'Keep the title to 200 characters or fewer.' : '';
+    setError(message);
+    return !message;
+  };
+
   // Create pass
   const handleCreate = async () => {
-    if (!open || pending.current !== null || passcodeTooShort) return;
+    if (!open || pending.current !== null || passcodeTooShort || !validateDetails()) return;
     const request = generation.current;
     const issuedHome = homeId;
     const issuedPasscode = passcode.trim();
@@ -204,7 +216,7 @@ export default function CreateGuestPass({
         kind,
         included_sections: sections,
         custom_title: customTitle.trim() || undefined,
-        duration_hours: Number(durationHours) || TEMPLATE_DEFAULTS[kind].hours,
+        duration_hours: Number(durationHours),
         passcode: issuedPasscode || undefined,
         max_views: maxViews ? Number(maxViews) : undefined,
         request_id: requestId.current,
@@ -326,6 +338,7 @@ export default function CreateGuestPass({
             <div>
               <label className="block text-xs font-medium text-app-text-secondary mb-1">Title (optional)</label>
               <input
+                aria-label="Title (optional)"
                 value={customTitle}
                 onChange={(e) => setCustomTitle(e.target.value)}
                 className="w-full rounded-lg border border-app-border px-3 py-2 text-sm"
@@ -341,6 +354,7 @@ export default function CreateGuestPass({
                   <button
                     key={h}
                     onClick={() => setDurationHours(String(h))}
+                    aria-pressed={durationHours === String(h)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
                       durationHours === String(h)
                         ? 'bg-gray-900 text-white'
@@ -352,6 +366,7 @@ export default function CreateGuestPass({
                 ))}
                 <input
                   type="number"
+                  aria-label="Duration (hours)"
                   value={durationHours}
                   onChange={(e) => setDurationHours(e.target.value)}
                   min={1}
@@ -369,6 +384,7 @@ export default function CreateGuestPass({
                   <button
                     key={sec.key}
                     onClick={() => toggleSection(sec.key)}
+                    aria-pressed={sections.includes(sec.key)}
                     className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition ${
                       sections.includes(sec.key)
                         ? 'bg-gray-900 text-white'
@@ -390,6 +406,7 @@ export default function CreateGuestPass({
                 <label className="block text-xs font-medium text-app-text-secondary mb-1">Passcode (optional)</label>
                 <input
                   type="text"
+                  aria-label="Passcode (optional)"
                   value={passcode}
                   onChange={(e) => setPasscode(e.target.value)}
                   className="w-full rounded-lg border border-app-border px-3 py-2 text-sm font-mono"
@@ -403,6 +420,8 @@ export default function CreateGuestPass({
                 <label className="block text-xs font-medium text-app-text-secondary mb-1">Max Views (optional)</label>
                 <input
                   type="number"
+                  aria-label="Max Views (optional)"
+                  max={100000}
                   value={maxViews}
                   onChange={(e) => setMaxViews(e.target.value)}
                   min={1}
@@ -422,7 +441,7 @@ export default function CreateGuestPass({
                 Back
               </button>
               <button
-                onClick={() => setStep('preview')}
+                onClick={() => { if (validateDetails()) setStep('preview'); }}
                 className="flex-1 py-2 rounded-lg bg-app-surface-sunken text-sm font-medium text-app-text-strong hover:bg-app-hover transition"
               >
                 Preview

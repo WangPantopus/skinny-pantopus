@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useId, useMemo, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import Image from 'next/image';
 import * as api from '@pantopus/api';
@@ -11,26 +11,17 @@ import { formatTimeAgo, getInitials } from '@pantopus/ui-utils';
 import { MessageCircle, Search, Home, Users, Wrench, ShoppingCart, Sparkles } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import SearchInput from '@/components/SearchInput';
-import { useSocketEvent, useSocketConnected } from '@/hooks/useSocket';
-import { useBadges } from '@/contexts/BadgeContext';
+import { ChatSearchResults } from '@/components/chat/ChatSearch';
+import { useSocketConnected } from '@/hooks/useSocket';
 import { queryKeys } from '@/lib/query-keys';
 import type { UnifiedConversationItem, ConversationTopic, Relationship, RelationshipUser, User } from '@pantopus/types';
 import { launchFeatures } from '@/lib/featureFlags';
 import { chosenUsername, usernameHandle } from '@pantopus/utils';
 import { fetchMe } from '@/lib/me';
-import { conversationsQuery as conversationsListQuery, type ConversationsReply } from '@/lib/conversations';
-
-type IncomingChatMessage = {
-  room_id?: string;
-  message?: string;
-  message_text?: string;
-  created_at?: string;
-  user_id?: string;
-  sender_id?: string;
-  sender?: { id?: string };
-};
-
-type ConversationsResponse = ConversationsReply;
+import { useConversationPages, conversationKey } from '@/lib/conversations';
+import { releaseShellReads } from '@/lib/shellReads';
+import { useOnlineStatus } from '@/components/map/OfflineIndicator';
+import { navigateChatPath, useChatOfflineShell } from '@/hooks/useChatOfflineShell';
 
 type NewChatPerson = { id: string; name: string; handle: string; avatar?: string | null };
 
@@ -110,10 +101,16 @@ function NewChatPersonRow({ person, starting, onStart }: {
 }
 
 export default function ChatListPage() {
+  useChatOfflineShell();
+  const { isOnline } = useOnlineStatus();
   const router = useRouter();
-  const queryClient = useQueryClient();
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [inboxSearch, setInboxSearch] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setInboxSearch(search.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
   const [newChatOpen, setNewChatOpen] = useState(false);
   const newChatTitleId = useId();
   const [newChatQuery, setNewChatQuery] = useState('');
@@ -122,28 +119,28 @@ export default function ChatListPage() {
   const [newChatError, setNewChatError] = useState<string | null>(null);
   const [startingChatUserId, setStartingChatUserId] = useState<string | null>(null);
   const connected = useSocketConnected();
-  const { setUnreadMessages, setTotalMessages } = useBadges();
-
-  // Refs for batching badge syncs and throttling reload
-  const badgeSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastReloadTimeRef = useRef(0);
-  const activeConversationRoomRef = useRef<string | null>(null);
 
   // ── Conversations via useQuery ─────────────────────────────
-  const conversationsKey = queryKeys.conversations();
-  const conversationsQuery = useQuery<ConversationsResponse>(conversationsListQuery());
-
-  const conversations = useMemo<UnifiedConversationItem[]>(
-    () => conversationsQuery.data?.conversations ?? [],
-    [conversationsQuery.data],
-  );
+  const pages = useConversationPages(inboxSearch);
+  const conversationsQuery = pages.query;
+  const conversations = pages.conversations;
   const totalUnread = Number(conversationsQuery.data?.totalUnread || 0);
-  const loading = conversationsQuery.isPending;
+  const offlineUnavailable = !isOnline && pages.restored && !conversationsQuery.data;
+  const loading = !offlineUnavailable && (search.trim() !== inboxSearch || conversationsQuery.isPending);
   // A failed first read has no list to describe: no count, no empty-inbox card.
-  const listFailed = conversationsQuery.isError && !conversationsQuery.data;
-  const error = conversationsQuery.error
+  const listFailed = offlineUnavailable || conversationsQuery.isError && !conversationsQuery.data;
+  const error = offlineUnavailable ? 'No saved inbox is available on this browser. Reconnect to load Messages.' : conversationsQuery.error
     ? (conversationsQuery.error instanceof Error ? conversationsQuery.error.message : 'Failed to load conversations')
     : null;
+  // On a cold load the app shell's own reads wait until the frame showing the
+  // rows (or the empty or error state) has painted, or until this page closes.
+  useEffect(() => {
+    if (loading) return;
+    let timer: number | undefined;
+    const frame = requestAnimationFrame(() => { timer = window.setTimeout(releaseShellReads, 0); });
+    return () => { cancelAnimationFrame(frame); window.clearTimeout(timer); };
+  }, [loading]);
+  useEffect(() => releaseShellReads, []);
 
   // "Start new chat" lists your connections, as the iOS and Android pickers do. Search finds only
   // neighbor profiles, so a connection without one couldn't be reached from here.
@@ -158,7 +155,7 @@ export default function ChatListPage() {
   });
 
   const newChatConnections = useMemo<NewChatPerson[]>(() => {
-    const q = newChatQuery.trim().toLowerCase();
+    const q = newChatQuery.trim().replace(/^@+/, '').toLowerCase();
     return (connectionsQuery.data || [])
       .map((rel) => rel.other_user)
       .filter((user): user is RelationshipUser => Boolean(user?.id))
@@ -173,39 +170,8 @@ export default function ChatListPage() {
 
   // Shim for imperative refetch calls (fallback polling, reload after new message from unknown room)
   const load = useCallback(async () => {
-    await conversationsQuery.refetch();
+    await conversationsQuery.refetch({ cancelRefetch: false });
   }, [conversationsQuery]);
-
-  // ── setQueryData helpers ───────────────────────────────────
-  const updateConversations = useCallback(
-    (updater: (conversations: UnifiedConversationItem[], totalUnread: number) => {
-      conversations: UnifiedConversationItem[];
-      totalUnread: number;
-    }) => {
-      queryClient.setQueryData<ConversationsResponse>(conversationsKey, (old) => {
-        if (!old) return old;
-        const next = updater(old.conversations || [], Number(old.totalUnread || 0));
-        return {
-          ...old,
-          conversations: next.conversations,
-          totalUnread: next.totalUnread,
-        };
-      });
-    },
-    [queryClient, conversationsKey],
-  );
-
-  // Batch badge syncs: collapse rapid changes into a single BadgeContext update
-  useEffect(() => {
-    if (badgeSyncTimerRef.current) clearTimeout(badgeSyncTimerRef.current);
-    badgeSyncTimerRef.current = setTimeout(() => {
-      setUnreadMessages(totalUnread);
-      badgeSyncTimerRef.current = null;
-    }, 500);
-    return () => {
-      if (badgeSyncTimerRef.current) clearTimeout(badgeSyncTimerRef.current);
-    };
-  }, [totalUnread, setUnreadMessages]);
 
   useEffect(() => {
     let cancelled = false;
@@ -218,10 +184,25 @@ export default function ChatListPage() {
     return () => { cancelled = true; };
   }, []);
 
+  // Opening a first conversation loads and runs the conversation views' code.
+  // Do that once the inbox has settled and is idle, so a tap only has to render.
+  useEffect(() => {
+    const warm = () => {
+      void import('@/components/chat/ConversationView').catch(() => {});
+      void import('@/components/chat/ChatRoomView').catch(() => {});
+    };
+    let idle: number | undefined;
+    const timer = window.setTimeout(() => {
+      if (typeof window.requestIdleCallback === 'function') idle = window.requestIdleCallback(warm, { timeout: 3000 });
+      else warm();
+    }, 1000);
+    return () => { window.clearTimeout(timer); if (idle !== undefined) window.cancelIdleCallback(idle); };
+  }, []);
+
   useEffect(() => {
     if (connected) return;
     const timer = setInterval(() => {
-      void load();
+      if (navigator.onLine && document.visibilityState === 'visible') void load();
     }, 15000);
     return () => clearInterval(timer);
   }, [connected, load]);
@@ -236,18 +217,18 @@ export default function ChatListPage() {
 
   useEffect(() => {
     if (!newChatOpen) return;
-    const q = newChatQuery.trim();
-    if (!q) {
-      setNewChatResults([]);
-      setNewChatError(null);
+    const q = newChatQuery.trim().replace(/^@+/, '');
+    setNewChatResults([]);
+    setNewChatError(null);
+    if (q.length < 2) {
       setNewChatSearching(false);
       return;
     }
 
+    setNewChatSearching(true);
     let cancelled = false;
     const timer = setTimeout(async () => {
       try {
-        setNewChatSearching(true);
         setNewChatError(null);
         const resp = await api.users.searchUsers(q, { type: 'people', limit: 8 });
         if (!cancelled) setNewChatResults(resp?.users || []);
@@ -264,61 +245,6 @@ export default function ChatListPage() {
     };
   }, [newChatOpen, newChatQuery]);
 
-  const handleIncomingListMessage = useCallback((msg: IncomingChatMessage) => {
-    if (!msg?.room_id) return;
-    const roomId = String(msg.room_id);
-    const preview = msg.message || msg.message_text || '';
-    const timestamp = msg.created_at || new Date().toISOString();
-    const senderId = String(msg.user_id || msg.sender_id || msg?.sender?.id || '');
-    const isOwn = !!currentUserId && senderId === String(currentUserId);
-    // Don't increment unread for the conversation the user is currently viewing
-    // (the useChatMessages hook is already handling it via its own socket listener)
-    const isActiveRoom = activeConversationRoomRef.current === roomId;
-    let shouldReload = false;
-    setTotalMessages((prev) => prev + 1);
-
-    // Reorder and bump the conversation in the cache via setQueryData.
-    // The O(n) findIndex + splice + unshift is preserved — just moved here.
-    updateConversations((prev, prevTotalUnread) => {
-      const idx = prev.findIndex(conv =>
-        conv._type === 'room'
-          ? String(conv.id) === roomId
-          : (conv.room_ids || []).map(String).includes(roomId)
-      );
-
-      if (idx === -1) {
-        shouldReload = true;
-        return { conversations: prev, totalUnread: prevTotalUnread };
-      }
-
-      const updated = [...prev];
-      const conv = { ...updated[idx] };
-      conv.last_message_preview = String(preview);
-      conv.last_message_at = timestamp;
-      if (!isOwn && !isActiveRoom) conv.total_unread = (conv.total_unread || 0) + 1;
-
-      // Move to top
-      updated.splice(idx, 1);
-      updated.unshift(conv as UnifiedConversationItem);
-      return {
-        conversations: updated,
-        totalUnread: (!isOwn && !isActiveRoom) ? prevTotalUnread + 1 : prevTotalUnread,
-      };
-    });
-    // Throttle full reload to at most once per 10 seconds
-    if (shouldReload) {
-      const now = Date.now();
-      if (now - lastReloadTimeRef.current >= 10000) {
-        lastReloadTimeRef.current = now;
-        void load();
-      }
-    }
-  }, [currentUserId, load, setTotalMessages, updateConversations]);
-
-  // ── Real-time: update conversation list when a new message arrives ──
-  useSocketEvent('message:new', handleIncomingListMessage);
-  useSocketEvent('newMessage', handleIncomingListMessage);
-
   const getLastMessagePreview = (conv: UnifiedConversationItem) => {
     const raw = conv?.last_message_preview ?? '';
     if (/^\[[^\]]*attachment\]$/i.test(String(raw).trim())) return 'Media';
@@ -326,29 +252,10 @@ export default function ChatListPage() {
   };
 
   const handleConversationPress = (conv: UnifiedConversationItem) => {
-    const unread = Number(conv.total_unread || 0);
-    if (unread > 0) {
-      updateConversations((prev, prevTotalUnread) => ({
-        conversations: prev.map((item) => {
-          const sameConv = item._type === 'room' && conv._type === 'room'
-            ? String(item.id) === String(conv.id)
-            : item._type === 'conversation' && conv._type === 'conversation'
-            ? String(item.other_participant_id) === String(conv.other_participant_id)
-            : false;
-          return sameConv ? { ...item, total_unread: 0 } : item;
-        }),
-        totalUnread: Math.max(0, prevTotalUnread - unread),
-      }));
-    }
-
-    // Only unread conversations need a read receipt here; the conversation also
-    // marks itself read once it loads.
     if (conv._type === 'room') {
-      if (unread > 0) void api.chat.markMessagesAsRead(String(conv.id)).catch(() => {});
-      router.push(`/app/chat/${conv.id}`);
+      navigateChatPath(`/app/chat/${conv.id}`, router.push);
     } else {
-      if (unread > 0) void api.chat.markConversationAsRead(String(conv.other_participant_id)).catch(() => {});
-      router.push(`/app/chat/conversation/${conv.other_participant_id}`);
+      navigateChatPath(`/app/chat/conversation/${conv.other_participant_id}`, router.push);
     }
   };
 
@@ -375,24 +282,20 @@ export default function ChatListPage() {
     }
   };
 
-  const filteredConversations = useMemo(() => conversations.filter((conv) => {
-    if (!search.trim()) return true;
-    const q = search.toLowerCase();
-    const isRoom = conv._type === 'room';
-    const name = isRoom
-      ? (conv.room_name || '').toLowerCase()
-      : (conv.other_participant_name || conv.other_participant_username || '').toLowerCase();
-    const preview = (conv.last_message_preview || '').toLowerCase();
-    const topicTitles = (conv.topics || []).map((t: ConversationTopic) => (t.title || '').toLowerCase()).join(' ');
-    return name.includes(q) || preview.includes(q) || topicTitles.includes(q);
-  }), [conversations, search]);
+  // The server filters authorized names and all topics before pagination.
+  const filteredConversations = conversations;
 
   // ── Virtualize conversation list ──────────────────────────
+  // The first rows render in the same commit as the list. Until the list can be
+  // measured, its height is taken as its max height (below), and a row without
+  // topics is 73 px with its border, so measuring rows rarely renders them again.
   const listScrollRef = useRef<HTMLDivElement>(null);
   const virtualizer = useVirtualizer({
     count: filteredConversations.length,
     getScrollElement: () => listScrollRef.current,
-    estimateSize: () => 72,
+    getItemKey: (index) => conversationKey(filteredConversations[index]),
+    estimateSize: () => 73,
+    initialRect: { width: 0, height: typeof window === 'undefined' ? 0 : Math.max(0, window.innerHeight - 280) },
     overscan: 8,
   });
 
@@ -413,7 +316,7 @@ export default function ChatListPage() {
         <PageHeader
           title="Messages"
           // No count until the list has loaded: it read "0 conversations" while loading.
-          subtitle={loading || listFailed ? undefined : totalUnread > 0 ? `${totalUnread} unread` : `${conversations.length} ${conversations.length === 1 ? 'conversation' : 'conversations'}`}
+          subtitle={loading || listFailed ? undefined : totalUnread > 0 ? `${totalUnread} unread` : `${conversationsQuery.data?.total ?? conversations.length} ${(conversationsQuery.data?.total ?? conversations.length) === 1 ? 'conversation' : 'conversations'}`}
           ctaLabel="New message"
           ctaOnClick={openNewChat}
         >
@@ -421,7 +324,7 @@ export default function ChatListPage() {
             <SearchInput
               value={search}
               onChange={setSearch}
-              placeholder="Search conversations…"
+              placeholder="Search conversations or messages…"
               className="max-w-sm flex-1"
             />
             <button
@@ -435,6 +338,7 @@ export default function ChatListPage() {
       </div>
 
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pb-6">
+        {search.trim() && <div className="mb-4"><ChatSearchResults query={search} target={{ currentUserId }} /></div>}
         {error && (
           <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             {error}
@@ -456,7 +360,7 @@ export default function ChatListPage() {
               </div>
             ))}
           </div>
-        ) : listFailed ? null : conversations.length === 0 ? (
+        ) : listFailed ? null : conversations.length === 0 && !inboxSearch ? (
           <>
           {/* Before a first conversation the assistant is still reachable here. */}
           <div className="bg-surface rounded-xl border border-app shadow-sm overflow-hidden">
@@ -486,6 +390,8 @@ export default function ChatListPage() {
             {/* Virtualized conversation list */}
             <div
               ref={listScrollRef}
+              aria-label="Conversations"
+              tabIndex={0}
               className="overflow-y-auto"
               style={{ maxHeight: 'calc(100vh - 280px)' }}
             >
@@ -599,6 +505,9 @@ export default function ChatListPage() {
             </div>
           </div>
         )}
+        {!loading && pages.moreError && <p role="alert" className="mt-3 text-sm text-red-600">{pages.moreError}</p>}
+        {!loading && pages.hasMore && <button className="mt-3 w-full rounded-lg border border-app px-3 py-2 text-sm text-app hover-bg-app disabled:opacity-50"
+          disabled={pages.loadingMore} onClick={() => void pages.loadMore()}>{pages.loadingMore ? 'Loading conversations…' : 'Load more conversations'}</button>}
       </div>
 
       {/* On document.body: AppShell's <main> is its own stacking context, so from inside it this dialog's backdrop
@@ -631,11 +540,13 @@ export default function ChatListPage() {
               <SearchInput
                 value={newChatQuery}
                 onChange={(value) => {
-                  setNewChatQuery(value);
+                  setNewChatQuery(value.slice(0, 100));
                   // "Searching…" from the first keystroke, so "No users found." only follows an answer.
-                  setNewChatSearching(value.trim().length > 0);
+                  setNewChatResults([]);
+                  setNewChatError(null);
+                  setNewChatSearching(value.trim().replace(/^@+/, '').length >= 2);
                 }}
-                placeholder="Type a person's name…"
+                placeholder="Search by name or username…"
               />
 
               {newChatError && (
@@ -661,6 +572,8 @@ export default function ChatListPage() {
                   newChatConnections.length === 0 && (
                     <div className="p-4 text-sm text-app-muted">Start typing to find people.</div>
                   )
+                ) : newChatQuery.trim().replace(/^@+/, '').length < 2 ? (
+                  <div className="p-4 text-sm text-app-muted">Enter at least 2 characters to search.</div>
                 ) : newChatSearching ? (
                   <div className="p-4 text-sm text-app-muted">Searching…</div>
                 ) : newChatPeople.length > 0 ? (
@@ -674,7 +587,7 @@ export default function ChatListPage() {
                       />
                     ))}
                   </NewChatSection>
-                ) : newChatConnections.length === 0 ? (
+                ) : !newChatError && newChatConnections.length === 0 ? (
                   <div className="p-4 text-sm text-app-muted">No users found.</div>
                 ) : null}
               </div>

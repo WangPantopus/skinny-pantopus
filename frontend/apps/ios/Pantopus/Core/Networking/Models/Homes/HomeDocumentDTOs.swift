@@ -119,6 +119,7 @@ public struct HomeDocumentDTO: Decodable, Sendable, Hashable, Identifiable {
 /// `{ "documents": [HomeDocumentDTO, …] }`.
 public struct GetHomeDocumentsResponse: Decodable, Sendable {
     public let documents: [HomeDocumentDTO]
+    public let permissions: [String]?
 }
 
 /// Wrapper for the create response — backend returns

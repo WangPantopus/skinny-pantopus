@@ -9,9 +9,12 @@
 //   * our own session registry (AuthSession) has a row for that session. The registry stays the authority on
 //     sign-outs: callers still apply checkSessionPolicy (revocation with its 15-second cache, the
 //     sessions_valid_after watermark), exactly as after getUser.
-// An authentic token past its expiry is refused here too (Supabase refuses it as well). Anything this check
+// An authentic token past its expiry is refused for authentication (Supabase refuses it as well).
+// Only the logout route may use its verified signature to revoke that same registry session.
+// Anything this check
 // can't decide goes to Supabase's getUser as before: a malformed token, an unknown key id, a JWKS outage, a
-// secret-signed token without SUPABASE_JWT_SECRET, a session without a registry row, a failed registry read.
+// secret-signed token without SUPABASE_JWT_SECRET, a session without a registry row. A failed registry read
+// answers busy: the registry decides sign-outs, so getUser can't stand in for it.
 // AUTH_LOCAL_JWT=off sends every token to getUser.
 // ============================================================
 
@@ -50,7 +53,7 @@ function undecided(reason) {
 }
 
 /** @returns {Promise<{status:'valid', claims:object, mode:string}|{status:'expired'}|{status:'undecided', reason:string}>} */
-async function verifyLocally(token) {
+async function verifyLocally(token, { allowExpiredForRevocation = false } = {}) {
   if (String(process.env.AUTH_LOCAL_JWT || '').toLowerCase() === 'off') return undecided('off');
   let header;
   try {
@@ -82,7 +85,16 @@ async function verifyLocally(token) {
     return { status: 'valid', claims: payload, mode };
   } catch (err) {
     // The signature verified before the expiry was read, so the token is authentic and past its time.
-    if (err instanceof errors.JWTExpired) return { status: 'expired' };
+    if (err instanceof errors.JWTExpired) {
+      // A signed expired token can revoke only its own registry session. It
+      // must never authenticate an ordinary request or open a connection.
+      const payload = err.payload;
+      if (allowExpiredForRevocation && err.claim === 'exp' && payload?.role === 'authenticated'
+          && UUID.test(String(payload.sub || '')) && UUID.test(String(payload.session_id || ''))) {
+        return { status: 'valid', claims: payload, mode };
+      }
+      return { status: 'expired' };
+    }
     return undecided(err?.code || err?.name || 'verify_failed');
   }
 }
@@ -94,11 +106,17 @@ let loggedActive = false;
  * @returns {Promise<{ok:true, via:'local'|'supabase', user:{id:string, email:string|null, emailConfirmed:boolean|null}}
  *   |{ok:false, reason:'invalid'|'busy', error?:object}>}
  */
-async function verifyAccessToken(token, { authClient }) {
-  const local = await verifyLocally(token);
+async function verifyAccessToken(token, { authClient, allowExpiredForRevocation = false }) {
+  const local = await verifyLocally(token, { allowExpiredForRevocation });
   if (local.status === 'expired') return { ok: false, reason: 'invalid' };
   if (local.status === 'valid') {
-    const state = await authSessionService.getSessionStateCached(local.claims.session_id);
+    let state;
+    try {
+      state = await authSessionService.getSessionStateCached(local.claims.session_id);
+    } catch (error) {
+      if (error.authBusy) return { ok: false, reason: 'busy', error };
+      throw error;
+    }
     if (state.known) {
       if (!loggedActive) {
         loggedActive = true;

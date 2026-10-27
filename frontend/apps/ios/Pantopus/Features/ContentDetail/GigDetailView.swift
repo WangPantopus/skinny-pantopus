@@ -249,7 +249,7 @@ public struct GigDetailView: View {
         Task {
             switch await viewModel.shareLiveStatus() {
             case let .succeeded(url):
-                UIPasteboard.general.string = url
+                SensitivePasteboard.copy(url)
                 toast = ToastMessage(
                     text: "Live status link copied — it expires in 24 hours.",
                     kind: .success

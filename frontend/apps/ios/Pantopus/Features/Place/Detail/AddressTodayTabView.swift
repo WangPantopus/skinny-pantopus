@@ -9,9 +9,6 @@
 //  on its own. Parity twin of Android's `TodayTabScreen`.
 //
 
-// Keeping Today's content on return (Instant Screens) pushed this past 500 lines.
-// swiftlint:disable file_length
-
 import SwiftUI
 
 struct AddressTodayTabView: View {
@@ -65,7 +62,20 @@ struct AddressTodayTabView: View {
         return true
     }
 
+    /// The title, date and address, with the side menu at the end (every tab
+    /// has it, founder decision 2026-10-20).
     private var header: some View {
+        HStack(alignment: .top, spacing: Spacing.s2) {
+            titleBlock
+            NavigationMenuButton(accessibilityIdentifier: "today.menu")
+                .padding(.top, -Spacing.s2)
+        }
+        .padding(.leading, 18)
+        .padding(.trailing, Spacing.s2)
+        .padding(.vertical, 10)
+    }
+
+    private var titleBlock: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text("Today")
@@ -92,8 +102,6 @@ struct AddressTodayTabView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 18)
-        .padding(.vertical, 10)
     }
 
     private var address: String? {
@@ -274,15 +282,9 @@ private struct AddressTodayLoaded: View {
     let onOpenPlace: () -> Void
     @State private var scope = HomeClaimSessionScope(api: .shared)
     @State private var savedAnchorMatches = false
-    @State private var showMorningCard = false
-    @State private var preferenceBusy = false
-    @State private var preferenceError: String?
-    @State private var promptAttempted = false
-    @State private var promptConfirmed = false
-    @State private var scrollFrame = CGRect.zero
-    @State private var cardFrame = CGRect.zero
     @State private var sessionChanged = false
-    @State private var lifecycleVersion = 0
+    /// The assistant, opened from the box at the top about this day.
+    @State private var askTopic: AIAskTopic?
 
     var body: some View {
         Group {
@@ -295,6 +297,8 @@ private struct AddressTodayLoaded: View {
                 case let .loaded(intel):
                     ScrollView {
                         VStack(alignment: .leading, spacing: 0) {
+                            AskPantopusBox { askTopic = .today(homeId: viewModel.calendarHomeId) }
+                                .padding(.bottom, 12)
                             // Nearby Plans on the day (A1, A2): nothing unless the `plans` flag is on.
                             if PlansFlags.shared.plans { PlansTodayCards() }
                             if savedAnchorMatches {
@@ -310,15 +314,10 @@ private struct AddressTodayLoaded: View {
                             if savedPlace != nil {
                                 remindersRow.padding(.top, 12)
                             }
-                            if showMorningCard, savedAnchorMatches {
-                                morningCard.padding(.top, 12)
-                                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { cardFrame = $0 }
-                            }
                         }
                         .padding(.horizontal, 16)
                         .padding(.bottom, Spacing.s10)
                     }
-                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { scrollFrame = $0 }
                     // The home-screen widget shows what Today just showed for this place.
                     .task(id: WidgetSource(intel: intel, fallback: viewModel.fallbackCalendar)) {
                         guard scope.isCurrent,
@@ -328,9 +327,6 @@ private struct AddressTodayLoaded: View {
                         }
                         WidgetSnapshotStore.shared.writeToday(TodayWidgetSnapshot(intel: intel, viewModel: viewModel))
                     }
-                    .onChange(of: morningVisible) { _, visible in
-                        if visible { Task { await markPromptDisplayed() } }
-                    }
                     .refreshable {
                         guard scope.isCurrent else { sessionChanged = true
                             return
@@ -339,7 +335,7 @@ private struct AddressTodayLoaded: View {
                         guard scope.isCurrent else { sessionChanged = true
                             return
                         }
-                        await loadSavedPrompt()
+                        await loadSavedAnchor()
                     }
                 case let .error(message):
                     if viewModel.accessDenied {
@@ -351,6 +347,7 @@ private struct AddressTodayLoaded: View {
             }
         }
         .refreshFailureToast($viewModel.refreshFailureMessage)
+        .askPantopus($askTopic)
         .task {
             guard scope.isCurrent else { sessionChanged = true
                 return
@@ -361,28 +358,8 @@ private struct AddressTodayLoaded: View {
             guard scope.isCurrent else { sessionChanged = true
                 return
             }
-            await loadSavedPrompt()
+            await loadSavedAnchor()
         }
-        .onAppear { lifecycleVersion += 1
-            preferenceBusy = false
-        }
-        .onDisappear { lifecycleVersion += 1
-            preferenceBusy = false
-        }
-        .onChange(of: rootTabs.selected) { _, _ in lifecycleVersion += 1
-            preferenceBusy = false
-        }
-        .onChange(of: AppLockManager.shared.isLocked) { _, _ in lifecycleVersion += 1
-            preferenceBusy = false
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIApplication.protectedDataDidBecomeAvailableNotification)) { _ in
-            lifecycleVersion += 1
-            preferenceBusy = false
-        }
-    }
-
-    private var morningVisible: Bool {
-        showMorningCard && savedAnchorMatches && rootTabs.selected == .today && !cardFrame.isEmpty && cardFrame.intersects(scrollFrame)
     }
 
     private var remindersRow: some View {
@@ -401,27 +378,6 @@ private struct AddressTodayLoaded: View {
         .accessibilityIdentifier("todaySavedPlaceReminders")
     }
 
-    private var morningCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("A morning heads-up?")
-                .font(.system(size: 16, weight: .semibold)).foregroundStyle(Theme.Color.appText)
-            Text("Weather, air and alerts for this address, only when something's worth knowing.")
-                .font(.system(size: 14)).foregroundStyle(Theme.Color.appTextSecondary)
-            if let preferenceError {
-                Text(preferenceError).font(.system(size: 13)).foregroundStyle(Theme.Color.error)
-            }
-            HStack(spacing: 8) {
-                GhostButton(title: "Turn on", isLoading: preferenceBusy) { await turnOnMorning() }
-                GhostButton(title: "Not now", isEnabled: !preferenceBusy) { await hideMorningCard() }
-            }
-        }
-        .padding(16)
-        .background(Theme.Color.appSurface)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.Color.appBorder, lineWidth: 1))
-        .accessibilityIdentifier("todayMorningOptIn")
-    }
-
     private func checkSavedAnchor() async throws -> Bool {
         guard let savedPlace else { return false }
         try scope.requireCurrent()
@@ -433,128 +389,14 @@ private struct AddressTodayLoaded: View {
         return abs(latitude - savedPlace.latitude) < 0.000001 && abs(longitude - savedPlace.longitude) < 0.000001
     }
 
-    private func loadSavedPrompt() async {
+    private func loadSavedAnchor() async {
         guard savedPlace != nil else { return }
         savedAnchorMatches = false
         do {
             savedAnchorMatches = try await checkSavedAnchor()
-            guard savedAnchorMatches else { showMorningCard = false
-                return
-            }
-            let response: NotificationPreferencesResponseDTO = try await APIClient.shared.request(NotificationPreferencesEndpoints.fetch())
-            try Task.checkCancellation()
-            try scope.requireCurrent()
-            promptConfirmed = response.preferences.dailyBriefingPromptedAt?.isEmpty == false
-            if !promptAttempted { showMorningCard = response.preferences.dailyBriefingPromptedAt == nil }
         } catch {
-            savedAnchorMatches = false
-            showMorningCard = false
             if !scope.isCurrent { sessionChanged = true }
         }
-    }
-
-    private func markPromptDisplayed() async {
-        guard showMorningCard, savedAnchorMatches, !promptAttempted else { return }
-        _ = await persistPromptDisplayed()
-    }
-
-    private func hideMorningCard() async {
-        guard showMorningCard, !preferenceBusy else { return }
-        // A failed display stamp must be retried before dismissal; otherwise
-        // the next visit treats this already-answered prompt as first use.
-        if promptConfirmed {
-            showMorningCard = false
-        } else if await persistPromptDisplayed() {
-            showMorningCard = false
-        }
-    }
-
-    private func persistPromptDisplayed() async -> Bool {
-        let version = lifecycleVersion
-        promptAttempted = true
-        preferenceBusy = true
-        preferenceError = nil
-        defer {
-            if lifecycleVersion == version, rootTabs.selected == .today, savedPlace?.id == viewModel.savedPlaceId,
-               !AppLockManager.shared.isLocked, UIApplication.shared.isProtectedDataAvailable { preferenceBusy = false }
-        }
-        do {
-            try requirePreferenceCurrent(version)
-            let response: NotificationPreferencesResponseDTO = try await APIClient.shared.request(
-                NotificationPreferencesEndpoints.update(
-                    ["daily_briefing_prompted": .bool(true)]
-                ) { try requirePreferenceCurrent(version) }
-            )
-            try requirePreferenceCurrent(version)
-            guard response.preferences.dailyBriefingPromptedAt?.isEmpty == false else { throw APIError.invalidResponse }
-            promptConfirmed = true
-            return true
-        } catch {
-            guard lifecycleVersion == version, rootTabs.selected == .today, savedPlace?.id == viewModel.savedPlaceId,
-                  !AppLockManager.shared.isLocked, UIApplication.shared.isProtectedDataAvailable else { return false }
-            if scope.isCurrent {
-                preferenceError = "Couldn't save your choice. Try again."
-            } else {
-                showMorningCard = false
-                savedAnchorMatches = false
-                sessionChanged = true
-            }
-            return false
-        }
-    }
-
-    private func turnOnMorning() async {
-        guard !preferenceBusy else { return }
-        let version = lifecycleVersion
-        preferenceBusy = true
-        preferenceError = nil
-        defer {
-            if lifecycleVersion == version, rootTabs.selected == .today, savedPlace?.id == viewModel.savedPlaceId,
-               !AppLockManager.shared.isLocked, UIApplication.shared.isProtectedDataAvailable { preferenceBusy = false }
-        }
-        do {
-            let matches = try await checkSavedAnchor()
-            try requirePreferenceCurrent(version)
-            guard matches else { showMorningCard = false
-                savedAnchorMatches = false
-                return
-            }
-            let timezone = TimeZone.autoupdatingCurrent.identifier
-            guard TimeZone.knownTimeZoneIdentifiers.contains(timezone) else {
-                preferenceError = "Couldn't read your time zone. Try again."
-                return
-            }
-            try requirePreferenceCurrent(version)
-            let response: NotificationPreferencesResponseDTO = try await APIClient.shared.request(
-                NotificationPreferencesEndpoints.update([
-                    "daily_briefing_enabled": .bool(true), "daily_briefing_timezone": .string(timezone),
-                    "daily_briefing_prompted": .bool(true)
-                ]) { try requirePreferenceCurrent(version) }
-            )
-            try requirePreferenceCurrent(version)
-            if response.preferences.dailyBriefingEnabled {
-                showMorningCard = false
-            } else {
-                preferenceError = "Couldn't turn on your morning briefing. Try again."
-            }
-        } catch {
-            guard lifecycleVersion == version, rootTabs.selected == .today, savedPlace?.id == viewModel.savedPlaceId,
-                  !AppLockManager.shared.isLocked, UIApplication.shared.isProtectedDataAvailable else { return }
-            if scope.isCurrent {
-                preferenceError = "Couldn't turn on your morning briefing. Try again."
-            } else {
-                showMorningCard = false
-                savedAnchorMatches = false
-                sessionChanged = true
-            }
-        }
-    }
-
-    private func requirePreferenceCurrent(_ version: Int) throws {
-        try scope.requireCurrent()
-        try Task.checkCancellation()
-        guard lifecycleVersion == version, rootTabs.selected == .today, savedPlace?.id == viewModel.savedPlaceId,
-              !AppLockManager.shared.isLocked, UIApplication.shared.isProtectedDataAvailable else { throw CancellationError() }
     }
 }
 

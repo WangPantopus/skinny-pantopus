@@ -125,6 +125,7 @@ public enum NotificationCategory: Sendable, Hashable {
         "comment": .reply,
         "chat": .reply,
         "chat_message": .reply,
+        "business_message": .reply,
         "dm": .reply,
         "mention": .mention,
         "follow": .mention,
@@ -789,7 +790,9 @@ public final class NotificationsViewModel: ListOfRowsDataSource {
                 await markRead(id: dto.id)
             }
         }
-        let link = HomeTaskNotificationRoute.path(type: dto.type, homeId: dto.metadata?.homeId, taskId: dto.metadata?.taskId)
+        // A brief or nudge opens the assistant at its message (AI assistant phase 2).
+        let link = DeepLinkRouter.assistantPath(type: dto.type, notificationId: dto.id, conversationId: dto.metadata?.conversationId)
+            ?? HomeTaskNotificationRoute.path(type: dto.type, homeId: dto.metadata?.homeId, taskId: dto.metadata?.taskId)
             ?? DeepLinkRouter.notificationPath(type: dto.type, link: dto.link)
         if let link, !link.isEmpty { DeepLinkRouter.shared.handle(path: link) }
         onSelect(dto)

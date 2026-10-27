@@ -14,6 +14,7 @@ const { buildIcs } = require('./icsService');
 const { isEmailSuppressed } = require('./schedulingShared');
 const notifyPrefs = require('./schedulingNotifyPrefs');
 const { getBusinessMemberIdsByRole } = require('../../utils/businessPermissions');
+const { loadChatPeople } = require('../chatPeople');
 
 const APP_URL = process.env.APP_URL || 'http://localhost:3000';
 
@@ -34,10 +35,34 @@ function formatWhen(startIso, endIso, tz) {
   return `${s.toFormat('cccc, LLL d, yyyy')} · ${s.toFormat('h:mm a')} – ${e.toFormat('h:mm a')} (${s.toFormat('ZZZZ')})`;
 }
 
-async function getUserContact(userId) {
-  if (!userId) return null;
-  const { data } = await supabaseAdmin.from('User').select('id, email, name').eq('id', userId).maybeSingle();
-  return data || null;
+// The address our own emails come from (SMTP_FROM, "Name <address>").
+function platformSenderAddress() {
+  const from = process.env.SMTP_FROM || 'Pantopus <hello@pantopus.com>';
+  const match = from.match(/<([^>]+)>/);
+  return (match ? match[1] : from).trim();
+}
+
+/**
+ * The organizer the guest's calendar invite names. The invite goes to the guest's own address, outside Pantopus, so it
+ * never carries a person's account email. A business's booking is organized by the business: its name and its public
+ * email, or our own sender address (the host of a round-robin, collective or reassigned booking is a staff member).
+ * Personal and Home bookings name their host (else the owner) as neighbors see them (services/chatPeople.js: by their
+ * Local Profile, or the account for anyone without one), at our own sender address.
+ */
+async function inviteOrganizer(booking) {
+  if (booking.owner_type !== 'business') {
+    const hostId = booking.host_user_id || booking.owner_user_id;
+    if (!hostId) return null;
+    const host = (await loadChatPeople([hostId])).get(String(hostId));
+    return { email: platformSenderAddress(), name: host?.displayName || 'Pantopus' };
+  }
+  const [{ data: business }, { data: profile }] = await Promise.all([
+    supabaseAdmin.from('User').select('name').eq('id', booking.owner_id).maybeSingle(),
+    supabaseAdmin.from('BusinessProfile').select('public_email').eq('business_user_id', booking.owner_id).maybeSingle(),
+  ]);
+  const email = typeof profile?.public_email === 'string' && profile.public_email.trim()
+    ? profile.public_email.trim() : platformSenderAddress();
+  return { email, name: business?.name || 'Pantopus' };
 }
 
 /**
@@ -248,7 +273,7 @@ async function notifyBookingEvent({ booking, eventType, page, kind, manageToken 
       // Non-user invitee -> transactional email (always sent for these lifecycle events).
       let attachments;
       if (copy.attachIcs) {
-        const organizer = await getUserContact(booking.host_user_id || booking.owner_user_id);
+        const organizer = await inviteOrganizer(booking);
         attachments = [await buildBookingIcs({ booking, eventType, method: copy.icsMethod, organizer })];
       }
       const html = bookingEmailHtml({
@@ -388,7 +413,7 @@ async function sendBookingReminder({ booking, eventType, page, kind, offsetMinut
     });
   } else if (booking.invitee_email) {
     if (await isEmailSuppressed(booking.invitee_email, booking.owner_type, booking.owner_id)) return;
-    const organizer = await getUserContact(booking.host_user_id || booking.owner_user_id);
+    const organizer = await inviteOrganizer(booking);
     const attachments = [await buildBookingIcs({ booking, eventType, method: 'REQUEST', organizer })];
     const html = bookingEmailHtml({
       heading: `Reminder: ${eventName}`,

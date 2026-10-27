@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from unittest.mock import MagicMock
+import pytest
 
 from src.config.region_registry import (
     RegionConfig,
@@ -62,10 +63,10 @@ class TestLoadActiveRegions:
         assert regions[1].region == "seattle_metro"
         assert regions[1].lat == 47.6062
 
-    def test_returns_empty_on_error(self):
+    def test_raises_on_error(self):
         sb = _mock_supabase(table_error=True)
-        regions = load_active_regions(sb)
-        assert regions == []
+        with pytest.raises(Exception, match="DB error"):
+            load_active_regions(sb)
 
     def test_returns_empty_when_no_rows(self):
         sb = _mock_supabase(table_data=[])
@@ -124,10 +125,10 @@ class TestLoadSourcesForRegion:
         assert sources[0].source_id == "rss:columbian"
         assert sources[1].source_type == "google_news"
 
-    def test_returns_empty_on_error(self):
+    def test_raises_on_error(self):
         sb = _mock_supabase(table_error=True)
-        sources = load_sources_for_region(sb, "clark_county")
-        assert sources == []
+        with pytest.raises(Exception, match="DB error"):
+            load_sources_for_region(sb, "clark_county")
 
     def test_returns_empty_for_unknown_region(self):
         sb = _mock_supabase(table_data=[])

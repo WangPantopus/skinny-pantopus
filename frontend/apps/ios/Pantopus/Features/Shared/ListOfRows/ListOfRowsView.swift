@@ -969,7 +969,6 @@ struct RowView: View {
             card
                 .onTapGesture(perform: row.onTap)
                 .accessibilityElement(children: .contain)
-                .accessibilityLabel(a11yLabel)
                 .rowDestructiveMenu(row.destructiveAction)
         }
     }
@@ -1185,6 +1184,8 @@ struct RowView: View {
         if let subtitle = row.subtitle { parts.append(subtitle) }
         if let body = row.body { parts.append(body) }
         if case let .statusChip(text, _) = row.trailing { parts.append(text) }
+        // Bills, maintenance and received invoices: the amount and its status (Android's merged row reads both).
+        if case let .amountWithChip(amount, chipText, _, _) = row.trailing { parts.append(contentsOf: [amount, chipText]) }
         if case let .pillButton(label, _, _) = row.trailing { parts.append(label) }
         if let chips = row.chips {
             parts.append(contentsOf: chips.map(\.text))
@@ -1563,21 +1564,53 @@ private struct ChipRowView: View {
             }
         } else {
             HStack(spacing: Spacing.s1) {
-                chipContent
+                // One line: chips keep their full labels, and chips wider than
+                // the row scroll instead of squeezing (squeezed labels wrapped a
+                // letter per line). The caption after them still truncates.
+                if hasBidders || !chips.isEmpty {
+                    ViewThatFits(in: .horizontal) {
+                        chipStrip
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            chipStrip
+                        }
+                        .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+                    }
+                    .layoutPriority(1)
+                }
+                metaTailText
                 Spacer(minLength: Spacing.s0)
                 trailingContent
             }
         }
     }
 
+    private var hasBidders: Bool {
+        guard let bidderStack else { return false }
+        return !bidderStack.bidders.isEmpty || bidderStack.overflow > 0
+    }
+
     @ViewBuilder private var chipContent: some View {
-        if let bidderStack, !bidderStack.bidders.isEmpty || bidderStack.overflow > 0 {
+        bidderAndChips
+        metaTailText
+    }
+
+    private var chipStrip: some View {
+        HStack(spacing: Spacing.s1) {
+            bidderAndChips
+        }
+    }
+
+    @ViewBuilder private var bidderAndChips: some View {
+        if let bidderStack, hasBidders {
             BidderStack(bidders: bidderStack.bidders, overflow: bidderStack.overflow)
                 .padding(.trailing, 2)
         }
         ForEach(Array(chips.enumerated()), id: \.offset) { _, chip in
             ChipPill(chip: chip)
         }
+    }
+
+    @ViewBuilder private var metaTailText: some View {
         if let metaTail {
             Text(metaTail)
                 .pantopusTextStyle(.caption)
@@ -1693,6 +1726,7 @@ private struct ChipPill: View {
             Text(chip.text)
                 .pantopusTextStyle(.caption)
                 .foregroundStyle(foreground)
+                .lineLimit(1)
         }
         .padding(.horizontal, Spacing.s2)
         .padding(.vertical, 3)

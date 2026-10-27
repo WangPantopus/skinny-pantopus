@@ -15,15 +15,23 @@ public enum AIEndpoints {
     /// newest-updated first (server caps at 50). Summaries only; a
     /// conversation's turns come from `conversationMessages(id:)`.
     /// Route `backend/routes/ai.js:359`.
-    public static func conversations() -> Endpoint {
-        Endpoint(method: .get, path: "/api/ai/conversations")
+    public static func conversations(oldestFirst: Bool = false) -> Endpoint {
+        Endpoint(method: .get, path: "/api/ai/conversations", query: oldestFirst ? ["order": "oldest"] : [:])
     }
 
-    /// `GET /api/ai/conversations/:id/messages` — one conversation's earlier
-    /// turns, so a restored thread shows what the assistant remembers.
-    /// Route `backend/routes/ai.js:365`.
-    public static func conversationMessages(id: String) -> Endpoint {
-        Endpoint(method: .get, path: "/api/ai/conversations/\(id)/messages")
+    /// `GET /api/ai/conversations/:id/messages?cards=` — one conversation's
+    /// earlier turns, so a restored thread shows what the assistant
+    /// remembers. `cards` is the list the chat stream sends
+    /// (`AIChatStreamRequest.supportedCards`): the server leaves out the
+    /// cards an app doesn't list, so builds without action cards never get
+    /// one back from history (contract section 4.1).
+    /// Route `backend/routes/ai.js:445`.
+    public static func conversationMessages(id: String, cards: [String]) -> Endpoint {
+        Endpoint(
+            method: .get,
+            path: "/api/ai/conversations/\(id)/messages",
+            query: ["cards": cards.joined(separator: ",")]
+        )
     }
 
     /// `DELETE /api/ai/conversations/:id` — delete one AI conversation.

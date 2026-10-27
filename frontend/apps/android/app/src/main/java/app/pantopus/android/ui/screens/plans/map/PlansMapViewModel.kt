@@ -9,6 +9,7 @@ import app.pantopus.android.data.api.models.plans.PlanDto
 import app.pantopus.android.data.api.models.plans.PlanGameDto
 import app.pantopus.android.data.api.models.plans.PlanPinDto
 import app.pantopus.android.data.api.models.plans.PlansElsewhereDto
+import app.pantopus.android.data.api.models.plans.PlansSportsDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.plans.PlanFormat
@@ -71,6 +72,7 @@ data class PlansMapUiState(
     val selected: PlanDto? = null,
     val selectedMissing: Boolean = false,
     val games: List<PlanGameDto> = emptyList(),
+    val sports: PlansSportsDto? = null,
     val refreshing: Boolean = false,
     /** A plan the person just posted (board H8): its pin drops in and the sheet says it's on the map. */
     val postedId: String? = null,
@@ -127,6 +129,7 @@ class PlansMapViewModel
         private var viewport: PlanViewport? = null
         private var pinsJob: Job? = null
         private var listJob: Job? = null
+        private var gamesJob: Job? = null
         private var started = false
 
         init {
@@ -157,7 +160,6 @@ class PlansMapViewModel
             if (!started) {
                 started = true
                 resolveLocation()
-                loadGames()
                 return
             }
             val location = _state.value.location ?: return
@@ -226,16 +228,18 @@ class PlansMapViewModel
                     gps = if (location.source == PlanLocation.Source.GPS) Instant.now() else null,
                 ),
             )
-            _state.update { it.copy(location = location, locationStatus = PlansLocationStatus.Ready) }
+            _state.update { it.copy(location = location, locationStatus = PlansLocationStatus.Ready, games = emptyList()) }
             showStoredList()
             refreshAll(force = false)
         }
 
-        private fun loadGames() {
-            viewModelScope.launch {
-                val games = (repository.games() as? NetworkResult.Success)?.data.orEmpty()
-                _state.update { it.copy(games = games) }
-            }
+        fun loadGames() {
+            gamesJob?.cancel()
+            gamesJob =
+                viewModelScope.launch {
+                    val reply = (repository.games() as? NetworkResult.Success)?.data
+                    _state.update { it.copy(games = reply?.games.orEmpty(), sports = if (reply == null) it.sports else reply.sports) }
+                }
         }
 
         /** A chip: null is "All". */
@@ -322,6 +326,7 @@ class PlansMapViewModel
         }
 
         private fun refreshAll(force: Boolean) {
+            loadGames()
             loadList(force)
             loadPins(force, debounce = false)
         }

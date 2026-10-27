@@ -4,6 +4,9 @@ package app.pantopus.android.ui.screens.inbox.conversation
 
 import androidx.compose.runtime.Immutable
 import app.pantopus.android.core.LaunchFeatures
+import app.pantopus.android.data.ai.AIScreenContext
+import app.pantopus.android.data.api.models.chats.ChatAttachmentDto
+import app.pantopus.android.ui.screens.compose.pulse.PulseComposeDraftFields
 import app.pantopus.android.ui.theme.PantopusIcon
 import java.io.File
 
@@ -150,6 +153,12 @@ data class ChatConversationRouteArgs(
     val initialTopic: ChatInitialTopic? = null,
     /** Backing gig for gig rooms — drives the A15 pinned context strip. */
     val gigId: String? = null,
+    /** The screen an assistant thread was opened from (Ask Pantopus), or null. */
+    val aiContext: AIScreenContext? = null,
+    /** A brief's or nudge's notification id: the assistant thread opens at its message. */
+    val aiNudgeId: String? = null,
+    /** The conversation that brief or nudge was added to: the assistant thread opens and continues it. */
+    val aiConversationId: String? = null,
 )
 
 /**
@@ -195,7 +204,7 @@ sealed interface ChatCounterparty {
 
 /** Source-of-truth identifier for the thread. */
 sealed interface ChatThreadMode {
-    data class Room(val id: String) : ChatThreadMode
+    data class Room(val id: String, val asBusinessUserId: String? = null) : ChatThreadMode
 
     data class Person(val otherUserId: String) : ChatThreadMode
 
@@ -205,7 +214,7 @@ sealed interface ChatThreadMode {
 enum class ChatMessageSide { Incoming, Outgoing }
 
 /** [Refused]: the server refused the send (403); resending cannot succeed. */
-enum class ChatDeliveryState { Sending, Failed, Refused, Delivered, Read }
+enum class ChatDeliveryState { Sending, Queued, Failed, Refused, Sent, Delivered, Read }
 
 @Immutable
 data class ChatFanEntitlement(
@@ -224,6 +233,27 @@ enum class ChatSystemLinkAccent { Primary, Success, Warning, Error }
 
 enum class ChatQueuedAttachmentKind { Image, Document }
 
+/** A document sent to the assistant (a PDF), as its chip shows it: the file's name and size. */
+@Immutable
+data class ChatSentFile(
+    val name: String,
+    val sizeLabel: String? = null,
+)
+
+/**
+ * A photo sent from this phone, shown from its picked bytes (never written to an image cache). Equal by the
+ * attachment id, which names one picked file.
+ */
+@Immutable
+class ChatLocalPhoto(
+    val id: String,
+    val bytes: ByteArray,
+) {
+    override fun equals(other: Any?): Boolean = other is ChatLocalPhoto && other.id == id
+
+    override fun hashCode(): Int = id.hashCode()
+}
+
 @Immutable
 data class ChatQueuedAttachment(
     val id: String,
@@ -231,6 +261,8 @@ data class ChatQueuedAttachment(
     val filename: String,
     val mimeType: String = "application/octet-stream",
     val bytes: ByteArray? = null,
+    /** Where the picked file is on the phone (its content:// address): a photo sent to the assistant shows from it. */
+    val sourceUri: String? = null,
 )
 
 /**
@@ -252,6 +284,8 @@ data class ChatAIDraftPrefill(
     val postType: String? = null,
     /** A post's headline, when the draft has one. */
     val title: String? = null,
+    /** A post's exact type and its event, deal, lost-and-found and heads-up fields. */
+    val post: PulseComposeDraftFields? = null,
 )
 
 /**
@@ -290,6 +324,8 @@ data class ChatAIDraftCard(
     val prefill: ChatAIDraftPrefill? = null,
     /** A pickup-days card's schedule and where its Save stands. */
     val pickup: ChatAIPickupSchedule? = null,
+    /** An action card (type `action`): its fields, buttons and how they went. */
+    val action: ChatAIActionCard? = null,
 ) {
     /** Launch cut: a task (#4) or listing (#3) draft opens a composer hidden for the first launch. */
     val isLaunchAvailable: Boolean
@@ -311,6 +347,7 @@ data class ChatReplyPreview(
     val messageId: String,
     val senderName: String,
     val text: String,
+    val roomId: String? = null,
 )
 
 @Immutable
@@ -378,6 +415,7 @@ data class ChatShareListingOption(
 data class ChatOpenFile(
     val file: File,
     val mimeType: String,
+    val liveFile: File? = null,
 )
 
 /** Body of a single bubble. */
@@ -387,16 +425,20 @@ sealed interface ChatBubbleBody {
     data class TextWithImages(
         val text: String,
         val imageUrls: List<String>,
+        /** Documents (PDFs) sent to the assistant with the message, shown as file chips. */
+        val files: List<ChatSentFile> = emptyList(),
     ) : ChatBubbleBody
 
     /**
      * One or more photos. [caption] is the text sent with them; [moreUrls]
-     * are the message's further photos after [url].
+     * are the message's further photos after [url]. [local] are the same
+     * photos as picked on this phone, shown while they send and after.
      */
     data class Image(
         val url: String?,
         val caption: String? = null,
         val moreUrls: List<String> = emptyList(),
+        val local: List<ChatLocalPhoto> = emptyList(),
     ) : ChatBubbleBody
 
     /**
@@ -409,6 +451,7 @@ sealed interface ChatBubbleBody {
         val caption: String? = null,
         val fileUrl: String? = null,
         val mimeType: String? = null,
+        val liveVideoFileId: String? = null,
     ) : ChatBubbleBody
 
     data class LocationCard(val card: ChatLocationCard) : ChatBubbleBody
@@ -434,6 +477,8 @@ sealed interface ChatBubbleBody {
         val drafts: List<ChatAIDraftCard> = emptyList(),
         /** What the assistant is doing while the reply is pending ("Drafting your post…"). */
         val status: String? = null,
+        /** Buttons to screens of the app, under the reply. */
+        val links: List<ChatAILink> = emptyList(),
     ) : ChatBubbleBody
 }
 
@@ -457,6 +502,9 @@ data class ChatBubbleContent(
     val lockedTier: String? = null,
     val sentSupportTier: String? = null,
     val isContinuation: Boolean = false,
+    /** Public sender label for multi-person rooms; never the room title. */
+    val senderName: String? = null,
+    val attachments: List<ChatAttachmentDto> = emptyList(),
 )
 
 @Immutable

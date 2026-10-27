@@ -5,6 +5,7 @@
     <!-- Networking -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!-- Location (feed + gigs) -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
@@ -58,7 +59,10 @@
 
             <!-- Deep links: https://pantopus.com/... — the product domain. It is
                  what the backend and both clients build share and invite links
-                 on, and the only host that serves .well-known/assetlinks.json. -->
+                 on, and the only host that serves .well-known/assetlinks.json.
+                 It claims every path; a page the app has no screen for (a
+                 letter's claim page, the postcard opt-out, …) goes on to the
+                 browser (core/routing/WebLinkFallback.kt). -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -93,6 +97,15 @@
                 <data android:scheme="pantopus" />
             </intent-filter>
         </activity>
+
+        <!-- Notification taps open MainActivity through this alias. Any app can start MainActivity
+             with the "notification opened" extra, but only the app's own PendingIntents can start
+             an alias that isn't exported, so MainActivity counts a notification open only for an
+             intent that came this way (MainActivity.NOTIFICATION_OPEN). -->
+        <activity-alias
+            android:name=".NotificationOpen"
+            android:exported="false"
+            android:targetActivity=".MainActivity" />
 
         <!-- Settings → Apps → Pantopus → Storage → "Manage space" opens Storage & data
              (Instant Screens contract §7, android:manageSpaceActivity above). Exported because
@@ -171,6 +184,11 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_tasks_near_me_info" />
         </receiver>
+
+        <service
+            android:name=".data.chats.ChatOutboxJobService"
+            android:exported="true"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
 
         <!-- FCM bridge — mirrors the iOS AppDelegate push-notification
              half. Handles token rotation (onNewToken) and incoming

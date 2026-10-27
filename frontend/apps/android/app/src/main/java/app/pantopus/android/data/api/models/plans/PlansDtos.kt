@@ -2,6 +2,7 @@ package app.pantopus.android.data.api.models.plans
 
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
+import java.time.Instant
 
 /*
  * Nearby Plans: the wire shapes of `/api/plans` (the build brief's contract, section 5).
@@ -45,6 +46,11 @@ data class PlanHostDto(
 data class PlanGameRefDto(
     @Json(name = "label") val label: String? = null,
     @Json(name = "starts_at") val startsAt: String? = null,
+    @Json(name = "id") val id: String? = null,
+    @Json(name = "team") val team: String? = null,
+    @Json(name = "opponent") val opponent: String? = null,
+    @Json(name = "home") val home: Boolean? = null,
+    @Json(name = "ends_at") val endsAt: String? = null,
 )
 
 /** `details`: the per-type facts (brief section 4). Every field is optional. */
@@ -58,6 +64,10 @@ data class PlanDetailsDto(
     @Json(name = "walk_kind") val walkKind: String? = null,
     @Json(name = "pace") val pace: String? = null,
     @Json(name = "dogs_welcome") val dogsWelcome: Boolean? = null,
+    /** A study group's subject ("Spanish"), 1 to 60 characters. */
+    @Json(name = "subject") val subject: String? = null,
+    /** A study group's `quiet` or `together` ([app.pantopus.android.data.plans.PlanStudyStyle]). */
+    @Json(name = "study_style") val studyStyle: String? = null,
 )
 
 /**
@@ -408,12 +418,32 @@ data class PlanGameDto(
     @Json(name = "starts_at") val startsAt: String? = null,
     @Json(name = "ends_at") val endsAt: String? = null,
     @Json(name = "source") val source: String? = null,
-)
+    @Json(name = "opponent") val opponent: String? = null,
+    @Json(name = "home") val home: Boolean? = null,
+    @Json(name = "preseason") val preseason: Boolean? = null,
+    @Json(name = "followed") val followed: Boolean = false,
+) {
+    fun matchupLabel(): String = if (opponent.isNullOrBlank()) label else "$label ${if (home == false) "at" else "vs"} $opponent"
+
+    fun isAvailable(at: Instant = Instant.now()): Boolean =
+        runCatching {
+            if (endsAt != null) {
+                Instant.parse(endsAt).minusSeconds(GAME_MIN_LEFT_SECONDS).isAfter(at)
+            } else {
+                startsAt?.let { Instant.parse(it).isAfter(at) } ?: false
+            }
+        }.getOrDefault(false)
+
+    fun reference(): PlanGameRefDto = PlanGameRefDto(label, startsAt, id, team, opponent, home, endsAt)
+}
+
+private const val GAME_MIN_LEFT_SECONDS = 30 * 60L
 
 /** `GET /api/plans/games`. Empty is fine: the composer then offers only "Another game". */
 @JsonClass(generateAdapter = true)
 data class PlanGamesResponse(
     @Json(name = "games") val games: List<PlanGameDto> = emptyList(),
+    @Json(name = "sports") val sports: PlansSportsDto? = null,
 )
 
 /** `center` of a public place. */
@@ -439,6 +469,64 @@ data class PlanNearbyPlaceDto(
     @Json(name = "kind") val kind: String? = null,
     @Json(name = "distance_m") val distanceMeters: Double? = null,
     @Json(name = "distance_band") val distanceBand: String? = null,
+    /** Whether it's open for the plan's time, when the picker sent one and the place has hours. */
+    @Json(name = "hours") val hours: PlanPlaceHoursDto? = null,
+    /** The line under the place: hours that need a look, or open hours and a fact or two. */
+    @Json(name = "detail") val detail: PlanPlaceDetailDto? = null,
+    /** "Suggest places": why it suits the plan. */
+    @Json(name = "why") val why: String? = null,
+)
+
+/** A place's hours for the plan's time: [status] is `open`, `closes_early`, `opens_late` or `closed`. */
+@JsonClass(generateAdapter = true)
+data class PlanPlaceHoursDto(
+    @Json(name = "status") val status: String? = null,
+    /** "Open until 11 PM", "Closes at 2 PM", "Closed on Sunday". */
+    @Json(name = "text") val text: String? = null,
+) {
+    val isClosed: Boolean get() = status == "closed"
+
+    /** Open for part of the plan only. */
+    val isPartial: Boolean get() = status == "closes_early" || status == "opens_late"
+}
+
+/** H6's ready-made line under a place ("Open until 11 PM · Outdoor seating"); [tone] is `neutral` or `warning`. */
+@JsonClass(generateAdapter = true)
+data class PlanPlaceDetailDto(
+    @Json(name = "text") val text: String? = null,
+    @Json(name = "tone") val tone: String? = null,
+) {
+    val isWarning: Boolean get() = tone == "warning"
+}
+
+/**
+ * `POST /api/plans/places/suggest` body: H6's "Suggest places" for the draft. [ask] is what the host typed in the
+ * search box ("big screens and food"), when they asked from there.
+ */
+@Suppress("LongParameterList")
+@JsonClass(generateAdapter = true)
+data class PlanPlaceSuggestBody(
+    @Json(name = "latitude") val latitude: Double,
+    @Json(name = "longitude") val longitude: Double,
+    @Json(name = "kind") val kind: String,
+    @Json(name = "title") val title: String? = null,
+    @Json(name = "about") val about: String? = null,
+    @Json(name = "starts_at") val startsAt: String? = null,
+    @Json(name = "ends_at") val endsAt: String? = null,
+    @Json(name = "spots") val spots: Int? = null,
+    @Json(name = "details") val details: PlanDetailsDto? = null,
+    @Json(name = "ask") val ask: String? = null,
+)
+
+/**
+ * Up to three places for the plan, best first, each with `why`. [loading] (a 202) while the area's places are still
+ * on their way; [source] is `ai` when Pantopus chose them, `rules` when the list's own order did.
+ */
+@JsonClass(generateAdapter = true)
+data class PlanPlaceSuggestionsResponse(
+    @Json(name = "picks") val picks: List<PlanNearbyPlaceDto> = emptyList(),
+    @Json(name = "loading") val loading: Boolean = false,
+    @Json(name = "source") val source: String? = null,
 )
 
 /**

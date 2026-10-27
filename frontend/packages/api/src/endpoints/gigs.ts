@@ -19,6 +19,7 @@ import type {
   GigFilters,
   ApiResponse,
   BrowseResponse,
+  PublicAuthorIdentity,
 } from '@pantopus/types';
 
 type GigRecord = Record<string, unknown> & Partial<GigListItem & GigWithDetails>;
@@ -378,11 +379,13 @@ export async function abortAccept(
 /**
  * Get (or create) the gig chat room for this gig.
  * Access: gig owner OR accepted worker.
+ * The owner and staff of the business that posted it also get `asBusinessUserId` (open the room as the business)
+ * and, once it is assigned, `workerName`.
  */
 export async function getGigChatRoom(
   gigId: string
-): Promise<{ roomId: string; topicId?: string; gigOwnerId?: string }> {
-  return get<{ roomId: string; topicId?: string; gigOwnerId?: string }>(
+): Promise<{ roomId: string; topicId?: string; gigOwnerId?: string; asBusinessUserId?: string; workerName?: string }> {
+  return get<{ roomId: string; topicId?: string; gigOwnerId?: string; asBusinessUserId?: string; workerName?: string }>(
     `/api/gigs/${gigId}/chat-room`
   );
 }
@@ -1294,14 +1297,8 @@ export interface RebookableGig {
   category: string;
   price: number;
   completedAt: string;
-  worker: {
-    id: string;
-    firstName: string | null;
-    lastName: string | null;
-    username: string;
-    avatarUrl: string | null;
-    rating: number;
-  };
+  /** Named by their Local Profile (or as the business), as the task names them; `id` is the account id. */
+  worker: (PublicAuthorIdentity & { rating: number | null }) | null;
   myReview: { rating: number; comment: string | null } | null;
   city: string | null;
   state: string | null;

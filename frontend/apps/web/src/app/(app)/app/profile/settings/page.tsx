@@ -84,15 +84,24 @@ export default function SettingsPage() {
     try {
       await api.auth.logout();
     } catch (err) {
-      // A concurrent session-revoked reply can finish sign-out before this
-      // response arrives. An account switch also owns its own navigation.
-      if ((err as { code?: string } | null)?.code === 'AUTH_SESSION_CHANGED') return;
+      // Logout's Clear-Site-Data or a concurrent revocation can change the
+      // session marker before its response arrives. Finish navigation if the
+      // server already cleared the session cookie; preserve a newer sign-in.
+      if ((err as { code?: string } | null)?.code === 'AUTH_SESSION_CHANGED') {
+        const hasSessionCookie = document.cookie.split(';').some((cookie) => cookie.trim() === 'pantopus_session=1');
+        if (!hasSessionCookie) {
+          clearPendingPlaces();
+          clearAuthToken();
+          hardNavigate('/login');
+        }
+        return;
+      }
       toast.error('Could not confirm sign-out. Please try again.');
       return;
     }
     clearPendingPlaces();
     clearAuthToken();
-    router.push('/login');
+    hardNavigate('/login');
   };
 
   const handleDeleteAccount = async () => {
@@ -263,7 +272,7 @@ export default function SettingsPage() {
                   <span className="text-xl">🛡️</span>
                   <div className="text-left">
                     <span className="font-medium text-app group-hover:text-primary-600 block">Advanced Privacy & Blocks</span>
-                    <span className="text-xs text-app-secondary">Search visibility, field privacy, and profile blocks</span>
+                    <span className="text-xs text-app-secondary">How neighbors see you, search visibility, field privacy, and profile blocks</span>
                   </div>
                 </div>
                 <svg className="w-5 h-5 text-app-muted group-hover:text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -305,6 +314,23 @@ export default function SettingsPage() {
               <div className="flex items-center gap-3">
                 <span className="text-xl">💳</span>
                 <span className="font-medium text-app group-hover:text-primary-600">Payment Settings</span>
+              </div>
+              <svg className="w-5 h-5 text-app-muted group-hover:text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+            {/* Invoices businesses sent you, to pay or look back at once the notification is gone. */}
+            <button
+              onClick={() => router.push('/app/invoices')}
+              data-testid="settings-invoices"
+              className="mt-2 w-full flex items-center justify-between px-4 py-3 border border-app rounded-lg hover-bg-app transition group"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-xl">🧾</span>
+                <div className="text-left">
+                  <span className="font-medium text-app group-hover:text-primary-600 block">Invoices</span>
+                  <span className="text-xs text-app-secondary">Invoices from businesses you hire</span>
+                </div>
               </div>
               <svg className="w-5 h-5 text-app-muted group-hover:text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />

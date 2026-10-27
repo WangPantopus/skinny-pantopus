@@ -8,12 +8,18 @@
  *     passed (the request was answered, the plan was cancelled) is dropped.
  *  2. Asking closes: requests still waiting expire, with a kind note.
  *  3. Plans end at their end time; their chat goes read-only 24 hours later.
- *  4. Reminders for people who are in: 2 hours before, or 7 PM the evening
+ *  4. "Still coming?" asked once more of a guest who hasn't answered: 6 hours
+ *     after it was asked, or 2 hours before the start if that is sooner.
+ *  5. Reminders for people who are in: 2 hours before, or 7 PM the evening
  *     before a plan that starts before 10 AM.
- *  5. The host's summary at 8 AM on the day.
+ *  6. The host's summary at 8 AM on the day, with how many requests are waiting.
+ *  7. The assistant's nudges for hosts (services/ai/nudges/plans.js): weather
+ *     and air, requests waiting as asking closes, and after the plan.
+ *  8. Standing rules (services/ai/rules.js): next week's plan for hosts who
+ *     turned on a weekly plan, once this week's has ended.
  *
- * Every send is claimed first with a conditional update, so two runners (or a
- * retry) never send the same notice twice.
+ * Every send is claimed first with a conditional update (or a notice's
+ * idempotency key), so two runners (or a retry) never send the same notice twice.
  */
 
 const supabaseAdmin = require('../config/supabaseAdmin');
@@ -22,13 +28,20 @@ const rules = require('../services/plans/planRules');
 const planService = require('../services/plans/planService');
 const planChat = require('../services/plans/planChat');
 const planNotify = require('../services/plans/planNotifications');
-const { activeRequests, userNames, firstOf } = require('../services/plans/planActions');
+const { activeRequests, waitingRequests, userNames, firstOf } = require('../services/plans/planActions');
 
 const PLAN_NOTICE_TYPES = [
   'plan_request', 'plan_accepted', 'plan_declined', 'plan_reminder', 'plan_changed',
   'plan_cancelled', 'plan_spot_opened', 'plan_host_summary',
+  'plan_guest_left', 'plan_guest_auto_joined', 'plan_still_coming_reminder',
 ];
 const CHAT_OPEN_AFTER_END_MS = 24 * 60 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
+// "Still coming?" again: 6 hours after it was asked, or 2 hours before the start if
+// sooner, never within an hour of the first ask.
+const STILL_COMING_AGAIN_MS = 6 * HOUR_MS;
+const STILL_COMING_BEFORE_START_MS = 2 * HOUR_MS;
+const STILL_COMING_MIN_GAP_MS = HOUR_MS;
 
 const iso = (d) => new Date(d).toISOString();
 
@@ -65,6 +78,11 @@ function isStale(row, plan, request) {
     case 'plan_changed': return !request || request.status !== 'accepted' || request.reconfirmed != null || ended;
     case 'plan_reminder': return !request || request.status !== 'accepted' || ended;
     case 'plan_host_summary': return new Date(plan.post.event_date).getTime() <= Date.now();
+    case 'plan_guest_auto_joined': return !request || request.status !== 'accepted' || ended;
+    case 'plan_guest_left': return ended;
+    // Answered, left, or asked about a later change since.
+    case 'plan_still_coming_reminder': return !request || request.status !== 'accepted' || request.reconfirmed != null
+      || ended || new Date(request.reconfirm_requested_at).toISOString() !== row.metadata?.asked_at;
     default: return false;
   }
 }
@@ -87,7 +105,7 @@ async function releaseHeldPushes() {
   const requestIds = rows.map((r) => r.metadata?.request_id).filter(planService.isUuid);
   const requests = new Map();
   if (requestIds.length) {
-    const { data } = await supabaseAdmin.from('PlanRequest').select('id, status, reconfirmed').in('id', requestIds);
+    const { data } = await supabaseAdmin.from('PlanRequest').select('id, status, reconfirmed, reconfirm_requested_at').in('id', requestIds);
     for (const r of data || []) requests.set(r.id, r);
   }
 
@@ -194,7 +212,50 @@ async function closeAskingAndEnd() {
   return { expiredCount, endedCount, closedCount };
 }
 
-// ── 4. Reminders ─────────────────────────────────────────────
+// ── 4. "Still coming?" asked again ──────────────────────────
+
+/** When to ask once more, or null when that would be at or after the start. */
+function stillComingAgainAt(askedAt, startsAt) {
+  const asked = new Date(askedAt).getTime();
+  const start = new Date(startsAt).getTime();
+  const at = Math.max(asked + STILL_COMING_MIN_GAP_MS, Math.min(asked + STILL_COMING_AGAIN_MS, start - STILL_COMING_BEFORE_START_MS));
+  return Number.isFinite(at) && at < start ? new Date(at) : null;
+}
+
+async function sendStillComingReminders() {
+  const now = Date.now();
+  // A plan starts at most 14 days ahead, so an unanswered ask is never older than that.
+  const { data: unanswered, error } = await supabaseAdmin
+    .from('PlanRequest')
+    .select(planService.REQUEST_COLUMNS)
+    .eq('status', 'accepted')
+    .is('reconfirmed', null)
+    .lte('reconfirm_requested_at', new Date(now - STILL_COMING_MIN_GAP_MS).toISOString())
+    .gte('reconfirm_requested_at', new Date(now - (rules.LIMITS.maxDaysAhead + 1) * 24 * HOUR_MS).toISOString())
+    .limit(300);
+  if (error) throw new Error(`Failed to read unanswered "Still coming?": ${error.message}`);
+  if (!unanswered || unanswered.length === 0) return 0;
+  const plans = new Map((await planService.loadPlanRows([...new Set(unanswered.map((r) => r.post_id))]))
+    .map((p) => [p.post_id, p]));
+  const hostFirst = await hostFirstNames([...plans.values()]);
+  let sent = 0;
+  for (const request of unanswered) {
+    const plan = plans.get(request.post_id);
+    if (!plan || plan.status !== 'open' || new Date(plan.post.event_date).getTime() <= now) continue;
+    const again = stillComingAgainAt(request.reconfirm_requested_at, plan.post.event_date);
+    if (!again || again.getTime() > now) continue;
+    // Null when this change was already asked about again (the notice's key).
+    if (!(await planNotify.stillComingReminder({ plan, request, hostFirst: hostFirst(plan) }))) continue;
+    sent += 1;
+    // Asked again at the plan's own reminder time: that one push stands for both.
+    if (!request.reminded_at && rules.reminderAt(plan.post.event_date, rules.timezoneForPlan(plan)).getTime() <= now) {
+      await supabaseAdmin.from('PlanRequest').update({ reminded_at: iso(now) }).eq('id', request.id).is('reminded_at', null);
+    }
+  }
+  return sent;
+}
+
+// ── 5. Reminders ─────────────────────────────────────────────
 
 async function sendReminders() {
   const now = Date.now();
@@ -227,7 +288,7 @@ async function sendReminders() {
   return sent;
 }
 
-// ── 5. The host's morning summary ────────────────────────────
+// ── 6. The host's morning summary ────────────────────────────
 
 async function sendHostSummaries() {
   const now = Date.now();
@@ -257,7 +318,7 @@ async function sendHostSummaries() {
       plan,
       comingCount: going,
       spotsLeft: Math.max(0, plan.spots - going),
-      requestsCount: requests.filter((r) => r.status === 'pending').length,
+      requestsCount: (await waitingRequests(plan, requests)).length,
     });
     sent += 1;
   }
@@ -267,10 +328,36 @@ async function sendHostSummaries() {
 async function runPlansTick() {
   const released = await releaseHeldPushes();
   const lifecycle = await closeAskingAndEnd();
+  // Before reminders: asked again at a plan's reminder time, the reminder isn't sent as well.
+  const askedAgain = await sendStillComingReminders();
   const reminders = await sendReminders();
   const summaries = await sendHostSummaries();
-  const result = { released, ...lifecycle, reminders, summaries };
-  if (released || reminders || summaries || lifecycle.expiredCount || lifecycle.endedCount || lifecycle.closedCount) {
+  // The assistant's nudges come last, and a failure there never stops the notices above.
+  let nudges = null;
+  try {
+    nudges = await require('../services/ai/nudges/plans').runPlanNudges();
+  } catch (err) {
+    logger.warn('plans.tick.nudges_failed', { error: err.message });
+  }
+  // Then "Plans you'd like": newly posted plans, to the people who asked to hear about their kind.
+  let alerts = 0;
+  try {
+    alerts = await require('../services/ai/nudges/planAlerts').runPlanAlerts();
+  } catch (err) {
+    logger.warn('plans.tick.alerts_failed', { error: err.message });
+  }
+  // Last, weekly plans posted by standing rules: after the lifecycle above has ended this week's.
+  let repeats = 0;
+  try {
+    repeats = (await require('../services/ai/rules').runPlanRepeats()).posted;
+  } catch (err) {
+    logger.warn('plans.tick.rules_failed', { error: err.message });
+  }
+  const result = {
+    released, ...lifecycle, askedAgain, reminders, summaries, ...(nudges ? { nudges } : {}), ...(alerts ? { alerts } : {}), ...(repeats ? { repeats } : {}),
+  };
+  if (released || askedAgain || reminders || summaries || lifecycle.expiredCount || lifecycle.endedCount || lifecycle.closedCount
+    || (nudges && nudges.sent) || alerts || repeats) {
     logger.info('plans.tick', result);
   }
   return result;
@@ -280,6 +367,8 @@ module.exports = {
   runPlansTick,
   releaseHeldPushes,
   closeAskingAndEnd,
+  sendStillComingReminders,
+  stillComingAgainAt,
   sendReminders,
   sendHostSummaries,
 };

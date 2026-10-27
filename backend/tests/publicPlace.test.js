@@ -343,7 +343,7 @@ describe('GET /api/public/place', () => {
       expect(res.body.aha.headline).toMatch(/Red Flag Warning/);
     });
 
-    it('falls back to the calm card when every layer is quiet', async () => {
+    it('does not give an all-clear when the available layers are quiet but others are missing', async () => {
       installFetch({ whp: { value: '1' }, seismic: { response: { data: { sdc: 'B', sds: 0.3 } } } });
       const res = await request(buildApp()).get('/api/public/place').query({ address: '1421 SE Oak St' });
       // The two ECHO facilities score 50 (a "watch"), so mute them too.
@@ -352,7 +352,8 @@ describe('GET /api/public/place', () => {
         expect(res.body.aha.tone).toBe('watch');
         return;
       }
-      expect(res.body.aha).toMatchObject({ section_id: null, tone: 'calm' });
+      expect(res.body.sections.some((section) => section.status === 'unavailable')).toBe(true);
+      expect(res.body.aha).toMatchObject({ section_id: null, tone: 'info', grade: 'Partial' });
     });
 
     // The three rules the real-data audit (Camas, 2026-09-01) added.
@@ -415,14 +416,14 @@ describe('GET /api/public/place', () => {
       expect(global.fetch.mock.calls.filter(([u]) => String(u).includes('imagery.geoplatform.gov')).length).toBe(9);
     });
 
-    it('is calm for real when nothing nearby is regulated either', async () => {
+    it('keeps the known quiet facts without treating unavailable layers as checked', async () => {
       installFetch({ whp: { value: '1' }, seismic: { response: { data: { sdc: 'B', sds: 0.3 } } } });
       const base = global.fetch;
       global.fetch = jest.fn((url) => (String(url).includes('echodata.epa.gov')
         ? Promise.resolve(mockResp({ Results: { QueryRows: '0', Facilities: [] } }))
         : base(url)));
       const res = await request(buildApp()).get('/api/public/place').query({ address: '1421 SE Oak St' });
-      expect(res.body.aha).toMatchObject({ section_id: null, tone: 'calm', headline: 'Quiet on every layer' });
+      expect(res.body.aha).toMatchObject({ section_id: null, tone: 'info', headline: 'Some public information is still missing' });
       expect(res.body.aha.detail).toMatch(/minimal flood risk/i);
       expect(res.body.aha.detail).toMatch(/good air today/i);
       expect(res.body.aha.detail).toMatch(/no active alerts/i);

@@ -32,6 +32,7 @@ import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.auth.AuthRepository
+import app.pantopus.android.data.businesses.BusinessTeamRepository
 import app.pantopus.android.data.files.FilesRepository
 import app.pantopus.android.data.gigs.GigOwnerActionsRepository
 import app.pantopus.android.data.gigs.GigViewerBidRepository
@@ -140,6 +141,8 @@ class GigDetailViewModel
         authorizationFactory: app.pantopus.android.ui.screens.gigs.authorization.GigAssignedAuthorizationFactory,
         stopFactory: app.pantopus.android.ui.screens.gigs.stop.GigStopFactory,
         private val tipStore: app.pantopus.android.data.payments.PendingGigTipStore,
+        // Launch cut #4 (Open Gigs): `GET /api/businesses/:id/me` for a business's own task.
+        private val businessTeamRepo: BusinessTeamRepository,
     ) : ViewModel() {
         companion object {
             const val GIG_ID_KEY = "gigId"
@@ -429,6 +432,9 @@ class GigDetailViewModel
 
         private var viewerIsWorker = false
 
+        /** Launch cut #4 (Open Gigs): the viewer may act for the business that posted the task. */
+        private var viewerActsForBusiness = false
+
         /** True while `POST /instant-accept` is in flight. */
         private val _instantAcceptInFlight = MutableStateFlow(false)
         val instantAcceptInFlight: StateFlow<Boolean> = _instantAcceptInFlight.asStateFlow()
@@ -597,8 +603,11 @@ class GigDetailViewModel
         /** True when the signed-in viewer owns this gig. */
         fun viewerIsOwner(): Boolean = viewerIsOwner
 
-        /** Launch cut #4 (Open Gigs): true when the viewer posted or works this task. */
-        fun viewerIsPartOfTask(): Boolean = viewerIsOwner || viewerIsWorker
+        /**
+         * Launch cut #4 (Open Gigs): true when the viewer posted or works this task, or acts for the business that
+         * posted it. A business's owner and staff see its task as a visitor does, without the poster's actions.
+         */
+        fun viewerIsPartOfTask(): Boolean = viewerIsOwner || viewerIsWorker || viewerActsForBusiness
 
         fun canAskQuestion(): Boolean = currentUserId() != null && !viewerIsOwner
 
@@ -872,12 +881,15 @@ class GigDetailViewModel
                         // dock renders "Update bid" on the first frame.
                         loadViewerBid(result.data.gig)
                         val historicalTip = hasHistoricalTipEntry(result.data.gig)
+                        // Resolved before the page shows, so the launch-cut placeholder never flashes.
+                        val actsForBusiness = viewerActsForPostingBusiness(result.data.gig)
                         if (!bidCheckout.isCurrentReadScope()) {
                             _state.value = ContentDetailUiState.Error("Your account changed. Reopen this task to continue.")
                             refetchInFlight = false
                             _bidsRefreshing.value = false
                             return@launch
                         }
+                        viewerActsForBusiness = actsForBusiness
                         applyLoaded(result.data.gig, bids, historicalTip)
                         loadQuestions()
                     }
@@ -892,6 +904,21 @@ class GigDetailViewModel
                 refetchInFlight = false
                 _bidsRefreshing.value = false
             }
+        }
+
+        /**
+         * Launch cut #4 (Open Gigs): whether the viewer may act for the business that posted [gig]: its owner, or a
+         * member with `gigs.manage` or `gigs.post`, as the backend's `chatBusinessAccess.canActAsBusiness`
+         * (`GET /api/businesses/:id/me`, `backend/routes/businessIam.js:42`). Asked only while Open Gigs is off, for a
+         * business's task the viewer neither posted nor works. A failed or refused read counts as no access.
+         */
+        private suspend fun viewerActsForPostingBusiness(gig: GigDto): Boolean {
+            if (LaunchFeatures.openGigs) return false
+            val uid = currentUserId() ?: return false
+            val businessId = gig.userId?.takeIf { it.isNotEmpty() } ?: return false
+            if (uid == businessId || uid == gig.acceptedBy || gig.posterIdentity()?.type != "business") return false
+            val access = (businessTeamRepo.access(businessId) as? NetworkResult.Success)?.data ?: return false
+            return access.hasAccess && (access.isOwner || access.permissions.any { it == "gigs.manage" || it == "gigs.post" })
         }
 
         /**
@@ -2355,24 +2382,33 @@ class GigDetailViewModel
                 onReceipt = { silentRefetch() },
             )
 
-        /** Get-or-create the gig chat room, then emit navigation payload. */
+        /**
+         * Get-or-create the gig chat room, then emit navigation payload. A business's owner and staff open its
+         * task's room as the business, headed by the worker (the task before anyone is assigned).
+         */
         fun openGigChat() {
             val gig = rawGig ?: return
             val poster = gig.posterIdentity()
-            val name = poster?.resolvedDisplayName() ?: gig.title
-            val initials = Projection.initialsFromName(name)
-            val verified = poster?.resolvedVerified() == true
             viewModelScope.launch {
                 when (val result = repo.chatRoom(gigId)) {
-                    is NetworkResult.Success ->
+                    is NetworkResult.Success -> {
+                        val asBusinessUserId = result.data.asBusinessUserId?.takeIf { it.isNotBlank() }
+                        val name =
+                            if (asBusinessUserId == null) {
+                                poster?.resolvedDisplayName() ?: gig.title
+                            } else {
+                                result.data.workerName ?: gig.title
+                            }
                         _openChatEvents.emit(
                             GigOpenChatEvent(
                                 roomId = result.data.roomId,
                                 displayName = name,
-                                initials = initials,
-                                verified = verified,
+                                initials = Projection.initialsFromName(name),
+                                verified = asBusinessUserId == null && poster?.resolvedVerified() == true,
+                                asBusinessUserId = asBusinessUserId,
                             ),
                         )
+                    }
                     is NetworkResult.Failure -> Unit
                 }
             }

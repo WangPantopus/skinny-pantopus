@@ -2,13 +2,14 @@
 
 package app.pantopus.android.ui.screens.shared.media
 
+import android.view.ViewGroup
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -17,6 +18,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -26,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -34,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
@@ -55,6 +59,7 @@ fun MediaViewerDialog(
     items: List<PostMediaItem>,
     startIndex: Int,
     onDismiss: () -> Unit,
+    localPdfFile: java.io.File? = null,
 ) {
     if (items.isEmpty()) return
     val pagerState =
@@ -62,13 +67,21 @@ fun MediaViewerDialog(
 
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
+        properties = DialogProperties(decorFitsSystemWindows = false),
     ) {
+        val window = (LocalView.current.parent as? DialogWindowProvider)?.window
+        SideEffect {
+            // Compose 1.7 measures non-default-width dialogs against the full display,
+            // which can exceed the actual window on Android 15. Keep window constraints
+            // and expand the window itself so bottom playback/page controls stay visible.
+            window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        }
         Box(
             modifier =
                 Modifier
                     .fillMaxSize()
                     .background(Color.Black)
+                    .systemBarsPadding()
                     .testTag("mediaViewer"),
         ) {
             HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
@@ -82,6 +95,7 @@ fun MediaViewerDialog(
                             // Originals are never written to the disk cache (Instant Screens §6).
                             cacheOnDisk = false,
                         )
+                    PostMediaKind.Document -> PostPdfSlide(url = item.url, localFile = localPdfFile)
                     PostMediaKind.Video ->
                         ViewerVideoSlide(
                             url = item.url,
@@ -92,6 +106,7 @@ fun MediaViewerDialog(
                             item = item,
                             contentScale = ContentScale.Fit,
                             showsReplayButton = true,
+                            isActive = pagerState.currentPage == page,
                             modifier = Modifier.fillMaxSize(),
                         )
                 }
@@ -108,7 +123,6 @@ fun MediaViewerDialog(
                     modifier =
                         Modifier
                             .align(Alignment.TopStart)
-                            .statusBarsPadding()
                             .padding(Spacing.s3)
                             .background(
                                 Color.Black.copy(alpha = 0.45f),
@@ -123,7 +137,6 @@ fun MediaViewerDialog(
                 modifier =
                     Modifier
                         .align(Alignment.TopEnd)
-                        .statusBarsPadding()
                         .padding(Spacing.s3)
                         .size(36.dp)
                         .background(Color.Black.copy(alpha = 0.45f), CircleShape)

@@ -1,7 +1,13 @@
 package app.pantopus.android.data.api.services
 
+import app.pantopus.android.data.api.models.chats.ChatChangesBody
+import app.pantopus.android.data.api.models.chats.ChatChangesResponse
 import app.pantopus.android.data.api.models.chats.ChatMessagesResponse
+import app.pantopus.android.data.api.models.chats.ChatNotificationPreferencesBody
+import app.pantopus.android.data.api.models.chats.ChatNotificationPreferencesResponse
+import app.pantopus.android.data.api.models.chats.ChatReadResponse
 import app.pantopus.android.data.api.models.chats.ChatRoomDetailResponse
+import app.pantopus.android.data.api.models.chats.ChatSearchResponse
 import app.pantopus.android.data.api.models.chats.ChatStatsResponse
 import app.pantopus.android.data.api.models.chats.ConversationTopicsResponse
 import app.pantopus.android.data.api.models.chats.CreateDirectChatBody
@@ -21,6 +27,7 @@ import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.Headers
+import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Path
@@ -34,9 +41,12 @@ import retrofit2.http.Streaming
 @Suppress("TooManyFunctions") // declarative Retrofit endpoint list — one function per route
 interface ChatApi {
     /** `GET /api/chat/unified-conversations`. */
+    @Headers("Cache-Control: no-store")
     @GET("api/chat/unified-conversations")
     suspend fun unifiedConversations(
         @Query("limit") limit: Int = 100,
+        @Query("before") before: String? = null,
+        @Query("q") query: String? = null,
     ): UnifiedConversationsResponse
 
     /** [unifiedConversations] for the screens' store: sends the stored ETag; a 304 means the copy is current. */
@@ -45,6 +55,41 @@ interface ChatApi {
         @Query("limit") limit: Int,
         @Header("If-None-Match") etag: String?,
     ): Response<UnifiedConversationsResponse>
+
+    @Headers("Cache-Control: no-store")
+    @GET("api/chat/search")
+    suspend fun searchMessages(
+        @Query("q") query: String,
+        @Query("before") before: String? = null,
+        @Query("limit") limit: Int = 50,
+    ): ChatSearchResponse
+
+    @Headers("Cache-Control: no-store")
+    @GET("api/chat/rooms/{roomId}/messages/{messageId}/context")
+    suspend fun roomMessageContext(
+        @Path("roomId") roomId: String,
+        @Path("messageId") messageId: String,
+        @Query("asBusinessUserId") asBusinessUserId: String? = null,
+    ): ChatMessagesResponse
+
+    @Headers("Cache-Control: no-store")
+    @GET("api/chat/conversations/{otherUserId}/messages/{messageId}/context")
+    suspend fun conversationMessageContext(
+        @Path("otherUserId") otherUserId: String,
+        @Path("messageId") messageId: String,
+    ): ChatMessagesResponse
+
+    @PATCH("api/chat/conversations/{otherUserId}/preferences")
+    suspend fun conversationPreferences(
+        @Path("otherUserId") otherUserId: String,
+        @Body body: ChatNotificationPreferencesBody,
+    ): ChatNotificationPreferencesResponse
+
+    @PATCH("api/chat/rooms/{roomId}/preferences")
+    suspend fun roomPreferences(
+        @Path("roomId") roomId: String,
+        @Body body: ChatNotificationPreferencesBody,
+    ): ChatNotificationPreferencesResponse
 
     /** `GET /api/chat/stats`. */
     @GET("api/chat/stats")
@@ -58,6 +103,7 @@ interface ChatApi {
     @GET("api/chat/rooms/{roomId}")
     suspend fun room(
         @Path("roomId") roomId: String,
+        @Query("asBusinessUserId") asBusinessUserId: String? = null,
     ): ChatRoomDetailResponse
 
     /** `GET /api/chat/rooms/:roomId/messages` — route `chats.js:1340`. */
@@ -67,6 +113,8 @@ interface ChatApi {
         @Query("limit") limit: Int = 60,
         @Query("before") before: String? = null,
         @Query("after") after: String? = null,
+        @Query("asBusinessUserId") asBusinessUserId: String? = null,
+        @Query("sync") sync: Boolean? = null,
     ): ChatMessagesResponse
 
     /** `GET /api/chat/conversations/:otherUserId/messages` — route `chats.js:1157`. */
@@ -77,6 +125,7 @@ interface ChatApi {
         @Query("before") before: String? = null,
         @Query("after") after: String? = null,
         @Query("topicId") topicId: String? = null,
+        @Query("sync") sync: Boolean? = null,
     ): ChatMessagesResponse
 
     @GET("api/chat/rooms/{roomId}/messages")
@@ -84,6 +133,8 @@ interface ChatApi {
         @Path("roomId") roomId: String,
         @Query("limit") limit: Int,
         @Header("If-None-Match") etag: String?,
+        @Query("asBusinessUserId") asBusinessUserId: String? = null,
+        @Query("sync") sync: Boolean? = true,
     ): Response<ChatMessagesResponse>
 
     @GET("api/chat/conversations/{otherUserId}/messages")
@@ -92,7 +143,41 @@ interface ChatApi {
         @Query("limit") limit: Int,
         @Query("topicId") topicId: String?,
         @Header("If-None-Match") etag: String?,
+        @Query("sync") sync: Boolean? = true,
     ): Response<ChatMessagesResponse>
+
+    @Headers("Cache-Control: no-store")
+    @GET("api/chat/rooms/{roomId}/changes")
+    suspend fun roomChanges(
+        @Path("roomId") roomId: String,
+        @Query("cursor") cursor: String,
+        @Query("until") until: String? = null,
+        @Query("asBusinessUserId") asBusinessUserId: String? = null,
+        @Query("limit") limit: Int = 200,
+    ): ChatChangesResponse
+
+    @Headers("Cache-Control: no-store")
+    @GET("api/chat/conversations/{otherUserId}/changes")
+    suspend fun conversationChanges(
+        @Path("otherUserId") otherUserId: String,
+        @Query("cursor") cursor: String,
+        @Query("until") until: String? = null,
+        @Query("limit") limit: Int = 200,
+    ): ChatChangesResponse
+
+    @Headers("Cache-Control: no-store")
+    @POST("api/chat/rooms/{roomId}/changes")
+    suspend fun roomChangesPost(
+        @Path("roomId") roomId: String,
+        @Body body: ChatChangesBody,
+    ): ChatChangesResponse
+
+    @Headers("Cache-Control: no-store")
+    @POST("api/chat/conversations/{otherUserId}/changes")
+    suspend fun conversationChangesPost(
+        @Path("otherUserId") otherUserId: String,
+        @Body body: ChatChangesBody,
+    ): ChatChangesResponse
 
     /**
      * `POST /api/chat/direct` — find-or-create the 1:1 direct room with
@@ -146,13 +231,30 @@ interface ChatApi {
     @POST("api/chat/rooms/{roomId}/read")
     suspend fun markRoomRead(
         @Path("roomId") roomId: String,
-    ): Unit
+        @Body body: Map<String, String> = emptyMap(),
+    ): ChatReadResponse
 
     /** `POST /api/chat/conversations/:otherUserId/read` — route `chats.js:1265`. */
     @POST("api/chat/conversations/{otherUserId}/read")
     suspend fun markConversationRead(
         @Path("otherUserId") otherUserId: String,
-    ): Unit
+        @Body body: Map<String, @JvmSuppressWildcards Any> = emptyMap(),
+    ): ChatReadResponse
+
+    /** Separate routes prevent older servers from interpreting a selected-topic read as a global read. */
+    @POST("api/chat/rooms/{roomId}/topics/{topicId}/read")
+    suspend fun markRoomTopicRead(
+        @Path("roomId") roomId: String,
+        @Path("topicId") topicId: String,
+        @Body body: Map<String, String>,
+    ): ChatReadResponse
+
+    @POST("api/chat/conversations/{otherUserId}/topics/{topicId}/read")
+    suspend fun markConversationTopicRead(
+        @Path("otherUserId") otherUserId: String,
+        @Path("topicId") topicId: String,
+        @Body body: Map<String, @JvmSuppressWildcards Any>,
+    ): ChatReadResponse
 
     /** `GET /api/chat/conversations/:otherUserId/topics` — route `chats.js:2466`. */
     @GET("api/chat/conversations/{otherUserId}/topics")

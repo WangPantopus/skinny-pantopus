@@ -130,9 +130,10 @@ final class APIClient: @unchecked Sendable {
     /// Perform a request and decode the response body as `Response`.
     func request<Response: Decodable>(
         _ endpoint: Endpoint,
-        as _: Response.Type = Response.self
+        as _: Response.Type = Response.self,
+        expectedSessionGeneration: Int? = nil
     ) async throws -> Response {
-        let data = try await executeWithRetry(endpoint).data
+        let data = try await executeWithRetry(endpoint, expectedSessionGeneration: expectedSessionGeneration).data
         if Response.self == EmptyResponse.self, data.isEmpty {
             // swiftlint:disable:next force_cast
             return EmptyResponse() as! Response
@@ -286,10 +287,14 @@ final class APIClient: @unchecked Sendable {
     @MainActor
     // swiftlint:disable:next cyclomatic_complexity
     private func executeWithRetry(
-        _ endpoint: Endpoint, includingForbidden: Bool = false, includingNotFound: Bool = false
+        _ endpoint: Endpoint,
+        includingForbidden: Bool = false,
+        includingNotFound: Bool = false,
+        expectedSessionGeneration: Int? = nil
     ) async throws -> DataResponse {
         let sessionOwner = auth
         let generation = sessionOwner.requestSessionGeneration
+        if let expectedSessionGeneration, generation != expectedSessionGeneration { throw CancellationError() }
         let checkSession: @MainActor () throws -> Void = { [self] in
             guard endpoint.authenticated else { return }
             guard auth === sessionOwner else { throw CancellationError() }
@@ -451,7 +456,7 @@ final class APIClient: @unchecked Sendable {
             return DataResponse(data: data, response: http)
         case 401:
             // Refresh + sign-out decisions are made in executeWithRetry.
-            throw APIError.unauthorized
+            throw unauthorizedError(data, endpoint: endpoint)
         case 403:
             // `STEP_UP_REQUIRED` is the one 403 the client can recover from
             // (CONTRACT "Client behaviour"): surface it as a signal so the
@@ -473,13 +478,29 @@ final class APIClient: @unchecked Sendable {
             let message = String(data: data, encoding: .utf8)
             throw APIError.clientError(status: http.statusCode, message: message)
         default:
-            await Observability.shared.capture(
-                message: "API \(endpoint.method.rawValue) \(endpoint.path) -> \(http.statusCode)",
-                level: .error
-            )
+            await reportServerError(endpoint, status: http.statusCode)
             let body = String(data: data, encoding: .utf8) ?? ""
             throw APIError.server(status: http.statusCode, body: body)
         }
+    }
+
+    private func reportServerError(_ endpoint: Endpoint, status: Int) async {
+        guard endpoint.reportsServerErrors else { return }
+        await Observability.shared.capture(
+            message: "API \(endpoint.method.rawValue) \(endpoint.path) -> \(status)",
+            level: .error
+        )
+    }
+
+    private func unauthorizedError(_ data: Data, endpoint: Endpoint) -> APIError {
+        // Credential-issuing requests can fail device proof even when
+        // the password is correct. Preserve that cause for the auth UI.
+        if !endpoint.authenticated, endpoint.requiresDPoP,
+           let code = AuthErrorBody.decode(data)?.code,
+           ["DPOP_REQUIRED", "DPOP_INVALID", "DPOP_REPLAY"].contains(code) {
+            return .clientError(status: 401, message: String(data: data, encoding: .utf8))
+        }
+        return .unauthorized
     }
 
     private func notFoundResponse(_ data: Data, response: HTTPURLResponse, includeBody: Bool) throws -> DataResponse {
@@ -490,6 +511,12 @@ final class APIClient: @unchecked Sendable {
     // MARK: - Building requests
 
     private func buildRequest(for endpoint: Endpoint, extraHeaders: [String: String] = [:]) async throws -> URLRequest {
+        // `appendingPathComponent` encodes the path but keeps `.` and `..`
+        // segments, which a proxy that normalizes paths resolves to another
+        // route. No endpoint has one; only an id from a link or a payload can.
+        guard !endpoint.path.split(separator: "/").contains(where: { $0 == "." || $0 == ".." }) else {
+            throw APIError.invalidURL
+        }
         guard var components = URLComponents(
             url: environment.apiBaseURL.appendingPathComponent(endpoint.path),
             resolvingAgainstBaseURL: false
@@ -629,6 +656,10 @@ public struct Endpoint: Sendable {
     /// and without signing the user out. The pre-flight refresh still runs,
     /// so the Bearer itself is fresh when the call goes out.
     public let verifiesCredential: Bool
+    /// Report a 5xx answer as an app error. Off where a 5xx is a routine
+    /// answer: `/api/link-preview` answers 502 for every link whose page
+    /// didn't load.
+    public let reportsServerErrors: Bool
 
     public init(
         method: Method,
@@ -642,6 +673,7 @@ public struct Endpoint: Sendable {
         timeout: TimeInterval? = nil,
         requiresDPoP: Bool = false,
         verifiesCredential: Bool = false,
+        reportsServerErrors: Bool = true,
         dispatchGuard: (@MainActor @Sendable () throws -> Void)? = nil
     ) {
         self.dispatchGuard = dispatchGuard
@@ -656,6 +688,7 @@ public struct Endpoint: Sendable {
         self.timeout = timeout
         self.requiresDPoP = requiresDPoP
         self.verifiesCredential = verifiesCredential
+        self.reportsServerErrors = reportsServerErrors
     }
 }
 

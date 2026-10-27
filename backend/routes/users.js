@@ -15,7 +15,7 @@ const Joi = require('joi');
 const logger = require('../utils/logger');
 const { getPublicResidencySummary } = require('../utils/publicResidencyProfile');
 const { generateCsrfToken } = require('../utils/csrf');
-const { isConnected, isSearchable, isScopedBlocked } = require('../utils/visibilityPolicy');
+const { isConnected, isSearchable, loadUserSearchAccess, isScopedBlocked, isUnpublishedBusiness, unpublishedBusinessIds, canViewProfileField } = require('../utils/visibilityPolicy');
 const affinityService = require('../services/gig/affinityService');
 const inviteRewardService = require('../services/inviteRewardService');
 const emailService = require('../services/emailService');
@@ -85,7 +85,7 @@ const USER_NAME_SEARCH_FIELDS = [
   'middle_name',
   'last_name',
 ];
-const USER_NAME_SEARCH_SELECT = 'id, account_type, name, first_name, middle_name, last_name';
+const USER_NAME_SEARCH_SELECT = 'id, account_type, profile_visibility, name, first_name, middle_name, last_name';
 
 function localSearchFieldsForProfile(profile) {
   const fields = ['handle', 'handle_normalized', 'display_name', 'tagline'];
@@ -116,10 +116,29 @@ function ilikePattern(value) {
   return `%${escaped}%`;
 }
 
+// Every token must match a public field before the candidate cap is applied.
+// Otherwise a common first name can fill the page and hide a more specific match.
+function userSearchFilter(fields, tokens, { local = false } = {}) {
+  const groups = tokens.map((token) => {
+    const pattern = JSON.stringify(ilikePattern(token));
+    return `or(${fields.map((field) => {
+      const match = `${field}.ilike.${pattern}`;
+      return local && field.startsWith('public_') ? `and(show_neighborhood.eq.true,${match})` : match;
+    }).join(',')})`;
+  });
+  return `and(${groups.join(',')})`;
+}
+
 function normalizeLocalProfileHandle(value) {
   return String(value || '').trim().replace(/^@+/, '').toLowerCase();
 }
 
+// PostgreSQL refused the text as a uuid: it isn't an id, so there is no such profile.
+function isNotAnIdError(error) {
+  return error?.code === '22P02';
+}
+
+// Both throw on a failed read.
 async function getLocalProfileByLegacyRouteHandle(value) {
   const raw = String(value || '').trim().replace(/^@+/, '');
   const normalized = normalizeLocalProfileHandle(raw);
@@ -131,9 +150,7 @@ async function getLocalProfileByLegacyRouteHandle(value) {
     .eq('handle_normalized', normalized)
     .maybeSingle();
 
-  if (normalizedResult.error) {
-    logger.warn('Legacy profile local handle lookup error', { error: normalizedResult.error.message });
-  }
+  if (normalizedResult.error) throw normalizedResult.error;
   if (normalizedResult.data) return normalizedResult.data;
 
   const exactResult = await supabaseAdmin
@@ -142,9 +159,7 @@ async function getLocalProfileByLegacyRouteHandle(value) {
     .eq('handle', raw)
     .maybeSingle();
 
-  if (exactResult.error) {
-    logger.warn('Legacy profile local handle exact lookup error', { error: exactResult.error.message });
-  }
+  if (exactResult.error) throw exactResult.error;
   return exactResult.data || null;
 }
 
@@ -158,9 +173,7 @@ async function getLocalProfileByLegacyRouteId(value) {
     .eq('id', id)
     .maybeSingle();
 
-  if (error) {
-    logger.warn('Legacy profile local id lookup error', { error: error.message });
-  }
+  if (error && !isNotAnIdError(error)) throw error;
   return data || null;
 }
 
@@ -198,39 +211,20 @@ function scoreLocalProfile(profile, fields, normalizedQuery, tokens) {
 }
 
 async function getNameDiscoverableLocalCandidates({
-  queryText,
-  primaryToken,
   tokens,
   viewerId,
   candidateLimit,
 }) {
-  const patterns = Array.from(new Set([queryText, primaryToken].filter(Boolean)));
-  const queries = [];
-  for (const pattern of patterns) {
-    for (const field of USER_NAME_SEARCH_FIELDS) {
-      queries.push(
-        supabaseAdmin
-          .from('User')
-          .select(USER_NAME_SEARCH_SELECT)
-          .ilike(field, ilikePattern(pattern))
-          .neq('id', viewerId)
-          .limit(candidateLimit),
-      );
-    }
-  }
-
-  const settled = await Promise.allSettled(queries);
-  const usersById = new Map();
-  for (const item of settled) {
-    if (item.status !== 'fulfilled') continue;
-    if (item.value?.error) {
-      logger.warn('User name search lookup error', { error: item.value.error.message });
-      continue;
-    }
-    for (const user of item.value?.data || []) {
-      if (user?.id && !usersById.has(user.id)) usersById.set(user.id, user);
-    }
-  }
+  // Quote the PostgREST filter value as well as escaping SQL wildcards. A
+  // comma, quote or parenthesis in a name must remain text, never filter syntax.
+  const { data: users, error } = await supabaseAdmin
+    .from('User')
+    .select(USER_NAME_SEARCH_SELECT)
+    .or(userSearchFilter(USER_NAME_SEARCH_FIELDS, tokens))
+    .neq('id', viewerId)
+    .limit(candidateLimit);
+  if (error) throw error;
+  const usersById = new Map((users || []).map((user) => [user.id, user]));
 
   const nameMatchedUsers = [...usersById.values()]
     .map((user) => ({ user, nameSearchText: searchableUserNameText(user) }))
@@ -246,8 +240,7 @@ async function getNameDiscoverableLocalCandidates({
     .eq('findable_by_name', true);
 
   if (privacyError) {
-    logger.warn('User name search privacy lookup error', { error: privacyError.message });
-    return [];
+    throw privacyError;
   }
 
   const nameFindableUserIds = new Set((privacyRows || []).map((row) => row.user_id));
@@ -262,8 +255,7 @@ async function getNameDiscoverableLocalCandidates({
     .limit(candidateLimit);
 
   if (profileError) {
-    logger.warn('User name search local profile lookup error', { error: profileError.message });
-    return [];
+    throw profileError;
   }
 
   return (profiles || [])
@@ -275,6 +267,7 @@ async function getNameDiscoverableLocalCandidates({
         account: {
           id: match.user.id,
           account_type: match.user.account_type,
+          profile_visibility: match.user.profile_visibility,
         },
         nameSearchText: match.nameSearchText,
       };
@@ -282,24 +275,29 @@ async function getNameDiscoverableLocalCandidates({
     .filter(Boolean);
 }
 
-async function canDiscoverLocalProfileForUserSearch(profile, viewerId, account = null) {
+async function canDiscoverLocalProfileForUserSearch(profile, viewerId, account = null, access = null) {
   if (!profile?.user_id || profile.user_id === viewerId) return false;
-  if (!(await isSearchable(viewerId, profile.user_id))) return false;
-  if (await isScopedBlocked(viewerId, profile.user_id, 'search_only')) return false;
+  if (access) {
+    if (!access.searchable) return false;
+  } else {
+    if (!(await isSearchable(viewerId, profile.user_id))) return false;
+    if (await isScopedBlocked(viewerId, profile.user_id, 'search_only')) return false;
+  }
+  const connected = () => access ? access.connected : isConnected(viewerId, profile.user_id);
 
   const searchVisibility = profile.search_visibility || 'everyone';
   if (searchVisibility === 'nobody') return false;
-  if (searchVisibility === 'mutuals' && !(await isConnected(viewerId, profile.user_id))) {
+  if (searchVisibility === 'mutuals' && !(await connected())) {
     return false;
   }
 
   const profileVisibility = await require('../utils/identityProfiles').localProfileVisibilityFor(profile, viewerId, account);
   if (profileVisibility === 'private') return false;
-  if (profileVisibility === 'connections' && !(await isConnected(viewerId, profile.user_id))) {
+  if (profileVisibility === 'connections' && !(await connected())) {
     return false;
   }
   // Legacy 'followers' value is treated as 'connections' after peer-follow removal.
-  if (profileVisibility === 'followers' && !(await isConnected(viewerId, profile.user_id))) {
+  if (profileVisibility === 'followers' && !(await connected())) {
     return false;
   }
 
@@ -325,6 +323,13 @@ function serializeCompatibilitySearchUser(profile, user = {}) {
     href: profile.handle ? `/${profile.handle}` : null,
   };
 }
+
+// The profile routes (GET /id/:id, /username/:username and /:username) refuse when a profile, block or privacy read
+// fails: 503, so the person can try again, never a profile with a check skipped and never "not found".
+const PROFILE_UNAVAILABLE_REPLY = {
+  error: 'This profile can\'t be loaded right now. Please try again.',
+  code: 'PROFILE_UNAVAILABLE',
+};
 
 async function canAccessPublicUserProfile(viewerId, targetUserId, visibility = 'public') {
   if (viewerId && viewerId === targetUserId) return true;
@@ -374,10 +379,51 @@ function applyLocalProfilePublicOverlay(userData, localProfile) {
     name: (isKnownMadeUpUsername(localProfile.display_name) ? null : localProfile.display_name) || userData.name,
     bio: localProfile.bio ?? userData.bio,
     tagline: localProfile.tagline ?? userData.tagline,
-    profile_picture_url: localProfile.avatar_url || userData.profile_picture_url,
+    // The photo neighbors see, or none: someone who removed it there doesn't show the account's.
+    profile_picture_url: localProfile.avatar_url || null,
     city: showLocality ? (localProfile.public_city || null) : null,
     state: showLocality ? (localProfile.public_state || null) : null,
   };
+}
+
+// Someone else sees a person by their Local Profile, as on the person's posts, comments, tasks and chats
+// (services/chatPeople.js): its name, handle and photo, and no first, middle or last name, which belong to the
+// private account (identity firewall §2.1). The owner, a business and a person without a Local Profile see the account
+// as before, and `id` stays the account id that Follow and Connect use. `routeLocalProfile` is the Local Profile the
+// route was looked up by, if any. An unreadable Local Profile fails the request rather than show the account's name.
+async function withLocalProfileNameForViewer(shown, userData, viewerId, routeLocalProfile = null) {
+  if (viewerId === userData.id || userData.account_type === 'business') return shown;
+  let localProfile = routeLocalProfile;
+  if (!localProfile) {
+    const { data, error } = await supabaseAdmin
+      .from('LocalProfile')
+      .select(LOCAL_PROFILE_SEARCH_SELECT)
+      .eq('user_id', userData.id)
+      .maybeSingle();
+    if (error) throw error;
+    localProfile = data;
+  }
+  if (!localProfile) return shown;
+  const { handle, displayName, avatarUrl } = require('../serializers/identitySerializers')
+    .serializeLocalProfileForViewer({ ...localProfile, user: userData });
+  return {
+    ...shown,
+    username: handle,
+    name: displayName,
+    first_name: null,
+    middle_name: null,
+    last_name: null,
+    profile_picture_url: avatarUrl,
+  };
+}
+
+// Where someone lives (their profile's city and state, and their home's city in `residency`) is shown to the people
+// their Neighborhood privacy setting names, "Who can see your general area": everyone, their connections and the
+// people they live with ("Followers only", the default), or nobody but themselves ("Only me"). Everyone else gets those
+// keys with null values; the verified-resident badge stays. The owner and a business see and show them as before.
+async function canSeeProfileArea(viewerId, userData) {
+  if (viewerId === userData.id || userData.account_type === 'business') return true;
+  return canViewProfileField(viewerId, userData.id, 'neighborhood');
 }
 
 const PUBLIC_USER_PROFILE_SELECT = [
@@ -547,7 +593,7 @@ async function revokeSessionByAccessToken(accessToken, context = {}) {
     const { error } = await supabaseAdmin.auth.admin.signOut(accessToken, 'local');
     if (error) {
       const status = Number(error.status);
-      if ([401, 403, 404].includes(status)) {
+      if (authSessionService.sessionAlreadyEnded(error)) {
         logger.info('auth.session_revoke_already_invalid', {
           ...context,
           status,
@@ -674,12 +720,13 @@ async function isRecoveryAccessToken(token) {
   return { ok: true };
 }
 
-/** Best-effort persistent-login hook: registry failures never fail the auth route. */
+/** Optional bookkeeping may fail; security revocation must never report false success. */
 async function safeHook(name, fn) {
   try {
     return await fn();
   } catch (err) {
     logger.error(`auth.hook.${name}_failed`, { error: err.message, stack: err.stack });
+    if (['password_reset', 'refresh_reuse', 'refresh_foreign', 'oauth_token_mismatch'].includes(name)) throw err;
     return null;
   }
 }
@@ -1819,7 +1866,15 @@ router.post(
         // generateLink hands back the existing auth user when the address already has an unconfirmed one: an
         // identical sign-up created it moments ago, and that sign-up's User row owns it, so never delete it. This
         // request's generateLink replaced that sign-up's verification link, so this request sends the email.
-        const { data: owner } = await supabaseAdmin.from('User').select('id').eq('id', userId).maybeSingle();
+        const { data: owner, error: ownerError } = await supabaseAdmin.from('User').select('id').eq('id', userId).maybeSingle();
+        if (ownerError) {
+          // Unknown owner: keep the auth user. If no User row has it, signing up again uses it.
+          logger.warn('Registration rollback skipped: owner check failed', { userId, errorCode: ownerError.code || null });
+          return res.status(503).json({
+            code: 'REGISTRATION_UNAVAILABLE',
+            error: 'Sign-up is temporarily unavailable. Please try again.',
+          });
+        }
         if (owner) {
           const repeat = await findRepeatSignup(email, password);
           if (!repeat) return res.status(400).json({ error: 'Email already registered' });
@@ -2250,7 +2305,13 @@ router.post('/reauthenticate', verifyToken, reauthLimiter, reauthAccountLimiter,
     // that just showed its password becomes interactive (design §7.10).
     const sid = currentSessionId(req);
     const stepUp = await safeHook('reauthenticate_step_up', async () => {
-      const sessionRow = await authDeviceService.sessionRowFromRequest(req);
+      // The password was just verified. An unreadable session row only skips
+      // promoting a restored session; it must not withhold the step-up.
+      const sessionRow = await authDeviceService.sessionRowFromRequest(req).catch((err) => {
+        if (!err.authBusy) throw err;
+        logger.warn('auth.reauthenticate.session_unavailable', { userId });
+        return null;
+      });
       if (sessionRow?.context === 'restored') {
         await authDeviceService.promoteSessionToInteractive(sessionRow);
       }
@@ -2321,7 +2382,7 @@ router.get('/auth-methods', verifyToken, async (req, res) => {
  * Change the password with the caller's own access token (GoTrue PUT /user). Returns false,
  * so the caller falls back to the admin update, when there's no token or GoTrue refuses.
  */
-async function updatePasswordWithOwnSession(accessToken, newPassword, userId) {
+async function updatePasswordWithOwnSession(accessToken, newPassword, userId, currentPassword) {
   const baseUrl = String(process.env.SUPABASE_URL || '').replace(/\/+$/, '');
   const anonKey = process.env.SUPABASE_ANON_KEY;
   if (!accessToken || !baseUrl || !anonKey) return false;
@@ -2329,7 +2390,7 @@ async function updatePasswordWithOwnSession(accessToken, newPassword, userId) {
     const response = await fetch(`${baseUrl}/auth/v1/user`, {
       method: 'PUT',
       headers: { apikey: anonKey, Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: newPassword }),
+      body: JSON.stringify({ password: newPassword, current_password: currentPassword }),
       signal: AbortSignal.timeout(10000),
     });
     if (response.ok) return true;
@@ -2448,7 +2509,7 @@ router.post('/password', verifyToken, reauthLimiter, reauthAccountLimiter, valid
     // Through the caller's own session, GoTrue keeps that session and ends the others, as the
     // design below says. admin.updateUserById ends every session, the caller's too, so the
     // next request 401s and the apps sign the person out; it stays as the fallback.
-    if (!(await updatePasswordWithOwnSession(accessTokenFromRequest(req), newPassword, userId))) {
+    if (!(await updatePasswordWithOwnSession(accessTokenFromRequest(req), newPassword, userId, currentPassword))) {
       const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
         password: newPassword,
       });
@@ -2471,13 +2532,23 @@ router.post('/password', verifyToken, reauthLimiter, reauthAccountLimiter, valid
 
     // Persistent login (design §6.3 /password): every OTHER session/device is
     // signed out (GoTrue scope 'others' + registry rows + grants) and the user
-    // is told; the current session stays.
-    await safeHook('password_changed', () => authDeviceService.onPasswordChanged({
-      userId,
-      currentSessionId: currentSessionId(req),
-      accessToken: accessTokenFromRequest(req),
-      req,
-    }));
+    // is told; the current session stays. The password has already changed, so
+    // a sign-out that didn't finish is reported as that, not as a failed change.
+    try {
+      await authDeviceService.onPasswordChanged({
+        userId,
+        currentSessionId: currentSessionId(req),
+        accessToken: accessTokenFromRequest(req),
+        req,
+      });
+    } catch (hookErr) {
+      logger.error('auth.hook.password_changed_failed', { userId, error: hookErr.message, stack: hookErr.stack });
+      return res.status(503).json({
+        error: 'Your password was changed, but signing out your other devices didn\'t finish. Choose "Sign out other devices" in Security settings.',
+        code: 'SIGN_OUT_INCOMPLETE',
+        hasPassword: true,
+      });
+    }
 
     return res.status(200).json({
       message: hasPassword ? 'Password updated successfully' : 'Password set successfully',
@@ -2507,8 +2578,8 @@ router.post('/password', verifyToken, reauthLimiter, reauthAccountLimiter, valid
  * Persistent login: pre-check the session registry before GoTrue rotates
  * (CONTRACT "/refresh" order: resolve session → revoked? → inactivity → bound:
  * verify DPoP against the bound key → legacy rules). A crash inside the
- * registry never fails open in `required` mode and never fails closed in the
- * others (getUser/GoTrue stay the authority for the pair itself).
+ * registry refuses refresh in every binding mode when security state is
+ * unreadable. A retryable failure preserves the client's existing tokens.
  */
 async function preCheckRefresh(req, refreshToken) {
   try {
@@ -2522,10 +2593,7 @@ async function preCheckRefresh(req, refreshToken) {
     });
   } catch (err) {
     logger.error('auth.refresh.precheck_error', { error: err.message, stack: err.stack });
-    if (authPolicy.deviceBindingMode() === 'required' && !isCookieTransport(req)) {
-      return { ok: false, status: 503, code: 'AUTH_UNAVAILABLE', error: 'Could not verify this session right now. Please try again.' };
-    }
-    return { ok: true, session: null, device: null, legacy: true, adopt: false, matchedBy: null };
+    return { ok: false, status: 503, code: 'AUTH_UNAVAILABLE', error: 'Could not verify this session right now. Please try again.' };
   }
 }
 
@@ -2558,7 +2626,7 @@ router.post('/refresh', refreshLimiter, refreshDpop, async (req, res) => {
 
   try {
     // (1)+(2) registry: session resolve, revocation, inactivity, device binding.
-    const check = await preCheckRefresh(req, refreshToken);
+    let check = await preCheckRefresh(req, refreshToken);
     if (!check.ok) {
       // Security codes terminate the session on the client; 503 = retry.
       if (check.status === 401) clearAuthCookies(res);
@@ -2645,6 +2713,29 @@ router.post('/refresh', refreshLimiter, refreshDpop, async (req, res) => {
         clearAuthCookies(res);
         return res.status(401).json({ error: authDeviceService.SECURITY_MESSAGES.DEVICE_MISMATCH, code: 'DEVICE_MISMATCH' });
       }
+    } else {
+      // No row matched: a pre-registry session, or a rotation whose hashes weren't saved (a blip
+      // during an earlier refresh). The new pair still names its session. A row it has gets the
+      // checks above (a signed-out session stays signed out, a bound one needs its key) and keeps
+      // its binding and context; only a session with no row gets a new one. A refusal also ends
+      // the provider session the fresh token kept. A 503 (row unreadable) leaves it: GoTrue
+      // re-issues its current token when the client retries with its own.
+      const mintedId = authSessionService.sessionClaimsFromAccessToken(session.access_token)?.id || null;
+      check = await authDeviceService.checkMintedSession({
+        sessionId: mintedId,
+        refreshToken,
+        dpop: req.dpop || null,
+        cookieTransport: isCookieTransport(req),
+        req,
+      });
+      if (!check.ok) {
+        logger.warn('auth.refresh_refused', { errorCode: check.code, sessionId: mintedId, ip: req.ip });
+        if (check.status === 401) {
+          await revokeSessionByAccessToken(session.access_token, { source: 'refresh_minted_session_refused' });
+          clearAuthCookies(res);
+        }
+        return res.status(check.status || 401).json({ error: check.error, code: check.code });
+      }
     }
 
     // (4) persist hashes / last_refresh / last_seen / ip (+ legacy adoption).
@@ -2672,6 +2763,8 @@ router.post('/refresh', refreshLimiter, refreshDpop, async (req, res) => {
     res.status(200).json({ ok: true, ...tokenFields, ...registryFields });
   } catch (err) {
     logger.error('Refresh token error', { error: err.message });
+    // A reuse/mismatch revocation that couldn't be saved: the apps retry a 503.
+    if (err.authBusy) return res.status(503).json({ error: 'Could not verify this session right now. Please try again.', code: 'AUTH_UNAVAILABLE' });
     res.status(500).json({ error: 'Failed to refresh session' });
   }
 });
@@ -2930,6 +3023,23 @@ router.patch('/profile', verifyToken, validate(updateProfileSchema), async (req,
 
     updates.updated_at = new Date().toISOString();
 
+    // The name and bio as they were: the Local Profile's copies of them follow the edit, a name the person chose to
+    // show neighbors stays (syncLocalProfileFromAccount below).
+    const localProfileChanges = ['name', 'bio'].filter((column) => updates[column] !== undefined);
+    let previousAccount = null;
+    if (localProfileChanges.length > 0) {
+      const { data: previous, error: previousErr } = await supabaseAdmin
+        .from('User')
+        .select('id, username, name, first_name, middle_name, last_name, bio')
+        .eq('id', userId)
+        .single();
+      if (previousErr) {
+        logger.error('Profile update read error', { error: previousErr.message, userId });
+        return res.status(500).json({ error: 'Failed to update profile' });
+      }
+      previousAccount = previous;
+    }
+
     const { data: userData, error } = await supabaseAdmin
       .from('User')
       .update(updates)
@@ -2966,9 +3076,8 @@ router.patch('/profile', verifyToken, validate(updateProfileSchema), async (req,
 
     // Posts, comments and search show the LocalProfile's copy of the name and bio, and of the city and state.
     const { syncLocalProfileFromAccount, syncLocalProfileLocality } = require('../utils/identityProfiles');
-    const localProfileChanges = ['name', 'bio'].filter((column) => updates[column] !== undefined);
     try {
-      await syncLocalProfileFromAccount(userData, localProfileChanges);
+      await syncLocalProfileFromAccount(userData, localProfileChanges, previousAccount);
       if (updates.city !== undefined || updates.state !== undefined) await syncLocalProfileLocality(userId);
     } catch (syncErr) {
       logger.error('Profile update local profile sync error', { error: syncErr.message, userId });
@@ -3215,68 +3324,60 @@ router.get('/search', verifyToken, async (req, res) => {
   try {
     const { q, limit: rawLimit, type = 'all' } = req.query;
     const userId = req.user.id;
-    const limit = Math.min(parseInt(rawLimit) || 5, 20);
+    const limit = Math.min(Math.max(parseInt(rawLimit, 10) || 5, 1), 20);
     const normalizedType = String(type || 'all').toLowerCase();
-    const queryText = String(q || '').trim();
+    const queryText = String(q || '').trim().replace(/^@+/, '');
     const normalizedQuery = queryText.toLowerCase();
     const tokens = normalizedQuery.split(/\s+/).filter(Boolean).slice(0, 6);
-    const primaryToken = tokens[0] || normalizedQuery;
 
     if (!queryText || queryText.length < 2) {
       return res.status(400).json({ error: 'Query must be at least 2 characters' });
+    }
+    if (queryText.length > 100) {
+      return res.status(400).json({ error: 'Query must be at most 100 characters' });
     }
     if (!['all', 'people', 'business'].includes(normalizedType)) {
       return res.status(400).json({ error: 'type must be one of: all, people, business' });
     }
 
-    const fullSearchTerm = `%${queryText}%`;
-    const broadSearchTerm = `%${primaryToken}%`;
     const candidateLimit = Math.min(Math.max(limit * 8, 40), 200);
-    const searchFilters = LOCAL_SEARCH_FIELDS
-      .flatMap((field) => [`${field}.ilike.${fullSearchTerm}`, `${field}.ilike.${broadSearchTerm}`])
-      .join(',');
-
-    const query = supabaseAdmin
-      .from('LocalProfile')
-      .select(LOCAL_PROFILE_SEARCH_SELECT)
-      .or(searchFilters)
-      .neq('user_id', userId) // Exclude self
-      .limit(candidateLimit);
-
-    const { data, error } = await query;
+    const searchFilters = userSearchFilter(LOCAL_SEARCH_FIELDS, tokens, { local: true });
+    const baseQuery = () => supabaseAdmin.from('LocalProfile')
+      .select(LOCAL_PROFILE_SEARCH_SELECT).neq('user_id', userId);
+    const exact = JSON.stringify(queryText.toLowerCase());
+    const [broad, exactMatches, nameCandidates] = await Promise.all([
+      baseQuery().or(searchFilters).order('handle_normalized').limit(candidateLimit),
+      baseQuery().or(`handle_normalized.eq.${exact},display_name.ilike.${JSON.stringify(ilikePattern(queryText).slice(1, -1))}`)
+        .limit(candidateLimit),
+      getNameDiscoverableLocalCandidates({ tokens, viewerId: userId, candidateLimit }),
+    ]);
+    const error = broad.error || exactMatches.error;
+    const data = [...new Map([...(exactMatches.data || []), ...(broad.data || [])]
+      .map((profile) => [profile.id, profile])).values()];
 
     if (error) {
       logger.error('User search error', { error: error.message });
       return res.status(500).json({ error: 'Search failed' });
     }
 
-    const accountRows = (data || []).length
-      ? await supabaseAdmin
-        .from('User')
-        .select('id, account_type, profile_visibility')
-        .in('id', [...new Set((data || []).map((profile) => profile.user_id).filter(Boolean))])
-      : { data: [], error: null };
-    if (accountRows.error) {
-      logger.warn('User search account lookup error', { error: accountRows.error.message });
+    const accountById = new Map();
+    const profileUserIds = [...new Set(data.map((profile) => profile.user_id))];
+    for (let offset = 0; offset < profileUserIds.length; offset += 100) {
+      const { data: accounts, error: accountError } = await supabaseAdmin.from('User')
+        .select('id, account_type, profile_visibility').in('id', profileUserIds.slice(offset, offset + 100));
+      if (accountError) throw accountError;
+      for (const account of accounts || []) accountById.set(account.id, account);
     }
-    const accountById = new Map((accountRows.data || []).map((user) => [user.id, user]));
 
     const candidateByProfileId = new Map();
-    for (const profile of data || []) {
+    for (const profile of data) {
+      if (!accountById.has(profile.user_id)) continue;
       candidateByProfileId.set(profile.id, {
         profile,
         account: accountById.get(profile.user_id) || {},
         nameSearchText: '',
       });
     }
-
-    const nameCandidates = await getNameDiscoverableLocalCandidates({
-      queryText,
-      primaryToken,
-      tokens,
-      viewerId: userId,
-      candidateLimit,
-    });
 
     for (const candidate of nameCandidates) {
       const existing = candidateByProfileId.get(candidate.profile.id);
@@ -3290,17 +3391,30 @@ router.get('/search', verifyToken, async (req, res) => {
       }
     }
 
-    const blockers = await personalBlockersOf(userId);
+    const candidateIds = [...candidateByProfileId.values()].map(({ profile }) => profile.user_id);
+    const [accessById, unpublishedBusinesses] = await Promise.all([
+      loadUserSearchAccess(userId, candidateIds),
+      (async () => {
+        const hidden = new Set();
+        for (let offset = 0; offset < candidateIds.length; offset += 100) {
+          for (const id of await unpublishedBusinessIds(candidateIds.slice(offset, offset + 100))) hidden.add(id);
+        }
+        return hidden;
+      })(),
+    ]);
     const visibleCandidates = [];
     for (const candidate of candidateByProfileId.values()) {
       const { profile } = candidate;
       const account = candidate.account || {};
       const accountType = account.account_type || 'individual';
       if (accountType === 'curator') continue;
-      if (blockers.has(String(profile.user_id))) continue;
+      if (unpublishedBusinesses.has(String(profile.user_id))) continue;
       if (normalizedType === 'people' && accountType === 'business') continue;
       if (normalizedType === 'business' && accountType !== 'business') continue;
-      if (!(await canDiscoverLocalProfileForUserSearch(profile, userId, account))) continue;
+      // The batched read covers every candidate's blocks and settings; one it didn't cover is left out.
+      const access = accessById.get(profile.user_id);
+      if (!access) continue;
+      if (!(await canDiscoverLocalProfileForUserSearch(profile, userId, account, access))) continue;
       visibleCandidates.push({ profile, account, nameSearchText: candidate.nameSearchText || '' });
     }
 
@@ -3329,8 +3443,10 @@ router.get('/search', verifyToken, async (req, res) => {
 
     res.json({ users });
   } catch (err) {
-    logger.error('User search error', { error: err.message });
-    res.status(500).json({ error: 'Search failed' });
+    logger.error('User search error', { error: err.message, errorCode: err.code || null });
+    // Every step here is a read. One that fails, a block or privacy check included, refuses the search rather than
+    // skip the check.
+    res.status(503).json({ error: 'Search isn\'t available right now. Please try again.', code: 'SEARCH_UNAVAILABLE' });
   }
 });
 
@@ -3504,6 +3620,7 @@ router.get('/id/:id', optionalAuth, async (req, res) => {
       .select(PUBLIC_USER_PROFILE_SELECT)
       .eq('id', id)
       .maybeSingle();
+    if (userResult.error && !isNotAnIdError(userResult.error)) throw userResult.error;
 
     let userData = userResult.data || null;
     let localProfileRouteMatch = null;
@@ -3516,11 +3633,12 @@ router.get('/id/:id', optionalAuth, async (req, res) => {
           .select(PUBLIC_USER_PROFILE_SELECT)
           .eq('id', localProfileRouteMatch.user_id)
           .maybeSingle();
+        if (localUserResult.error) throw localUserResult.error;
         userData = localUserResult.data || null;
       }
     }
 
-    if (!userData) {
+    if (!userData || await isUnpublishedBusiness(userData.id)) {
       return res.status(404).json({ error: 'User not found' });
     }
 
@@ -3533,7 +3651,8 @@ router.get('/id/:id', optionalAuth, async (req, res) => {
     if (!canAccess) {
       return res.status(403).json({ error: 'This profile is private' });
     }
-    const publicUserData = applyLocalProfilePublicOverlay(userData, localProfileRouteMatch);
+    const publicUserData = await withLocalProfileNameForViewer(
+      applyLocalProfilePublicOverlay(userData, localProfileRouteMatch), userData, viewerId, localProfileRouteMatch);
 
     // Compute live gig counts + fetch skills in parallel
     const [postedRes, skillsRes] = await Promise.allSettled([
@@ -3558,14 +3677,19 @@ router.get('/id/:id', optionalAuth, async (req, res) => {
         .limit(20);
 
       if (reviewData && reviewData.length > 0) {
+        const { loadChatPeople, reviewerRow } = require('../services/chatPeople');
         const reviewerIds = [...new Set(reviewData.map(r => r.reviewer_id))];
-        const { data: reviewers } = await supabaseAdmin
-          .from('User')
-          .select('id, username, name, first_name, last_name, profile_picture_url')
-          .in('id', reviewerIds);
+        const [{ data: reviewers }, people] = await Promise.all([
+          supabaseAdmin
+            .from('User')
+            .select('id, username, name, first_name, last_name, profile_picture_url')
+            .in('id', reviewerIds),
+          loadChatPeople(reviewerIds),
+        ]);
 
+        // A writer goes by their Local Profile, as on their posts and comments (services/chatPeople.js).
         const reviewerMap = {};
-        (reviewers || []).forEach(u => { reviewerMap[u.id] = u; });
+        (reviewers || []).forEach(u => { reviewerMap[u.id] = reviewerRow(u, people); });
 
         reviews = reviewData.map(r => ({
           ...r,
@@ -3584,7 +3708,10 @@ router.get('/id/:id', optionalAuth, async (req, res) => {
       logger.warn('Could not fetch reviews', { error: reviewErr.message });
     }
 
-    const residency = await getPublicResidencySummary(userData.id, req.user?.id || null);
+    const [residency, showArea] = await Promise.all([
+      getPublicResidencySummary(userData.id, req.user?.id || null),
+      canSeeProfileArea(viewerId, userData),
+    ]);
 
     res.json({
       id: publicUserData.id,
@@ -3601,11 +3728,11 @@ router.get('/id/:id', optionalAuth, async (req, res) => {
       avatar_url: publicUserData.profile_picture_url,
       profile_picture_url: publicUserData.profile_picture_url,
       profilePicture: publicUserData.profile_picture_url,
-      city: publicUserData.city,
-      state: publicUserData.state,
+      city: showArea ? publicUserData.city : null,
+      state: showArea ? publicUserData.state : null,
       accountType: publicUserData.account_type,
       verified: publicUserData.verified,
-      residency,
+      residency: showArea ? residency : { ...residency, city: null, state: null },
       profileVisibility,
       profile_visibility: profileVisibility,
       showEmail: publicUserData.show_email || false,
@@ -3627,8 +3754,8 @@ router.get('/id/:id', optionalAuth, async (req, res) => {
       skills: (profileSkills || []).map(s => s.skill_name),
     });
   } catch (err) {
-    logger.error('Public profile fetch by ID error', { error: err.message, id: req.params.id });
-    res.status(500).json({ error: 'Failed to fetch user profile' });
+    logger.error('Public profile fetch by ID error', { error: err.message, errorCode: err.code || null, id: req.params.id });
+    res.status(503).json(PROFILE_UNAVAILABLE_REPLY);
   }
 });
 
@@ -3856,12 +3983,16 @@ router.get('/public/join/:code', async (req, res) => {
       .eq('id', referral.referrer_id)
       .single();
 
-    const referrerName = referrer?.name || referrer?.first_name || chosenUsernameOrNull(referrer?.username) || 'A neighbor';
+    // Whoever opens the link sees the inviter as neighbors do: by their Local Profile's name and photo, a business (or
+    // anyone without one) by the account (services/chatPeople.js).
+    const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
+    const shownReferrer = referrer ? chatPersonRow(referrer, await loadChatPeople([referrer.id])) : null;
+    const referrerName = shownReferrer?.name || shownReferrer?.first_name || chosenUsernameOrNull(shownReferrer?.username) || 'A neighbor';
 
     res.json({
       valid: true,
       referrer_name: referrerName,
-      referrer_avatar: referrer?.profile_picture_url || null,
+      referrer_avatar: shownReferrer?.profile_picture_url || null,
       code: referral.invite_code,
     });
   } catch (err) {
@@ -3880,11 +4011,12 @@ router.get('/:username', optionalAuth, async (req, res) => {
 
     const { data: userData, error } = await supabaseAdmin
       .from('User')
-      .select('id, username, name, first_name, middle_name, last_name, bio, city, state, profile_picture_url, created_at, profile_visibility')
+      .select('id, username, name, first_name, middle_name, last_name, bio, city, state, profile_picture_url, created_at, profile_visibility, account_type')
       .eq('username', username)
-      .single();
+      .maybeSingle();
+    if (error) throw error;
 
-    if (error || !userData) {
+    if (!userData || await isUnpublishedBusiness(userData.id)) {
       return res.status(404).json({ error: 'User not found' });
     }
 
@@ -3893,26 +4025,28 @@ router.get('/:username', optionalAuth, async (req, res) => {
     if (!(await canAccessPublicUserProfile(viewerId, userData.id, profileVisibility))) {
       return res.status(403).json({ error: 'This profile is private' });
     }
+    const shownUser = await withLocalProfileNameForViewer(userData, userData, viewerId);
+    const showArea = await canSeeProfileArea(viewerId, userData);
 
     res.json({
       user: {
-        id: userData.id,
-        username: userData.username,
-        name: userData.name,
-        firstName: userData.first_name,
-        middleName: userData.middle_name,
-        lastName: userData.last_name,
-        bio: userData.bio,
-        city: userData.city,
-        state: userData.state,
-        profile_picture_url: userData.profile_picture_url,
-        memberSince: userData.created_at,
+        id: shownUser.id,
+        username: shownUser.username,
+        name: shownUser.name,
+        firstName: shownUser.first_name,
+        middleName: shownUser.middle_name,
+        lastName: shownUser.last_name,
+        bio: shownUser.bio,
+        city: showArea ? shownUser.city : null,
+        state: showArea ? shownUser.state : null,
+        profile_picture_url: shownUser.profile_picture_url,
+        memberSince: shownUser.created_at,
         profile_visibility: profileVisibility,
       },
     });
   } catch (err) {
-    logger.error('Public profile fetch error', { error: err.message, username: req.params.username });
-    res.status(500).json({ error: 'Failed to fetch user profile' });
+    logger.error('Public profile fetch error', { error: err.message, errorCode: err.code || null, username: req.params.username });
+    res.status(503).json(PROFILE_UNAVAILABLE_REPLY);
   }
 });
 
@@ -4198,6 +4332,8 @@ const RESET_BUSY_LINK_USED = 'Password reset is busy right now. Please request a
  * Reset password using recovery token (token_hash) or access token
  */
 router.post('/reset-password', resetPasswordLimiter, validate(resetPasswordSchema), async (req, res) => {
+  // Set once the new password is saved: a later failure must not say the link still works.
+  let passwordChanged = false;
   try {
     const { token, newPassword } = req.body;
     const isJwtAccessToken = token.split('.').length === 3;
@@ -4243,6 +4379,7 @@ router.post('/reset-password', resetPasswordLimiter, validate(resetPasswordSchem
         }
         return res.status(400).json({ error: 'Unable to reset password' });
       }
+      passwordChanged = true;
 
       // Persistent login (design §6.3 /reset-password): everything is signed
       // out — GoTrue global sign-out, registry rows, devices, grants, push
@@ -4304,6 +4441,7 @@ router.post('/reset-password', resetPasswordLimiter, validate(resetPasswordSchem
         }
         return res.status(400).json({ error: 'Unable to reset password' });
       }
+      passwordChanged = true;
 
       // Persistent login: revoke ALL sessions/devices/grants + watermark
       // (global sign-out through the recovery session's JWT), then drop the
@@ -4325,6 +4463,19 @@ router.post('/reset-password', resetPasswordLimiter, validate(resetPasswordSchem
     startSignInCountsAgain(resetEmail);
     return res.json({ message: 'Password reset successful. You can now sign in.' });
   } catch (err) {
+    // The recovery check reads the session registry before anything changes (the
+    // link still works); the sign-out-everywhere step runs after the new password is saved.
+    if (err.authBusy && !passwordChanged) {
+      logger.warn('Reset password unavailable - session registry unreadable', { code: err.code });
+      return res.status(503).json({ error: RESET_BUSY_LINK_KEPT, code: 'AUTH_BUSY' });
+    }
+    if (err.authBusy) {
+      logger.warn('Reset password saved, sign-out everywhere incomplete', { code: err.code });
+      return res.status(503).json({
+        error: 'Your new password was saved, but signing out your other devices didn\'t finish. Sign in with it, then choose "Sign out everywhere" in Security settings.',
+        code: 'SIGN_OUT_INCOMPLETE',
+      });
+    }
     logger.error('Reset password error', { error: err.message });
     return res.status(500).json({ error: 'Failed to reset password' });
   }
@@ -4384,6 +4535,7 @@ router.get('/username/:username', optionalAuth, async (req, res) => {
       .select(PUBLIC_USER_PROFILE_SELECT)
       .eq('username', username)
       .maybeSingle();
+    if (userResult.error) throw userResult.error;
 
     let userData = userResult.data || null;
     let localProfileRouteMatch = null;
@@ -4396,11 +4548,12 @@ router.get('/username/:username', optionalAuth, async (req, res) => {
           .select(PUBLIC_USER_PROFILE_SELECT)
           .eq('id', localProfileRouteMatch.user_id)
           .maybeSingle();
+        if (localUserResult.error) throw localUserResult.error;
         userData = localUserResult.data || null;
       }
     }
 
-    if (!userData) {
+    if (!userData || await isUnpublishedBusiness(userData.id)) {
       return res.status(404).json({ error: 'User not found' });
     }
 
@@ -4413,7 +4566,8 @@ router.get('/username/:username', optionalAuth, async (req, res) => {
     if (!canAccess) {
       return res.status(403).json({ error: 'This profile is private' });
     }
-    const publicUserData = applyLocalProfilePublicOverlay(userData, localProfileRouteMatch);
+    const publicUserData = await withLocalProfileNameForViewer(
+      applyLocalProfilePublicOverlay(userData, localProfileRouteMatch), userData, viewerId, localProfileRouteMatch);
 
     // Compute live gig counts + fetch skills in parallel
     const [postedRes, skillsRes2] = await Promise.allSettled([
@@ -4438,15 +4592,20 @@ router.get('/username/:username', optionalAuth, async (req, res) => {
         .limit(20);
 
       if (reviewData && reviewData.length > 0) {
-        // Hydrate reviewer info
+        // Hydrate reviewer info: a writer goes by their Local Profile, as on their posts and comments
+        // (services/chatPeople.js).
+        const { loadChatPeople, reviewerRow } = require('../services/chatPeople');
         const reviewerIds = [...new Set(reviewData.map(r => r.reviewer_id))];
-        const { data: reviewers } = await supabaseAdmin
-          .from('User')
-          .select('id, username, name, first_name, last_name, profile_picture_url')
-          .in('id', reviewerIds);
+        const [{ data: reviewers }, people] = await Promise.all([
+          supabaseAdmin
+            .from('User')
+            .select('id, username, name, first_name, last_name, profile_picture_url')
+            .in('id', reviewerIds),
+          loadChatPeople(reviewerIds),
+        ]);
 
         const reviewerMap = {};
-        (reviewers || []).forEach(u => { reviewerMap[u.id] = u; });
+        (reviewers || []).forEach(u => { reviewerMap[u.id] = reviewerRow(u, people); });
 
         reviews = reviewData.map(r => ({
           ...r,
@@ -4466,7 +4625,10 @@ router.get('/username/:username', optionalAuth, async (req, res) => {
       logger.warn('Could not fetch reviews', { error: reviewErr.message });
     }
 
-    const residency = await getPublicResidencySummary(userData.id, req.user?.id || null);
+    const [residency, showArea] = await Promise.all([
+      getPublicResidencySummary(userData.id, req.user?.id || null),
+      canSeeProfileArea(viewerId, userData),
+    ]);
 
     res.json({
       id: publicUserData.id,
@@ -4483,11 +4645,11 @@ router.get('/username/:username', optionalAuth, async (req, res) => {
       avatar_url: publicUserData.profile_picture_url,
       profile_picture_url: publicUserData.profile_picture_url,
       profilePicture: publicUserData.profile_picture_url,
-      city: publicUserData.city,
-      state: publicUserData.state,
+      city: showArea ? publicUserData.city : null,
+      state: showArea ? publicUserData.state : null,
       accountType: publicUserData.account_type,
       verified: publicUserData.verified,
-      residency,
+      residency: showArea ? residency : { ...residency, city: null, state: null },
       profileVisibility,
       profile_visibility: profileVisibility,
       showEmail: publicUserData.show_email || false,
@@ -4509,8 +4671,8 @@ router.get('/username/:username', optionalAuth, async (req, res) => {
       skills: (profileSkills2 || []).map(s => s.skill_name),
     });
   } catch (err) {
-    logger.error('Public profile fetch error', { error: err.message });
-    res.status(500).json({ error: 'Failed to fetch profile' });
+    logger.error('Public profile fetch error', { error: err.message, errorCode: err.code || null });
+    res.status(503).json(PROFILE_UNAVAILABLE_REPLY);
   }
 });
 
@@ -4577,18 +4739,18 @@ router.post('/:id/follow', verifyToken, async (req, res) => {
       .insert({ follower_id: followerId, following_id: followingId });
 
     if (error) {
+      if (error.code === 'PT403' && error.message === 'PERSONAL_CONNECTION_BLOCKED') {
+        return res.status(403).json({ error: 'Cannot follow this user' });
+      }
       logger.error('Error following user', { error: error.message, followerId, followingId });
       return res.status(500).json({ error: 'Failed to follow user' });
     }
 
     const notificationService = require('../services/notificationService');
-    const { data: followerUser } = await supabaseAdmin
-      .from('User')
-      .select('username, name, first_name')
-      .eq('id', followerId)
-      .maybeSingle();
-
-    const followerName = followerUser?.name || followerUser?.first_name || chosenUsernameOrNull(followerUser?.username) || 'Someone';
+    const { loadChatPeople } = require('../services/chatPeople');
+    // The notice names the follower as their posts and chats do: a person by their Local Profile's name, a business
+    // (or anyone without one) by the account (services/chatPeople.js).
+    const followerName = (await loadChatPeople([followerId])).get(String(followerId))?.displayName || 'Someone';
     notificationService.createNotification({
       userId: followingId,
       type: 'new_follower',
@@ -4641,6 +4803,11 @@ router.delete('/:id/follow', verifyToken, async (req, res) => {
 router.get('/:id/followers', verifyToken, async (req, res) => {
   try {
     const userId = req.params.id;
+    // Only your own: accepting a connection makes both people follow each other, so someone's followers are mostly
+    // their connections, which only they see (GET /api/relationships).
+    if (req.user.id !== userId) {
+      return res.status(403).json({ error: 'Can only list your own followers' });
+    }
     const { data: followers, error } = await supabaseAdmin
       .from('UserFollow')
       .select(`follower:follower_id (${FOLLOW_USER_SELECT}), created_at`)
@@ -4653,7 +4820,12 @@ router.get('/:id/followers', verifyToken, async (req, res) => {
     }
 
     const filtered = (followers || []).filter(f => f.follower?.account_type !== 'curator');
-    res.json({ followers: filtered });
+    // Each person goes by the name, handle and photo neighbors see on their posts and in chats: their Local Profile's,
+    // with only the area it shows and no first or last name, or a business's (or anyone else's) account as before
+    // (services/chatPeople.js listedPerson, as in the Connections lists). `id` stays the account id.
+    const { loadListedPeople, listedPerson } = require('../services/chatPeople');
+    const listed = await loadListedPeople(filtered.map(f => f.follower?.id));
+    res.json({ followers: filtered.map(f => ({ ...f, follower: listedPerson(f.follower, listed) })) });
   } catch (err) {
     logger.error('Followers fetch error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch followers' });
@@ -4666,6 +4838,10 @@ router.get('/:id/followers', verifyToken, async (req, res) => {
 router.get('/:id/following', verifyToken, async (req, res) => {
   try {
     const userId = req.params.id;
+    // Only your own, as with followers above.
+    if (req.user.id !== userId) {
+      return res.status(403).json({ error: 'Can only list who you follow' });
+    }
     const { data: following, error } = await supabaseAdmin
       .from('UserFollow')
       .select(`following:following_id (${FOLLOW_USER_SELECT}), created_at`)
@@ -4678,7 +4854,10 @@ router.get('/:id/following', verifyToken, async (req, res) => {
     }
 
     const filtered = (following || []).filter(f => f.following?.account_type !== 'curator');
-    res.json({ following: filtered });
+    // Named as in the followers list above.
+    const { loadListedPeople, listedPerson } = require('../services/chatPeople');
+    const listed = await loadListedPeople(filtered.map(f => f.following?.id));
+    res.json({ following: filtered.map(f => ({ ...f, following: listedPerson(f.following, listed) })) });
   } catch (err) {
     logger.error('Following fetch error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch following list' });
@@ -4734,7 +4913,9 @@ const OAUTH_PROVIDER_LABELS = { google: 'Google', apple: 'Apple' };
 const OAUTH_PROBE_OK_TTL_MS = 5 * 60 * 1000;
 const OAUTH_PROBE_FAIL_TTL_MS = 30 * 1000;
 const OAUTH_PROBE_TIMEOUT_MS = 5000;
+const OAUTH_REDIRECT_MAX_LENGTH = 2048;
 const oauthProviderProbes = new Map();
+const oauthProbesInFlight = new Map();
 
 /**
  * A provider the Auth server doesn't have set up (disabled, or enabled
@@ -4743,16 +4924,32 @@ const oauthProviderProbes = new Map();
  * the provider. Ask the Auth server first — without following the redirect,
  * so no provider page loads — and only hand out a URL that leads to the
  * provider. Results are cached briefly; nothing is written by the probe.
+ *
+ * The answer is shared by everyone, so it asks about the provider only: the
+ * probe returns to the server's own web callback, never the caller's
+ * redirectTo, which could otherwise make the Auth server refuse and switch
+ * the provider off for all sign-ins. Starts that arrive together share one
+ * probe.
  */
 async function isOAuthProviderAvailable(provider, authorizeUrl) {
   const cached = oauthProviderProbes.get(provider);
-  const now = Date.now();
-  if (cached && now - cached.at < (cached.ok ? OAUTH_PROBE_OK_TTL_MS : OAUTH_PROBE_FAIL_TTL_MS)) {
+  if (cached && Date.now() - cached.at < (cached.ok ? OAUTH_PROBE_OK_TTL_MS : OAUTH_PROBE_FAIL_TTL_MS)) {
     return cached.ok;
   }
+  let probe = oauthProbesInFlight.get(provider);
+  if (!probe) {
+    probe = probeOAuthProvider(provider, authorizeUrl).finally(() => oauthProbesInFlight.delete(provider));
+    oauthProbesInFlight.set(provider, probe);
+  }
+  return probe;
+}
+
+async function probeOAuthProvider(provider, authorizeUrl) {
+  const probeUrl = new URL(authorizeUrl);
+  probeUrl.searchParams.set('redirect_to', `${getAuthRedirectBaseUrl()}/auth/callback`);
   let response;
   try {
-    response = await fetch(authorizeUrl, {
+    response = await fetch(probeUrl, {
       method: 'GET',
       redirect: 'manual',
       signal: AbortSignal.timeout(OAUTH_PROBE_TIMEOUT_MS),
@@ -4763,14 +4960,56 @@ async function isOAuthProviderAvailable(provider, authorizeUrl) {
     logger.warn('OAuth provider probe failed', { provider, error: err.message });
     return false;
   }
+  if (response.status >= 500) {
+    // A struggling Auth server isn't a provider setting: not cached either.
+    logger.warn('OAuth provider probe failed', { provider, status: response.status });
+    return false;
+  }
   const location = response.headers.get('location') || '';
   const ok = response.status >= 300 && response.status < 400
     && /^https:\/\//i.test(location) && !/[?#&]error=/.test(location);
   if (!ok) {
     logger.warn('OAuth provider unavailable on the Auth server', { provider, status: response.status });
   }
-  oauthProviderProbes.set(provider, { ok, at: now });
+  oauthProviderProbes.set(provider, { ok, at: Date.now() });
   return ok;
+}
+
+// Expo Go builds sign in through exp:// and exps:// links, which any app or host can answer. Only a local server
+// started with OAUTH_ALLOW_EXPO_REDIRECTS=true accepts them.
+function expoOAuthRedirectsAllowed() {
+  return process.env.OAUTH_ALLOW_EXPO_REDIRECTS === 'true'
+    && ['development', 'test'].includes(process.env.NODE_ENV)
+    && !['staging', 'production'].includes(process.env.APP_ENV);
+}
+
+/**
+ * Where a sign-in may return. auth-js starts the implicit flow, so the Auth
+ * server puts the new session's tokens in this address: only Pantopus's own
+ * callbacks qualify. Returns `{ redirectTo }` for the apps'
+ * pantopus://auth/callback (their per-attempt app_nonce rides in its query)
+ * or the web's /auth/callback on this site; `{ fallback: true }` for any other
+ * web address, which gets the site's callback as before; or null to refuse:
+ * other schemes and hosts, credentials, fragments and over-long values.
+ */
+function allowedOAuthRedirect(value, oauthRedirectBase) {
+  if (typeof value !== 'string' || value.length > OAUTH_REDIRECT_MAX_LENGTH) return null;
+  let requested;
+  try {
+    requested = new URL(value);
+  } catch {
+    return null;
+  }
+  if (requested.username || requested.password || requested.hash) return null;
+  if (['http:', 'https:'].includes(requested.protocol)) {
+    const isSiteCallback = requested.origin === new URL(oauthRedirectBase).origin
+      && requested.pathname === '/auth/callback';
+    return isSiteCallback ? { redirectTo: requested.href } : { fallback: true };
+  }
+  const isAppCallback = requested.protocol === 'pantopus:'
+    && requested.host === 'auth' && requested.pathname === '/callback';
+  const isExpo = ['exp:', 'exps:'].includes(requested.protocol) && expoOAuthRedirectsAllowed();
+  return isAppCallback || isExpo ? { redirectTo: requested.href } : null;
 }
 
 /**
@@ -4791,25 +5030,21 @@ router.get('/oauth/:provider', oauthLimiter, async (req, res) => {
   }
 
   try {
-    // Allow mobile clients to pass their own deep-link redirect URI.
-    // Validate against allowed origins to prevent open-redirect attacks.
+    // The apps pass their own callback; the web passes its /auth/callback.
+    // Only those are allowed (allowedOAuthRedirect).
     const oauthRedirectBase = getOAuthRedirectBaseUrl(req);
     const defaultRedirect = `${oauthRedirectBase}/auth/callback`;
     let redirectTo = defaultRedirect;
     if (req.query.redirectTo) {
-      try {
-        const requested = new URL(req.query.redirectTo);
-        const appBase = new URL(oauthRedirectBase);
-        // Allow same-origin redirects and common mobile deep-link schemes
-        const isSameOrigin = requested.origin === appBase.origin;
-        const isMobileScheme = ['pantopus:', 'exp:', 'exps:'].includes(requested.protocol);
-        if (isSameOrigin || isMobileScheme) {
-          redirectTo = req.query.redirectTo;
-        } else {
-          logger.warn('OAuth redirectTo rejected - not allowed origin', { requested: req.query.redirectTo });
-        }
-      } catch {
-        logger.warn('OAuth redirectTo rejected - invalid URL', { requested: req.query.redirectTo });
+      const allowed = allowedOAuthRedirect(req.query.redirectTo, oauthRedirectBase);
+      if (!allowed) {
+        logger.warn('OAuth redirectTo refused', { provider });
+        return res.status(400).json({ error: 'This sign-in link isn\'t allowed.', code: 'OAUTH_REDIRECT_INVALID' });
+      }
+      if (allowed.fallback) {
+        logger.warn('OAuth redirectTo rejected - not allowed origin; using the site callback', { provider });
+      } else {
+        redirectTo = allowed.redirectTo;
       }
     }
 
@@ -5201,7 +5436,8 @@ async function requireStrongestStepUpForDeletion(req, res, next) {
   if (req.stepUp?.method !== 'device_key') return next();
   try {
     const { data, error } = await supabaseAdmin.auth.admin.getUserById(req.user.id);
-    if (!error && data?.user && hasPasswordProvider(data.user)) {
+    if (error || !data?.user) throw error || new Error('Account verification unavailable');
+    if (hasPasswordProvider(data.user)) {
       logger.info('auth.stepup.required', { purpose: 'delete_account', reason: 'password_required', userId: req.user.id });
       return res.status(403).json({
         error: 'Please verify your password to delete your account.',
@@ -5213,8 +5449,11 @@ async function requireStrongestStepUpForDeletion(req, res, next) {
     }
     return next();
   } catch (err) {
-    logger.error('auth.stepup.strongest_check_failed', { userId: req.user?.id, error: err.message });
-    return res.status(500).json({ error: 'Step-up verification failed' });
+    logger.warn('auth.stepup.strongest_check_failed', { userId: req.user?.id, code: err.code });
+    return res.status(503).json({
+      error: 'Account verification is temporarily unavailable. Please try again.',
+      code: 'AUTH_UNAVAILABLE',
+    });
   }
 }
 
@@ -5301,6 +5540,42 @@ const ACCOUNT_DELETE_OTHER_ROWS = [
   { table: 'seeder_config', column: 'curator_user_id' },
 ];
 const pairNames = (list) => list.map(({ table, column }) => `${table}.${column}`);
+const ACCOUNT_DELETE_UNAVAILABLE_REPLY = {
+  error: 'Account deletion is temporarily unavailable. Please try again.',
+  code: 'ACCOUNT_DELETE_UNAVAILABLE',
+};
+const AUTH_USER_DELETE_RETRY_WINDOW_MS = 5 * 60 * 1000;
+const AUTH_USER_DELETE_RETRY_MAX_DELAY_MS = 30 * 1000;
+
+async function deleteAuthUser(userId) {
+  const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
+  if (error && error.status !== 404) throw error;
+}
+
+// After the User row is gone the person can't send the deletion again, so the server finishes deleting the auth user:
+// otherwise Google or Apple could still sign in and get a new, empty account. Retried for a few minutes, as
+// /logout does (retryLocalSignOut).
+function retryAuthUserDeletion(userId, until = Date.now() + AUTH_USER_DELETE_RETRY_WINDOW_MS, delayMs = 1000) {
+  const timer = setTimeout(async () => {
+    try {
+      await deleteAuthUser(userId);
+      logger.info('Supabase auth user deleted on retry', { userId });
+    } catch (err) {
+      const nextMs = Math.min(delayMs * 2, AUTH_USER_DELETE_RETRY_MAX_DELAY_MS);
+      if (Date.now() + nextMs > until) {
+        logger.error('Auth user deletion gave up (DB user already removed)', { userId, error: err.message });
+        return;
+      }
+      retryAuthUserDeletion(userId, until, nextMs);
+    }
+  }, delayMs * (0.8 + Math.random() * 0.4));
+  timer.unref();
+}
+
+const businessOwnershipRequired = {
+  error: 'Before deleting your account, close your businesses or transfer ownership and leave each business.',
+  code: 'BUSINESS_OWNERSHIP_REQUIRED',
+};
 
 router.delete('/account', verifyToken, requireStepUp('delete_account'), requireStrongestStepUpForDeletion, async (req, res) => {
   const userId = req.user.id;
@@ -5308,6 +5583,34 @@ router.delete('/account', verifyToken, requireStepUp('delete_account'), requireS
 
   try {
     // ── 1. Pre-checks ────────────────────────────────────────────
+    // Business accounts have no login of their own. Deleting an owner only
+    // cascades their membership, leaving the business public and unmanaged.
+    // Require an explicit handoff/leave or business deletion first, including
+    // drafts. BusinessTeam is the canonical ownership source during the seat
+    // migration; retired businesses have account_type='individual'.
+    try {
+      const { data: ownerships, error: ownershipError } = await supabaseAdmin
+        .from('BusinessTeam')
+        .select('business_user_id')
+        .eq('user_id', userId)
+        .eq('role_base', 'owner')
+        .eq('is_active', true);
+      if (ownershipError) throw ownershipError;
+      if (ownerships?.length) {
+        const { data: businesses, error: businessError } = await supabaseAdmin
+          .from('User')
+          .select('id')
+          .in('id', ownerships.map((membership) => membership.business_user_id))
+          .eq('account_type', 'business')
+          .limit(1);
+        if (businessError) throw businessError;
+        if (businesses?.length) return res.status(409).json(businessOwnershipRequired);
+      }
+    } catch (err) {
+      logger.warn('Account deletion ownership check unavailable', { userId, code: err.code });
+      return res.status(503).json(ACCOUNT_DELETE_UNAVAILABLE_REPLY);
+    }
+
     // Block deletion if user has gigs currently in progress
     const { data: activeGigs, error: activeGigsError } = await supabaseAdmin
       .from('Gig')
@@ -5451,10 +5754,13 @@ router.delete('/account', verifyToken, requireStepUp('delete_account'), requireS
       logger.info('Account deletion refused before any change', {
         userId, sqlstate: dryRun.sqlstate, table: dryRun.table, constraint: dryRun.constraint,
       });
+      if (dryRun.constraint === 'account_deletion_business_ownership') {
+        return res.status(409).json(businessOwnershipRequired);
+      }
       // Constraint, check and guard failures mean records that must stay;
       // anything else (a lock timeout, say) is worth a retry.
       if (!/^(23|P0)/.test(String(dryRun.sqlstate || ''))) {
-        return res.status(503).json({ error: 'Account deletion is temporarily unavailable. Please try again.', code: 'ACCOUNT_DELETE_UNAVAILABLE' });
+        return res.status(503).json(ACCOUNT_DELETE_UNAVAILABLE_REPLY);
       }
       return res.status(409).json({
         error: "Your account has records we need to keep, so it can't be deleted in the app yet. Contact support to close it.",
@@ -5499,7 +5805,7 @@ router.delete('/account', verifyToken, requireStepUp('delete_account'), requireS
           });
         }
         if (status === 503) {
-          return res.status(503).json({ error: 'Account deletion is temporarily unavailable. Please try again.', code: 'ACCOUNT_DELETE_UNAVAILABLE' });
+          return res.status(503).json(ACCOUNT_DELETE_UNAVAILABLE_REPLY);
         }
         throw err;
       }
@@ -5515,86 +5821,89 @@ router.delete('/account', verifyToken, requireStepUp('delete_account'), requireS
       if (cancelled > 0) logger.info('Account deletion: Support Train signups cancelled', { userId, cancelled });
     } catch (err) {
       logger.warn('Account deletion refused: Support Train signups could not be cancelled', { userId, error: err.message });
-      return res.status(503).json({ error: 'Account deletion is temporarily unavailable. Please try again.', code: 'ACCOUNT_DELETE_UNAVAILABLE' });
+      return res.status(503).json(ACCOUNT_DELETE_UNAVAILABLE_REPLY);
     }
+
+    // From here on every write is checked, and the first that fails stops the
+    // deletion with a retryable 503 before anything more is erased: going on
+    // would erase data and then fail at the User delete (step 4) on what the
+    // failed write left. Each write only clears what is still there, so a
+    // retry picks up where this one stopped and finishes the job.
+    const stopDeletion = (step, table, error) => {
+      logger.warn('Account deletion stopped: a write failed', { userId, step, table, errorCode: error?.code || null });
+      return res.status(503).json(ACCOUNT_DELETE_UNAVAILABLE_REPLY);
+    };
 
     // ── 2. Nullify bare FK columns (NO ON DELETE clause) ─────────
     // These columns reference User(id) without an ON DELETE rule,
     // meaning PostgreSQL defaults to NO ACTION which blocks deletion.
-    // We SET NULL so the User row can be deleted afterwards.
-    const nullifyOps = ACCOUNT_DELETE_NULLIFY;
-
-    // Run all nullify operations in parallel
+    // We SET NULL so the User row can be deleted afterwards. They are
+    // attributions, not the person's data, so they run in parallel, and all
+    // must succeed before anything is deleted.
     const nullifyResults = await Promise.allSettled(
-      nullifyOps.map(({ table, column }) =>
+      ACCOUNT_DELETE_NULLIFY.map(({ table, column }) =>
         supabaseAdmin.from(table).update({ [column]: null }).eq(column, userId)
       )
     );
-
-    // Log any failures but continue — these are non-critical audit columns
-    nullifyResults.forEach((result, i) => {
-      if (result.status === 'rejected') {
-        logger.warn('Nullify failed (continuing)', {
-          table: nullifyOps[i].table,
-          column: nullifyOps[i].column,
-          error: result.reason?.message,
-        });
-      }
-    });
+    const nullifyFailed = nullifyResults.findIndex((result) => result.status === 'rejected' || result.value?.error);
+    if (nullifyFailed >= 0) {
+      const failed = nullifyResults[nullifyFailed];
+      return stopDeletion('nullify', ACCOUNT_DELETE_NULLIFY[nullifyFailed].table, failed.reason || failed.value.error);
+    }
 
     // ── 2b. Delete rows from tables with bare FK where column is NOT nullable ──
-    await Promise.allSettled(
-      ACCOUNT_DELETE_OWN_ROWS.map(({ table, column }) => supabaseAdmin.from(table).delete().eq(column, userId))
-    );
-
     // ── 2c. ChatMessage: user_id is NOT NULL; legacy FK used ON DELETE SET NULL ──
-    await supabaseAdmin.from('ChatMessage').delete().eq('user_id', userId);
+    // One at a time, so a failure erases nothing after it.
+    for (const { table, column } of [...ACCOUNT_DELETE_OWN_ROWS, { table: 'ChatMessage', column: 'user_id' }]) {
+      const { error } = await supabaseAdmin.from(table).delete().eq(column, userId);
+      if (error) return stopDeletion('own_rows', table, error);
+    }
 
     // ── 3. Delete rows from RESTRICT-constrained tables ──────────
     // These have ON DELETE RESTRICT and would block User deletion.
     // Order matters: Refund → Payment → Payout, WalletTransaction, Subscription
 
     // Delete refunds linked to user's payments first
-    const { data: userPayments } = await supabaseAdmin
+    const { data: userPayments, error: userPaymentsError } = await supabaseAdmin
       .from('Payment')
       .select('id')
       .or(`payer_id.eq.${userId},payee_id.eq.${userId}`);
+    if (userPaymentsError) return stopDeletion('restrict', 'Payment', userPaymentsError);
     const paymentIds = (userPayments || []).map(p => p.id);
 
-    if (paymentIds.length > 0) {
-      // Delete refunds that reference these payments
-      await supabaseAdmin.from('Refund').delete().in('payment_id', paymentIds);
+    const restrictDeletes = [
+      // Refunds that reference these payments, then the payments themselves
+      ...(paymentIds.length > 0 ? [{ table: 'Refund', run: () => supabaseAdmin.from('Refund').delete().in('payment_id', paymentIds) }] : []),
+      { table: 'Payment', run: () => supabaseAdmin.from('Payment').delete().or(`payer_id.eq.${userId},payee_id.eq.${userId}`) },
+      // Wallet transactions (RESTRICT on user_id AND wallet_id)
+      { table: 'WalletTransaction', run: () => supabaseAdmin.from('WalletTransaction').delete().eq('user_id', userId) },
+      // Payouts (RESTRICT on user_id)
+      { table: 'Payout', run: () => supabaseAdmin.from('Payout').delete().eq('user_id', userId) },
+      // Subscriptions (RESTRICT on user_id)
+      { table: 'Subscription', run: () => supabaseAdmin.from('Subscription').delete().eq('user_id', userId) },
+      // Regional seeder config where this user is the curator (RESTRICT on curator_user_id)
+      { table: 'seeder_config', run: () => supabaseAdmin.from('seeder_config').delete().eq('curator_user_id', userId) },
+    ];
+    for (const { table, run } of restrictDeletes) {
+      const { error } = await run();
+      if (error) return stopDeletion('restrict', table, error);
     }
-
-    // Now delete payments themselves
-    await supabaseAdmin.from('Payment').delete().or(`payer_id.eq.${userId},payee_id.eq.${userId}`);
-
-    // Delete wallet transactions (RESTRICT on user_id AND wallet_id)
-    await supabaseAdmin.from('WalletTransaction').delete().eq('user_id', userId);
-
-    // Delete payouts (RESTRICT on user_id)
-    await supabaseAdmin.from('Payout').delete().eq('user_id', userId);
-
-    // Delete subscriptions (RESTRICT on user_id)
-    await supabaseAdmin.from('Subscription').delete().eq('user_id', userId);
-
-    // Delete regional seeder config where this user is the curator (RESTRICT on curator_user_id)
-    await supabaseAdmin.from('seeder_config').delete().eq('curator_user_id', userId);
 
     // ── 4. Delete User row ───────────────────────────────────────
     // This triggers ON DELETE CASCADE for ~70+ tables (Posts, Gigs,
     // Wallet, Listings, Notifications, Chat participants, etc.)
     // Pulse's BEFORE DELETE trigger scrubs the author's replies atomically;
     // their nullable user_id then SET NULLs, preserving other people's branches.
-    // If the delete fails, neither the scrub nor its count changes commit.
+    // If the delete fails, neither the scrub nor its count changes commit, and
+    // a retry runs the dry run again: a record that must stay is refused there.
     const { error: deleteError } = await supabaseAdmin
       .from('User')
       .delete()
       .eq('id', userId);
 
     if (deleteError) {
-      logger.error('User row deletion failed', { userId, error: deleteError.message });
-      return res.status(500).json({ error: 'Failed to delete account. Please contact support.' });
+      logger.error('User row deletion failed', { userId, error: deleteError.message, errorCode: deleteError.code || null });
+      return res.status(503).json(ACCOUNT_DELETE_UNAVAILABLE_REPLY);
     }
 
     // ── 4b. Persistent login: sign out everywhere ────────────────
@@ -5603,6 +5912,9 @@ router.delete('/account', verifyToken, requireStepUp('delete_account'), requireS
     // of an account that still exists. Revoke every session/device/grant,
     // delete PushToken rows, kick sockets, record `account_deleted`. These
     // rows are FK'd to auth.users, so this runs before admin.deleteUser.
+    // A failure here must not skip that deletion: with the User row gone
+    // verifyToken already refuses these sessions, and deleting the auth user
+    // ends their refresh tokens.
     await safeHook('account_deleted', () => authDeviceService.onAccountDeleted({
       userId,
       accessToken: accessTokenFromRequest(req),
@@ -5611,21 +5923,24 @@ router.delete('/account', verifyToken, requireStepUp('delete_account'), requireS
 
     // ── 5. Delete Supabase Auth user ─────────────────────────────
     try {
-      await supabaseAdmin.auth.admin.deleteUser(userId);
+      await deleteAuthUser(userId);
       logger.info('Supabase auth user deleted', { userId });
     } catch (authErr) {
-      // User row is already gone — log but don't fail the request
-      logger.warn('Auth user deletion failed (DB user already removed)', {
+      // User row is already gone — the account is deleted; finish the auth user in the background.
+      logger.warn('Auth user deletion failed (DB user already removed); retrying', {
         userId,
         error: authErr.message,
       });
+      retryAuthUserDeletion(userId);
     }
 
     logger.info('Account deleted successfully', { userId });
     res.json({ message: 'Account deleted successfully' });
   } catch (err) {
+    // A check, the dry run or a home's retirement failed before the User row
+    // was deleted: the account is still there, and a retry starts over.
     logger.error('Account deletion error', { userId, error: err.message, stack: err.stack });
-    res.status(500).json({ error: 'Failed to delete account. Please contact support.' });
+    res.status(503).json(ACCOUNT_DELETE_UNAVAILABLE_REPLY);
   }
 });
 
@@ -5761,6 +6076,117 @@ router.post('/:userId/report', verifyToken, validate(reportUserSchema), async (r
 //            session's bound key verifies the DPoP (rth checked).
 //   others / global — verifyToken (+CSRF for cookies) + X-Step-Up
 //            (`revoke_sessions`), then revokeOthers / revokeAll (lockdown).
+//
+// A local logout whose revocation can't be saved answers 503, and nobody
+// repeats it: the apps wipe their tokens and the web clears its cookies first.
+// This process repeats it instead, with backoff, for about five minutes, and
+// meanwhile reads the verified session as signed out
+// (authSessionService.markSignOutPending). A restart forgets the retries.
+const LOGOUT_RETRY_WINDOW_MS = 5 * 60 * 1000;
+const LOGOUT_RETRY_MAX_DELAY_MS = 30 * 1000;
+const LOGOUT_RETRY_MAX_PENDING = 500;
+const pendingLogouts = new Map(); // hash of the presented token -> sign-out
+
+/** One local logout's work. runLocalSignOut repeats only the steps that haven't succeeded. */
+function localSignOut(req, { accessToken, refreshToken, deviceId, dpop }) {
+  const token = accessToken || refreshToken;
+  return {
+    key: token ? authSessionService.hashToken(token) : null,
+    accessToken,
+    refreshToken,
+    deviceId,
+    dpop,
+    // The security event keeps only the address and user agent of the request.
+    req: { ip: req.ip, headers: { 'user-agent': getHeader(req, 'user-agent') } },
+    verified: !accessToken,
+    userId: null,
+    sessionId: null,
+    registryDone: false,
+    providerDone: false,
+    attempts: 0,
+    until: 0,
+    running: null,
+  };
+}
+
+/** One attempt at a time: a repeated logout can meet a retry in flight. */
+function attemptLocalSignOut(s) {
+  const attempt = (s.running || Promise.resolve()).catch(() => {}).then(() => runLocalSignOut(s));
+  s.running = attempt;
+  return attempt;
+}
+
+async function runLocalSignOut(s) {
+  s.attempts += 1;
+  if (!s.verified) {
+    // Verify the signed token even when GoTrue already removed its session in a
+    // previous partial attempt. The registry must still be revocable on retry.
+    const { verifyAccessToken } = require('../services/accessTokenVerifier');
+    const verified = await verifyAccessToken(s.accessToken, { authClient: supabase, allowExpiredForRevocation: true });
+    if (!verified.ok && verified.reason === 'busy') throw authSessionService.authUnavailableError(verified.error);
+    if (verified.ok) {
+      s.userId = verified.user.id;
+      s.sessionId = authSessionService.sessionClaimsFromAccessToken(s.accessToken)?.id || null;
+    }
+    s.verified = true;
+  }
+  if (!s.registryDone) {
+    if (s.userId || (s.refreshToken && s.dpop)) {
+      await authDeviceService.logoutLocal({
+        userId: s.userId, bearerSessionId: s.sessionId, deviceId: s.deviceId, refreshToken: s.refreshToken, dpop: s.dpop, req: s.req,
+      });
+    }
+    s.registryDone = true;
+  }
+  if (!s.providerDone) {
+    // Commit application revocation before removing the provider session.
+    // Invalid/missing credentials still allow idempotent local cookie clearing.
+    if (s.accessToken && !(await revokeSessionByAccessToken(s.accessToken, { source: 'logout' }))) {
+      throw authSessionService.authUnavailableError();
+    }
+    s.providerDone = true;
+  }
+}
+
+/** Keep retrying a local sign-out that failed. False when it can't be queued. */
+function retryLocalSignOut(s) {
+  // Worth repeating: a proven session, or a token whose check couldn't run.
+  const proven = s.userId || (s.refreshToken && s.dpop);
+  if (!s.key || (s.verified && !proven)) return false;
+  if (!pendingLogouts.has(s.key)) {
+    if (pendingLogouts.size >= LOGOUT_RETRY_MAX_PENDING) {
+      logger.error('auth.logout.retry_queue_full', { pending: pendingLogouts.size });
+      return false;
+    }
+    s.until = Date.now() + LOGOUT_RETRY_WINDOW_MS;
+    pendingLogouts.set(s.key, s);
+    scheduleLocalSignOut(s, 1000);
+  }
+  if (s.sessionId) authSessionService.markSignOutPending(s.sessionId, s.userId, s.until);
+  return true;
+}
+
+function scheduleLocalSignOut(s, delayMs) {
+  const timer = setTimeout(async () => {
+    if (pendingLogouts.get(s.key) !== s) return;
+    try {
+      await attemptLocalSignOut(s);
+      pendingLogouts.delete(s.key);
+      logger.info('auth.logout.retry_saved', { userId: s.userId, sessionId: s.sessionId, attempts: s.attempts });
+    } catch (err) {
+      const nextMs = Math.min(delayMs * 2, LOGOUT_RETRY_MAX_DELAY_MS);
+      if (Date.now() + nextMs > s.until) {
+        pendingLogouts.delete(s.key);
+        logger.error('auth.logout.retry_gave_up', { userId: s.userId, sessionId: s.sessionId, attempts: s.attempts, errorCode: err.code || null });
+        return;
+      }
+      if (s.sessionId) authSessionService.markSignOutPending(s.sessionId, s.userId, s.until);
+      scheduleLocalSignOut(s, nextMs);
+    }
+  }, delayMs * (0.8 + Math.random() * 0.4));
+  timer.unref();
+}
+
 router.post(
   '/logout',
   logoutLimiter,
@@ -5800,7 +6226,7 @@ router.post(
         return res.json({ success: true, revoked: result.revoked });
       } catch (err) {
         logger.error('Logout scope error', { userId, scope, error: err.message, stack: err.stack });
-        return res.status(500).json({ error: 'Could not sign out other devices', code: 'INTERNAL' });
+        return res.status(err.authBusy ? 503 : 500).json({ error: 'Could not sign out other devices', code: err.authBusy ? 'AUTH_UNAVAILABLE' : 'INTERNAL' });
       }
     }
 
@@ -5809,57 +6235,36 @@ router.post(
     // This browser's saved data goes with the session (Instant Screens contract §5).
     res.set('Clear-Site-Data', '"storage"');
 
-    const accessToken = getLogoutAccessToken(req);
-
-    // Proof (a) MUST be established BEFORE the JWT is revoked. GoTrue's
-    // `admin.signOut(jwt,'local')` deletes the session row, after which
-    // `auth.getUser(jwt)` answers 403 session_not_found — so resolving the
-    // caller afterwards would silently forfeit every registry side effect
-    // (session row revoke, that device's push tokens, its resume grants) for
-    // web and for any session without a DPoP proof.
-    let proofUserId = null;
-    let proofSessionId = null;
-    if (accessToken && typeof accessToken === 'string') {
-      const { data, error } = await supabase.auth.getUser(accessToken);
-      if (!error && data?.user?.id) {
-        proofUserId = data.user.id;
-        proofSessionId = authSessionService.sessionClaimsFromAccessToken(accessToken)?.id || null;
-      }
+    const presentedAccess = getLogoutAccessToken(req);
+    const accessToken = typeof presentedAccess === 'string' && presentedAccess ? presentedAccess : null;
+    const presentedRefresh = req.body?.refreshToken || req.body?.refresh_token;
+    const refreshToken = typeof presentedRefresh === 'string' && presentedRefresh ? presentedRefresh : null;
+    const deviceId = typeof req.body?.deviceId === 'string' && req.body.deviceId ? req.body.deviceId : undefined;
+    // A proof is checked once (its jti is spent); retries reuse the result.
+    let dpop = null;
+    if (getHeader(req, 'dpop')) {
+      const result = await verifyDpop(req, refreshToken ? { refreshToken } : {});
+      if (result.ok) dpop = result.dpop;
+      else logger.warn('auth.logout.dpop_invalid', { errorCode: result.code });
     }
 
-    const sessionRevoked = await revokeSessionByAccessToken(accessToken, {
-      source: 'logout',
-      transport: getBearerToken(req) ? 'bearer' : accessToken ? 'cookie_or_body' : 'none',
-    });
-
-    // Registry side effects only with proof (best effort; never fails the logout).
-    await safeHook('logout_local', async () => {
-      const refreshToken = req.body?.refreshToken || req.body?.refresh_token || null;
-      const deviceId = typeof req.body?.deviceId === 'string' && req.body.deviceId ? req.body.deviceId : undefined;
-
-      // Proof (b): DPoP (rth over the refresh token) — verified when present,
-      // never required (a missing/invalid proof only forfeits the side effects).
-      let dpop = null;
-      if (getHeader(req, 'dpop')) {
-        const result = await verifyDpop(req, refreshToken ? { refreshToken } : {});
-        if (result.ok) dpop = result.dpop;
-        else logger.warn('auth.logout.dpop_invalid', { errorCode: result.code, ip: req.ip });
-      }
-
-      if (!proofUserId && !(refreshToken && dpop)) return null;
-      return authDeviceService.logoutLocal({
-        userId: proofUserId,
-        bearerSessionId: proofSessionId,
-        deviceId,
-        refreshToken,
-        dpop,
-        req,
-      });
-    });
+    const fresh = localSignOut(req, { accessToken, refreshToken, deviceId, dpop });
+    // The same token again continues the sign-out already being retried.
+    const pending = fresh.key ? pendingLogouts.get(fresh.key) : null;
+    const signOut = pending || fresh;
+    try {
+      await attemptLocalSignOut(signOut);
+    } catch (err) {
+      const retrying = retryLocalSignOut(signOut);
+      logger.warn('auth.logout.incomplete', { errorCode: err.code || 'AUTH_UNAVAILABLE', retrying });
+      return res.status(503).json({ code: 'AUTH_UNAVAILABLE',
+        error: 'Local sign-in data was cleared, but server sign-out could not be confirmed. Please try again.' });
+    }
+    if (pending) pendingLogouts.delete(pending.key);
 
     logger.info('Logout completed', {
       hasAccessToken: Boolean(accessToken),
-      sessionRevoked,
+      sessionRevoked: Boolean(accessToken),
     });
 
     res.json({ success: true });

@@ -28,6 +28,8 @@ const { checkHomePermission, getActiveOccupancy, mapLegacyRole } = require('../u
 const { computeUtilityScore } = require('../utils/feedRanking');
 const s3 = require('../services/s3Service');
 const feedService = require('../services/feedService');
+const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
+const marketplaceService = require('../services/marketplace/marketplaceService');
 const { generateNeighborhoodFacts } = require('../services/ai/neighborhoodFactService');
 const { encodeGeohash6: _encodeGeohash6 } = require('../utils/geohash');
 const { resolveLocation } = require('../services/context/locationResolver');
@@ -124,6 +126,7 @@ const {
   attachIdentityAuthors,
   applyPostLocationPrivacy,
   sortMatchedBusinessesByRating,
+  dropUnpublishedMatches,
   applyCursorCondition,
   buildCursorPagination,
   FEED_POST_SELECT,
@@ -234,7 +237,7 @@ const createPostSchema = Joi.object({
   content: Joi.string().min(1).max(5000).required(),
   title: Joi.string().max(255).optional(),
   mediaUrls: Joi.array().items(Joi.string().uri()).max(10).optional(),
-  mediaTypes: Joi.array().items(Joi.string().valid('image', 'video', 'live_photo')).optional(),
+  mediaTypes: Joi.array().items(Joi.string().valid('image', 'video', 'live_photo', 'document')).optional(),
   mediaThumbnails: Joi.array().items(Joi.string().uri().allow('', null)).max(10).optional(),
   mediaLiveUrls: Joi.array().items(Joi.string().uri().allow('', null)).max(10).optional(),
   postType: Joi.string().valid(...POST_TYPES, ...PULSE_ONLY_TYPES).default('general'),
@@ -357,7 +360,7 @@ const updatePostSchema = Joi.object({
   content: Joi.string().min(1).max(5000),
   title: Joi.string().max(255).allow(null, ''),
   mediaUrls: Joi.array().items(Joi.string().uri()).max(10),
-  mediaTypes: Joi.array().items(Joi.string().valid('image', 'video', 'live_photo')),
+  mediaTypes: Joi.array().items(Joi.string().valid('image', 'video', 'live_photo', 'document')),
   mediaThumbnails: Joi.array().items(Joi.string().uri().allow('', null)).max(10),
   mediaLiveUrls: Joi.array().items(Joi.string().uri().allow('', null)).max(10),
   postType: Joi.string().valid(...POST_TYPES, ...PULSE_ONLY_TYPES),
@@ -598,13 +601,13 @@ async function loadPersonaCommentAuthors(post, userIds) {
   return authors;
 }
 
-function serializeCommentForViewer(comment, audienceAuthor, viewerUserId) {
+function serializeCommentForViewer(comment, audienceAuthor, viewerUserId, person) {
   if (!comment) return null;
   const { author: rawAuthor, user_id: actorUserId, ...safe } = comment;
   return {
     ...safe,
     user_id: audienceAuthor ? (actorUserId === viewerUserId ? actorUserId : '') : actorUserId,
-    author: audienceAuthor || serializeUserAsLocalIdentity(rawAuthor),
+    author: audienceAuthor || person || serializeUserAsLocalIdentity(rawAuthor),
   };
 }
 
@@ -613,9 +616,13 @@ async function serializeCommentsForViewer(comments, post, viewerUserId, prepared
   const blocked = viewerUserId ? await blockService.blockedUserIds(viewerUserId) : new Set();
   const visible = blocked.size ? comments.filter((comment) => !blocked.has(comment.user_id)) : comments;
   const authors = preparedAuthors ?? await loadPersonaCommentAuthors(post, visible.map((comment) => comment.user_id));
+  // Off a persona post, commenters go by the name the post's author does: a person by their Local Profile's name,
+  // handle and photo, a business (or anyone without a Local Profile) by the account. A chat names people that way, so
+  // its lookup is reused; `id` stays the account id the web's hover card follows and connects by.
+  const people = authors ? null : await loadChatPeople(visible.map((comment) => comment.user_id));
   return visible.map((comment) => serializeCommentForViewer(comment,
     authors ? authors.get(comment.user_id) || { id: '', displayName: 'Fan', href: null } : null,
-    viewerUserId));
+    viewerUserId, people?.get(String(comment.user_id))));
 }
 
 function serializeLikeForViewer(like) {
@@ -633,6 +640,39 @@ async function serializePostForViewer(post, viewerUserId) {
   if (!post) return null;
   const [serialized] = await attachIdentityAuthors([post], viewerUserId);
   return serialized || post;
+}
+
+// A reader who isn't signed in (the web's public post page and its link preview,
+// frontend/apps/web/src/app/posts/[id]/page.tsx) gets what that page shows and nothing else.
+const SIGNED_OUT_POST_FIELDS = ['id', 'title', 'content', 'post_type', 'state', 'media_urls', 'media_live_urls',
+  'ref_task_id', 'ref_listing_id', 'location_name', 'created_at'];
+
+// A signed-in reader who isn't the author gets what the web, iOS and Android post pages read: the post, its
+// approximate place, the Lost & Found contact (phone|<digits> when the poster asked for calls), what decides whether
+// it can be shared, its counts and the viewer's own likes and saves, and the replies. Only the author, whose edit
+// form reads it, gets the rest of the row: moderation notes, geocoding, the GPS fix time, account, home and place
+// ids, audience and profile settings, and the view and delivery counts.
+const READER_POST_FIELDS = [
+  'id', 'user_id', 'author_user_id', 'author', 'creator', 'home', 'created_at', 'is_edited',
+  'title', 'content', 'post_type', 'purpose', 'tags', 'media_urls', 'media_types', 'media_thumbnails', 'media_live_urls',
+  'location_name', 'latitude', 'longitude', 'locationUnlocked',
+  'state', 'resolution', 'expires_at', 'archived_at', 'archive_reason',
+  'read_scope', 'visibility', 'audience', 'allow_external_share', 'moderation_state',
+  'event_date', 'event_end_date', 'event_venue', 'safety_alert_kind', 'deal_business_name', 'deal_expires_at',
+  'lost_found_type', 'lost_found_contact_pref', 'service_category', 'ref_task_id', 'ref_listing_id',
+  'like_count', 'comment_count', 'share_count', 'userHasLiked', 'userHasSaved', 'userHasReposted', 'comments',
+];
+
+function signedOutPostView(post) {
+  const view = Object.fromEntries(SIGNED_OUT_POST_FIELDS.map((field) => [field, post[field] ?? null]));
+  // The author as the post shows them, without the profile or home id behind it.
+  const { id: _creatorId, ...creator } = post.creator || {};
+  view.creator = post.creator ? creator : null;
+  return view;
+}
+
+function readerPostView(post) {
+  return Object.fromEntries(READER_POST_FIELDS.map((field) => [field, post[field] ?? null]));
 }
 
 
@@ -684,14 +724,10 @@ async function requireVisiblePost({ postId, userId, res, select = POST_VISIBILIT
   return post;
 }
 
+// A like, comment, reply or repost notice names the person who acted as their comments do: a person by their Local
+// Profile's name, a business (or anyone without a Local Profile) by the account. The metadata keeps the account id.
 async function getUserDisplayName(userId) {
-  const { data } = await supabaseAdmin
-    .from('User')
-    .select('username, name, first_name')
-    .eq('id', userId)
-    .single();
-  if (!data) return 'Someone';
-  return data.name || data.first_name || chosenUsernameOrNull(data.username) || 'Someone';
+  return (await loadChatPeople([userId])).get(String(userId))?.displayName || 'Someone';
 }
 
 // ============ POST ROUTES ============
@@ -700,11 +736,31 @@ async function getUserDisplayName(userId) {
  * POST /api/posts/precheck
  * Soft AI pre-check before submitting a post.
  * Returns suggestions — never blocks the post outright.
+ *
+ * The composers call it again with `stage: "post"` when the person taps Post. That adds
+ * `findings`, the kindness and safety check (AI assistant phase 2 contract §6.6,
+ * services/ai/postCheck.js): a heated tone, a phone number or street address in the words, a
+ * Heads-up kind this route's create would refuse. The apps show them with "Edit" and "Post anyway".
  */
 router.post('/precheck', verifyToken, async (req, res) => {
   try {
     const { content, postType, purpose, surface, latitude, longitude } = req.body;
     const userId = req.user.id;
+    const { stage, title, safetyAlertKind, sourceUrl } = req.body;
+    // Runs alongside the reads below; it never throws.
+    const findingsRead = stage === 'post'
+      ? require('../services/ai/postCheck').checkPost({
+        userId,
+        title: typeof title === 'string' ? title : null,
+        content: typeof content === 'string' ? content : '',
+        postType,
+        kindRefusal: postType === 'alert' && typeof safetyAlertKind === 'string'
+          ? alertKindRefusal(safetyAlertKind, req.user.accountType, sourceUrl) : null,
+      }).catch((err) => {
+        logger.warn('Post check failed', { userId, error: err.message });
+        return [];
+      })
+      : null;
 
     const suggestions = [];
     const flags = [];
@@ -791,11 +847,14 @@ router.post('/precheck', verifyToken, async (req, res) => {
       flags,
       suggestions,
       isVisitor,
+      ...(findingsRead ? { findings: await findingsRead } : {}),
     });
   } catch (err) {
     logger.error('Post precheck error', { error: err.message });
     // Always fail open — never block posting due to precheck errors
-    res.json({ ok: true, canPost: true, flags: [], suggestions: [], isVisitor: false });
+    res.json({
+      ok: true, canPost: true, flags: [], suggestions: [], isVisitor: false, ...(req.body?.stage === 'post' ? { findings: [] } : {}),
+    });
   }
 });
 
@@ -862,8 +921,21 @@ async function isVisitorAt(userId, latitude, longitude) {
     && homes.every((home) => Math.abs(lat - home.latitude) > 0.5 || Math.abs(lng - home.longitude) > 0.5);
 }
 
+// An event may omit its times, but an end requires a strictly earlier start.
+// Edits call this with the resulting pair, not just the fields in the request.
+function eventRangeError(start, end) {
+  if (end == null) return null;
+  if (start == null) return 'Choose an event start time before setting its end time.';
+  if (new Date(end).getTime() <= new Date(start).getTime()) {
+    return 'The event end time must be after its start time.';
+  }
+  return null;
+}
+
 router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
   try {
+    const dateError = eventRangeError(req.body.eventDate, req.body.eventEndDate);
+    if (dateError) return res.status(400).json({ error: dateError, code: 'INVALID_EVENT_DATES' });
     const {
       content, title, mediaUrls, mediaTypes, mediaThumbnails, mediaLiveUrls, postType, postFormat,
       visibility, visibilityScope, locationPrecision,
@@ -967,6 +1039,16 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
     if (postAs === 'business'
       && (LOCAL_AUDIENCES.includes(requestedAudience) || requestedDistributionTargets.includes('place'))) {
       return res.status(403).json({ error: BUSINESS_CANNOT_POST_ERROR, code: 'BUSINESS_CANNOT_POST' });
+    }
+    // A business has no connections: a business post for the writer's own connections would tell them who is behind
+    // the business (and notify them by the writer's name).
+    if (postAs === 'business' && (['connections', 'network'].includes(requestedAudience)
+      || requestedVisibility === 'connections'
+      || requestedDistributionTargets.some((target) => ['connections', 'followers'].includes(target)))) {
+      return res.status(400).json({
+        error: "Business posts can't go to your connections. Use Public instead.",
+        code: 'business_connections_audience',
+      });
     }
     const alertRefusal = alertKindRefusal(safetyAlertKind, req.user.accountType, sourceUrl);
     if (alertRefusal) {
@@ -1174,12 +1256,17 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
       // v1.1: Home Place rate limit — 2 per day per home
       if (postAs === 'home' && homeId) {
         const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-        const { count } = await supabaseAdmin
+        let homePlacePosts = supabaseAdmin
           .from('Post')
           .select('id', { count: 'exact', head: true })
           .eq('home_id', homeId)
           .contains('distribution_targets', ['place'])
           .gte('created_at', oneDayAgo);
+        // A retry of a post this composer command already saved (to attach photos
+        // after a failed upload) is not a new post, so it doesn't count against itself.
+        const retryId = commandPostId(userId, req.body.clientRequestId);
+        if (retryId) homePlacePosts = homePlacePosts.neq('id', retryId);
+        const { count } = await homePlacePosts;
         if (count >= 2) {
           return res.status(429).json({ error: 'Home posting limit reached (2 posts per day to Place feed). Try again later.' });
         }
@@ -1716,6 +1803,37 @@ router.get('/feed', verifyToken, async (req, res) => {
   }
 });
 
+// The person looked at the Nearby feed: its "since you last looked" marker moves to now
+// (AI assistant phase 2 contract §6.1). The apps call it when the feed appears, at most once
+// every 5 minutes. It is the marker the paused Pulse redesign keeps (services/pulse/seen.js),
+// which only ever moves forward.
+router.post('/feed/seen', verifyToken, async (req, res) => {
+  try {
+    res.json(await require('../services/pulse/seen').advance(req.user.id, 'nearby', new Date().toISOString()));
+  } catch (err) {
+    logger.error('Feed seen error', { error: err.message, userId: req.user?.id });
+    res.status(500).json({ error: "Couldn't save where you left off." });
+  }
+});
+
+// "Before you ask" (AI assistant phase 2 contract §6.5): while someone writes a question, the
+// composers show up to 3 earlier questions and recommendations nearby that match its words, each
+// with its best reply. A plain search through the Nearby feed's own checks, with no model call,
+// around the point the question is going to (else the person's own place).
+router.get('/before-you-ask', verifyToken, async (req, res) => {
+  try {
+    const query = typeof req.query.q === 'string' ? req.query.q.slice(0, 500) : '';
+    const latitude = parseFloat(req.query.latitude);
+    const longitude = parseFloat(req.query.longitude);
+    const point = Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180 ? { latitude, longitude } : {};
+    const { earlierAnswers } = require('../services/ai/readToolsNearby');
+    res.json(await earlierAnswers({ query, ...point }, { userId: req.user.id }));
+  } catch (err) {
+    logger.error('Before you ask error', { error: err.message, userId: req.user?.id });
+    res.status(500).json({ error: "Couldn't look for earlier answers." });
+  }
+});
+
 
 
 router.get('/map', verifyToken, async (req, res) => {
@@ -2167,16 +2285,24 @@ router.post('/mute', verifyToken, async (req, res) => {
     if (!['user', 'business', 'persona'].includes(entityType)) {
       return res.status(400).json({ error: 'entityType must be "user", "business", or "persona"' });
     }
+    // A business post carries the business's id for everyone but its writer, and the web mutes a post's author as a
+    // "user": muting a business account mutes the business (its posts), never the person who wrote one.
+    let mutedType = entityType;
+    if (entityType === 'user') {
+      const { data: account } = await supabaseAdmin.from('User').select('account_type').eq('id', entityId).maybeSingle();
+      if (account?.account_type === 'business') mutedType = 'business';
+    }
 
     await ensurePostMute({
       userId,
-      entityType,
+      entityType: mutedType,
       entityId,
       surface: null,
     });
 
     feedService.invalidateFilterCache(userId);
-    res.json({ message: `${entityType} muted successfully` });
+    marketplaceService.invalidateFilterCache(userId);
+    res.json({ message: `${mutedType} muted successfully` });
   } catch (err) {
     logger.error('Mute error', { error: err.message });
     res.status(500).json({ error: 'Failed to mute' });
@@ -2213,12 +2339,19 @@ router.get('/mute', verifyToken, async (req, res) => {
     const ids = [...new Set((mutes || []).map((m) => m.muted_entity_id))];
     let accounts = new Map();
     if (ids.length > 0) {
-      const { data: users, error: usersError } = await supabaseAdmin
-        .from('User')
-        .select('id, username, name, first_name, last_name, profile_picture_url')
-        .in('id', ids);
+      const [{ data: users, error: usersError }, people] = await Promise.all([
+        supabaseAdmin
+          .from('User')
+          .select('id, username, name, first_name, last_name, profile_picture_url')
+          .in('id', ids),
+        loadChatPeople(ids),
+      ]);
       if (usersError) throw usersError;
-      accounts = new Map((users || []).map((u) => [u.id, u]));
+      // Muted people go by the name their posts and comments show: a person by their Local Profile's name, handle and
+      // photo, a business (or anyone without a Local Profile) by the account. loadChatPeople leaves everyone out when
+      // its read fails; the list fails then rather than show the accounts' names.
+      if ((users || []).some((u) => !people.has(String(u.id)))) throw new Error('Muted people could not be named');
+      accounts = new Map((users || []).map((u) => [u.id, chatPersonRow(u, people)]));
     }
 
     // A mute of a deleted account has no one to show and no effect, so it isn't listed.
@@ -2271,6 +2404,7 @@ router.delete('/mute', verifyToken, async (req, res) => {
     if (error) throw error;
 
     feedService.invalidateFilterCache(userId);
+    marketplaceService.invalidateFilterCache(userId);
     res.json({ message: 'Unmuted successfully' });
   } catch (err) {
     logger.error('Unmute error', { error: err.message });
@@ -2381,6 +2515,7 @@ router.get('/feed-preferences', verifyToken, async (req, res) => {
     res.json({
       preferences: data || {
         user_id: userId,
+        sports: {},
         hide_deals_place: false,
         hide_alerts_place: false,
         show_politics_connections: false,
@@ -2401,6 +2536,9 @@ router.get('/feed-preferences', verifyToken, async (req, res) => {
 router.put('/feed-preferences', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
+    if (req.body.expected_user_id && req.body.expected_user_id !== userId) {
+      return res.status(409).json({ error: 'This card belongs to another signed-in account.' });
+    }
     const {
       hideDealsPlace, hideAlertsPlace,
       showPoliticsConnections, showPoliticsPlace,
@@ -2417,11 +2555,38 @@ router.put('/feed-preferences', verifyToken, async (req, res) => {
     if (showPoliticsConnections !== undefined) upsertData.show_politics_connections = !!showPoliticsConnections;
     if (showPoliticsPlace !== undefined) upsertData.show_politics_place = !!showPoliticsPlace;
 
-    const { data, error } = await supabaseAdmin
-      .from('UserFeedPreference')
-      .upsert(upsertData, { onConflict: 'user_id' })
-      .select()
-      .single();
+    let data, error;
+    if (req.body.sports !== undefined) {
+      const { isFeatureEnabled } = require('../services/featureFlagService');
+      if (!await isFeatureEnabled('plans_sports', req.user)) return res.status(404).json({ error: 'Sports preferences are not available.' });
+      const { mergeSports } = require('../services/plans/planTeams');
+      // Compare-and-swap the JSON value. Concurrent partial saves must merge with
+      // the latest choices, rather than overwrite a successful unrelated change.
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        const { data: existing, error: readError } = await supabaseAdmin.from('UserFeedPreference')
+          .select('sports').eq('user_id', userId).maybeSingle();
+        if (readError) throw new Error('Could not read sports preferences.');
+        const current = existing?.sports || {};
+        if (req.body.expected_sports !== undefined
+          && !require('node:util').isDeepStrictEqual(current, req.body.expected_sports)) {
+          return res.status(409).json({ error: 'Your teams changed. Reopen your teams or request a new card before saving.' });
+        }
+        try { upsertData.sports = mergeSports(current, req.body.sports); }
+        catch (err) { return res.status(400).json({ error: err.message }); }
+        const result = existing
+          ? await supabaseAdmin.from('UserFeedPreference').update(upsertData)
+            .eq('user_id', userId).eq('sports', JSON.stringify(current)).select().maybeSingle()
+          : await supabaseAdmin.from('UserFeedPreference').insert(upsertData).select().single();
+        // A competing first save created the row; read it and merge on the next attempt.
+        if (!existing && result.error?.code === '23505') continue;
+        ({ data, error } = result);
+        if (data || error) break;
+      }
+      if (!data && !error) return res.status(409).json({ error: 'Your teams changed while saving. Try again.' });
+    } else {
+      ({ data, error } = await supabaseAdmin.from('UserFeedPreference')
+        .upsert(upsertData, { onConflict: 'user_id' }).select().single());
+    }
 
     if (error) {
       logger.error('Feed preferences update error', { error: error.message, userId });
@@ -2490,6 +2655,19 @@ router.get('/:id', optionalAuth, async (req, res) => {
     const { id } = req.params;
     const userId = req.user?.id || null;
 
+    // A signed-in reader gets more of the post than anyone else (READER_POST_FIELDS, and its author the whole row;
+    // SIGNED_OUT_POST_FIELDS otherwise). A rejected token (expired, invalid or revoked) or the web's session flag
+    // without its access cookie gets a 401, as verifyToken would, so the client refreshes and asks again instead of
+    // showing them the signed-out view; a sign-in that couldn't be checked gets a retry.
+    const staleWebSession = req.cookies?.pantopus_session === '1'
+      && !req.cookies?.pantopus_access && !req.headers.authorization;
+    if (!userId && (req.authRejected || staleWebSession)) {
+      return res.status(401).json({ error: 'Invalid or expired token', code: 'SESSION_REFRESH_REQUIRED' });
+    }
+    if (!userId && req.authUnavailable) {
+      return res.status(503).json({ error: 'Could not check your sign-in right now. Please try again.' });
+    }
+
     const { data: post, error } = await supabaseAdmin
       .from('Post')
       .select(`*, creator:user_id (${SAFE_CREATOR_SELECT}), home:home_id (id, address, city, state)`)
@@ -2504,6 +2682,17 @@ router.get('/:id', optionalAuth, async (req, res) => {
 
     const hasAccess = await canViewPost(post, userId);
     if (!hasAccess) return res.status(403).json({ error: 'You do not have access to this post' });
+
+    if (!userId) {
+      applyPostLocationPrivacy(post, null);
+      return res.json({
+        post: signedOutPostView(await serializePostForViewer({
+          ...post,
+          media_urls: normalizeMediaUrls(post.media_urls),
+          media_live_urls: normalizeAlignedMediaUrls(post.media_live_urls),
+        }, null)),
+      });
+    }
 
     const { data: comments } = await onlyShownReplies(supabaseAdmin
       .from('PostComment')
@@ -2545,6 +2734,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
         .catch(err => logger.warn('post.view_count.error', { error: err.message, postId: id, userId }));
     }
 
+    await dropUnpublishedMatches([post]);
     applyPostLocationPrivacy(post, userId);
     const responsePost = await serializePostForViewer({
       ...post,
@@ -2558,7 +2748,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
     }, userId);
 
     res.json({
-      post: responsePost,
+      post: isOwner ? responsePost : readerPostView(responsePost),
     });
   } catch (err) {
     logger.error('Post fetch error', { error: err.message, postId: req.params.id });
@@ -2574,10 +2764,17 @@ router.patch('/:id', verifyToken, validate(updatePostSchema), async (req, res) =
     const { data: existing } = await supabaseAdmin.from('Post')
       .select(`user_id, media_urls, media_thumbnails, media_live_urls, safety_alert_kind, post_metadata,
         post_type, content, topic, area_id, read_scope, latitude, longitude, location_precision,
-        visibility, visibility_scope, radius_miles`)
+        visibility, visibility_scope, radius_miles, event_date, event_end_date`)
       .eq('id', id).single();
     if (!existing) return res.status(404).json({ error: 'Post not found' });
     if (existing.user_id !== userId) return res.status(403).json({ error: 'You can only edit your own posts' });
+    if (req.body.eventDate !== undefined || req.body.eventEndDate !== undefined) {
+      const dateError = eventRangeError(
+        req.body.eventDate !== undefined ? req.body.eventDate : existing.event_date,
+        req.body.eventEndDate !== undefined ? req.body.eventEndDate : existing.event_end_date
+      );
+      if (dateError) return res.status(400).json({ error: dateError, code: 'INVALID_EVENT_DATES' });
+    }
     // Only Pulse creates Share and Offer posts; an older post can't become one.
     if (!existing.read_scope && PULSE_ONLY_TYPES.includes(req.body.postType) && req.body.postType !== existing.post_type) {
       return res.status(400).json({ error: "A post's type can't be changed to this one.", code: 'PULSE_FIELD_LOCKED' });
@@ -2657,22 +2854,27 @@ router.delete('/:id', verifyToken, async (req, res) => {
     if (existing.user_id !== userId) return res.status(403).json({ error: 'You can only delete your own posts' });
 
     const keys = new Set();
-    const prefix = `posts/${id}/${existing.user_id}/`;
-    const publicPrefix = s3.getPublicUrl(prefix);
+    // This post's own uploads (POST /api/upload/post-media) sit in posts/<post>/, or in posts/<post>/<writer>/ when
+    // uploaded before their keys stopped naming the writer.
+    const folders = [`posts/${id}/${existing.user_id}/`, `posts/${id}/`];
+    const ownFolder = (key) => folders.find((folder) => key.startsWith(folder) && !key.slice(folder.length).includes('/'));
+    const storage = s3.getPublicUrl('');
     for (const urls of [existing.media_urls, existing.media_thumbnails, existing.media_live_urls]) {
       if (urls != null && !Array.isArray(urls)) {
         return res.status(503).json({ error: 'Post media could not be checked. Please retry.' });
       }
       for (const url of urls || []) {
         // External/shared references do not authorize deleting another object's bytes.
-        if (typeof url !== 'string' || !url.startsWith(publicPrefix)) continue;
-        const name = url.slice(publicPrefix.length);
-        if (!/^(?:\d+_[a-f0-9]{16}|media_[a-f0-9]{64})(?:_(?:thumb|card|detail|full))?\.[a-z0-9]+$/.test(name)) {
+        const folder = typeof url === 'string' && url.startsWith(storage) ? ownFolder(url.slice(storage.length)) : null;
+        if (!folder) continue;
+        const name = url.slice(storage.length + folder.length);
+        // A Live Photo's clip is media_<hash>_live.<ext>.
+        if (!/^(?:\d+_[a-f0-9]{16}|media_[a-f0-9]{64})(?:_(?:thumb|card|detail|full|live))?\.[a-z0-9]+$/.test(name)) {
           return res.status(503).json({ error: 'Post media storage could not be verified. Please retry.' });
         }
-        const key = prefix + name;
+        const key = folder + name;
         keys.add(key);
-        if (!/_(?:thumb|card|detail|full)\.[a-z0-9]+$/.test(name)) {
+        if (!/_(?:thumb|card|detail|full|live)\.[a-z0-9]+$/.test(name)) {
           for (const variant of require('../services/marketplace/imageResizeService').getImageVariantKeys(key)) {
             keys.add(variant);
           }
@@ -2687,8 +2889,9 @@ router.delete('/:id', verifyToken, async (req, res) => {
         return res.status(503).json({ error: 'Post attachments could not be checked. Please retry.' });
       }
       for (const file of files) {
-        const filePrefix = file.comment_id ? `comments/${file.comment_id}/${file.user_id}/` : prefix;
-        if (typeof file.file_path !== 'string' || !file.file_path.startsWith(filePrefix)
+        const filePrefix = file.comment_id ? `comments/${file.comment_id}/${file.user_id}/`
+          : typeof file.file_path === 'string' && ownFolder(file.file_path);
+        if (typeof file.file_path !== 'string' || !filePrefix || !file.file_path.startsWith(filePrefix)
           || file.file_path.slice(filePrefix.length).includes('/') || file.file_path.includes('..')) {
           return res.status(503).json({ error: 'Post attachment storage could not be verified. Please retry.' });
         }
@@ -2788,6 +2991,7 @@ router.get('/:id/matched-businesses', verifyToken, async (req, res) => {
       select: `${POST_VISIBILITY_SELECT},service_category,matched_business_ids,matched_businesses_cache,created_at`,
     });
     if (!post) return;
+    await dropUnpublishedMatches([post]);
 
     // No service_category → no matches possible
     if (!post.service_category) {
@@ -3506,12 +3710,16 @@ router.get('/user/:userId', verifyToken, async (req, res) => {
     if (!(isOwn && includeArchived === 'true')) query = query.is('archived_at', null);
 
     if (isOwn) {
-      // Own profile: see everything (no filters on visibility)
+      // Own profile: see everything (no filters on visibility), the posts written for a business too, so the
+      // writer can still edit or delete them.
     } else {
       // Non-own profiles: only show posts marked for profile display
       query = query.eq('show_on_profile', true);
       // Exclude posts explicitly hidden from profiles
       query = query.neq('profile_visibility_scope', 'hidden');
+      // A post written for a business is the business's (its page lists it), never its writer's. Both ways of
+      // writing one (POST /api/posts as the business, the retired POST /api/businesses/:id/posts) store post_as.
+      query = query.or('post_as.is.null,post_as.neq.business');
     }
 
     query = applyCursorCondition(query, cursorCreatedAt, cursorId);

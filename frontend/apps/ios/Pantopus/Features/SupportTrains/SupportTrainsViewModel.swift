@@ -8,7 +8,7 @@
 //  three tabs sharing a single `ListOfRows` shell:
 //
 //    - **My trains** — `GET /api/support-trains/me/support-trains`
-//      (`role` filter omitted so both organizer + helper rows surface).
+//      (`role` filter omitted so organizer, recipient and helper rows surface).
 //    - **Nearby** — `GET /api/support-trains/nearby` with the caller's
 //      location.
 //    - **Invitations** — projected client-side from `me/support-trains`
@@ -141,7 +141,8 @@ public final class SupportTrainsViewModel: ListOfRowsDataSource {
         self.locationRequester = locationRequester
         self.openLocationSettings = openLocationSettings
         // The store's copy of My trains shows in the first frame.
-        if let copy = store.peek(Self.mineEndpoint, as: SupportTrainsListResponse.self) {
+        if let copy = store.peek(Self.mineEndpoint, as: SupportTrainsListResponse.self),
+           (copy.value.total ?? copy.value.supportTrains.count) <= copy.value.supportTrains.count {
             mine = copy.value.supportTrains
             staleNotice = copy.refreshNotice
             loadedOnce = true
@@ -149,7 +150,7 @@ public final class SupportTrainsViewModel: ListOfRowsDataSource {
         }
     }
 
-    /// The trains you organize, help with or were invited to.
+    /// The trains you organize, receive, help with or were invited to.
     private static var mineEndpoint: Endpoint {
         SupportTrainsEndpoints.mine()
     }
@@ -168,7 +169,8 @@ public final class SupportTrainsViewModel: ListOfRowsDataSource {
     }
 
     public func loadMoreIfNeeded() async {
-        // Single-shot feeds — pagination deferred to a follow-up.
+        // My trains and Invitations project the same fully loaded feed; an
+        // invitation on a later page must not look like an empty Invitations tab.
     }
 
     /// Nearby's "Use my location": asks for permission if it hasn't been answered,
@@ -204,15 +206,20 @@ public final class SupportTrainsViewModel: ListOfRowsDataSource {
 
     private func fetchMine(force: Bool) async -> Bool {
         do {
-            let snapshot = try await store.load(
-                Self.mineEndpoint,
-                as: SupportTrainsListResponse.self,
-                kind: .supportTrain,
-                topics: [ScreenTopic.supportTrains],
-                force: force
-            )
-            mine = snapshot.value.supportTrains
-            staleNotice = snapshot.refreshNotice
+            var notice: String?
+            let rows = try await SupportTrainsEndpoints.allMine { endpoint in
+                let page = try await store.load(
+                    endpoint,
+                    as: SupportTrainsListResponse.self,
+                    kind: .supportTrain,
+                    topics: [ScreenTopic.supportTrains],
+                    force: force
+                )
+                notice = notice ?? page.refreshNotice
+                return page.value
+            }
+            mine = rows
+            staleNotice = notice
             mineFailed = false
             return true
         } catch is CancellationError {
@@ -398,6 +405,7 @@ private extension SupportTrainsViewModel {
         switch role ?? "" {
         case "organizer": "You organize"
         case "co_organizer": "You co-organize"
+        case "recipient": "For you"
         case "helper": "Helper"
         default: nil
         }

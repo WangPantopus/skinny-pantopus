@@ -17,7 +17,7 @@
 
 'use client';
 
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
@@ -58,6 +58,7 @@ import { authPageHref } from '@/lib/auth-utils';
 import { launchFeatures } from '@/lib/featureFlags';
 import PrivacyPromise from './PrivacyPromise';
 import AddressAutocomplete, { type SelectedAddress } from './AddressAutocomplete';
+import { isDailyLookupLimit, lookupLimitMessage } from './lookupLimit';
 import BallotTeaser from '@/components/ballot/BallotTeaser';
 import { ballotTeaserData } from '@/components/ballot/BallotCard';
 
@@ -84,6 +85,7 @@ function TopBar() {
 function HeroStep({
   onSelect,
   onClear,
+  onFallbackChange,
   onSubmit,
   canSubmit,
   onBrowse,
@@ -91,6 +93,7 @@ function HeroStep({
 }: {
   onSelect: (p: SelectedAddress) => void;
   onClear: () => void;
+  onFallbackChange: (address: string | null) => void;
   onSubmit: () => void;
   canSubmit: boolean;
   onBrowse: () => void;
@@ -122,7 +125,7 @@ function HeroStep({
           </p>
 
           <div className="mt-6 flex flex-col gap-2.5">
-            <AddressAutocomplete onSelect={onSelect} onClear={onClear} onSubmit={onSubmit} autoFocus />
+            <AddressAutocomplete onSelect={onSelect} onClear={onClear} onFallbackChange={onFallbackChange} onSubmit={onSubmit} autoFocus />
             <button
               type="button"
               onClick={onSubmit}
@@ -647,6 +650,7 @@ export default function StartFunnel() {
   const router = useRouter();
   const [fromCard, setFromCard] = useState(false);
   const [selected, setSelected] = useState<SelectedAddress | null>(null);
+  const [fallbackAddress, setFallbackAddress] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState<string | null>(null);
 
   // Deep links (Wedge v2 D5): `?r=<route>` from an EDDM card or invite
@@ -668,14 +672,19 @@ export default function StartFunnel() {
       try {
         const res = await api.geo.autocompleteWithAbort(address, new AbortController().signal);
         const first = res?.suggestions?.[0];
-        if (cancelled || !first) return;
-        const lat = first.center?.lat;
-        const lng = first.center?.lng;
-        if (typeof lat !== 'number' || typeof lng !== 'number') return;
+        if (cancelled) return;
+        const lat = first?.center?.lat;
+        const lng = first?.center?.lng;
+        if (typeof lat !== 'number' || typeof lng !== 'number') throw new Error('No suggestion');
         setSelected({ label: first.label, latitude: lat, longitude: lng });
         setSubmitted(first.label);
       } catch {
-        /* a bad deep link simply lands on the hero */
+        // Share links and homepage arrivals still have their preview allowance
+        // when the separate suggestions allowance is exhausted.
+        if (!cancelled) {
+          setFallbackAddress(address);
+          setSubmitted(address);
+        }
       }
     })();
     return () => { cancelled = true; };
@@ -689,11 +698,37 @@ export default function StartFunnel() {
     retry: false,
   });
 
+  // A fast preview can arrive before its slow public-data requests finish.
+  // They keep warming the server's caches. Give failed cards two chances to
+  // recover, within the caller's free-repeat window; never poll an old tab or
+  // retry a refused lookup. Real outages still leave the manual retry visible.
+  const recovery = useRef({ address: submitted, attempts: 0, firstResponseAt: 0 });
+  const { refetch: refetchPreview } = previewQuery;
+  useEffect(() => {
+    if (recovery.current.address !== submitted) {
+      recovery.current = { address: submitted, attempts: 0, firstResponseAt: 0 };
+    }
+    if (!submitted || !previewQuery.data || previewQuery.isError || previewQuery.isFetching) return;
+    const run = recovery.current;
+    if (!run.firstResponseAt) run.firstResponseAt = previewQuery.dataUpdatedAt;
+    const hasFailedCards = previewQuery.data.sections?.some((section) => section.status === 'error');
+    if (!hasFailedCards || run.attempts >= 2 || Date.now() - run.firstResponseAt >= 60_000) return;
+    const timer = setTimeout(() => {
+      if (document.visibilityState !== 'visible' || Date.now() - run.firstResponseAt >= 60_000) return;
+      run.attempts += 1;
+      void refetchPreview();
+    }, 4_000);
+    return () => clearTimeout(timer);
+  }, [submitted, previewQuery.data, previewQuery.dataUpdatedAt, previewQuery.isError,
+    previewQuery.isFetching, refetchPreview]);
+
   // Funnel: T0 preview rendered — client-reported, because the preview
   // endpoint itself persists nothing by contract. Once per submit.
   const previewStatus = previewQuery.data?.status ?? null;
+  const viewedPreview = useRef<string | null>(null);
   useEffect(() => {
-    if (submitted && previewStatus) {
+    if (submitted && previewStatus && viewedPreview.current !== submitted) {
+      viewedPreview.current = submitted;
       api.recordFunnelEvent('t0_preview_viewed', { status: previewStatus });
     }
   }, [submitted, previewStatus]);
@@ -701,8 +736,10 @@ export default function StartFunnel() {
   // Funnel: the aha rate (D1) — which card led, and whether it was the
   // calm fallback. Section id, tone and grade only; never the address.
   const aha = previewQuery.data?.aha ?? null;
+  const viewedAha = useRef<string | null>(null);
   useEffect(() => {
-    if (submitted && previewStatus === 'ready' && aha) {
+    if (submitted && previewStatus === 'ready' && aha && viewedAha.current !== submitted) {
+      viewedAha.current = submitted;
       api.recordFunnelEvent('t0_aha_viewed', {
         section_id: aha.section_id ?? '',
         tone: aha.tone,
@@ -721,12 +758,14 @@ export default function StartFunnel() {
   const continueWithPreview = (page: '/login' | '/register') => {
     // Funnel: the soft wall converted a preview into intent.
     api.recordFunnelEvent('t0_wall_viewed');
-    if (selected) {
+    if (selected || submitted) {
       const place = previewQuery.data?.place;
       const previewId = stashPendingPlace({
-        label: selected.label,
-        latitude: selected.latitude,
-        longitude: selected.longitude,
+        label: selected?.label ?? (place?.address
+          ? [place.address, place.city, place.state, place.zipcode].filter(Boolean).join(', ')
+          : submitted!),
+        latitude: selected?.latitude ?? null,
+        longitude: selected?.longitude ?? null,
         city: place?.city ?? null,
         state: place?.state ?? null,
       });
@@ -742,7 +781,8 @@ export default function StartFunnel() {
   const goWall = () => continueWithPreview('/register');
 
   const submit = () => {
-    if (selected) setSubmitted(selected.label);
+    const address = selected?.label ?? fallbackAddress;
+    if (address) setSubmitted(address);
   };
 
   // Hero step.
@@ -753,8 +793,9 @@ export default function StartFunnel() {
           <HeroStep
             onSelect={setSelected}
             onClear={() => setSelected(null)}
+            onFallbackChange={setFallbackAddress}
             onSubmit={submit}
-            canSubmit={!!selected}
+            canSubmit={!!selected || !!fallbackAddress}
             onBrowse={goBrowse}
             fromCard={fromCard}
           />
@@ -767,7 +808,7 @@ export default function StartFunnel() {
   const preview = previewQuery.data;
   const addressLabel = preview?.place?.address
     ? [preview.place.address, preview.place.city].filter(Boolean).join(', ')
-    : selected?.label ?? 'Your address';
+    : selected?.label ?? submitted;
 
   return (
     <main className="min-h-screen bg-app-bg">
@@ -777,13 +818,23 @@ export default function StartFunnel() {
           <PreviewSkeleton />
         ) : previewQuery.isError ? (
           <div className="mt-10 text-center">
-            <p className="text-sm text-app-text-secondary">We couldn&apos;t look up that address. Try again.</p>
+            <p className="text-sm text-app-text-secondary">
+              {lookupLimitMessage(previewQuery.error) ?? "We couldn't look up that address. Try again."}
+            </p>
             <div className="mt-3 flex justify-center">
-              <TextButton arrow={false} onClick={() => previewQuery.refetch()}>Try again</TextButton>
+              {isDailyLookupLimit(previewQuery.error) ? (
+                api.hasActiveSession() ? (
+                  <TextButton onClick={() => router.push('/app/place')}>Back to Place</TextButton>
+                ) : (
+                  <TextButton onClick={goWall}>Create a free account</TextButton>
+                )
+              ) : (
+                <TextButton arrow={false} onClick={() => previewQuery.refetch()}>Try again</TextButton>
+              )}
             </div>
           </div>
         ) : preview && preview.status === 'could_not_place' ? (
-          <CouldNotPlace onRetry={() => { setSelected(null); setSubmitted(null); }} />
+          <CouldNotPlace onRetry={() => { setSelected(null); setFallbackAddress(null); setSubmitted(null); }} />
         ) : preview && preview.status === 'unsupported_region' ? (
           <UnsupportedRegion onBrowse={goBrowse} />
         ) : preview ? (

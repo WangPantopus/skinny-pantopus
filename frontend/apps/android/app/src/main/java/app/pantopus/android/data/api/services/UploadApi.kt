@@ -1,10 +1,12 @@
 package app.pantopus.android.data.api.services
 
+import app.pantopus.android.data.api.models.ai.AIPostSuggestionResponse
 import app.pantopus.android.data.api.models.ai.AIRadonReportResponse
 import app.pantopus.android.data.api.models.audience.PersonaMediaUploadResponse
 import app.pantopus.android.data.api.models.businesses.BusinessMediaUploadResponse
 import app.pantopus.android.data.api.models.chats.AIMediaUploadResponse
 import app.pantopus.android.data.api.models.chats.ChatMediaUploadResponse
+import app.pantopus.android.data.api.models.identity.OwnLocalProfileResponse
 import app.pantopus.android.data.api.models.listings.ListingMediaUploadResponse
 import app.pantopus.android.data.api.models.posts.PostMediaUploadResponse
 import app.pantopus.android.data.api.models.users.ProfilePictureUploadResponse
@@ -13,6 +15,7 @@ import okhttp3.RequestBody
 import retrofit2.http.Multipart
 import retrofit2.http.POST
 import retrofit2.http.Part
+import retrofit2.http.PartMap
 import retrofit2.http.Path
 import retrofit2.http.Query
 
@@ -58,6 +61,18 @@ interface UploadApi {
     ): AIRadonReportResponse
 
     /**
+     * The composer's AI assist: the whole post suggested from the person's photos (parts `photos`, JPEGs, up to 4)
+     * and the composer's fields (`postType`, what they've written, the place). The server reads the photos in memory
+     * and doesn't keep them; nothing is posted. Route `backend/routes/ai.js:333`.
+     */
+    @Multipart
+    @POST("api/ai/draft/post-suggestion")
+    suspend fun suggestPost(
+        @Part photos: @JvmSuppressWildcards List<MultipartBody.Part>,
+        @PartMap fields: @JvmSuppressWildcards Map<String, RequestBody>,
+    ): AIPostSuggestionResponse
+
+    /**
      * Replace the signed-in user's avatar. Single part named `file`; the
      * server resizes to 800x800 webp, writes `User.profile_picture_url`,
      * and echoes the new URL back.
@@ -68,6 +83,16 @@ interface UploadApi {
     suspend fun uploadProfilePicture(
         @Part file: MultipartBody.Part,
     ): ProfilePictureUploadResponse
+
+    /**
+     * Set the photo neighbors see (How neighbors see you). Single part named `file`; it goes on the Local Profile
+     * only, never the account. Route `backend/routes/upload.js:343`.
+     */
+    @Multipart
+    @POST("api/upload/local-profile-picture")
+    suspend fun uploadLocalProfilePicture(
+        @Part file: MultipartBody.Part,
+    ): OwnLocalProfileResponse
 
     /**
      * Attach photos to an existing listing (Snap & Sell post-create

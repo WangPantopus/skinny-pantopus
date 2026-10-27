@@ -15,6 +15,10 @@ data class PostPrecheckRequest(
     val surface: String? = null,
     val latitude: Double? = null,
     val longitude: Double? = null,
+    /** `"post"` when the person tapped Post: the answer adds [PostPrecheckResponse.findings]. */
+    val stage: String? = null,
+    val title: String? = null,
+    val safetyAlertKind: String? = null,
 )
 
 /**
@@ -33,6 +37,11 @@ data class PostPrecheckResponse(
     val flags: List<PostPrecheckFlag>? = null,
     val suggestions: List<PostPrecheckSuggestion>? = null,
     val isVisitor: Boolean? = null,
+    /**
+     * What the kindness and safety check found (`stage: "post"` only), most
+     * important first (AI phase 2 contract §6.6). Empty: post at once.
+     */
+    val findings: List<PostPrecheckFinding>? = null,
 ) {
     /**
      * RN surfaces the first suggestion, then the first flag —
@@ -72,4 +81,42 @@ data class PostPrecheckSuggestion(
     val message: String? = null,
     val suggestedAction: String? = null,
     val suggestedIntents: List<String>? = null,
+)
+
+/**
+ * One thing the check before posting found: [kind] is `heads_up_kind`, `tone`,
+ * `phone` or `address`; [message] is the server's sentence.
+ */
+@JsonClass(generateAdapter = true)
+data class PostPrecheckFinding(
+    val kind: String,
+    val message: String,
+    val text: String? = null,
+)
+
+/** Response from `GET /api/posts/before-you-ask` (AI phase 2 contract §6.5). */
+@JsonClass(generateAdapter = true)
+data class BeforeYouAskResponse(
+    val posts: List<EarlierPostDto> = emptyList(),
+)
+
+/** An earlier question or recommendation nearby, with its best reply. */
+@JsonClass(generateAdapter = true)
+data class EarlierPostDto(
+    @Json(name = "post_id") val postId: String,
+    /** `ask_local` or `recommendation`. */
+    val type: String,
+    val title: String? = null,
+    val body: String? = null,
+    val solved: Boolean? = null,
+    @Json(name = "reply_count") val replyCount: Int? = null,
+    @Json(name = "best_reply") val bestReply: EarlierReplyDto? = null,
+)
+
+/** The reply the asker marked Helpful, else the most liked one. */
+@JsonClass(generateAdapter = true)
+data class EarlierReplyDto(
+    val text: String? = null,
+    val helpful: Boolean? = null,
+    val likes: Int? = null,
 )

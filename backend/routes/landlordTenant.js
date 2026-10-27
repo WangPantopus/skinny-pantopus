@@ -24,6 +24,7 @@ const { ownershipClaimLimiter } = require('../middleware/rateLimiter');
 const landlordAuthorityService = require('../services/addressValidation/landlordAuthorityService');
 const { assertCallerOwnsLease, resolveVerifiedAuthorityForActor } = require('../utils/authorityResolution');
 const { requireExpectedSessionScope } = require('../utils/requestSessionScope');
+const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
 
 // ============================================================
 // VALIDATION SCHEMAS
@@ -169,29 +170,32 @@ router.get(
       const userId = req.user.id;
 
       // Direct user authorities
-      const { data: userAuths } = await supabaseAdmin
+      const { data: userAuths, error: userAuthsError } = await supabaseAdmin
         .from('HomeAuthority')
         .select('*, home:home_id(id, name, address_id, home_type)')
         .eq('subject_type', 'user')
         .eq('subject_id', userId)
         .neq('status', 'revoked');
+      if (userAuthsError) throw userAuthsError;
 
       // Business authorities (find businesses user belongs to)
-      const { data: memberships } = await supabaseAdmin
+      const { data: memberships, error: membershipsError } = await supabaseAdmin
         .from('BusinessTeam')
         .select('business_user_id')
         .eq('user_id', userId)
         .eq('is_active', true);
+      if (membershipsError) throw membershipsError;
 
       let businessAuths = [];
       if (memberships && memberships.length > 0) {
         const bizIds = memberships.map((m) => m.business_user_id);
-        const { data } = await supabaseAdmin
+        const { data, error: businessAuthsError } = await supabaseAdmin
           .from('HomeAuthority')
           .select('*, home:home_id(id, name, address_id, home_type)')
           .eq('subject_type', 'business')
           .in('subject_id', bizIds)
           .neq('status', 'revoked');
+        if (businessAuthsError) throw businessAuthsError;
         businessAuths = data || [];
       }
 
@@ -271,19 +275,20 @@ router.get(
         .in('state', ['active', 'pending', 'ended', 'canceled'])
         .order('created_at', { ascending: false });
       if (leasesErr) throw leasesErr;
-      const displayLeases = (leases || []).map(lease => ({ ...lease, metadata: leaseRequestMetadata(lease.metadata) }));
+      const displayLeases = await namedResidents((leases || []).map(lease => ({ ...lease, metadata: leaseRequestMetadata(lease.metadata) })));
 
       // Fetch pending tenant requests (leases sourced from tenant)
       const pendingRequests = displayLeases.filter(
         (l) => l.state === 'pending' && l.source === 'tenant_request',
       );
 
-      // Fetch current occupants
-      const { data: occupants } = await supabaseAdmin
+      // Match the lease summary's scope, without exposing unmanaged units.
+      const { data: occupants, error: occupantsErr } = await supabaseAdmin
         .from('HomeOccupancy')
         .select('id, user_id, role, role_base, verification_status, is_active, start_at')
-        .eq('home_id', homeId)
+        .in('home_id', [homeId, ...managedUnitIds])
         .eq('is_active', true);
+      if (occupantsErr) throw occupantsErr;
 
       res.json({
         actor_id: req.user.id,
@@ -517,13 +522,24 @@ router.get(
 
       if (error) throw error;
 
-      res.json({ requests: (requests || []).map(lease => ({ ...lease, metadata: leaseRequestMetadata(lease.metadata) })) });
+      res.json({ requests: await namedResidents((requests || []).map(lease => ({ ...lease, metadata: leaseRequestMetadata(lease.metadata) }))) });
     } catch (err) {
       logger.error('GET /landlord/properties/:homeId/requests failed', { error: err.message });
       res.status(500).json({ error: 'Failed to fetch requests' });
     }
   },
 );
+
+// A lease's tenant goes by the name and handle they show neighbors (services/chatPeople.js), in the keys the lease
+// row already has.
+async function namedResidents(leases) {
+  const people = await loadChatPeople(leases.map(lease => lease.primary_resident?.id));
+  return leases.map((lease) => {
+    if (!lease.primary_resident) return lease;
+    const { username, name } = chatPersonRow(lease.primary_resident, people);
+    return { ...lease, primary_resident: { ...lease.primary_resident, username, name } };
+  });
+}
 
 // ============================================================
 // ═══════════════════════════════════════════════════════════════

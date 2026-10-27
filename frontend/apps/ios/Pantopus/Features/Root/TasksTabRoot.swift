@@ -230,6 +230,9 @@ public struct TasksTabRoot: View {
                     identityKind: nil,
                     verified: false
                 )))
+            },
+            onOpenChat: { destination in
+                path.append(.chatConversation(destination))
             }
         )
     }
@@ -408,7 +411,8 @@ public struct TasksTabRoot: View {
                 mode: Self.chatMode(for: dest.mode),
                 counterparty: Self.chatCounterparty(for: dest),
                 currentUserId: currentUserId,
-                initialTopic: dest.initialTopic
+                initialTopic: dest.initialTopic,
+                asBusinessUserId: dest.asBusinessUserId
             ),
             mode: dest.kind,
             onUseAIDraft: { draft in

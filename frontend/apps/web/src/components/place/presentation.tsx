@@ -252,6 +252,8 @@ const SECTION_CONFIG: Record<PlaceSectionId, SectionConfig> = {
       const aging = d.summary?.aging_count ?? 0;
       if (past > 0) return { value: `${past} past expected life`, statusDot: 'error' };
       if (aging > 0) return { value: `${aging} aging`, statusDot: 'warning' };
+      const unknown = d.systems.filter((system) => system.status === 'unknown').length;
+      if (unknown > 0) return { value: `${unknown} installation years unknown` };
       return { value: 'All within expected life', statusDot: 'success' };
     },
   },

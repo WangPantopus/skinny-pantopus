@@ -184,6 +184,8 @@ public enum ChatDeliveryState: Sendable, Hashable {
     case failed
     /// The server refused the send (403); resending cannot succeed.
     case refused
+    /// Persisted by the server; recipient delivery is not implied.
+    case sent
     case delivered
     case read
 }
@@ -229,19 +231,22 @@ public struct ChatQueuedAttachment: Identifiable, Sendable, Hashable {
     public let filename: String
     public let mimeType: String
     public let data: Data?
+    public let liveVideo: Data?
 
     public init(
         id: String,
         kind: ChatQueuedAttachmentKind,
         filename: String,
         mimeType: String = "application/octet-stream",
-        data: Data? = nil
+        data: Data? = nil,
+        liveVideo: Data? = nil
     ) {
         self.id = id
         self.kind = kind
         self.filename = filename
         self.mimeType = mimeType
         self.data = data
+        self.liveVideo = liveVideo
     }
 }
 
@@ -273,6 +278,8 @@ public struct ChatAIDraftCard: Identifiable, Sendable, Hashable {
     public var prefill: ChatAIDraftPrefill?
     /// A pickup-days card's schedule and where its Save stands.
     public var pickup: ChatAIPickupSchedule?
+    /// An action card: what one tap sends, and where it stands.
+    public var action: ChatAIActionCard?
 }
 
 /// The household's pickup days as the assistant read them. Save writes them
@@ -302,18 +309,82 @@ public struct ChatAIDraftPrefill: Sendable, Hashable {
     public let postType: String?
     /// A post's headline, when the draft has one.
     public let title: String?
+    /// A post's event, deal, Lost & Found and Heads Up fields, when it has them.
+    public var eventDate: String?
+    public var eventEndDate: String?
+    public var eventVenue: String?
+    public var dealExpiresAt: String?
+    public var lostFoundType: String?
+    public var safetyAlertKind: String?
 
     public init(body: String, postType: String? = nil, title: String? = nil) {
         self.body = body
         self.postType = postType
         self.title = title
     }
+
+    /// Everything the Pulse composer starts from.
+    public var postDraft: PulseComposeDraft {
+        PulseComposeDraft(
+            postType: postType,
+            title: title,
+            body: body,
+            eventDate: eventDate,
+            eventEndDate: eventEndDate,
+            eventVenue: eventVenue,
+            dealExpiresAt: dealExpiresAt,
+            lostFoundType: lostFoundType,
+            safetyAlertKind: safetyAlertKind
+        )
+    }
 }
 
-public struct ChatReplyPreview: Sendable, Hashable {
+/// A link button under an assistant reply: a screen in the app, opened
+/// through the deep-link router.
+public struct ChatAILink: Identifiable, Sendable, Hashable {
+    public let label: String
+    public let url: String
+
+    public var id: String {
+        "\(label)|\(url)"
+    }
+
+    public init(label: String, url: String) {
+        self.label = label
+        self.url = url
+    }
+}
+
+/// An action card in the thread, and where its taps stand.
+public struct ChatAIActionCard: Sendable, Hashable {
+    public let envelope: AIActionCardDTO
+    /// Actions that went through, by `AIActionDoneStore.key`, with what the card shows for them.
+    public var done: [String: ChatAIActionDone] = [:]
+    /// The action whose request is in flight, by the same key.
+    public var running: String?
+    /// The last failure: "" for the card's own actions, else the row's id.
+    public var failures: [String: String] = [:]
+
+    public init(envelope: AIActionCardDTO) {
+        self.envelope = envelope
+    }
+}
+
+/// How a finished action reads on its card, kept on the device.
+public struct ChatAIActionDone: Codable, Sendable, Hashable {
+    /// "Plan posted".
+    public let label: String
+    /// An app link with the reply's values filled in, for the Open button.
+    public let link: String?
+    /// "The repeat wasn't set."
+    public let note: String?
+}
+
+public struct ChatReplyPreview: Codable, Sendable, Hashable {
     public let messageId: String
     public let senderName: String
     public let text: String
+    public var roomId: String?
 }
 
 public struct ChatBubbleReaction: Identifiable, Sendable, Hashable {
@@ -323,7 +394,7 @@ public struct ChatBubbleReaction: Identifiable, Sendable, Hashable {
     public let reactedByMe: Bool
 }
 
-public struct ChatConversationTopic: Identifiable, Sendable, Hashable {
+public struct ChatConversationTopic: Identifiable, Sendable, Hashable, Codable {
     public let id: String
     public let topicType: String
     public let title: String
@@ -444,11 +515,25 @@ public struct ChatShareListingOption: Identifiable, Sendable, Hashable {
     }
 }
 
+/// A file sent to the assistant: its name and size for the bubble's chip.
+/// The file itself isn't kept; the server deletes it once it has read it.
+public struct ChatSentFile: Sendable, Hashable {
+    public let name: String
+    public let sizeLabel: String?
+
+    public init(name: String, sizeLabel: String?) {
+        self.name = name
+        self.sizeLabel = sizeLabel
+    }
+}
+
 /// Per-bubble render model.
 public struct ChatBubbleContent: Identifiable, Sendable, Hashable {
     public enum Body: Sendable, Hashable {
         case text(String)
-        case textWithImages(text: String, imageURLs: [URL])
+        /// Text with photos and, for a message sent to the assistant, the
+        /// PDFs it carried (`files`, shown as file chips).
+        case textWithImages(text: String, imageURLs: [URL], files: [ChatSentFile] = [])
         /// One or more photos. `caption` is the text sent with them;
         /// `moreURLs` are the message's further photos after `url`.
         case image(url: URL?, caption: String? = nil, moreURLs: [URL] = [])
@@ -478,6 +563,7 @@ public struct ChatBubbleContent: Identifiable, Sendable, Hashable {
     public let id: String
     public let side: ChatMessageSide
     public let body: Body
+    public let attachments: [ChatAttachmentDTO]
     public let replyPreview: ChatReplyPreview?
     public let reactions: [ChatBubbleReaction]
     /// Whether this bubble carries the 4pt tail (last in a same-sender
@@ -496,6 +582,12 @@ public struct ChatBubbleContent: Identifiable, Sendable, Hashable {
     public let lockedTier: String?
     /// Paid support tier attached to outgoing fan replies.
     public let sentSupportTier: String?
+    /// Who sent an incoming message in a room with several people (a
+    /// group's, a Support Train's); never the room's title. `nil` in a
+    /// one-to-one thread.
+    public let senderName: String?
+    /// Link buttons under an assistant reply (`.aiReply` only).
+    public let aiLinks: [ChatAILink]
 
     public init(
         id: String,
@@ -508,7 +600,10 @@ public struct ChatBubbleContent: Identifiable, Sendable, Hashable {
         stamp: String?,
         deliveryState: ChatDeliveryState? = nil,
         lockedTier: String? = nil,
-        sentSupportTier: String? = nil
+        sentSupportTier: String? = nil,
+        senderName: String? = nil,
+        aiLinks: [ChatAILink] = [],
+        attachments: [ChatAttachmentDTO] = []
     ) {
         self.id = id
         self.side = side
@@ -521,6 +616,9 @@ public struct ChatBubbleContent: Identifiable, Sendable, Hashable {
         self.deliveryState = deliveryState
         self.lockedTier = lockedTier
         self.sentSupportTier = sentSupportTier
+        self.senderName = senderName
+        self.aiLinks = aiLinks
+        self.attachments = attachments
     }
 }
 

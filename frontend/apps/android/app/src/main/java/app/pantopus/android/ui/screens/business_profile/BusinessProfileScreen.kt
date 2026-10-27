@@ -320,6 +320,8 @@ internal fun BusinessProfileLoadedFrame(
                 locality = content.header.locality ?: "",
                 identity = IdentityPillar.Business,
                 logoIcon = content.header.logoIcon,
+                logoUrl = content.header.logoUrl,
+                bannerUrl = content.header.bannerUrl,
                 verified = content.header.isVerified,
                 // No shield on the chip for an unverified business.
                 chipIcon = if (content.header.isVerified) PantopusIcon.ShieldCheck else null,
@@ -563,8 +565,7 @@ private fun FooterItem(
 
 @Composable
 private fun JustOpenedNote(
-    // Claims verification only for a verified business; otherwise the
-    // "Verification pending" wording My businesses and the owner header use.
+    // An unverified business has not necessarily submitted a verification request.
     isVerified: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -583,7 +584,7 @@ private fun JustOpenedNote(
             contentAlignment = Alignment.Center,
         ) {
             PantopusIconImage(
-                icon = if (isVerified) PantopusIcon.BadgeCheck else PantopusIcon.Hourglass,
+                icon = if (isVerified) PantopusIcon.BadgeCheck else PantopusIcon.Info,
                 contentDescription = null,
                 size = 16.dp,
                 strokeWidth = 2.2f,
@@ -600,7 +601,7 @@ private fun JustOpenedNote(
             )
             Text(
                 text =
-                    (if (isVerified) "Address and business identity are verified." else "Verification pending.") +
+                    (if (isVerified) "This business is verified." else "This business is not verified.") +
                         " Reviews and photos build up after the first few jobs — early neighbors set the tone.",
                 color = PantopusColors.appTextStrong,
                 fontSize = 11.5.sp,

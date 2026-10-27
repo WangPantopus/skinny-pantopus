@@ -166,6 +166,8 @@ class ReceivedReviewsViewModel
             }
 
             fun displayName(reviewer: TransactionReviewerDto?): String {
+                // The name the server gives (a person's Local Profile name), else the account's first and last name.
+                reviewer?.name?.takeIf { it.isNotEmpty() }?.let { return it }
                 val first = reviewer?.firstName?.takeIf { it.isNotEmpty() }
                 if (first != null) {
                     val last = reviewer.lastName?.takeIf { it.isNotEmpty() }

@@ -96,6 +96,26 @@ struct BallotCardView: View {
     }
 }
 
+/// "This season" over the "Your ballot" card, where the Place dashboard and
+/// an address's preview show it. Parity twin of Android `BallotSeasonBlock`.
+struct BallotSeasonBlock: View {
+    let card: BallotSummary
+    var asOf: String?
+    var onOpenGovernments: (() -> Void)?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.s4) {
+            Text("This season")
+                .textCase(.uppercase)
+                .font(.system(size: 11, weight: .semibold))
+                .kerning(0.88)
+                .foregroundStyle(Theme.Color.appTextSecondary)
+                .accessibilityAddTraits(.isHeader)
+            BallotCardView(card: card, asOf: asOf, onOpenGovernments: onOpenGovernments)
+        }
+    }
+}
+
 struct BallotCardHeader: View {
     let title: String
     let subtitle: String?

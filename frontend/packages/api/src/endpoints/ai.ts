@@ -12,6 +12,8 @@ import type {
   ListingDraft,
   AIDraftPostRequest,
   AIDraftPostResponse,
+  AIPostSuggestionRequest,
+  AIPostSuggestionResponse,
   AISummarizeMailRequest,
   MailSummary,
   PlaceBrief,
@@ -218,6 +220,28 @@ export async function draftPost(data: AIDraftPostRequest): Promise<AIDraftPostRe
   return post<AIDraftPostResponse>('/api/ai/draft/post', data);
 }
 
+/**
+ * The composer's AI assist: the whole post suggested from the person's photos (JPEGs, up to 4), the place they picked
+ * and what they've written so far. The server reads the photos in memory and keeps nothing; nothing is posted.
+ */
+export async function suggestPost(
+  fields: AIPostSuggestionRequest,
+  photos: Blob[] = [],
+): Promise<AIPostSuggestionResponse> {
+  const form = new FormData();
+  for (const [key, value] of Object.entries(fields)) {
+    if (typeof value === 'string' && value.trim()) form.append(key, value);
+  }
+  photos.slice(0, 4).forEach((photo, index) => form.append('photos', photo, `photo-${index}.jpg`));
+  return post<AIPostSuggestionResponse>('/api/ai/draft/post-suggestion', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    // The server answers within 25 s; the photos take a moment to go up first.
+    timeout: 45000,
+    // A failed suggestion shows on the composer's assist card.
+    suppressDevErrorOverlay: true,
+  });
+}
+
 // ─── Mail Summarization ──────────────────────────────────────
 
 /**
@@ -250,8 +274,8 @@ export async function getNeighborhoodPulse(homeId: string): Promise<Neighborhood
 /**
  * List the user's AI conversations.
  */
-export async function getConversations(): Promise<{ conversations: AIConversation[] }> {
-  return get<{ conversations: AIConversation[] }>('/api/ai/conversations');
+export async function getConversations(options?: { order: 'oldest' | 'newest' }): Promise<{ conversations: AIConversation[] }> {
+  return get<{ conversations: AIConversation[] }>('/api/ai/conversations', options);
 }
 
 /**

@@ -23,6 +23,11 @@
 
 import SwiftUI
 
+/// The fields outside the Send an update form that take the keyboard.
+private enum ManageCardField: Hashable {
+    case reminder, fundGoal
+}
+
 @MainActor
 public struct ManageTrainView: View {
     @State private var viewModel: ManageTrainViewModel
@@ -64,6 +69,11 @@ public struct ManageTrainView: View {
     @State private var showOrganizerPicker = false
     /// "Invite to Pantopus" in the picker shares the train once the picker closes.
     @State private var shareAfterPicker = false
+    /// Set while a card's own field (the reminder, the gift-fund goal) has the keyboard.
+    @FocusState private var focusedCardField: ManageCardField?
+    /// The reminder card's frame on screen as of its latest height change: its editor grows
+    /// a line at a time while the organizer types.
+    @State private var nudgeSectionFrame: CGRect = .zero
 
     public var body: some View {
         VStack(spacing: Spacing.s0) {
@@ -353,9 +363,17 @@ public struct ManageTrainView: View {
             .padding(.bottom, Spacing.s4)
         }
         .scrollDismissesKeyboard(.interactively)
-        .refreshable { await viewModel.refresh() }
-        .safeAreaInset(edge: .bottom, spacing: Spacing.s0) { stickyCTA(content: content) }
+        // Weakly: the keyboard's AutoFill can keep a field below, and this action with it, after the screen closes.
+        .refreshable { [weak viewModel] in await viewModel?.refresh() }
+        .safeAreaInset(edge: .bottom, spacing: Spacing.s0) {
+            // The bar sends the update message. It steps aside while a card's own field has the
+            // keyboard: riding the keyboard, it covered that card's buttons.
+            if focusedCardField == nil {
+                stickyCTA(content: content)
+            }
+        }
         .accessibilityIdentifier("manageTrainScroll")
+        .modifier(ManageReminderKeyboardReveal(isEditing: focusedCardField == .reminder, sectionFrame: nudgeSectionFrame))
     }
 
     /// S1 — dates / helpers / co-organizers / nudge / gift fund. Every
@@ -433,12 +451,19 @@ public struct ManageTrainView: View {
             openSlotCount: content.slotsOpen,
             hasDates: !viewModel.slotRows.isEmpty,
             draft: viewModel.nudgeDraft,
+            draftNote: viewModel.nudgeDraftNote,
             isBusy: viewModel.isSubmitting,
             onDraft: { Task { await viewModel.draftNudge() } },
             onEditDraft: { viewModel.nudgeDraft = $0 },
             onSend: { Task { await viewModel.sendNudge() } },
             onDiscard: { viewModel.discardNudge() }
         )
+        .id(ManageReminderKeyboardReveal.nudgeSectionID)
+        .focused($focusedCardField, equals: .reminder)
+        // Kept only when the height changes: scrolling moves the frame on every frame.
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
+            if frame.height != nudgeSectionFrame.height { nudgeSectionFrame = frame }
+        }
 
         // Launch cut #9: no app takes a contribution yet.
         if LaunchFeatures.giftFunds {
@@ -461,6 +486,7 @@ public struct ManageTrainView: View {
                     )
                 }
             )
+            .focused($focusedCardField, equals: .fundGoal)
         }
     }
 
@@ -575,6 +601,41 @@ public struct ManageTrainView: View {
                 }
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
                 .accessibilityIdentifier("manageTrainToast")
+        }
+    }
+}
+
+/// Keeps the reminder's Send to chat and Discard in view above the keyboard while its text is
+/// being edited, as `LoginKeyboardReveal` does for Log in. The editor grows as the organizer
+/// types, so a new line that pushes the buttons under the keyboard brings them back up.
+private struct ManageReminderKeyboardReveal: ViewModifier {
+    static let nudgeSectionID = "manageTrainNudgeSection"
+    let isEditing: Bool
+    /// The reminder card's frame on screen as of its latest height change.
+    let sectionFrame: CGRect
+    /// The keyboard's top edge on screen.
+    @State private var keyboardTop: CGFloat?
+
+    func body(content: Content) -> some View {
+        ScrollViewReader { proxy in
+            content
+                .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
+                    guard isEditing else { return }
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        proxy.scrollTo(Self.nudgeSectionID, anchor: .bottom)
+                    }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidChangeFrameNotification)) { note in
+                    keyboardTop = (note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect)?.minY
+                }
+                .onChange(of: sectionFrame) { old, new in
+                    // Only when the card grew past the keyboard from above it (to within rounding): an
+                    // organizer who scrolled up to edit an earlier line keeps their place and their caret.
+                    guard isEditing, let keyboardTop, new.height > old.height else { return }
+                    guard new.minY + old.height <= keyboardTop + 2, new.maxY > keyboardTop else { return }
+                    // Not animated: the buttons hold still while the text above them moves up a line.
+                    proxy.scrollTo(Self.nudgeSectionID, anchor: .bottom)
+                }
         }
     }
 }

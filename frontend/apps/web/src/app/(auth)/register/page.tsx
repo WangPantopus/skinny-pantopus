@@ -27,6 +27,7 @@ import {
   safeRedirectPath,
 } from '@/lib/auth-utils';
 import { launchFeatures } from '@/lib/featureFlags';
+import { OAUTH_ATTEMPT_UNAVAILABLE_ERROR, beginOAuthAttempt } from '@/lib/oauth-attempt';
 
 const PASSWORD_MIN_LENGTH = 12;
 
@@ -157,9 +158,15 @@ function RegisterContent() {
     if (oauthLoading) return;
     setOauthLoading(provider);
     try {
+      const nonce = beginOAuthAttempt();
+      if (!nonce) {
+        setError(OAUTH_ATTEMPT_UNAVAILABLE_ERROR);
+        setOauthLoading(null);
+        return;
+      }
       const { url } = await api.auth.getOAuthUrl(
         provider,
-        oauthRedirectParamForWeb(redirectTo, typeof window !== 'undefined' ? window.location.origin : undefined),
+        oauthRedirectParamForWeb(redirectTo, typeof window !== 'undefined' ? window.location.origin : undefined, nonce),
       );
       window.location.href = url;
     } catch (err: unknown) {

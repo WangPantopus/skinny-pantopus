@@ -17,6 +17,9 @@ const MESSAGES = {
   POSTCARD_HOME_UNAVAILABLE: 'Mail verification is unavailable for this Home right now.',
   POSTCARD_RESIDENCY_REQUEST_REQUIRED: 'Submit your residency request before requesting a verification code.',
   POSTCARD_ACCESS_REVIEW_REQUIRED: 'Your access needs household review. A mail code cannot restore it.',
+  // Home claims PR 4: a probationer the household said no to can prove the address, and that goes to Pantopus review.
+  POSTCARD_DISPUTE_RECORDED: 'Your code is right. Because someone in the household said you don’t live here, Pantopus will review your proof. Your access stays off until then.',
+  POSTCARD_DISPUTE_IN_REVIEW: 'Pantopus is reviewing your proof of this address. Your access stays off until then.',
   POSTCARD_REVIEW_ALREADY_RECORDED: 'Your verification is already recorded. Check your current residency status.',
   OWNERSHIP_FLOW_REQUIRED: 'Use ownership verification to manage your ownership request.',
   POSTCARD_ADDRESS_CHANGED: "This address doesn't match the one saved for this Home. Check the street, apartment and ZIP.",

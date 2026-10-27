@@ -70,6 +70,17 @@ enum ResumeOutcome: Equatable {
 }
 
 extension AuthManager {
+    /// Apply the side effects of a confirmed signed-in session: publish
+    /// state, identify analytics, and (re)connect the realtime socket.
+    func finishSignedIn(_ user: UserDTO, token: String) {
+        PlacePendingStore.bind(to: user.id)
+        setState(.signedIn(user))
+        Observability.shared.identify(userId: user.id, email: user.email)
+        Analytics.identify(userId: user.id)
+        SocketClient.shared.connect(token: token)
+        if apiClient === APIClient.shared { ChatOutbox.shared.start(account: user.id) }
+    }
+
     // MARK: - Session restore (cold start)
 
     /// Cold-start decision tree (design §3):
@@ -581,19 +592,28 @@ extension AuthManager {
         apiClient.purgeCache()
         // So do the images AsyncImage kept in the shared URL cache (chat and
         // mail photos, avatars), the widgets' snapshots of Today and nearby
-        // tasks, and what this account's chat badge, link previews, AI thread,
-        // Support Train edits and chat hide/mute choices left in memory.
+        // tasks, and what this account's chat badge, link previews, picked
+        // photo previews, AI thread, Support Train edits and chat hide/mute
+        // choices left in memory.
         URLCache.shared.removeAllCachedResponses()
         WidgetSnapshotStore.shared.clear()
         ChatBadgeStore.shared.reset()
         LinkPreviewStore.shared.clear()
+        ChatPhotoPreviews.shared.clear()
         AIConversationStore.shared.clear()
         SupportTrainReservationsStore.shared.reset()
         ChatConversationPreferences.shared.clear()
-        guard hadSession else { return false }
+        ChatOutbox.shared.stop()
+        ChatLocalStore.shared.clear()
+        // And the files opened from its chats, with the copies of photos it sent the assistant,
+        // and its exported Home documents, emergency card and residency letters.
+        ChatMediaURL.removeLocalFiles()
+        try? HomeDocumentTemporaryFiles.clearPreviousLaunch()
         // The next person on this device must not read the last account's
         // notifications on the lock screen or in Notification Center.
+        UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
         UNUserNotificationCenter.current().removeAllDeliveredNotifications()
+        guard hadSession else { return false }
         SocketClient.shared.disconnect()
         Observability.shared.identify(userId: nil)
         Analytics.identify(userId: nil)

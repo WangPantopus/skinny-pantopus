@@ -8,6 +8,7 @@ import {
   CalendarCheck,
   ChevronRight,
   CreditCard,
+  FileText,
 } from "lucide-react";
 import { getAuthToken } from "@pantopus/api";
 import WalletBalanceCard from "@/components/wallet/WalletBalanceCard";
@@ -56,6 +57,24 @@ function WalletContent() {
           onWithdraw={() => setShowWithdraw(true)}
         />
       </div>
+
+      {/* Invoices businesses sent you: the way back to one once its notification is gone. */}
+      <Link
+        href="/app/invoices"
+        data-testid="wallet-invoices"
+        className="mb-6 flex items-center gap-3 rounded-2xl border border-app-border bg-app-surface px-4 py-3 shadow-sm transition hover:bg-app-hover"
+      >
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-app-business-bg text-app-business">
+          <FileText className="w-5 h-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-app-text">Invoices</p>
+          <p className="text-xs text-app-text-secondary">
+            Pay or look back at invoices from businesses you hire.
+          </p>
+        </div>
+        <ChevronRight className="w-4 h-4 text-app-text-muted" />
+      </Link>
 
       {/* Scheduling booking earnings (W14) — only the booking source goes violet. */}
       {webFeatureFlags.schedulingPaid && launchFeatures.publicScheduling && (

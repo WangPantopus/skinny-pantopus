@@ -212,17 +212,26 @@ public struct PulseComposePhoto: Identifiable, Sendable, Hashable {
     /// place-picker anchor hint ONLY — never sent on any request.
     public let capturedLatitude: Double?
     public let capturedLongitude: Double?
+    public let mimeType: String?
+    public let filename: String?
+    public let liveVideo: Data?
 
     public init(
         id: UUID = UUID(),
         data: Data,
         capturedLatitude: Double? = nil,
-        capturedLongitude: Double? = nil
+        capturedLongitude: Double? = nil,
+        mimeType: String? = nil,
+        filename: String? = nil,
+        liveVideo: Data? = nil
     ) {
         self.id = id
         self.data = data
         self.capturedLatitude = capturedLatitude
         self.capturedLongitude = capturedLongitude
+        self.mimeType = mimeType
+        self.filename = filename
+        self.liveVideo = liveVideo
     }
 }
 
@@ -304,7 +313,38 @@ public final class PulseComposeViewModel {
 
     /// Guards the per-draft single run. Reset whenever the body changes,
     /// mirroring RN's `precheckDone` flag.
-    private var precheckDone = false
+    var precheckDone = false
+
+    // MARK: - Before you ask, and the check before posting (AI phase 2 §6.5, §6.6)
+
+    /// Earlier questions and recommendations nearby that match the
+    /// question being written, each with its best reply. Empty hides them.
+    public private(set) var earlierAnswers: [BeforeYouAskResponse.EarlierPost] = []
+    private var earlierAnswersQuery = ""
+    private var earlierAnswersTask: Task<Void, Never>?
+
+    /// What the kindness and safety check found after Post was tapped.
+    /// Non-nil shows "Before you post" with Edit and Post anyway.
+    public var postCheckFindings: [PostPrecheckResponse.Finding]?
+    /// True while that check runs; the Post button shows it is working.
+    public private(set) var isCheckingPost = false
+    /// The draft "Post anyway" was tapped for: that exact draft posts without another check.
+    private var postAnywayDraft: String?
+
+    // MARK: - AI assist (`POST /api/ai/draft/post-suggestion`, PulseComposeViewModel+Assist.swift)
+
+    /// The composer's AI assist: idle, writing, a suggestion in the form, or why it couldn't write one.
+    public internal(set) var assist: PulseComposeAssistState = .idle
+    /// The form as it was before the suggestion went in, for Undo. Dropped once the person edits a field.
+    var assistUndo: PulseComposeAssistSnapshot?
+    /// True while a suggestion is being put into the form, so those edits keep Undo.
+    var isApplyingSuggestion = false
+    /// True when the post has words the AI suggested: Post asks the person to check it first.
+    public internal(set) var hasAISuggestion = false
+    /// Non-nil asks "Post this?" before a post with AI-suggested words goes out.
+    public var aiPostConfirmation: String?
+    /// The draft the person confirmed: that exact draft posts without asking again.
+    private var aiConfirmedDraft: String?
 
     /// Announce audience chip selection.
     public var announceAudience: PulseAnnounceAudience = .neighbors
@@ -361,7 +401,7 @@ public final class PulseComposeViewModel {
 
     private let createCommandId = UUID().uuidString
     private let api: APIClient
-    private let multipartUploader: MultipartUploader
+    let multipartUploader: MultipartUploader
     private let locationProvider: any LocationProviding
 
     /// Fresh device fix captured at submit time so the backend's 5-minute
@@ -395,6 +435,7 @@ public final class PulseComposeViewModel {
         taskShare: PulseTaskShare? = nil,
         prefillTitle: String? = nil,
         prefillBody: String? = nil,
+        prefillDraft: PulseComposeDraft? = nil,
         api: APIClient = .shared,
         multipartUploader: MultipartUploader = .shared,
         locationProvider: any LocationProviding = DeviceLocationProvider.shared
@@ -438,15 +479,46 @@ public final class PulseComposeViewModel {
         // pre-filled — RN `FeedScreen.tsx:296` (`setComposeText`); a
         // Pantopus AI post draft brings its headline too.
         if taskShare == nil {
-            for (field, value) in [(PulseComposeField.title, prefillTitle), (PulseComposeField.body, prefillBody)] {
+            for (field, value) in [
+                (PulseComposeField.title, prefillTitle ?? prefillDraft?.title),
+                (PulseComposeField.body, prefillBody ?? prefillDraft?.body)
+            ] {
                 guard let value, !value.isEmpty else { continue }
                 var snapshot = fields[field] ?? FormFieldState(id: field.rawValue, originalValue: "")
                 snapshot.value = value
                 fields[field] = snapshot
             }
+            if let prefillDraft { seedDraft(prefillDraft) }
         }
         baselineIdentity = self.identity
         baselineVisibility = visibility
+    }
+
+    /// A Pantopus AI post card's other fields, as current values like its
+    /// text: the event's times and place, when a deal ends, lost or found,
+    /// and the Heads Up kind. A value the form can't take keeps its default.
+    private func seedDraft(_ draft: PulseComposeDraft) {
+        let pickerFormat = DateFormatter()
+        pickerFormat.calendar = Calendar(identifier: .iso8601)
+        pickerFormat.locale = Locale(identifier: "en_US_POSIX")
+        // The card's times are moments; the Event fields hold the picker's local
+        // wall clock (`PulseComposeContent.formatDate`), which every composer posts
+        // as wall-clock time (`PulseEventDetails`).
+        pickerFormat.dateFormat = "yyyy-MM-dd HH:mm"
+        let venue = draft.eventVenue?.trimmingCharacters(in: .whitespacesAndNewlines)
+        for (field, value) in [
+            (PulseComposeField.eventDate, PulseComposeDraft.date(from: draft.eventDate).map(pickerFormat.string(from:))),
+            (PulseComposeField.eventEndDate, PulseComposeDraft.date(from: draft.eventEndDate).map(pickerFormat.string(from:))),
+            (PulseComposeField.eventLocation, venue?.isEmpty == false ? venue : nil)
+        ] {
+            guard let value else { continue }
+            var snapshot = fields[field] ?? FormFieldState(id: field.rawValue, originalValue: "")
+            snapshot.value = value
+            fields[field] = snapshot
+        }
+        if let expires = PulseComposeDraft.lastMoment(from: draft.dealExpiresAt) { dealExpiresAt = expires }
+        if let kind = draft.lostFoundType.flatMap(PulseLostFoundKind.init(rawValue:)) { lostFoundKind = kind }
+        if let kind = draft.safetyAlertKind.flatMap(PulseSafetyAlertKind.init(rawValue:)) { safetyAlertKind = kind }
     }
 
     /// True when the draft screen was reached via target/purpose pickers.
@@ -486,9 +558,12 @@ public final class PulseComposeViewModel {
         snapshot.touched = true
         snapshot.error = validator(for: field).validate(value)
         fields[field] = snapshot
+        // The person's own edit keeps the suggestion's words but ends its Undo.
+        if changed, !isApplyingSuggestion { assistUndo = nil }
         // RN re-arms the precheck whenever the body text changes
         // (`PostComposerModal.tsx:789`).
         if field == .body, changed { precheckDone = false }
+        if field == .title || field == .body, changed { scheduleEarlierAnswers() }
     }
 
     /// Switch active intent without losing draft text — only refreshes
@@ -497,6 +572,7 @@ public final class PulseComposeViewModel {
     public func selectIntent(_ intent: PulseComposeIntent) {
         guard !isIntentLocked, intent != activeIntent else { return }
         activeIntent = intent
+        scheduleEarlierAnswers()
     }
 
     /// Replace the current photo set. Callers must respect
@@ -575,7 +651,7 @@ public final class PulseComposeViewModel {
 
     public var isSubmitting: Bool {
         if case .submitting = state { return true }
-        return false
+        return isCheckingPost
     }
 
     // swiftlint:disable cyclomatic_complexity
@@ -687,7 +763,11 @@ public final class PulseComposeViewModel {
         case .event:
             [.title, .eventDate, .eventEndDate, .eventLocation, .eventCapacity, .body]
         case .lost:
-            [.body, .lostLastSeenLocation, .lostLastSeenDate, .contactPhone]
+            // An edit shows the saved contact read-only (`buildUpdateRequest` never sends it), so its
+            // phone number neither blocks nor enables Save.
+            isEditing
+                ? [.body, .lostLastSeenLocation, .lostLastSeenDate]
+                : [.body, .lostLastSeenLocation, .lostLastSeenDate, .contactPhone]
         case .announce:
             composePurpose == .deal ? [.title, .body, .dealBusinessName] : [.title, .body]
         }
@@ -722,7 +802,10 @@ public final class PulseComposeViewModel {
     /// Send the create or update body. Returns true on success.
     @discardableResult
     public func submit() async -> Bool {
-        if case .submitting = state { return false }
+        if isSubmitting { return false }
+        // Earlier answers still on their way would only arrive behind the post.
+        earlierAnswersTask?.cancel()
+        earlierAnswersQuery = ""
         if let invalidField = validateAll() {
             shakeTrigger &+= 1
             toast = ToastMessage(text: "Fix the highlighted field.", kind: .error)
@@ -740,7 +823,9 @@ public final class PulseComposeViewModel {
             Analytics.track(.formPulseComposeSubmit(intent: activeIntent.rawValue, result: .error))
             return false
         }
-        if isBlockedByPrecheck() { return false }
+        // A live posting restriction refuses the draft; AI-suggested words wait for "Post this?"; the check before
+        // posting may hold it for Edit or Post anyway.
+        guard !isBlockedByPrecheck(), !needsAIConfirmation(), await !needsSecondLook() else { return false }
         state = .submitting
         if editingPostId == nil {
             await refreshGPSFixIfNeeded()
@@ -779,19 +864,27 @@ public final class PulseComposeViewModel {
                 return false
             }
             if !photos.isEmpty {
-                let files = photos.enumerated().map { index, photo in
-                    photo.asMultipartFile(index: index)
+                var files: [MultipartFile] = []
+                let slots = photos.enumerated().map { index, photo in
+                    var slot = ["fileIndex": files.count]
+                    files.append(photo.asMultipartFile(index: index))
+                    if let clip = photo.liveVideo {
+                        slot["liveVideoIndex"] = files.count
+                        files.append(MultipartFile(fieldName: "files", filename: "live-\(index).mp4", mimeType: "video/mp4", data: clip))
+                    }
+                    return slot
                 }
+                let metadata = try String(bytes: JSONEncoder().encode(slots), encoding: .utf8)
                 do {
-                    _ = try await multipartUploader.uploadPostMedia(postId: postId, files: files)
+                    _ = try await multipartUploader.uploadPostMedia(postId: postId, files: files, media: metadata)
                 } catch {
                     toast = ToastMessage(
                         text: isEditing
-                            ? "Saved. Photos could not be confirmed. Try again."
-                            : "Post saved. Photos could not be confirmed. Try again.",
+                            ? "Saved. Attachments could not be confirmed. Try again."
+                            : "Post saved. Attachments could not be confirmed. Try again.",
                         kind: .error
                     )
-                    state = .error(toast?.text ?? "Photos could not be confirmed. Try again.")
+                    state = .error(toast?.text ?? "Attachments could not be confirmed. Try again.")
                     PulsePostsRefresh.notifyPostsDidChange()
                     Analytics.track(.formPulseComposeSubmit(intent: activeIntent.rawValue, result: .error))
                     return false
@@ -876,15 +969,24 @@ public final class PulseComposeViewModel {
             seedField(.title, value: post.title ?? "")
             seedField(.body, value: post.content)
             seedField(.eventDate, value: formatEventDateForPicker(post.eventDate))
+            seedField(.eventEndDate, value: formatEventDateForPicker(post.eventEndDate))
             seedField(.eventLocation, value: post.eventVenue ?? "")
         case .lost:
-            let (location, body) = unwrapLostBody(post.content)
+            let (lastSeen, body) = unwrapLostBody(post.content)
+            let (location, lastSeenDate) = splitLastSeenLine(lastSeen ?? "")
             seedField(.body, value: body)
-            seedField(.lostLastSeenLocation, value: location ?? "")
+            seedField(.lostLastSeenLocation, value: location)
+            seedField(.lostLastSeenDate, value: lastSeenDate)
             if let raw = post.lostFoundType, let mapped = PulseLostFoundKind(rawValue: raw) {
                 lostFoundKind = mapped
             }
             baselineLostFoundKind = lostFoundKind
+            // The saved contact ("dm", "comment", "phone" or "phone|<digits>"), shown read-only: the edit
+            // can't store a phone number. A post saved without one reads as Direct message, as on the web.
+            let savedContact = (post.lostFoundContactPref ?? "").split(separator: "|", maxSplits: 1).map(String.init)
+            lostFoundContactPref = savedContact.first.flatMap(PulseLostFoundContactPref.init(rawValue:)) ?? .dm
+            baselineLostFoundContactPref = lostFoundContactPref
+            seedField(.contactPhone, value: lostFoundContactPref == .phone ? savedContact.dropFirst().first ?? "" : "")
         case .announce:
             seedField(.title, value: post.title ?? "")
             seedField(.body, value: post.content)
@@ -927,6 +1029,16 @@ public final class PulseComposeViewModel {
         let location = String(afterPrefix[..<newlineRange.lowerBound])
         let bodyStart = afterPrefix[newlineRange.upperBound...].drop { $0 == "\n" }
         return (location, String(bodyStart))
+    }
+
+    /// Splits the Last seen line `prefixLastSeen` wrote, "<loc> · <date>", into the
+    /// location and the picker's `yyyy-MM-dd`. A last part that isn't a date in this
+    /// phone's locale (an older post, or another locale's) stays in the location.
+    private func splitLastSeenLine(_ line: String) -> (location: String, date: String) {
+        let separator = line.range(of: Self.lastSeenSeparator, options: .backwards)
+        let lastPart = separator.map { String(line[$0.upperBound...]) } ?? line
+        guard let day = Self.lastSeenDayFormatter().date(from: lastPart) else { return (line, "") }
+        return (separator.map { String(line[..<$0.lowerBound]) } ?? "", Self.pickerDayFormatter().string(from: day))
     }
 
     /// Convert an ISO-8601 wire date into the `yyyy-MM-dd HH:mm` shape
@@ -1009,7 +1121,7 @@ public final class PulseComposeViewModel {
             let lastSeen = trimmedValue(.lostLastSeenLocation)
             let phone = trimmedValue(.contactPhone)
             base = PostCreateRequest(
-                content: prefixLastSeen(body: bodyValue, location: lastSeen),
+                content: prefixLastSeen(body: bodyValue, location: lastSeen, date: trimmedValue(.lostLastSeenDate)),
                 postType: postType,
                 visibility: vis,
                 postAs: postAs,
@@ -1068,7 +1180,7 @@ public final class PulseComposeViewModel {
         return formatter.string(from: date)
     }
 
-    private var effectivePostType: String {
+    var effectivePostType: String {
         if let composePurpose { return composePurpose.postType }
         if postingTarget?.isNetworkTarget == true { return "general" }
         return activeIntent.postType
@@ -1085,7 +1197,7 @@ public final class PulseComposeViewModel {
         return visibility.rawValue
     }
 
-    private var effectiveAudience: String {
+    var effectiveAudience: String {
         if postingTarget?.isNetworkTarget == true { return "connections" }
         // Place target with the "Connections" radio selected — the post
         // should reach the network, not the neighborhood.
@@ -1210,6 +1322,125 @@ public final class PulseComposeViewModel {
         }
     }
 
+    // MARK: - Before you ask (`GET /api/posts/before-you-ask`)
+
+    /// A new question going to a place nearby: the only draft that looks for earlier answers.
+    private var isWritingQuestion: Bool {
+        !isEditing && effectivePostType == "ask_local" && (postingTarget?.isPlaceTarget ?? true)
+    }
+
+    /// Looks for earlier answers once the question has 3 words, 600 ms
+    /// after it stops changing; a shorter question or another kind of
+    /// post clears them.
+    func scheduleEarlierAnswers() {
+        let query = isWritingQuestion
+            ? "\(trimmedValue(.title)) \(trimmedValue(.body))".trimmingCharacters(in: .whitespacesAndNewlines)
+            : ""
+        guard query.split(whereSeparator: \.isWhitespace).count >= 3 else {
+            earlierAnswersTask?.cancel()
+            earlierAnswersQuery = ""
+            earlierAnswers = []
+            return
+        }
+        guard query != earlierAnswersQuery else { return }
+        earlierAnswersQuery = query
+        earlierAnswersTask?.cancel()
+        earlierAnswersTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 600_000_000)
+            guard !Task.isCancelled else { return }
+            await self?.loadEarlierAnswers(for: query)
+        }
+    }
+
+    private func loadEarlierAnswers(for query: String) async {
+        let coords = precheckCoordinates()
+        do {
+            let response: BeforeYouAskResponse = try await api.request(
+                PostPrecheckEndpoints.beforeYouAsk(query: query, latitude: coords.latitude, longitude: coords.longitude)
+            )
+            guard !Task.isCancelled, query == earlierAnswersQuery else { return }
+            earlierAnswers = response.posts
+        } catch {
+            // Nothing is shown when the look fails; the question posts as usual.
+        }
+    }
+
+    // MARK: - The check before posting (`POST /api/posts/precheck`, `stage: "post"`)
+
+    /// The draft as the check reads it; "Post anyway" approves exactly this.
+    private func postCheckDraft(_ request: PostCreateRequest) -> String {
+        [request.postType, request.safetyAlertKind ?? "", request.title ?? "", request.content].joined(separator: "\u{1F}")
+    }
+
+    /// Runs the kindness and safety check when Post is tapped on a new
+    /// post to a place nearby. True when it found something: the post
+    /// waits for Edit or Post anyway. A failed or slow check posts as usual.
+    private func needsSecondLook() async -> Bool {
+        guard !isEditing, businessAuthorId == nil, postingTarget?.isPlaceTarget ?? true else { return false }
+        let request = buildRequest()
+        let draft = postCheckDraft(request)
+        guard draft != postAnywayDraft else { return false }
+        isCheckingPost = true
+        defer { isCheckingPost = false }
+        let coords = precheckCoordinates()
+        do {
+            let response: PostPrecheckResponse = try await api.request(
+                PostPrecheckEndpoints.postCheck(body: PostPrecheckRequest(
+                    content: request.content,
+                    postType: request.postType,
+                    purpose: request.purpose,
+                    surface: "place",
+                    latitude: coords.latitude,
+                    longitude: coords.longitude,
+                    stage: "post",
+                    title: request.title,
+                    safetyAlertKind: request.safetyAlertKind
+                ))
+            )
+            guard let findings = response.findings, !findings.isEmpty else { return false }
+            postCheckFindings = findings
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    /// "Post anyway": posts this draft as it is.
+    public func postAnyway() async {
+        postAnywayDraft = postCheckDraft(buildRequest())
+        postCheckFindings = nil
+        await submit()
+    }
+
+    /// "Edit": back to the composer, the words kept.
+    public func editAfterPostCheck() {
+        postCheckFindings = nil
+    }
+
+    /// A new post with words the AI suggested asks "Post this?" once per draft, so the
+    /// person checks what goes out under their name. True when it is asking.
+    private func needsAIConfirmation() -> Bool {
+        guard hasAISuggestion, !isEditing else { return false }
+        let draft = postCheckDraft(buildRequest())
+        guard draft != aiConfirmedDraft else { return false }
+        aiPostConfirmation = effectiveAudience == "connections"
+            ? "Pantopus AI wrote parts of this post. Check that it's right before your connections see it."
+            : "Pantopus AI wrote parts of this post. Check that it's right before neighbors see it."
+        return true
+    }
+
+    /// "Post" on "Post this?": posts this draft as it is.
+    public func confirmAIPost() async {
+        aiConfirmedDraft = postCheckDraft(buildRequest())
+        aiPostConfirmation = nil
+        await submit()
+    }
+
+    /// "Keep editing" on "Post this?": back to the composer.
+    public func keepEditingAIPost() {
+        aiPostConfirmation = nil
+    }
+
     /// The precheck runs on body blur (RN `PostComposerModal.tsx:801`).
     /// When it came back with a live posting restriction the draft is
     /// refused here instead of round-tripping into a server rejection.
@@ -1280,16 +1511,20 @@ public final class PulseComposeViewModel {
         case .event:
             let venue = trimmedValue(.eventLocation)
             let dateRaw = trimmedValue(.eventDate)
+            let endRaw = trimmedValue(.eventEndDate)
             return PostUpdateRequest(
                 content: bodyValue,
                 title: titleValue.isEmpty ? nil : titleValue,
                 eventDate: dateRaw.isEmpty ? nil : isoDateTime(from: dateRaw),
-                eventVenue: venue.isEmpty ? nil : venue
+                eventEndDate: endRaw.isEmpty ? nil : isoDateTime(from: endRaw),
+                eventVenue: venue.isEmpty ? nil : venue,
+                // A cleared End field removes the saved end.
+                clearEventEndDate: endRaw.isEmpty && fields[.eventEndDate]?.isDirty == true
             )
         case .lost:
             let lastSeen = trimmedValue(.lostLastSeenLocation)
             return PostUpdateRequest(
-                content: prefixLastSeen(body: bodyValue, location: lastSeen),
+                content: prefixLastSeen(body: bodyValue, location: lastSeen, date: trimmedValue(.lostLastSeenDate)),
                 lostFoundType: lostFoundKind.rawValue
             )
         case .announce:
@@ -1300,7 +1535,7 @@ public final class PulseComposeViewModel {
         }
     }
 
-    private func trimmedValue(_ field: PulseComposeField) -> String {
+    func trimmedValue(_ field: PulseComposeField) -> String {
         (fields[field]?.value ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
@@ -1313,9 +1548,35 @@ public final class PulseComposeViewModel {
         return body.isEmpty ? row : "\(row)\n\n\(body)"
     }
 
-    private func prefixLastSeen(body: String, location: String) -> String {
-        guard !location.isEmpty else { return body }
-        return "Last seen: \(location)\n\n\(body)"
+    /// "Last seen: <loc> · <date>\n\n<body>", the date in the poster's own
+    /// locale. `date` is the picker's `yyyy-MM-dd`; an empty one leaves just the place.
+    private func prefixLastSeen(body: String, location: String, date: String) -> String {
+        let day = Self.pickerDayFormatter().date(from: date).map { Self.lastSeenDayFormatter().string(from: $0) }
+        let line = [location, day ?? ""].filter { !$0.isEmpty }.joined(separator: Self.lastSeenSeparator)
+        guard !line.isEmpty else { return body }
+        return "Last seen: \(line)\n\n\(body)"
+    }
+
+    private static let lastSeenSeparator = " · "
+
+    /// The Last seen date field's `yyyy-MM-dd`: a calendar day where the poster is.
+    private static func pickerDayFormatter() -> DateFormatter {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .iso8601)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }
+
+    /// The day as the post shows it, in the poster's own locale ("Oct 20, 2026").
+    private static func lastSeenDayFormatter() -> DateFormatter {
+        let formatter = DateFormatter()
+        formatter.locale = .current
+        formatter.timeZone = .current
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        return formatter
     }
 
     /// Normalize an event date string to ISO-8601 (yyyy-MM-dd'T'HH:mm:ssZ).
@@ -1343,8 +1604,13 @@ public final class PulseComposeViewModel {
 
 private extension PulseComposePhoto {
     func asMultipartFile(index: Int) -> MultipartFile {
-        let (filename, mimeType) = Self.mimeInfo(for: data, index: index)
-        return MultipartFile(fieldName: "files", filename: filename, mimeType: mimeType, data: data)
+        let inferred = Self.mimeInfo(for: data, index: index)
+        return MultipartFile(
+            fieldName: "files",
+            filename: filename ?? inferred.filename,
+            mimeType: mimeType ?? inferred.mimeType,
+            data: data
+        )
     }
 
     static func mimeInfo(for data: Data, index: Int) -> (filename: String, mimeType: String) {

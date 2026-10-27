@@ -114,11 +114,10 @@ here supersede their earlier status snapshots, not founder decisions.
    sign-in with founder accounts.
    Choose when to upgrade Supabase for managed backups and the two 100 MB
    buckets. The recorded Free-plan deferral remains in force. April Auth
-   transfer still requires the private export and isolated rehearsal in
-   [its runbook](production-auth-transfer.md); there is no approved import
-   command yet. The founder's later cutover-before-transfer decision is
-   recorded in P2A's plan decision; its users' login limitation must remain
-   explicit.
+   transfer was pending at this October 13 check. **October 24 update:** the
+   approved 35-account transfer and isolated rehearsal are complete; four
+   overlaps were skipped and current accounts preserved. Real imported-account
+   sign-in checks remain open in [its runbook](production-auth-transfer.md).
 3. **Supply provider credentials (Appendix A and P7).** Enter keys privately
    in the designated backend/GitHub/AWS destinations. Review Census, AirNow,
    Anthropic, Mapbox, SMTP and Stripe test configuration and webhooks. Google
@@ -171,7 +170,7 @@ to the founder. No unchecked hosted or physical-device gate is claimed complete.
 | New native apps | iOS `app.pantopus.ios`, Android `app.pantopus.android`: different app IDs from the April apps, so they're new store listings (decision D2). Not uploaded anywhere yet. |
 | Supabase | The April production project and new `pantopus-production` project (`falmvysvndmwtfxsrxek`) are in the founder's `Pantopus` Free organization. The new project is healthy in Oregon; all 148 canonical migrations were applied and verified on October 9, the first production release applied the 36 newer ones on October 17 (184 in all), and the private `home-documents` bucket is configured. Auth transfer, the two 100 MB buckets, the S3 key and managed daily backups are pending. `Pantopus-staging` is separate and was reset to the canonical migrations on October 7 (S2). A separate production organization is optional billing isolation. |
 | GitHub | `staging` releases from `dev` after CI. `production` has nine secrets, `DB_MIGRATIONS_ENABLED=true`, and, since October 17 at 00:20 UTC, `BACKEND_DEPLOY_ENABLED=true`: every master merge that changes the backend releases to production after CI, migrations first. Store signing setup remains separate (section 4). |
-| AWS Lambdas | Staging stack `pantopus-seeder-staging` carries the seeder, briefing, home-reminder, weather-alert, mail and job-trigger functions. The founder paused the April `pantopus-seeder-production` stack: all 14 EventBridge rules were independently confirmed `DISABLED` on October 11, and its briefing log has no event after October 8 at 19:14 UTC. Keep them disabled until P8 replaces the old production configuration. The April `pantopus-seeder-dev` functions were deleted; its ten schedules have nothing to run. |
+| AWS Lambdas | Staging stack `pantopus-seeder-staging` carries the seeder, briefing, home-reminder, weather-alert, mail and job-trigger functions. The founder paused the April `pantopus-seeder-production` stack: all 14 EventBridge rules were independently confirmed `DISABLED` on October 11, and its briefing log has no event after October 8 at 19:14 UTC. P8 then replaced its code and secret (paused, October 17) and turned on only the briefing rule and its daily cleanup (October 18), followed by the approved local seeder, Home/weather and maintenance groups on October 21 (P8). The April `pantopus-seeder-dev` functions were deleted; its ten schedules have nothing to run. |
 
 **Reminders run on AWS Lambda.** Morning and evening briefings (the night-before
 pickup push rides the evening one), task and bill reminders, weather alerts and
@@ -190,25 +189,19 @@ Each has a default that the steps below follow until you change it here.
   `api.pantopus.app`, which has no DNS; L4 switches them.) Also point
   `pantopus.app` and `www.pantopus.app` at the website (step P10): the apps share
   `https://pantopus.app` links.
-- [x] **D2 Store listings.** Decided October 6, as recommended. Default: new listings for `app.pantopus.ios` and
-  `app.pantopus.android`; take the April apps off sale once the new ones are
-  live. The App Store won't accept a second app named exactly "Pantopus" while
-  the April app holds that name, so either give the new listing a longer name
-  (for example "Pantopus Home") or rename the April app first with an update.
-  The alternative, shipping the native apps as updates to `com.pantopus.app`,
-  means changing the native app IDs, push setup and signing; L4 doesn't
-  recommend it this close to the pilot.
+- [x] **D2 Store listings.** **Replaced October 23 by the founder:** update the existing **Pantopus** listings, using `com.pantopus.app` on both platforms. iOS App Store ID `6760512315`; Google Play app ID `4974977490173375457`. The October 26 final candidates are **2.0.7** (iOS 87, Android 29), superseding the earlier 2.0.4 preparation. Do not rename the original app, take it off sale, or publish the separate Pantopus Home records (`6821263216` / `app.pantopus.ios`, and `app.pantopus.android`). Earlier October 6–22 new-listing instructions and build evidence below are historical.
 - [x] **D3 Production database.** Decided October 8: create a new production
   Supabase project from the canonical migrations and transfer April users'
   logins and matching app profiles after an isolated rehearsal. Preserve the
   Auth identities needed for email, Google and Apple sign-in; leave April's
   Homes, Trains and other product data in the old project. The founder runs
-  the reviewed production import. See [the Auth transfer runbook](production-auth-transfer.md).
+  the reviewed production import or explicitly delegates its scope. **October 24:** the founder authorized importing 35 non-overlapping accounts as ordinary users and preserving current accounts. That transfer is complete; four legacy overlaps were skipped. Product content starts fresh. Complete imported-account sign-in checks before releasing 2.0.4. See [the Auth transfer runbook](production-auth-transfer.md).
 - [x] **D4 Payments during the pilot.** Decided October 6, as recommended. Default: production uses Stripe **test**
   keys until you activate live payments; no pilot journey takes money. Pilot
   store builds then carry the matching `pk_test_` key (L4 adjusts the Android
   release guard, which demands `pk_live_`). A real card fails in test mode
-  instead of being charged.
+  instead of being charged. **October 22:** the founder chose Crew Day, paid through business invoices, as the
+  first money feature (NEXT_STEPS section 0); [P11](#p11-live-payments-for-crew-day-founder) turns on live payments for it.
 - [x] **D5 Postcards.** Updated by the founder October 9: defer Lob, Google Address Validation and Smarty setup for the first public web release. Set `DEFER_ADDRESS_PROVIDER_SETUP=true` in the production backend only. Missing providers stay unavailable; no mock postcard may be sent or reported as sent. New address validation, Add Home without a fresh cached validation, and mail verification/invitations will fail until the providers are configured. When enabling Lob, provide `LOB_ENV=live`, a `live_` key, its webhook secret and a real return address (`LOB_FROM_*`; the defaults are a placeholder San Francisco address), then remove the deferral switch. Staging still requires its test providers.
 - [ ] **D6 Email.** Open (October 6): the founder is checking which email service is already paid for; use that one if it does SMTP. Default: Postmark SMTP for backend email and for Supabase
   Auth email, sending from `pantopus.com` with SPF, DKIM and DMARC.
@@ -293,7 +286,16 @@ Supabase dashboard → Authentication:
 
 - URL configuration: Site URL `https://staging.pantopus.com`; redirect URLs
   `https://staging.pantopus.com/auth/callback`, `https://staging.pantopus.com/**`
-  and `pantopus://auth/callback`.
+  and `pantopus://auth/callback**`. The apps' browser sign-in (Google on iOS,
+  Google and Apple on Android) returns to
+  `pantopus://auth/callback?app_nonce=<per-attempt check>`, and Supabase
+  compares that whole address with this list. A plain
+  `pantopus://auth/callback` doesn't match it, so Supabase sends the person
+  to the Site URL instead: the sign-in sheet shows the website and the app
+  never signs in. The `**` covers the query. The web's own callback matches
+  either way. Staging had the plain entry until October 17. After the founder
+  added `pantopus://auth/callback**`, the read-only check in P3's status
+  accepted the apps' address at 06:23 UTC.
 - Email: confirm email **on**; minimum password length **12**; custom SMTP from
   D6 (sender `Pantopus Staging <staging@pantopus.com>`).
 - Rate limits: every sign-in, sign-up, token refresh, password reset and email
@@ -446,6 +448,31 @@ from the repository: every line passes except Android app links, which wait for 
 
 ### S8. Staging scheduled jobs (founder runs, L4 prepared)
 
+The pg-boss worker uses two database connections and checks each application
+queue every 30 seconds (up to 30 seconds of pickup latency after enqueue).
+The existing cron expressions, singleton keys, three retries with backoff,
+one-hour execution timeout and seven-day pending-job retention are unchanged.
+Finished application history (completed, cancelled or retries exhausted) is
+retained for one day. The internal `__pgboss__send-it` queue records scheduler
+handoffs to application queues; those terminal receipts are retained for one
+hour. Hourly maintenance means actual history can extend one hour past these
+limits. Queue monitoring and expired-job recovery still run every minute.
+
+Startup updates existing queue settings as well as creating missing queues.
+Already-enqueued jobs retain their copied settings: a code deploy alone does
+not shorten old history. For an authorized backlog cleanup, inspect aggregate
+counts and preserve the schedule definitions and every created, retrying or
+active job. Restrict deletion to terminal jobs in the registered application
+queues older than one day and internal handoffs older than one hour; use
+bounded batches with statement/lock timeouts. Never truncate the job table.
+Afterward check table size, queue completion/retry progress, pool connections,
+API health and database query/read deltas. Any table compaction requires a
+brief graceful worker stop and a bounded lock timeout; restart and verify the
+worker even if compaction fails. Keep operator evidence outside this public
+repository. The existing production-image queue check exercises all 21
+consumers, a real cron handoff, retry, maintenance and worker restart against
+disposable PostgreSQL; business side effects are replaced in that check.
+
 The worker container already runs cron and pg-boss. The Lambda stack sends the
 reminders:
 
@@ -485,11 +512,18 @@ reminders:
      --protocol email --notification-endpoint <your email>
    ```
 
-Task reminders go out at 7:00 and the evening run at 18:00 Pacific, through
-daylight saving (EventBridge Scheduler); briefings follow each person's own time.
+The home-reminder job checks every 15 minutes, all day. Task reminders become
+eligible at 07:00 in each recipient's resolved local time zone; bills also have
+an 18:00 local window. Briefings check every minute for the person's saved
+morning/evening time (defaults 07:30 and 18:00). Both use IANA time zones,
+including Alaska, the Aleutians, Hawaii and Arizona's daylight-saving exceptions.
+The selected home/place supplies the zone; a valid saved device zone is the
+fallback when no location is available. An unknown zone is skipped, never
+silently assigned Pacific time. Failed briefings retry only during the same
+15-minute local slot; daily housekeeping never sends a catch-up briefing.
 
 **Check:** CloudWatch logs for `pantopus-briefing-scheduler-staging` show runs
-every 15 minutes with no errors; `select job_name, last_success, last_failure
+every minute with no errors; `select job_name, last_success, last_failure
 from job_locks` in the staging SQL editor shows the job-trigger runs; the
 CloudWatch alarms list shows six `pantopus-*-errors-staging` alarms in OK; the
 founder's staging phone gets one scheduled reminder (section 5).
@@ -633,7 +667,10 @@ done.
 4. Transfer April logins and matching app profiles only after the private
    export and isolated rehearsal in [the Auth transfer runbook](production-auth-transfer.md).
    Check matching IDs, email/password and OAuth sign-in, and new-app access
-   before pointing the API at the project. The founder runs the reviewed import.
+   before release. **October 24:** the API already serves this project; its
+   endpoints were unchanged. The explicitly authorized 35-account import is
+   complete, with all current accounts preserved and four overlaps skipped.
+   Real imported-account sign-in checks remain open.
 5. Keep the April project available until the login transfer and sign-in checks
    pass; don't delete it. A project in a Pro organization cannot be paused, so
    keeping both projects in `Pantopus` will also keep the April archive active
@@ -688,9 +725,22 @@ Don't run any of this until L4 has rehearsed it on a copy:
 
 As in S3, with Site URL `https://pantopus.com`, redirect URLs
 `https://pantopus.com/auth/callback`, `https://www.pantopus.com/auth/callback`,
-`https://pantopus.com/**` and `pantopus://auth/callback`, production SMTP sender
-`Pantopus <hello@pantopus.com>`, the same rate limits, and the production Apple
-and Google settings.
+`https://pantopus.com/**` and `pantopus://auth/callback**`, production SMTP
+sender `Pantopus <hello@pantopus.com>`, the same rate limits, and the production
+Apple and Google settings.
+
+**Status, October 17:** the production list had the plain
+`pantopus://auth/callback`, so Continue with Google in the 2.0.0 iPhone build
+ended on `pantopus.com` inside the sign-in sheet and never signed in. Every
+browser sign-in on Android (Google and Apple) had the same problem. Apple on the
+iPhone uses Apple's native sheet, and the web's callback is on `pantopus.com`
+itself, so both worked. A check of Supabase's public `/auth/v1/verify` with a
+deliberately invalid token showed the apps'
+`pantopus://auth/callback?app_nonce=…` replaced by the Site URL while
+`https://pantopus.com/auth/callback` was accepted. After the founder added
+`pantopus://auth/callback**`, the same check accepted the apps' address at
+06:05 UTC, and the founder signed in with Google on the iPhone app. Not checked:
+Android sign-in on a phone.
 
 ### P4. Production Firebase and APNs (founder)
 
@@ -756,13 +806,170 @@ for P10). The containers were not inspected on the host.
   `https://api.pantopus.com/api/v1/webhooks/lob`; its secret in
   `LOB_WEBHOOK_SECRET`.
 
-### P8. Production scheduled jobs (founder runs, L4 prepared)
+### P8. Production scheduled jobs (approved launch groups active October 21)
+
+**October 26 update:** the founder authorized live payments before the final
+mobile builds. `PaymentJobsEnabled=true` now enables the five payment rules;
+all five completed a production invocation without errors after the live-key
+switch. Other activation parameters and deployed Lambda code are unchanged.
+See [P11](#p11-live-payments-for-crew-day-founder) for configuration validation
+and the remaining real-money acceptance checks.
+
+**October 21 baseline:** `SchedulesEnabled=false`, with
+`BriefingsEnabled`, `SeederEnabled`, `HomeRemindersEnabled`, `AlertsEnabled` and
+`MaintenanceJobsEnabled` true; `PaymentJobsEnabled=false`. There are **13 enabled
+and 11 disabled schedules**. Briefing, Home reminder and local poster functions
+each reserve one invocation. Sports, Mail and no-bid schedules remain disabled.
+The founder explicitly approved curator setup, normal metered local seeding,
+Home/weather/maintenance activation and production alarm routing. Useful-update-only
+briefings remain the chosen behavior.
+
+The existing setup script created the labeled **Pantopus Local** curator, two
+initial regions (Clark County, WA and Portland Metro), and 10 active critical/core
+sources. All 55 enrichment sources, including sports, are inactive. Curator login
+was verified and credentials saved in the production secret without changing its
+other fields. The registered iPhone's location is within the configured coverage.
+A bootstrap publisher run created two real posts with zero failures; both appeared
+in the production web Pulse and the founder confirmed seeing a new post on the
+physical iPhone. A subsequent fetch completed with zero errors.
+The first manual fetch overlapped the newly enabled schedule and encountered
+unique-key deduplication conflicts; no duplicate queue rows were inserted.
+
+All six maintenance jobs completed through the deployed Lambda/backend path.
+Home and weather checks completed without failures, with no eligible reminders
+or alerts to send. Daily discovery completed with no new clusters. CloudFormation
+reported `UPDATE_COMPLETE`; the activation preserved all 12 function packages.
+The subsequent launch-reliability update replaced the shared package with the
+reviewed monitoring/lookup fixes; all 12 functions remain Active. The production
+SNS email subscription is confirmed, all 17 alarms route to it, and the earlier
+one-time routing test arrived in the inbox.
+The worker's Lambda cron fallback remains off to prevent duplicate scheduling.
+Before host maintenance, all 17 alarms reached OK. The normal 17:00 local seeder run
+published two additional posts with zero failures; the ongoing briefing and
+Home schedules also completed without reported failures.
+
+Production FCM OAuth and a validation-only message request passed (HTTP 200),
+and the privately saved Android release Firebase configuration matches the
+server project. No Android registration exists yet, so this does not prove
+Android receipt.
+
+The founder confirmed physical iPhone receipt of the authorized generic push test
+and that tapping opened Today. **Scheduled useful briefing/Home-reminder receipt
+on physical iPhone and Android remains unverified.** Quiet-day suppression is
+intentional; a successful generic push does not prove briefing composition,
+idempotency or the briefing-specific destination. P8's physical checks remain open.
+
+**Launch reliability follow-up:** local fetcher, poster and discovery now report
+caught and partial failures through a bounded CloudWatch metric. Weather checks
+also report per-location and push failures. Housekeeping and Home-member lookup
+failures propagate to their existing error alarms. Quiet/no-recipient runs are successful;
+publishing failures keep their existing retry behavior to avoid extra posts.
+The production update completed October 21. Existing seeder tests (505), SAM
+lint and the 128 activation combinations passed. Live fetcher, poster, discovery
+and weather checks completed without errors. Error alarms combine application
+outcomes with Lambda crashes/timeouts. Eight
+missing-invocation alarms cover the enabled functions, including daily housekeeping;
+their actions follow the schedule switches so intentional pauses stay silent.
+The jobs alarm covers the shared trigger; inspect each maintenance rule separately
+when changing schedules. Failure alarms use the existing confirmed production inbox.
 
 The April stack `pantopus-seeder-production` already exists, so
 `sam deploy --config-env prod` updates it in place: new code, the job trigger,
-the failure alarms and the Pacific-time reminder schedules. The stack never
+the failure alarms and recipient-local reminder schedules. The stack never
 writes secret contents, so the secret `pantopus/seeder/production` keeps its
-April values (the April database and its service key) until you replace them.
+previous values until they are replaced separately.
+The checked-in production deploy configuration matches the live stack:
+the approved launch groups above on, payment and launch-cut jobs paused. A plain
+`sam deploy --config-env prod` keeps that state; changing activation is an
+explicit parameter change, recorded here and in `samconfig.toml` together.
+
+**Independent activation controls (deployed October 21):** keep
+`SchedulesEnabled=false` and enable only the groups the founder has reviewed.
+All new controls default to false, preserving existing deployments. The older
+`SchedulesEnabled=true` remains an all-jobs override, including sports, Mail and
+no-bid nudges; it is not the launch activation command.
+
+| Parameter | Schedules enabled | Before activation |
+| --- | --- | --- |
+| `BriefingsEnabled` | Briefing scheduler and cleanup (2) | Production API/database and internal-key authentication; preferences, location and native push registration |
+| `SeederEnabled` | Local fetcher, poster and region discovery (3) | Production curator account and credentials, region/source rows, reviewed source coverage and paid-composition approval; national sports stays paused |
+| `HomeRemindersEnabled` | Recipient-local Home reminders (1) | Due-day task/bill/calendar checks and physical-phone receipt |
+| `AlertsEnabled` | Weather/AQI checks (1) | Location coverage, preferences and working weather/AQI providers |
+| `MaintenanceJobsEnabled` | Post expiry, Ask reminders, chat redaction, ghost-business cleanup, response statistics and trust checks (6) | Review the existing jobs' effects and verify the worker is not also running them |
+| `PaymentJobsEnabled` | Authorization, transfers, capture retry, authorization expiry and stuck-payment checks (5) | Verify actual Stripe mode and review pending work before allowing financial side effects |
+
+The initial October 21 read-only check found all 11 generic job-trigger schedules
+disabled and `LAMBDA_BACKED_CRON_ENABLED=false` on the production worker. Those
+jobs had no scheduler; healthy API/worker containers did not establish that
+these jobs ran. Leave the worker fallback off when activating their Lambda
+schedules, so each job has one scheduler.
+
+The initial check found no production curator credentials or region/source/queue
+rows. Use the existing `pantopus-seeder/scripts/setup_curator_account.py` after
+reviewing its dry run, rather than reusing the April account or adding tables.
+Keep its output private. Check the resulting curator login and regional feed
+before enabling the poster. Existing location-driven region provisioning and
+daily discovery extend coverage after the curator exists; default setup regions
+alone are not nationwide coverage proof.
+
+Subscribe and confirm an operator inbox on the **production** SNS topic before
+activation. Initially the subscription belonged only to staging; the production subscription
+is now confirmed. An `OK`
+Lambda error alarm does not detect a disabled schedule or prove content/push
+delivery. Check invocation counts and application outcomes as well.
+
+Paused jobs do not reserve Lambda concurrency. Before activation, check
+`aws lambda get-account-settings --region us-west-2`: the account must have
+capacity for one reserved briefing invocation (and one each for home reminders
+and the content poster when all jobs are enabled), above AWS's required
+unreserved floor. The October
+17 account limit was only 10, with all 10 required to remain unreserved; AWS
+rejected reserving even one invocation. A quota increase is required before
+activation. Keep the single-run safeguards; do not remove them to bypass the
+quota. The founder authorized an AWS quota/support request for this rollout.
+
+**Initial read-only check, October 17, before rollout:** all 14 existing production rules were
+disabled. The briefing Lambda was last deployed May 3; its last log event was
+October 8 at 12:14 Pacific. Its secret still points to the April database and
+its internal API key differs from the prepared current-production key. The
+current-production key passed an empty `/api/internal/briefing/timezones`
+lookup against the live API (no users processed). Aggregate reads of the new
+production database found zero notification-preference rows and zero briefing
+deliveries. No hosted configuration or user preferences were changed during
+that initial check.
+
+**Paused rollout, October 17, with founder authorization:** the production
+secret now contains the verified current database/API credentials. The SAM
+stack completed its update; all 23 EventBridge rules and the one local-reminder
+Scheduler schedule are disabled. The deployed briefing package matches the
+committed handlers. A live scheduler invocation against the current database
+completed with zero eligible recipients, zero sends and zero failures. This
+checks the deployed runtime and database connection, not physical push delivery.
+The database still has no notification-preference rows. A private rollback copy
+of the prior secret was retained outside Git.
+
+AWS opened a support case for the founder-authorized Lambda quota request;
+approval is pending and the account limit remains 10. Keep all schedules paused
+until capacity permits the briefing's reserved concurrency. The processed AWS
+template was checked for all three modes: paused enables zero schedules and
+reserves zero invocations; briefing-only enables the two briefing rules and
+reserves one; full activation enables 24 schedules and reserves three. Use
+conditional `State`, not conditional `Enabled`, so the SAM transform preserves
+the pause conditions. Actual scheduled delivery on iPhone and Android is still
+unverified, and P8 remains incomplete.
+
+**Briefing-only activation, October 18, with explicit founder authorization:**
+AWS raised the account's Lambda concurrency quota to 1,000, which resolved the
+quota blocker above. At 06:17 UTC a reviewed parameter-only change set reused
+the deployed template and changed exactly three properties: it enabled the
+every-minute briefing rule and the daily briefing cleanup and reserved one
+concurrent briefing scheduler invocation. CloudFormation reported
+UPDATE_COMPLETE at 06:18 UTC. The 12 deployed Lambda packages were unchanged,
+every function was Active and the six error alarms were OK. The first two
+scheduled runs completed with zero eligible, sent, skipped or failed
+deliveries and no logged errors or timeouts. That shows scheduling is live; it
+does not show receipt on a phone.
+
 In this order:
 
 1. Make sure the April schedules are paused (start of section 3). While they
@@ -771,28 +978,71 @@ In this order:
    production project's `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`,
    `PANTOPUS_API_BASE_URL=https://api.pantopus.com`, the production
    `INTERNAL_API_KEY` (in `hosted-secrets/production.env`), a production
-   curator account, `ANTHROPIC_API_KEY`, `AIRNOW_API_KEY` and the WeatherKit keys:
+   curator account, `ANTHROPIC_API_KEY`, `AIRNOW_API_KEY` and optional WeatherKit keys.
+   A private candidate was prepared on the Mac at
+   `~/.config/pantopus/hosted-secrets/seeder-production-prepared-2026-10-17.json`
+   (mode 600), using `production-server-candidate.env`. Its database credential
+   passed read-only checks against the new production, and its internal API key
+   passed the live API check above. Revalidate if production credentials change.
+   That historical candidate has blank curator fields and must not overwrite the
+   current secret: the production curator was created on October 21. Verify
+   the current curator login before enabling content publishing. Briefings need only the database URL/key,
+   API URL and internal API key; they can be enabled independently below.
    ```bash
-   aws secretsmanager put-secret-value --secret-id pantopus/seeder/production --secret-string file://<private json file>
+   aws secretsmanager put-secret-value --region us-west-2 \
+     --secret-id pantopus/seeder/production --secret-string file://<private json file>
    ```
-3. Deploy as in S8 step 1, ending with `sam deploy --config-env prod`.
-4. Switch the schedules back on. A deploy that doesn't change a schedule leaves
-   it paused:
+3. Build and deploy as in S8 step 1, using `sam build --use-container --config-env prod`
+   and `sam deploy --config-env prod --parameter-overrides Environment=production
+   SchedulesEnabled=false BriefingsEnabled=false` (done October 17). This deploy
+   kept every schedule paused, including the new
+   `pantopus-home-reminders-local-production` Scheduler resource. Review the
+   change set before executing it. Verify the deployed code date, secret target
+   and internal-key authentication while still paused.
+4. Activate **only morning/evening briefings and their housekeeping** first
+   (done October 18; superseded by the approved October 21 group settings):
    ```bash
-   for r in $(aws cloudformation describe-stack-resources --region us-west-2 --stack-name pantopus-seeder-production \
-       --query "StackResources[?ResourceType=='AWS::Events::Rule'].PhysicalResourceId" --output text); do
-     aws events enable-rule --region us-west-2 --name "$r"
-   done
+   sam deploy --config-env prod \
+     --parameter-overrides Environment=production SchedulesEnabled=false BriefingsEnabled=true
    ```
-5. Subscribe your inbox to `pantopus-job-alarms-production` as in S8 step 4.
+   In the founder's app, enable the desired briefing in notification settings,
+   choose its local time and allow OS notifications. A preference row and a
+   registered push token must exist; neither is created by deploying Lambda.
+   Wait for the actual scheduled delivery on iPhone and Android. Quiet hours,
+   opt-out and a low-signal day intentionally suppress delivery; inspect only
+   aggregate status/skip reasons, never paste raw user or device-token rows.
+5. After reviewing each group's prerequisites above, prepare the exact desired
+   parameter values in `samconfig.toml`, retaining `SchedulesEnabled=false`.
+   Review the CloudFormation change set before executing it. For example,
+   enabling **only Home reminders in addition to the existing briefings** is:
+   ```bash
+   sam deploy --config-env prod \
+     --parameter-overrides Environment=production SchedulesEnabled=false \
+       BriefingsEnabled=true SeederEnabled=false HomeRemindersEnabled=true \
+       AlertsEnabled=false MaintenanceJobsEnabled=false PaymentJobsEnabled=false
+   ```
+   This example is not production activation approval. Change only the approved
+   groups, and explicitly include every switch so a retained parameter cannot
+   keep an unintended group running. To pause everything, set `SchedulesEnabled`
+   and **all six group switches** to false. To roll back a single group, set its
+   switch false while preserving the other reviewed values.
+   Whenever activation changes, update `parameter_overrides` in
+   `pantopus-seeder/deploy/samconfig.toml` to the same values, so a later plain
+   `sam deploy --config-env prod` never silently pauses or enables jobs. Do not
+   enable individual rules by hand and leave their state different from the
+   template.
 
-**Check:** as S8 with `-production` names. Every rule in the stack is
-`ENABLED`; `aws scheduler list-schedules --region us-west-2` lists
-`pantopus-home-reminders-morning-production` and
-`pantopus-home-reminders-evening-production`; and the log of
-`pantopus-briefing-scheduler-production` shows requests to the database you
-chose in P2 (with P2A, the new project's `<ref>.supabase.co`, not the April
-`ankjdyvoduutkhhaxvhx`).
+**Check:** as S8 with `-production` names. After step 4, only the briefing and
+cleanup rules are enabled. After step 5, compare every rule with the approved
+groups; sports, Mail and no-bid schedules remain disabled. When Home reminders
+are approved, `aws scheduler list-schedules --region us-west-2` must list
+`pantopus-home-reminders-local-production` as enabled (every 15 minutes UTC,
+with recipient eligibility evaluated in local time). The briefing scheduler runs every minute
+against the new production database and delivers at most one successful
+morning and one evening brief per recipient's local date. Check summer, winter
+and DST transitions, including Alaska, Adak, Hawaii and Arizona; the AWS region
+`us-west-2` is the hosting region, not a delivery time zone. P8 stays incomplete
+until the hosted and physical-phone checks pass.
 
 ### P9. Production web (founder)
 
@@ -869,7 +1119,204 @@ Stripe key's mode against D4.
 passes every line (health, HTTPS, security headers, the web's API and realtime forwarding, both
 app-link files, robots.txt).
 
+### P11. Live payments for Crew Day (founder)
+
+**October 26, founder-authorized live configuration:** the production API and
+worker now use the existing Pantopus account's live secret and publishable keys,
+with a new live webhook for the 36 supported event types at
+`https://api.pantopus.com/api/webhooks/stripe`. The account reports charges and
+payouts enabled, with card payments and transfers active. The production database
+had no Payment, PaymentMethod, StripeAccount or BusinessInvoice rows, and no User
+Stripe customer links, before the switch. Both containers remained on their
+existing image and passed readiness; public API health passed. A signed synthetic
+configuration event was accepted, its duplicate was suppressed, and an invalid
+signature was rejected. This verifies the receiver, not an actual Stripe delivery
+or card charge.
+
+The `ios-release` and `android-release` publishable-key secrets now match that
+live account; Android's test-payment exception was removed. Vercel's existing
+`NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` was verified to match, without changing it.
+The production stack's `PaymentJobsEnabled` is now true: the reviewed change set
+enabled the five payment rules and retained the other parameters and deployed
+Lambda code. The checked-in production SAM configuration preserves that state.
+Staging retains test keys. A real card charge, refund, delayed transfer and bank
+payout remain founder acceptance checks; no money was moved during this setup.
+
+Decided October 22 (NEXT_STEPS section 0): Crew Day street days are paid through business invoices, so production takes
+real cards for them. A crew invoices each household from its Pantopus business page; the household pays by card; 48
+hours later the payment jobs move the crew's share to the crew's Stripe account, minus Pantopus's fee (10% for the
+first 50 businesses, 15% for home services). This ends D4's test-mode pilot for payments. Do it after the business fee
+fix is merged and released (NEXT_STEPS, section 4A). Keys stay in Stripe, `~/pantopus/.env.prod`, Vercel and the
+GitHub environments; never in Git or chat.
+
+1. **Stripe account, live.** In the Stripe Dashboard, activate live payments: business details, Pantopus's bank
+   account and the identity check. Set the statement descriptor (what card statements show) to PANTOPUS.
+2. **Connect, live.** Settings → Connect: complete the platform profile for live mode, keep Express accounts, and set
+   the name, icon and color crews see during Stripe onboarding. Pantopus charges the card on its own account and
+   transfers the crew's share later ("separate charges and transfers").
+3. **Live webhook.** Developers → Webhooks, in live mode: add `https://api.pantopus.com/api/webhooks/stripe` for
+   events on your account, with the events `backend/stripe/stripeWebhooks.js` handles:
+   ```text
+   account.application.authorized account.application.deauthorized account.updated capability.updated
+   charge.dispute.closed charge.dispute.created charge.dispute.updated charge.failed charge.refund.updated
+   charge.refunded charge.succeeded checkout.session.completed customer.subscription.created
+   customer.subscription.deleted customer.subscription.updated customer.updated invoice.paid
+   invoice.payment_failed payment_intent.amount_capturable_updated payment_intent.canceled
+   payment_intent.payment_failed payment_intent.requires_action payment_intent.succeeded
+   payment_method.attached payment_method.detached payout.created payout.failed payout.paid refund.created
+   refund.failed refund.updated setup_intent.setup_failed setup_intent.succeeded transfer.created
+   transfer.failed transfer.paid transfer.reversed
+   ```
+   Keep its signing secret for step 4. The server checks one signing secret, and this one endpoint is enough: a
+   crew's Stripe onboarding status is read from Stripe again whenever its payout page opens
+   (`GET /api/businesses/:businessId/stripe/account`), so no endpoint for connected accounts is needed. Events from
+   crews' own Stripe accounts (their bank payouts) don't reach the server; crews see those in their Stripe Express
+   dashboard.
+4. **Server keys.** In `~/pantopus/.env.prod` on the server: `STRIPE_SECRET_KEY` (the live `sk_live_…`),
+   `STRIPE_PUBLISHABLE_KEY` (`pk_live_…`) and `STRIPE_WEBHOOK_SECRET` (step 3's `whsec_…`). Keep the test values
+   somewhere outside Git for a rollback. Then re-run the latest production deployment (or restart the API and worker
+   containers) so they read the new values. Staging keeps its test keys; it refuses live ones.
+5. **Web key.** Vercel production: `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` must be this account's `pk_live_…`. On
+   October 10 it already held a `pk_live_` key while the server used test keys, so card entry on the web fails until
+   both match. Confirm it is this account's live key, then redeploy the web, since the key is built in.
+6. **Payment jobs.** Turn on `PaymentJobsEnabled` the P8 way, changing only that switch from the October 21 state:
+   ```bash
+   sam deploy --config-env prod \
+     --parameter-overrides Environment=production SchedulesEnabled=false \
+       BriefingsEnabled=true SeederEnabled=true HomeRemindersEnabled=true \
+       AlertsEnabled=true MaintenanceJobsEnabled=true PaymentJobsEnabled=true
+   ```
+   Review the change set before executing it, and update `parameter_overrides` in `samconfig.toml` afterwards.
+   Without these jobs no crew is ever paid.
+7. **A real $1 check.** With your own accounts: create a home-service business, finish its Stripe onboarding with
+   your real details, invoice your own member account $1, pay it with your own card on pantopus.com, and check the
+   charge in Stripe. After 48 hours, check the transfer to the business's Stripe account ($1 minus the fee) and its
+   payout to the bank. Refund the $1 afterwards if you like.
+8. **Apps.** The current store builds carry the test key, so their card form fails against live keys: until new
+   builds ship, households pay on pantopus.com. For the next builds, put the `pk_live_…` key in the `ios-release`
+   and `android-release` secrets `STRIPE_PUBLISHABLE_KEY`, and delete the `PANTOPUS_ALLOW_TEST_PAYMENTS` variable
+   (section 4).
+9. **Rollback.** Put the test keys back in `.env.prod` and Vercel, redeploy both, and set `PaymentJobsEnabled=false`
+   the same way. Payments already taken stay in Stripe; refund them there if needed.
+
+After each street day, check the Dashboard for the day's charges, transfers and any dispute. Stripe emails you when a
+dispute opens.
+
 ## 4. Store builds
+
+### Current direction — October 26: final 2.0.7 candidates on the original apps
+
+This section supersedes the historical signing/upload instructions below. Both stores still serve 1.5.0. With the founder's explicit authorization, **2.0.7** replaces the older 2.0.6 candidates and remains held for **manual public release** after approval. Earlier dated entries below retain their original evidence and open runtime checks.
+
+- [x] October 26: final source `30e87b3ab22db37e6277055b1d9be8b2861d8bc7` produced **iOS 2.0.7 (87)** through the allowed `ios-v2.0.7` tag ([successful build/upload, attempt 2](https://github.com/WangPantopus/skinny-pantopus/actions/runs/40416269622)). Apple reports the build valid, the selected version Waiting for Review, and release type Manual. The older submission was withdrawn; existing metadata, screenshots and reviewer credentials were preserved.
+- [x] October 26: the signed **Android 2.0.7 (29)** bundle reached the original production listing. Its embedded live publishable key, production API URL, version and original upload certificate were verified. The signed-in Play Console submitted it with the existing Data safety declaration, withdrew the older approved package, excluded version code 28 and retained code 25 for older supported devices. Managed publishing is on. Google's automatic pre-review checks completed and the console confirms the changes are now in review; neither store was publicly released.
+- [x] October 26 validation limits: the final Android APK opened its welcome and sign-in screens on a fresh emulator without an observed crash. Emulator text input prevented completion of native sign-in. Existing reviewer credentials separately passed production API login and local-session logout. Final iOS runtime, full native reviewer journeys, physical upgrades/push, and real-money transactions remain unverified; earlier build evidence does not establish these final-build checks.
+
+| Setting | Required value |
+|---|---|
+| iOS record / main bundle | `6760512315` / `com.pantopus.app` |
+| iOS widget bundle | `com.pantopus.app.widgets` |
+| iOS signing team | `6UYZBA546R` (same as published 1.5.0) |
+| App Group | Reuse `group.app.pantopus.ios`; both original app and renamed widget need membership and matching profiles |
+| Android record / application ID | `4974977490173375457` / `com.pantopus.app` |
+| Android Kotlin namespace | Keep `app.pantopus.android`; this is source packaging, not the store identity |
+| Android debug application ID | `com.pantopus.app.debug` |
+| Store title | `Pantopus` |
+
+- [x] Read the original records: iOS 1.5.0 (84), iPhone family, team `6UYZBA546R`; Android original production listing exists. The old Android Play-signing SHA-256 matches the repository's `com.pantopus.app` association.
+- [x] Created the original iOS record's **2.0.4 / Prepare for Submission** draft, with current description, subtitle, keywords, promotional text, update notes, support/marketing links and reviewer instructions. Manual release is selected. Updated age-rating answers (13+ in most regions) and content-rights information to the current app's answers. No build is selected or submitted.
+- [x] Saved the original Play listing's current title, descriptions, icon, feature graphic and four phone screenshots as a draft. Removed obsolete tablet screenshot references; no new tablet screenshots are claimed. No changes were sent for review.
+- [x] Replaced repository store screenshots with actual October 23 native captures of welcome, Place, Today and household tasks. iPhone images are 1320×2868 (large Dynamic Island display); Android images are 1080×2400. Synthetic test household only. Apple's four images are saved in the large-display slot and inherited by smaller sizes; obsolete 1.5.0 screenshot references were removed from the editable version.
+- [x] Saved an additive Play Data safety draft: optional health/audio collection, device-ID functionality/security purposes, contact account-management purposes, and the current account-deletion URL. Kept existing legacy declarations pending a review covering every distributed version. See the compliance document's transition note; this is not final compliance approval.
+- [x] Local checks: iOS simulator build and Android debug assembly passed under the restored identities; Android ktlint/detekt, both Ruby Fastfile syntax checks, existing native-config tests (6), and association-file tests (5) passed. Both apps signed into a real local backend/database and displayed the same synthetic home/tasks. Created tasks persisted across iOS relaunch and were visible on Android; Android sign-in persisted after force-stop/relaunch. Initial native evidence used base `fc3223d3f`; these checks do not prove release signing, old-account transfer or a physical upgrade.
+- [x] With the founder's explicit October 23 authorization, enabled App Groups on `com.pantopus.app`, registered `com.pantopus.app.widgets`, and assigned both to the existing `group.app.pantopus.ios`. Reopened both App IDs to verify membership. Generated active `match AppStore com.pantopus.app` and `match AppStore com.pantopus.app.widgets` profiles using the existing team distribution certificate; both expire October 16, 2027. Stored the encrypted profiles in the existing private Match repository. Readonly retrieval using CI's existing signing credential, profile entitlement/certificate checks, and private-key signing/signature verification all passed. Existing iOS release secrets, pilot profiles and distribution certificate are unchanged. No release archive/export, upload, submission or physical upgrade was performed.
+- [x] Android: recovered the **original app's upload keystore** from the existing Expo/EAS project. Its certificate matches the certificate downloaded from the original Play record: SHA-256 `20:D3:0B:09:8D:06:A4:E1:9D:E1:40:65:EF:70:96:55:EF:4D:F7:91:BB:89:BB:DA:33:48:F7:0B:B1:F3:FB:8B`. The private key successfully signed a local verification JAR, whose signature passed verification. **No upload-key reset is needed**; the unused reset form was discarded.
+- [x] With the founder's explicit October 23 authorization, replaced the four `android-release` signing secrets with the recovered original key and its passwords/alias. GitHub accepted all four updates and their modification timestamps were verified. The separate Pantopus Home key remains unchanged locally. No build or upload was triggered.
+- [x] Registered `com.pantopus.app` in production Firebase (`pantopus-prod`) and added the original Play app-signing SHA-1 `42:AC:48:11:1A:63:75:95:03:4E:01:0F:5F:F1:DF:DE:F5:8F:6C:6C` and SHA-256 `33:60:AE:F8:09:B6:BF:18:3F:FB:DE:4F:F7:CD:BD:68:0A:F0:2E:5F:84:61:5A:2E:9A:A0:F3:89:EF:73:02:EF`. Both persisted after reload. Downloaded its genuine config, verified project/package/app identity, and updated `android-release/GOOGLE_SERVICES_JSON`. Also registered `com.pantopus.app.debug` in `pantopus-staging` and saved its config privately. Existing pilot Firebase apps remain registered; the checked-in JSON remains a build-only placeholder.
+- [x] Granted the existing Play release service account app-scoped read information/quality access and testing-track release access for original Pantopus. Production publishing, admin, financial and store-presence permissions remain off. Reopened the console to verify persistence; the service account successfully read the original tracks, including production **1.5.0 / version code 25**. Discarded the temporary API inspection edit without committing changes. No bundle upload or release occurred.
+- [ ] Match Maps/OAuth restrictions to the restored package and verify real sign-in and physical push delivery. Firebase registration, stored fingerprints, API access and secret-update acknowledgements do not establish these runtime checks or a store-signed upgrade.
+- [x] October 24, with the founder's explicit authorization: changed only production `APNS_BUNDLE_ID` to `com.pantopus.app` and restarted the API and worker on their unchanged image. Both containers and public API health passed; a private rollback copy of the prior environment is retained. The backend has one global APNs topic, so this no longer delivers to the separate `app.pantopus.ios` pilot builds. A fresh physical push check after this change is still required.
+- [x] October 24, with explicit founder authorization: completed D3's transfer of 35 non-overlapping legacy accounts as ordinary users, importing 37 identities and 35 profiles. Skipped the four overlapping legacy records. Fresh comparisons verified all six existing Auth users, six identities and seven profiles unchanged. Destination totals are 41 Auth users, 43 identities and 42 profiles. The Auth Admin API sees all imported users and production API/database health passed. No legacy product content was imported.
+- [x] After the October 24 import, the founder reported successful sign-in and profile loading for a migrated account they control. The sign-in method was not specified; this does not record separate password, Google and Apple coverage.
+- [ ] Finish any applicable provider-specific sign-in and fresh-content checks not covered by the reported journey. Explain the content reset in the store update notes. New minimum iOS is 17; the old build supported 15.1.
+- [x] October 24, founder-reported physical checks on **iOS 2.0.4 (85)** and **Android 2.0.4 (26)**: in-place upgrade from 1.5.0, existing-account sign-in, and receiving/opening a push passed on both phones. This evidence applies to those exact builds and predates the APNs topic correction above; it does not establish transfer coverage for every April account or validate a refreshed build.
+- [x] The refreshed source at `7b8ab3c7a3` passed [full CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/40126546394), including Android instrumented tests, Android quality/build checks, iOS simulator tests and database replay/lint. Both CI apps signed into a real local backend/database. A synthetic household task created on iOS persisted after relaunch and appeared on Android. Android completed it and retained sign-in and the completed task after force-stop/relaunch; iOS then displayed that completion after relaunch.
+- [ ] Investigate an intermittent iOS 27 simulator relaunch stall: one launch remained on the splash screen for several minutes with sustained main-thread SwiftUI/Observation work. Terminating and reopening recovered the signed-in app and task state. Two additional cold launches reached the signed-in home; the later debugger capture showed an idle main run loop. The cause and release-build/physical-device impact remain unverified; successful launches do not close this gate.
+- [x] October 26: refreshed signed 2.0.7 builds are uploaded as recorded above. Earlier October 24 branch-triggered [iOS](https://github.com/WangPantopus/skinny-pantopus/actions/runs/40128914101) and [Android](https://github.com/WangPantopus/skinny-pantopus/actions/runs/40128915997) attempts stopped before any build step because the release environments allow only `master` and their platform's release tags. Those earlier attempts produced no signed build and changed no protection rule. The final iOS upload used its allowed release tag; Android was built locally with required production validation and uploaded through the console.
+- [x] Before the approved transfer, captured a fresh full private destination backup and checked its live schema. Rehearsed with the actual destination schema and synthetic accounts only: password/provider identity preservation, ordinary-user conversion, unchanged existing rows, collision/drift/repeat rejection and rollback after a forced failure all passed. The local Auth service accepted the confirmed synthetic user's original password and rejected the unconfirmed user. The [Auth transfer runbook](production-auth-transfer.md) records the completed production scope and remaining real-account acceptance; account rows, SQL payloads and operator logs remain private.
+- [ ] Complete fresh-install, links, widgets, relaunch and old-local-data checks, and recheck the refreshed release builds on physical phones. The release branch now incorporates master `f561a6f375`, including the native privacy repairs in #2812 and the recent Plans fixes; the earlier build numbers do not contain those changes.
+- [x] Signed builds **2.0.4 (85)** and **2.0.4 (26)** reached the original records. October 24: Apple reports build 85 valid and unexpired; its public 2.0.4 version remains Prepare for Submission with manual release and no build selected. Play reports 2.0.4 available to internal testers. Refreshed candidates need new build numbers; existing tags and artifacts remain preserved.
+- [x] October 24: the reviewer credentials already saved in App Store Connect successfully signed in through the production API. This verifies API login, not the complete reviewer journey in the native apps.
+- [x] October 24: removed the unsupported optional data-only deletion answer from Play's Data safety draft. The required `https://pantopus.com/delete-account` link remains, and the save persisted after reload. No changes were submitted for review.
+- [ ] Finish privacy labels/Data safety and the native reviewer journey against production. Apple privacy's final data-type action is **Publish and Continue**, so the form remains unpublished; reconcile the live 1.5.0 collection before the cutover. Play's additive draft still needs the full legacy/current-version review. The App Store icon comes from the new binary; uploading screenshots alone does not replace it.
+- [ ] Founder releases the approved 2.0.7 candidates manually after the remaining acceptance checks. Review submission was explicitly delegated and completed October 26; iOS Manual release and Play Managed publishing remain enabled.
+
+Draft-only listing commands (after loading the correct private credentials):
+
+```sh
+# frontend/apps/ios; saves metadata/screenshots without a binary or review submission
+bundle exec fastlane listing version:2.0.4
+# frontend/apps/android; commits listing edits without sending changes for review
+bundle exec fastlane listing
+```
+
+The `release` lanes submit/promote builds and remain founder actions. The existing store links on the website already point to the correct original records.
+
+Android's `beta` and `listing` lanes disable Fastlane's automatic retry of a
+rejected `changes_not_sent_for_review` request. If Play rejects the hold, the
+command fails for founder review; do not retry without the flag as part of
+draft preparation.
+
+**App Review information**
+
+Manage the review account, **Sign-in required** setting and notes directly in
+App Store Connect. The iOS `listing` and `release` lanes leave those saved
+details untouched. Do not add a notes-only file to
+`fastlane/metadata/review_information/`: Fastlane sets **Sign-in required** to
+false when it uploads notes without both demo credentials, even if credentials
+are already saved in App Store Connect. Keep credentials outside the repository.
+
+Approved notes for the founder to paste into the editable version's **App
+Review Information → Notes**, retaining **Sign-in required** and the private
+review account, then verify after saving:
+
+> Pantopus 2.0.4 updates the existing Pantopus app (com.pantopus.app). It brings the current native experience to the same listing.
+>
+> Start with the address preview, which does not require an account. Sign in using the dedicated review account supplied in App Review Information to access the household and community features.
+>
+> The main tabs are Place, Today, Nearby, Plans, and Messages. Place contains household tasks, members, documents, and emergency information. Today shows address-based weather, air quality, local information, pickup schedules, and reminders. Nearby contains Pulse and Neighborhood. Plans supports local plans and join requests. Messages contains conversations. The menu provides additional account and community tools.
+>
+> The upgrade preserves account sign-ins through the account transfer, while homes, tasks, posts, messages, and other product content start fresh. The public update notes disclose this reset.
+>
+> Exact home and plan details follow membership and approval permissions. A reviewer account with a prepared synthetic household is needed to inspect restricted household features. No real resident information is needed for review.
+
+**Android key recovery, October 23:** after the initial Mac file search found
+no matching keystore, the existing Expo CLI login provided access to the
+original project's matching Android build credentials. The original key and
+passwords are now stored outside Git in
+`~/.config/pantopus/credentials/android/original-pantopus/` (directory mode
+700, private files mode 600). `upload-signing.json` references the recovered
+`pantopus-upload.jks`; preserve the separate pilot credentials unchanged.
+Both the exported certificate and a successful private-key signing check
+confirm this is usable, not merely a public certificate copy. No key reset
+was needed. Recovery itself made no hosted credential changes; the subsequent
+founder-authorized configuration updates are recorded above.
+
+`ANDROID_KEYSTORE_BASE64`, `PANTOPUS_KEYSTORE_PASSWORD`, `PANTOPUS_KEY_ALIAS`
+and `PANTOPUS_KEY_PASSWORD` are now set in GitHub's `android-release`
+environment from that private material. Play's existing app-signing key is
+unchanged. Validate a signed internal-track update after the other release
+gates pass; the local verification JAR is not an app upload or upgrade test.
+
+A local `apply-github-signing.py` in the same private directory verifies the
+original certificate and previews these four secret names by default. The
+founder authorized its `--apply` mode after reviewing the prepared setup; the
+dry run and all four secret writes succeeded. It does not configure Firebase
+or start a build, upload or release. Firebase's config was updated separately
+from the genuine downloaded file, without printing any secret values.
+
+### Historical October 6–22 setup (different app identities)
+
 
 ### iOS (TestFlight, then App Store)
 
@@ -949,7 +1396,7 @@ native access checks; passing data and offline checks alone does not close this 
 
 - [x] Founder approved the listing text, screenshots, privacy answers and the
   account-deletion page on October 7 (decisions A and B are written into the
-  privacy scripts). Both listings use the name "Pantopus Home" per D2.
+  privacy scripts). The October 23 D2 amendment changes both store titles to "Pantopus".
 - [x] L4: the approved files are where the lanes read them. iOS: text in
   `frontend/apps/ios/fastlane/metadata/en-US/` and 8 iPhone screenshots
   (6.9-inch, 1320 × 2868) in `frontend/apps/ios/fastlane/screenshots/en-US/`;
@@ -1024,6 +1471,9 @@ Write these as `KEY=value` lines (no quotes, one line each) into
 | `SMARTY_AUTH_ID`, `SMARTY_AUTH_TOKEN` | required | deferred for first web release | Smarty (subscription must be active; S4 checks it) |
 | `DEFER_ADDRESS_PROVIDER_SETUP` | unset | `true` until the live Google, Smarty and Lob settings are ready; then remove | production-only startup switch, D5 |
 | `MAPBOX_ACCESS_TOKEN` | required | required | Mapbox secret token |
+| `GEO_ANON_HOURLY_CALLS` | unset | unset | Mapbox calls that signed-out address lookups may make in an hour, everyone together (default 300, `backend/services/geo/signedOutBudget.js`). Raise it before a planned push such as a postcard drop |
+| `GEO_ANON_LOOKUPS` | unset | unset | `off` refuses every signed-out address lookup that would call Mapbox (an emergency stop; members keep working) |
+| `GEO_OG_HOURLY_RENDERS` | unset | unset | share-card images (`/api/og/place`) that may render an address preview in an hour (default 100); past it a card renders without one. They count only with a matching `EDGE_PROXY_SECRET` |
 | `ATTOM_API_KEY` | optional | required for property facts | ATTOM |
 | `AIRNOW_API_KEY` | required for air quality | required for air quality | free AirNow key; without it the air section says it couldn't load. Also goes in the Lambda secret (S8) |
 | `CENSUS_API_KEY` | required for area facts | required for area facts | free Census key (api.census.gov/data/key_signup.html); the Census API refuses keyless calls, so without it Place's "Homes here", the address preview's area facts and the tract medians are unavailable (checked on staging October 9) |
@@ -1117,3 +1567,39 @@ can't write Supabase's two (empty) vector-bucket tables, so they're excluded; th
 migration ledger isn't part of a normal dump, so it's dumped separately; and
 `aws s3 sync` would skip the files because the restored rows make them look
 present, so the restore uploads each file explicitly.
+
+**October 21 recovery check:** a fresh production database, migration ledger and
+Storage backup was saved outside Git on FileVault-encrypted local storage. All
+three buckets were inventoried; there were no stored objects and no missing
+files. A network-isolated local PostgreSQL restore succeeded, with matching row
+counts across 398 tables. The rehearsal aligned managed role names and used an
+additional auth/storage/public/pgboss schema export because the local Supabase
+bootstrap differs from the hosted service. This is a database recovery rehearsal,
+not a hosted-project failover or an app acceptance check. Production/staging host
+environment, Nginx and TLS configuration were also backed up privately.
+
+These are point-in-time copies; automatic recurring off-host backups are not
+configured by this check. Keep following the weekly and pre-change procedure
+above. An EC2 root snapshot does not back up the external Supabase database or
+uploaded files.
+
+**October 21 approved host maintenance:** the shared production/staging EC2
+instance now boots from an encrypted 8 GiB gp3 root volume under the AWS-managed
+EBS key. A snapshot and encrypted copy were prepared while the stateless host
+remained online, then the instance was stopped, its root volume exchanged and
+the same instance restarted. The original device mapping, disk performance,
+Elastic IP, security groups, API/worker image digests and environment
+configuration were preserved. Pinned SSH and both HTTPS API readiness checks
+passed; all four API/worker containers were healthy. A maintenance job also
+completed through the deployed Lambda-to-API path. Readiness probes observed
+approximately 2 minutes 7 seconds of interruption, ending at 17:49 PDT.
+EC2's system, instance and attached-disk checks subsequently all reported OK.
+The briefing scheduler's error alarm detected connection timeouts/502 responses
+during the restart; scheduled runs recovered automatically once the API returned.
+
+The original disk and the private source/encrypted snapshots are retained for
+rollback pending the founder's retention decision; they incur ongoing storage
+charges. Key-only SSH and IMDSv2 remain in force, with the existing broad SSH
+ingress unchanged. This maintenance does not establish physical-phone delivery
+or automatic recurring backups. Future host stops require their own maintenance
+window; a Lambda rollout does not require stopping this host.

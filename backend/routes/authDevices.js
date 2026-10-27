@@ -31,6 +31,8 @@ const { requireDpop } = require('../middleware/dpop');
 const { requireStepUp, mintStepUpToken, PURPOSES } = require('../middleware/stepUp');
 const authDeviceService = require('../services/authDeviceService');
 const authSessionService = require('../services/authSessionService');
+const apnsClient = require('../services/push/apnsClient');
+const { resolveRegistration } = require('../services/push/tokenRouting');
 
 const router = express.Router();
 
@@ -110,7 +112,13 @@ const challengeSchema = Joi.object({
 
 const registerSchema = Joi.object({
   device: deviceSchema.required(),
-  pushToken: Joi.string().max(4096).allow(null, ''),
+  // An APNs token is sent to Apple in the request path (services/push/apnsClient.js), so it must be the device's hex
+  // token. Which push service a token is for follows the same rule as saving it (pushService.saveToken).
+  pushToken: Joi.string().max(4096).allow(null, '').custom((token, helpers) => {
+    const { pushProvider: provider, device } = helpers.state.ancestors[0] || {};
+    const { provider: service } = resolveRegistration({ token, platform: device?.platform, provider });
+    return service === 'apns' && !apnsClient.isDeviceToken(token) ? helpers.error('string.pattern.base') : token;
+  }),
   pushProvider: Joi.string().valid('fcm', 'apns').allow(null, ''),
 });
 
@@ -285,7 +293,7 @@ router.delete('/devices/:id', verifyToken, attachSession, requireStepUp('revoke_
     return res.json({ ok: true, revokedSessions: result.revokedSessions });
   } catch (err) {
     logger.error('auth.devices.revoke_error', { userId: req.user?.id, error: err.message, stack: err.stack });
-    return res.status(500).json({ error: 'Could not remove device', code: 'INTERNAL' });
+    return res.status(err.authBusy ? 503 : 500).json({ error: 'Could not remove device', code: err.authBusy ? 'AUTH_UNAVAILABLE' : 'INTERNAL' });
   }
 });
 
@@ -303,7 +311,7 @@ router.post('/sessions/revoke-others', verifyToken, attachSession, requireStepUp
     return res.json({ revoked: result.revoked });
   } catch (err) {
     logger.error('auth.sessions.revoke_others_error', { userId: req.user?.id, error: err.message, stack: err.stack });
-    return res.status(500).json({ error: 'Could not sign out other devices', code: 'INTERNAL' });
+    return res.status(err.authBusy ? 503 : 500).json({ error: 'Could not sign out other devices', code: err.authBusy ? 'AUTH_UNAVAILABLE' : 'INTERNAL' });
   }
 });
 
@@ -327,7 +335,7 @@ router.post('/sessions/revoke-all', verifyToken, attachSession, requireStepUp('r
     return res.json({ ok: true });
   } catch (err) {
     logger.error('auth.sessions.revoke_all_error', { userId: req.user?.id, error: err.message, stack: err.stack });
-    return res.status(500).json({ error: 'Could not sign out everywhere', code: 'INTERNAL' });
+    return res.status(err.authBusy ? 503 : 500).json({ error: 'Could not sign out everywhere', code: err.authBusy ? 'AUTH_UNAVAILABLE' : 'INTERNAL' });
   }
 });
 

@@ -21,12 +21,14 @@ import Foundation
 
 // MARK: - Values
 
-/// The four kinds of plan (decision D3).
+/// The five kinds of plan (decision D3; study groups added by the founder
+/// on 2026-10-17).
 public enum PlanKind: String, Codable, Sendable, Hashable, CaseIterable, Identifiable {
     case watchParty = "watch_party"
     case playdate
     case pickupGame = "pickup_game"
     case walkCoffee = "walk_coffee"
+    case studyGroup = "study_group"
 
     public var id: String {
         rawValue
@@ -213,22 +215,6 @@ public struct PlanViewerDTO: Codable, Sendable, Hashable {
     }
 }
 
-/// The game a watch party is for.
-public struct PlanGameDTO: Codable, Sendable, Hashable {
-    public let label: String
-    public let startsAt: String?
-
-    enum CodingKeys: String, CodingKey {
-        case label
-        case startsAt = "starts_at"
-    }
-
-    public init(label: String, startsAt: String?) {
-        self.label = label
-        self.startsAt = startsAt
-    }
-}
-
 /// The kind-specific details (`Plan.details`).
 public struct PlanDetailsDTO: Codable, Sendable, Hashable {
     public var game: PlanGameDTO?
@@ -239,13 +225,18 @@ public struct PlanDetailsDTO: Codable, Sendable, Hashable {
     public var walkKind: String?
     public var pace: String?
     public var dogsWelcome: Bool?
+    /// A study group's subject ("Spanish"), 1 to 60 characters.
+    public var subject: String?
+    /// A study group's style: `quiet` or `together`.
+    public var studyStyle: String?
 
     enum CodingKeys: String, CodingKey {
-        case game, sport, level, pace
+        case game, sport, level, pace, subject
         case extraGear = "extra_gear"
         case kidsAgeBands = "kids_age_bands"
         case walkKind = "walk_kind"
         case dogsWelcome = "dogs_welcome"
+        case studyStyle = "study_style"
     }
 
     public init() {}
@@ -266,6 +257,8 @@ public struct PlanDetailsDTO: Codable, Sendable, Hashable {
         walkKind = try? container.decodeIfPresent(String.self, forKey: .walkKind)
         pace = try? container.decodeIfPresent(String.self, forKey: .pace)
         dogsWelcome = try? container.decodeIfPresent(Bool.self, forKey: .dogsWelcome)
+        subject = try? container.decodeIfPresent(String.self, forKey: .subject)
+        studyStyle = try? container.decodeIfPresent(String.self, forKey: .studyStyle)
     }
 }
 

@@ -1,11 +1,12 @@
 // Used by actions/github-script; never checks out code from a workflow_run PR.
 // Sets `deploy` to 'true' or 'false'. Automatic deploys skip quietly when the
 // green commit is no longer the branch head, or when nothing that goes into the
-// backend image or its rollout changed since the environment's last release
+// backend image, database migrations or rollout changed since the environment's last release
 // (each rollout restarts the API). A manual run always deploys the head. The
 // release job rechecks with { recheck: true }: CI and the branch head only, so a
 // commit superseded during the build sets `deploy` to 'false' before cutover.
-const BACKEND_PATHS = [/^backend\//, /^scripts\/deploy\//, /^package\.json$/, /^pnpm-lock\.yaml$/,
+const { setTimeout: sleep } = require('node:timers/promises');
+const BACKEND_PATHS = [/^backend\//, /^supabase\/migrations\//, /^scripts\/deploy\//, /^package\.json$/, /^pnpm-lock\.yaml$/,
   /^pnpm-workspace\.yaml$/, /^\.dockerignore$/, /^\.github\/workflows\/deploy-backend\.yml$/];
 const touchesBackend = (file) => BACKEND_PATHS.some((pattern) => pattern.test(file));
 // deploy-backend.yml's run-name ends with "(<branch> <commit>)". A workflow_run job runs in the
@@ -13,7 +14,7 @@ const touchesBackend = (file) => BACKEND_PATHS.some((pattern) => pattern.test(fi
 const RELEASE_TITLE = /\((?:master|dev) ([0-9a-f]{40})\)$/;
 const ROLLOUT_STEP = 'Deploy API and worker';
 
-module.exports = async ({ github, context, core }, { recheck = false } = {}) => {
+module.exports = async ({ github, context, core }, { recheck = false, rereadSeconds = [5, 10, 20] } = {}) => {
   const { owner, repo } = context.repo;
   const upstream = context.payload.workflow_run;
   const branch = upstream ? upstream.head_branch : context.ref.replace('refs/heads/', '');
@@ -30,15 +31,7 @@ module.exports = async ({ github, context, core }, { recheck = false } = {}) => 
     core.setOutput('deploy', 'false');
     return { sha, branch, skipped: 'superseded' };
   }
-  const { data } = await github.rest.actions.listWorkflowRuns({
-    owner, repo, workflow_id: 'ci.yml', branch, head_sha: sha, per_page: 100,
-  });
-  // A newer failed/cancelled attempt must not be bypassed by an older green run.
-  const latest = data.workflow_runs.filter(run => ['push', 'workflow_dispatch'].includes(run.event))
-    .sort((a, b) => b.id - a.id)[0];
-  if (!latest || latest.status !== 'completed' || latest.conclusion !== 'success') {
-    throw new Error(`CI must succeed on ${branch} at ${sha} before deployment`);
-  }
+  await requireGreenCi({ github, core, owner, repo, branch, sha, rereadSeconds });
   const target = branch === 'master' ? 'production' : 'staging';
   core.setOutput('sha', sha);
   core.setOutput('target', target);
@@ -53,6 +46,33 @@ module.exports = async ({ github, context, core }, { recheck = false } = {}) => 
   core.setOutput('deploy', 'true');
   return { sha, branch };
 };
+
+// Throws unless the newest push or manual CI run of `sha` succeeded: a newer
+// failed/cancelled attempt must not be bypassed by an older green run. GitHub's
+// runs list can come back empty or behind for a while (during the 2026-10-22
+// Actions incident about half the reads listed no run for a green commit), so a
+// read without a finished newest run is repeated after each wait in
+// `rereadSeconds`. A finished run decides at once. A read whose runs are all
+// older than one an earlier read listed is behind as well, so it is read again.
+async function requireGreenCi({ github, core, owner, repo, branch, sha, rereadSeconds }) {
+  let newestSeen = 0;
+  for (let read = 0; ; read += 1) {
+    const { data } = await github.rest.actions.listWorkflowRuns({
+      owner, repo, workflow_id: 'ci.yml', branch, head_sha: sha, per_page: 100,
+    });
+    const latest = data.workflow_runs.filter(run => ['push', 'workflow_dispatch'].includes(run.event))
+      .sort((a, b) => b.id - a.id)[0];
+    const finished = latest && latest.id >= newestSeen && latest.status === 'completed';
+    if (finished && latest.conclusion === 'success') return;
+    if (finished || read === rereadSeconds.length) {
+      throw new Error(`CI must succeed on ${branch} at ${sha} before deployment`);
+    }
+    newestSeen = Math.max(newestSeen, latest ? latest.id : 0);
+    core.info(`GitHub listed ${latest ? `CI run ${latest.id} as ${latest.status}` : 'no CI run'} for ${sha}; ` +
+      `reading again in ${rereadSeconds[read]} s`);
+    await sleep(rereadSeconds[read] * 1000);
+  }
+}
 
 // Returns the last released commit when nothing backend-relevant changed
 // between it and `sha`; null (deploy) when there is no known release, the

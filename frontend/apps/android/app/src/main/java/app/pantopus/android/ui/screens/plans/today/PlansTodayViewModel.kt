@@ -88,7 +88,7 @@ class PlansTodayViewModel
             val dismissed = prefs.getStringSet(KEY_DISMISSED, emptySet()).orEmpty()
             _ui.update {
                 it.copy(
-                    // The two soonest of each: Today stays short; the rest are in Nearby's "Your plans".
+                    // The two soonest of each: Today stays short; the rest are in the Plans tab's "Your plans".
                     going = mine.going.filter(::isToday).sortedBy { p -> PlanFormat.instant(p.startsAt) ?: now }.take(TODAY_CARDS),
                     hosting = mine.hosting.filter(::isToday).sortedBy { p -> PlanFormat.instant(p.startsAt) ?: now }.take(TODAY_CARDS),
                     // A card just answered stays to say thanks until "Done" (as on iOS), though the plan now has feedback.

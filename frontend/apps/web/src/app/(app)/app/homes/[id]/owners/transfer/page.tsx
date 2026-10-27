@@ -22,7 +22,7 @@ function TransferContent() {
 
     const yes = await confirmStore.open({
       title: 'Confirm Transfer',
-      description: 'This will initiate an ownership transfer. The new owner must verify ownership before the transfer completes.',
+      description: 'When the transfer is initiated, your ownership access is removed and you remain a household member. The buyer receives a pending ownership claim and must verify ownership before gaining owner access. Other owners may need to approve first.',
       confirmLabel: 'Initiate Transfer',
       variant: 'destructive',
     });
@@ -35,7 +35,7 @@ function TransferContent() {
         toast.info(res.message || 'Transfer requires approval from other owners');
         router.back();
       } else {
-        toast.success('Ownership transfer initiated. The new owner will need to verify their identity.');
+        toast.success('Transfer initiated. You are now a household member; the buyer must verify ownership.');
         // The seller is now a member and can no longer open Owners.
         router.replace(`/app/homes/${homeId}/dashboard`);
       }
@@ -59,23 +59,23 @@ function TransferContent() {
       <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
         <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
         <p className="text-sm text-amber-800 leading-relaxed">
-          Transferring ownership is a significant action. The new owner will gain full control of this home profile.
-          This action may require approval from other owners.
+          Once initiated, this removes your ownership access and leaves you as a household member.
+          The buyer must verify ownership before gaining owner access. Other owners may need to approve first.
         </p>
       </div>
 
-      <div className="space-y-4">
+      <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); void handleTransfer(); }}>
         <label className="block space-y-1.5">
           <span className="text-sm font-semibold text-app-text-strong">Buyer&apos;s email</span>
           <input type="email" value={buyerEmail} onChange={(e) => setBuyerEmail(e.target.value)} placeholder="buyer@example.com" autoComplete="email"
             className="w-full px-3 py-2.5 border border-app-border rounded-lg text-sm text-app-text bg-app-surface placeholder:text-app-text-muted focus:outline-none focus:ring-2 focus:ring-amber-400" />
         </label>
 
-        <button onClick={handleTransfer} disabled={submitting || !buyerEmail.trim()}
+        <button type="submit" disabled={submitting || !buyerEmail.trim()}
           className="w-full flex items-center justify-center gap-2 py-3.5 bg-amber-700 text-white rounded-xl font-bold text-base hover:bg-amber-800 disabled:opacity-50 transition mt-2">
           {submitting ? 'Processing...' : <><ArrowLeftRight className="w-4 h-4" /> Initiate Transfer</>}
         </button>
-      </div>
+      </form>
     </div>
   );
 }

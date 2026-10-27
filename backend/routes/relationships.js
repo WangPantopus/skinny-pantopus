@@ -23,8 +23,11 @@ const Joi = require('joi');
 const logger = require('../utils/logger');
 const notificationService = require('../services/notificationService');
 const blockService = require('../services/blockService');
+const { pendingReceived } = require('../services/connectionRequests');
+const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
 const { isBlocked, getRelationshipStatus } = require('../utils/visibilityPolicy');
 const { invalidateFilterCache } = require('../services/feedService');
+const marketplaceService = require('../services/marketplace/marketplaceService');
 const { writeIdentityAuditLog } = require('../utils/identityAudit');
 const rateLimit = require('express-rate-limit');
 const { chosenUsernameOrNull } = require('../utils/personalUsername');
@@ -36,11 +39,36 @@ function isHiddenBlock(rel, userId) {
   return rel?.status === 'blocked' && rel.blocked_by !== userId;
 }
 
+function connectionUnavailable(res) {
+  return res.status(403).json({
+    error: 'This connection request is no longer available.',
+    code: 'CONNECTION_UNAVAILABLE',
+  });
+}
+
+function isPersonalBlockAdmissionError(error) {
+  return error?.code === 'PT403' && error.message === 'PERSONAL_CONNECTION_BLOCKED';
+}
+
+// A block that couldn't finish (blockService.removeFollowsBetween) or couldn't be read: try again.
+function blockUnfinished(res, err) {
+  return res.status(503).json({ error: err.message, code: err.code });
+}
+
+function connectionReadUnavailable(res) {
+  return res.status(503).json({
+    error: 'Connections are temporarily unavailable. Please try again.',
+    code: 'CONNECTION_CHECK_UNAVAILABLE',
+  });
+}
+
 // The caller asked to block someone who already blocked them. Their own block
 // is recorded as a personal UserBlock, which every client uses and which stays
 // in force if the other person unblocks later. The answer is a plain success
 // that does not return the other person's relationship row.
 async function blockSomeoneWhoBlockedYou(req, res, userId, otherUserId, reason) {
+  // Follows go before and after the block is recorded, as on every block route (blockService.removeFollowsBetween).
+  await blockService.removeFollowsBetween(userId, otherUserId);
   const { error } = await supabaseAdmin
     .from('UserBlock')
     .upsert(
@@ -52,8 +80,8 @@ async function blockSomeoneWhoBlockedYou(req, res, userId, otherUserId, reason) 
     return res.status(500).json({ error: 'Failed to block user' });
   }
   blockService.invalidateBlockCache(userId, otherUserId);
-  invalidateFilterCache(userId);
-  invalidateFilterCache(otherUserId);
+  invalidateBlockFilters(userId, otherUserId);
+  await blockService.removeFollowsBetween(userId, otherUserId);
   // Same personal-block cascade as POST /api/users/:userId/block (P1.14).
   setImmediate(async () => {
     try {
@@ -100,17 +128,61 @@ function withChosenUsername(user) {
   return user ? { ...user, username: chosenUsernameOrNull(user.username) } : user;
 }
 
+// The area each of these people's Local Profiles shows, by account id: its public city and state while their
+// Neighborhood setting shows them to everyone, otherwise none (the rule the Local Profile overlay on profiles and user
+// search follow). Businesses go by the account and get no entry. Throws on a failed read, so a list fails rather than
+// show what a Local Profile hides.
+async function loadLocalProfileAreas(userIds) {
+  const ids = [...new Set(userIds.filter(Boolean).map(String))];
+  if (ids.length === 0) return new Map();
+  const { data, error } = await supabaseAdmin
+    .from('LocalProfile')
+    .select('user_id, public_city, public_state, show_neighborhood, owner:user_id (account_type)')
+    .in('user_id', ids);
+  if (error) throw new Error(error.message);
+  return new Map((data || [])
+    .filter((profile) => profile.owner?.account_type !== 'business')
+    .map((profile) => {
+      const shown = profile.show_neighborhood === true;
+      return [String(profile.user_id), {
+        city: shown ? (profile.public_city || null) : null,
+        state: shown ? (profile.public_state || null) : null,
+      }];
+    }));
+}
+
+// What the lists below need to show these people: their names (loadChatPeople) and their Local Profiles' areas.
+async function loadListedPeople(userIds) {
+  const [people, areas] = await Promise.all([loadChatPeople(userIds), loadLocalProfileAreas(userIds)]);
+  return { people, areas };
+}
+
+// A person in one of the lists below, as neighbors see them. Someone with a Local Profile goes by it: its name, handle
+// and photo (services/chatPeople.js, as on posts, in chats and in connection notices), only the area it shows, and no
+// first or last name, which belong to the private account. A business, or anyone without one, goes by the account.
+// Anyone `listed` lacks (the caller's own entry included) keeps the account row. `id` stays the account id.
+function listedPerson(user, { people, areas }) {
+  const row = withChosenUsername(chatPersonRow(user, people));
+  const area = row?.id ? areas.get(String(row.id)) : null;
+  return area ? { ...row, first_name: null, last_name: null, city: area.city, state: area.state } : row;
+}
+
+// Blocks hide content in both directions (the feed and marketplace filters read them
+// both ways), so a block or unblock drops both people's cached filters.
+function invalidateBlockFilters(userId, otherUserId) {
+  for (const id of [userId, otherUserId]) {
+    invalidateFilterCache(id);
+    marketplaceService.invalidateFilterCache(id);
+  }
+}
+
 /**
- * Get user display name for notifications.
+ * The name a connection notice gives the person who acted, as neighbors see them on posts and in chats: a person by
+ * their Local Profile's name, a business (or anyone without a Local Profile) by the account. The metadata keeps the
+ * account id.
  */
 async function getUserDisplayName(userId) {
-  const { data } = await supabaseAdmin
-    .from('User')
-    .select('username, name, first_name')
-    .eq('id', userId)
-    .single();
-  if (!data) return 'Someone';
-  return data.name || data.first_name || chosenUsernameOrNull(data.username) || 'Someone';
+  return (await loadChatPeople([userId])).get(String(userId))?.displayName || 'Someone';
 }
 
 // ============ ROUTES ============
@@ -189,6 +261,7 @@ router.post('/requests', verifyToken, connectionRequestLimiter, validate(request
             .select();
 
           if (error) {
+            if (isPersonalBlockAdmissionError(error)) return connectionUnavailable(res);
             logger.error('Error auto-accepting relationship', { error: error.message });
             return res.status(500).json({ error: 'Failed to accept connection' });
           }
@@ -254,6 +327,7 @@ router.post('/requests', verifyToken, connectionRequestLimiter, validate(request
       .single();
 
     if (error) {
+      if (isPersonalBlockAdmissionError(error)) return connectionUnavailable(res);
       // Handle unique violation gracefully
       if (error.code === '23505') {
         return res.status(400).json({ error: 'Connection request already exists' });
@@ -294,11 +368,13 @@ router.post('/:id/accept', verifyToken, async (req, res) => {
     const userId = req.user.id;
 
     // Fetch the relationship
-    const { data: rel } = await supabaseAdmin
+    const { data: rel, error: readError } = await supabaseAdmin
       .from('Relationship')
       .select('*')
       .eq('id', relationshipId)
-      .single();
+      .maybeSingle();
+
+    if (readError) return connectionReadUnavailable(res);
 
     if (!rel) {
       return res.status(404).json({ error: 'Connection request not found' });
@@ -311,6 +387,13 @@ router.post('/:id/accept', verifyToken, async (req, res) => {
 
     if (isHiddenBlock(rel, userId)) {
       return res.status(404).json({ error: 'Connection request not found' });
+    }
+
+    // An older request is not permission to connect after either person blocks.
+    // The database admission trigger repeats this check under the block's pair
+    // lock, covering a block committed after this cached preflight.
+    if (await blockService.isBlocked(rel.requester_id, rel.addressee_id)) {
+      return connectionUnavailable(res);
     }
 
     // A repeat of an accept that already went through (a re-sent request or a second tap)
@@ -335,6 +418,7 @@ router.post('/:id/accept', verifyToken, async (req, res) => {
       .select();
 
     if (error) {
+      if (isPersonalBlockAdmissionError(error)) return connectionUnavailable(res);
       logger.error('Error accepting relationship', { error: error.message });
       return res.status(500).json({ error: 'Failed to accept connection' });
     }
@@ -375,6 +459,7 @@ router.post('/:id/accept', verifyToken, async (req, res) => {
 
     res.json({ message: 'Connection accepted', relationship: updated });
   } catch (err) {
+    if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return connectionReadUnavailable(res);
     logger.error('Accept connection error', { error: err.message });
     res.status(500).json({ error: 'Failed to accept connection' });
   }
@@ -437,11 +522,14 @@ router.post('/:id/block', verifyToken, async (req, res) => {
     const userId = req.user.id;
     const { reason } = req.body || {};
 
-    const { data: rel } = await supabaseAdmin
+    const { data: rel, error: readError } = await supabaseAdmin
       .from('Relationship')
       .select('*')
       .eq('id', relationshipId)
-      .single();
+      .maybeSingle();
+
+    // 22P02: the id isn't one at all, so there is no such relationship.
+    if (readError && readError.code !== '22P02') return connectionReadUnavailable(res);
 
     if (!rel) {
       return res.status(404).json({ error: 'Relationship not found' });
@@ -456,9 +544,17 @@ router.post('/:id/block', verifyToken, async (req, res) => {
       return res.status(404).json({ error: 'Relationship not found' });
     }
 
+    const otherUserId = rel.requester_id === userId ? rel.addressee_id : rel.requester_id;
+
+    // The caller's own block, already recorded: a retry of one whose follows
+    // couldn't be removed finishes them.
     if (rel.status === 'blocked') {
-      return res.status(400).json({ error: 'Already blocked' });
+      await blockService.removeFollowsBetween(userId, otherUserId);
+      return res.json({ message: 'User blocked', relationship: rel });
     }
+
+    // First, so a failure records nothing and Block is still offered.
+    await blockService.removeFollowsBetween(userId, otherUserId);
 
     const { data: updated, error } = await supabaseAdmin
       .from('Relationship')
@@ -477,13 +573,7 @@ router.post('/:id/block', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to block user' });
     }
 
-    const otherUserId = rel.requester_id === userId ? rel.addressee_id : rel.requester_id;
-    await Promise.allSettled([
-      supabaseAdmin.from('UserFollow').delete().eq('follower_id', userId).eq('following_id', otherUserId),
-      supabaseAdmin.from('UserFollow').delete().eq('follower_id', otherUserId).eq('following_id', userId),
-    ]);
-
-    invalidateFilterCache(userId);
+    invalidateBlockFilters(userId, otherUserId);
     await writeIdentityAuditLog({
       req,
       actorUserId: userId,
@@ -495,8 +585,11 @@ router.post('/:id/block', verifyToken, async (req, res) => {
         had_reason: !!reason,
       },
     });
+    // Again now that the block is recorded, for a follow added in between.
+    await blockService.removeFollowsBetween(userId, otherUserId);
     res.json({ message: 'User blocked', relationship: updated });
   } catch (err) {
+    if (err.code === 'BLOCK_INCOMPLETE') return blockUnfinished(res, err);
     logger.error('Block user error', { error: err.message });
     res.status(500).json({ error: 'Failed to block user' });
   }
@@ -514,26 +607,40 @@ router.post('/block-user', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'user_id is required' });
     }
 
+    // An account id only: the lookup below writes it into a filter, where
+    // anything else could match a relationship between two other people.
+    if (Joi.string().uuid().validate(targetId).error) {
+      return res.status(400).json({ error: 'user_id must be an account id' });
+    }
+
     if (userId === targetId) {
       return res.status(400).json({ error: 'Cannot block yourself' });
     }
 
-    // Check existing relationship
-    const { data: existing } = await supabaseAdmin
+    // Check existing relationship (the unique pair index enforces one row)
+    const { data: existing, error: readError } = await supabaseAdmin
       .from('Relationship')
-      .select('id, status, blocked_by')
+      .select('*')
       .or(
         `and(requester_id.eq.${userId},addressee_id.eq.${targetId}),and(requester_id.eq.${targetId},addressee_id.eq.${userId})`
       )
-      .single();
+      .maybeSingle();
+
+    if (readError) return connectionReadUnavailable(res);
 
     if (existing) {
       if (isHiddenBlock(existing, userId)) {
-        return blockSomeoneWhoBlockedYou(req, res, userId, targetId, reason);
+        return await blockSomeoneWhoBlockedYou(req, res, userId, targetId, reason);
       }
+      // The caller's own block, already recorded: a retry of one whose follows
+      // couldn't be removed finishes them.
       if (existing.status === 'blocked') {
-        return res.status(400).json({ error: 'Already blocked' });
+        await blockService.removeFollowsBetween(userId, targetId);
+        return res.json({ message: 'User blocked', relationship: existing });
       }
+
+      // First, so a failure records nothing and Block is still offered.
+      await blockService.removeFollowsBetween(userId, targetId);
 
       // Update existing relationship to blocked
       const { data: updated, error } = await supabaseAdmin
@@ -553,12 +660,7 @@ router.post('/block-user', verifyToken, async (req, res) => {
         return res.status(500).json({ error: 'Failed to block user' });
       }
 
-      await Promise.allSettled([
-        supabaseAdmin.from('UserFollow').delete().eq('follower_id', userId).eq('following_id', targetId),
-        supabaseAdmin.from('UserFollow').delete().eq('follower_id', targetId).eq('following_id', userId),
-      ]);
-
-      invalidateFilterCache(userId);
+      invalidateBlockFilters(userId, targetId);
       await writeIdentityAuditLog({
         req,
         actorUserId: userId,
@@ -571,8 +673,13 @@ router.post('/block-user', verifyToken, async (req, res) => {
           mode: 'existing_relationship',
         },
       });
+      // Again now that the block is recorded, for a follow added in between.
+      await blockService.removeFollowsBetween(userId, targetId);
       return res.json({ message: 'User blocked', relationship: updated });
     }
+
+    // Follows first, so a failure records nothing; again after the block below.
+    await blockService.removeFollowsBetween(userId, targetId);
 
     // Create a new blocked relationship
     const { data: rel, error } = await supabaseAdmin
@@ -593,12 +700,7 @@ router.post('/block-user', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to block user' });
     }
 
-    await Promise.allSettled([
-      supabaseAdmin.from('UserFollow').delete().eq('follower_id', userId).eq('following_id', targetId),
-      supabaseAdmin.from('UserFollow').delete().eq('follower_id', targetId).eq('following_id', userId),
-    ]);
-
-    invalidateFilterCache(userId);
+    invalidateBlockFilters(userId, targetId);
     await writeIdentityAuditLog({
       req,
       actorUserId: userId,
@@ -611,8 +713,10 @@ router.post('/block-user', verifyToken, async (req, res) => {
         mode: 'created_relationship',
       },
     });
+    await blockService.removeFollowsBetween(userId, targetId);
     res.json({ message: 'User blocked', relationship: rel });
   } catch (err) {
+    if (err.code === 'BLOCK_INCOMPLETE') return blockUnfinished(res, err);
     logger.error('Block user error', { error: err.message });
     res.status(500).json({ error: 'Failed to block user' });
   }
@@ -626,11 +730,13 @@ router.post('/:id/unblock', verifyToken, async (req, res) => {
     const relationshipId = req.params.id;
     const userId = req.user.id;
 
-    const { data: rel } = await supabaseAdmin
+    const { data: rel, error: readError } = await supabaseAdmin
       .from('Relationship')
       .select('*')
       .eq('id', relationshipId)
-      .single();
+      .maybeSingle();
+
+    if (readError && readError.code !== '22P02') return connectionReadUnavailable(res);
 
     // Only the blocker can unblock. Everyone else, participant or not, gets
     // the same not-found answer, so this route never confirms a block.
@@ -650,7 +756,7 @@ router.post('/:id/unblock', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to unblock user' });
     }
 
-    invalidateFilterCache(userId);
+    invalidateBlockFilters(userId, otherUserId);
     await writeIdentityAuditLog({
       req,
       actorUserId: userId,
@@ -722,6 +828,7 @@ router.get('/', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const { status, limit = 50, offset = 0 } = req.query;
+    const blockedIds = [...await blockService.blockedUserIds(userId)];
 
     let query = supabaseAdmin
       .from('Relationship')
@@ -741,6 +848,10 @@ router.get('/', verifyToken, async (req, res) => {
     if (status) {
       query = query.eq('status', status);
     }
+    if (blockedIds.length) {
+      query = query.not('requester_id', 'in', `(${blockedIds.join(',')})`)
+        .not('addressee_id', 'in', `(${blockedIds.join(',')})`);
+    }
 
     const { data: relationships, error } = await query;
 
@@ -750,10 +861,12 @@ router.get('/', verifyToken, async (req, res) => {
     }
 
     // Enrich with role info (who is the "other" user relative to current user)
+    const listed = await loadListedPeople((relationships || [])
+      .map(rel => (rel.requester?.id === userId ? rel.addressee?.id : rel.requester?.id)));
     const enriched = (relationships || []).map(rel => {
       const isRequester = rel.requester?.id === userId;
-      const requester = withChosenUsername(rel.requester);
-      const addressee = withChosenUsername(rel.addressee);
+      const requester = listedPerson(rel.requester, listed);
+      const addressee = listedPerson(rel.addressee, listed);
       return {
         ...rel,
         requester,
@@ -765,6 +878,7 @@ router.get('/', verifyToken, async (req, res) => {
 
     res.json({ relationships: enriched });
   } catch (err) {
+    if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return connectionReadUnavailable(res);
     logger.error('List relationships error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch connections' });
   }
@@ -775,25 +889,20 @@ router.get('/', verifyToken, async (req, res) => {
  */
 router.get('/requests/pending', verifyToken, async (req, res) => {
   try {
-    const userId = req.user.id;
-
-    const { data: requests, error } = await supabaseAdmin
-      .from('Relationship')
-      .select(`
-        id, status, created_at,
-        requester:requester_id (${USER_SELECT})
-      `)
-      .eq('addressee_id', userId)
-      .eq('status', 'pending')
-      .order('created_at', { ascending: false });
-
-    if (error) {
+    let requests;
+    try {
+      // The same read the assistant's "Needs you" uses (services/connectionRequests.js).
+      requests = await pendingReceived(req.user.id);
+    } catch (error) {
+      if (error.code !== 'PENDING_READ_FAILED') throw error;
       logger.error('Error fetching pending requests', { error: error.message });
       return res.status(500).json({ error: 'Failed to fetch pending requests' });
     }
 
-    res.json({ requests: (requests || []).map(r => ({ ...r, requester: withChosenUsername(r.requester) })) });
+    const listed = await loadListedPeople(requests.map(r => r.requester?.id));
+    res.json({ requests: requests.map(r => ({ ...r, requester: listedPerson(r.requester, listed) })) });
   } catch (err) {
+    if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return connectionReadUnavailable(res);
     logger.error('Pending requests error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch pending requests' });
   }
@@ -805,8 +914,9 @@ router.get('/requests/pending', verifyToken, async (req, res) => {
 router.get('/requests/sent', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
+    const blockedIds = [...await blockService.blockedUserIds(userId)];
 
-    const { data: requests, error } = await supabaseAdmin
+    let query = supabaseAdmin
       .from('Relationship')
       .select(`
         id, status, created_at,
@@ -815,14 +925,18 @@ router.get('/requests/sent', verifyToken, async (req, res) => {
       .eq('requester_id', userId)
       .eq('status', 'pending')
       .order('created_at', { ascending: false });
+    if (blockedIds.length) query = query.not('addressee_id', 'in', `(${blockedIds.join(',')})`);
+    const { data: requests, error } = await query;
 
     if (error) {
       logger.error('Error fetching sent requests', { error: error.message });
       return res.status(500).json({ error: 'Failed to fetch sent requests' });
     }
 
-    res.json({ requests: (requests || []).map(r => ({ ...r, addressee: withChosenUsername(r.addressee) })) });
+    const listed = await loadListedPeople((requests || []).map(r => r.addressee?.id));
+    res.json({ requests: (requests || []).map(r => ({ ...r, addressee: listedPerson(r.addressee, listed) })) });
   } catch (err) {
+    if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return connectionReadUnavailable(res);
     logger.error('Sent requests error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch sent requests' });
   }
@@ -851,9 +965,11 @@ router.get('/blocked', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch blocked users' });
     }
 
+    const listed = await loadListedPeople((blocked || [])
+      .map(rel => (rel.requester?.id === userId ? rel.addressee?.id : rel.requester?.id)));
     const enriched = (blocked || []).map(rel => {
-      const requester = withChosenUsername(rel.requester);
-      const addressee = withChosenUsername(rel.addressee);
+      const requester = listedPerson(rel.requester, listed);
+      const addressee = listedPerson(rel.addressee, listed);
       const blockedUser = rel.requester?.id === userId ? addressee : requester;
       return { ...rel, requester, addressee, blocked_user: blockedUser };
     });

@@ -8,7 +8,7 @@
  * sheet's own Save, which records the answer as it always has (a done radon task
  * with `tested_on` and `result_pci`).
  */
-const { jpegBlock } = require('./photos');
+const { jpegBlock, isPdf, pdfBlock } = require('./photos');
 
 // 1 pCi/L is 37 Bq/m³.
 const BQ_PER_PCI = 37;
@@ -38,10 +38,7 @@ function todayIn(timeZone, now = new Date()) {
  */
 async function reportBlock(bytes) {
   if (!Buffer.isBuffer(bytes) || !bytes.length || bytes.length > MAX_REPORT_BYTES) return null;
-  if (bytes.subarray(0, 5).toString('latin1') === '%PDF-') {
-    return { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: bytes.toString('base64') } };
-  }
-  return jpegBlock(bytes);
+  return isPdf(bytes) ? pdfBlock(bytes) : jpegBlock(bytes);
 }
 
 const dateFormat = (options) => new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', ...options });

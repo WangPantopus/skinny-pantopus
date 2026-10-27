@@ -201,6 +201,11 @@ function requireStepUp(purpose) {
       req.stepUp = { uid: payload.uid, sid: payload.sid, purpose: payload.purpose, method: payload.method, jti: payload.jti };
       return next();
     } catch (err) {
+      // The session's security record couldn't be read: the step-up token stays usable for a retry.
+      if (err.authBusy) {
+        logger.warn('auth.stepup.unavailable', { purpose, code: err.code });
+        return res.status(503).json({ error: err.message, code: 'AUTH_UNAVAILABLE' });
+      }
       logger.error('auth.stepup.error', { error: err.message, stack: err.stack });
       return res.status(500).json({ error: 'Step-up verification failed' });
     }

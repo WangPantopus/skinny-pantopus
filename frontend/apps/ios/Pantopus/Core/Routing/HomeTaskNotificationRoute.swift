@@ -27,11 +27,16 @@ enum HomeTaskNotificationRoute {
 public struct HomeTaskNotificationMetadata: Decodable, Sendable, Hashable {
     public let homeId: String?
     public let taskId: String?
-    private enum CodingKeys: String, CodingKey { case homeId = "home_id", taskId = "task_id" }
+    /// A brief's or nudge's assistant conversation (AI assistant phase 2 §3.2).
+    public let conversationId: String?
+    private enum CodingKeys: String, CodingKey {
+        case homeId = "home_id", taskId = "task_id", conversationId = "conversation_id"
+    }
 
     public init(from decoder: any Decoder) throws {
         let fields = try? decoder.container(keyedBy: CodingKeys.self)
         homeId = try? fields?.decode(String.self, forKey: .homeId)
         taskId = try? fields?.decode(String.self, forKey: .taskId)
+        conversationId = try? fields?.decode(String.self, forKey: .conversationId)
     }
 }

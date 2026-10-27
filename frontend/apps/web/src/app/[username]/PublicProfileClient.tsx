@@ -32,6 +32,13 @@ import { queryKeys } from '@/lib/query-keys';
 
 type RelationshipState = 'none' | 'pending_sent' | 'pending_received' | 'connected' | 'blocked';
 type ViewerContext = 'public' | 'neighborhood' | 'follower' | 'owner';
+
+// As the owner's Preview selector names them (components/profile/public/ProfileHeader.tsx).
+const OWNER_PREVIEW_LABELS: Record<Exclude<ViewerContext, 'owner'>, string> = {
+  public: 'Public',
+  neighborhood: 'Neighborhood',
+  follower: 'Followers',
+};
 type ProfileTab = 'overview' | 'portfolio' | 'missions' | 'reviews' | 'activity' | 'insights' | 'settings';
 
 /** Extended profile shape returned by the public profile API. */
@@ -118,6 +125,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
   const [loading, setLoading] = useState(!initialProfile);
   // A failed read that is not a 404 must not claim the profile doesn't exist.
   const [loadFailed, setLoadFailed] = useState(false);
+  const [profileRestricted, setProfileRestricted] = useState(false);
   const [activeTab, setActiveTab] = useState<ProfileTab>('overview');
   const [userGigs, setUserGigs] = useState<GigListItem[]>([]);
   const [gigsLoading, setGigsLoading] = useState(false);
@@ -132,6 +140,19 @@ export default function PublicProfileClient({ username, initialProfile }: Public
   const reviewsRequested = useRef<string | null>(null);
   const [postsLoading, setPostsLoading] = useState(false);
   const [ownerPreviewContext, setOwnerPreviewContext] = useState<ViewerContext>('owner');
+  // Settings → How neighbors see you links here with ?preview=public: your own profile opens as others see it.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('preview') === 'public') setOwnerPreviewContext('public');
+  }, []);
+  // Back to your own view, and off the link's ?preview=public so a reload stays there.
+  const leaveOwnerPreview = () => {
+    setOwnerPreviewContext('owner');
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has('preview')) return;
+    params.delete('preview');
+    const query = params.toString();
+    window.history.replaceState(window.history.state, '', `${window.location.pathname}${query ? `?${query}` : ''}`);
+  };
   const [shareCopied, setShareCopied] = useState(false);
   // Sharing your own profile while its link still has the made-up username asks once for a real one.
   const [usernamePromptOpen, setUsernamePromptOpen] = useState(false);
@@ -214,6 +235,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
   const loadProfile = useCallback(async () => {
     const current = captureAction();
     setLoadFailed(false);
+    setProfileRestricted(false);
     try {
       const profileData = UUID_REGEX.test(profileIdentifier)
         ? await api.users.getProfileById(profileIdentifier)
@@ -245,7 +267,14 @@ export default function PublicProfileClient({ username, initialProfile }: Public
       }
 
       console.error('Failed to load profile:', err);
-      if ((err as { statusCode?: number } | null)?.statusCode !== 404) setLoadFailed(true);
+      const status = (err as { statusCode?: number } | null)?.statusCode;
+      if (status === 403 || status === 404) {
+        // A previously rendered profile must disappear when access is refused.
+        setProfile(null);
+        setProfileRestricted(status === 403);
+      } else {
+        setLoadFailed(true);
+      }
     } finally {
       if (current()) setLoading(false);
     }
@@ -674,8 +703,10 @@ export default function PublicProfileClient({ username, initialProfile }: Public
     return (
       <div className="flex items-center justify-center py-20">
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-app mb-2">Profile not found</h2>
-          <p className="text-app-secondary mb-4">This user doesn&apos;t exist or has been removed.</p>
+          <h2 className="text-2xl font-bold text-app mb-2">{profileRestricted ? 'Profile unavailable' : 'Profile not found'}</h2>
+          <p className="text-app-secondary mb-4">
+            {profileRestricted ? "This profile isn't visible to your account." : "This user doesn't exist or has been removed."}
+          </p>
           <button
             onClick={() => router.push('/app')}
             className="bg-primary-600 text-white px-6 py-2 rounded-lg hover:bg-primary-700"
@@ -696,20 +727,37 @@ export default function PublicProfileClient({ username, initialProfile }: Public
   // ── Derived state ──
 
   const isOwnProfile = currentUser?.id === profile.id || currentUser?.username === profile.username;
-  // The server says when the username was made up (user_…, or the pre-October-7 kind built from the email).
-  const chosenHandle = profile.usernameIsGenerated ? null : chosenUsername(profile.username);
-  const realName = profile.firstName && profile.lastName
-    ? `${profile.firstName} ${profile.lastName}`
-    : profile.name || chosenHandle;
-  const fullName = realName || 'Pantopus member';
-
-  const displayRating = reviewStats.average || profile.average_rating || 0;
-  const displayReviewCount = reviewStats.total || profile.review_count || 0;
   const effectiveViewer: ViewerContext = isOwnProfile
     ? ownerPreviewContext
     : (connectionState === 'connected' ? 'follower' : 'public');
 
   const showOwnerOnly = effectiveViewer === 'owner';
+  // The page is read signed out, which names the person as other people see them: by their Local Profile's name,
+  // handle and photo. The owner's own view keeps their account's, as in the apps; Preview shows the others' view.
+  const shownProfile: PublicProfileData = showOwnerOnly && currentUser?.id === profile.id
+    ? {
+      ...profile,
+      username: currentUser.username,
+      usernameIsGenerated: currentUser.usernameIsGenerated,
+      name: currentUser.name,
+      firstName: currentUser.firstName,
+      lastName: currentUser.lastName,
+      profile_picture_url: currentUser.profile_picture_url,
+      profilePicture: currentUser.profilePicture,
+      avatar_url: currentUser.avatar_url,
+    }
+    : profile;
+  // The server says when the username was made up (user_…, or the pre-October-7 kind built from the email).
+  const chosenHandle = shownProfile.usernameIsGenerated ? null : chosenUsername(shownProfile.username);
+  const realName = shownProfile.firstName && shownProfile.lastName
+    ? `${shownProfile.firstName} ${shownProfile.lastName}`
+    : shownProfile.name || chosenHandle;
+  const fullName = realName || 'Pantopus member';
+  // Other people get no first name, so "You blocked …" uses the name's first word, as the apps do.
+  const shownFirstName = realName?.split(' ')[0] || null;
+
+  const displayRating = reviewStats.average || profile.average_rating || 0;
+  const displayReviewCount = reviewStats.total || profile.review_count || 0;
   // Someone you blocked can't be messaged (the block says so); the menu or Settings unblocks.
   const canMessage = connectionState !== 'blocked';
 
@@ -764,8 +812,24 @@ export default function PublicProfileClient({ username, initialProfile }: Public
         onSubmit={submitReport}
         entityType="user"
       />
+      {isOwnProfile && ownerPreviewContext !== 'owner' ? (
+        // Your own profile as someone else sees it has no Preview selector (that is in your view): say which view this
+        // is and give yours back.
+        <div className="w-full px-4 sm:px-6 lg:px-10 xl:px-12 py-3 bg-surface border-b border-app flex items-center justify-between gap-3 text-sm">
+          <span className="text-app">
+            Viewing as: <span className="font-semibold">{OWNER_PREVIEW_LABELS[ownerPreviewContext]}</span>
+          </span>
+          <button
+            type="button"
+            onClick={leaveOwnerPreview}
+            className="font-medium text-primary-600 hover:underline"
+          >
+            Back to your view
+          </button>
+        </div>
+      ) : null}
       <ProfileHeader
-        profile={profile}
+        profile={shownProfile}
         fullName={fullName}
         hasName={Boolean(realName)}
         handle={chosenHandle}
@@ -860,7 +924,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
             reviews={reviews}
             loading={gigsLoading || reviewsLoading || postsLoading}
             blocked={connectionState === 'blocked'}
-            firstName={profile.firstName || null}
+            firstName={shownFirstName}
           />
         )}
         {activeTab === 'insights' && showOwnerOnly && (

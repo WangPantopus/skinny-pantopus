@@ -145,11 +145,13 @@ public final class BusinessProfileViewModel {
         do {
             let detail = try await loadDetail()
             let publicResponse = await loadPublic(username: detail.business.username)
+            let hours = try await loadHours(from: detail, publicResponse: publicResponse)
             let reviewsResponse = await loadReviewsAndStats()
             await loadNamedPage(username: detail.business.username)
             let content = build(
                 from: detail,
                 publicResponse: publicResponse,
+                hours: hours,
                 reviewsResponse: reviewsResponse
             )
             state = .loaded(content)
@@ -203,6 +205,23 @@ public final class BusinessProfileViewModel {
             logger.debug("Public business fetch skipped (unpublished or error): \(error)")
             return nil
         }
+    }
+
+    /// Draft businesses have no public payload. Read their saved hours through
+    /// the existing authorized endpoint instead of presenting them as unset.
+    private func loadHours(
+        from detail: BusinessDetailResponse,
+        publicResponse: BusinessPublicResponse?
+    ) async throws -> [BusinessHoursDTO] {
+        if let publicResponse { return publicResponse.hours }
+        guard detail.access?.isOwner == true || detail.access?.permissions?.contains("hours.view") == true,
+              let location = detail.profile?.primaryLocation
+              ?? detail.locations.first(where: { $0.isPrimary == true })
+              ?? detail.locations.first else { return [] }
+        let response: BusinessLocationHoursResponse = try await client.request(
+            BusinessesEndpoints.locationHours(businessId: businessId, locationId: location.id)
+        )
+        return response.hours
     }
 
     /// C4 — resolves `GET /api/b/:username/:slug` so the named custom page
@@ -288,6 +307,7 @@ extension BusinessProfileViewModel {
     private func build(
         from detail: BusinessDetailResponse,
         publicResponse: BusinessPublicResponse?,
+        hours: [BusinessHoursDTO],
         reviewsResponse: PublicProfile?
     ) -> BusinessProfileContent {
         let business = detail.business
@@ -296,7 +316,10 @@ extension BusinessProfileViewModel {
             ?? detail.locations.first { $0.isPrimary == true }
             ?? detail.locations.first
 
-        let calendar = Calendar.current
+        var calendar = Calendar.current
+        if let identifier = primaryLocation?.timezone, let timeZone = TimeZone(identifier: identifier) {
+            calendar.timeZone = timeZone
+        }
         let now = Date()
         let weekday = calendar.component(.weekday, from: now) - 1
 
@@ -321,11 +344,13 @@ extension BusinessProfileViewModel {
             // header. `business.verified` is the account row's flag, not the
             // business's verification, so it never earns the mark on its own.
             isVerified: BusinessCardModel.isVerified(tier: profile?.identityVerificationTier),
-            logoIcon: nil
+            logoIcon: nil,
+            logoImageURL: business.profilePictureURL.flatMap(URL.init(string:)),
+            bannerImageURL: business.coverPhotoURL.flatMap(URL.init(string:))
         )
 
         let scopedHours = scopedHours(
-            from: publicResponse?.hours ?? [],
+            from: hours,
             primaryLocationId: primaryLocation?.id
         )
         let status = computeOpenState(scopedHours, now: now, calendar: calendar)
@@ -515,6 +540,15 @@ extension BusinessProfileViewModel {
         let minutesNow = calendar.component(.hour, from: now) * 60 + calendar.component(.minute, from: now)
         let byDay = Dictionary(grouping: rows) { max(0, min(6, $0.dayOfWeek)) }
 
+        // Overnight hours belong to the day the business opened, even when
+        // the following day's own schedule is closed.
+        if let previous = byDay[(weekday + 6) % 7]?.first,
+           previous.isClosed != true,
+           let open = minutes(previous.openTime),
+           let close = minutes(previous.closeTime),
+           close < open, minutesNow < close {
+            return openState(closingAt: previous.closeTime)
+        }
         if let today = byDay[weekday]?.first, let state = todayOpenState(today, minutesNow: minutesNow) {
             return state
         }
@@ -528,13 +562,8 @@ extension BusinessProfileViewModel {
         guard today.isClosed != true,
               let openM = minutes(today.openTime),
               let closeM = minutes(today.closeTime) else { return nil }
-        if minutesNow >= openM, minutesNow < closeM {
-            return BusinessOpenState(
-                isOpen: true,
-                statusLabel: "Open now",
-                statusDetail: "Closes \(formatTime(today.closeTime ?? ""))",
-                chipLabel: "Open now"
-            )
+        if minutesNow >= openM, closeM < openM || minutesNow < closeM {
+            return openState(closingAt: today.closeTime)
         }
         if minutesNow < openM {
             return BusinessOpenState(
@@ -545,6 +574,15 @@ extension BusinessProfileViewModel {
             )
         }
         return nil
+    }
+
+    private func openState(closingAt time: String?) -> BusinessOpenState {
+        BusinessOpenState(
+            isOpen: true,
+            statusLabel: "Open now",
+            statusDetail: "Closes \(formatTime(time ?? ""))",
+            chipLabel: "Open now"
+        )
     }
 
     private func nextOpening(byDay: [Int: [BusinessHoursDTO]], weekday: Int) -> BusinessOpenState? {
@@ -741,11 +779,13 @@ extension BusinessProfileViewModel {
         return business.city ?? business.state
     }
 
+    /// A bare domain gets https; any other scheme (`tel:`, `javascript:`,
+    /// `pantopus://`) isn't a website.
     private func normalizedWebsite(_ raw: String?) -> URL? {
         guard let raw, !raw.isEmpty else { return nil }
-        if let url = URL(string: raw), url.scheme != nil {
-            return url
+        if URL(string: raw)?.scheme != nil {
+            return ExternalLink.webURL(raw)
         }
-        return URL(string: "https://\(raw)")
+        return ExternalLink.webURL("https://\(raw)")
     }
 }

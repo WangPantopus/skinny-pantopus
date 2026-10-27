@@ -63,9 +63,11 @@ import app.pantopus.android.data.api.services.HomeVerificationApi
 import app.pantopus.android.data.api.services.HomesApi
 import app.pantopus.android.data.api.services.HubApi
 import app.pantopus.android.data.api.services.IdentityCenterApi
+import app.pantopus.android.data.api.services.LinkPreviewApi
 import app.pantopus.android.data.api.services.ListingOffersApi
 import app.pantopus.android.data.api.services.ListingsMutationApi
 import app.pantopus.android.data.api.services.ListingsReadApi
+import app.pantopus.android.data.api.services.LocalProfilesApi
 import app.pantopus.android.data.api.services.MailComposeApi
 import app.pantopus.android.data.api.services.MailDayApi
 import app.pantopus.android.data.api.services.MailboxApi
@@ -128,6 +130,7 @@ import app.pantopus.android.data.auth.DPoPReplayGuard
 import app.pantopus.android.data.auth.DeviceIdentityInterceptor
 import app.pantopus.android.data.auth.StepUpInterceptor
 import app.pantopus.android.data.auth.TokenAuthenticator
+import app.pantopus.android.data.chats.ChatMediaInterceptor
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.adapters.Rfc3339DateJsonAdapter
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
@@ -178,6 +181,10 @@ object NetworkModule {
             .add(app.pantopus.android.data.api.models.homes.BillDecimalAdapter())
             .add(app.pantopus.android.data.api.models.homes.MaintenanceCostJsonAdapter())
             .add(app.pantopus.android.data.api.models.homes.UpdateMaintenanceRequestJsonAdapter())
+            // A post edit's cleared event end goes out as explicit JSON null.
+            .add(app.pantopus.android.data.api.models.posts.PostUpdateRequestJsonAdapter())
+            // How neighbors see you: "no photo" goes out as explicit JSON null.
+            .add(app.pantopus.android.data.api.models.identity.LocalProfileUpdateRequestJsonAdapter())
             .add(app.pantopus.android.data.api.models.homes.PollOptionAdapter())
             .add(app.pantopus.android.data.api.models.gigs.GigStopJsonAdapterFactory)
             // `gig.items` stored as a JSON string by older writers reads as the list inside it.
@@ -220,12 +227,14 @@ object NetworkModule {
         tokenAuthenticator: TokenAuthenticator,
         retryInterceptor: RetryInterceptor,
         dpopReplayGuard: DPoPReplayGuard,
+        chatMediaInterceptor: ChatMediaInterceptor,
     ): OkHttpClient {
         val logging = SafeHttpLoggingInterceptor(enabled = BuildConfig.DEBUG)
         // No HTTP cache: replies carry door codes, medical cards, the wallet and the profile, and OkHttp's disk
         // cache kept them while signed in. Coil keeps images in its own cache (PantopusApplication).
         return OkHttpClient
             .Builder()
+            .addInterceptor(chatMediaInterceptor)
             // Outermost: UTC timestamps reach Moshi as "Z", which Android 8–13 can parse.
             .addInterceptor(UtcTimestampInterceptor())
             // X-Client-Platform + X-Device-Id on every API request (both clients).
@@ -242,7 +251,7 @@ object NetworkModule {
             .authenticator(tokenAuthenticator)
             .addInterceptor(retryInterceptor)
             .addInterceptor(logging)
-            .addInterceptor(SentryOkHttpInterceptor())
+            .addInterceptor(SentryOkHttpInterceptor(app.pantopus.android.data.observability.scrubbedHttpSpan))
             .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
             .readTimeout(READ_WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
             .writeTimeout(READ_WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
@@ -312,7 +321,7 @@ object NetworkModule {
             .addInterceptor(platformHeader)
             .addInterceptor(retryInterceptor)
             .addInterceptor(logging)
-            .addInterceptor(SentryOkHttpInterceptor())
+            .addInterceptor(SentryOkHttpInterceptor(app.pantopus.android.data.observability.scrubbedHttpSpan))
             .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
             .readTimeout(READ_WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
             .writeTimeout(READ_WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
@@ -594,6 +603,10 @@ object NetworkModule {
 
     @Provides
     @Singleton
+    fun provideLinkPreviewApi(retrofit: Retrofit): LinkPreviewApi = retrofit.create(LinkPreviewApi::class.java)
+
+    @Provides
+    @Singleton
     fun providePlaceApi(retrofit: Retrofit): PlaceApi = retrofit.create(PlaceApi::class.java)
 
     @Provides
@@ -696,6 +709,10 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideIdentityCenterApi(retrofit: Retrofit): IdentityCenterApi = retrofit.create(IdentityCenterApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideLocalProfilesApi(retrofit: Retrofit): LocalProfilesApi = retrofit.create(LocalProfilesApi::class.java)
 
     @Provides
     @Singleton

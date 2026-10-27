@@ -171,8 +171,11 @@ final class GigComposeMagicTests: XCTestCase {
         XCTAssertEqual(GigComposeCategory.from(backendCategory: "Pet Care"), .petcare)
         XCTAssertEqual(GigComposeCategory.from(backendCategory: "Child Care"), .childcare)
         XCTAssertEqual(GigComposeCategory.from(backendCategory: "Tech Support"), .tech)
-        XCTAssertEqual(GigComposeCategory.from(backendCategory: "Grocery Pickup"), .delivery)
-        XCTAssertEqual(GigComposeCategory.from(backendCategory: "Gardening"), .other, "Unknown buckets land on Other.")
+        XCTAssertEqual(GigComposeCategory.from(backendCategory: "Grocery Pickup"), .groceryPickup)
+        XCTAssertEqual(GigComposeCategory.from(backendCategory: "Gardening"), .gardening)
+        XCTAssertEqual(GigComposeCategory.from(backendCategory: "Event Help"), .eventHelp)
+        XCTAssertEqual(GigComposeCategory.from(backendCategory: "Landscaping Pro"), .landscapingPro)
+        XCTAssertEqual(GigComposeCategory.from(backendCategory: "Snow Removal"), .other, "Unknown buckets land on Other.")
         XCTAssertEqual(GigComposeCategory.from(backendCategory: "Other"), .other)
         XCTAssertNil(GigComposeCategory.from(backendCategory: nil))
         XCTAssertNil(GigComposeCategory.from(backendCategory: " "), "Blank category defers to the keyword fallback.")
@@ -257,8 +260,8 @@ final class GigComposeMagicTests: XCTestCase {
         XCTAssertTrue(vm.chrome.primaryCTAEnabled)
     }
 
-    func testManualPickerUsesEightConcreteArchetypes() {
-        XCTAssertEqual(GigComposeCategory.manualPickerCases.count, 8)
+    func testManualPickerUsesEveryConcreteCategory() {
+        XCTAssertEqual(GigComposeCategory.manualPickerCases.count, GigComposeCategory.allCases.count - 1)
         XCTAssertFalse(GigComposeCategory.manualPickerCases.contains(.other))
     }
 

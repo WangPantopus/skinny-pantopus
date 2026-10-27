@@ -6,6 +6,7 @@
  *   POST /chat                   — Streaming chat agent (SSE)
  *   POST /draft/listing          — Single-turn listing draft
  *   POST /draft/post             — Single-turn post draft
+ *   POST /draft/post-suggestion  — The composer's AI assist: the whole post from photos, place and notes
  *   POST /draft/pickup-schedule  — Pickup days from a flyer photo, for the Today editor
  *   POST /draft/radon-result     — Radon result from a lab report photo or PDF, for the Today radon sheet
  *   POST /draft/mail-opening    — Mail opening line suggestion
@@ -14,7 +15,15 @@
  *   GET  /property-profile       — Property intelligence profile
  *   GET  /pulse                  — Neighborhood Pulse (cold-start)
  *   GET  /conversations          — List user's AI conversations
+ *   GET  /conversations/:id/messages?cards= — One conversation's turns, with the cards the app can show
  *   DELETE /conversations/:id    — Delete a conversation
+ *   POST /nudges/:id/fewer       — "Fewer like this" on a nudge or the morning brief
+ *   POST /cards/:cardId/state    — What ran on one of the person's cards (done or dismissed)
+ *   GET|POST|DELETE /memory, PATCH|DELETE /memory/:id, POST /memory/reviewed — What Pantopus remembers
+ *   GET  /needs-you              — What waits on the person, for Today and the assistant
+ *   GET|POST /follow-ups, DELETE /follow-ups/:id — Check-backs ("check back Thursday")
+ *   GET  /glance/:topic          — Pickup, today or nearby in a few sentences, for Siri and the launcher
+ *   GET|POST /rules, PATCH|DELETE /rules/:id — What Pantopus does for you (standing rules)
  */
 const express = require('express');
 const Joi = require('joi');
@@ -26,13 +35,22 @@ const validate = require('../middleware/validate');
 const { aiChatLimiter, aiDraftLimiter } = require('../middleware/rateLimiter');
 const { asyncHandler } = require('../errorHandler');
 const agentService = require('../services/ai/agentService');
+const nudgeEngine = require('../services/ai/nudges/engine');
+const cardState = require('../services/ai/cardState');
+const memory = require('../services/ai/memory');
+const { needsYou } = require('../services/ai/needsYou');
+const followUps = require('../services/ai/followUps');
+const { glance, GlanceError } = require('../services/ai/glance');
+const rules = require('../services/ai/rules');
 const radonReport = require('../services/ai/radonReport');
+const postSuggestion = require('../services/ai/postSuggestion');
 const { CHAT_MODEL, DRAFT_MODEL } = require('../config/anthropic');
 const propertyIntelligenceService = require('../services/ai/propertyIntelligenceService');
 const neighborhoodPulseComposer = require('../services/ai/neighborhoodPulseComposer');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const { checkHomePermission } = require('../utils/homePermissions');
+const { getRequestSessionScope } = require('../utils/requestSessionScope');
 
 function aiErrorStatus(errorCode) {
   if (errorCode === 'AI_UNAVAILABLE') return 503;
@@ -42,6 +60,19 @@ function aiErrorStatus(errorCode) {
 
 // ─── Validation Schemas ─────────────────────────────────────────────────────
 
+// The draft cards this app can show beyond the original ones (e.g. "pickup_schedule",
+// "action", "link"). Unknown names are ignored, so older servers and newer apps get along.
+const cardsSchema = Joi.array().items(Joi.string().max(40)).max(20);
+
+/** The same list on a GET, comma-separated (`?cards=pickup_schedule,action,link`). */
+function cardsQuery(listed) {
+  if (listed === undefined) return { value: [] };
+  if (typeof listed !== 'string') return { error: new Error('cards must be a comma-separated list') };
+  const names = listed.split(',').map((name) => name.trim()).filter(Boolean);
+  const { error } = Joi.object({ cards: cardsSchema }).validate({ cards: names });
+  return error ? { error } : { value: names };
+}
+
 const chatSchema = Joi.object({
   message: Joi.string().min(1).max(2000).required(),
   conversationId: Joi.string().uuid().optional(),
@@ -49,10 +80,17 @@ const chatSchema = Joi.object({
     city: Joi.string().max(100),
     state: Joi.string().max(50),
   }).optional(),
+  // The person's own uploads (POST /api/upload/ai-media hands back ai-photo: references) or image URLs.
   images: Joi.array().items(Joi.string().uri()).max(5).optional(),
-  // The draft cards this app can show beyond the original ones (e.g. "pickup_schedule").
-  // Unknown names are ignored, so older servers and newer apps get along.
-  cards: Joi.array().items(Joi.string().max(40)).max(20).optional(),
+  cards: cardsSchema.optional(),
+  // The screen the person tapped Ask on (docs/product/ai-assistant-phase1-contract-2026-10-20.md §6).
+  // Unknown surfaces are ignored; access is checked as that screen checks it.
+  context: Joi.object({
+    surface: Joi.string().max(40).required(),
+    id: Joi.string().uuid().optional().allow(null),
+    home_id: Joi.string().uuid().optional().allow(null),
+    section: Joi.string().max(40).optional().allow(null),
+  }).optional().allow(null),
 });
 
 const draftGigSchema = Joi.object({
@@ -123,8 +161,16 @@ router.get('/health', (req, res) => {
 // ─── Streaming Chat ─────────────────────────────────────────────────────────
 
 router.post('/chat', verifyToken, aiChatLimiter, validate(chatSchema), asyncHandler(async (req, res) => {
-  const { message, conversationId, coarseLocation, images, cards } = req.body;
+  const { message, conversationId, coarseLocation, images, cards, context } = req.body;
   const userId = req.user.id;
+  // Action cards that create household tasks carry this session's scope, as the
+  // tasks screen's own requests do (utils/requestSessionScope.js).
+  let sessionScope = null;
+  try {
+    sessionScope = getRequestSessionScope(req).session_scope;
+  } catch {
+    sessionScope = null;
+  }
 
   // Set up SSE headers
   res.writeHead(200, {
@@ -164,7 +210,10 @@ router.post('/chat', verifyToken, aiChatLimiter, validate(chatSchema), asyncHand
   });
 
   await agentService.streamChat(
-    { userId, conversationId, message, coarseLocation, images, cards, signal: clientGone.signal },
+    {
+      userId, conversationId, message, coarseLocation, images, cards, context, sessionScope,
+      user: { id: userId, role: req.user.role || null }, signal: clientGone.signal,
+    },
     sseWriter
   );
 }));
@@ -241,6 +290,58 @@ router.post('/draft/post', verifyToken, aiDraftLimiter, validate(draftPostSchema
   res.json(result);
 }));
 
+// ─── Post Suggestion (the composer's AI assist) ─────────────────────────────
+// Fills the composer's fields from the person's photos (`photos`, up to 4), the place
+// they picked and what they've written so far; the composer's own Post publishes. The
+// photos are read in memory and never stored.
+
+const receivePostPhotos = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fieldNameSize: 100, fieldSize: 24 * 1024, fields: 16, parts: 24,
+    files: postSuggestion.MAX_PHOTOS, fileSize: postSuggestion.MAX_PHOTO_BYTES,
+  },
+}).array('photos', postSuggestion.MAX_PHOTOS);
+
+function postPhotosUpload(req, res, next) {
+  receivePostPhotos(req, res, (err) => {
+    if (!err) return next();
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({ error: 'FILE_TOO_LARGE', message: 'One of those photos is over 10 MB. Try a smaller one.' });
+    }
+    if (err.code === 'LIMIT_FILE_COUNT' || err.code === 'LIMIT_UNEXPECTED_FILE') {
+      return res.status(400).json({ error: 'TOO_MANY_PHOTOS', message: `Choose up to ${postSuggestion.MAX_PHOTOS} photos.` });
+    }
+    return res.status(400).json({ error: 'FILE_UNREADABLE', message: "Couldn't read those photos. Please try again." });
+  });
+}
+
+const draftPostSuggestionSchema = Joi.object({
+  postType: Joi.string().valid(...postSuggestion.POST_TYPES).required(),
+  audience: Joi.string().valid('nearby', 'connections').optional(),
+  // What the person has filled in so far.
+  title: Joi.string().max(255).allow('').optional(),
+  body: Joi.string().max(5000).allow('').optional(),
+  businessName: Joi.string().max(255).allow('').optional(),
+  eventVenue: Joi.string().max(255).allow('').optional(),
+  lastSeenLocation: Joi.string().max(255).allow('').optional(),
+  // The place they tagged (its name and address), or the area they're posting to ("Camas, WA").
+  place: Joi.string().max(255).allow('').optional(),
+  placeAddress: Joi.string().max(500).allow('').optional(),
+});
+
+router.post('/draft/post-suggestion', verifyToken, aiDraftLimiter, postPhotosUpload, validate(draftPostSuggestionSchema), asyncHandler(async (req, res) => {
+  const files = req.files || [];
+  if (!files.length && !postSuggestion.hasWords(req.body)) {
+    return res.status(400).json({ error: 'NOTHING_TO_GO_ON', message: 'Add a photo or a few words first.' });
+  }
+  const result = await agentService.suggestPost({ files, fields: req.body, userId: req.user.id });
+  if (result.error) {
+    return res.status(aiErrorStatus(result.error)).json(result);
+  }
+  res.json(result);
+}));
+
 // ─── Pickup Days from a Flyer ───────────────────────────────────────────────
 // Fills the pickup editor; the editor's own Save writes the days.
 
@@ -265,7 +366,7 @@ router.post('/draft/pickup-schedule', verifyToken, aiDraftLimiter, validate(draf
 
 const receiveRadonReport = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: radonReport.MAX_REPORT_BYTES, files: 1 },
+  limits: { fieldNameSize: 100, fieldNestingDepth: 3, fieldArrayIndexLimit: 32, fileSize: radonReport.MAX_REPORT_BYTES, files: 1, fields: 8, parts: 9, fieldSize: 4096 },
 }).single('file');
 
 function radonReportUpload(req, res, next) {
@@ -414,15 +515,21 @@ router.get('/pulse', verifyToken, asyncHandler(async (req, res) => {
 // ─── Conversation Management ────────────────────────────────────────────────
 
 router.get('/conversations', verifyToken, asyncHandler(async (req, res) => {
-  const conversations = await agentService.listConversations(req.user.id);
+  const { value: order, error } = Joi.string().valid('newest', 'oldest').default('newest').validate(req.query.order);
+  if (error) return res.status(400).json({ error: 'Invalid conversation order' });
+  const conversations = await agentService.listConversations(req.user.id, { oldestFirst: order === 'oldest' });
   res.json({ conversations });
 }));
 
-// A conversation's history, so an app can show it again after a relaunch.
+// A conversation's history, so an app can show it again after a relaunch. `?cards=` is the
+// chat request's list, comma-separated: an app gets back only the cards it can show, so a
+// build without action cards never sees one that another build of the same account made.
 router.get('/conversations/:id/messages', verifyToken, asyncHandler(async (req, res) => {
   const { error: invalid } = Joi.string().uuid().validate(req.params.id);
   if (invalid) return res.status(404).json({ error: 'Conversation not found' });
-  const conversation = await agentService.getConversationMessages(req.user.id, req.params.id);
+  const { value: cards, error: badCards } = cardsQuery(req.query.cards);
+  if (badCards) return res.status(400).json({ error: 'Validation failed', message: badCards.message });
+  const conversation = await agentService.getConversationMessages(req.user.id, req.params.id, { cards });
   if (!conversation) return res.status(404).json({ error: 'Conversation not found' });
   res.json(conversation);
 }));
@@ -434,6 +541,162 @@ router.delete('/conversations/:id', verifyToken, asyncHandler(async (req, res) =
     return res.status(404).json({ error: 'Conversation not found' });
   }
   res.json({ message: 'Conversation deleted' });
+}));
+
+// ─── "Fewer like this" ──────────────────────────────────────────────────────
+// The secondary action on every nudge's card (phase 2 contract §3.6): mutes that kind
+// of suggestion for 30 days; on the morning brief, the plain briefing comes back.
+
+router.post('/nudges/:notificationId/fewer', verifyToken, asyncHandler(async (req, res) => {
+  const result = await nudgeEngine.fewerLikeThis(req.user.id, req.params.notificationId);
+  if (!result) return res.status(404).json({ error: 'Suggestion not found' });
+  res.json(result);
+}));
+
+// ─── Card done states ───────────────────────────────────────────────────────
+// Phase 3 contract §4.2: the apps report what ran on a card, so every device (and a
+// reinstall) shows it done. The writes limiter verifyToken applies covers it.
+
+const cardStateSchema = Joi.object({
+  status: Joi.string().valid('done', 'dismissed').required(),
+  action_id: Joi.when('status', {
+    is: 'done',
+    then: Joi.string().max(40).required(),
+    otherwise: Joi.string().max(40).allow(null).optional(),
+  }),
+  item_id: Joi.string().max(100).allow(null).optional(),
+  link: Joi.string().max(500).allow(null, '').optional(),
+});
+
+router.post('/cards/:cardId/state', verifyToken, validate(cardStateSchema), asyncHandler(async (req, res) => {
+  const result = await cardState.reportState(req.user.id, req.params.cardId, req.body);
+  if (result.code) return res.status(result.status).json({ error: result.message, code: result.code });
+  res.json(result);
+}));
+
+// ─── What Pantopus remembers ────────────────────────────────────────────────
+// Phase 3 contract §5.4: the person's own items only. An item is added only from a
+// memory_save card they tapped (POST with the card's id), as the card showed it.
+
+function memoryRoute(handler) {
+  return asyncHandler(async (req, res) => {
+    try {
+      await handler(req, res);
+    } catch (err) {
+      if (err instanceof memory.MemoryError) return res.status(err.status).json({ error: err.message, code: err.code });
+      throw err;
+    }
+  });
+}
+
+router.get('/memory', verifyToken, memoryRoute(async (req, res) => {
+  res.json(await memory.listMemory(req.user.id));
+}));
+
+router.post('/memory', verifyToken, validate(Joi.object({ card_id: Joi.string().uuid().required() })), memoryRoute(async (req, res) => {
+  const { status, item } = await memory.saveFromCard(req.user.id, req.body.card_id);
+  res.status(status).json({ item });
+}));
+
+router.post('/memory/reviewed', verifyToken, memoryRoute(async (req, res) => {
+  res.json(await memory.markReviewed(req.user.id));
+}));
+
+router.patch('/memory/:id', verifyToken, validate(Joi.object({ fact: Joi.string().max(1000).required() })), memoryRoute(async (req, res) => {
+  res.json({ item: await memory.editFact(req.user.id, req.params.id, req.body.fact) });
+}));
+
+router.delete('/memory/:id', verifyToken, memoryRoute(async (req, res) => {
+  await memory.forget(req.user.id, req.params.id);
+  res.status(204).end();
+}));
+
+router.delete('/memory', verifyToken, memoryRoute(async (req, res) => {
+  res.json(await memory.forgetAll(req.user.id));
+}));
+
+// ─── Needs you ──────────────────────────────────────────────────────────────
+// Phase 3 contract §6.2: read as the person from the screens' own services, each source
+// within 1.5 seconds (`partial` when one was left out). No model call, nothing written.
+
+router.get('/needs-you', verifyToken, asyncHandler(async (req, res) => {
+  res.json(await needsYou({ userId: req.user.id, user: { id: req.user.id, role: req.user.role || null } }));
+}));
+
+// ─── Follow-ups ─────────────────────────────────────────────────────────────
+// Phase 3 contract §7.1: set only from a follow_up card the person tapped, as it was shown.
+
+function followUpRoute(handler) {
+  return asyncHandler(async (req, res) => {
+    try {
+      await handler(req, res);
+    } catch (err) {
+      if (err instanceof followUps.FollowUpError) return res.status(err.status).json({ error: err.message, code: err.code });
+      throw err;
+    }
+  });
+}
+
+router.get('/follow-ups', verifyToken, followUpRoute(async (req, res) => {
+  res.json({ follow_ups: await followUps.listWaiting(req.user.id) });
+}));
+
+router.post('/follow-ups', verifyToken, validate(Joi.object({ card_id: Joi.string().uuid().required() })), followUpRoute(async (req, res) => {
+  const { status, follow_up: followUp } = await followUps.setFromCard(req.user.id, req.body.card_id);
+  res.status(status).json({ follow_up: followUp });
+}));
+
+router.delete('/follow-ups/:id', verifyToken, followUpRoute(async (req, res) => {
+  res.json(await followUps.cancel(req.user.id, req.params.id));
+}));
+
+// ─── Glance answers ─────────────────────────────────────────────────────────
+// Phase 3 contract §8.2: written from facts as the person (no model call, nothing written).
+// A home_id must be theirs: chosenHome would quietly fall back to the default home.
+
+router.get('/glance/:topic', verifyToken, aiDraftLimiter, asyncHandler(async (req, res) => {
+  const homeId = req.query.home_id ?? null;
+  try {
+    res.json(await glance(req.user.id, req.params.topic, { homeId }));
+  } catch (err) {
+    if (err instanceof GlanceError) return res.status(404).json({ code: err.code, speech: err.speech, link: err.link });
+    throw err;
+  }
+}));
+
+// ─── Standing rules ─────────────────────────────────────────────────────────
+// Phase 3 contract §18.5: the person's own rules only. A rule is turned on only from a
+// rule_save card they tapped (POST with the card's id), as the card showed it.
+
+function ruleRoute(handler) {
+  return asyncHandler(async (req, res) => {
+    try {
+      await handler(req, res);
+    } catch (err) {
+      if (err instanceof rules.RuleError) return res.status(err.status).json({ error: err.message, code: err.code });
+      throw err;
+    }
+  });
+}
+
+router.get('/rules', verifyToken, ruleRoute(async (req, res) => {
+  res.json(await rules.listRules(req.user.id));
+}));
+
+router.post('/rules', verifyToken, validate(Joi.object({ card_id: Joi.string().uuid().required() })), ruleRoute(async (req, res) => {
+  const { status, rule } = await rules.saveFromCard(req.user.id, req.body.card_id);
+  res.status(status).json({ rule });
+}));
+
+const ruleChangeSchema = Joi.object({ enabled: Joi.boolean(), extend: Joi.boolean().valid(true) }).or('enabled', 'extend');
+
+router.patch('/rules/:id', verifyToken, validate(ruleChangeSchema), ruleRoute(async (req, res) => {
+  res.json(await rules.changeRule({ id: req.user.id, role: req.user.role || null }, req.params.id, req.body));
+}));
+
+router.delete('/rules/:id', verifyToken, ruleRoute(async (req, res) => {
+  await rules.deleteRule(req.user.id, req.params.id);
+  res.status(204).end();
 }));
 
 // ─── Audio Transcription ─────────────────────────────────────────────────────

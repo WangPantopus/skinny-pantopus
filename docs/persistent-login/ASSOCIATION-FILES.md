@@ -14,37 +14,26 @@ They gate four things the design depends on:
 | `assetlinks.json` → `common.handle_all_urls` | Android App Links (`autoVerify`) | same deep links on Android |
 | `assetlinks.json` → `common.get_login_creds` | Credential Manager: saved passwords / passkeys / Sign in with Google for the app are shared with the site | L3 on Android (Phase 3) |
 
-## Current state (2026-08-18)
+## Current state (October 23, 2026)
 
-- **iOS — done.** `6UYZBA546R.app.pantopus.ios` was added to `applinks.details`
-  (same paths as the legacy entry) and to `webcredentials.apps`. The legacy Expo
-  entry `6UYZBA546R.com.pantopus.app` is kept until that app is retired.
-  ⚠️ The Team ID `6UYZBA546R` is inherited from the Expo app; the native
-  project's `DEVELOPMENT_TEAM` is intentionally blank in
-  `frontend/apps/ios/project.yml`. **Confirm the native app is signed by the
-  same team** (Xcode → Signing & Capabilities → Team, or
-  `security find-identity -v -p codesigning`). If it is a different team, rerun
-  the generator with the right `APPLE_TEAM_ID`.
-- **Android — NOT done, on purpose.** The `app.pantopus.android` statement
-  needs the SHA-256 fingerprint(s) of the certificate(s) that sign the APK the
-  user actually installs. Those are **not in the repo**: the release keystore is
-  a CI secret (`ANDROID_KEYSTORE_BASE64` in `.github/workflows/android-beta.yml`)
-  and, with Play App Signing, Google re-signs the app with a key only visible in
-  Play Console. Writing a guessed fingerprint would silently break App Link
-  verification, so nothing was added. The legacy `com.pantopus.app` statement is
-  kept.
+The founder chose to update both original Pantopus listings under `com.pantopus.app`. Keep the `app.pantopus.ios` and `app.pantopus.android` entries for already distributed pilot builds, but the generator now defaults to the original store identities.
+
+- iOS: `6UYZBA546R.com.pantopus.app` already has the current Universal Link paths and web credentials. The published 1.5.0 build uses the same signing team. Preserve the pilot entry as well.
+- Android: the original app's Play Console Digital Asset Links snippet was rechecked October 23. Its Play-signing SHA-256 is `33:60:AE:F8:09:B6:BF:18:3F:FB:DE:4F:F7:CD:BD:68:0A:F0:2E:5F:84:61:5A:2E:9A:A0:F3:89:EF:73:02:EF`. The original statement now includes both App Links and Credential Manager relations. Keep the separate pilot statement and its existing signing history.
+- A Play upload-key reset does not change the Play app-signing certificate or this production statement. Never add the upload or debug certificate to the production association to work around a signing mismatch.
+- Hosted JSON and physical, store-installed app verification remain separate checks after deployment.
 
 ## What values are needed
 
 | Variable | Where to get it |
 |---|---|
-| `APPLE_TEAM_ID` | Apple Developer → Membership → Team ID; must equal the team that signs `app.pantopus.ios` |
-| `IOS_BUNDLE_ID` | `app.pantopus.ios` (default) |
-| `ANDROID_PACKAGE` | `app.pantopus.android` (default; `applicationId` in `frontend/apps/android/app/build.gradle.kts`) |
-| `ANDROID_SHA256_FINGERPRINTS` | Comma-separated. Include **all** of: |
+| `APPLE_TEAM_ID` | Apple Developer → Membership → Team ID; must equal the team that signs `com.pantopus.app` |
+| `IOS_BUNDLE_ID` | `com.pantopus.app` (default) |
+| `ANDROID_PACKAGE` | `com.pantopus.app` (default; `applicationId` in `frontend/apps/android/app/build.gradle.kts`) |
+| `ANDROID_SHA256_FINGERPRINTS` | Comma-separated. Use the applicable **Play app-signing certificates**: |
 | | 1. **Play App Signing certificate** — Play Console → *Setup* → *App signing* → "App signing key certificate" → SHA-256. This is what production/internal-testing installs from Play are signed with. |
-| | 2. **Upload certificate** — same page, "Upload key certificate" → SHA-256, or locally: `keytool -list -v -keystore pantopus-release.jks -alias "$PANTOPUS_KEY_ALIAS"` (needs the CI keystore secrets). Needed for APKs installed directly from CI artifacts. |
-| | 3. *(debug builds only, never in production)* the debug keystore: `keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android`. Note debug builds use `applicationIdSuffix ".debug"` → package `app.pantopus.android.debug`; add a separate statement for it if you need App Links on debug builds. |
+| | Upload certificates are for validating uploads; do not add them to the production statement. Test direct-install builds against an isolated development association instead. |
+| | *(debug builds only, never in production)* the debug keystore: `keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android`. Note debug builds use `applicationIdSuffix ".debug"` → package `com.pantopus.app.debug`; add a separate statement for it if you need App Links on debug builds. |
 
 Play Console also shows the exact JSON it expects under *Grow* → *Deep links*
 (or *Setup* → *App signing* → "Digital Asset Links JSON snippet"). Copy the
@@ -55,7 +44,7 @@ fingerprint from there rather than retyping it.
 ```bash
 # from the repo root; node >= 18, no deps
 APPLE_TEAM_ID=6UYZBA546R \
-ANDROID_SHA256_FINGERPRINTS="<play-app-signing-sha256>,<upload-key-sha256>" \
+ANDROID_SHA256_FINGERPRINTS="<play-app-signing-sha256>" \
 node tools/gen-association-files.mjs
 
 # CI / pre-commit style guard: exit 1 if the files would change
@@ -79,7 +68,7 @@ elsewhere (used by the tests/scratch runs).
 2. Apple's CDN copy (what devices actually fetch; can lag up to ~24 h after
    deploy — Apple caches it):
    `curl -s https://app-site-association.cdn-apple.com/a/v1/pantopus.com | jq .`
-   Look for `6UYZBA546R.app.pantopus.ios` in `applinks.details[].appID` **and**
+   Look for `6UYZBA546R.com.pantopus.app` in `applinks.details[].appID` **and**
    `webcredentials.apps`.
 3. On a device with the TestFlight build: Settings → Developer → *Universal
    Links* → *Diagnostics* → enter `https://pantopus.com/join/abc` → should say
@@ -97,11 +86,11 @@ elsewhere (used by the tests/scratch runs).
    relation for a given package):
    `https://digitalassetlinks.googleapis.com/v1/statements:list?source.web.site=https://pantopus.com&relation=delegate_permission/common.handle_all_urls`
    — the response must list a statement with `target.androidApp.packageName ==
-   "app.pantopus.android"` and the certificate SHA-256 you expect. Repeat with
+   "com.pantopus.app"` and the certificate SHA-256 you expect. Repeat with
    `relation=delegate_permission/common.get_login_creds`.
 3. On a device with the Play build installed:
-   `adb shell pm get-app-links app.pantopus.android` → `pantopus.com: verified`
-   (`adb shell pm verify-app-links --re-verify app.pantopus.android` to force a
+   `adb shell pm get-app-links com.pantopus.app` → `pantopus.com: verified`
+   (`adb shell pm verify-app-links --re-verify com.pantopus.app` to force a
    re-check). If it says `legacy_failure`/`1024`, the fingerprint does not match
    the installed APK's signer: `keytool -printcert -jarfile app.apk`.
 4. Play Console → *Grow* → *Deep links* shows per-domain verification status
@@ -118,7 +107,7 @@ elsewhere (used by the tests/scratch runs).
 - **iOS entitlements** (`webcredentials:pantopus.com` etc.) — iOS layer
   (`Pantopus.entitlements` **and** `project.yml`, because `make bootstrap`
   regenerates the entitlements from `project.yml`).
-- Removing the legacy Expo identifiers — only after that app is unpublished.
+- Removing either original store identity or existing pilot associations — the October 23 decision retains them.
 
 ## Change control
 

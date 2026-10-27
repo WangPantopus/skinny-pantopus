@@ -8,10 +8,11 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.plans.CreatePlanBody
 import app.pantopus.android.data.api.models.plans.PlanDetailsDto
 import app.pantopus.android.data.api.models.plans.PlanGameDto
-import app.pantopus.android.data.api.models.plans.PlanGameRefDto
 import app.pantopus.android.data.api.models.plans.PlanGpsInput
 import app.pantopus.android.data.api.models.plans.PlanNearbyPlaceDto
 import app.pantopus.android.data.api.models.plans.PlanPlaceInput
+import app.pantopus.android.data.api.models.plans.PlanPlaceSuggestBody
+import app.pantopus.android.data.api.models.plans.PlansSportsDto
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.GeoApi
@@ -21,6 +22,8 @@ import app.pantopus.android.data.plans.PlanAutoRule
 import app.pantopus.android.data.plans.PlanFormat
 import app.pantopus.android.data.plans.PlanKind
 import app.pantopus.android.data.plans.PlanLocationResolver
+import app.pantopus.android.data.plans.PlanPlaceQuery
+import app.pantopus.android.data.plans.PlanStudyStyle
 import app.pantopus.android.data.plans.PlansEvents
 import app.pantopus.android.data.plans.PlansFeature
 import app.pantopus.android.data.plans.PlansRepository
@@ -101,6 +104,9 @@ data class HostDraft(
     val pace: String = "easy",
     val dogsWelcome: Boolean = false,
     val pickupNow: Boolean = true,
+    /** A study group's subject (required) and how it studies. */
+    val subject: String = "",
+    val studyStyle: PlanStudyStyle = PlanStudyStyle.QUIET,
 )
 
 /** H1 to H8. */
@@ -109,12 +115,19 @@ data class HostUi(
     val draft: HostDraft = HostDraft(),
     val zone: ZoneId = ZoneId.systemDefault(),
     val games: List<PlanGameDto> = emptyList(),
+    val sports: PlansSportsDto? = null,
     val home: HostHome? = null,
     val places: List<PlanNearbyPlaceDto> = emptyList(),
     val placesLoading: Boolean = false,
+    /** The server is still gathering the area's places (a first look can take up to a minute). */
+    val placesGathering: Boolean = false,
+    /** Why H6's places couldn't load, shown with "Try again". */
+    val placesError: String? = null,
     val placesQuery: String = "",
     /** The places' credit, shown under the list ("© OpenStreetMap contributors"). */
     val placesAttribution: String? = null,
+    /** H6's "Suggest places" (or "Ask Pantopus" for the search text). */
+    val suggestions: PlaceSuggestions = PlaceSuggestions.Idle,
     val placeCandidate: PickedPlace? = null,
     val hereNow: HereNowState = HereNowState.Idle,
     /** Every home of the host's with a point: "You're here now" never picks a place right at one. */
@@ -135,8 +148,8 @@ data class HostUi(
 /**
  * Host a plan (boards H1 to H8). The rules come from the brief: hosting needs a home or GPS within 3 miles (the
  * fix proves you're nearby and never becomes the pin); playdates meet in public places with a verified address
- * and the host approves each family; at home the host approves each person, with "people I've hosted" the only
- * rule allowed; anyone nearby is only for pickup games and walks.
+ * and the host approves each family; study groups meet in public places too; at home the host approves each person,
+ * with "people I've hosted" the only rule allowed; anyone nearby is only for pickup games and walks.
  */
 @HiltViewModel
 class HostFlowViewModel
@@ -155,6 +168,9 @@ class HostFlowViewModel
         private var againFrom: String? = null
 
         private var placesSearch: Job? = null
+        private var placesRead: Job? = null
+        private var suggestJob: Job? = null
+        private var gamesGeneration = 0
 
         private val _ui =
             MutableStateFlow(
@@ -225,6 +241,8 @@ class HostFlowViewModel
                             pace = d?.pace ?: "easy",
                             dogsWelcome = d?.dogsWelcome == true,
                             pickupNow = false,
+                            subject = d?.subject.orEmpty(),
+                            studyStyle = PlanStudyStyle.from(d?.studyStyle),
                         ),
                 )
             }
@@ -236,23 +254,46 @@ class HostFlowViewModel
         }
 
         private suspend fun loadContext(gameId: String?) {
+            val generation = ++gamesGeneration
             val payload = (viewing.current() as? NetworkResult.Success)?.data ?: viewing.currentCopy()
             val home = payload?.homes?.firstOrNull()?.let { HostHome(it.id, it.name, it.city, it.latitude, it.longitude) }
             val homePoints = payload?.homes.orEmpty().mapNotNull { h -> h.latitude?.let { lat -> h.longitude?.let { lat to it } } }
-            val games = (repository.games() as? NetworkResult.Success)?.data.orEmpty()
+            val reply = (repository.games("composer") as? NetworkResult.Success)?.data
+            val games = reply?.games.orEmpty()
             // Hosting a playdate needs a verified address (`/mine` says where the person stands; unknown means yes).
             val verified = (repository.mineCopy() ?: repository.mine().data)?.viewer?.verifiedAddress ?: true
-            _ui.update { it.copy(home = home, homePoints = homePoints, games = games, canHostPlaydates = verified) }
+            _ui.update { it.copy(home = home, homePoints = homePoints, canHostPlaydates = verified) }
+            warmPlaces(home)
+            if (generation != gamesGeneration) return
+            _ui.update { it.copy(games = games, sports = reply?.sports) }
             val draft = _ui.value.draft
             when {
                 gameId != null -> games.firstOrNull { it.id == gameId }?.let(::pickGame)
                 // A watch party chosen before the games came back starts on the soonest one (see choose).
-                draft.kind == PlanKind.WATCH_PARTY && draft.gameId == null && !draft.titleEdited -> games.firstOrNull()?.let(::pickGame)
+                draft.kind == PlanKind.WATCH_PARTY && draft.gameId == null && !draft.titleEdited -> automaticGame()?.let(::pickGame)
             }
         }
 
         /** "Verify your address" from H1's playdate card. */
         suspend fun verificationTarget(): HubVerificationTarget = plansVerificationTarget(homes)
+
+        private fun automaticGame(): PlanGameDto? =
+            _ui.value.games.firstOrNull {
+                it.isAvailable() && (_ui.value.sports?.canChoose != true || it.followed)
+            }
+
+        fun refreshGames() {
+            val generation = ++gamesGeneration
+            viewModelScope.launch {
+                val reply = (repository.games("composer") as? NetworkResult.Success)?.data ?: return@launch
+                if (generation != gamesGeneration) return@launch
+                _ui.update { it.copy(games = reply.games, sports = reply.sports) }
+                if (_ui.value.draft.gameId != null && reply.games.none { it.id == _ui.value.draft.gameId }) {
+                    pickGame(null)
+                    edit { if (it.titleEdited) it else it.copy(title = "") }
+                }
+            }
+        }
 
         // ---- H1 ----
 
@@ -273,16 +314,19 @@ class HostFlowViewModel
                         )
                     PlanKind.WALK_COFFEE ->
                         HostDraft(kind = kind, spots = 6, approveEach = false, autoRule = PlanAutoRule.VERIFIED, title = "Coffee walk")
+                    // A watch party's defaults (as on iOS), always at a public place.
+                    PlanKind.STUDY_GROUP -> HostDraft(kind = kind, spots = 8)
                 }
+            val hours = if (kind == PlanKind.WATCH_PARTY || kind == PlanKind.STUDY_GROUP) 3L else 1L
             val timed =
                 if (kind == PlanKind.PICKUP_GAME) {
                     draft.copy(start = now.plusMinutes(PICKUP_LEAD_MINUTES), end = now.plusHours(2))
                 } else {
-                    draft.copy(start = start, end = start.plusHours(if (kind == PlanKind.WATCH_PARTY) 3 else 1))
+                    draft.copy(start = start, end = start.plusHours(hours))
                 }
             _ui.update { it.copy(step = HostStep.Details, draft = timed, error = null) }
             // A watch party starts on the soonest game, its chip checked and its title and time filled in (board H2, as on iOS).
-            if (kind == PlanKind.WATCH_PARTY) _ui.value.games.firstOrNull()?.let(::pickGame)
+            if (kind == PlanKind.WATCH_PARTY) automaticGame()?.let(::pickGame)
         }
 
         /**
@@ -312,6 +356,9 @@ class HostFlowViewModel
         }
 
         fun setTitle(value: String) = edit { it.copy(title = value.take(TITLE_MAX), titleEdited = true) }
+
+        /** A study group's subject: at most 60 characters, as the server allows. */
+        fun setSubject(value: String) = edit { it.copy(subject = value.take(SUBJECT_MAX)) }
 
         /** A game fills in the title and the time (H2). */
         fun pickGame(game: PlanGameDto?) {
@@ -378,8 +425,40 @@ class HostFlowViewModel
         // ---- H6 ----
 
         fun openPlaces() {
-            _ui.update { it.copy(step = HostStep.Place, placeCandidate = it.draft.place, hereNow = HereNowState.Idle) }
-            viewModelScope.launch { loadPlaces() }
+            suggestJob?.cancel()
+            _ui.update {
+                it.copy(
+                    step = HostStep.Place,
+                    placeCandidate = it.draft.place,
+                    hereNow = HereNowState.Idle,
+                    placesError = null,
+                    suggestions = PlaceSuggestions.Idle,
+                )
+            }
+            placesRead?.cancel()
+            placesRead = viewModelScope.launch { loadPlaces() }
+        }
+
+        /** "Try again" under H6's list: the same read again (the search's, while searching). */
+        fun retryPlaces() {
+            val origin = _ui.value.origin
+            val query = _ui.value.placesQuery.trim().takeIf(String::isNotEmpty)
+            placesRead?.cancel()
+            placesRead = viewModelScope.launch { if (origin == null) loadPlaces() else fetchPlaces(origin, query) }
+        }
+
+        /**
+         * Starts the server gathering the public places around the host when the flow opens, so H6 usually opens on a
+         * full list: a new area can take the map servers up to a minute (as on iOS). Nothing is shown from it.
+         */
+        private fun warmPlaces(home: HostHome?) {
+            viewModelScope.launch {
+                val point =
+                    locations.gpsFix()?.let { it.latitude to it.longitude }
+                        ?: home?.let { h -> if (h.latitude != null && h.longitude != null) h.latitude to h.longitude else null }
+                        ?: return@launch
+                repository.nearbyPlaces(point.first, point.second, wait = false)
+            }
         }
 
         private suspend fun loadPlaces() {
@@ -390,57 +469,103 @@ class HostFlowViewModel
                     ?: home?.let { h -> if (h.latitude != null && h.longitude != null) h.latitude to h.longitude else null }
                     ?: locations.resolve()?.let { it.latitude to it.longitude }
             if (origin == null) {
-                _ui.update { it.copy(error = "Share your location or add your home to find places nearby.") }
+                _ui.update { it.copy(placesError = "Share your location or add your home to find places nearby.") }
                 return
             }
-            _ui.update { it.copy(origin = origin, placesLoading = true) }
+            _ui.update { it.copy(origin = origin) }
             fetchPlaces(origin, query = null)
         }
 
+        /** What H6's list and suggestions are for: the draft's kind, a pickup game's sport, and its time. */
+        private fun planPlaceQuery(): PlanPlaceQuery? {
+            val ui = _ui.value
+            val kind = ui.draft.kind ?: return null
+            val start = ui.draft.start ?: return null
+            return placeQuery(kind, ui.draft.sport, start, ui.draft.end, ui.zone)
+        }
+
         /**
-         * One places read. The first ask for an area may come back `loading` while OpenStreetMap is slow: the list
-         * keeps its skeleton and asks again a few seconds later.
+         * One places read, ordered for the plan. A first ask for an area may come back `loading` while OpenStreetMap is
+         * slow: the list keeps its skeleton (saying why after the first such answer) and the read asks again.
          */
         private suspend fun fetchPlaces(
             origin: Pair<Double, Double>,
             query: String?,
         ) {
-            repeat(PLACES_ATTEMPTS) { attempt ->
-                val result = repository.nearbyPlaces(origin.first, origin.second, query)
-                if (query != _ui.value.placesQuery.trim().takeIf(String::isNotEmpty)) return
+            val stillAsked = { query == _ui.value.placesQuery.trim().takeIf(String::isNotEmpty) }
+            _ui.update { it.copy(placesLoading = true, placesGathering = false, placesError = null) }
+            val result =
+                repository.nearbyPlacesWhenReady(origin.first, origin.second, query, planPlaceQuery()) { reply ->
+                    if (stillAsked()) {
+                        _ui.update { it.copy(placesGathering = true, placesAttribution = reply.attribution ?: it.placesAttribution) }
+                    }
+                }
+            if (!stillAsked()) return
+            _ui.update {
                 when (result) {
-                    is NetworkResult.Success -> {
-                        val reply = result.data
-                        val waiting = reply.loading && reply.places.isEmpty() && attempt < PLACES_ATTEMPTS - 1
-                        _ui.update {
+                    is NetworkResult.Success ->
+                        if (result.data.loading) {
+                            it.copy(placesLoading = false, placesGathering = false, placesError = PLACES_SLOW)
+                        } else {
                             it.copy(
-                                placesLoading = waiting,
-                                places = if (waiting) it.places else reply.places,
-                                placesAttribution = reply.attribution ?: it.placesAttribution,
-                                error = null,
+                                placesLoading = false,
+                                placesGathering = false,
+                                places = result.data.places,
+                                placesAttribution = result.data.attribution ?: it.placesAttribution,
                             )
                         }
-                        if (!waiting) return
-                        delay(PLACES_RETRY_MS)
-                    }
-                    is NetworkResult.Failure -> {
-                        _ui.update { it.copy(placesLoading = false, error = result.error.planMessage) }
-                        return
-                    }
+                    is NetworkResult.Failure ->
+                        it.copy(placesLoading = false, placesGathering = false, placesError = placesFailure(result.error))
                 }
             }
         }
 
         /** Search by name: the list filters at once, and the server looks further than the nearest 40. */
         fun searchPlaces(query: String) {
+            if (query.trim() != _ui.value.placesQuery.trim()) {
+                // Suggestions answer the words they were asked with (as on iOS).
+                suggestJob?.cancel()
+                _ui.update { it.copy(suggestions = PlaceSuggestions.Idle) }
+            }
             _ui.update { it.copy(placesQuery = query) }
             placesSearch?.cancel()
             val origin = _ui.value.origin ?: return
             placesSearch =
                 viewModelScope.launch {
                     delay(SEARCH_DEBOUNCE_MS)
-                    _ui.update { it.copy(placesLoading = true) }
                     fetchPlaces(origin, query.trim().takeIf(String::isNotEmpty))
+                }
+        }
+
+        /** H6's "Suggest places" ([ask] null), or "Ask Pantopus" for what the host typed in the search box. */
+        fun suggestPlaces(ask: String?) {
+            val ui = _ui.value
+            val origin = ui.origin ?: return
+            val draft = ui.draft
+            val kind = draft.kind ?: return
+            val plan = planPlaceQuery() ?: return
+            val body =
+                PlanPlaceSuggestBody(
+                    latitude = origin.first,
+                    longitude = origin.second,
+                    kind = kind.wire,
+                    title = draft.title.trim().takeIf(String::isNotEmpty),
+                    about = draft.about.trim().takeIf(String::isNotEmpty),
+                    startsAt = plan.startsAt,
+                    endsAt = plan.endsAt,
+                    spots = draft.spots,
+                    details = details(kind, draft, ui.games.firstOrNull { it.id == draft.gameId }),
+                    ask = ask,
+                )
+            suggestJob?.cancel()
+            _ui.update { it.copy(suggestions = PlaceSuggestions.Loading(gathering = false)) }
+            suggestJob =
+                viewModelScope.launch {
+                    val result =
+                        repository.suggestPlacesWhenReady(body) {
+                            _ui.update { it.copy(suggestions = PlaceSuggestions.Loading(gathering = true)) }
+                        }
+                    _ui.update { it.copy(suggestions = PlaceSuggestions.from(result, ask)) }
                 }
         }
 
@@ -608,7 +733,8 @@ class HostFlowViewModel
                 buildList {
                     if (kind != PlanKind.PLAYDATE) {
                         if (!draft.approveEach && !draft.atHome) draft.autoRule?.let(::add)
-                        if (draft.hostedBefore) add(PlanAutoRule.HOSTED_BEFORE)
+                        // Not for a pickup game: its form has no such box (board H4), as on iOS.
+                        if (draft.hostedBefore && kind != PlanKind.PICKUP_GAME) add(PlanAutoRule.HOSTED_BEFORE)
                     }
                 }.distinct()
             val game = ui.games.firstOrNull { it.id == draft.gameId }
@@ -621,7 +747,9 @@ class HostFlowViewModel
                 place = place,
                 spots = draft.spots,
                 autoRules = rules,
-                joinRequirement = if (kind == PlanKind.PLAYDATE || draft.autoRule == PlanAutoRule.VERIFIED) "verified" else "located",
+                // Who can ask (decision D5, as on iOS): anyone nearby, or only verified neighbors for a playdate.
+                // "Verified neighbors get in right away" is the `verified` rule above; others still ask.
+                joinRequirement = if (kind == PlanKind.PLAYDATE) "verified" else "located",
                 details = details(kind, draft, game),
                 guestNote = draft.note.trim().takeIf(String::isNotEmpty),
                 gps = gps,
@@ -635,10 +763,11 @@ class HostFlowViewModel
             game: PlanGameDto?,
         ): PlanDetailsDto =
             when (kind) {
-                PlanKind.WATCH_PARTY -> PlanDetailsDto(game = game?.let { PlanGameRefDto(it.label, it.startsAt) })
+                PlanKind.WATCH_PARTY -> PlanDetailsDto(game = game?.reference())
                 PlanKind.PLAYDATE -> PlanDetailsDto(kidsAgeBands = draft.kidsAgeBands.toList())
                 PlanKind.PICKUP_GAME -> PlanDetailsDto(sport = draft.sport, level = draft.level, extraGear = draft.extraGear)
                 PlanKind.WALK_COFFEE -> PlanDetailsDto(walkKind = draft.walkKind, pace = draft.pace, dogsWelcome = draft.dogsWelcome)
+                PlanKind.STUDY_GROUP -> PlanDetailsDto(subject = draft.subject.cleanSubject(), studyStyle = draft.studyStyle.wire)
             }
 
         private fun validate(draft: HostDraft): String? {
@@ -646,6 +775,7 @@ class HostFlowViewModel
             val start = draft.start
             val end = draft.end
             val minutes = if (start != null && end != null) Duration.between(start, end).toMinutes() else 0
+            val kindProblem = kindProblem(draft)
             return when {
                 draft.title.isBlank() -> "Give your plan a title."
                 start == null || end == null -> "Pick when it starts and ends."
@@ -653,15 +783,24 @@ class HostFlowViewModel
                 start.isAfter(now.plusDays(MAX_DAYS_AHEAD)) -> "Plans can start up to 14 days from now."
                 minutes < MIN_MINUTES -> "A plan lasts at least 15 minutes."
                 minutes > MAX_MINUTES -> "A plan lasts at most 8 hours."
-                draft.kind == PlanKind.PLAYDATE && draft.kidsAgeBands.isEmpty() -> "Pick the kids' ages."
+                kindProblem != null -> kindProblem
                 draft.atHome && _ui.value.home == null -> "Add your home to host there, or choose a public place."
                 !draft.atHome && draft.place == null -> "Choose a place."
                 else -> null
             }
         }
 
+        /** What the chosen kind still needs: a playdate's kids' ages, a study group's subject; null when nothing. */
+        private fun kindProblem(draft: HostDraft): String? =
+            when (draft.kind) {
+                PlanKind.PLAYDATE -> "Pick the kids' ages.".takeIf { draft.kidsAgeBands.isEmpty() }
+                PlanKind.STUDY_GROUP -> "Add what you're studying.".takeIf { draft.subject.cleanSubject().isEmpty() }
+                else -> null
+            }
+
         private companion object {
             const val TITLE_MAX = 80
+            const val SUBJECT_MAX = 60
             const val PICKUP_LEAD_MINUTES = 15L
             const val DAY_START = 8
             const val WALK_EARLIEST = 7
@@ -675,7 +814,7 @@ class HostFlowViewModel
             const val QUARTER_HOUR = 15L
             const val GAME_ON_LEAD_MINUTES = 5L
             const val MAX_MINUTES = 8 * 60L
-            const val PLACES_ATTEMPTS = 4
+            const val PLACES_ATTEMPTS = 8
             const val PLACES_RETRY_MS = 3_000L
             const val SEARCH_DEBOUNCE_MS = 350L
 
@@ -697,6 +836,9 @@ class HostFlowViewModel
                 val a = sin(dLat / 2).pow(2) + cos(Math.toRadians(fromLat)) * cos(Math.toRadians(toLat)) * sin(dLng / 2).pow(2)
                 return EARTH_RADIUS_METERS * 2 * atan2(sqrt(a), sqrt(1 - a))
             }
+
+            /** The subject as the server keeps it: trimmed, with runs of spaces made one. */
+            fun String.cleanSubject(): String = trim().replace(Regex("\\s+"), " ")
 
             /** "Sam Rivera" → "Sam R." (first name and last initial, as everyone sees a host). */
             fun shortName(name: String?): String {

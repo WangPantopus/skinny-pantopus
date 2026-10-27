@@ -1,6 +1,6 @@
 'use client';
 
-import { getErrorMessage, chosenUsername } from '@pantopus/utils';
+import { getErrorMessage } from '@pantopus/utils';
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -25,7 +25,8 @@ import { launchFeatures } from '@/lib/featureFlags';
 interface CompletionGigData {
   price?: number | string;
   accepted_by?: string | null;
-  acceptedBy?: string | null;
+  /** The worker as the task names them (their Local Profile), sent to the poster and the worker. */
+  acceptedBy?: { displayName?: string | null } | null;
   payment_status?: string;
   completion_photos?: string[];
   completion_review?: string | null;
@@ -33,12 +34,6 @@ interface CompletionGigData {
   completion_checklist?: Array<{ item: string; done: boolean }>;
   worker_completed_at?: string | null;
   owner_confirmed_at?: string | null;
-  accepted_bid?: {
-    bidder?: {
-      name?: string;
-      username?: string;
-    };
-  };
   [key: string]: unknown;
 }
 
@@ -60,6 +55,8 @@ interface CompletionFlowProps {
   gigId: string;
   gig: CompletionGigData;
   isOwner: boolean;
+  /** The owner manages the task as the business that posted it (its owner or staff), not as the poster. */
+  asBusiness?: boolean;
   isWorker: boolean;
   currentUserId: string | undefined;
   gigStatus: string;
@@ -78,6 +75,7 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
   gigId,
   gig,
   isOwner,
+  asBusiness = false,
   isWorker,
   currentUserId,
   gigStatus,
@@ -92,7 +90,7 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
   const isCompleted = gigStatus === 'completed';
   const canCancel = (isOwner || isWorker) && ['open', 'assigned', 'in_progress'].includes(gigStatus);
   const isPaidGig = Number(gig?.price || 0) > 0;
-  const acceptedBy = gig?.accepted_by ?? gig?.acceptedBy ?? null;
+  const acceptedBy = gig?.accepted_by ?? null;
   const completionPhotos = gig.completion_photos ?? [];
   const completionChecklist = gig.completion_checklist ?? [];
   const iAmWorkerAssigned = isWorker && isAssigned;
@@ -183,7 +181,8 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
       void tipRecoverySlot(origin, currentUserId, gigId).load().then(async original => {
         if (!current()) return;
         if (original) { setTipRecoveryRequestId(original.value.requestId); setShowTipModal(true); return; }
-        if (!isOwner || !isCompleted) return;
+        // Tips come from the poster's own account; a business's team members have none to recover.
+        if (!isOwner || asBusiness || !isCompleted) return;
         // A fresh browser has no retained UUID for an older payment. Discover
         // only an existing local payment; the picker still verifies and retains
         // its exact identity before any explicit check or cancellation.
@@ -195,7 +194,7 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
       }).catch(() => { /* Explicit tip entry still shows retained-storage errors before sending. */ });
     }
     return () => { active = false; unsubscribe(); };
-  }, [currentUserId, gigId, router, isOwner, isCompleted]);
+  }, [currentUserId, gigId, router, isOwner, asBusiness, isCompleted]);
 
   const handleReopenBidding = () => setStopAction('reopen_bidding');
 
@@ -363,7 +362,8 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
       if (!current()) return;
       setShowConfirmModal(false);
       onStatusChange?.();
-      if (!current()) return;
+      // The tip that follows is the poster's: the tips API refuses a business's team members.
+      if (!current() || asBusiness) return;
       setTipRecoveryRequestId(undefined);
       setShowTipModal(true);
     } catch (err: unknown) {
@@ -853,11 +853,7 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
           workerId={acceptedBy}
           recoveryRequestId={tipRecoveryRequestId}
           gigId={gigId}
-          workerName={
-            gig?.accepted_bid?.bidder?.name ||
-            chosenUsername(gig?.accepted_bid?.bidder?.username) ||
-            'the worker'
-          }
+          workerName={gig?.acceptedBy?.displayName || 'the worker'}
           onSuccess={(tipAmount) => {
             setShowTipModal(false);
             const url = new URL(window.location.href);

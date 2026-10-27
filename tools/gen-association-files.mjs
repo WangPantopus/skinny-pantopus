@@ -6,9 +6,9 @@
  *   apple-app-site-association   (Universal Links + Password AutoFill / passkeys)
  *   assetlinks.json              (Android App Links + Credential Manager)
  *
- * The native apps (`app.pantopus.ios`, `app.pantopus.android`) replaced the
- * Expo-era app (`com.pantopus.app`). During the transition BOTH sets of
- * identifiers must be present, so this script:
+ * Store updates use the original `com.pantopus.app` identity on both platforms.
+ * Previously distributed pilot builds still use `app.pantopus.ios` and
+ * `app.pantopus.android`; preserve their associations during the transition:
  *   - keeps every entry already in the files that it does not own
  *     (the legacy Expo entries and any hand-added ones), and
  *   - upserts the native entries from environment variables.
@@ -17,13 +17,13 @@
  *
  * Environment (all optional; unset ⇒ that native entry is left untouched):
  *   APPLE_TEAM_ID                Apple Developer Team ID (10 chars), e.g. 6UYZBA546R
- *   IOS_BUNDLE_ID                default app.pantopus.ios
- *   ANDROID_PACKAGE              default app.pantopus.android
+ *   IOS_BUNDLE_ID                default com.pantopus.app
+ *   ANDROID_PACKAGE              default com.pantopus.app
  *   ANDROID_SHA256_FINGERPRINTS  comma-separated SHA-256 cert fingerprints
  *                                (colon-separated uppercase hex, 32 bytes each).
- *                                Include BOTH the Play App Signing certificate
- *                                and the upload certificate; add the debug
- *                                keystore fingerprint only for a debug build.
+ *                                Use the published app's Play App Signing
+ *                                certificates. Never add a debug or upload
+ *                                certificate to the production statement.
  *   AASA_PATHS                   optional comma-separated override of the
  *                                applinks paths (default: copy the legacy entry's
  *                                paths, or the built-in list if none exists)
@@ -144,7 +144,7 @@ function buildAasa(existing, { teamId, bundleId, pathsOverride }) {
 function buildAssetlinks(existing, { androidPackage, fingerprints }) {
   const list = Array.isArray(existing) ? existing : [];
 
-  // Always keep the legacy Expo statement (and any others we do not own).
+  // Preserve statements for other app identities, including existing pilot installs.
   if (!androidPackage || fingerprints.length === 0) return list;
 
   const isNative = (s) =>
@@ -167,7 +167,7 @@ function buildAssetlinks(existing, { androidPackage, fingerprints }) {
   if (!list.some((s) => s?.target?.package_name === LEGACY_ANDROID_PACKAGE)) {
     console.warn(
       `gen-association-files: warning — legacy ${LEGACY_ANDROID_PACKAGE} statement not present ` +
-        '(fine after the Expo app is retired; otherwise restore it).',
+        '(restore it before releasing an update to the published app).',
     );
   }
   return list;
@@ -184,8 +184,8 @@ function main() {
 
   const teamId = (process.env.APPLE_TEAM_ID || '').trim();
   if (teamId && !/^[A-Z0-9]{10}$/.test(teamId)) fail(`APPLE_TEAM_ID "${teamId}" is not a 10-char Team ID`);
-  const bundleId = (process.env.IOS_BUNDLE_ID || 'app.pantopus.ios').trim();
-  const androidPackage = (process.env.ANDROID_PACKAGE || 'app.pantopus.android').trim();
+  const bundleId = (process.env.IOS_BUNDLE_ID || 'com.pantopus.app').trim();
+  const androidPackage = (process.env.ANDROID_PACKAGE || 'com.pantopus.app').trim();
   const fingerprints = (process.env.ANDROID_SHA256_FINGERPRINTS || '')
     .split(',')
     .map((s) => s.trim())

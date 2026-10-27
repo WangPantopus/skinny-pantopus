@@ -50,7 +50,28 @@ async function mutateMember({ homeId, actorId, targetId, action, payload = {} })
     p_home_id: homeId, p_actor_id: actorId, p_target_id: targetId, p_action: action, p_payload: payload,
   });
   if (result.ok !== true) throw fail(result.code, [400, 403, 404, 409].includes(result.status) ? result.status : 503);
+  // `changed` is true only for the call that ended the membership, so a repeat tells nobody.
+  if (action === 'remove' && result.changed === true && String(targetId).toLowerCase() !== String(actorId).toLowerCase()) {
+    await notifyRemovedMember({ homeId, targetId, occupancyId: result.occupancy_id, completedAt: result.completed_at });
+  }
   return result;
+}
+
+// Tell a person that someone else removed them from a household (notificationService.notifyHomeMemberRemoved), after
+// the removal committed. Also used by the member-removal commands. A failed Home read only leaves the Home unnamed; a
+// failed notice is logged and the removal stands. The key makes a repeated notice a no-op.
+async function notifyRemovedMember({ homeId, targetId, occupancyId, completedAt }) {
+  let homeName = null;
+  try {
+    const { data } = await db.from('Home').select('name, address').eq('id', homeId).maybeSingle();
+    homeName = data?.name || data?.address || null;
+  } catch { /* Named generically. */ }
+  try {
+    await require('./notificationService').notifyHomeMemberRemoved({ userId: String(targetId).toLowerCase(), homeId, homeName,
+      ...(occupancyId && completedAt ? { idempotencyKey: `home-member-removed:${occupancyId}:${completedAt}` } : {}) });
+  } catch (err) {
+    logger.error('Removed member notice failed', { errorCode: err?.code || null });
+  }
 }
 
 async function deleteEligibility(homeId, actorId) {
@@ -223,4 +244,4 @@ function throwDeleteResult(result) {
   throw fail(result.code, status);
 }
 
-module.exports = { mutateMember, deleteEligibility, deleteHome, retireHomeForDeletedAccount };
+module.exports = { mutateMember, notifyRemovedMember, deleteEligibility, deleteHome, retireHomeForDeletedAccount };

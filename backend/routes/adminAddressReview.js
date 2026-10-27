@@ -16,6 +16,8 @@ const { requireAdmin } = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const logger = require('../utils/logger');
 const addressReviewService = require('../services/addressValidation/addressReviewService');
+const homeRemovalVotes = require('../services/homeRemovalVoteService');
+const postcardReview = require('../services/homePostcardVerificationService');
 const { writeAuditLog } = require('../utils/homePermissions');
 
 // Every route here is admin-only.
@@ -52,15 +54,19 @@ router.post('/:caseId/resolve', validate(resolveSchema), async (req, res) => {
     const { outcome, note } = req.body;
     const reviewerId = req.user.id;
 
-    const result = await addressReviewService.resolveCase({
-      caseId, reviewerId, outcome, note: note || null,
-    });
+    // Home claims PR 4: a probation dispute's case decides the dispute too; approving restores the membership.
+    // Home claims PR 5: a contested household removal vote's case decides the vote too (homeRemovalVoteService).
+    const result = await postcardReview.resolveDisputeCase({ caseId, reviewerId, outcome, note: note || null })
+      || await homeRemovalVotes.resolveReviewCase({ caseId, reviewerId, outcome, note: note || null })
+      || await addressReviewService.resolveCase({
+        caseId, reviewerId, outcome, note: note || null,
+      });
 
     if (!result.success) {
       // "already resolved" is a conflict, not a server error — two reviewers
       // acting at once should get a clear answer.
       const conflict = /already resolved|not found/i.test(result.error || '');
-      return res.status(conflict ? 409 : 500).json({ error: result.error });
+      return res.status(result.status || (conflict ? 409 : 500)).json({ error: result.error });
     }
 
     // Every reviewer action is recorded.

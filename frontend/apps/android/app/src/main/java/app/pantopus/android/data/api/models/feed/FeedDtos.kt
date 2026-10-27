@@ -53,6 +53,8 @@ data class FeedPost(
     @Json(name = "business_author_id") val businessAuthorId: String? = null,
     @Json(name = "location_name") val locationName: String? = null,
     @Json(name = "event_date") val eventDate: String? = null,
+    /** When an Event ends, when the poster named an end time. */
+    @Json(name = "event_end_date") val eventEndDate: String? = null,
     @Json(name = "event_venue") val eventVenue: String? = null,
     @Json(name = "lost_found_type") val lostFoundType: String? = null,
     @Json(name = "media_urls") val mediaUrls: List<String> = emptyList(),

@@ -24,6 +24,14 @@
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('./logger');
 
+// Ids are written into PostgREST or() filters as text, so a value from a request with filter syntax in it (commas,
+// dots, parentheses) could add filters of its own and match other people's rows. Such a value is never an id, so
+// nothing can reference it.
+const FILTER_SAFE_ID_RE = /^[A-Za-z0-9_-]+$/;
+function isIdShaped(value) {
+  return typeof value === 'string' && FILTER_SAFE_ID_RE.test(value);
+}
+
 // ============================================================
 // GRAPH QUERY HELPERS
 // ============================================================
@@ -39,6 +47,7 @@ const logger = require('./logger');
  */
 async function getRelationshipStatus(userA, userB, { forViewer = false } = {}) {
   if (!userA || !userB || userA === userB) return 'none';
+  if (!isIdShaped(userA) || !isIdShaped(userB)) return 'none';
   const { data, error } = await supabaseAdmin
     .from('Relationship')
     .select('id, requester_id, addressee_id, status, blocked_by')
@@ -285,7 +294,18 @@ async function canViewProfessionalProfile(viewerId, profile) {
 // ============================================================
 
 /**
+ * A block or privacy read that failed. Callers refuse (the routes answer 503) rather than read it as "not blocked" or
+ * "everyone".
+ */
+function privacyCheckUnavailable(cause) {
+  return Object.assign(new Error('Privacy settings can\'t be checked right now. Please try again.'), {
+    code: 'PRIVACY_CHECK_UNAVAILABLE', status: 503, cause,
+  });
+}
+
+/**
  * Check if a user is searchable by a viewer, respecting UserPrivacySettings.
+ * A block or setting that can't be read throws (privacyCheckUnavailable).
  *
  * @param {string} viewerId - the person searching
  * @param {string} targetUserId - the person being searched for
@@ -294,27 +314,31 @@ async function canViewProfessionalProfile(viewerId, profile) {
 async function isSearchable(viewerId, targetUserId) {
   if (viewerId === targetUserId) return true;
 
-  // Check scoped blocks (full or search_only)
-  const { data: block } = await supabaseAdmin
-    .from('UserProfileBlock')
-    .select('id, block_scope')
-    .eq('user_id', targetUserId)
-    .eq('blocked_user_id', viewerId)
-    .in('block_scope', ['full', 'search_only'])
-    .maybeSingle();
+  // Check scoped blocks (full or search_only); someone signed out has none. A person can hold both kinds.
+  if (viewerId) {
+    const { data: blocks, error: blockError } = await supabaseAdmin
+      .from('UserProfileBlock')
+      .select('id')
+      .eq('user_id', targetUserId)
+      .eq('blocked_user_id', viewerId)
+      .in('block_scope', ['full', 'search_only'])
+      .limit(1);
 
-  if (block) return false;
+    if (blockError || !Array.isArray(blocks)) throw privacyCheckUnavailable(blockError);
+    if (blocks.length > 0) return false;
+  }
 
   // Check legacy Relationship blocks too
   if (await isBlocked(viewerId, targetUserId)) return false;
 
   // Check privacy settings
-  const { data: settings } = await supabaseAdmin
+  const { data: settings, error: settingsError } = await supabaseAdmin
     .from('UserPrivacySettings')
     .select('search_visibility')
     .eq('user_id', targetUserId)
     .maybeSingle();
 
+  if (settingsError) throw privacyCheckUnavailable(settingsError);
   const visibility = settings?.search_visibility || 'everyone';
 
   switch (visibility) {
@@ -327,6 +351,56 @@ async function isSearchable(viewerId, targetUserId) {
     default:
       return true;
   }
+}
+
+/**
+ * Batched counterpart of isSearchable + isScopedBlocked(search_only), with the
+ * connection status needed by LocalProfile visibility. Reads only this request's
+ * candidates; never caches privacy decisions. A failed read refuses the search.
+ */
+async function loadUserSearchAccess(viewerId, userIds) {
+  if (!isIdShaped(viewerId)) throw privacyCheckUnavailable();
+  const ids = [...new Set(userIds)].filter((id) => isIdShaped(id) && id !== viewerId);
+  const access = new Map();
+  for (let offset = 0; offset < ids.length; offset += 100) {
+    const batch = ids.slice(offset, offset + 100);
+    const pages = await Promise.all([
+      supabaseAdmin.from('UserPrivacySettings').select('user_id, search_visibility').in('user_id', batch),
+      supabaseAdmin.from('Relationship').select('requester_id, addressee_id, status')
+        .eq('requester_id', viewerId).in('addressee_id', batch),
+      supabaseAdmin.from('Relationship').select('requester_id, addressee_id, status')
+        .eq('addressee_id', viewerId).in('requester_id', batch),
+      supabaseAdmin.from('UserProfileBlock').select('user_id, blocked_user_id')
+        .eq('user_id', viewerId).in('blocked_user_id', batch).in('block_scope', ['full', 'search_only']),
+      supabaseAdmin.from('UserProfileBlock').select('user_id, blocked_user_id')
+        .eq('blocked_user_id', viewerId).in('user_id', batch).in('block_scope', ['full', 'search_only']),
+      supabaseAdmin.from('UserBlock').select('blocker_user_id')
+        .eq('blocked_user_id', viewerId).in('blocker_user_id', batch),
+    ]);
+    for (const page of pages) {
+      if (page.error || !Array.isArray(page.data)) throw privacyCheckUnavailable(page.error);
+    }
+    const [settings, outgoing, incoming, blockedByViewer, blockedByTarget, personalBlocks] = pages.map((page) => page.data);
+    const connected = new Set();
+    const blocked = new Set(personalBlocks.map((row) => row.blocker_user_id));
+    for (const row of [...outgoing, ...incoming]) {
+      const peer = row.requester_id === viewerId ? row.addressee_id : row.requester_id;
+      if (row.status === 'accepted') connected.add(peer);
+      if (row.status === 'blocked') blocked.add(peer);
+    }
+    for (const row of [...blockedByViewer, ...blockedByTarget]) {
+      blocked.add(row.user_id === viewerId ? row.blocked_user_id : row.user_id);
+    }
+    const visibility = new Map(settings.map((row) => [row.user_id, row.search_visibility]));
+    for (const id of batch) {
+      const policy = visibility.get(id) || 'everyone';
+      access.set(id, {
+        connected: connected.has(id),
+        searchable: !blocked.has(id) && policy !== 'nobody' && (policy !== 'mutuals' || connected.has(id)),
+      });
+    }
+  }
+  return access;
 }
 
 /**
@@ -346,16 +420,25 @@ async function canViewProfileField(viewerId, targetUserId, field) {
     home_affiliation: 'show_home_affiliation',
   };
 
+  // Someone without a settings row has the table's defaults, which their privacy screen shows them.
+  const defaultLevel = {
+    gig_history: 'followers',
+    neighborhood: 'followers',
+    home_affiliation: 'private',
+  };
+
   const column = fieldToColumn[field];
   if (!column) return false;
 
-  const { data: settings } = await supabaseAdmin
+  // An unreadable setting fails the caller rather than guess.
+  const { data: settings, error } = await supabaseAdmin
     .from('UserPrivacySettings')
     .select(column)
     .eq('user_id', targetUserId)
     .maybeSingle();
+  if (error) throw error;
 
-  const level = settings?.[column] || 'public';
+  const level = settings?.[column] || defaultLevel[field];
 
   switch (level) {
     case 'public':
@@ -391,6 +474,7 @@ async function isScopedBlocked(viewerId, targetUserId, scope = 'full') {
 
   // Check legacy Relationship block first (always full scope)
   if (await isBlocked(viewerId, targetUserId)) return true;
+  if (!isIdShaped(viewerId) || !isIdShaped(targetUserId)) return false;
 
   const scopeFilter = scope === 'any'
     ? ['full', 'search_only', 'business_context']
@@ -410,6 +494,37 @@ async function isScopedBlocked(viewerId, targetUserId, scope = 'full') {
 
   if (error) throw error;
   return blocks && blocks.length > 0;
+}
+
+/**
+ * Business accounts among `userIds` whose profile isn't published: drafts, and businesses closed with
+ * DELETE /api/businesses/:id, which unpublishes the profile and makes the account 'individual' (so a
+ * BusinessProfile on any other account type is a closed business). GET /api/businesses/public/:username refuses
+ * both, so a lookup by handle, id or name leaves them out too. A failed read throws, so callers fail closed.
+ *
+ * @param {string[]} userIds
+ * @returns {Promise<Set<string>>}
+ */
+async function unpublishedBusinessIds(userIds) {
+  const ids = [...new Set((userIds || []).filter(Boolean).map(String))];
+  if (!ids.length) return new Set();
+  const [accounts, profiles] = await Promise.all([
+    supabaseAdmin.from('User').select('id, account_type').in('id', ids),
+    supabaseAdmin.from('BusinessProfile').select('business_user_id, is_published').in('business_user_id', ids),
+  ]);
+  if (accounts.error) throw accounts.error;
+  if (profiles.error) throw profiles.error;
+  const published = new Map((profiles.data || [])
+    .map((row) => [String(row.business_user_id), row.is_published === true]));
+  return new Set((accounts.data || [])
+    .filter((user) => (user.account_type === 'business'
+      ? published.get(String(user.id)) !== true
+      : published.has(String(user.id))))
+    .map((user) => String(user.id)));
+}
+
+async function isUnpublishedBusiness(userId) {
+  return (await unpublishedBusinessIds([userId])).has(String(userId));
 }
 
 
@@ -434,6 +549,11 @@ module.exports = {
 
   // Identity Firewall — privacy settings
   isSearchable,
+  loadUserSearchAccess,
   canViewProfileField,
   isScopedBlocked,
+
+  // Draft and closed businesses
+  unpublishedBusinessIds,
+  isUnpublishedBusiness,
 };

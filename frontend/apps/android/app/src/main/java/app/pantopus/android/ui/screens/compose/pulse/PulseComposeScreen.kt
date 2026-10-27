@@ -2,11 +2,12 @@
 
 package app.pantopus.android.ui.screens.compose.pulse
 
+import android.Manifest
 import android.app.DatePickerDialog
 import android.content.ContentResolver
+import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -31,6 +32,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -39,6 +42,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
@@ -64,10 +68,13 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
+import app.pantopus.android.data.api.models.posts.EarlierPostDto
+import app.pantopus.android.data.posts.PostCameraPhotos
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.FutureDateTimePickerDialogs
 import app.pantopus.android.ui.components.PantopusFieldState
@@ -92,8 +99,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.time.LocalDate
 import java.time.LocalDateTime
-import java.util.Calendar
 import java.util.UUID
 
 /**
@@ -115,6 +123,8 @@ fun PulseComposeScreen(
      * business. Used by the Business owner dashboard's compose FAB.
      */
     businessAuthorId: String? = null,
+    /** "Before you ask": opens an earlier post; the composer keeps the draft underneath. */
+    onOpenPost: (String) -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val activeIntent by viewModel.activeIntent.collectAsStateWithLifecycle()
@@ -137,6 +147,11 @@ fun PulseComposeScreen(
     val shouldDismiss by viewModel.shouldDismiss.collectAsStateWithLifecycle()
     val prefillState by viewModel.prefillState.collectAsStateWithLifecycle()
     val selectedPlaceTag by viewModel.selectedPlaceTag.collectAsStateWithLifecycle()
+    val earlierAnswers by viewModel.earlierAnswers.collectAsStateWithLifecycle()
+    val postCheckFindings by viewModel.postCheckFindings.collectAsStateWithLifecycle()
+    val assist by viewModel.assist.collectAsStateWithLifecycle()
+    val canUndoSuggestion by viewModel.canUndoSuggestion.collectAsStateWithLifecycle()
+    val aiPostConfirmation by viewModel.aiPostConfirmation.collectAsStateWithLifecycle()
     var showPlacePicker by remember { mutableStateOf(false) }
 
     LaunchedEffect(flowTarget, flowPurpose) {
@@ -150,9 +165,6 @@ fun PulseComposeScreen(
             viewModel.applyBusinessAuthor(businessAuthorId)
         }
     }
-
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         Analytics.track(AnalyticsEvent.ScreenPulseComposeViewed(intent = activeIntent.key))
@@ -179,39 +191,8 @@ fun PulseComposeScreen(
         }
     }
 
-    val photoPicker =
-        rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = PULSE_COMPOSE_MAX_PHOTOS),
-        ) { uris ->
-            if (uris.isEmpty()) return@rememberLauncherForActivityResult
-            scope.launch {
-                val loaded =
-                    withContext(Dispatchers.IO) {
-                        uris.take(PULSE_COMPOSE_MAX_PHOTOS).mapNotNull { uri ->
-                            readBytes(context.contentResolver, uri)?.let { bytes ->
-                                // Capture-location anchor (ADDENDUM 2):
-                                // EXIF GPS is read off the picked bytes as
-                                // a LOCAL place-picker anchor only — it is
-                                // never auto-attached to the outgoing post.
-                                // On API 29+ the system photo picker
-                                // redacts location EXIF at read time
-                                // (ACCESS_MEDIA_LOCATION does not apply to
-                                // picker URIs), so this legitimately
-                                // returns null there → no anchor chips;
-                                // API 26-28 bytes still carry GPS.
-                                val captured = MediaLocationExtractor.fromImageBytes(bytes)
-                                PulseComposePhoto(
-                                    id = UUID.randomUUID().toString(),
-                                    data = bytes,
-                                    capturedLatitude = captured?.latitude,
-                                    capturedLongitude = captured?.longitude,
-                                )
-                            }
-                        }
-                    }
-                viewModel.setPhotos(loaded)
-            }
-        }
+    var isLoadingMedia by remember { mutableStateOf(false) }
+    val media = rememberPulseComposeMedia(viewModel, photoCount = photos.size, onLoading = { isLoadingMedia = it })
 
     Box(
         modifier =
@@ -240,11 +221,12 @@ fun PulseComposeScreen(
             dealExpiresAt
             selectedPlaceTag
             state
+            assist
         }
         FormShell(
             title = viewModel.displayTitle,
             rightActionLabel = viewModel.ctaLabel,
-            isValid = viewModel.isValid,
+            isValid = viewModel.isValid && !isLoadingMedia && !viewModel.isSuggesting,
             isDirty = viewModel.isDirty,
             isSaving = viewModel.isSubmitting,
             onClose = onBack,
@@ -283,6 +265,12 @@ fun PulseComposeScreen(
                                 composePurpose = viewModel.flowPurpose,
                                 postingTargetLabel = viewModel.flowTargetLabel,
                                 isNetworkTarget = viewModel.isNetworkFlowTarget,
+                                earlierAnswers = earlierAnswers,
+                                assist = assist.takeUnless { viewModel.isEditing },
+                                assistHasMaterial = viewModel.assistHasMaterial,
+                                assistPhotoCount = viewModel.assistPhotoCount,
+                                assistCanUndo = canUndoSuggestion,
+                                canTakePhoto = media.canTakePhoto,
                             ),
                         actions =
                             PulseComposeActions(
@@ -300,16 +288,18 @@ fun PulseComposeScreen(
                                         onSelectRecommendRating = viewModel::selectRecommendRating,
                                     ),
                                 onUpdateField = viewModel::update,
-                                onPickPhotos = {
-                                    photoPicker.launch(
-                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
-                                    )
-                                },
+                                onPickPhotos = { media.pickFiles(arrayOf("image/*", "video/*", "application/pdf"), false) },
                                 onRemovePhoto = viewModel::removePhoto,
                                 onBodyEditingEnded = viewModel::runPrecheck,
                                 onDismissPrecheckNudge = viewModel::dismissPrecheckNudge,
                                 onAddLocation = { showPlacePicker = true },
                                 onClearLocation = viewModel::clearPlaceTag,
+                                onOpenEarlierPost = onOpenPost,
+                                onSuggest = viewModel::suggestPost,
+                                onUndoSuggestion = viewModel::undoSuggestion,
+                                onAssistTakePhoto = { media.takePhoto(true) },
+                                onAssistChoosePhotos = { media.pickFiles(arrayOf("image/*"), true) },
+                                onTakePhoto = { media.takePhoto(false) },
                             ),
                     )
             }
@@ -324,6 +314,22 @@ fun PulseComposeScreen(
                         .padding(bottom = Spacing.s10),
             )
         }
+    }
+
+    postCheckFindings?.let { findings ->
+        PostCheckDialog(
+            findings = findings,
+            onEdit = viewModel::editAfterPostCheck,
+            onPostAnyway = viewModel::postAnyway,
+        )
+    }
+
+    aiPostConfirmation?.let { message ->
+        AIPostConfirmDialog(
+            message = message,
+            onPost = viewModel::confirmAIPost,
+            onKeepEditing = viewModel::keepEditingAIPost,
+        )
     }
 
     if (showPlacePicker) {
@@ -346,13 +352,136 @@ fun PulseComposeScreen(
     }
 }
 
+private fun readAttachment(
+    resolver: ContentResolver,
+    uri: Uri,
+    mimeOverride: String? = null,
+): PulseComposePhoto? =
+    runCatching {
+        val mime = mimeOverride ?: resolver.getType(uri) ?: ""
+        val maxBytes =
+            when {
+                mime.startsWith("video/") -> 100 * 1024 * 1024
+                mime == "application/pdf" -> 25 * 1024 * 1024
+                mime.startsWith("image/") -> 10 * 1024 * 1024
+                else -> 0
+            }
+        val bytes = readBytes(resolver, uri, maxBytes)
+        require(bytes != null && bytes.isNotEmpty())
+        val captured = if (mime.startsWith("image/")) MediaLocationExtractor.fromImageBytes(bytes) else null
+        PulseComposePhoto(
+            id = UUID.randomUUID().toString(),
+            data = bytes,
+            capturedLatitude = captured?.latitude,
+            capturedLongitude = captured?.longitude,
+            mimeType = mime,
+        )
+    }.getOrNull()
+
 private fun readBytes(
     resolver: ContentResolver,
     uri: Uri,
+    maxBytes: Int,
 ): ByteArray? =
     runCatching {
-        resolver.openInputStream(uri)?.use { it.readBytes() }
+        resolver.openInputStream(uri)?.use { stream ->
+            require(maxBytes > 0)
+            val output = java.io.ByteArrayOutputStream()
+            val buffer = ByteArray(8192)
+            while (true) {
+                val count = stream.read(buffer)
+                if (count < 0) break
+                require(output.size() + count <= maxBytes)
+                output.write(buffer, 0, count)
+            }
+            output.toByteArray()
+        }
     }.getOrNull()
+
+/**
+ * The composer's ways to add attachments: files from the phone, and the camera behind its permission. With `suggest`,
+ * the AI assist writes the post from the new photos as soon as they're in ("Take photo" and "Choose photos" on the
+ * assist card).
+ */
+private class PulseComposeMedia(
+    val pickFiles: (types: Array<String>, suggest: Boolean) -> Unit,
+    val takePhoto: (suggest: Boolean) -> Unit,
+    val canTakePhoto: Boolean,
+)
+
+@Composable
+private fun rememberPulseComposeMedia(
+    viewModel: PulseComposeViewModel,
+    photoCount: Int,
+    onLoading: (Boolean) -> Unit,
+): PulseComposeMedia {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var suggestsAfterPicking by rememberSaveable { mutableStateOf(false) }
+    val added = { photos: List<PulseComposePhoto>, requested: Int ->
+        photos.forEach(viewModel::appendPhoto)
+        onLoading(false)
+        if (photos.size < requested) viewModel.attachmentReadFailed()
+        if (suggestsAfterPicking && photos.isNotEmpty()) viewModel.suggestPost()
+        suggestsAfterPicking = false
+    }
+    val filePicker =
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+            val requested = uris.take(PULSE_COMPOSE_MAX_PHOTOS - photoCount)
+            onLoading(requested.isNotEmpty())
+            scope.launch {
+                val loaded = withContext(Dispatchers.IO) { requested.mapNotNull { readAttachment(context.contentResolver, it) } }
+                added(loaded, requested.size)
+            }
+        }
+    // The camera app writes into a cache file shared through the FileProvider (xml/file_paths.xml, post-camera/); its
+    // bytes are read and the file deleted at once. Saveable, so the capture still lands if the app was stopped while the
+    // camera was open.
+    var pendingCameraFile by rememberSaveable { mutableStateOf<String?>(null) }
+    val camera =
+        rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { taken ->
+            val file = pendingCameraFile?.let(::File)
+            pendingCameraFile = null
+            val captured = file?.takeIf { taken }
+            onLoading(captured != null)
+            scope.launch {
+                val photo =
+                    withContext(Dispatchers.IO) {
+                        val read = captured?.let { readAttachment(context.contentResolver, Uri.fromFile(it), mimeOverride = "image/jpeg") }
+                        file?.delete()
+                        read
+                    }
+                added(listOfNotNull(photo), if (captured != null) 1 else 0)
+            }
+        }
+    // CAMERA is declared in the manifest, so the camera app needs the runtime grant. A refusal skips the capture.
+    val cameraPermission =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (!granted) viewModel.cameraRefused()
+            val file = PostCameraPhotos.newFile(context.cacheDir).takeIf { granted }
+            pendingCameraFile = file?.absolutePath
+
+            fun open(target: File) = camera.launch(FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", target))
+            // No camera app (or a broken resolver) must not crash the composer: the capture is just dropped.
+            if (file == null || runCatching { open(file) }.isFailure) {
+                pendingCameraFile = null
+                file?.delete()
+                suggestsAfterPicking = false
+            }
+        }
+    val canTakePhoto = remember { context.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY) }
+    return PulseComposeMedia(
+        pickFiles = { types, suggest ->
+            suggestsAfterPicking = suggest
+            filePicker.launch(types)
+        },
+        takePhoto = { suggest ->
+            suggestsAfterPicking = suggest
+            cameraPermission.launch(Manifest.permission.CAMERA)
+        },
+        canTakePhoto = canTakePhoto,
+    )
+}
 
 @Composable
 internal fun PulseComposeToastView(
@@ -399,6 +528,18 @@ internal data class PulseComposeContentState(
     val postingTargetLabel: String? = null,
     /** Composing to the Connections target: the general form reads "Post" and speaks of connections. */
     val isNetworkTarget: Boolean = false,
+    /** "Before you ask": earlier questions and recommendations nearby matching the question being written. */
+    val earlierAnswers: List<EarlierPostDto> = emptyList(),
+    /** The AI assist card; null hides it (editing a post). */
+    val assist: PulseComposeAssistState? = null,
+    /** A photo or words in the form for the assist to write from. */
+    val assistHasMaterial: Boolean = false,
+    /** How many attachments the assist reads. */
+    val assistPhotoCount: Int = 0,
+    /** Undo on the assist card, until the person edits the suggestion. */
+    val assistCanUndo: Boolean = false,
+    /** The phone has a camera ("Take photo"). */
+    val canTakePhoto: Boolean = false,
 )
 
 internal data class PulseComposeSelectionActions(
@@ -427,6 +568,17 @@ internal data class PulseComposeActions(
     val onAddLocation: () -> Unit = {},
     /** ✕ on the set-tag row — clears the venue tag. */
     val onClearLocation: () -> Unit = {},
+    /** A "Before you ask" row: opens that earlier post. */
+    val onOpenEarlierPost: (String) -> Unit = {},
+    /** The AI assist: suggest the whole post from the photos, the place and the words. */
+    val onSuggest: () -> Unit = {},
+    /** Undo on the assist card: the form as it was before the suggestion. */
+    val onUndoSuggestion: () -> Unit = {},
+    /** The assist card's "Take photo" and "Choose photos": a suggestion follows the new photos. */
+    val onAssistTakePhoto: () -> Unit = {},
+    val onAssistChoosePhotos: () -> Unit = {},
+    /** "Take photo" in the attachments menu. */
+    val onTakePhoto: () -> Unit = {},
 )
 
 /**
@@ -467,6 +619,14 @@ private fun PulseComposeBodySections(
         nudge = state.precheckNudge,
         onDismissNudge = actions.onDismissPrecheckNudge,
     )
+    state.assist?.let { assist ->
+        val focusManager = LocalFocusManager.current
+        PulseComposeAssistCard(assist = assist, state = state, actions = actions) {
+            // The suggestion replaces the text being typed, so the keyboard goes first.
+            focusManager.clearFocus()
+            actions.onSuggest()
+        }
+    }
     IntentSpecificSection(
         state = state,
         onUpdateField = actions.onUpdateField,
@@ -478,7 +638,13 @@ private fun PulseComposeBodySections(
         onSelectAskCategory = actions.selection.onSelectAskCategory,
         onSelectRecommendRating = actions.selection.onSelectRecommendRating,
     )
-    PhotosSection(photos = state.photos, onPick = actions.onPickPhotos, onRemove = actions.onRemovePhoto)
+    BeforeYouAskSection(posts = state.earlierAnswers, onOpenPost = actions.onOpenEarlierPost)
+    PhotosSection(
+        photos = state.photos,
+        onPick = actions.onPickPhotos,
+        onRemove = actions.onRemovePhoto,
+        onTakePhoto = actions.onTakePhoto.takeIf { state.canTakePhoto },
+    )
     // Place tags are create-only (the update pipeline carries no location
     // fields), so hide the row in edit mode — offering a picker whose
     // input the Save path drops would lose data. Mirrors iOS.
@@ -837,6 +1003,7 @@ private fun IntentSpecificSection(
                 fields = state.fields,
                 kind = state.lostFoundKind,
                 contactPref = state.lostFoundContactPref,
+                isContactLocked = state.isIntentLocked,
                 onUpdateField = onUpdateField,
                 onSelectKind = onSelectLostFoundKind,
                 onSelectContactPref = onSelectContactPref,
@@ -993,11 +1160,10 @@ private fun EventSection(
             fields = fields,
             onUpdate = onUpdateField,
         )
-        DateRow(
+        DateTimeRow(
             field = PulseComposeField.EventDate,
             label = "Date & time",
-            allowFuture = true,
-            allowPast = false,
+            optional = false,
             fields = fields,
             onUpdate = onUpdateField,
         )
@@ -1028,6 +1194,7 @@ private fun LostSection(
     fields: Map<PulseComposeField, FormFieldState>,
     kind: PulseLostFoundKind,
     contactPref: PulseLostFoundContactPref,
+    isContactLocked: Boolean,
     onUpdateField: (PulseComposeField, String) -> Unit,
     onSelectKind: (PulseLostFoundKind) -> Unit,
     onSelectContactPref: (PulseLostFoundContactPref) -> Unit,
@@ -1060,16 +1227,30 @@ private fun LostSection(
             options = PulseLostFoundContactPref.entries.map { it.key to it.label },
             activeKey = contactPref.key,
             identifierPrefix = "composePulseContactPref",
+            isLocked = isContactLocked,
             onSelect = { key -> onSelectContactPref(PulseLostFoundContactPref.entries.first { it.key == key }) },
         )
-        if (contactPref == PulseLostFoundContactPref.Phone) {
+        // Editing shows the saved number read-only (none saved, no field).
+        if (contactPref == PulseLostFoundContactPref.Phone &&
+            (!isContactLocked || fields[PulseComposeField.ContactPhone]?.value.orEmpty().isNotEmpty())
+        ) {
             FieldRow(
                 field = PulseComposeField.ContactPhone,
                 label = "Phone number",
                 placeholder = "(555) 555-0123",
                 keyboardType = KeyboardType.Phone,
+                enabled = !isContactLocked,
                 fields = fields,
                 onUpdate = onUpdateField,
+            )
+        }
+        // The edit can't store a phone number, so the contact stays as posted, as on the web.
+        if (isContactLocked) {
+            Text(
+                text = "Contact can't be changed after posting.",
+                style = PantopusTextStyle.caption,
+                color = PantopusColors.appTextSecondary,
+                modifier = Modifier.testTag("composePulseContactLockedNote"),
             )
         }
     }
@@ -1299,19 +1480,20 @@ private fun PhotosSection(
     photos: List<PulseComposePhoto>,
     onPick: () -> Unit,
     onRemove: (String) -> Unit,
+    onTakePhoto: (() -> Unit)? = null,
 ) {
-    FormFieldGroup("Photos (optional)") {
+    FormFieldGroup("Attachments (optional)") {
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+            Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
                 photos.forEach { photo ->
                     PhotoThumbnail(photo = photo, onRemove = onRemove)
                 }
                 if (photos.size < PULSE_COMPOSE_MAX_PHOTOS) {
-                    AddPhotoTile(onPick = onPick)
+                    AddPhotoTile(onPick = onPick, onTakePhoto = onTakePhoto)
                 }
             }
             Text(
-                text = "Up to $PULSE_COMPOSE_MAX_PHOTOS images. Tap a photo to remove it.",
+                text = "Up to $PULSE_COMPOSE_MAX_PHOTOS photos, videos, or PDFs. Tap an attachment to remove it.",
                 style = PantopusTextStyle.caption,
                 color = PantopusColors.appTextSecondary,
             )
@@ -1324,7 +1506,7 @@ private fun PhotoThumbnail(
     photo: PulseComposePhoto,
     onRemove: (String) -> Unit,
 ) {
-    val bitmap = remember(photo.id) { decodeImage(photo.data) }
+    val bitmap = remember(photo.id) { if (photo.mimeType.startsWith("image/")) decodeImage(photo.data) else null }
     Box(
         modifier =
             Modifier
@@ -1342,6 +1524,9 @@ private fun PhotoThumbnail(
                 contentScale = ContentScale.Crop,
             )
         }
+        if (bitmap == null) {
+            Text(if (photo.mimeType == "application/pdf") "PDF" else "Video", modifier = Modifier.align(Alignment.Center))
+        }
         Box(
             modifier =
                 Modifier
@@ -1354,7 +1539,7 @@ private fun PhotoThumbnail(
         ) {
             PantopusIconImage(
                 icon = PantopusIcon.X,
-                contentDescription = "Remove photo",
+                contentDescription = "Remove attachment",
                 size = 10.dp,
                 strokeWidth = 2.5f,
                 tint = PantopusColors.appTextInverse,
@@ -1368,17 +1553,47 @@ private fun decodeImage(bytes: ByteArray): ImageBitmap? =
         android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
     }.getOrNull()
 
+/** "Add": a photo from the camera, or photos, videos and PDFs from the phone (a menu when there's a camera). */
 @Composable
-private fun AddPhotoTile(onPick: () -> Unit) {
+private fun AddPhotoTile(
+    onPick: () -> Unit,
+    onTakePhoto: (() -> Unit)? = null,
+) {
+    var showsMenu by remember { mutableStateOf(false) }
+    Box {
+        AddPhotoTileFace(onClick = { if (onTakePhoto != null) showsMenu = true else onPick() })
+        DropdownMenu(expanded = showsMenu, onDismissRequest = { showsMenu = false }) {
+            DropdownMenuItem(
+                text = { Text("Take photo") },
+                onClick = {
+                    showsMenu = false
+                    onTakePhoto?.invoke()
+                },
+                modifier = Modifier.testTag("composePulseAddPhotoCamera"),
+            )
+            DropdownMenuItem(
+                text = { Text("Photos, videos, or PDFs") },
+                onClick = {
+                    showsMenu = false
+                    onPick()
+                },
+                modifier = Modifier.testTag("composePulseAddPhotoFiles"),
+            )
+        }
+    }
+}
+
+@Composable
+private fun AddPhotoTileFace(onClick: () -> Unit) {
     Column(
         modifier =
             Modifier
                 .size(64.dp)
                 .clip(RoundedCornerShape(Radii.md))
                 .border(width = 1.dp, color = PantopusColors.appBorderStrong, shape = RoundedCornerShape(Radii.md))
-                .clickable { onPick() }
+                .clickable(onClick = onClick)
                 .testTag("composePulseAddPhoto")
-                .semantics { contentDescription = "Add photo" },
+                .semantics { contentDescription = "Add photo, video, or PDF" },
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
@@ -1573,6 +1788,7 @@ private fun FieldRow(
     onUpdate: (PulseComposeField, String) -> Unit,
     placeholder: String = "",
     keyboardType: KeyboardType = KeyboardType.Text,
+    enabled: Boolean = true,
 ) {
     val snapshot = fields[field] ?: FormFieldState(id = field.key)
     val state =
@@ -1589,6 +1805,7 @@ private fun FieldRow(
         state = state,
         keyboardType = keyboardType,
         fieldTestTag = "composePulseField_${field.key}",
+        enabled = enabled,
     )
 }
 
@@ -1698,17 +1915,17 @@ private fun DateRow(
                         color = if (snapshot.error != null) PantopusColors.error else PantopusColors.appBorder,
                         shape = RoundedCornerShape(Radii.md),
                     ).clickable {
-                        val cal = Calendar.getInstance()
+                        // Opens on the field's day when it has one (a post being edited), else today.
+                        val shown = runCatching { LocalDate.parse(snapshot.value) }.getOrNull() ?: LocalDate.now()
                         DatePickerDialog(
                             context,
                             { _, year, month, day ->
-                                val formatted =
-                                    "%04d-%02d-%02d".format(year, month + 1, day)
-                                onUpdate(field, formatted)
+                                // ISO digits whatever the phone's language, as the field and validator expect.
+                                onUpdate(field, LocalDate.of(year, month + 1, day).toString())
                             },
-                            cal.get(Calendar.YEAR),
-                            cal.get(Calendar.MONTH),
-                            cal.get(Calendar.DAY_OF_MONTH),
+                            shown.year,
+                            shown.monthValue - 1,
+                            shown.dayOfMonth,
                         ).apply {
                             if (!allowFuture) datePicker.maxDate = System.currentTimeMillis()
                             if (!allowPast) datePicker.minDate = System.currentTimeMillis()
@@ -1749,9 +1966,11 @@ private fun DateRow(
 }
 
 /**
- * Optional date+time row backed by [FutureDateTimePickerDialogs]. The
- * field stores the picker-emitted `yyyy-MM-dd HH:mm` shape; a Clear
- * affordance empties it back out.
+ * Date+time row backed by [FutureDateTimePickerDialogs], for an event's
+ * start and its end. The field stores the picker-emitted
+ * `yyyy-MM-dd HH:mm` shape; a Clear affordance empties it back out.
+ * An [optional] row (the end) fades while empty; the start stays solid,
+ * as on iOS.
  */
 @Composable
 private fun DateTimeRow(
@@ -1759,6 +1978,7 @@ private fun DateTimeRow(
     label: String,
     fields: Map<PulseComposeField, FormFieldState>,
     onUpdate: (PulseComposeField, String) -> Unit,
+    optional: Boolean = true,
 ) {
     val snapshot = fields[field] ?: FormFieldState(id = field.key)
     var showPicker by remember { mutableStateOf(false) }
@@ -1796,7 +2016,7 @@ private fun DateTimeRow(
                         shape = RoundedCornerShape(Radii.md),
                     ).clickable { showPicker = true }
                     .padding(horizontal = Spacing.s3)
-                    .alpha(if (snapshot.value.isEmpty()) 0.65f else 1f)
+                    .alpha(if (optional && snapshot.value.isEmpty()) 0.65f else 1f)
                     .testTag("composePulseField_${field.key}")
                     .semantics { contentDescription = "$label, ${snapshot.value.ifEmpty { "not set" }}" },
             verticalAlignment = Alignment.CenterVertically,
@@ -1854,6 +2074,8 @@ private fun ChipRow(
     activeKey: String,
     identifierPrefix: String,
     onSelect: (String) -> Unit,
+    /** Shows the choice without letting it change, like the post type when editing. */
+    isLocked: Boolean = false,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
         Text(
@@ -1872,6 +2094,7 @@ private fun ChipRow(
                 Box(
                     modifier =
                         Modifier
+                            .alpha(if (isLocked && !isActive) 0.4f else 1f)
                             .heightIn(min = 30.dp)
                             .clip(RoundedCornerShape(Radii.pill))
                             .background(if (isActive) PantopusColors.primary600 else PantopusColors.appSurface)
@@ -1880,7 +2103,7 @@ private fun ChipRow(
                                 color = if (isActive) Color.Transparent else PantopusColors.appBorder,
                                 shape = RoundedCornerShape(Radii.pill),
                             )
-                            .selectable(selected = isActive, role = Role.RadioButton) { onSelect(key) }
+                            .selectable(selected = isActive, enabled = !isLocked, role = Role.RadioButton) { onSelect(key) }
                             .padding(horizontal = Spacing.s3, vertical = Spacing.s1)
                             .testTag("${identifierPrefix}_$key")
                             .semantics { contentDescription = displayLabel },

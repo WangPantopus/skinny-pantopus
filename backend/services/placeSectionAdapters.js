@@ -58,9 +58,18 @@ async function fetchJson(url, { headers } = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    const res = await fetch(url, { signal: controller.signal, headers });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
+    // These are read-only public-data requests. EPA occasionally answers a
+    // healthy query with a transient 500; retry once inside the SAME timeout
+    // instead of dropping the whole card or starting a county fallback.
+    // A provider asking us to wait (or throttling us) keeps its own policy.
+    for (let attempt = 0; ; attempt += 1) {
+      const res = await fetch(url, { signal: controller.signal, headers });
+      if (res.ok) return await res.json();
+      if (attempt > 0 || ![500, 502, 503, 504].includes(res.status)
+        || res.headers?.get?.('retry-after')) throw new Error(`HTTP ${res.status}`);
+      await res.body?.cancel();
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
   } finally {
     clearTimeout(timer);
   }
@@ -685,11 +694,20 @@ async function composeDrinkingWater(home) {
 // environmental_hazards — EPA ECHO facilities within 1 mile
 // ════════════════════════════════════════════════════════════
 const ECHO_URL = 'https://echodata.epa.gov/echo/echo_rest_services.get_facilities';
+// get_qid's `qcolumns` REPLACES its default columns, so it names every
+// column mapEchoFacilities reads, by id from echo_rest_services.metadata.
+// ECHO calls the water/air flags NPDESFlag/AIRFlag, not CWAFlag/CAAFlag;
+// the mapper also accepts the older aliases.
+const ECHO_COLUMN_IDS = {
+  FacName: 1, FacNAICSCodes: 17, FacLat: 19, FacLong: 20, FacSNCFlg: 36, FacQtrsWithNC: 37,
+  FacComplianceStatus: 38, FacDateLastFormalAction: 57, FacPenaltyCount: 63,
+  AIRFlag: 100, NPDESFlag: 101, SDWISFlag: 102, RCRAFlag: 103, TRIFlag: 104,
+};
 const ECHO_PROGRAM_FLAGS = [
-  ['CWAFlag', 'Clean Water Act'],
-  ['CAAFlag', 'Clean Air Act'],
-  ['RCRAFlag', 'Hazardous waste (RCRA)'],
-  ['SDWISFlag', 'Safe Drinking Water Act'],
+  [['CWAFlag', 'NPDESFlag'], 'Clean Water Act'],
+  [['CAAFlag'], 'Clean Air Act'],
+  [['RCRAFlag'], 'Hazardous waste (RCRA)'],
+  [['SDWISFlag'], 'Safe Drinking Water Act'],
 ];
 
 function haversineMiles(lat1, lng1, lat2, lng2) {
@@ -708,8 +726,10 @@ function echoResults(data) {
   return results;
 }
 
-// ECHO's default columns (audit, Sep 2026): FacLat but NO FacLong, no
-// per-program flags — what they DO carry is compliance: FacSNCFlg
+// get_qid's default columns (checked Oct 2026) carry neither FacLat nor
+// FacLong, and none of TRIFlag, AIRFlag, RCRAFlag, FacPenaltyCount or
+// FacDateLastFormalAction, so fetchEchoFacilities asks for them by id
+// (ECHO_COLUMN_IDS). The rows are about compliance: FacSNCFlg
 // (significant noncompliance), FacQtrsWithNC (quarters with violations in
 // the last 3 years), FacPenaltyCount, FacComplianceStatus, TRIFlag /
 // AIRFlag. Most rows near a suburban home are construction stormwater
@@ -720,10 +740,10 @@ function num(v) { const n = Number(v); return Number.isFinite(n) ? n : 0; }
 
 function mapEchoFacilities(rows, lat, lng) {
   const mapped = (rows || []).map((f) => {
-    const fLat = Number(f.FacLat);
-    const fLng = Number(f.FacLong);
+    const fLat = f.FacLat == null || String(f.FacLat).trim() === '' ? NaN : Number(f.FacLat);
+    const fLng = f.FacLong == null || String(f.FacLong).trim() === '' ? NaN : Number(f.FacLong);
     const hasCoords = Number.isFinite(fLat) && Number.isFinite(fLng);
-    const programs = ECHO_PROGRAM_FLAGS.filter(([k]) => flag(f[k])).map(([, label]) => label);
+    const programs = ECHO_PROGRAM_FLAGS.filter(([keys]) => keys.some((k) => flag(f[k]))).map(([, label]) => label);
     if (flag(f.TRIFlag)) programs.push('Toxics Release Inventory');
     if (flag(f.AIRFlag) && !programs.includes('Clean Air Act')) programs.push('Air program');
     // Construction stormwater permits (NAICS 23x: subdivisions, grading,
@@ -771,7 +791,8 @@ async function fetchEchoFacilities(lat, lng) {
   let rows = Array.isArray(search.Facilities) ? search.Facilities : [];
   if (count > 0 && rows.length === 0 && search.QueryID) {
     const page = echoResults(await fetchJson(
-      `https://echodata.epa.gov/echo/echo_rest_services.get_qid?output=JSON&qid=${encodeURIComponent(search.QueryID)}&pageno=1`,
+      `https://echodata.epa.gov/echo/echo_rest_services.get_qid?output=JSON&qid=${encodeURIComponent(search.QueryID)}&pageno=1`
+        + `&qcolumns=${Object.values(ECHO_COLUMN_IDS).join(',')}`,
     ));
     rows = Array.isArray(page.Facilities) ? page.Facilities : [];
   }
@@ -807,7 +828,11 @@ async function composeEnvironmentalHazards(home) {
   try {
     const gh6 = encodeGeohash(ll.lat, ll.lng, 6);
     const { payload, fetchedAt, stale } = await readThrough({
-      cacheKey: `geo:${gh6}`,
+      // v2: rows cached before the facility rows carried coordinates have no
+      // distances (and no TRI or program flags). A new key refetches them
+      // instead of serving them for up to 90 days; the janitor deletes the
+      // old geo:<gh6> rows 30 days after they expire.
+      cacheKey: `geo:v2:${gh6}`,
       sectionId: 'environmental_hazards',
       ttlMs: 90 * DAY_MS,
       fetch: () => fetchEchoFacilities(ll.lat, ll.lng),
@@ -976,7 +1001,9 @@ async function fetchStateLegislators(stateAbbr) {
     sectionId: '_state_legislators',
     ttlMs: 7 * DAY_MS,
     fetch: async () => {
-      const res = await fetch(`https://data.openstates.org/people/current/${st}.csv`);
+      const res = await fetch(`https://data.openstates.org/people/current/${st}.csv`, {
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const rows = parseCsv(await res.text());
       if (rows.length < 2) return null;
@@ -1189,6 +1216,18 @@ function electionMatchesState(election, stateAbbr) {
   return Boolean(name && ocd.includes(division));
 }
 
+// The election section from a Ballot summary (ballot/summary.js): the "Your
+// ballot" card fields beside the pre-Ballot contract they extend.
+function ballotElectionSection(data) {
+  return serializePlaceSection('civic_election', {
+    asOf: data.checked_at ? `${data.checked_at}T00:00:00.000Z` : null,
+    status: 'ready',
+    source: data.source_line,
+    coverage: data.coverage === 'supported' ? 'full' : 'partial',
+    data,
+  });
+}
+
 // Ballot P0 (docs/ballot-implementation-plan-2026-09-24.md §5.2): for a
 // request that opted in to Ballot (see composeCivicGovernments) the section
 // gains the "Your ballot" card fields from person-checked reference data.
@@ -1199,13 +1238,7 @@ async function composeBallotElection(home, ballot) {
   try {
     const data = await ballotSummary.summaryForHome(home);
     if (!data) return null;
-    return [serializePlaceSection('civic_election', {
-      asOf: data.checked_at ? `${data.checked_at}T00:00:00.000Z` : null,
-      status: 'ready',
-      source: data.source_line,
-      coverage: data.coverage === 'supported' ? 'full' : 'partial',
-      data,
-    })];
+    return [ballotElectionSection(data)];
   } catch (err) {
     logger.warn('placeSections: ballot summary failed', { homeId: home.id, error: err.message });
     return null;
@@ -1419,6 +1452,8 @@ module.exports = {
   composeEnvironmentalHazards,
   composeCivicDistricts,
   composeCivicElection,
+  // The preview's election row for a point (placePreviewService).
+  ballotElectionSection,
   composeSeismic,
   composeWildfire,
   // The anonymous preview leads with a dollar figure and needs the raw

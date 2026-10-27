@@ -12,6 +12,8 @@ const logger = require('../../utils/logger');
 const notificationService = require('../notificationService');
 const { PAYMENT_STATES } = require('../../stripe/paymentStateMachine');
 const stripeService = require('../../stripe/stripeService');
+const { assertListingInteractionAllowed } = require('./listingBlocks');
+const { loadTaskPersonName } = require('../../utils/listingCreatorIdentity');
 
 // ─── Helpers ─────────────────────────────────────────────────
 
@@ -35,19 +37,11 @@ async function fetchOffer(offerId) {
 }
 
 /**
- * Fetch a user's display name for notification bodies.
+ * The name notification bodies give a person: the name the listing's offers show them by (their Local Profile; a
+ * business is the business; the account name only without a Local Profile name).
  */
-async function getUserName(userId) {
-  const { data } = await supabaseAdmin
-    .from('User')
-    .select('first_name, last_name, username')
-    .eq('id', userId)
-    .single();
-
-  if (!data) return 'Someone';
-  if (data.first_name) return data.first_name;
-  if (data.username) return data.username;
-  return 'Someone';
+function getUserName(userId) {
+  return loadTaskPersonName(userId, 'Someone');
 }
 
 // Safe display state for the buyer's existing checkout. Intent creation still
@@ -144,6 +138,8 @@ async function createOffer({ listingId, buyerId, amount, message }) {
     throw err;
   }
 
+  await assertListingInteractionAllowed(listing.user_id, buyerId);
+
   // 2. Check for duplicate active offer
   const { data: existing } = await supabaseAdmin
     .from('ListingOffer')
@@ -220,6 +216,8 @@ async function counterOffer({ offerId, sellerId, counterAmount, counterMessage }
     throw err;
   }
 
+  await assertListingInteractionAllowed(sellerId, offer.buyer_id);
+
   const { data: updated, error: updateErr } = await supabaseAdmin
     .from('ListingOffer')
     .update({
@@ -280,6 +278,8 @@ async function acceptOffer({ offerId, userId }) {
     err.status = 409;
     throw err;
   }
+
+  await assertListingInteractionAllowed(offer.seller_id, offer.buyer_id);
 
   // 0. Verify listing is still active
   const { data: offerListing } = await supabaseAdmin
@@ -573,6 +573,9 @@ async function completeTransaction({ offerId, completedBy }) {
     err.status = 409;
     throw err;
   }
+
+  // Completing marks the seller's listing sold and asks both people for a review.
+  await assertListingInteractionAllowed(offer.buyer_id, offer.seller_id);
 
   const now = new Date().toISOString();
 

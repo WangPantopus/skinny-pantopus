@@ -262,9 +262,9 @@ public struct GigFilterCriteria: Sendable, Hashable {
         self.archetype = archetype
     }
 
-    /// Concrete categories the chip group offers (`all` is a sentinel
-    /// and never shown in the sheet).
-    static let categoryOptions: [GigsCategory] = GigsCategory.allCases.filter { $0 != .all }
+    /// Concrete categories the chip group offers: web's browse list
+    /// (`all` is a sentinel and never shown in the sheet).
+    static let categoryOptions: [GigsCategory] = GigsCategory.filterCases.filter { $0 != .all }
 
     var isBudgetActive: Bool {
         budgetLower > Self.budgetMin || budgetUpper < Self.budgetMax

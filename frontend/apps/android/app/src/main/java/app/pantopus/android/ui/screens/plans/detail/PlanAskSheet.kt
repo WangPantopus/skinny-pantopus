@@ -28,8 +28,10 @@ import app.pantopus.android.data.api.models.plans.PlanDto
 import app.pantopus.android.data.plans.KidsAgeBand
 import app.pantopus.android.data.plans.PlanFormat
 import app.pantopus.android.data.plans.PlanKind
+import app.pantopus.android.data.plans.PlanViewerStanding
 import app.pantopus.android.data.plans.isPlaydate
 import app.pantopus.android.data.plans.planKind
+import app.pantopus.android.data.plans.standing
 import app.pantopus.android.ui.components.PantopusCheckbox
 import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.screens.plans.components.PlanChoice
@@ -119,7 +121,9 @@ internal fun PlanAskSheet(
             PrimaryButton(
                 title =
                     when {
-                        plan.myRequest != null -> "Update request"
+                        // Changing a request still waiting; after a withdrawal or a no, asking again is a new request
+                        // (the server keeps the old one in `my_request`), as on iOS.
+                        plan.standing == PlanViewerStanding.REQUESTED -> "Update request"
                         plan.isFull -> "Join the waitlist"
                         else -> "Send request"
                     },

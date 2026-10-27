@@ -1,5 +1,20 @@
+import { isLaunchCutNotification } from '@/lib/featureFlags';
+
 type NotificationTarget = { type?: string; metadata?: Record<string, unknown> | null };
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+// The assistant's brief and nudges open the apps' assistant thread
+// (pantopus://assistant?nudge=<id>), its yearly memory review the apps'
+// memory list (pantopus://settings/memory), and a standing rule's notices the
+// apps' rules list (pantopus://settings/rules); the web has none of them. The
+// server leaves them out of the web's lists and counts; this catches live ones.
+const APP_ONLY_TYPES = new Set(['assistant_brief', 'assistant_nudge', 'assistant_memory_review', 'assistant_rule']);
+
+/** True when the web leaves a notification out: one only the apps open, or one of a feature hidden for the launch. */
+export function isHiddenOnWeb(notification: NotificationTarget & { link?: string | null; context?: string | null }): boolean {
+  if (notification.type && APP_ONLY_TYPES.has(notification.type)) return true;
+  return isLaunchCutNotification(notification, resolveWebNotificationPath(notification.link, notification));
+}
 
 export function resolveWebNotificationPath(link: string | null | undefined, notification?: NotificationTarget): string | null {
   // The old dashboard link remains usable by older clients. Current clients
@@ -10,6 +25,12 @@ export function resolveWebNotificationPath(link: string | null | undefined, noti
     if (typeof home === 'string' && uuid.test(home) && typeof task === 'string' && uuid.test(task)) {
       return `/app/homes/${home.toLowerCase()}/tasks/${task.toLowerCase()}`;
     }
+  }
+  // A claim that was not approved or needs more documents grants no Home
+  // access, so its dashboard link (kept for the native routers) can't show it.
+  // My Homes lists the claim with its next step.
+  if (notification?.type === 'ownership_claim_rejected' || notification?.type === 'ownership_claim_needs_more_info') {
+    return '/app/homes';
   }
   if (!link) return null;
   const trimmed = link.trim();
@@ -47,6 +68,12 @@ export function resolveWebNotificationPath(link: string | null | undefined, noti
     const suffix = path.slice(listingMatch[0].length);
     return `/app/marketplace/${listingMatch[1]}${suffix}`;
   }
+
+  // Plans are hosted in the apps; the web has only a plan's share page, which
+  // opens it in the app. A host's "asked to join" and "requests waiting" notices
+  // link to the apps' requests screen (/plans/:id/requests).
+  const planRequests = path.match(/^\/plans\/([^/?#]+)\/requests(?=$|[?#])/i);
+  if (planRequests && uuid.test(planRequests[1])) return `/plans/${planRequests[1]}`;
 
   // Older Home notices linked to pages the web never had: /homes/:id/ownership
   // (the Owners page) and /homes/:id/occupants (the Members page).

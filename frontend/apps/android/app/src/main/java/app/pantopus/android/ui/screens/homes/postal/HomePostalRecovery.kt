@@ -43,7 +43,7 @@ internal fun HomePostalRecovery(
         when {
             viewModel.canAcknowledge ->
                 HomePostalButton(
-                    if (state.outcome?.state == "completed") "Done" else "Start over",
+                    if (state.outcome?.state == "completed" || HomePostalMessages.sentForReview(state.outcome)) "Done" else "Start over",
                     "homePostalAcknowledge",
                     onClick = viewModel::acknowledge,
                 )

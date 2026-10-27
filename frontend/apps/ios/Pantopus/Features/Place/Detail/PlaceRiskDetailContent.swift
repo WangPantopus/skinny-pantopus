@@ -12,12 +12,12 @@ import SwiftUI
 struct PlaceRiskDetailContent: View {
     let intel: PlaceIntelligence
     let vm: PlaceDetailViewModel
-    @State private var fridge: PlaceFridgeCardViewModel
+    @State private var fridge: PlaceFridgeCardViewModel?
 
     init(intel: PlaceIntelligence, vm: PlaceDetailViewModel) {
         self.intel = intel
         self.vm = vm
-        _fridge = State(initialValue: PlaceFridgeCardViewModel(homeId: vm.homeId))
+        _fridge = State(initialValue: vm.savedPlaceId == nil ? PlaceFridgeCardViewModel(homeId: vm.homeId) : nil)
     }
 
     var body: some View {
@@ -54,24 +54,27 @@ struct PlaceRiskDetailContent: View {
                 PlaceSourceNote(name: "EPA radon zones · SDWIS · ECHO", asOf: nil)
             }
 
-            PlaceDetailSectionLabel(text: "Emergency plan")
-            EmergencyChecklist()
-            PlaceSourceNote(name: "Ready.gov · American Red Cross", asOf: nil)
+            if vm.savedPlaceId == nil {
+                PlaceDetailSectionLabel(text: "Emergency plan")
+                EmergencyChecklist(homeId: vm.homeId)
+                    .id(vm.homeId)
+                PlaceSourceNote(name: "Ready.gov · American Red Cross", asOf: nil)
 
-            PlaceDetailSectionLabel(text: "Fridge card")
-            if intel.tier == .t4 {
-                PlaceFridgeCardSection(vm: fridge)
-                    .task { await fridge.load() }
-            } else {
-                PlaceLockedCard(
-                    icon: .heartPulse,
-                    title: "The 911-ready household card",
-                    reason: vm.nonResidentViewer
-                        ? "Issued by this home's verified residents — its headline is the verified address a caller reads to 911."
-                        : "Verify your address to issue a fridge card — its headline is the verified address a caller reads to 911.",
-                    cta: "Verify address",
-                    onTap: vm.verifyAction
-                )
+                PlaceDetailSectionLabel(text: "Fridge card")
+                if intel.tier == .t4, let fridge {
+                    PlaceFridgeCardSection(vm: fridge)
+                        .task { await fridge.load() }
+                } else {
+                    PlaceLockedCard(
+                        icon: .heartPulse,
+                        title: "The 911-ready household card",
+                        reason: vm.nonResidentViewer
+                            ? "Issued by this home's verified residents — its headline is the verified address a caller reads to 911."
+                            : "Verify your address to issue a fridge card — its headline is the verified address a caller reads to 911.",
+                        cta: "Verify address",
+                        onTap: vm.verifyAction
+                    )
+                }
             }
         }
     }
@@ -176,7 +179,7 @@ struct PlaceRiskDetailContent: View {
     @ViewBuilder
     private func healthCard(_ env: PlaceSectionEnvelope) -> some View {
         let cfg = PlacePresentation.config(for: env.id)
-        if env.status == .ready || env.status == .stale {
+        if env.status == .ready || env.status == .stale || (vm.savedPlaceId != nil && env.status == .partial) {
             PlaceDetailCard(padding: 16) {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 11) {
@@ -199,8 +202,10 @@ struct PlaceRiskDetailContent: View {
                                     Text(f.name).font(.system(size: 12.5, weight: .medium))
                                         .foregroundStyle(Theme.Color.appTextStrong)
                                     Spacer()
-                                    Text(String(format: "%.1f mi", f.distanceMi))
-                                        .pantopusTextStyle(.caption).foregroundStyle(Theme.Color.appTextMuted)
+                                    if let distance = f.distanceMi {
+                                        Text(String(format: "%.1f mi", distance))
+                                            .pantopusTextStyle(.caption).foregroundStyle(Theme.Color.appTextMuted)
+                                    }
                                 }
                             }
                         }
@@ -262,7 +267,14 @@ private struct EmergencyChecklist: View {
         )
     ]
 
-    @State private var checked: Set<String> = []
+    private let storageKey: String
+    @State private var checked: Set<String>
+
+    init(homeId: String) {
+        let accountId: String = if case let .signedIn(user) = AuthManager.shared.state { user.id } else { "guest" }
+        storageKey = "place.emergencyChecklist.\(accountId).\(homeId)"
+        _checked = State(initialValue: Set(UserDefaults.standard.stringArray(forKey: storageKey) ?? []))
+    }
 
     private var total: Int {
         Self.groups.reduce(0) { $0 + $1.items.count }
@@ -280,6 +292,9 @@ private struct EmergencyChecklist: View {
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Theme.Color.home)
                 }
+                Text("Saved on this device for this home · not shared with household members")
+                    .pantopusTextStyle(.small)
+                    .foregroundStyle(Theme.Color.appTextMuted)
                 GeometryReader { proxy in
                     ZStack(alignment: .leading) {
                         Capsule().fill(Theme.Color.appSurfaceSunken).frame(height: 6)
@@ -306,6 +321,7 @@ private struct EmergencyChecklist: View {
     private func checkRow(_ item: String) -> some View {
         Button {
             if checked.contains(item) { checked.remove(item) } else { checked.insert(item) }
+            UserDefaults.standard.set(checked.sorted(), forKey: storageKey)
         } label: {
             HStack(spacing: 10) {
                 ZStack {
@@ -323,6 +339,7 @@ private struct EmergencyChecklist: View {
             }
         }
         .buttonStyle(.plain)
+        .accessibilityValue(checked.contains(item) ? "Ready" : "Not ready")
     }
 }
 

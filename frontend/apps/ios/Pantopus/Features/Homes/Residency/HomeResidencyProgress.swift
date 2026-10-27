@@ -82,16 +82,58 @@ struct PersonalHomeResidencyProgress: Decodable, Equatable {
         case unavailable
     }
 
+    /// Probation (home claims PR 4), for a request nobody in the household answered in 7 days: 'active' until someone
+    /// there says yes or the address is verified by mail, 'ended' after a no (proof by mail is the way back),
+    /// 'review' while Pantopus reviews that proof, and 'declined' when Pantopus kept the household's no (new proof
+    /// by mail opens another review; an approval restores the membership instead). It has its own field because
+    /// `next_step` stays what older apps know. Older servers omit it, and a value this app doesn't know falls back to
+    /// `next_step`.
+    enum Probation: String {
+        case active, ended, review, declined
+
+        var title: String {
+            switch self {
+            case .active: "You're on probation"
+            case .ended: "The household said no"
+            case .review: "Pantopus is reviewing your proof"
+            case .declined: "Pantopus kept the household's answer"
+            }
+        }
+
+        var explanation: String {
+            switch self {
+            case .active:
+                "Nobody in the household answered your request in 7 days, so you're on probation. "
+                    + "Household records stay private until someone there says yes or you verify your address by mail."
+            case .ended:
+                "Someone in the household said you don't live here, so your probation ended. If you do live here, "
+                    + "verify your address by mail. Pantopus will review your proof, and your access stays off until then."
+            case .review:
+                "You verified this address by mail after the household said no. Pantopus is reviewing it, "
+                    + "and your access stays off until then."
+            case .declined:
+                "Pantopus reviewed your proof of this address and kept the household's no. If you have new proof, "
+                    + "you can verify by mail again and Pantopus will take another look."
+            }
+        }
+    }
+
     let homeId: String
     let request: PersonalHomeResidencyRequest?
     let currentAccess: String
     let nextStep: NextStep
+    let rawProbation: String?
 
     private enum CodingKeys: String, CodingKey {
         case request
         case homeId = "home_id"
         case currentAccess = "current_access"
         case nextStep = "next_step"
+        case rawProbation = "probation"
+    }
+
+    var probation: Probation? {
+        rawProbation.flatMap(Probation.init(rawValue:))
     }
 
     func matches(_ home: String) -> Bool {
@@ -105,7 +147,8 @@ struct PersonalHomeResidencyProgress: Decodable, Equatable {
     }
 
     var title: String {
-        switch nextStep {
+        if let probation { return probation.title }
+        return switch nextStep {
         case .home: "You're part of this household"
         case .householdReview: "Waiting for household review"
         case .addressVerification: needsResidencyRequest ? "Confirm your address" : "Your address isn't verified yet"
@@ -117,7 +160,8 @@ struct PersonalHomeResidencyProgress: Decodable, Equatable {
     }
 
     var explanation: String {
-        switch nextStep {
+        if let probation { return probation.explanation }
+        return switch nextStep {
         case .home: "Open the Home to see your household. What you can see and change depends on your role."
         case .householdReview:
             "Someone in the household will review your request. You don't need to upload any documents. "
@@ -195,7 +239,9 @@ final class HomeResidencyProgressViewModel {
         guard visible, isCurrent, !isLoading, let progress else { return false }
         switch destination {
         case .home: return progress.currentAccess == "shared" && progress.nextStep == .home
-        case .mail: return progress.nextStep == .addressVerification && !progress.needsResidencyRequest
+        // Proof by mail ends probation, and it's the way back after a no (Pantopus reviews it then, again if needed).
+        case .mail: return (progress.nextStep == .addressVerification && !progress.needsResidencyRequest)
+            || [.active, .ended, .declined].contains(progress.probation)
         case .ownership: return progress.nextStep == .ownershipVerification
         case .addHome: return progress.nextStep == .resubmit || progress.needsResidencyRequest
         }

@@ -267,6 +267,19 @@ public struct ChangeMemberRoleResponse: Decodable, Sendable, Hashable {
     }
 }
 
+/// `{ confirmed, replayed, message }` — route `backend/routes/homeIam.js:314`.
+public struct ConfirmClaimMemberResponse: Decodable, Sendable, Hashable {
+    public let confirmed: Bool?
+    public let replayed: Bool?
+    public let message: String?
+
+    public init(confirmed: Bool? = nil, replayed: Bool? = nil, message: String? = nil) {
+        self.confirmed = confirmed
+        self.replayed = replayed
+        self.message = message
+    }
+}
+
 // MARK: - Household access requests
 
 /// Joined `User` record on a household-access request row.

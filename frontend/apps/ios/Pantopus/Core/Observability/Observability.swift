@@ -40,16 +40,32 @@ final class Observability {
             options.tracesSampleRate = environment.target == .production ? 0.1 : 1.0
             options.enableUserInteractionTracing = true
             options.enableNetworkTracking = true
+            // The SDK adds sentry-trace and baggage (trace id, release,
+            // environment, Sentry key) to every URLSession request whose URL
+            // matches a target, and its default target matches all of them:
+            // Stripe, PostHog, storage images. Only the API gets them.
+            options.tracePropagationTargets = Self.tracePropagationTargets(apiBaseURL: environment.apiBaseURL)
             options.attachViewHierarchy = false
             options.attachScreenshot = false
             options.sendDefaultPii = false
             options.beforeSend = { event in
+                // A link the server couldn't preview answers 502, which is routine.
+                if Self.isLinkPreview(event.request?.url) { return nil }
                 Self.scrubPII(from: event)
                 return event
             }
             options.beforeBreadcrumb = { breadcrumb in
                 Self.scrubPII(from: breadcrumb)
                 return breadcrumb
+            }
+            options.beforeSendSpan = { span in
+                Self.urlQueryKeys.forEach { span.removeData(key: $0) }
+                // An HTTP span names its request in the description and `url`.
+                span.spanDescription = span.spanDescription.map(Self.redactBearerPaths)
+                if let url = span.data["url"] as? String {
+                    span.setData(value: Self.redactBearerPaths(url), key: "url")
+                }
+                return span
             }
         }
 
@@ -79,7 +95,64 @@ final class Observability {
 
     private nonisolated static let redacted = "[redacted]"
 
+    /// Sentry's keys for a request URL's query string and fragment (HTTP
+    /// breadcrumbs and spans). Queries carry typed addresses, coordinates,
+    /// search terms and signed-URL tokens, so only the path leaves the device.
+    private nonisolated static let urlQueryKeys = ["http.query", "http.fragment"]
+
+    /// The API's origin (scheme, host and port) as Sentry's only trace
+    /// propagation target. The SDK looks for a string or regex target anywhere
+    /// in a URL, so another host's URL carrying the API's address would
+    /// match; this pattern is anchored to the start and ends at the port. No
+    /// target, so no headers, if the base URL has no host.
+    private nonisolated static func tracePropagationTargets(apiBaseURL: URL) -> [NSRegularExpression] {
+        guard let scheme = apiBaseURL.scheme, let host = apiBaseURL.host else { return [] }
+        let origin = "\(scheme)://\(host)" + (apiBaseURL.port.map { ":\($0)" } ?? "")
+        let pattern = "^\(NSRegularExpression.escapedPattern(for: origin))(?:[/?#]|$)"
+        guard let target = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { return [] }
+        return [target]
+    }
+
+    /// `GET /api/link-preview?url=` answers 502 for a link that won't load.
+    private nonisolated static func isLinkPreview(_ url: String?) -> Bool {
+        url?.split(separator: "?").first?.hasSuffix("/api/link-preview") == true
+    }
+
+    /// Routes whose last segment is the credential itself: a home invite, a
+    /// guest pass, a booking's one-off or manage link (which can cancel or
+    /// reschedule it), and the public residency, fridge-card and opt-out
+    /// codes. Their URLs leave the device with that segment redacted, as the
+    /// backend's request log does (`BEARER_CODE_PATH`, backend/app.js).
+    private nonisolated static let bearerPathPattern =
+        #"(/api/(?:homes/invitations/token|homes/guest|homes/shared|public/book/o|public/booking|"#
+            + #"public/residency-letters|public/residency-claims|public/fridge-cards|public/block-invites/opt-out))"#
+            + #"/[^/?#\s]+"#
+
+    /// `value` (a URL, or a span's "GET <url>") with every bearer credential
+    /// in its path replaced by `[redacted]`.
+    private nonisolated static func redactBearerPaths(_ value: String) -> String {
+        guard let regex = try? NSRegularExpression(pattern: bearerPathPattern, options: [.caseInsensitive]) else {
+            return value
+        }
+        let range = NSRange(value.startIndex..., in: value)
+        return regex.stringByReplacingMatches(in: value, range: range, withTemplate: "$1/\(redacted)")
+    }
+
     private nonisolated static func scrubPII(from event: Event) {
+        // A failed-request event keeps the method, path and status: no query,
+        // fragment or request headers. The SDK drops only a short list of
+        // headers, so the device id, DPoP proof and step-up token would leave.
+        event.request?.url = event.request?.url.map(redactBearerPaths)
+        event.request?.queryString = nil
+        event.request?.fragment = nil
+        event.request?.headers = nil
+        // The app's own reports name the request too ("API GET <path> -> 503").
+        if let message = event.message {
+            let scrubbed = SentryMessage(formatted: redactBearerPaths(message.formatted))
+            scrubbed.message = message.message.map(redactBearerPaths)
+            scrubbed.params = message.params
+            event.message = scrubbed
+        }
         if var extra = event.extra {
             scrubInPlace(&extra)
             event.extra = extra
@@ -91,11 +164,17 @@ final class Observability {
 
     private nonisolated static func scrubPII(from breadcrumb: Breadcrumb) {
         if var data = breadcrumb.data {
+            for key in urlQueryKeys {
+                data[key] = nil
+            }
+            if let url = data["url"] as? String {
+                data["url"] = redactBearerPaths(url)
+            }
             scrubInPlace(&data)
             breadcrumb.data = data
         }
         if let message = breadcrumb.message {
-            breadcrumb.message = redact(emailLikePattern: message)
+            breadcrumb.message = redact(emailLikePattern: redactBearerPaths(message))
         }
     }
 

@@ -798,7 +798,7 @@ struct NeighborReviewsEmptyCard: View {
             Text("No reviews yet")
                 .font(.system(size: 15, weight: .bold))
                 .foregroundStyle(Theme.Color.appText)
-            Text("\(firstName) verified recently. Reviews show up after the first hire, recommendation, or marketplace deal.")
+            Text("\(firstName) hasn't received any reviews yet.")
                 .font(.system(size: 12.5))
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .multilineTextAlignment(.center)

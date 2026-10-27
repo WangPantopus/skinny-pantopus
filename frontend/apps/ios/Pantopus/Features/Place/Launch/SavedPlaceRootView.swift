@@ -6,8 +6,8 @@
 //  Home yet: their address, one next step (set it up as their Home), and
 //  what's public about it. They are never asked for the address again.
 //  The facts are the preview's own (`PlacePreviewContent`), read for the
-//  saved point by `GET /api/saved-places/:id/preview`; nothing is kept on
-//  the phone.
+//  saved point by `GET /api/saved-places/:id/preview`, with an account-scoped
+//  copy shared with its public detail pages.
 //
 
 import SwiftUI
@@ -24,21 +24,36 @@ final class SavedPlaceRootViewModel {
     let place: SavedPlaceDTO
     private(set) var state: State = .loading
     private(set) var isRefreshing = false
-    private let api: APIClient
+    var refreshFailureMessage: String?
+    private let store: ScreenStore
 
     init(place: SavedPlaceDTO, api: APIClient = .shared) {
         self.place = place
-        self.api = api
+        store = ScreenStore.store(for: api)
+        if let copy = store.peek(SavedPlacesEndpoints.preview(id: place.id), as: PlacePreview.self) {
+            state = .loaded(copy.value)
+        }
     }
 
     /// A failed re-read keeps the facts already on screen.
-    func load() async {
+    func load(force: Bool = false) async {
         do {
-            let preview: PlacePreview = try await api.request(SavedPlacesEndpoints.preview(id: place.id))
-            state = .loaded(preview)
+            let copy = try await store.load(
+                SavedPlacesEndpoints.preview(id: place.id),
+                as: PlacePreview.self,
+                kind: .today,
+                topics: [ScreenTopic.savedPlaces, ScreenTopic.today],
+                force: force
+            )
+            state = .loaded(copy.value)
+            refreshFailureMessage = copy.refreshFailed ? "Couldn't refresh. Showing saved information." : nil
+        } catch is CancellationError {
+            return
         } catch {
-            guard !(error is CancellationError) else { return }
-            if case .loaded = state { return }
+            if case .loaded = state, !ScreenStore.isRefusal(error) {
+                refreshFailureMessage = "Couldn't refresh. Showing saved information."
+                return
+            }
             state = .error
         }
     }
@@ -46,7 +61,7 @@ final class SavedPlaceRootViewModel {
     func refresh() async {
         isRefreshing = true
         defer { isRefreshing = false }
-        await load()
+        await load(force: true)
     }
 }
 
@@ -58,6 +73,7 @@ struct SavedPlaceRootView: View {
     private let onOpenMenu: () -> Void
     private let onSetUpHome: () -> Void
     private let onLookUpAddress: () -> Void
+    private let onOpenDetail: ((PlaceDetailGroup) -> Void)?
 
     init(
         viewModel: SavedPlaceRootViewModel,
@@ -66,7 +82,8 @@ struct SavedPlaceRootView: View {
         onOpenNotifications: @escaping () -> Void,
         onOpenMenu: @escaping () -> Void,
         onSetUpHome: @escaping () -> Void,
-        onLookUpAddress: @escaping () -> Void
+        onLookUpAddress: @escaping () -> Void,
+        onOpenDetail: ((PlaceDetailGroup) -> Void)? = nil
     ) {
         _viewModel = State(initialValue: viewModel)
         self.unreadCount = unreadCount
@@ -75,6 +92,7 @@ struct SavedPlaceRootView: View {
         self.onOpenMenu = onOpenMenu
         self.onSetUpHome = onSetUpHome
         self.onLookUpAddress = onLookUpAddress
+        self.onOpenDetail = onOpenDetail
     }
 
     var body: some View {
@@ -104,6 +122,8 @@ struct SavedPlaceRootView: View {
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .task { await viewModel.load() }
         .refreshable { await viewModel.refresh() }
+        .refreshFailureToast($viewModel.refreshFailureMessage)
+        .refreshesOnStoreChange { await viewModel.load() }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("place.savedRoot")
     }
@@ -210,6 +230,7 @@ struct SavedPlaceRootView: View {
                 PlacePreviewContent(
                     preview: preview,
                     showsLocked: false,
+                    onOpenDetail: onOpenDetail,
                     onAction: onSetUpHome,
                     onRetry: { Task { await viewModel.refresh() } },
                     retrying: viewModel.isRefreshing

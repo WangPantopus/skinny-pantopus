@@ -84,8 +84,10 @@ data class UnifiedConversationDto(
     @Json(name = "home_id") val homeId: String? = null,
     // shared
     @Json(name = "total_unread") val totalUnread: Int = 0,
+    @Json(name = "unmuted_unread") val unmutedUnread: Int? = null,
     @Json(name = "last_message_at") val lastMessageAt: String? = null,
     @Json(name = "last_message_preview") val lastMessagePreview: String? = null,
+    @Json(name = "notifications_enabled") val notificationsEnabled: Boolean? = null,
 )
 
 /** `GET /api/chat/unified-conversations` envelope. */
@@ -94,6 +96,29 @@ data class UnifiedConversationsResponse(
     val conversations: List<UnifiedConversationDto>,
     val total: Int? = null,
     val totalUnread: Int? = null,
+    val totalUnmutedUnread: Int? = null,
+    val hasMore: Boolean = false,
+    val nextCursor: String? = null,
+)
+
+/** The authoritative unread count for the room or person scope acknowledged by the read request. */
+@JsonClass(generateAdapter = true)
+data class ChatReadResponse(
+    val unreadCount: Int? = null,
+    val topicId: String? = null,
+    val readScope: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class ChatNotificationPreferencesBody(
+    val notificationsEnabled: Boolean,
+    val asBusinessUserId: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class ChatNotificationPreferencesResponse(
+    val notificationsEnabled: Boolean,
+    val roomIds: List<String> = emptyList(),
 )
 
 /** Stats payload from `GET /api/chat/stats`. */
@@ -102,6 +127,7 @@ data class ChatStats(
     @Json(name = "total_chats") val totalChats: Int = 0,
     @Json(name = "total_messages") val totalMessages: Int = 0,
     @Json(name = "total_unread") val totalUnread: Int = 0,
+    @Json(name = "total_unmuted_unread") val totalUnmutedUnread: Int? = null,
     @Json(name = "direct_chats") val directChats: Int = 0,
     @Json(name = "gig_chats") val gigChats: Int = 0,
     @Json(name = "home_chats") val homeChats: Int = 0,
@@ -122,7 +148,13 @@ data class ChatMessageSender(
     val username: String? = null,
     val name: String? = null,
     @Json(name = "profile_picture_url") val profilePictureUrl: String? = null,
-)
+    /** Current public identity projection; legacy servers still use name/username. */
+    val displayName: String? = null,
+    val handle: String? = null,
+) {
+    val displayLabel: String?
+        get() = listOf(displayName, name, handle, username).firstOrNull { !it.isNullOrBlank() }
+}
 
 /** One row from `/messages`. */
 @JsonClass(generateAdapter = true)
@@ -140,7 +172,7 @@ data class ChatMessageDto(
     @Json(name = "reply_to_id") val replyToId: String? = null,
     @Json(name = "topic_id") val topicId: String? = null,
     @Json(name = "client_message_id") val clientMessageId: String? = null,
-    @Json(name = "created_at") val createdAt: String,
+    @Json(name = "created_at") val createdAt: String = "",
     @Json(name = "edited_at") val editedAt: String? = null,
     @Json(name = "deleted_at") val deletedAt: String? = null,
     @Json(name = "delivered_at") val deliveredAt: String? = null,
@@ -148,6 +180,14 @@ data class ChatMessageDto(
     val sender: ChatMessageSender? = null,
     val reactions: List<ChatReactionSummary> = emptyList(),
     val attachments: List<ChatAttachmentDto> = emptyList(),
+    /**
+     * The person who wrote a message sent as a business. The server names that only to the writer, so it is set on
+     * the business's messages you wrote yourself and null everywhere else.
+     */
+    @Json(name = "actor_user_id") val actorUserId: String? = null,
+    @Json(name = "sync_version") val syncVersion: Long? = null,
+    /** Incremental recovery can return a minimal tombstone without body or timestamp fields. */
+    val deleted: Boolean = false,
 )
 
 /** Body text — API may return canonical `message` or alias `message_text`. */
@@ -166,6 +206,8 @@ data class ChatAttachmentDto(
     @Json(name = "mime_type") val mimeType: String? = null,
     @Json(name = "file_size") val fileSize: Int? = null,
     @Json(name = "file_type") val fileType: String? = null,
+    @Json(name = "live_video_file_id") val liveVideoFileId: String? = null,
+    @Json(name = "live_photo_file_id") val livePhotoFileId: String? = null,
 )
 
 @JsonClass(generateAdapter = true)
@@ -203,6 +245,58 @@ data class ChatMessagesResponse(
     val hasMore: Boolean? = null,
     @Json(name = "nextCursor") val nextCursor: String? = null,
     val roomIds: List<String>? = null,
+    /**
+     * Set when the conversation takes no messages from you: a direct chat with a draft or closed business (`code`
+     * NOT_PUBLISHED). Null from older servers, which leave the key out.
+     */
+    val sendRefusal: ChatSendRefusal? = null,
+    /** First-page anchor only; older pages never advance the saved recovery cursor. */
+    val syncCursors: Map<String, Long> = emptyMap(),
+    /** Device-only tombstone revisions prevent a delayed history response from restoring a deleted bubble. */
+    val deletedMessageVersions: Map<String, Long> = emptyMap(),
+    val hasMoreAfter: Boolean = false,
+    val anchorMessageId: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class ChatReadReceipt(
+    val roomId: String,
+    val userId: String,
+    val readAt: String,
+    val throughMessageId: String,
+    val throughCreatedAt: String,
+)
+
+@JsonClass(generateAdapter = true)
+data class ChatChangesBody(
+    val cursor: Map<String, Long>,
+    val until: Map<String, Long>? = null,
+    val asBusinessUserId: String? = null,
+    val limit: Int = 200,
+    val readMessageIds: List<String>? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class ChatMessageReadReceipt(val messageId: String, val readAt: String? = null)
+
+@JsonClass(generateAdapter = true)
+data class ChatChangesResponse(
+    val messages: List<ChatMessageDto> = emptyList(),
+    val syncCursors: Map<String, Long> = emptyMap(),
+    val untilCursors: Map<String, Long> = emptyMap(),
+    val hasMore: Boolean = false,
+    val roomIds: List<String> = emptyList(),
+    val removedRoomIds: List<String> = emptyList(),
+    val resetRequired: Boolean = false,
+    val readReceipts: List<ChatReadReceipt> = emptyList(),
+    val messageReadReceipts: List<ChatMessageReadReceipt>? = null,
+)
+
+/** Why a conversation takes no messages, as the server words it (`backend/routes/chats.js` `unpublishedDirectRoomRefusal`). */
+@JsonClass(generateAdapter = true)
+data class ChatSendRefusal(
+    val error: String,
+    val code: String? = null,
 )
 
 /** `POST /messages` body. */
@@ -216,6 +310,7 @@ data class SendChatMessageBody(
     val replyToId: String? = null,
     val topicId: String? = null,
     val metadata: Map<String, Any>? = null,
+    val asBusinessUserId: String? = null,
 )
 
 /** `POST /messages` envelope. */
@@ -275,6 +370,8 @@ data class ChatRoomDetailResponse(
 @JsonClass(generateAdapter = true)
 data class ChatRoomDetail(
     val type: String? = null,
+    /** The room's name; a Support Train's room goes by the train's title. */
+    val name: String? = null,
     val participants: List<ChatRoomParticipant>? = null,
     /** False once the room is read-only (a plan's chat after the plan, or a cancelled plan). */
     @Json(name = "is_active") val isActive: Boolean? = null,
@@ -287,10 +384,29 @@ data class ChatRoomParticipant(
     @Json(name = "user_id") val userId: String? = null,
     /** The local-identity projection (`serializeUserAsLocalIdentity`). */
     val user: ChatRoomParticipantIdentity? = null,
+    @Json(name = "is_active") val isActive: Boolean? = null,
+    // Missing legacy membership fields cannot prove an active reply audience.
+    @Json(name = "left_at") val leftAt: String? = "",
 )
 
 @JsonClass(generateAdapter = true)
 data class ChatRoomParticipantIdentity(
     val displayName: String? = null,
     val avatarUrl: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class ChatSearchRoomContext(
+    val conversationId: String,
+    val kind: String,
+    val name: String,
+    val identity: ChatOtherIdentity? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class ChatSearchResponse(
+    val messages: List<ChatMessageDto> = emptyList(),
+    val roomContexts: Map<String, ChatSearchRoomContext> = emptyMap(),
+    val hasMore: Boolean = false,
+    val nextCursor: String? = null,
 )

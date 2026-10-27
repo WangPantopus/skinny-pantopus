@@ -684,13 +684,12 @@ class MaintenanceListViewModel
             @JvmStatic
             fun formatCurrency(amount: BigDecimal): String =
                 NumberFormat.getCurrencyInstance(Locale.US).apply {
-                    maximumFractionDigits = 0
-                    minimumFractionDigits = 0
+                    maximumFractionDigits = 2
+                    minimumFractionDigits = if (amount.stripTrailingZeros().scale() > 0) 2 else 0
                 }.format(amount)
 
             private fun formatCost(cost: BigDecimal?): String {
                 if (cost == null) return "—"
-                if (cost.signum() == 0) return "DIY"
                 return formatCurrency(cost)
             }
 

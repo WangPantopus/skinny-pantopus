@@ -15,6 +15,8 @@ const { readGigAuthorizationDeadline, requireLiveAuthorization } = require('./gi
 const { expectedTipLiveMode, readTipProof, verifyTipCustomer, originalTipRequest, projectTipOriginal,
   tipProviderParams, discoverOriginalTip } = require('./gigTipProof');
 const { isDeepStrictEqual } = require('node:util');
+const { REDUCED_FEE_BELOW_PCT, FOUNDING_FEE_CAP_PCT } = require('../utils/businessConstants');
+const { hasFoundingCap, reducedFeeVerified } = require('../services/businessEntityService');
 
 // Default platform fee: 15%
 const DEFAULT_PLATFORM_FEE_PCT = 15;
@@ -213,11 +215,15 @@ class StripeService {
    */
   async createConnectAccount(userId, userData = {}) {
     try {
-      const { data: existing } = await supabaseAdmin
+      const { data: existing, error: existingError } = await supabaseAdmin
         .from('StripeAccount')
         .select('stripe_account_id')
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
+
+      // A failed read is not "no account yet": creating one then would leave a
+      // second Stripe account that nothing links to.
+      if (existingError) throw new Error('Stripe account lookup failed');
 
       if (existing) {
         return {
@@ -264,6 +270,17 @@ class StripeService {
 
       if (dbError) {
         logger.error('Error saving Stripe account', { error: dbError.message });
+        // A concurrent request linked its account first: answer as the check above would.
+        if (dbError.code === '23505') {
+          const { data: linked } = await supabaseAdmin
+            .from('StripeAccount')
+            .select('stripe_account_id')
+            .eq('user_id', userId)
+            .maybeSingle();
+          if (linked) return { success: false, error: 'Stripe account already exists', accountId: linked.stripe_account_id };
+        }
+        // Reporting success here left a payout account that nothing links to.
+        throw new Error('Failed to save Stripe account');
       }
 
       return {
@@ -381,11 +398,15 @@ class StripeService {
    */
   async getConnectAccount(userId) {
     try {
-      const { data: account } = await supabaseAdmin
+      const { data: account, error: accountError } = await supabaseAdmin
         .from('StripeAccount')
         .select('*')
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
+
+      // A failed read must not answer "no account": the payout screens would offer
+      // to set up a payout account that already exists.
+      if (accountError) throw new Error('Stripe account lookup failed');
 
       if (!account) {
         return { success: false, error: 'No Stripe account found' };
@@ -693,7 +714,10 @@ class StripeService {
 
   /**
    * Get the effective platform fee rate for a business.
-   * Returns the per-business override if set, else the platform default (15%).
+   * Returns the per-business override if set, else the platform default (15%). A reduced rate (under 10%) comes
+   * from a type the owner picks, so it applies only once Pantopus has verified the business as that type; until
+   * then the business pays the platform default, or its founding cap (founder rule 2026-10-22). Checked here, where
+   * every invoice and payment is priced, so businesses that picked such a type earlier are covered too.
    *
    * @param {string} businessUserId - The business user ID (payee)
    * @returns {Promise<number>} - Fee percentage (0-100)
@@ -701,13 +725,16 @@ class StripeService {
   async getEffectiveFeeRate(businessUserId) {
     if (!businessUserId) return DEFAULT_PLATFORM_FEE_PCT;
     try {
-      const { data: profile } = await supabaseAdmin
+      const { data: profile, error } = await supabaseAdmin
         .from('BusinessProfile')
-        .select('fee_override_pct')
+        .select('fee_override_pct, business_type, verification_status, founding_badge, founding_benefit_expires_at')
         .eq('business_user_id', businessUserId)
         .maybeSingle();
+      if (error) throw error;
       if (profile && profile.fee_override_pct !== null && profile.fee_override_pct !== undefined) {
-        return Number(profile.fee_override_pct);
+        const rate = Number(profile.fee_override_pct);
+        if (rate >= REDUCED_FEE_BELOW_PCT || await reducedFeeVerified(businessUserId, profile)) return rate;
+        return hasFoundingCap(profile) ? FOUNDING_FEE_CAP_PCT : DEFAULT_PLATFORM_FEE_PCT;
       }
     } catch (err) {
       logger.warn('getEffectiveFeeRate: failed to fetch override, using default', {

@@ -9,6 +9,7 @@ import { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { NavIcons } from '@/lib/icons';
 import { launchFeatures } from '@/lib/featureFlags';
+import { afterInboxRows } from '@/lib/shellReads';
 
 type Tab = {
   key: 'place' | 'today' | 'nearby' | 'mail';
@@ -23,7 +24,8 @@ const starts = (path: string, ...prefixes: string[]) => prefixes.some((p) => pat
 export const MOBILE_TABS: Tab[] = [
   { key: 'place', label: 'Place', href: '/app/place', icon: NavIcons.place, matches: (p) => starts(p, '/app/place', '/app/hub', '/app/homes') && !starts(p, '/app/hub/today') },
   { key: 'today', label: 'Today', href: '/app/today', icon: NavIcons.today, matches: (p) => starts(p, '/app/today', '/app/hub/today') },
-  { key: 'nearby', label: 'Nearby', href: '/app/nearby', icon: NavIcons.nearby, matches: (p) => starts(p, '/app/nearby', '/app/neighborhood', '/app/feed', '/app/beacons', '/app/connections', '/app/gigs', '/app/marketplace') },
+  // Nearby opens on its Pulse segment; Neighborhood is /app/nearby, and Connections is in the menu (founder decision 2026-10-20).
+  { key: 'nearby', label: 'Nearby', href: '/app/feed', icon: NavIcons.nearby, matches: (p) => starts(p, '/app/nearby', '/app/neighborhood', '/app/feed', '/app/beacons', '/app/gigs', '/app/marketplace') },
   // Launch cut #10 (Mailbox): the fourth tab is Messages, the conversation
   // list itself. Its key stays `mail` so tests and tools keep working.
   launchFeatures.mailbox
@@ -42,10 +44,10 @@ export default function MobileTabBar({ unread = 0 }: { unread?: number }) {
 
   // The sidebar prefetches each tab on hover; phones have no hover, so
   // warm all four once instead of giving the slowest connections the
-  // coldest navigation.
-  useEffect(() => {
+  // coldest navigation. A cold Messages inbox paints its rows first (lib/shellReads.ts).
+  useEffect(() => afterInboxRows(() => {
     MOBILE_TABS.forEach((tab) => router.prefetch(tab.href));
-  }, [router]);
+  }), [router]);
 
   return (
     <nav

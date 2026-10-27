@@ -31,8 +31,7 @@ final class DeepLinkRouter {
         /// While the Pulse redesign is off (launch cut #11) only `/nearby`
         /// resolves here, and it opens the Nearby tab, as on October 13.
         case pulse
-        /// `/plans`: the Plans tab, while the `plans` switch is on (Nearby
-        /// while the Pulse redesign is off).
+        /// `/plans`: the Plans tab, while the `plans` switch is on.
         case plans
         case notifications
         case supportTrain(id: String)
@@ -56,8 +55,8 @@ final class DeepLinkRouter {
         /// `pantopus://homes/:id/owners` — the Owners list (`claim_window_expiring`).
         case homeOwners(id: String)
         /// `pantopus://homes/:id/owners/review-claim` — the owner's claim review
-        /// on its Residency tab (`residency_claim`).
-        case homeClaimReview(id: String)
+        /// on Ownership for `tab=ownership`, otherwise Residency.
+        case homeClaimReview(id: String, residency: Bool = true)
         /// `pantopus://homes/:id/owners/transfer` — A13.4 Transfer Ownership
         /// form. Lands on the populated state; the form owns the Face ID
         /// bottom sheet.
@@ -143,6 +142,14 @@ final class DeepLinkRouter {
         /// reached from `https://pantopus.com/app/settings/security`, the
         /// link those notices carry.
         case securityDevices
+        /// `pantopus://settings/notifications` — Settings → Notifications
+        /// (quiet hours, briefings, alerts), from a Pantopus AI link button.
+        case notificationSettings
+        /// `pantopus://assistant` — the Pantopus AI thread (AI assistant
+        /// phase 2 contract §8.2). `?nudge=<notificationId>` opens it at the
+        /// brief or nudge that notification carried; `&conversation=<id>`,
+        /// added from the notification's metadata, names its conversation.
+        case assistant(nudgeId: String?, conversationId: String?)
 
         // MARK: - B1.6 batch-2 routing seam
 
@@ -173,6 +180,11 @@ final class DeepLinkRouter {
         /// `pantopus://businesses/:id` — A10.7 Business owner view. The public
         /// profile (A10.6) lives at the singular `pantopus://business/:username`.
         case businessOwner(businessId: String)
+        /// `/app/businesses/:id/chat/:roomId` — a conversation in the business's
+        /// inbox (the `business_message` notice its owner and staff get). Opens
+        /// the owner view, then the thread acting as the business; never the
+        /// person's own Messages.
+        case businessConversation(businessId: String, roomId: String)
         /// `pantopus://identity/preview` — A18.5 "View as" identity preview.
         case viewAs
         /// `pantopus://homes/:id/waiting-room` — A18.4 persistent waiting room.
@@ -218,7 +230,7 @@ final class DeepLinkRouter {
         /// `persona_follow`. Opens "Your audience" (requests and members).
         case creatorAudienceMembers
         /// `/plans/:id` — a Nearby Plan (share links, plan pushes). Opens in
-        /// the Nearby stack; dropped while the `plans` flag is off.
+        /// the Plans tab's stack; dropped while the `plans` flag is off.
         case plan(id: String)
         /// `/plans/:id/requests` — the host's requests (H10).
         case planRequests(id: String)
@@ -478,6 +490,22 @@ final class DeepLinkRouter {
         return "/hub-today?kind=\(kind)&deliveryId=\(encoded)"
     }
 
+    /// The types a brief or nudge arrives as (phase 2 contract §3.2).
+    nonisolated static let assistantNotificationTypes: Set<String> = ["assistant_brief", "assistant_nudge"]
+
+    /// A brief's or nudge's push or row opens the assistant at its message,
+    /// whatever its `link` says: `/assistant?nudge=<id>`, plus the
+    /// conversation its metadata names. Nil for every other type.
+    nonisolated static func assistantPath(type: String?, notificationId: String?, conversationId: String?) -> String? {
+        guard assistantNotificationTypes.contains(type?.lowercased() ?? ""),
+              let notificationId, UUID(uuidString: notificationId) != nil else { return nil }
+        var path = "/assistant?nudge=\(notificationId.lowercased())"
+        if let conversationId, UUID(uuidString: conversationId) != nil {
+            path += "&conversation=\(conversationId.lowercased())"
+        }
+        return path
+    }
+
     static func normalizeIncoming(_ path: String) -> String {
         if path.hasPrefix("pantopus://") || path.hasPrefix("http") {
             return path
@@ -521,7 +549,7 @@ final class DeepLinkRouter {
         let comps = URLComponents(url: url, resolvingAgainstBaseURL: false)
         let tabQuery = queryValue("tab", in: comps)
         // B1.6 — `?id=` seeds the translation / unboxing mailbox sub-screens.
-        let idQuery = queryValue("id", in: comps)
+        let idQuery = idValue("id", in: comps)
         let tokenQuery = queryValue("token", in: comps)
             ?? queryValue("token_hash", in: comps)
             ?? fragmentParam(url.fragment, name: "token")
@@ -531,7 +559,7 @@ final class DeepLinkRouter {
 
         switch firstSegment {
         case "feed":
-            if let postId = queryValue("post", in: comps), !postId.isEmpty { return .post(id: postId) }
+            if let postId = idValue("post", in: comps), !postId.isEmpty { return .post(id: postId) }
             return queryValue("surface", in: comps) == "personas" ? .beacons : .feed
         case "home":
             return .home
@@ -593,7 +621,7 @@ final class DeepLinkRouter {
             // Singular `business/:username` is the A10.6 public profile.
             // `?pageSlug=` is RN's redirect target for `/b/:username/:slug`.
             guard let id = segments.dropFirst().first else { return .unknown(url) }
-            if let slug = queryValue("pageSlug", in: comps), !slug.isEmpty {
+            if let slug = idValue("pageSlug", in: comps), !slug.isEmpty {
                 return .businessPage(businessId: id, pageSlug: slug)
             }
             return .businessProfile(businessId: id)
@@ -678,6 +706,12 @@ final class DeepLinkRouter {
             }
             return .unknown(url)
         case "invite":
+            // Business share links carry the token in the query; "seat" is
+            // the invitation kind, not the token itself.
+            if segments.dropFirst().first == "seat" {
+                guard segments.count == 2, let token = tokenQuery, !token.isEmpty else { return .unknown(url) }
+                return .invite(token: token)
+            }
             if segments.dropFirst().first == "lease" {
                 guard segments.count == 3, let token = segments.last,
                       token.range(of: "^[a-fA-F0-9]{64}$", options: .regularExpression) != nil else { return .unknown(url) }
@@ -695,9 +729,20 @@ final class DeepLinkRouter {
             return resetPasswordDestination(url: url, token: tokenQuery)
         case "verify-email", "verify_email":
             return verifyEmailDestination(url: url, token: tokenQuery, email: emailQuery)
+        case "assistant":
+            guard segments.count == 1 else { return .unknown(url) }
+            // An id that isn't a uuid opens the thread where it is.
+            let uuid: (String?) -> String? = { raw in
+                raw.flatMap { UUID(uuidString: $0) != nil ? $0.lowercased() : nil }
+            }
+            return .assistant(
+                nudgeId: uuid(queryValue("nudge", in: comps)),
+                conversationId: uuid(queryValue("conversation", in: comps))
+            )
         case "settings":
-            // `pantopus://settings/payments` — A14.6, and
-            // `pantopus://settings/security` — Devices & sessions. Other
+            // `pantopus://settings/payments` — A14.6,
+            // `pantopus://settings/security` — Devices & sessions, and
+            // `pantopus://settings/notifications` — Notifications. Other
             // settings sub-routes aren't deep-linkable yet; the bare host
             // `pantopus://settings` falls through to `.unknown`.
             if segments.dropFirst().first == "payments" {
@@ -705,6 +750,9 @@ final class DeepLinkRouter {
             }
             if segments.dropFirst().first == "security" {
                 return .securityDevices
+            }
+            if segments.dropFirst().first == "notifications", segments.count == 2 {
+                return .notificationSettings
             }
             return .unknown(url)
         default:
@@ -731,7 +779,23 @@ final class DeepLinkRouter {
            let host = Self.customSchemeAuthority(for: url), !host.isEmpty {
             segments.insert(host, at: 0)
         }
+        // A link's ids go into API paths, decoded: one carrying `/` (`%2F`),
+        // a `.` or `..` segment, a control character or an overlong id would
+        // send the request to another route, so the link resolves to nothing.
+        guard segments.allSatisfy(Self.isSafeSegment) else { return [] }
         return segments
+    }
+
+    /// Whether `value`, once in an API path, stays one segment of its route.
+    private nonisolated static func isSafeSegment(_ value: String) -> Bool {
+        value.count <= 128 && value != "." && value != ".."
+            && !value.contains("/") && !value.contains("\\")
+            && !value.unicodeScalars.contains { CharacterSet.controlCharacters.contains($0) }
+    }
+
+    /// A query value that names an id (`?id=`, `?post=`, `?pageSlug=`), when it is one.
+    private func idValue(_ name: String, in components: URLComponents?) -> String? {
+        queryValue(name, in: components).flatMap { Self.isSafeSegment($0) ? $0 : nil }
     }
 
     /// The authority of a custom-scheme link, read off the raw string.
@@ -791,7 +855,7 @@ final class DeepLinkRouter {
         if trailing.first == "owners" {
             switch trailing.dropFirst().first {
             case "transfer": return .homeOwnersTransfer(id: id)
-            case "review-claim": return .homeClaimReview(id: id)
+            case "review-claim": return .homeClaimReview(id: id, residency: tabQuery != "ownership")
             case nil: return .homeOwners(id: id)
             default: break
             }
@@ -816,7 +880,8 @@ final class DeepLinkRouter {
 
     /// Plural `businesses/*` is the owner-side surface family.
     /// `…/new` opens the Create Business wizard, `…/:id/page-editor` opens
-    /// A13.10 (owner-only), and `…/:id` opens the A10.7 Business owner view.
+    /// A13.10 (owner-only), `…/:id/chat/:roomId` opens a thread of the
+    /// business inbox, and `…/:id` opens the A10.7 Business owner view.
     /// The singular `business/:username` (A10.6 public profile) is handled
     /// separately in `resolve`.
     private func businessesDestination(url: URL, segments: [String]) -> Destination {
@@ -827,6 +892,10 @@ final class DeepLinkRouter {
         let trailing = Array(segments.dropFirst(2))
         if trailing.first == "page-editor" || trailing.first == "page_editor" {
             return .editBusinessPage(businessId: id)
+        }
+        if trailing.first == "chat", trailing.count == 2, let roomId = trailing.last,
+           UUID(uuidString: roomId) != nil {
+            return .businessConversation(businessId: id, roomId: roomId.lowercased())
         }
         return .businessOwner(businessId: id)
     }

@@ -14,6 +14,7 @@
 
 import CryptoKit
 import Foundation
+import ImageIO
 import UIKit
 
 final class PantopusImagePipeline: @unchecked Sendable {
@@ -74,20 +75,33 @@ final class PantopusImagePipeline: @unchecked Sendable {
     // MARK: - Reading
 
     /// The decoded image already in memory, for a screen's first frame.
-    func cachedImage(for url: URL) -> UIImage? {
-        memory.image(for: memoryKey(Self.cacheKey(for: url)))
+    func cachedImage(for url: URL, maxPixelSize: Int? = nil) -> UIImage? {
+        guard !ChatMediaURL.isChatFile(url) else { return nil }
+        return memory.image(for: memoryKey(Self.imageKey(for: url, maxPixelSize: maxPixelSize)))
+    }
+
+    private static func imageKey(for url: URL, maxPixelSize: Int?) -> String {
+        let key = cacheKey(for: url)
+        return maxPixelSize.map { "\(key)#preview-\($0)" } ?? key
     }
 
     /// Memory, then the phone, then the network. `keepsOnDisk: false` for
     /// full-size originals (the photo viewer): memory only.
-    func image(for url: URL, keepsOnDisk: Bool = true) async -> UIImage? {
-        let key = Self.cacheKey(for: url)
+    func image(for url: URL, keepsOnDisk: Bool = true, maxPixelSize: Int? = nil) async -> UIImage? {
+        let key = Self.imageKey(for: url, maxPixelSize: maxPixelSize)
+        if ChatMediaURL.isChatFile(url) {
+            // Chat media belongs to the account and its authorization epoch.
+            // Remove a legacy generic copy; only the encrypted store may serve it.
+            try? FileManager.default.removeItem(at: root.appendingPathComponent(Self.fileName(for: key)))
+            guard let bytes = await ChatMediaURL.imageData(url) else { return nil }
+            return Self.decode(bytes)
+        }
         if let image = memory.image(for: memoryKey(key)) { return image }
         let (task, started) = lock.withLock { () -> (Task<UIImage?, Never>, Int) in
             if let running = inFlight[key] { return (running, generation) }
             let started = generation
             let task = Task.detached(priority: .userInitiated) { [self] in
-                await fetch(url: url, key: key, keepsOnDisk: keepsOnDisk, generation: started)
+                await fetch(url: url, key: key, keepsOnDisk: keepsOnDisk, maxPixelSize: maxPixelSize, generation: started)
             }
             inFlight[key] = task
             return (task, started)
@@ -97,20 +111,30 @@ final class PantopusImagePipeline: @unchecked Sendable {
         return image
     }
 
-    private func fetch(url: URL, key: String, keepsOnDisk: Bool, generation started: Int) async -> UIImage? {
+    private func fetch(url: URL, key: String, keepsOnDisk: Bool, maxPixelSize: Int?, generation started: Int) async -> UIImage? {
+        // A copy the app keeps in its own temporary folder (a photo just sent to the assistant):
+        // read where it is, memory only. A file link from anywhere else loads nothing.
+        if url.isFileURL {
+            let temporary = FileManager.default.temporaryDirectory.standardizedFileURL.path + "/"
+            guard url.standardizedFileURL.path.hasPrefix(temporary),
+                  let bytes = try? Data(contentsOf: url), let image = Self.decode(bytes, maxPixelSize: maxPixelSize)
+            else { return nil }
+            keep(image, key: key, generation: started)
+            return image
+        }
         let file = root.appendingPathComponent(Self.fileName(for: key))
-        if let bytes = try? Data(contentsOf: file), let image = Self.decode(bytes) {
+        if let bytes = try? Data(contentsOf: file), let image = Self.decode(bytes, maxPixelSize: maxPixelSize) {
             try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: file.path)
             keep(image, key: key, generation: started)
             return image
         }
         guard let (bytes, response) = try? await session.data(from: url),
               let http = response as? HTTPURLResponse, http.statusCode == 200,
-              !Self.isNeverKept(http.mimeType), let image = Self.decode(bytes)
+              !Self.isNeverKept(http.mimeType), let image = Self.decode(bytes, maxPixelSize: maxPixelSize)
         else { return nil }
         keep(image, key: key, generation: started)
         // Web links only: a local file is already on the phone.
-        if keepsOnDisk, url.scheme?.hasPrefix("http") == true, bytes.count <= Self.maxFileBytes {
+        if keepsOnDisk, maxPixelSize == nil, url.scheme?.hasPrefix("http") == true, bytes.count <= Self.maxFileBytes {
             write(bytes, to: file, generation: started)
         }
         return image
@@ -121,7 +145,19 @@ final class PantopusImagePipeline: @unchecked Sendable {
         return type.hasPrefix("video/") || type.hasPrefix("audio/") || type == "application/pdf" || type.hasPrefix("text/")
     }
 
-    private static func decode(_ bytes: Data) -> UIImage? {
+    private static func decode(_ bytes: Data, maxPixelSize: Int? = nil) -> UIImage? {
+        if let maxPixelSize {
+            // Decode a sharp preview without allocating the camera original's full bitmap.
+            guard let source = CGImageSourceCreateWithData(bytes as CFData, nil),
+                  let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                      kCGImageSourceCreateThumbnailFromImageAlways: true,
+                      kCGImageSourceCreateThumbnailWithTransform: true,
+                      kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+                      kCGImageSourceShouldCacheImmediately: true
+                  ] as CFDictionary)
+            else { return nil }
+            return UIImage(cgImage: image)
+        }
         guard let image = UIImage(data: bytes) else { return nil }
         return image.preparingForDisplay() ?? image
     }

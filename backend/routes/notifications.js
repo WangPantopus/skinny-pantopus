@@ -11,6 +11,7 @@
  */
 
 const express = require('express');
+const Joi = require('joi');
 const router = express.Router();
 const supabaseAdmin = require('../config/supabaseAdmin');
 const verifyToken = require('../middleware/verifyToken');
@@ -25,6 +26,10 @@ const { excludeHiddenLaunchNotifications, isLaunchFeatureEnabled } = require('..
 const FIREWALL_VALUES = ['personal', 'audience', 'platform'];
 const CONTEXT_INPUT = ['all', ...FIREWALL_VALUES];
 const LEGACY_CONTEXT_TYPES = ['personal', 'business'];
+const paginationSchema = Joi.object({
+  limit: Joi.number().integer().min(1).max(Number.MAX_SAFE_INTEGER).default(20),
+  offset: Joi.number().integer().min(0).max(2147483597).default(0),
+});
 
 function parseFirewallFilter(req, { allowMultiple = false } = {}) {
   const contextRaw = req.query.context ?? req.body?.context;
@@ -67,6 +72,18 @@ function applyNotificationFilters(query, {
   return next;
 }
 
+// The assistant's brief and nudges (services/ai/nudges/engine.js TYPES) open the
+// apps' assistant thread, pantopus://assistant?nudge=<id>, and its yearly memory
+// review opens the apps' memory list (pantopus://settings/memory): the web has neither. The web asks for its list, counts and "Mark all read" without them
+// (exclude=assistant); the apps send nothing and get every row, as before. A standing
+// rule's notices (assistant_rule: runs, pauses, pickup reminders) open the apps' rules list,
+// a plan or Today, and the web leaves them out too.
+const ASSISTANT_TYPES = ['assistant_brief', 'assistant_nudge', 'assistant_memory_review', 'assistant_rule'];
+function withoutAssistantRows(query, req) {
+  if ((req.query.exclude ?? req.body?.exclude) !== 'assistant') return query;
+  return query.not('type', 'in', `(${ASSISTANT_TYPES.join(',')})`);
+}
+
 /**
  * GET /api/notifications
  * Returns notifications for the current user + unread count.
@@ -85,6 +102,8 @@ function applyNotificationFilters(query, {
  *   context_id — business_user_id to filter business notifications
  *   firewall — alias for `context` kept for P0.6 internal callers.
  *     New code should pass `context` instead.
+ *   exclude — 'assistant' leaves out the assistant's brief and nudges, in the
+ *     list and its unread count (the web, which can't open them).
  *   after — only what's new (Instant Screens contract §8): a notification id
  *     the client already has, or an ISO time; returns the notifications
  *     newer than it, newest first (offset is ignored; hasMore means more new
@@ -97,8 +116,15 @@ const NOTIFICATION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-
 router.get('/', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
-    const limit = Math.min(parseInt(req.query.limit) || 20, 50);
-    const offset = parseInt(req.query.offset) || 0;
+    const pagination = paginationSchema.validate({ limit: req.query.limit, offset: req.query.offset });
+    if (pagination.error) {
+      return res.status(400).json({
+        error: 'Invalid pagination. Use a positive whole-number limit and a non-negative offset within the supported range.',
+        code: 'INVALID_PAGINATION',
+      });
+    }
+    const limit = Math.min(pagination.value.limit, 50);
+    const offset = pagination.value.offset;
     const unreadOnly = req.query.unread === 'true';
     const contextType = req.query.context_type; // legacy 'personal' | 'business'
     const contextId = req.query.context_id;
@@ -127,7 +153,7 @@ router.get('/', verifyToken, async (req, res) => {
           .maybeSingle();
         if (anchorError) {
           logger.error('Error reading notification cursor', { error: anchorError.message, userId });
-          return res.status(500).json({ error: 'Failed to fetch notifications' });
+          throw anchorError;
         }
         if (!anchor) {
           return res.status(400).json({ error: 'Unknown notification; reload the list.', code: 'NOTIFICATION_CURSOR_UNKNOWN' });
@@ -160,7 +186,7 @@ router.get('/', verifyToken, async (req, res) => {
       query = query.eq('is_read', false);
     }
 
-    query = applyNotificationFilters(query, { contextType, contextId, contexts });
+    query = withoutAssistantRows(applyNotificationFilters(query, { contextType, contextId, contexts }), req);
     // Launch cuts: notifications that only a hidden feature produces are left out.
     query = excludeHiddenLaunchNotifications(query);
     // So are notices from someone across a block, in either direction.
@@ -175,19 +201,12 @@ router.get('/', verifyToken, async (req, res) => {
       .eq('user_id', userId)
       .eq('is_read', false);
 
-    countQuery = applyNotificationFilters(countQuery, { contextType, contextId, contexts });
+    countQuery = withoutAssistantRows(applyNotificationFilters(countQuery, { contextType, contextId, contexts }), req);
     countQuery = readablePost(withoutBlocked(excludeHiddenLaunchNotifications(countQuery)));
 
     const [{ data: notifications, error }, { count: unreadCount, error: countErr }] = await Promise.all([query, countQuery]);
 
-    if (error) {
-      logger.error('Error fetching notifications', { error: error.message, userId });
-      return res.status(500).json({ error: 'Failed to fetch notifications' });
-    }
-
-    if (countErr) {
-      logger.error('Error counting unread notifications', { error: countErr.message });
-    }
+    if (error || countErr) throw error || countErr;
 
     res.json({
       notifications: notifications || [],
@@ -196,7 +215,7 @@ router.get('/', verifyToken, async (req, res) => {
     });
   } catch (err) {
     logger.error('Notifications fetch error', { error: err.message });
-    res.status(500).json({ error: 'Failed to fetch notifications' });
+    res.status(503).json({ error: 'Could not load notifications right now. Please try again.', code: 'NOTIFICATIONS_UNAVAILABLE' });
   }
 });
 
@@ -205,6 +224,7 @@ router.get('/', verifyToken, async (req, res) => {
  * Quick endpoint for the bell badge — returns the total + a per-firewall
  * breakdown (P2.3 / unified-IA §6.1: separate streams for personal vs
  * audience, never combined). Existing callers reading `count` keep working.
+ * `?exclude=assistant` leaves the assistant's brief and nudges out (the web).
  *
  *   { count: 12, byContext: { personal: 9, audience: 3, platform: 0 } }
  */
@@ -216,11 +236,11 @@ router.get('/unread-count', verifyToken, async (req, res) => {
     // someone across a block.
     const withoutBlocked = await notificationBlockFilter(userId);
     const readablePost = await notificationPostFilter(userId);
-    const baseFilter = (q) => readablePost(withoutBlocked(excludeHiddenLaunchNotifications(q
+    const baseFilter = (q) => readablePost(withoutBlocked(excludeHiddenLaunchNotifications(withoutAssistantRows(q
       .from('Notification')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', userId)
-      .eq('is_read', false))));
+      .eq('is_read', false), req))));
 
     const [totalRes, personalRes, audienceRes, platformRes] = await Promise.all([
       baseFilter(supabaseAdmin),
@@ -233,8 +253,7 @@ router.get('/unread-count', verifyToken, async (req, res) => {
       .map((r) => r && r.error)
       .find(Boolean);
     if (firstError) {
-      logger.error('Error counting unread', { error: firstError.message });
-      return res.status(500).json({ error: 'Failed to count notifications' });
+      throw firstError;
     }
 
     const total = totalRes.count || 0;
@@ -247,7 +266,7 @@ router.get('/unread-count', verifyToken, async (req, res) => {
     res.json({ count: total, total, byContext });
   } catch (err) {
     logger.error('Unread count error', { error: err.message });
-    res.status(500).json({ error: 'Failed to count notifications' });
+    res.status(503).json({ error: 'Could not load notifications right now. Please try again.', code: 'NOTIFICATIONS_UNAVAILABLE' });
   }
 });
 
@@ -485,6 +504,7 @@ router.patch('/:id/read', verifyToken, async (req, res) => {
  * Mark all notifications as read for the current user. Optional body/query:
  *   context | contexts | firewall — personal/audience/platform/all
  *   context_type/context_id       — legacy personal/business sub-filter
+ *   exclude=assistant             — leaves the assistant's brief and nudges unread (the web)
  */
 router.post('/read-all', verifyToken, async (req, res) => {
   try {
@@ -502,11 +522,11 @@ router.post('/read-all', verifyToken, async (req, res) => {
       .update({ is_read: true })
       .eq('user_id', userId)
       .eq('is_read', false);
-    query = applyNotificationFilters(query, {
+    query = withoutAssistantRows(applyNotificationFilters(query, {
       contextType,
       contextId,
       contexts: parsed.contexts,
-    });
+    }), req);
 
     const { error } = await query;
 

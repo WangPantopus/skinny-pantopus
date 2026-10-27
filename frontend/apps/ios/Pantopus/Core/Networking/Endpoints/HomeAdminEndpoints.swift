@@ -83,6 +83,18 @@ public enum HomeAdminEndpoints {
         )
     }
 
+    // MARK: - Claims (home claims PR 3)
+
+    /// `POST /api/homes/:id/members/:userId/confirm-claim` — route
+    /// `backend/routes/homeIam.js:314`.
+    ///
+    /// "Yes, they live here": someone who proved the address confirms a member
+    /// whose access is a claim, and the claim's grants come back to them. Offered
+    /// only where the member row carries `claim_review.can_confirm`.
+    public static func confirmClaimMember(homeId: String, userId: String) -> Endpoint {
+        Endpoint(method: .post, path: "/api/homes/\(homeId)/members/\(userId)/confirm-claim")
+    }
+
     // MARK: - Household access requests
 
     /// `GET /api/homes/:id/household-access-requests` — route

@@ -9,6 +9,7 @@ const { SAFE_CREATOR_SELECT } = require('../serializers/identitySerializers');
 const { currentOccupancy, resolveHomeRole, ROLE_RANK } = require('../utils/homeAccessPolicy');
 const parsePoint = require('../utils/parsePostGISPoint');
 const { localDisplayNames } = require('../utils/identityProfiles');
+const { loadChatPeople } = require('./chatPeople');
 const { chosenUsernameOrNull } = require('../utils/personalUsername');
 
 // A shared Home is not a container for every sensitive column/file reference.
@@ -54,6 +55,12 @@ function userRef(user, expectedId) {
   if (!object(user) || !uuid(user.id) || user.id !== expectedId || typeof user.username !== 'string') throw failure();
   return { id: user.id, username: user.username, name: null,
     profile_picture_url: typeof user.profile_picture_url === 'string' ? user.profile_picture_url : null };
+}
+// A HomeUserRef with the handle and photo the person shows neighbors (services/chatPeople.js): their Local Profile's,
+// or the account's for anyone without one or whom loadChatPeople can't read. Its name stays null.
+function localRef(ref, people) {
+  const person = people.get(String(ref.id));
+  return person ? { ...ref, username: person.handle || ref.username, profile_picture_url: person.avatarUrl || null } : ref;
 }
 
 async function readHome(homeId, access, { provider = false } = {}) {
@@ -116,13 +123,21 @@ async function readMembers(homeId, { history = false } = {}) {
 }
 
 // Members show by the name they show neighbors on their posts. A username the server made up is never a display name
-// (utils/personalUsername.js); a person with no name reads "Household member". Used only once the consistency recheck
-// passes, and only for display_name: the rest of each row keeps its shape.
+// (utils/personalUsername.js); a person with no name reads "Household member". Their handle and photo are the ones
+// they show neighbors too (localRef). Used only once the consistency recheck passes, and only for display_name, the
+// handle and the photo: the rest of each row keeps its shape.
 async function withDisplayNames(occupants) {
   if (occupants.length === 0) return occupants;
+  const ids = occupants.map(member => member.user_id);
   let names;
-  try { names = await localDisplayNames(occupants.map(member => member.user_id)); } catch (_) { throw failure(); }
-  return occupants.map(member => ({ ...member, display_name: names.get(String(member.user_id)) || 'Household member' }));
+  const people = loadChatPeople(ids);
+  try { names = await localDisplayNames(ids); } catch (_) { throw failure(); }
+  const shown = await people;
+  return occupants.map((member) => {
+    const user = localRef(member.user, shown);
+    return { ...member, user, display_name: names.get(String(member.user_id)) || 'Household member',
+      username: user.username, avatar_url: user.profile_picture_url };
+  });
 }
 
 async function ownClaims(homeId, actorId) {
@@ -148,11 +163,12 @@ async function detail(homeId, actorId) {
     const primary = visibleOwners.find(owner => owner.is_primary_owner && owner.owner_status === 'verified' && owner.subject_type === 'user');
     // The primary owner's account and delete eligibility are independent reads,
     // so they run together; a failure is reported in the same order as before.
-    const [ownerRead, deleteRead] = await Promise.allSettled([
+    const [ownerRead, deleteRead, ownerPeople] = await Promise.allSettled([
       primary ? checked(db.from('User').select(SAFE_CREATOR_SELECT).eq('id', primary.subject_id).maybeSingle()) : null,
       deletion.deleteEligibility(homeId, actorId),
+      primary ? loadChatPeople([primary.subject_id]) : null,
     ]);
-    const owner = primary ? userRef(settledValue(ownerRead), primary.subject_id) : null;
+    const owner = primary ? localRef(userRef(settledValue(ownerRead), primary.subject_id), settledValue(ownerPeople)) : null;
     const canDelete = settledValue(deleteRead).allowed;
     // A member or owner can change while this caller's grants remain unchanged.
     // Retire those held projections as well as rechecking caller authority.
@@ -216,8 +232,26 @@ async function members(homeId, actorId, { history = false } = {}) {
     ]);
     if (JSON.stringify(settledValue(membersAgain)) !== JSON.stringify(occupants)) throw failure();
     if (manage && JSON.stringify(settledValue(invitesAgain)) !== JSON.stringify(invites)) throw failure();
-    return { occupants: settledValue(namedOccupants), pendingInvites };
+    const named = settledValue(namedOccupants);
+    return { occupants: history ? named : await withClaimReview(homeId, actorId, named), pendingInvites };
   });
+}
+// Home claims PR 3: a proof always beats a claim. For a viewer who proved the address, the rows of people whose access
+// is a claim say what the viewer may do about them: confirm them while their claim steps back for proof
+// (home_claim_set_aside), and remove them up to lease_resident (home_member_rank_ceiling). Nobody else sees this.
+async function withClaimReview(homeId, actorId, occupants) {
+  const claims = occupants.filter(member => member.verification_source === 'claim' && member.user_id !== actorId);
+  if (claims.length === 0) return occupants;
+  const proof = await checked(db.rpc('home_proof_holder', { p_home_id: homeId, p_user_id: actorId }));
+  if (typeof proof !== 'boolean') throw failure();
+  if (!proof) return occupants;
+  const review = new Map(await Promise.all(claims.map(async member => {
+    const setAside = await checked(db.rpc('home_claim_set_aside', { p_home_id: homeId, p_user_id: member.user_id }));
+    if (typeof setAside !== 'boolean') throw failure();
+    return [member.user_id, { set_aside: setAside, can_confirm: setAside,
+      can_remove: (ROLE_RANK[member.role] || ROLE_RANK.owner) <= ROLE_RANK.lease_resident }];
+  })));
+  return occupants.map(member => (review.has(member.user_id) ? { ...member, claim_review: review.get(member.user_id) } : member));
 }
 function sendError(res, error) {
   if (['HOME_DASHBOARD_DENIED', 'HOME_DASHBOARD_ACCESS_CHANGED', 'HOME_RESOURCE_DENIED'].includes(error?.code)) return authority.sendError(res, error);

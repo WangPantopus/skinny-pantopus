@@ -3,10 +3,11 @@
 //  Pantopus
 //
 //  Nearby on the map (board F1), when the `plans` flag is on: the MapKit
-//  canvas and the three-stop sheet of the Explore map, with the Plans pins,
-//  areas and clusters of board P1 and the "you" dot from the system. The
-//  sheet holds the list (F2), a tapped pin's card (F3), "Nothing planned
-//  yet" (F4) and "See plans near you" (F5).
+//  canvas, full screen under the floating chrome, with the Plans pins, areas
+//  and clusters of board P1 and the "you" dot from the system, and the
+//  three-stop sheet (`PlansMapSheet`). The sheet holds the list (F2), a
+//  tapped pin's card (F3), "Nothing planned yet" (F4) and "See plans near
+//  you" (F5).
 //
 
 import MapKit
@@ -14,83 +15,75 @@ import SwiftUI
 
 struct PlansMapView: View {
     @State private var viewModel: PlansMapViewModel
+    /// The finger on the sheet. It stays out of this view's state, so a drag frame never redraws the map.
+    @State private var drag: PlansSheetDrag
     @State private var camera: MapCameraPosition = .automatic
-    @State private var dragOffset: CGFloat = 0
-    /// The area pill and chips' height, so the first look keeps pins out from under them.
+    /// The area pill and chips' height: the sheet's full stop sits under them, and the first look keeps pins out from under them.
     @State private var chromeHeight: CGFloat = 0
     @State private var showsAreaPicker = false
     /// When a pin was last tapped: the same touch also reaches the map's own
     /// tap (which clears a selection) and must not undo the pin's.
     @State private var pinTappedAt: Date?
     @State private var flags = PlansFlags.shared
+    /// The assistant, opened from the header about plans.
+    @State private var askTopic: AIAskTopic?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    let actions: PlansMapActions
+    private let tabActions: PlansMapActions
 
     init(viewModel: PlansMapViewModel = PlansMapViewModel(), actions: PlansMapActions) {
         _viewModel = State(initialValue: viewModel)
-        self.actions = actions
+        _drag = State(initialValue: PlansSheetDrag(viewModel: viewModel))
+        tabActions = actions
     }
 
     var body: some View {
         GeometryReader { geo in
-            let height = geo.size.height
             let bottomInset = geo.safeAreaInsets.bottom
-            let sheetHeight = max(140, stopHeight(screen: height) - dragOffset) + bottomInset
+            let screen = PlansSheetLayout(height: geo.size.height + bottomInset, bottomInset: bottomInset, chromeBottom: chromeHeight)
+            // The map runs under the status bar and the tab bar: the whole screen.
+            let mapSize = CGSize(width: geo.size.width, height: geo.safeAreaInsets.top + screen.height)
             ZStack(alignment: .top) {
                 mapLayer
-                // The list pulled all the way up covers the map: its chrome steps aside (F2).
-                if viewModel.sheetStop != .full {
-                    PlansMapTopBar(
-                        viewModel: viewModel,
-                        showsPlaydates: flags.playdates && viewModel.showsPlaydateFilter
-                    ) { showsAreaPicker = true }
-                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { chromeHeight = $0 }
-                        .transition(.opacity)
-                }
-                if showsHostButton {
-                    PlansHostButton { actions.host(nil) }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                        .padding(.trailing, Spacing.s4)
-                        .padding(.bottom, sheetHeight + 18)
-                        .transition(.opacity)
-                }
-                sheet(height: sheetHeight, screenHeight: height, bottomInset: bottomInset)
+                // The chrome stays at every stop: the sheet pulled all the way up stops under it (F2).
+                PlansMapTopBar(
+                    viewModel: viewModel,
+                    showsPlaydates: flags.playdates && viewModel.showsPlaydateFilter,
+                    onAsk: actions.ask
+                ) { showsAreaPicker = true }
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { chromeHeight = $0 }
             }
             .ignoresSafeArea(edges: .bottom)
-            .onChange(of: height + bottomInset, initial: true) { _, mapHeight in
+            // Over the map and the chrome, but not in their stack: a child taller than the safe area
+            // (the sheet at full) pushed the whole stack down, the map with it.
+            .overlay(alignment: .bottom) {
+                PlansMapSheet(viewModel: viewModel, drag: drag, screen: screen, actions: actions, onStop: setStop)
+                    .ignoresSafeArea(edges: .bottom)
+            }
+            .onChange(of: mapSize.height, initial: true) { _, mapHeight in
                 if abs(viewModel.mapPoints - mapHeight) > 1 { viewModel.mapPoints = mapHeight }
             }
             .onChange(of: viewModel.fitRequest) { _, _ in
-                let mapSize = CGSize(width: geo.size.width, height: height + bottomInset)
-                fitPlans(mapSize: mapSize, sheetTop: mapSize.height - sheetHeight)
+                fitPlans(mapSize: mapSize, topInset: geo.safeAreaInsets.top)
+            }
+            .onChange(of: viewModel.widenRequest) { _, _ in
+                widen(mapSize: mapSize, topInset: geo.safeAreaInsets.top)
             }
         }
         .background(Theme.Color.appBg)
         .task { await viewModel.start() }
         .refreshesOnStoreChange(affects: { PlansStoreReads.affects($0) }, perform: { await viewModel.start() })
         .onChange(of: viewModel.recenterRequest) { _, _ in recenter() }
-        .onChange(of: viewModel.widenRequest) { _, _ in widen() }
+        .onChange(of: reduceMotion, initial: true) { _, reduce in drag.reduceMotion = reduce }
         .sheet(isPresented: $showsAreaPicker) {
             PlansAreaPicker(viewModel: viewModel) { showsAreaPicker = false }
                 .presentationDetents([.medium, .large])
                 .presentationBackground(Theme.Color.appSurface)
         }
+        .askPantopus($askTopic)
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("plansMap")
-    }
-
-    /// The sheet at its stop; a tapped pin's card fits its content, up to half.
-    private func stopHeight(screen height: CGFloat) -> CGFloat {
-        let stop = height * viewModel.shownStop.fraction
-        guard viewModel.selectedId != nil, viewModel.shownStop == .half, viewModel.cardHeight > 0 else { return stop }
-        // The grab handle and its spacing sit above the card.
-        return min(stop, viewModel.cardHeight + 25)
-    }
-
-    private var showsHostButton: Bool {
-        viewModel.phase == .ready && viewModel.selectedId == nil && viewModel.sheetStop == .peek && !viewModel.isEmpty
     }
 
     // MARK: - Map
@@ -132,9 +125,9 @@ struct PlansMapView: View {
                 }
             }
         }
-        .mapStyle(.standard(pointsOfInterest: .excludingAll))
-        .saturation(dimsMap ? 0.7 : 1)
-        .opacity(dimsMap ? 0.85 : 1)
+        // F4 and F5 dim the map with MapKit's own muted style: a filter on the live map redrew all
+        // of it off screen on every frame, and an overlay that ignores the safe area moved the map down.
+        .mapStyle(.standard(emphasis: dimsMap ? .muted : .automatic, pointsOfInterest: .excludingAll))
         .onMapCameraChange(frequency: .onEnd) { context in
             viewModel.cameraChanged(context.region)
         }
@@ -144,7 +137,7 @@ struct PlansMapView: View {
         }
     }
 
-    /// F4 and F5 dim the map under their sheet.
+    /// F4 and F5 mute the map under their sheet.
     private var dimsMap: Bool {
         viewModel.phase == .needsLocation || viewModel.isEmpty
     }
@@ -239,21 +232,25 @@ struct PlansMapView: View {
         }
     }
 
-    /// F4 "Show": out far enough that the town with plans, `miles` away in a
-    /// direction we don't know, fits in the map above the list.
-    private func widen() {
+    /// F4 "Show": the sheet goes down, and the map out far enough that the
+    /// town with plans, `miles` away in a direction we don't know, fits in the
+    /// open map above it.
+    private func widen(mapSize: CGSize, topInset: CGFloat) {
         guard let center = viewModel.center else { return }
+        setStop(.peek)
         // A margin, so the town's pins sit inside the edge, not on it.
         let miles = Double(viewModel.nearestElsewhere?.miles ?? 8) * 1.25 + 2
-        let latitudeSpan = miles * 2 / 69 / 0.46
-        let longitudeSpan = miles * 2 / (69 * max(cos(center.latitude * .pi / 180), 0.2))
-        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.4)) {
-            camera = .region(MKCoordinateRegion(
-                // You sit in the middle of the map above the sheet, not the screen's.
-                center: CLLocationCoordinate2D(latitude: center.latitude - latitudeSpan * 0.13, longitude: center.longitude),
-                span: MKCoordinateSpan(latitudeDelta: latitudeSpan, longitudeDelta: longitudeSpan)
-            ))
-        }
+        let latitude = miles / 69
+        let longitude = miles / (69 * max(cos(center.latitude * .pi / 180), 0.2))
+        let points = [
+            CLLocationCoordinate2D(latitude: center.latitude + latitude, longitude: center.longitude),
+            CLLocationCoordinate2D(latitude: center.latitude - latitude, longitude: center.longitude),
+            CLLocationCoordinate2D(latitude: center.latitude, longitude: center.longitude + longitude),
+            CLLocationCoordinate2D(latitude: center.latitude, longitude: center.longitude - longitude)
+        ]
+        let window = openMap(mapSize: mapSize, topInset: topInset)
+        guard let region = PlansCameraFit.region(showing: points, in: window, mapSize: mapSize) else { return }
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.4)) { camera = .region(region) }
     }
 
     private func recenter() {
@@ -266,94 +263,31 @@ struct PlansMapView: View {
     }
 
     /// F1's first look: you and the plans around you, in the open map between
-    /// the area pill and chips and the list (clear of the Host button too), so
-    /// no pin opens under them or off the edge.
-    private func fitPlans(mapSize: CGSize, sheetTop: CGFloat) {
+    /// the area pill and chips and the list, so no pin opens under them or off the edge.
+    private func fitPlans(mapSize: CGSize, topInset: CGFloat) {
         guard let center = viewModel.center, viewModel.selectedId == nil else { return }
         let plans = viewModel.pins.filter { viewModel.kindFilter == nil || $0.kind == viewModel.kindFilter }
         guard !plans.isEmpty else { return }
         let points = plans.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
             + [CLLocationCoordinate2D(latitude: center.latitude, longitude: center.longitude)]
-        // A pin's head stands about 44 pt above its point and its tag hangs under it.
-        let top = chromeHeight + 48
-        let window = CGRect(x: 32, y: top, width: mapSize.width - 64, height: sheetTop - 80 - top)
+        let window = openMap(mapSize: mapSize, topInset: topInset)
         guard let region = PlansCameraFit.region(showing: points, in: window, mapSize: mapSize) else { return }
         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.35)) { camera = .region(region) }
     }
 
+    /// The map between the chrome and the sheet at its lowest stop, clear of
+    /// the Host button, in the map's own coordinates (it starts under the
+    /// status bar). A pin's head stands about 44 pt above its point and its tag hangs under it.
+    private func openMap(mapSize: CGSize, topInset: CGFloat) -> CGRect {
+        let top = topInset + chromeHeight + 48
+        let bottom = topInset + drag.layout.peekTop - 80
+        return CGRect(x: 32, y: top, width: mapSize.width - 64, height: bottom - top)
+    }
+
     // MARK: - Sheet
-
-    private func sheet(height: CGFloat, screenHeight: CGFloat, bottomInset: CGFloat) -> some View {
-        VStack(spacing: 0) {
-            Spacer(minLength: 0)
-            VStack(spacing: 0) {
-                Capsule()
-                    .fill(Theme.Color.appBorderStrong)
-                    .frame(width: 36, height: 5)
-                    .padding(.top, Spacing.s2)
-                    .padding(.bottom, Spacing.s3)
-                    .frame(maxWidth: .infinity)
-                    .contentShape(Rectangle())
-                    .onTapGesture { cycleStop() }
-                    // The grab handle always moves the sheet.
-                    .gesture(sheetDrag(screenHeight: screenHeight))
-                    .accessibilityElement()
-                    .accessibilityLabel("Plans list")
-                    .accessibilityValue(stopName)
-                    .accessibilityAddTraits(.isButton)
-                    .accessibilityAction(named: "Show more") { setStop(.full) }
-                    .accessibilityAction(named: "Show less") { setStop(.peek) }
-                PlansSheetContent(viewModel: viewModel, actions: actions, onStop: setStop)
-                    .frame(maxHeight: .infinity, alignment: .top)
-            }
-            .padding(.bottom, bottomInset)
-            .frame(maxWidth: .infinity)
-            // Content taller than the stop (the largest text) runs off the bottom, never over the map.
-            .frame(height: height, alignment: .top)
-            .clipped()
-            .background(
-                UnevenRoundedRectangle(topLeadingRadius: Radii.xl3, topTrailingRadius: Radii.xl3, style: .continuous)
-                    .fill(Theme.Color.appSurface)
-                    .shadow(color: .black.opacity(0.12), radius: 12, x: 0, y: -6)
-            )
-            // At its lowest stop the whole sheet drags; once open, its list
-            // scrolls and only the handle moves the sheet.
-            .gesture(sheetDrag(screenHeight: screenHeight), including: viewModel.shownStop == .peek ? .all : .subviews)
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("plansSheet")
-    }
-
-    private func sheetDrag(screenHeight: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 12)
-            .onChanged { value in
-                dragOffset = value.translation.height
-            }
-            .onEnded { value in
-                let projected = screenHeight * viewModel.shownStop.fraction - value.predictedEndTranslation.height
-                let fraction = projected / max(screenHeight, 1)
-                let target = PlansSheetStop.allCases.min { abs($0.fraction - fraction) < abs($1.fraction - fraction) } ?? .peek
-                withSheetAnimation {
-                    dragOffset = 0
-                    viewModel.sheetStop = target
-                }
-            }
-    }
 
     private func setStop(_ stop: PlansSheetStop) {
         withSheetAnimation { viewModel.sheetStop = stop }
-    }
-
-    private func cycleStop() {
-        setStop(viewModel.sheetStop == .full ? .peek : .full)
-    }
-
-    private var stopName: String {
-        switch viewModel.shownStop {
-        case .peek: "Collapsed"
-        case .half: "Half open"
-        case .full: "Open"
-        }
     }
 
     /// Board P3: a spring of about 0.35 s; a crossfade under Reduce Motion.
@@ -367,16 +301,28 @@ enum PlanOpenIntent: Hashable {
     case view, ask, chat
 }
 
-/// The actions the map hands to the Nearby stack.
+extension PlansMapView {
+    /// The tab's actions, with Ask opening the assistant over the map.
+    private var actions: PlansMapActions {
+        var actions = tabActions
+        actions.ask = { askTopic = .plans() }
+        return actions
+    }
+}
+
+/// The actions the map hands to the Plans tab's stack.
 struct PlansMapActions {
     /// Open a plan (J1 and the screens after it), from its card when one is on screen.
     let openPlan: @MainActor (PlanCardDTO?, String, PlanOpenIntent) -> Void
     /// Start hosting, optionally with a kind (and a game) chosen.
     let host: @MainActor (PlansHostStart?) -> Void
-    /// "More nearby": Pulse.
-    let openPulse: @MainActor () -> Void
+    /// "More nearby": Pulse. Nil drops the "More nearby" rows (the Pulse
+    /// redesign is off, and the Nearby tab beside Plans has them).
+    var openPulse: (@MainActor () -> Void)?
     /// "More nearby": Connections.
-    let openConnections: @MainActor () -> Void
+    var openConnections: (@MainActor () -> Void)?
+    /// "Ask Pantopus" about plans (the header's trailing button); the map fills it in.
+    var ask: (@MainActor () -> Void)?
 }
 
 /// Where the composer starts: a kind, and for a watch party maybe a game.

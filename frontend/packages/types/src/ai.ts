@@ -313,6 +313,50 @@ export interface AIDraftPostResponse {
   clarifying_questions: ClarifyingQuestionAI[];
 }
 
+/**
+ * The composer's fields for `POST /api/ai/draft/post-suggestion` (multipart form fields beside up to 4 `photos`):
+ * the kind of post, who it goes to, what the person has written so far and the place.
+ */
+export interface AIPostSuggestionRequest {
+  postType: string;
+  audience?: 'nearby' | 'connections';
+  title?: string;
+  body?: string;
+  businessName?: string;
+  eventVenue?: string;
+  lastSeenLocation?: string;
+  /** A tagged place's name, or the area the post goes to ("Camas, WA"). Never a home's street address. */
+  place?: string;
+  placeAddress?: string;
+}
+
+/** Every field the composer's forms take. A field the kind of post doesn't use is null. */
+export interface AIPostSuggestion {
+  title: string | null;
+  body: string;
+  /** Local wall-clock time, `YYYY-MM-DDTHH:MM`. */
+  eventDate: string | null;
+  eventEndDate: string | null;
+  eventVenue: string | null;
+  /** `YYYY-MM-DD`: the deal's last day. */
+  dealExpiresAt: string | null;
+  /** The business recommended, or the one offering a deal. */
+  businessName: string | null;
+  lostFoundType: 'lost' | 'found' | null;
+  lastSeenLocation: string | null;
+  /** `YYYY-MM-DD`. */
+  lastSeenDate: string | null;
+  safetyAlertKind: string | null;
+  askCategory: string | null;
+  tags: string[];
+}
+
+export interface AIPostSuggestionResponse {
+  suggestion: AIPostSuggestion;
+  /** One sentence for the person: what to add, or a kind of post that fits the photo better. */
+  note: string | null;
+}
+
 export interface AISummarizeMailRequest {
   mailItemId: string;
 }

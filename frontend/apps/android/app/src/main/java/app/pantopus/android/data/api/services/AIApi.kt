@@ -10,6 +10,7 @@ import app.pantopus.android.data.api.models.ai.AIListingVisionResponse
 import app.pantopus.android.data.api.models.ai.AIPostDraftResponse
 import app.pantopus.android.data.api.models.place.NeighborhoodPulse
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
@@ -26,15 +27,20 @@ interface AIApi {
      * Route `backend/routes/ai.js:358`.
      */
     @GET("api/ai/conversations")
-    suspend fun conversations(): AIConversationsResponse
+    suspend fun conversations(
+        @Query("order") order: String? = null,
+    ): AIConversationsResponse
 
     /**
-     * One conversation's earlier turns, for a restored thread.
-     * Route `backend/routes/ai.js:365`.
+     * One conversation's earlier turns, for a restored thread. [cards] is the
+     * chat request's card list, comma-separated: the server leaves out the
+     * cards an app doesn't list (AI assistant phase 1 contract, section 4.1).
+     * Route `backend/routes/ai.js:459`.
      */
     @GET("api/ai/conversations/{id}/messages")
     suspend fun conversationMessages(
         @Path("id") id: String,
+        @Query("cards") cards: String,
     ): AIConversationMessagesResponse
 
     /**
@@ -77,4 +83,13 @@ interface AIApi {
     suspend fun draftPickupSchedule(
         @Body body: AIDraftPickupScheduleRequest,
     ): AIDraftPickupScheduleResponse
+
+    /**
+     * Delete one of the user's AI conversations (the assistant thread's "Delete conversation").
+     * Route `backend/routes/ai.js:451`.
+     */
+    @DELETE("api/ai/conversations/{id}")
+    suspend fun deleteConversation(
+        @Path("id") id: String,
+    ): Unit
 }

@@ -15,7 +15,15 @@
 //
 //  While the Pulse redesign is off (launch cut #11, `LaunchFeatures.pulseRedesign`,
 //  founder decision 2026-10-15) the bar is the October 13 one: Place · Today ·
-//  Nearby · Messages, with Pulse, Plans and Connections opened from Nearby.
+//  Nearby · Messages, with Pulse and Connections opened from Nearby. Plans
+//  is its own tab there too (founder decision 2026-10-17): Place · Today ·
+//  Nearby · Plans · Messages while the `plans` switch is on.
+//
+//  Founder decision 2026-10-20: Nearby is two segments, Pulse (the October 13
+//  feed, where the tab opens) and Neighborhood (the density map and meter),
+//  with no door page between; Connections lives in the side menu. The side
+//  menu (the navigation drawer) is hosted here, above every tab, and the top
+//  screen of every tab has its menu button (`NavigationMenuButton`).
 //
 
 // swiftlint:disable file_length
@@ -70,12 +78,6 @@ public enum RootTab: Hashable, CaseIterable {
     static var pulseHome: RootTab {
         LaunchFeatures.pulseRedesign ? .pulse : .nearby
     }
-
-    /// Where the Plans screens open: the Plans tab, or Nearby while the Pulse
-    /// redesign is off (launch cut #11), as on October 13.
-    static var plansHome: RootTab {
-        LaunchFeatures.pulseRedesign ? .plans : .nearby
-    }
 }
 
 /// The two segments of the Mail tab. Chat threads are just another kind
@@ -119,6 +121,12 @@ public final class RootTabModel {
     /// Changes each time the Place tab is tapped again while already on its
     /// root, so the root scrolls back to the top.
     public var placeReselectedAtRoot: UUID?
+    /// The side menu is open (each tab's menu button sets it; the drawer,
+    /// hosted by `RootTabView`, clears it when it closes).
+    public var showsNavigationMenu = false
+    /// A side-menu choice waiting for the Place tab's stack (`HubTabRoot`),
+    /// where the menu's screens open.
+    var pendingMenuAction: NavigationMenuAction?
     public init() {}
 }
 
@@ -168,20 +176,20 @@ public struct RootTabView: View {
                 PulseTabRoot(onAddHome: startAddingHome)
                     .tabItem { tabLabel(.pulse) }
                     .tag(RootTab.pulse)
-
-                // Only while the `plans` switch is on (`onChange` below moves a
-                // reader off it when the switch turns off).
-                if plansFlags.plans {
-                    PlansTabRoot()
-                        .tabItem { tabLabel(.plans) }
-                        .tag(RootTab.plans)
-                }
             } else {
-                // Launch cut #11 (the Pulse redesign) is off: October 13's
-                // Nearby tab, which opens Pulse, Plans and Connections.
-                NeighborhoodTabRoot()
+                // Launch cut #11 (the Pulse redesign) is off: the Nearby tab,
+                // Pulse and Neighborhood as two segments (founder, 2026-10-20).
+                NeighborhoodTabRoot(onAddHome: startAddingHome)
                     .tabItem { tabLabel(.nearby) }
                     .tag(RootTab.nearby)
+            }
+
+            // Only while the `plans` switch is on (`onChange` below moves a
+            // reader off it when the switch turns off).
+            if plansFlags.plans {
+                PlansTabRoot()
+                    .tabItem { tabLabel(.plans) }
+                    .tag(RootTab.plans)
             }
 
             MailTabRoot(
@@ -195,6 +203,14 @@ public struct RootTabView: View {
         // The app-wide tint also reaches the dialogs UIKit presents; primaryTint resolves for dark mode there.
         .tint(Theme.Color.primaryTint)
         .environment(model)
+        // The side menu, above every tab and the bar (founder, 2026-10-20).
+        .overlay { navigationMenu }
+        .background {
+            if signedInUserID != nil, !AppLockManager.shared.isLocked,
+               !showProfile, pendingInviteToken == nil {
+                BriefingNoticeView().id(signedInUserID)
+            }
+        }
         .task {
             // Live updates (sync:changed, notification:new, reconnects) for every screen.
             ScreenStoreLive.start()
@@ -219,8 +235,9 @@ public struct RootTabView: View {
             Task { await plansFlags.refresh(account: signedInUserID) }
         }
         .onChange(of: plansFlags.plans) { _, isOn in
-            // The Plans tab goes with the switch; a reader on it lands on Pulse.
-            if !isOn, model.selected == .plans { model.selected = .pulse }
+            // The Plans tab goes with the switch; a reader on it lands on Pulse
+            // (Nearby while the Pulse redesign is off).
+            if !isOn, model.selected == .plans { model.selected = RootTab.pulseHome }
         }
         .onChange(of: chatBadgeStore.unreadMessages) { _, unread in
             model.messagesBadge = unread
@@ -327,8 +344,8 @@ public struct RootTabView: View {
              .verifyLandlord, .postcardVerification,
              .notifications, .createBusiness, .businessProfile, .businessPage,
              .editBusinessPage,
-             .wallet, .paymentsSettings, .securityDevices,
-             .businessOwner, .viewAs, .waitingRoom, .neighborMessage,
+             .wallet, .paymentsSettings, .securityDevices, .notificationSettings,
+             .businessOwner, .businessConversation, .viewAs, .waitingRoom, .neighborMessage,
              .bookingDetail, .myBookings,
              .invoiceDetail:
             model.selected = .place
@@ -352,9 +369,9 @@ public struct RootTabView: View {
             openProfile(at: .fanInbox(personaId: personaId))
         case .creatorAudienceMembers:
             openProfile(at: .creatorAudienceMembers)
-        case .conversation:
-            // Chat lives in the Messages tab (the Mail tab's Messages segment
-            // while Mailbox is on).
+        case .conversation, .assistant:
+            // Chat, and the Pantopus AI thread with it, lives in the Messages
+            // tab (the Mail tab's Messages segment while Mailbox is on).
             if LaunchFeatures.mailbox { MailTabStore.shared.pendingSegment = .messages }
             model.selected = .mail
         case .home:
@@ -385,39 +402,67 @@ public struct RootTabView: View {
         } else {
             PlansNavigator.shared.pendingHost = PlansHostRequest(start: nil)
         }
-        model.selected = RootTab.plansHome
+        model.selected = .plans
     }
 
-    /// `/plans`: the Plans tab itself, while the switch is on. With the Pulse
-    /// redesign off (launch cut #11) it opens Nearby, which shows the Plans
-    /// map while that switch is on, as on October 13.
+    /// `/plans`: the Plans tab itself, while the switch is on.
     private func openPlansTab() {
         _ = router.consume()
-        guard LaunchFeatures.pulseRedesign else {
-            model.selected = .nearby
-            return
-        }
         plansFlags.prime(account: signedInUserID)
         guard plansFlags.plans else { return }
         model.selected = .plans
     }
 
-    /// With the Pulse redesign off (launch cut #11), as on October 13: `/nearby`
-    /// opens the Nearby tab, and a feed or post link opens Pulse from Nearby's
-    /// door, whose Pulse sheet then consumes it.
+    /// With the Pulse redesign off (launch cut #11): the Nearby tab (founder
+    /// decision 2026-10-20). `/nearby` (the neighborhood milestone push among
+    /// them) opens its Neighborhood segment; a feed or post link opens the
+    /// Pulse segment, whose stack then consumes it.
     private func openNearby(_ destination: DeepLinkRouter.Destination) {
         model.selected = .nearby
         if destination == .pulse {
+            NeighborhoodDoorStore.shared.pendingSegment = .neighborhood
             _ = router.consume()
         } else {
-            NeighborhoodDoorStore.shared.pendingSurface = .pulse
+            NeighborhoodDoorStore.shared.pendingSegment = .pulse
         }
     }
 
-    /// "Set up a home" from Today or Pulse: the Place tab starts adding one.
+    /// "Set up a home" from Today, Pulse or Nearby: the Place tab starts adding one.
     private func startAddingHome() {
         model.selected = .place
         addHomeRequest = UUID()
+    }
+
+    /// The side menu over every tab (founder decision 2026-10-20). It is the
+    /// personal context, as it was on Place: the pill's name opens the profile
+    /// cover, and rows open their screens in the Place tab's stack.
+    private var navigationMenu: some View {
+        NavigationDrawerView(
+            viewModel: NavigationDrawerViewModel(context: .personal(name: signedInUserName)),
+            isPresented: Binding(
+                get: { model.showsNavigationMenu },
+                set: { model.showsNavigationMenu = $0 }
+            ),
+            onSelect: { destination in openFromMenu(.open(destination)) },
+            // Launch cut #2 (Personas): the drawer hides its identity Switch.
+            onOpenIdentityCenter: {
+                if LaunchFeatures.personas { openFromMenu(.identityCenter) }
+            },
+            onBackToHub: { openFromMenu(.backToPlace) },
+            onOpenProfile: { showProfile = true }
+        )
+    }
+
+    /// The menu's screens live in the Place stack, as the account links
+    /// (`/connections`, `/wallet` …) do: from any tab, Place shows them.
+    private func openFromMenu(_ action: NavigationMenuAction) {
+        model.showsNavigationMenu = false
+        model.pendingMenuAction = action
+        model.selected = .place
+    }
+
+    private var signedInUserName: String {
+        if case let .signedIn(user) = auth.state { user.displayName ?? "" } else { "" }
     }
 
     /// Links that leave the profile cover in place: the monthly receipt
@@ -659,6 +704,10 @@ final class ChatBadgeStore {
     private var badgeTask: Task<Void, Never>?
     private var reconnectTask: Task<Void, Never>?
     private var serverTotalUnread: Int = 0
+    private var serverTotalUnmutedUnread: Int?
+    private var countGeneration = 0
+    private var refreshRequestId: UUID?
+    private var hasAuthoritativeCount = false
     private var cachedRows: [ConversationRowContent] = []
 
     init(
@@ -672,19 +721,40 @@ final class ChatBadgeStore {
     }
 
     func start() async {
-        await refresh()
         subscribeIfNeeded()
+        if api === APIClient.shared, !hasAuthoritativeCount,
+           case let .signedIn(user) = AuthManager.shared.state {
+            let generation = countGeneration
+            let scope = ChatLocalStore.scope(server: api.apiBaseURL.absoluteString, account: user.id)
+            let cached = await ChatLocalStore.shared.inbox(scope: scope)
+            if generation == countGeneration, !Task.isCancelled, let cached {
+                let rows = cached.response.conversations.map {
+                    Self.snapshotRow(from: $0, mutedKeys: preferences.mutedKeys())
+                }
+                applyListSnapshot(
+                    totalUnread: cached.stats?.totalUnread ?? cached.response.totalUnread ?? 0,
+                    totalUnmutedUnread: cached.stats?.totalUnmutedUnread ?? cached.response.totalUnmutedUnread,
+                    rows: rows
+                )
+            }
+        }
+        await refresh()
     }
 
-    /// The Messages list's own reads, through the screen store: the badge at
-    /// launch also warms the Messages tab (it opens on this copy) and its
-    /// saved copy.
+    /// Warm the list through its screen store, but read counts directly from
+    /// the server so an offline fallback cannot become badge authority.
     func refresh() async {
+        guard refreshRequestId == nil else { return }
+        let requestId = UUID()
+        refreshRequestId = requestId
+        defer { if refreshRequestId == requestId { refreshRequestId = nil } }
+        let generation = countGeneration
+        await preferences.migrateLegacyMutes(api: api)
+        guard generation == countGeneration, !Task.isCancelled else { return }
         let store = ScreenStore.store(for: api)
         let statsTask = Task { [self] in
             await optional {
-                try await store.load(ChatEndpoints.stats(), as: ChatStatsResponse.self, kind: .messagesList, topics: [ScreenTopic.chats])
-                    .value
+                try await api.request(ChatEndpoints.stats(), as: ChatStatsResponse.self)
             }
         }
         let conversationsTask = Task { [self] in
@@ -701,8 +771,14 @@ final class ChatBadgeStore {
             logger.warning("Chat badge refresh failed: stats unavailable")
             return
         }
+        let conversations = await conversationsTask.value
+        // A newer socket count (or account reset) wins over an older HTTP read.
+        guard generation == countGeneration, !Task.isCancelled else { return }
+        hasAuthoritativeCount = true
         serverTotalUnread = stats.stats.totalUnread
-        if let conversations = await conversationsTask.value {
+        serverTotalUnmutedUnread = stats.stats.totalUnmutedUnread
+        if let conversations {
+            preferences.applyServer(conversations.conversations)
             let mutedKeys = preferences.mutedKeys()
             cachedRows = conversations.conversations.map {
                 Self.snapshotRow(from: $0, mutedKeys: mutedKeys)
@@ -711,14 +787,20 @@ final class ChatBadgeStore {
         applyAdjustedUnread()
     }
 
-    /// Called by the chat list whenever rows or server totals change.
-    func applyListSnapshot(totalUnread: Int, rows: [ConversationRowContent]) {
-        serverTotalUnread = totalUnread
+    /// Cached list counts can seed an offline launch, but cannot overwrite a
+    /// newer server count while a covered list is still finishing its refresh.
+    func applyListSnapshot(totalUnread: Int, totalUnmutedUnread: Int? = nil, rows: [ConversationRowContent]) {
+        if !hasAuthoritativeCount {
+            serverTotalUnread = totalUnread
+            serverTotalUnmutedUnread = totalUnmutedUnread
+        }
         cachedRows = rows
         applyAdjustedUnread()
     }
 
     func stop() {
+        countGeneration += 1
+        refreshRequestId = nil
         badgeTask?.cancel()
         reconnectTask?.cancel()
         badgeTask = nil
@@ -730,12 +812,14 @@ final class ChatBadgeStore {
     func reset() {
         stop()
         serverTotalUnread = 0
+        serverTotalUnmutedUnread = nil
+        hasAuthoritativeCount = false
         cachedRows = []
         unreadMessages = 0
     }
 
     private func applyAdjustedUnread() {
-        unreadMessages = ChatUnreadBadgeMath.adjustedTotal(
+        unreadMessages = serverTotalUnmutedUnread ?? ChatUnreadBadgeMath.adjustedTotal(
             serverTotal: serverTotalUnread,
             rows: cachedRows,
             mutedKeys: preferences.mutedKeys()
@@ -783,7 +867,10 @@ final class ChatBadgeStore {
             badgeTask = Task { [weak self] in
                 guard let self else { return }
                 for await update in socket.events(named: "badge:update", as: ChatBadgeUpdate.self) {
+                    countGeneration += 1
+                    hasAuthoritativeCount = true
                     serverTotalUnread = update.totalUnread
+                    serverTotalUnmutedUnread = update.totalUnmutedUnread
                     applyAdjustedUnread()
                 }
             }

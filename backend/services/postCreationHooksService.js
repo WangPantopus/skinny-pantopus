@@ -2,7 +2,7 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const notificationService = require('./notificationService');
 const { getPersonaNotificationRecipientIds } = require('./personaNotificationRecipients');
-const { chosenUsernameOrNull } = require('../utils/personalUsername');
+const { loadChatPeople } = require('./chatPeople');
 
 function newPostFanoutLinkAndMeta(post) {
   if (post?.ref_task_id) {
@@ -31,14 +31,10 @@ function newPostFanoutLinkAndMeta(post) {
   };
 }
 
+// The new-post notice names the writer as their posts and comments do: a person by their Local Profile's name, anyone
+// without one by the account (services/chatPeople.js). A business's post sends no notice (runPostCreatedHooksNow).
 async function getUserDisplayName(userId) {
-  const { data } = await supabaseAdmin
-    .from('User')
-    .select('username, name, first_name')
-    .eq('id', userId)
-    .single();
-  if (!data) return 'Someone';
-  return data.name || data.first_name || chosenUsernameOrNull(data.username) || 'Someone';
+  return (await loadChatPeople([userId])).get(String(userId))?.displayName || 'Someone';
 }
 
 async function resolvePostFanoutRecipients({
@@ -87,6 +83,8 @@ async function runPostCreatedHooksNow({
   rateLimit = true,
 }) {
   if (!post?.id || !userId) return;
+  // A business post is the business's: the writer's connections hear nothing about it (the notice named the writer).
+  if (post.post_as === 'business' || post.business_author_id || post.identity_context_type === 'business') return;
 
   const distributionTargets = Array.isArray(targets)
     ? targets

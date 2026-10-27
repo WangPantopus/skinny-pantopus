@@ -17,7 +17,15 @@
 
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('./logger');
-const { chosenUsernameOrNull } = require('../utils/personalUsername');
+const { localDisplayNames } = require('./identityProfiles');
+
+// The member who deleted or dismissed a Home letter, by the name they show their household (their Local Profile's),
+// or null when they have none or it can't be read.
+async function householdName(userId) {
+  if (!userId) return null;
+  const names = await localDisplayNames([userId]).catch(() => new Map());
+  return names.get(String(userId)) || null;
+}
 
 /**
  * Occupancy verification states that may read the household's physical mail.
@@ -74,7 +82,9 @@ async function trustedHomeIdsOrThrow(userId) {
     .select('home_id, verification_status, verified_at')
     .eq('user_id', userId)
     .eq('is_active', true)
-    .in('verification_status', MAIL_TRUSTED_VERIFICATION_STATUSES);
+    .in('verification_status', MAIL_TRUSTED_VERIFICATION_STATUSES)
+    // Probation (a request nobody answered, home claims PR 4) is provisional without proof: never mail.
+    .neq('verification_source', 'probation');
 
   if (error) throw new Error(error.message);
 
@@ -295,15 +305,7 @@ const MAIL_RESTORE_DAYS = 30;
  */
 async function removedMailInfo(mail) {
   if (mail.deleted_at) {
-    let byName = null;
-    if (mail.deleted_by) {
-      const { data: user } = await supabaseAdmin
-        .from('User')
-        .select('name, first_name, username')
-        .eq('id', mail.deleted_by)
-        .maybeSingle();
-      byName = user ? (user.name || user.first_name || chosenUsernameOrNull(user.username) || null) : null;
-    }
+    const byName = await householdName(mail.deleted_by);
     const until = new Date(new Date(mail.deleted_at).getTime() + MAIL_RESTORE_DAYS * 24 * 60 * 60 * 1000);
     return { action: 'deleted', at: mail.deleted_at, by_name: byName, restorable_until: until.toISOString() };
   }
@@ -323,9 +325,9 @@ async function sendHomeMailRemovedNotice(mail, actorId, action) {
   try {
     const userIds = await homeMailAudience(mail, actorId);
     if (!userIds.length) return;
-    const [{ data: letter }, { data: actor }] = await Promise.all([
+    const [{ data: letter }, actorName] = await Promise.all([
       supabaseAdmin.from('Mail').select('display_title, subject').eq('id', mail.id).maybeSingle(),
-      supabaseAdmin.from('User').select('name, first_name, username').eq('id', actorId).maybeSingle(),
+      householdName(actorId),
     ]);
     // Loaded here rather than at the top so this access module stays free of
     // service dependencies.
@@ -335,7 +337,7 @@ async function sendHomeMailRemovedNotice(mail, actorId, action) {
       mailId: mail.id,
       homeId: mail.recipient_home_id,
       letterTitle: letter ? (letter.display_title || letter.subject) : null,
-      actorName: actor ? (actor.name || actor.first_name || chosenUsernameOrNull(actor.username)) : null,
+      actorName,
       action,
       restoreDays: MAIL_RESTORE_DAYS,
     });

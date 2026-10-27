@@ -98,12 +98,15 @@ public enum OfferStatus: Sendable, Hashable {
     }
 }
 
-/// Eight gig-category buckets the row's leading icon represents. Wraps
+/// The gig-category buckets the row's leading icon represents. Wraps
 /// the existing `GigsCategory` enum with an icon + theme-token gradient
 /// pair so the shell can render `RowLeading.categoryGradientIcon`
 /// without leaking any hex literals.
 public enum OffersCategory: Sendable, Hashable {
     case handyman, cleaning, moving, petCare, childCare, tutoring, tech, delivery, other
+    /// A category past the first eight (Gardening, Event help, …): the
+    /// feed's glyph on its color.
+    case more(GigsCategory)
 
     public static func from(rawCategory: String?) -> OffersCategory {
         let key = (rawCategory ?? "")
@@ -120,7 +123,10 @@ public enum OffersCategory: Sendable, Hashable {
         case "tutoring", "tutor", "lessons", "teaching": return .tutoring
         case "tech", "technology", "it", "computer", "techsupport": return .tech
         case "delivery", "deliveries", "courier": return .delivery
-        default: return .other
+        default:
+            guard let category = GigsCategory(backendKey: rawCategory), category != .all, category != .other
+            else { return .other }
+            return .more(category)
         }
     }
 
@@ -135,6 +141,7 @@ public enum OffersCategory: Sendable, Hashable {
         case .tech: .info
         case .delivery: .send
         case .other: .briefcase
+        case let .more(category): taskCategoryGlyph(category)
         }
     }
 
@@ -152,6 +159,7 @@ public enum OffersCategory: Sendable, Hashable {
         case .tech: GradientPair(start: Theme.Color.tech, end: Theme.Color.appTextSecondary)
         case .delivery: GradientPair(start: Theme.Color.delivery, end: Theme.Color.primary700)
         case .other: GradientPair(start: Theme.Color.primary600, end: Theme.Color.primary700)
+        case let .more(category): GradientPair(start: category.color, end: category.color)
         }
     }
 }
@@ -766,6 +774,7 @@ extension OffersViewModel {
     }
 
     static func displayName(for bidder: BidderUserDTO?) -> String {
+        if let display = bidder?.displayName, !display.isEmpty { return display }
         if let name = bidder?.name, !name.isEmpty { return name }
         if let first = bidder?.firstName, !first.isEmpty { return first }
         if let username = bidder?.username, !username.isEmpty { return username }

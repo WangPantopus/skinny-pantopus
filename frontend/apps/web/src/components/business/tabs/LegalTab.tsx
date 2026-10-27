@@ -17,6 +17,8 @@ export default function LegalTab({ businessId, businessType }: Props) {
   const [hasData, setHasData] = useState(false);
   // Only the owner may read these; anyone else gets a 403 and no form.
   const [forbidden, setForbidden] = useState(false);
+  // Save sends every field, cleared ones as empty, so it must never save over details it couldn't read.
+  const [loadFailed, setLoadFailed] = useState(false);
   const fieldId = useId();
 
   // Nonprofit verification
@@ -46,6 +48,7 @@ export default function LegalTab({ businessId, businessType }: Props) {
 
   const loadPrivateData = async () => {
     setLoading(true);
+    setLoadFailed(false);
     try {
       const result = await api.businesses.getBusinessPrivate(businessId);
       const data = result.private || {};
@@ -55,19 +58,31 @@ export default function LegalTab({ businessId, businessType }: Props) {
     } catch (e: any) {
       // API errors carry statusCode (there is no `status`), so the 403 check never matched.
       if (e?.statusCode === 403) setForbidden(true);
-      else toast.error(e?.message || 'Failed to load legal info');
+      else setLoadFailed(true);
     } finally {
       setLoading(false);
     }
   };
 
   const handleSave = async () => {
+    if (loadFailed) return;
+    const legalName = form.legal_name.trim();
+    const taxId = form.tax_id_last4.trim();
+    const supportEmail = form.support_email.trim();
+    if (supportEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(supportEmail)) {
+      toast.error('Enter a valid support email address.');
+      return;
+    }
+    if (taxId && !/^\d{4}$/.test(taxId)) {
+      toast.error('Enter exactly four tax ID digits, or leave it blank.');
+      return;
+    }
     setSaving(true);
     try {
       await api.businesses.updateBusinessPrivate(businessId, {
-        legal_name: form.legal_name || undefined,
-        tax_id_last4: form.tax_id_last4 || undefined,
-        support_email: form.support_email || undefined,
+        legal_name: legalName,
+        tax_id_last4: taxId,
+        support_email: supportEmail,
       });
       toast.success('Legal information updated');
       setHasData(true);
@@ -112,7 +127,7 @@ export default function LegalTab({ businessId, businessType }: Props) {
     }
   };
 
-  if (loading) return <div className="flex items-center justify-center py-16"><div className="animate-spin h-8 w-8 border-3 border-violet-600 border-t-transparent rounded-full" /></div>;
+  if (loading) return <div className="flex items-center justify-center py-16"><div className="animate-spin h-8 w-8 border-2 border-violet-600 border-t-transparent rounded-full" /></div>;
 
   if (forbidden) {
     return (
@@ -196,22 +211,28 @@ export default function LegalTab({ businessId, businessType }: Props) {
 
       {/* Legal form */}
       <div className="bg-app-surface border border-app-border rounded-xl p-5 space-y-4">
+        {loadFailed && (
+          <div role="alert" className="flex items-center justify-between gap-3 rounded-lg bg-red-50 border border-red-200 px-3 py-2">
+            <p className="text-xs text-red-700">Your legal details couldn&apos;t be loaded, so they can&apos;t be edited right now.</p>
+            <button onClick={loadPrivateData} className="text-xs font-medium text-red-700 underline flex-shrink-0">Retry</button>
+          </div>
+        )}
         <div>
           <label htmlFor={`${fieldId}-legal-name`} className="text-xs text-app-text-secondary mb-1 block">Legal Business Name</label>
-          <input id={`${fieldId}-legal-name`} type="text" value={form.legal_name} onChange={e => setForm(f => ({ ...f, legal_name: e.target.value }))} placeholder="Registered business name"
+          <input id={`${fieldId}-legal-name`} type="text" value={form.legal_name} disabled={loadFailed} onChange={e => setForm(f => ({ ...f, legal_name: e.target.value }))} placeholder="Registered business name"
             className="w-full text-sm px-3 py-2 border border-app-border rounded-lg bg-app-surface text-app-text placeholder:text-app-text-muted focus:outline-none focus:ring-1 focus:ring-violet-500" />
         </div>
         <div>
           <label htmlFor={`${fieldId}-tax-id`} className="text-xs text-app-text-secondary mb-1 block">Tax ID (last 4 digits)</label>
-          <input id={`${fieldId}-tax-id`} type="text" value={form.tax_id_last4} onChange={e => setForm(f => ({ ...f, tax_id_last4: e.target.value.replace(/\D/g, '').slice(0, 4) }))} placeholder="e.g. 1234" maxLength={4}
+          <input id={`${fieldId}-tax-id`} type="text" value={form.tax_id_last4} disabled={loadFailed} onChange={e => setForm(f => ({ ...f, tax_id_last4: e.target.value.replace(/\D/g, '').slice(0, 4) }))} placeholder="e.g. 1234" maxLength={4}
             className="w-full text-sm px-3 py-2 border border-app-border rounded-lg bg-app-surface text-app-text placeholder:text-app-text-muted focus:outline-none focus:ring-1 focus:ring-violet-500" />
         </div>
         <div>
           <label htmlFor={`${fieldId}-support-email`} className="text-xs text-app-text-secondary mb-1 block">Support Email</label>
-          <input id={`${fieldId}-support-email`} type="email" value={form.support_email} onChange={e => setForm(f => ({ ...f, support_email: e.target.value }))} placeholder="support@yourbusiness.com"
+          <input id={`${fieldId}-support-email`} type="email" value={form.support_email} disabled={loadFailed} onChange={e => setForm(f => ({ ...f, support_email: e.target.value }))} placeholder="support@yourbusiness.com"
             className="w-full text-sm px-3 py-2 border border-app-border rounded-lg bg-app-surface text-app-text placeholder:text-app-text-muted focus:outline-none focus:ring-1 focus:ring-violet-500" />
         </div>
-        <button onClick={handleSave} disabled={saving}
+        <button onClick={handleSave} disabled={saving || loadFailed}
           className="w-full py-2.5 bg-violet-600 text-white text-sm font-semibold rounded-lg hover:bg-violet-700 disabled:opacity-50 transition">
           {saving ? 'Saving...' : hasData ? 'Update' : 'Save'}
         </button>

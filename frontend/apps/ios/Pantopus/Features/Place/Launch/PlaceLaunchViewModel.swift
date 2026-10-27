@@ -24,7 +24,16 @@ final class PlaceLaunchViewModel {
     private(set) var suggestions: [GeoSuggestion] = []
     private(set) var isLoadingPreview = false
     var query = "" {
-        didSet { scheduleAutocomplete() }
+        didSet {
+            if query != oldValue {
+                selected = nil
+                suggestions = []
+                errorMessage = nil
+                lookupTask?.cancel()
+                isLoadingPreview = false
+            }
+            scheduleAutocomplete()
+        }
     }
 
     private var selected: GeoSuggestion?
@@ -58,11 +67,26 @@ final class PlaceLaunchViewModel {
     }
 
     private func fetchSuggestions(_ q: String) async {
-        guard let response: GeoAutocompleteResponse = try? await api.request(
-            GeoEndpoints.autocomplete(query: q)
-        ) else { return }
-        guard !Task.isCancelled else { return }
-        suggestions = response.suggestions
+        do {
+            let response: GeoAutocompleteResponse = try await api.request(GeoEndpoints.autocomplete(query: q))
+            guard !Task.isCancelled, q == query.trimmingCharacters(in: .whitespaces) else { return }
+            suggestions = response.suggestions
+        } catch {
+            guard !Task.isCancelled, q == query.trimmingCharacters(in: .whitespaces) else { return }
+            suggestions = []
+            // Out of suggestions for today (or everyone's are busy): a typed
+            // address still works through See your place.
+            errorMessage = Self.isLimit(error)
+                ? "Address suggestions aren’t available right now. Type the full address, then tap See your place."
+                : "We couldn’t look up addresses right now. Try again or enter the full address."
+        }
+    }
+
+    /// A 429: the server's own sentence (today's lookups are used, or
+    /// lookups are busy) is what the screen should say.
+    private static func isLimit(_ error: Error) -> Bool {
+        guard case let .clientError(status, _) = error as? APIError else { return false }
+        return status == 429
     }
 
     // MARK: - Selection → preview
@@ -85,14 +109,23 @@ final class PlaceLaunchViewModel {
             do {
                 let preview: PlacePreview = try await api.request(PlaceEndpoints.publicPreview(address: address))
                 guard !Task.isCancelled else { return }
-                if preview.status == .unsupportedRegion {
-                    step = .region(message: preview.message ?? "Home features are coming to your region.")
-                } else {
+                switch preview.status {
+                case .ready, .partial:
                     step = .preview(preview)
+                case .unsupportedRegion:
+                    step = .region(message: preview.message ?? "Home features are coming to your region.")
+                case .couldNotPlace:
+                    step = .hero
+                    errorMessage = preview.message ?? "We couldn’t find that address. Try adding the city and state."
+                case .unknown:
+                    step = .hero
+                    errorMessage = "We couldn’t load this address. Please try again."
                 }
             } catch {
                 guard !Task.isCancelled else { return }
-                errorMessage = "We couldn’t load this address. Please try again."
+                errorMessage = Self.isLimit(error)
+                    ? error.localizedDescription
+                    : "We couldn’t load this address. Please try again."
             }
         }
     }

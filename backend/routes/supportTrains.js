@@ -17,8 +17,11 @@ const {
   loadSupportTrain,
   requireSupportTrainRole,
   requireSupportTrainViewer,
+  supportTrainUnavailable,
 } = require('../middleware/supportTrainPermissions');
 const { emitSupportTrainEvent, formatSupportTrainSlotTime } = require('../services/supportTrainNotifications');
+const { deliverNewMessage } = require('./chats');
+const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
 const {
   sendGuestReservationAddressEmail,
   sendGuestReservationConfirmationEmail,
@@ -28,10 +31,28 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const { chosenUsernameOrNull } = require('../utils/personalUsername');
 
-/** A row with a joined `User`, minus a made-up username (`user_…`, or the older kind built from the email). */
-function withChosenUsername(row) {
+/**
+ * A person on a train (an organizer, an update's author, a contributor, an invitee, a helper), named as neighbors see
+ * them on posts, in chats and in the train's notices (services/chatPeople.js): by their Local Profile's name, handle
+ * and photo, or, for a business or anyone without one, by the account. `people` comes from loadChatPeople. Only the
+ * id, username (minus a made-up one: `user_…`, or the older kind built from the email), name and photo are passed on,
+ * and `id` stays the account id.
+ */
+function trainPerson(user, people) {
+  if (!user) return null;
+  const person = chatPersonRow(user, people);
+  return {
+    id: person.id,
+    username: chosenUsernameOrNull(person.username),
+    name: person.name,
+    profile_picture_url: person.profile_picture_url,
+  };
+}
+
+/** A row with a joined `User`, that person named as above. */
+function withTrainPerson(row, people) {
   if (!row?.User) return row;
-  return { ...row, User: { ...row.User, username: chosenUsernameOrNull(row.User.username) } };
+  return { ...row, User: trainPerson(row.User, people) };
 }
 const { isLaunchFeatureEnabled } = require('../utils/featureFlags');
 const { applyLocationPrecision } = require('../utils/locationPrivacy');
@@ -42,6 +63,15 @@ const {
   listEffectivelyOpenSlots,
   normalizeSlotsWithActiveReservations,
 } = require('../services/supportTrainSlotAvailability');
+
+// An inconclusive sign-in check must not turn an organizer/helper into a
+// visitor or turn their reservation into an email-only guest signup.
+function requireAvailableOptionalAuth(req, res, next) {
+  if (req.authUnavailable) {
+    return supportTrainUnavailable(res, 'Could not check your sign-in right now. Please try again.');
+  }
+  return next();
+}
 
 /** PostGIS GEOGRAPHY Point WKT */
 function formatLocationForDB(latitude, longitude) {
@@ -123,12 +153,13 @@ function buildCoarseLocation(home) {
 async function hasSupportTrainAddressGrant(supportTrainId, granteeUserId) {
   if (!supportTrainId || !granteeUserId) return false;
 
-  const { count } = await supabaseAdmin
+  const { count, error } = await supabaseAdmin
     .from('SupportTrainAddressGrant')
     .select('id', { count: 'exact', head: true })
     .eq('support_train_id', supportTrainId)
     .eq('grantee_user_id', granteeUserId);
 
+  if (error) throw Object.assign(new Error('Could not check address access. Please try again.'), { status: 503 });
   return (count || 0) > 0;
 }
 
@@ -171,13 +202,13 @@ function formatAddressLabel(address) {
   return [firstLine, secondLine].filter(Boolean).join('\n');
 }
 
-async function getSupportTrainExactDeliveryDetails(st, supportTrainId) {
-  const [{ data: profile }, homeResult] = await Promise.all([
-    supabaseAdmin
+async function getSupportTrainExactDeliveryDetails(st, supportTrainId, { includeInstructions = true } = {}) {
+  const [profileResult, homeResult] = await Promise.all([
+    includeInstructions ? supabaseAdmin
       .from('SupportTrainRecipientProfile')
       .select('delivery_instructions, special_instructions')
       .eq('support_train_id', supportTrainId)
-      .single(),
+      .maybeSingle() : { data: null, error: null },
     (async () => {
       const locationHomeId = st.recipient_home_id || st.Activity?.home_id || null;
       if (!locationHomeId) return { data: null, error: null };
@@ -185,15 +216,16 @@ async function getSupportTrainExactDeliveryDetails(st, supportTrainId) {
         .from('Home')
         .select('address, address2, city, state, zipcode')
         .eq('id', locationHomeId)
-        .single();
+        .maybeSingle();
     })(),
   ]);
 
-  if (homeResult.error) {
-    logger.warn('Failed to resolve Support Train exact address for guest email', {
+  if (homeResult.error || profileResult.error) {
+    logger.warn('Failed to resolve Support Train exact delivery details', {
       supportTrainId,
-      error: homeResult.error.message,
+      error: (homeResult.error || profileResult.error).message,
     });
+    throw Object.assign(new Error('Could not load the delivery address. Please try again.'), { status: 503 });
   }
 
   let address = null;
@@ -218,8 +250,8 @@ async function getSupportTrainExactDeliveryDetails(st, supportTrainId) {
   return {
     address,
     addressLabel: formatAddressLabel(address),
-    deliveryInstructions: profile?.delivery_instructions || null,
-    specialInstructions: profile?.special_instructions || null,
+    deliveryInstructions: profileResult.data?.delivery_instructions || null,
+    specialInstructions: profileResult.data?.special_instructions || null,
   };
 }
 
@@ -472,15 +504,27 @@ router.get('/health', (req, res) => {
 });
 
 // List my Support Train participations
+const participationPaginationSchema = Joi.object({
+  limit: Joi.number().integer().min(1).max(Number.MAX_SAFE_INTEGER).default(20),
+  offset: Joi.number().integer().min(0).max(2147483597).default(0),
+});
+
 router.get(
   '/me/support-trains',
   verifyToken,
   asyncHandler(async (req, res) => {
     const userId = req.user.id;
-    const roleFilter = req.query.role; // 'organizer' | 'helper'
+    const roleFilter = req.query.role; // 'organizer' | 'recipient' | 'helper'
     const statusFilter = req.query.status;
-    const limit = Math.min(parseInt(req.query.limit, 10) || 20, 50);
-    const offset = parseInt(req.query.offset, 10) || 0;
+    const pagination = participationPaginationSchema.validate({ limit: req.query.limit, offset: req.query.offset });
+    if (pagination.error) {
+      return res.status(400).json({
+        error: 'Invalid pagination. Use a positive whole-number limit and a non-negative offset within the supported range.',
+        code: 'INVALID_PAGINATION',
+      });
+    }
+    const limit = Math.min(pagination.value.limit, 50);
+    const offset = pagination.value.offset;
 
     const results = [];
 
@@ -499,14 +543,16 @@ router.get(
 
       if (statusFilter) orgQuery = orgQuery.eq('status', statusFilter);
 
-      const { data: owned } = await orgQuery;
+      const { data: owned, error: ownedError } = await orgQuery;
+      if (ownedError) throw ownedError;
 
       // Also check co-organizer rows
-      const { data: coOrgRows } = await supabaseAdmin
+      const { data: coOrgRows, error: coOrgError } = await supabaseAdmin
         .from('SupportTrainOrganizer')
         .select('support_train_id, role')
         .eq('user_id', userId)
         .neq('role', 'primary');
+      if (coOrgError) throw coOrgError;
 
       const coOrgIds = (coOrgRows || []).map((r) => r.support_train_id);
       const ownedIds = new Set((owned || []).map((s) => s.id));
@@ -519,7 +565,8 @@ router.get(
           .select('id, status, published_at, created_at, Activity!inner ( title )')
           .in('id', missingIds);
         if (statusFilter) coQuery = coQuery.eq('status', statusFilter);
-        const { data } = await coQuery;
+        const { data, error } = await coQuery;
+        if (error) throw error;
         coOrgTrains = data || [];
       }
 
@@ -550,13 +597,39 @@ router.get(
       }
     }
 
+    // Recipients can already open published trains and see their reservations.
+    // Include them here without exposing an organizer's unpublished draft.
+    if (!roleFilter || roleFilter === 'recipient') {
+      let recipientQuery = supabaseAdmin
+        .from('SupportTrain')
+        .select('id, status, published_at, created_at, Activity!inner ( title )')
+        .eq('recipient_user_id', userId)
+        .not('published_at', 'is', null);
+      if (statusFilter) recipientQuery = recipientQuery.eq('status', statusFilter);
+      const { data: received, error } = await recipientQuery;
+      if (error) throw error;
+      const existingIds = new Set(results.map((r) => r.id));
+      for (const st of received || []) {
+        if (existingIds.has(st.id)) continue;
+        results.push({
+          id: st.id,
+          title: st.Activity?.title || null,
+          status: st.status,
+          published_at: st.published_at,
+          created_at: st.created_at,
+          my_role: 'recipient',
+        });
+      }
+    }
+
     // Fetch helper participations
     if (!roleFilter || roleFilter === 'helper') {
-      const { data: reservations } = await supabaseAdmin
+      const { data: reservations, error: reservationError } = await supabaseAdmin
         .from('SupportTrainReservation')
         .select('support_train_id')
         .eq('user_id', userId)
         .neq('status', 'canceled');
+      if (reservationError) throw reservationError;
 
       const helperTrainIds = [...new Set((reservations || []).map((r) => r.support_train_id))];
       const existingIds = new Set(results.map((r) => r.id));
@@ -568,7 +641,8 @@ router.get(
           .select('id, status, published_at, created_at, Activity!inner ( title )')
           .in('id', newHelperIds);
         if (statusFilter) helperQuery = helperQuery.eq('status', statusFilter);
-        const { data: helperTrains } = await helperQuery;
+        const { data: helperTrains, error } = await helperQuery;
+        if (error) throw error;
 
         for (const st of helperTrains || []) {
           results.push({
@@ -578,6 +652,40 @@ router.get(
             published_at: st.published_at,
             created_at: st.created_at,
             my_role: 'helper',
+          });
+        }
+      }
+    }
+
+    // The Invitations tab consumes pending invitations from this same feed.
+    // Do not list private drafts, ended trains or trains already represented
+    // by an organizer/recipient/helper role.
+    if (!roleFilter && (!statusFilter || statusFilter === 'invited')) {
+      const { data: invitations, error: inviteError } = await supabaseAdmin
+        .from('SupportTrainInvite')
+        .select('support_train_id')
+        .eq('invitee_user_id', userId)
+        .eq('status', 'pending');
+      if (inviteError) throw inviteError;
+      const existingIds = new Set(results.map((r) => r.id));
+      const invitedIds = [...new Set((invitations || []).map((r) => r.support_train_id))]
+        .filter((id) => !existingIds.has(id));
+      if (invitedIds.length) {
+        const { data: invitedTrains, error } = await supabaseAdmin
+          .from('SupportTrain')
+          .select('id, status, published_at, created_at, Activity!inner ( title )')
+          .in('id', invitedIds)
+          .in('status', ['published', 'active'])
+          .not('published_at', 'is', null);
+        if (error) throw error;
+        for (const st of invitedTrains || []) {
+          results.push({
+            id: st.id,
+            title: st.Activity?.title || null,
+            status: 'invited',
+            published_at: st.published_at,
+            created_at: st.created_at,
+            my_role: 'invited',
           });
         }
       }
@@ -1278,6 +1386,56 @@ router.post(
   })
 );
 
+/**
+ * Takes someone out of the train's campaign chat once nothing keeps them in it: being the organizer or the
+ * recipient, a co-organizer role (unless `exceptOrganizer`: the role being removed) or a signup that isn't
+ * canceled (other than `exceptReservationId`: the one being canceled). Their open connections stop getting the
+ * room's live messages at once, as in routes/chats.js. Returns whether they're out. A failed read or write throws,
+ * so a removal is never answered as done while they can still read the chat.
+ */
+async function leaveTrainChatUnlessInvolved(req, userId, { exceptOrganizer = false, exceptReservationId = null } = {}) {
+  const st = req.supportTrain;
+  const roomId = req.activity?.chat_thread_id;
+  if (!roomId || !userId) return true;
+  if (userId === st.organizer_user_id || userId === st.recipient_user_id) return false;
+
+  let signups = supabaseAdmin
+    .from('SupportTrainReservation')
+    .select('id', { count: 'exact', head: true })
+    .eq('support_train_id', st.id)
+    .eq('user_id', userId)
+    .neq('status', 'canceled');
+  if (exceptReservationId) signups = signups.neq('id', exceptReservationId);
+  const [signupRead, organizerRead] = await Promise.all([
+    signups,
+    exceptOrganizer
+      ? { data: null, error: null }
+      : supabaseAdmin
+          .from('SupportTrainOrganizer')
+          .select('id')
+          .eq('support_train_id', st.id)
+          .eq('user_id', userId)
+          .maybeSingle(),
+  ]);
+  const readError = signupRead.error || organizerRead.error;
+  if (readError) throw new Error(`Could not check their place on the train: ${readError.message}`);
+  if ((signupRead.count || 0) > 0 || organizerRead.data) return false;
+
+  const { error } = await supabaseAdmin
+    .from('ChatParticipant')
+    .delete()
+    .eq('room_id', roomId)
+    .eq('user_id', userId);
+  if (error) throw new Error(`Could not remove them from the train's chat: ${error.message}`);
+
+  const io = req.app.get('io');
+  const { connectedUsers } = require('../socket/chatSocketio');
+  for (const socketId of connectedUsers.get(userId) || []) {
+    io?.sockets?.sockets?.get(socketId)?.leave(roomId);
+  }
+  return true;
+}
+
 // Remove a co-organizer
 router.delete(
   '/:id/organizers/:userId',
@@ -1296,47 +1454,27 @@ router.delete(
         .json({ error: 'CANNOT_REMOVE_PRIMARY', message: 'Cannot remove the primary organizer.' });
     }
 
-    const { error } = await supabaseAdmin
-      .from('SupportTrainOrganizer')
-      .delete()
-      .eq('support_train_id', st.id)
-      .eq('user_id', targetUserId);
+    // A removed co-organizer leaves the campaign chat unless they're the recipient or a helper with an active
+    // signup. They leave it before the role goes, so a failure leaves them listed and the organizer's retry
+    // finishes it; a signup that keeps them in may be canceled meanwhile, so that's checked again after.
+    try {
+      const leftChat = await leaveTrainChatUnlessInvolved(req, targetUserId, { exceptOrganizer: true });
 
-    if (error) {
+      const { error } = await supabaseAdmin
+        .from('SupportTrainOrganizer')
+        .delete()
+        .eq('support_train_id', st.id)
+        .eq('user_id', targetUserId);
+      if (error) throw new Error(`Could not remove the role: ${error.message}`);
+
+      if (!leftChat) await leaveTrainChatUnlessInvolved(req, targetUserId);
+    } catch (removeErr) {
       logger.error('Remove organizer failed', {
         supportTrainId: st.id,
         targetUserId,
-        error: error.message,
+        error: removeErr.message,
       });
-      return res.status(500).json({ error: 'INTERNAL', message: 'Failed to remove organizer.' });
-    }
-
-    // A removed co-organizer leaves the campaign chat unless they are still the recipient or a helper
-    // with an active signup (the same rule as a helper's cancel).
-    try {
-      const chatThreadId = req.activity?.chat_thread_id;
-      if (chatThreadId && targetUserId !== st.recipient_user_id) {
-        const { count: activeRes } = await supabaseAdmin
-          .from('SupportTrainReservation')
-          .select('id', { count: 'exact', head: true })
-          .eq('support_train_id', st.id)
-          .eq('user_id', targetUserId)
-          .neq('status', 'canceled');
-
-        if ((activeRes || 0) === 0) {
-          await supabaseAdmin
-            .from('ChatParticipant')
-            .delete()
-            .eq('room_id', chatThreadId)
-            .eq('user_id', targetUserId);
-        }
-      }
-    } catch (chatErr) {
-      logger.error('Remove organizer from chat failed (non-fatal)', {
-        supportTrainId: st.id,
-        targetUserId,
-        error: chatErr.message,
-      });
+      return supportTrainUnavailable(res, "Couldn't remove this co-organizer. Please try again.");
     }
 
     res.status(204).end();
@@ -1370,19 +1508,13 @@ router.get(
       return res.status(500).json({ error: 'INTERNAL', message: 'Failed to list organizers.' });
     }
 
+    const people = await loadChatPeople((organizers || []).map((o) => o.User?.id));
     const result = (organizers || []).map((o) => ({
       id: o.id,
       user_id: o.user_id,
       role: o.role,
       created_at: o.created_at,
-      user: o.User
-        ? {
-            id: o.User.id,
-            username: chosenUsernameOrNull(o.User.username),
-            name: o.User.name,
-            profile_picture_url: o.User.profile_picture_url,
-          }
-        : null,
+      user: trainPerson(o.User, people),
     }));
 
     res.json({ organizers: result });
@@ -1968,19 +2100,13 @@ router.get(
       return res.status(500).json({ error: 'INTERNAL', message: 'Failed to list updates.' });
     }
 
+    const people = await loadChatPeople((updates || []).map((u) => u.User?.id));
     const result = (updates || []).map((u) => ({
       id: u.id,
       body: u.body,
       media_urls: u.media_urls,
       created_at: u.created_at,
-      author: u.User
-        ? {
-            id: u.User.id,
-            username: chosenUsernameOrNull(u.User.username),
-            name: u.User.name,
-            profile_picture_url: u.User.profile_picture_url,
-          }
-        : null,
+      author: trainPerson(u.User, people),
     }));
 
     res.json({ updates: result });
@@ -2363,6 +2489,9 @@ router.get(
     }
 
     const isOrganizer = viewerRole === 'primary' || viewerRole === 'co_organizer';
+    const people = await loadChatPeople((contributions || [])
+      .filter((c) => !c.is_anonymous || isOrganizer)
+      .map((c) => c.User?.id));
 
     const shaped = (contributions || []).map((c) => {
       const item = {
@@ -2378,14 +2507,7 @@ router.get(
       if (c.is_anonymous && !isOrganizer) {
         item.contributor = { name: 'Anonymous' };
       } else {
-        item.contributor = c.User
-          ? {
-              id: c.User.id,
-              username: chosenUsernameOrNull(c.User.username),
-              name: c.User.name,
-              profile_picture_url: c.User.profile_picture_url,
-            }
-          : null;
+        item.contributor = trainPerson(c.User, people);
       }
 
       return item;
@@ -2464,7 +2586,8 @@ router.get(
       return res.status(500).json({ error: 'INTERNAL', message: 'Failed to list invites.' });
     }
 
-    res.json({ invites: (data || []).map(withChosenUsername) });
+    const people = await loadChatPeople((data || []).map((invite) => invite.User?.id));
+    res.json({ invites: (data || []).map((invite) => withTrainPerson(invite, people)) });
   })
 );
 
@@ -2581,8 +2704,9 @@ router.post(
         type: 'text',
         message: req.body.message,
         metadata: { source: 'support_train_nudge', support_train_id: st.id },
+        push_delivery_requested: true,
       })
-      .select('id, room_id, message, created_at')
+      .select('*, sender:user_id(id, username, name, profile_picture_url)')
       .single();
 
     if (error || !msg) {
@@ -2590,7 +2714,20 @@ router.post(
       return res.status(500).json({ error: 'INTERNAL', message: 'Failed to send nudge.' });
     }
 
-    res.status(201).json(msg);
+    // The reminder goes out as any message in the train's chat does: live to everyone in the
+    // chat, with their unread badge and a push. It's posted either way.
+    try {
+      await deliverNewMessage(req.app.get('io'), {
+        room: { id: chatThreadId, type: 'support_train' },
+        message: msg,
+        actorUserId: req.user.id,
+        requestId: req.requestId,
+      });
+    } catch (deliveryErr) {
+      logger.warn('Send nudge delivery failed (non-fatal)', { supportTrainId: st.id, error: deliveryErr.message });
+    }
+
+    res.status(201).json({ id: msg.id, room_id: msg.room_id, message: msg.message, created_at: msg.created_at });
   })
 );
 
@@ -2877,6 +3014,7 @@ router.post(
   '/:id/slots/:slotId/guest-reserve',
   supportTrainWriteLimiter,
   optionalAuth,
+  requireAvailableOptionalAuth,
   loadSupportTrain,
   validate(guestReserveSchema),
   asyncHandler(async (req, res) => {
@@ -2968,11 +3106,7 @@ router.post(
         });
       }
 
-      const { data: userRow } = await supabaseAdmin
-        .from('User')
-        .select('name, username')
-        .eq('id', authenticatedUserId)
-        .maybeSingle();
+      const people = await loadChatPeople([authenticatedUserId]);
 
       const { data: reservation, error: resErr } = await supabaseAdmin
         .from('SupportTrainReservation')
@@ -3036,7 +3170,7 @@ router.post(
           slot_id: slotId,
           slot_label: slot.slot_label,
           slot_date: slot.slot_date,
-          helper_name: userRow?.name || chosenUsernameOrNull(userRow?.username) || body.guest_name,
+          helper_name: people.get(String(authenticatedUserId))?.displayName || body.guest_name,
         },
       });
 
@@ -3199,6 +3333,8 @@ router.post(
 
 // A guest's address email repeated within this window is one share, not a resend.
 const GUEST_ADDRESS_REPEAT_WINDOW_MS = 60 * 1000;
+// A malformed id fails the database read; it is checked first so only a real read failure answers 503.
+const RESERVATION_ID =/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Manually reveal the exact address to a specific helper reservation
 router.post(
@@ -3213,12 +3349,21 @@ router.post(
 
     let isOrganizer = st.organizer_user_id === userId;
     if (!isOrganizer) {
-      const { data: orgRow } = await supabaseAdmin
+      const { data: orgRow, error: orgErr } = await supabaseAdmin
         .from('SupportTrainOrganizer')
         .select('role')
         .eq('support_train_id', st.id)
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
+      // A failed read is not a refusal: a co-organizer must not be told they can't share.
+      if (orgErr) {
+        logger.error('Reveal Support Train address organizer check failed', {
+          supportTrainId: st.id,
+          userId,
+          error: orgErr.message,
+        });
+        return supportTrainUnavailable(res, 'Could not check organizer access. Please try again.');
+      }
       if (orgRow && (orgRow.role === 'primary' || orgRow.role === 'co_organizer')) {
         isOrganizer = true;
       }
@@ -3231,6 +3376,10 @@ router.post(
       });
     }
 
+    if (!RESERVATION_ID.test(reservationId)) {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'Reservation not found.' });
+    }
+
     const { data: reservation, error: resErr } = await supabaseAdmin
       .from('SupportTrainReservation')
       .select(
@@ -3238,9 +3387,17 @@ router.post(
       )
       .eq('id', reservationId)
       .eq('support_train_id', st.id)
-      .single();
+      .maybeSingle();
 
-    if (resErr || !reservation) {
+    if (resErr) {
+      logger.error('Reveal Support Train address reservation read failed', {
+        supportTrainId: st.id,
+        reservationId,
+        error: resErr.message,
+      });
+      return supportTrainUnavailable(res, 'Could not load the reservation. Please try again.');
+    }
+    if (!reservation) {
       return res.status(404).json({ error: 'NOT_FOUND', message: 'Reservation not found.' });
     }
 
@@ -3255,6 +3412,26 @@ router.post(
       return res.status(409).json({
         error: 'NO_HELPER',
         message: 'This reservation is not linked to a helper account or guest email.',
+      });
+    }
+
+    // Both account helpers and email guests need an actual street address.
+    // Check before creating a grant or claiming that a repeated share worked.
+    let delivery;
+    try {
+      delivery = await getSupportTrainExactDeliveryDetails(st, st.id, {
+        includeInstructions: !reservation.user_id,
+      });
+    } catch (err) {
+      // A failed read throws a "try again" 503. Answer it here: app.js replaces every 5xx message in production.
+      if (err.status !== 503) throw err;
+      logger.error('Reveal Support Train address delivery details failed', { supportTrainId: st.id, reservationId });
+      return supportTrainUnavailable(res, err.message);
+    }
+    if (!delivery.address?.address?.trim()) {
+      return res.status(409).json({
+        error: 'ADDRESS_UNAVAILABLE',
+        message: 'This Support Train does not have an exact delivery address to share.',
       });
     }
 
@@ -3279,15 +3456,6 @@ router.post(
         .select('slot_date, slot_label, start_time, end_time')
         .eq('id', reservation.slot_id)
         .single();
-      const delivery = await getSupportTrainExactDeliveryDetails(st, st.id);
-
-      if (!delivery.addressLabel) {
-        return res.status(409).json({
-          error: 'ADDRESS_UNAVAILABLE',
-          message: 'This Support Train does not have an exact delivery address to share.',
-        });
-      }
-
       const alreadyShared = !!reservation.guest_address_shared_at;
       const emailResult = await sendGuestReservationAddressEmail({
         toEmail: reservation.guest_email,
@@ -3361,7 +3529,14 @@ router.post(
       });
     }
 
-    const alreadyShared = await hasSupportTrainAddressGrant(st.id, reservation.user_id);
+    let alreadyShared;
+    try {
+      alreadyShared = await hasSupportTrainAddressGrant(st.id, reservation.user_id);
+    } catch (err) {
+      if (err.status !== 503) throw err;
+      logger.error('Reveal Support Train address grant check failed', { supportTrainId: st.id, reservationId });
+      return supportTrainUnavailable(res, err.message);
+    }
 
     if (!alreadyShared) {
       const { error: grantErr } = await supabaseAdmin.from('SupportTrainAddressGrant').insert({
@@ -3466,9 +3641,21 @@ router.post(
         .json({ error: 'FORBIDDEN', message: 'You can only cancel your own reservation.' });
     }
 
+    // A helper leaves the campaign chat with their last signup, unless they organize the train or receive it.
+    // They leave it before the signup is canceled, so a failure leaves the signup there to cancel again.
+    const chatUnavailable = (chatErr) => {
+      logger.error('Remove helper from chat failed', { supportTrainId: st.id, reservationId, error: chatErr.message });
+      return supportTrainUnavailable(res, "Couldn't finish cancelling this signup. Please try again.");
+    };
+
     if (reservation.status === 'canceled') {
-      // The prior cancellation may have committed before its reply was lost.
-      // Keep its original timestamp and avoid repeating notifications.
+      // The prior cancellation may have committed before its reply was lost, or before its chat
+      // removal failed: finish that, but keep its original timestamp and avoid repeating notifications.
+      try {
+        await leaveTrainChatUnlessInvolved(req, reservation.user_id);
+      } catch (chatErr) {
+        return chatUnavailable(chatErr);
+      }
       return res.json(reservation);
     }
 
@@ -3477,6 +3664,13 @@ router.post(
         error: 'INVALID_TRANSITION',
         message: `Cannot cancel from status '${reservation.status}'. Only reserved signups can be removed.`,
       });
+    }
+
+    let leftChat;
+    try {
+      leftChat = await leaveTrainChatUnlessInvolved(req, reservation.user_id, { exceptReservationId: reservationId });
+    } catch (chatErr) {
+      return chatUnavailable(chatErr);
     }
 
     // Cancel the reservation
@@ -3545,48 +3739,14 @@ router.post(
       });
     }
 
-    // Remove helper from chat if they have no other active reservations
-    try {
-      const canceledUserId = reservation.user_id;
-      const chatThreadId = req.activity?.chat_thread_id;
-      if (chatThreadId && canceledUserId) {
-        // Check for other active reservations on this train
-        const { count: otherRes } = await supabaseAdmin
-          .from('SupportTrainReservation')
-          .select('id', { count: 'exact', head: true })
-          .eq('support_train_id', st.id)
-          .eq('user_id', canceledUserId)
-          .neq('status', 'canceled')
-          .neq('id', reservationId);
-
-        if ((otherRes || 0) === 0) {
-          // Don't remove organizers or recipients from chat
-          const isOrgOrRecipient =
-            canceledUserId === st.organizer_user_id || canceledUserId === st.recipient_user_id;
-
-          if (!isOrgOrRecipient) {
-            const { data: orgCheck } = await supabaseAdmin
-              .from('SupportTrainOrganizer')
-              .select('id')
-              .eq('support_train_id', st.id)
-              .eq('user_id', canceledUserId)
-              .single();
-
-            if (!orgCheck) {
-              await supabaseAdmin
-                .from('ChatParticipant')
-                .delete()
-                .eq('room_id', chatThreadId)
-                .eq('user_id', canceledUserId);
-            }
-          }
-        }
+    // Another signup or a co-organizer role kept them in the chat, and either may have ended meanwhile: check
+    // again. A failure here is answered too, and cancelling again finishes it (above).
+    if (!leftChat) {
+      try {
+        await leaveTrainChatUnlessInvolved(req, reservation.user_id);
+      } catch (chatErr) {
+        return chatUnavailable(chatErr);
       }
-    } catch (chatErr) {
-      logger.error('Remove helper from chat failed (non-fatal)', {
-        supportTrainId: st.id,
-        error: chatErr.message,
-      });
     }
 
     res.json(updated);
@@ -3639,8 +3799,9 @@ router.patch(
         ? Date.parse(value) === Date.parse(reservation[key])
         : value === reservation[key]
     );
+    const people = await loadChatPeople([reservation.User?.id]);
     // A lost reply may be retried with the original version. Never write it twice.
-    if (unchanged) return res.json({ ...withChosenUsername(reservation), slot_date: reservation.Slot?.slot_date || null });
+    if (unchanged) return res.json({ ...withTrainPerson(reservation, people), slot_date: reservation.Slot?.slot_date || null });
     const { data: updated, error: writeError } = await supabaseAdmin
       .from('SupportTrainReservation')
       .update(patch)
@@ -3656,7 +3817,7 @@ router.patch(
     if (!updated) {
       return res.status(409).json({ error: 'CONFLICT', message: 'This signup changed. Pull down to refresh the signup list, then edit again.' });
     }
-    res.json({ ...withChosenUsername(updated), slot_date: updated.Slot?.slot_date || null });
+    res.json({ ...withTrainPerson(updated, people), slot_date: updated.Slot?.slot_date || null });
   })
 );
 
@@ -3859,12 +4020,21 @@ router.get(
     if (st.organizer_user_id === userId) {
       role = 'organizer';
     } else {
-      const { data: orgRow } = await supabaseAdmin
+      const { data: orgRow, error: orgErr } = await supabaseAdmin
         .from('SupportTrainOrganizer')
         .select('role')
         .eq('support_train_id', st.id)
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
+      // A failed read is not a refusal: an organizer must not be told they have no access.
+      if (orgErr) {
+        logger.error('List reservations organizer check failed', {
+          supportTrainId: st.id,
+          userId,
+          error: orgErr.message,
+        });
+        return supportTrainUnavailable(res);
+      }
       if (orgRow) role = 'organizer';
     }
 
@@ -3874,12 +4044,20 @@ router.get(
 
     if (role === 'none') {
       // Check if helper
-      const { count } = await supabaseAdmin
+      const { count, error: helperErr } = await supabaseAdmin
         .from('SupportTrainReservation')
         .select('id', { count: 'exact', head: true })
         .eq('support_train_id', st.id)
         .eq('user_id', userId)
         .neq('status', 'canceled');
+      if (helperErr) {
+        logger.error('List reservations helper check failed', {
+          supportTrainId: st.id,
+          userId,
+          error: helperErr.message,
+        });
+        return supportTrainUnavailable(res);
+      }
       if ((count || 0) > 0) role = 'helper';
     }
 
@@ -3936,6 +4114,7 @@ router.get(
     const sharedUserIds = new Set(
       (grants || []).map((grant) => grant.grantee_user_id).filter(Boolean)
     );
+    const people = await loadChatPeople((reservations || []).map((r) => r.User?.id));
 
     // Shape the response based on role
     const result = (reservations || []).map((r) => {
@@ -3960,14 +4139,7 @@ router.get(
         exact_address_shared: r.user_id
           ? sharedUserIds.has(r.user_id)
           : !!r.guest_address_shared_at,
-        user: r.User
-          ? {
-              id: r.User.id,
-              username: chosenUsernameOrNull(r.User.username),
-              name: r.User.name,
-              profile_picture_url: r.User.profile_picture_url,
-            }
-          : null,
+        user: trainPerson(r.User, people),
       };
 
       // Only organizers see private_note_to_organizer
@@ -3986,22 +4158,35 @@ router.get(
 
 // ─── Public Campaign View ─────────────────────────────────────────────────
 
+// A malformed id fails the database read; it is checked first so only a real read failure answers 503.
+const SUPPORT_TRAIN_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // Get a Support Train (public-facing with privacy gating)
 router.get(
   '/:id',
   optionalAuth,
+  requireAvailableOptionalAuth,
   asyncHandler(async (req, res) => {
     const supportTrainId = req.params.id;
     const userId = req.user?.id || null;
+
+    if (!SUPPORT_TRAIN_ID.test(supportTrainId)) {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'Support Train not found.' });
+    }
 
     // Load SupportTrain + Activity
     const { data: st, error: stErr } = await supabaseAdmin
       .from('SupportTrain')
       .select('*, Activity!inner ( * )')
       .eq('id', supportTrainId)
-      .single();
+      .maybeSingle();
 
-    if (stErr || !st) {
+    // A failed read is not an answer: organizers and helpers must not be told the train doesn't exist.
+    if (stErr) {
+      logger.error('Support Train read failed', { supportTrainId, error: stErr.message });
+      return supportTrainUnavailable(res);
+    }
+    if (!st) {
       return res.status(404).json({ error: 'NOT_FOUND', message: 'Support Train not found.' });
     }
 
@@ -4017,12 +4202,21 @@ router.get(
     }
 
     if (userId && viewerLevel === 'none') {
-      const { data: orgRow } = await supabaseAdmin
+      const { data: orgRow, error: orgErr } = await supabaseAdmin
         .from('SupportTrainOrganizer')
         .select('role')
         .eq('support_train_id', supportTrainId)
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
+      // A failed read is not an answer: a co-organizer must not get the non-organizer view.
+      if (orgErr) {
+        logger.error('Support Train organizer check failed', {
+          supportTrainId,
+          userId,
+          error: orgErr.message,
+        });
+        return supportTrainUnavailable(res);
+      }
       if (orgRow) {
         viewerLevel = 'organizer';
         viewerSupportTrainRole = orgRow.role;
@@ -4037,12 +4231,20 @@ router.get(
 
     // Check signed-up helper
     if (userId && viewerLevel === 'none') {
-      const { count: resCount } = await supabaseAdmin
+      const { count: resCount, error: resErr } = await supabaseAdmin
         .from('SupportTrainReservation')
         .select('id', { count: 'exact', head: true })
         .eq('support_train_id', supportTrainId)
         .eq('user_id', userId)
         .in('status', ['reserved', 'delivered', 'confirmed']);
+      if (resErr) {
+        logger.error('Support Train helper check failed', {
+          supportTrainId,
+          userId,
+          error: resErr.message,
+        });
+        return supportTrainUnavailable(res);
+      }
       if ((resCount || 0) > 0) {
         viewerLevel = 'signed_up_helper';
         viewerSupportTrainRole = 'helper';
@@ -4061,7 +4263,7 @@ router.get(
         // My connections ("Only people you're connected to can find this"): the
         // organizer's accepted connections, and anyone the organizer invited. No route
         // ever accepts an invite, so any invite row for the viewer counts.
-        const [{ count: invCount }, { count: connCount }] = await Promise.all([
+        const [{ count: invCount, error: invErr }, { count: connCount, error: connErr }] = await Promise.all([
           supabaseAdmin
             .from('SupportTrainInvite')
             .select('id', { count: 'exact', head: true })
@@ -4076,6 +4278,14 @@ router.get(
         if ((invCount || 0) > 0 || (connCount || 0) > 0) {
           viewerLevel = 'viewer';
           viewerSupportTrainRole = 'viewer';
+        } else if (invErr || connErr) {
+          // Neither read found access, and one failed: that is not a refusal.
+          logger.error('Support Train connection check failed', {
+            supportTrainId,
+            userId,
+            error: (invErr || connErr).message,
+          });
+          return supportTrainUnavailable(res);
         }
       }
     }
@@ -4093,7 +4303,7 @@ router.get(
         .from('SupportTrainRecipientProfile')
         .select('*')
         .eq('support_train_id', supportTrainId)
-        .single(),
+        .maybeSingle(),
       supabaseAdmin
         .from('SupportTrainSlot')
         .select(
@@ -4130,25 +4340,55 @@ router.get(
         : Promise.resolve({ data: [] }),
     ]);
 
+    // The page is built from every one of these. A failed read would show as content:
+    // "None specified" for allergies, an empty schedule, no "You're signed up", "No updates yet".
+    const failedRead = [
+      ['recipient profile', profileRes],
+      ['slots', slotsRes],
+      ['updates', updatesRes],
+      ['organizers', organizersRes],
+      ['my reservations', myResRes],
+    ].find(([, result]) => result.error);
+    if (failedRead) {
+      logger.error('Support Train page read failed', {
+        supportTrainId,
+        userId,
+        read: failedRead[0],
+        error: failedRead[1].error.message,
+      });
+      return supportTrainUnavailable(res);
+    }
+
     const profile = profileRes.data;
     let slots = slotsRes.data || [];
     try {
       slots = await normalizeSlotsWithActiveReservations(slots);
     } catch (error) {
+      // The stored counts can be stale; open and full come from the signups themselves.
       logger.error('Support Train slot availability normalization failed', {
         supportTrainId,
         error: error.message,
       });
+      return supportTrainUnavailable(res);
     }
     // The apps list the person's signups as sent. Follow the slots' day order,
     // so a signup made later for an earlier day doesn't come last.
     const slotPosition = new Map(slots.map((slot, index) => [slot.id, index]));
     const dayOrder = (reservation) => slotPosition.get(reservation.slot_id) ?? slots.length;
     const myReservations = (myResRes.data || []).sort((a, b) => dayOrder(a) - dayOrder(b));
-    const helperHasExactAddress =
-      viewerLevel === 'signed_up_helper'
-        ? await hasSupportTrainAddressGrant(supportTrainId, userId)
-        : false;
+    let helperHasExactAddress = false;
+    if (viewerLevel === 'signed_up_helper') {
+      try {
+        helperHasExactAddress = await hasSupportTrainAddressGrant(supportTrainId, userId);
+      } catch (error) {
+        logger.error('Support Train address grant check failed', {
+          supportTrainId,
+          userId,
+          error: error.message,
+        });
+        return supportTrainUnavailable(res);
+      }
+    }
     const canSeeExactAddress =
       viewerLevel === 'organizer' || viewerLevel === 'recipient' || helperHasExactAddress;
 
@@ -4157,17 +4397,14 @@ router.get(
     const activity = st.Activity;
     const chips = st.ai_draft_payload?.summary_chips || [];
     const locationHomeId = st.recipient_home_id || activity?.home_id || null;
+    const organizerPeople = await loadChatPeople([
+      st.organizer_user_id,
+      ...(organizersRes.data || []).map((o) => o.User?.id),
+    ]);
     const organizers = (organizersRes.data || []).map((o) => ({
       id: o.id,
       role: o.User?.id === st.organizer_user_id ? 'primary' : o.role,
-      user: o.User
-        ? {
-            id: o.User.id,
-            username: chosenUsernameOrNull(o.User.username),
-            name: o.User.name,
-            profile_picture_url: o.User.profile_picture_url,
-          }
-        : null,
+      user: trainPerson(o.User, organizerPeople),
     }));
     const primaryOrganizerIndex = organizers.findIndex(
       (organizer) => organizer.user?.id === st.organizer_user_id
@@ -4179,22 +4416,24 @@ router.get(
     }
 
     if (primaryOrganizerIndex === -1 && st.organizer_user_id) {
-      const { data: organizerUser } = await supabaseAdmin
+      const { data: organizerUser, error: organizerUserErr } = await supabaseAdmin
         .from('User')
         .select('id, username, name, profile_picture_url')
         .eq('id', st.organizer_user_id)
         .maybeSingle();
+      if (organizerUserErr) {
+        logger.error('Support Train primary organizer read failed', {
+          supportTrainId,
+          error: organizerUserErr.message,
+        });
+        return supportTrainUnavailable(res);
+      }
 
       if (organizerUser) {
         organizers.unshift({
           id: `primary-${organizerUser.id}`,
           role: 'primary',
-          user: {
-            id: organizerUser.id,
-            username: chosenUsernameOrNull(organizerUser.username),
-            name: organizerUser.name,
-            profile_picture_url: organizerUser.profile_picture_url,
-          },
+          user: trainPerson(organizerUser, organizerPeople),
         });
       }
     }
@@ -4252,6 +4491,26 @@ router.get(
       response.activity_visibility = activity?.visibility || 'private';
     }
 
+    // The train's chat, only for someone in it: its organizers and recipient join at publish
+    // and helpers when they sign up, and they leave it when they're out.
+    if (userId && activity?.chat_thread_id) {
+      const { data: chatMember, error: chatMemberError } = await supabaseAdmin
+        .from('ChatParticipant')
+        .select('id')
+        .eq('room_id', activity.chat_thread_id)
+        .eq('user_id', userId)
+        .eq('is_active', true)
+        .maybeSingle();
+      if (chatMemberError) {
+        logger.error('Support Train chat membership check failed', {
+          supportTrainId,
+          error: chatMemberError.message,
+        });
+        return supportTrainUnavailable(res);
+      }
+      if (chatMember) response.chat_thread_id = activity.chat_thread_id;
+    }
+
     // ── Privacy-gated fields (address, delivery instructions) ──
 
     if (canSeeExactAddress) {
@@ -4267,13 +4526,15 @@ router.get(
             'address, address2, city, state, zipcode, map_center_lat, map_center_lng, location'
           )
           .eq('id', locationHomeId)
-          .single();
+          .maybeSingle();
+        // Without it the page shows no address at all: a helper it was shared with can't deliver.
         if (homeError) {
-          logger.warn('Failed to resolve Support Train exact address home', {
+          logger.error('Failed to resolve Support Train exact address home', {
             supportTrainId,
             locationHomeId,
             error: homeError.message,
           });
+          return supportTrainUnavailable(res);
         }
         if (home) {
           response.coarse_location = buildCoarseLocation(home);
@@ -4309,13 +4570,14 @@ router.get(
           .from('Home')
           .select('city, state, zipcode, map_center_lat, map_center_lng, location')
           .eq('id', locationHomeId)
-          .single();
+          .maybeSingle();
         if (homeError) {
-          logger.warn('Failed to resolve Support Train coarse location home', {
+          logger.error('Failed to resolve Support Train coarse location home', {
             supportTrainId,
             locationHomeId,
             error: homeError.message,
           });
+          return supportTrainUnavailable(res);
         }
         if (home) {
           response.coarse_location = buildCoarseLocation(home);

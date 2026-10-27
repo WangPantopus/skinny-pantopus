@@ -78,7 +78,7 @@ const {
   writeAuditLog,
   BUSINESS_ROLE_RANK,
 } = require('../utils/businessPermissions');
-const { RESERVED_USERNAMES, ENTITY_TYPES, getPublishRequirements } = require('../utils/businessConstants');
+const { RESERVED_USERNAMES, ENTITY_TYPES, VERIFICATION_STATUSES, getPublishRequirements } = require('../utils/businessConstants');
 const { applyEntityTypeSideEffects } = require('../services/businessEntityService');
 const stripeService = require('../stripe/stripeService');
 const { PAYMENT_STATES } = require('../stripe/paymentStateMachine');
@@ -87,6 +87,8 @@ const { shouldBlockCoordinateOverwrite } = require('../utils/verifiedCoordinateG
 const { generateNewBusinessSignal } = require('../services/businessSignalService');
 const membershipService = require('../services/businessMembershipService');
 const { chosenUsernameOrNull } = require('../utils/personalUsername');
+const { isUnpublishedBusiness } = require('../utils/visibilityPolicy');
+const { loadChatPeople, chatPersonRow, reviewerRow } = require('../services/chatPeople');
 
 
 // ============ CONSTANTS ============
@@ -148,6 +150,19 @@ const updateBusinessSchema = Joi.object({
   tagline: Joi.string().max(255).allow('', null),
   bio: Joi.string().max(5000).allow('', null),
 }).min(1);
+
+const updateBusinessPrivateSchema = Joi.object({
+  tax_id_last4: Joi.string().trim().pattern(/^[0-9]{4}$/).allow('', null)
+    .messages({
+      'string.base': 'Tax ID must contain exactly the last four digits.',
+      'string.pattern.base': 'Tax ID must contain exactly the last four digits.',
+    }),
+  support_email: Joi.string().trim().email().allow('', null)
+    .messages({
+      'string.base': 'Please enter a valid support email address.',
+      'string.email': 'Please enter a valid support email address.',
+    }),
+}).unknown(true).required();
 
 const validateAddressSchema = Joi.object({
   address: Joi.string().min(5).max(255).required(),
@@ -1214,7 +1229,7 @@ router.get('/:businessId/dashboard', verifyToken, async (req, res) => {
     const { businessId } = req.params;
     const userId = req.user.id;
 
-    const access = await checkBusinessPermission(businessId, userId);
+    const access = await getUserAccess(businessId, userId);
     if (!access.hasAccess) {
       return res.status(403).json({ error: 'No access to this business' });
     }
@@ -1258,6 +1273,11 @@ router.get('/:businessId/dashboard', verifyToken, async (req, res) => {
       hasHours = (hoursCount || 0) > 0;
     }
 
+    // Self-attestation records the owner's claim; only reviewed verification
+    // completes this step, matching the dashboard's verified badge.
+    const businessVerified = profile?.verification_status === VERIFICATION_STATUSES.DOCUMENT_VERIFIED
+      || profile?.verification_status === VERIFICATION_STATUSES.GOVERNMENT_VERIFIED;
+
     // Build onboarding checklist
     const checklist = [
       { key: 'account_created', done: true, label: 'Create business account', action: null },
@@ -1266,7 +1286,7 @@ router.get('/:businessId/dashboard', verifyToken, async (req, res) => {
       { key: 'logo_uploaded', done: !!profile?.logo_file_id, label: 'Upload a logo', action: '/profile' },
       { key: 'description_written', done: !!(profile?.description && profile.description.length >= 50), label: 'Write a description (50+ chars)', action: '/profile' },
       { key: 'catalog_item_added', done: (catalogItems || []).length > 0, label: 'Add a service or product', action: '/catalog' },
-      { key: 'business_verified', done: !!(profile?.verification_status && profile.verification_status !== 'unverified'), label: 'Verify your business', action: '/settings/verification' },
+      { key: 'business_verified', done: businessVerified, label: 'Verify your business', action: '/settings/verification' },
       { key: 'profile_published', done: profile?.is_published === true, label: 'Publish your profile', action: null },
     ];
 
@@ -1284,6 +1304,7 @@ router.get('/:businessId/dashboard', verifyToken, async (req, res) => {
         hasAccess: access.hasAccess,
         isOwner: access.isOwner,
         role_base: access.membership?.role_base || null,
+        permissions: access.permissions,
       },
       onboarding: {
         checklist,
@@ -1469,6 +1490,18 @@ router.patch('/:businessId', verifyToken, validate(updateBusinessSchema), async 
       }
     }
 
+    // The type the business had: its side effects (fee, nonprofit flag) run only when the type changes, since the
+    // profile editors resend the same type with every save.
+    let previousType = null;
+    if (profileFields.business_type) {
+      const { data: current } = await supabaseAdmin
+        .from('BusinessProfile')
+        .select('business_type')
+        .eq('business_user_id', businessId)
+        .maybeSingle();
+      previousType = current?.business_type || null;
+    }
+
     // Update BusinessProfile
     if (Object.keys(profileFields).length > 0) {
       profileFields.updated_at = new Date().toISOString();
@@ -1483,7 +1516,7 @@ router.patch('/:businessId', verifyToken, validate(updateBusinessSchema), async 
     }
 
     // If business_type changed, apply entity-type side effects (fee override, nonprofit flags)
-    if (profileFields.business_type) {
+    if (profileFields.business_type && profileFields.business_type !== previousType) {
       applyEntityTypeSideEffects(businessId, profileFields.business_type, {
         actorUserId: userId,
         isTypeChange: true,
@@ -1600,47 +1633,26 @@ router.delete('/:businessId', verifyToken, async (req, res) => {
   try {
     const { businessId } = req.params;
     const userId = req.user.id;
-
-    const access = await checkBusinessPermission(businessId, userId);
-    if (!access.isOwner) {
-      return res.status(403).json({ error: 'Only the owner can delete a business' });
+    if (Joi.string().uuid().validate(businessId).error) {
+      return res.status(400).json({ error: 'Invalid business ID' });
     }
 
-    // Soft-delete: unpublish + deactivate seats and team
-    await supabaseAdmin
-      .from('BusinessProfile')
-      .update({ is_published: false, updated_at: new Date().toISOString() })
-      .eq('business_user_id', businessId);
-
-    // Deactivate all seats
-    await supabaseAdmin
-      .from('BusinessSeat')
-      .update({ is_active: false, deactivated_at: new Date().toISOString(), deactivated_reason: 'Business deleted' })
-      .eq('business_user_id', businessId);
-
-    // Remove all seat bindings for this business
-    const { data: seats } = await supabaseAdmin
-      .from('BusinessSeat')
-      .select('id')
-      .eq('business_user_id', businessId);
-    if (seats && seats.length > 0) {
-      await supabaseAdmin
-        .from('SeatBinding')
-        .delete()
-        .in('seat_id', seats.map(s => s.id));
+    // Authorization and every retirement write share one transaction. A
+    // failed write must not report success or strand a partially closed crew.
+    const { error } = await supabaseAdmin.rpc('retire_business_account', {
+      p_business_id: businessId,
+      p_actor_id: userId,
+    });
+    if (error) {
+      if (error.code === '42501') {
+        return res.status(403).json({ error: 'Only the owner can delete a business' });
+      }
+      logger.warn('Business deletion unavailable', { businessId, code: error.code });
+      return res.status(503).json({
+        error: 'Business closure is temporarily unavailable. Please try again.',
+        code: 'BUSINESS_DELETE_UNAVAILABLE',
+      });
     }
-
-    // Dual-write: also deactivate legacy BusinessTeam
-    await supabaseAdmin
-      .from('BusinessTeam')
-      .update({ is_active: false, left_at: new Date().toISOString() })
-      .eq('business_user_id', businessId);
-
-    // Mark the User row as deleted (soft)
-    await supabaseAdmin
-      .from('User')
-      .update({ account_type: 'individual', updated_at: new Date().toISOString() })
-      .eq('id', businessId);
 
     await writeAuditLog(businessId, userId, 'delete_business', 'User', businessId, {});
 
@@ -3527,7 +3539,9 @@ router.get('/:businessId/pages/:pageId/revisions', verifyToken, async (req, res)
       return res.status(500).json({ error: 'Failed to fetch revisions' });
     }
 
-    res.json({ revisions: revisions || [] });
+    // The teammate who published goes by their Local Profile, as the team list names them.
+    const people = await loadChatPeople((revisions || []).map((rev) => rev.publisher?.id));
+    res.json({ revisions: (revisions || []).map((rev) => ({ ...rev, publisher: chatPersonRow(rev.publisher, people) })) });
   } catch (err) {
     logger.error('Get revisions error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch revisions' });
@@ -3819,15 +3833,19 @@ router.get('/:businessId/reviews', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch reviews' });
     }
 
-    // Hydrate reviewer info
+    // Hydrate reviewer info: a writer goes by their Local Profile, as on their posts and comments
+    // (services/chatPeople.js).
     const reviewerIds = [...new Set((reviews || []).map(r => r.reviewer_id))];
     let reviewerMap = {};
     if (reviewerIds.length > 0) {
-      const { data: reviewers } = await supabaseAdmin
-        .from('User')
-        .select('id, username, name, first_name, last_name, profile_picture_url')
-        .in('id', reviewerIds);
-      (reviewers || []).forEach(u => { reviewerMap[u.id] = u; });
+      const [{ data: reviewers }, people] = await Promise.all([
+        supabaseAdmin
+          .from('User')
+          .select('id, username, name, first_name, last_name, profile_picture_url')
+          .in('id', reviewerIds),
+        loadChatPeople(reviewerIds),
+      ]);
+      (reviewers || []).forEach(u => { reviewerMap[u.id] = reviewerRow(u, people); });
     }
 
     // Hydrate gig info
@@ -4084,10 +4102,17 @@ router.patch('/:businessId/private', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'No permission to edit sensitive data' });
     }
 
+    const privateFields = updateBusinessPrivateSchema.validate(req.body, { abortEarly: false });
+    if (privateFields.error) {
+      // Legal/contact values must not be echoed into error responses or logs.
+      const details = privateFields.error.details.map(({ path, message }) => ({ field: path.join('.'), message }));
+      return res.status(400).json({ error: details[0].message, code: 'INVALID_BUSINESS_PRIVATE', details });
+    }
+
     const allowed = ['legal_name', 'tax_id_last4', 'support_email', 'banking_info', 'legal_doc_ids'];
     const updates = {};
     for (const key of allowed) {
-      if (req.body[key] !== undefined) updates[key] = req.body[key];
+      if (privateFields.value[key] !== undefined) updates[key] = privateFields.value[key];
     }
     updates.updated_at = new Date().toISOString();
 
@@ -4180,14 +4205,14 @@ router.post('/:businessId/inbox/start', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'This account cannot send messages' });
     }
 
-    // Verify business exists
+    // Verify business exists. A draft isn't public (its profile answers 404), so it takes no inquiries.
     const { data: biz } = await supabaseAdmin
       .from('User')
       .select('id, name')
       .eq('id', businessId)
       .eq('account_type', 'business')
       .single();
-    if (!biz) return res.status(404).json({ error: 'Business not found' });
+    if (!biz || await isUnpublishedBusiness(businessId)) return res.status(404).json({ error: 'Business not found' });
 
     const { isBlocked } = require('../services/blockService');
     if (await isBlocked(userId, businessId)) {
@@ -4258,7 +4283,7 @@ router.get('/:businessId/insights', verifyToken, async (req, res) => {
     const userId = req.user.id;
 
     // Permission check
-    const access = await checkBusinessPermission(businessId, userId, 'analytics.view');
+    const access = await checkBusinessPermission(businessId, userId, 'insights.view');
     if (!access.hasAccess) {
       return res.status(403).json({ error: 'You do not have permission to view insights' });
     }
@@ -4522,9 +4547,11 @@ router.get('/:businessId/matched-posts', verifyToken, async (req, res) => {
     }
 
     const readable = await readablePosts(posts || [], userId);
+    // Each writer goes by their Local Profile, as on the post itself (services/chatPeople.js).
+    const people = await loadChatPeople(readable.map((post) => post.creator?.id));
     res.json({
       posts: readable.map(({ id, title, content, post_type, like_count, comment_count, created_at, user_id, creator }) => (
-        { id, title, content, post_type, like_count, comment_count, created_at, user_id, creator })),
+        { id, title, content, post_type, like_count, comment_count, created_at, user_id, creator: chatPersonRow(creator, people) })),
       pagination: {
         page,
         page_size: pageSize,
@@ -4776,6 +4803,31 @@ router.get('/invoices/:invoiceId', verifyToken, async (req, res) => {
       return res.status(404).json({ error: 'Invoice not found', code: 'NOT_FOUND' });
     }
 
+    // Opening the recipient detail is the view event. A conditional update must
+    // never turn a concurrently paid or voided invoice back into a payable one.
+    if (invoice.status === 'sent') {
+      const { error: viewError } = await supabaseAdmin
+        .from('BusinessInvoice')
+        .update({ status: 'viewed' })
+        .eq('id', invoiceId)
+        .eq('recipient_user_id', userId)
+        .eq('status', 'sent');
+      if (viewError) {
+        logger.error('Record invoice view error', { error: viewError.message });
+        return res.status(500).json({ error: 'Failed to open invoice', code: 'INTERNAL_ERROR' });
+      }
+      const { data: current, error: currentError } = await supabaseAdmin
+        .from('BusinessInvoice')
+        .select('status')
+        .eq('id', invoiceId)
+        .eq('recipient_user_id', userId)
+        .single();
+      if (currentError || !current) {
+        return res.status(500).json({ error: 'Failed to open invoice', code: 'INTERNAL_ERROR' });
+      }
+      invoice.status = current.status;
+    }
+
     res.json({ invoice });
   } catch (err) {
     logger.error('Get received invoice error', { error: err.message });
@@ -4914,12 +4966,17 @@ router.post('/invoices/:invoiceId/pay', verifyToken, async (req, res) => {
 
     // Store the payment reference and mark as "viewed" (not "paid" yet —
     // the invoice transitions to "paid" only after Stripe confirms capture).
+    // The payment is priced at the business's rate now, which can differ from when the invoice was sent (its type
+    // was verified since, say); the invoice shows the fee actually taken.
+    const paymentFee = result.payment?.amount_platform_fee;
+    const feeCents = Number.isInteger(paymentFee) ? paymentFee : invoice.fee_cents;
     const { error: updateErr } = await supabaseAdmin
       .from('BusinessInvoice')
       .update({
         status: 'viewed',
         payment_id: result.paymentId,
         stripe_payment_intent_id: result.paymentIntentId,
+        fee_cents: feeCents,
       })
       .eq('id', invoiceId);
 
@@ -4932,7 +4989,7 @@ router.post('/invoices/:invoiceId/pay', verifyToken, async (req, res) => {
       payment_intent_id: result.paymentIntentId,
       payment_id: result.paymentId,
       amount_cents: invoice.total_cents,
-      fee_cents: invoice.fee_cents,
+      fee_cents: feeCents,
     });
   } catch (err) {
     logger.error('Pay invoice error', { error: err.message });
@@ -4982,20 +5039,20 @@ async function captureInvoicePayment(paymentId) {
 /**
  * Tells the business's owner that an invoice was paid, when it is: the money reaches the business's payout account
  * (or, without one, the owner's wallet) after the 48-hour review (processPendingTransfers says so again then), but
- * they should not have to open the app to find out.
+ * they should not have to open the app to find out. The payer goes by their Local Profile, as on the invoice list.
  */
 async function notifyInvoicePaid(invoice) {
   const ownerId = await getBusinessPrimaryOwnerId(invoice.business_user_id);
   if (!ownerId) return;
-  const [{ data: payer }, { data: payment }, { data: business }] = await Promise.all([
-    supabaseAdmin.from('User').select('name, username').eq('id', invoice.recipient_user_id).maybeSingle(),
+  const [people, { data: payment }, { data: business }] = await Promise.all([
+    loadChatPeople([invoice.recipient_user_id]),
     invoice.payment_id
       ? supabaseAdmin.from('Payment').select('amount_to_payee, payee_id').eq('id', invoice.payment_id).maybeSingle()
       : Promise.resolve({ data: null }),
     supabaseAdmin.from('User').select('name').eq('id', invoice.business_user_id).maybeSingle(),
   ]);
   const total = `$${(invoice.total_cents / 100).toFixed(2)}`;
-  const payerName = payer?.name || chosenUsernameOrNull(payer?.username) || 'A customer';
+  const payerName = people.get(String(invoice.recipient_user_id))?.displayName || 'A customer';
   const net = payment?.amount_to_payee ? `$${(payment.amount_to_payee / 100).toFixed(2)}` : null;
   const toBusiness = payment?.payee_id === invoice.business_user_id;
   const destination = toBusiness ? `${business?.name || "the business"}'s payout account` : 'your wallet';
@@ -5109,10 +5166,60 @@ const INVOICE_RECIPIENT_SOURCE_LIMIT = 200;
 const INVOICE_RECIPIENT_RESULT_LIMIT = 20;
 
 /**
+ * The people a crew already knows, the only ones it can invoice: those it invoiced before, who
+ * booked with it, whose task it accepted, who wrote to it in a direct chat, and the sender's own
+ * connections. A Map of id → relation, labelled by the first source to name them; within a
+ * source most recent first, at most INVOICE_RECIPIENT_SOURCE_LIMIT each. With onlyUserId, just
+ * that person when the crew knows them, however long ago. Never the crew or the sender; callers
+ * drop blocked people and business accounts.
+ */
+async function knownInvoiceRecipients(businessId, senderId, onlyUserId = null) {
+  const recent = (query, column, recency) => (onlyUserId
+    ? query.eq(column, onlyUserId).limit(1)
+    : query.order(recency, { ascending: false }).limit(INVOICE_RECIPIENT_SOURCE_LIMIT));
+  const connected = supabaseAdmin.from('Relationship').select('requester_id, addressee_id').eq('status', 'accepted');
+  const sources = await Promise.all([
+    recent(supabaseAdmin.from('BusinessInvoice').select('recipient_user_id')
+      .eq('business_user_id', businessId), 'recipient_user_id', 'created_at'),
+    recent(supabaseAdmin.from('Booking').select('invitee_user_id').eq('owner_type', 'business')
+      .eq('owner_id', businessId).not('invitee_user_id', 'is', null), 'invitee_user_id', 'created_at'),
+    recent(supabaseAdmin.from('Gig').select('user_id').eq('accepted_by', businessId), 'user_id', 'accepted_at'),
+    // A direct chat counts once the other person has written in it, not when the crew opened it:
+    // the crew's messages carry its id, whoever on its team sent them.
+    recent(supabaseAdmin.from('ChatParticipant')
+      .select('room:room_id!inner(type, member:ChatParticipant!inner(user_id), reply:ChatMessage!inner(user_id))')
+      .eq('user_id', businessId).eq('room.type', 'direct')
+      .neq('room.member.user_id', businessId).neq('room.reply.user_id', businessId)
+      .limit(1, { referencedTable: 'room.reply' }), 'room.member.user_id', 'joined_at'),
+    onlyUserId
+      ? connected.or([[senderId, onlyUserId], [onlyUserId, senderId]]
+        .map(([a, b]) => `and(requester_id.eq.${a},addressee_id.eq.${b})`).join(',')).limit(1)
+      : connected.or(`requester_id.eq.${senderId},addressee_id.eq.${senderId}`)
+        .order('accepted_at', { ascending: false, nullsFirst: false }).limit(INVOICE_RECIPIENT_SOURCE_LIMIT),
+  ]);
+  const failed = sources.find((r) => r.error);
+  if (failed) throw failed.error;
+  const [invoiced, booked, hired, wrote, connections] = sources.map((r) => r.data || []);
+
+  const known = new Map();
+  const excluded = new Set([businessId, senderId].map((id) => String(id).toLowerCase()));
+  const add = (id, relation) => {
+    if (id && !excluded.has(String(id).toLowerCase()) && !known.has(id)) known.set(id, relation);
+  };
+  invoiced.forEach((r) => add(r.recipient_user_id, 'invoiced'));
+  booked.forEach((r) => add(r.invitee_user_id, 'booked'));
+  hired.forEach((r) => add(r.user_id, 'hired'));
+  wrote.forEach((r) => r.room.member.forEach((m) => add(m.user_id, 'messaged')));
+  connections.forEach((r) => add(r.requester_id === senderId ? r.addressee_id : r.requester_id, 'connection'));
+  return known;
+}
+
+/**
  * GET /:businessId/invoice-recipients?q= — the people this crew can pick when sending an
- * invoice: those it already knows (invoiced before, booked with it, hired it for a task,
- * messaged it) and the sender's own connections, matched by name or username. Never an open
- * member search. Without q, the most recent ones. Editors and up, like sending an invoice.
+ * invoice: those it already knows (knownInvoiceRecipients: invoiced before, booked with it,
+ * hired it for a task, wrote to it) and the sender's own connections, each by their Local
+ * Profile (services/chatPeople.js) and matched by that name or handle. Never an open member
+ * search. Without q, the most recent ones. Editors and up, like sending an invoice.
  */
 router.get('/:businessId/invoice-recipients', verifyToken, async (req, res) => {
   try {
@@ -5126,64 +5233,34 @@ router.get('/:businessId/invoice-recipients', verifyToken, async (req, res) => {
 
     const query = String(req.query.q || '').trim().slice(0, 80).toLowerCase();
 
-    const { data: crewRooms } = await supabaseAdmin
-      .from('ChatParticipant')
-      .select('room_id')
-      .eq('user_id', businessId)
-      .limit(INVOICE_RECIPIENT_SOURCE_LIMIT);
-    const crewRoomIds = (crewRooms || []).map((r) => r.room_id);
-
-    const [invoiced, booked, hired, messaged, connections] = await Promise.all([
-      supabaseAdmin.from('BusinessInvoice').select('recipient_user_id, created_at')
-        .eq('business_user_id', businessId)
-        .order('created_at', { ascending: false }).limit(INVOICE_RECIPIENT_SOURCE_LIMIT),
-      supabaseAdmin.from('Booking').select('invitee_user_id, created_at')
-        .eq('owner_type', 'business').eq('owner_id', businessId).not('invitee_user_id', 'is', null)
-        .order('created_at', { ascending: false }).limit(INVOICE_RECIPIENT_SOURCE_LIMIT),
-      supabaseAdmin.from('Gig').select('user_id, accepted_at')
-        .eq('accepted_by', businessId)
-        .order('accepted_at', { ascending: false }).limit(INVOICE_RECIPIENT_SOURCE_LIMIT),
-      crewRoomIds.length === 0 ? { data: [] } : supabaseAdmin.from('ChatParticipant')
-        .select('user_id, joined_at, room:room_id!inner(type)')
-        .in('room_id', crewRoomIds).eq('room.type', 'direct').neq('user_id', businessId)
-        .order('joined_at', { ascending: false }).limit(INVOICE_RECIPIENT_SOURCE_LIMIT),
-      supabaseAdmin.from('Relationship').select('requester_id, addressee_id, accepted_at')
-        .eq('status', 'accepted').or(`requester_id.eq.${userId},addressee_id.eq.${userId}`)
-        .order('accepted_at', { ascending: false, nullsFirst: false }).limit(INVOICE_RECIPIENT_SOURCE_LIMIT),
-    ]);
-
-    // The first source to name someone gives their label; within a source, most recent first.
-    const relationById = new Map();
-    const add = (id, relation) => {
-      if (id && !relationById.has(id)) relationById.set(id, relation);
-    };
-    (invoiced.data || []).forEach((r) => add(r.recipient_user_id, 'invoiced'));
-    (booked.data || []).forEach((r) => add(r.invitee_user_id, 'booked'));
-    (hired.data || []).forEach((r) => add(r.user_id, 'hired'));
-    (messaged.data || []).forEach((r) => add(r.user_id, 'messaged'));
-    (connections.data || []).forEach((r) => add(r.requester_id === userId ? r.addressee_id : r.requester_id, 'connection'));
+    const relationById = await knownInvoiceRecipients(businessId, userId);
 
     const { blockedUserIds } = require('../services/blockService');
     const [crewBlocks, senderBlocks] = await Promise.all([blockedUserIds(businessId), blockedUserIds(userId)]);
-    for (const id of [businessId, userId, ...crewBlocks, ...senderBlocks]) relationById.delete(id);
+    for (const id of [...crewBlocks, ...senderBlocks]) relationById.delete(id);
 
     const order = [...relationById.keys()];
     if (order.length === 0) return res.json({ people: [] });
 
-    // Looked up in chunks so a crew that knows many people doesn't send one huge id list.
+    // Looked up (and named) in chunks so a crew that knows many people doesn't send one huge id list.
     const chunks = [];
     for (let i = 0; i < order.length; i += 100) chunks.push(order.slice(i, i + 100));
-    const lookups = await Promise.all(chunks.map((ids) => supabaseAdmin
-      .from('User')
-      .select('id, name, username, profile_picture_url, account_type')
-      .in('id', ids)));
+    const [lookups, namedChunks] = await Promise.all([
+      Promise.all(chunks.map((ids) => supabaseAdmin
+        .from('User')
+        .select('id, name, username, profile_picture_url, account_type')
+        .in('id', ids))),
+      Promise.all(chunks.map((ids) => loadChatPeople(ids))),
+    ]);
     const failed = lookups.find((r) => r.error);
     if (failed) throw failed.error;
 
     const byId = new Map(lookups.flatMap((r) => r.data || []).map((u) => [u.id, u]));
+    const named = new Map(namedChunks.flatMap((chunk) => [...chunk]));
     const people = order
       .map((id) => byId.get(id))
       .filter((u) => u && u.account_type !== 'business')
+      .map((u) => chatPersonRow(u, named))
       .filter((u) => !query
         || (u.name || '').toLowerCase().includes(query)
         || (u.username || '').toLowerCase().includes(query))
@@ -5224,18 +5301,24 @@ router.post('/:businessId/invoices', verifyToken, validate(createInvoiceSchema),
     // Validate recipient exists
     const { data: recipient } = await supabaseAdmin
       .from('User')
-      .select('id, name, username')
+      .select('id, name, username, account_type')
       .eq('id', recipient_user_id)
       .maybeSingle();
     if (!recipient) {
       return res.status(404).json({ error: 'Recipient not found', code: 'RECIPIENT_NOT_FOUND' });
     }
 
-    // A business can't invoice someone who has blocked it (or whom it has
-    // blocked). 422 (not 403) so clients show this message, which doesn't
-    // reveal the block; a failed block check refuses too.
+    // A business invoices only someone the recipient picker could offer: a person it already
+    // knows, not just anyone whose id the sender has, and not someone who has blocked it or the
+    // sender (or whom either has blocked). 422 (not 403) so clients show this message, which
+    // doesn't say which; a failed check refuses too.
     const { isBlocked } = require('../services/blockService');
-    if (await isBlocked(recipient_user_id, businessId)) {
+    const [known, blockedByCrew, blockedBySender] = await Promise.all([
+      knownInvoiceRecipients(businessId, userId, recipient_user_id),
+      isBlocked(recipient_user_id, businessId),
+      isBlocked(recipient_user_id, userId),
+    ]);
+    if (known.size === 0 || recipient.account_type === 'business' || blockedByCrew || blockedBySender) {
       return res.status(422).json({ error: 'Unable to send an invoice to this person.' });
     }
 
@@ -5389,8 +5472,10 @@ router.get('/:businessId/invoices', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch invoices' });
     }
 
+    // Each customer goes by their Local Profile, as in the recipient picker (services/chatPeople.js).
+    const people = await loadChatPeople((invoices || []).map((inv) => inv.recipient?.id));
     res.json({
-      invoices: invoices || [],
+      invoices: (invoices || []).map((inv) => ({ ...inv, recipient: chatPersonRow(inv.recipient, people) })),
       pagination: { page, page_size: pageSize, total: count || 0 },
     });
   } catch (err) {
@@ -5423,7 +5508,8 @@ router.get('/:businessId/invoices/:invoiceId', verifyToken, async (req, res) => 
       return res.status(404).json({ error: 'Invoice not found', code: 'NOT_FOUND' });
     }
 
-    res.json({ invoice });
+    const people = await loadChatPeople([invoice.recipient?.id]);
+    res.json({ invoice: { ...invoice, recipient: chatPersonRow(invoice.recipient, people) } });
   } catch (err) {
     logger.error('Get invoice error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch invoice', code: 'INTERNAL_ERROR' });

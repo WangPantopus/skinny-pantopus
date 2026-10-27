@@ -23,8 +23,9 @@ interface BusinessInboxApi {
     @GET("api/chat/business/{businessId}/rooms")
     suspend fun rooms(
         @Path("businessId") businessId: String,
-        @Query("limit") limit: Int = 200,
+        @Query("limit") limit: Int = 50,
         @Query("type") type: String? = null,
+        @Query("before") before: String? = null,
     ): BusinessInboxRoomsResponse
 
     /** `GET /api/businesses/:businessId/matched-posts` — neighborhood posts

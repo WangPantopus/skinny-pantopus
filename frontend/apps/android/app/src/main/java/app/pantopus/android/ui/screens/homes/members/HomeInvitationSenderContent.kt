@@ -217,7 +217,12 @@ private fun SenderTerminal(
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2), modifier = Modifier.testTag("homeSenderTerminal")) {
         Text(senderOutcomeText(original.request.intent.action, outcome), color = PantopusColors.appText)
         if (outcome.state == "completed" && original.request.intent.action != "withdraw") {
-            Text(senderDeliveryText(outcome), color = PantopusColors.appTextSecondary, modifier = Modifier.testTag("homeSenderDelivery"))
+            val canShareLink = homeInvitationSenderLink(original, BuildConfig.PANTOPUS_WEB_BASE_URL, completed = true) != null
+            Text(
+                senderDeliveryText(outcome, canShareLink),
+                color = PantopusColors.appTextSecondary,
+                modifier = Modifier.testTag("homeSenderDelivery"),
+            )
             SenderSharing(original, state, viewModel)
         }
     }
@@ -285,12 +290,17 @@ internal fun senderOutcomeText(
     }
 
 /** What reached the invitee: "emailed" means the email service took the message, not that it arrived. */
-internal fun senderDeliveryText(outcome: HomeInvitationSenderOutcome): String {
+internal fun senderDeliveryText(
+    outcome: HomeInvitationSenderOutcome,
+    canShareLink: Boolean = false,
+): String {
     val email =
         when (outcome.email) {
             "provider_accepted" -> "We emailed the invitation."
             "not_requested" -> null
-            else -> "We couldn't confirm the invitation email went out. You can share the invitation link instead."
+            else ->
+                "We couldn't confirm the invitation email went out." +
+                    if (canShareLink) " You can share the invitation link instead." else ""
         }
     val notice =
         when (outcome.inApp) {
@@ -299,7 +309,8 @@ internal fun senderDeliveryText(outcome: HomeInvitationSenderOutcome): String {
             else -> "We couldn't confirm their Pantopus notification."
         }
     return listOfNotNull(email, notice).joinToString(" ").ifEmpty {
-        "No email or notification was sent. Share the invitation link so they can accept."
+        "No email or notification was sent. " +
+            if (canShareLink) "Share the invitation link so they can accept." else "You can resend from Pending in Members."
     }
 }
 

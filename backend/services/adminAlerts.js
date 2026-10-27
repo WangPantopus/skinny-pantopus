@@ -1,7 +1,8 @@
 // ============================================================
 // ADMIN ALERTS — "usually within hours" is a promise a person has to
 // be able to keep. When a residency (or ownership) claim lands, the
-// founder/admin inbox gets one email with a link to the review queue.
+// founder/admin inbox gets one email with a link to the review queue;
+// reports and address watch cases do the same.
 //
 // Delivery is best-effort and never affects the request: no address in
 // the subject, no document contents in the body — the queue has those.
@@ -115,4 +116,146 @@ async function notifyReportToReview({ kind, reason, reportId }) {
   }
 }
 
-module.exports = { notifyClaimToReview, notifyReportToReview, recipients };
+/**
+ * A household removal vote passed, but the member it was about proved the address and contested it, so an
+ * AddressReviewCase (trigger removal_vote) waits for Pantopus and the member keeps access until it's decided
+ * (homeRemovalVoteService). One email per case with the case id and how to decide it; never names or the address.
+ * No admin screen lists these cases yet, so the email says which API calls do.
+ *
+ * @param {object} params
+ * @param {string} params.caseId
+ * @param {object} [params.home] The Home row (city, state): city only is printed.
+ * @returns {Promise<boolean>} true when an email was handed to the mailer.
+ */
+async function notifyRemovalVoteToReview({ caseId, home }) {
+  const to = recipients();
+  if (!to.length || !caseId) return false;
+
+  const where = [home && home.city, home && home.state].filter(Boolean).join(', ') || 'unknown area';
+  const subject = `[Pantopus] Contested household vote to review · ${where}`;
+  const resolve = `POST /api/admin/address-review/${caseId}/resolve`;
+  const text = [
+    'A household voted to remove a member who proved the address and contested the vote. They keep access until it\'s decided.',
+    '',
+    `Case: ${caseId}`,
+    `Area: ${where}`,
+    '',
+    `Decide it: ${resolve} with {"outcome": "approved"} to remove them, or "rejected" or "dismissed" to keep them.`,
+    'Open cases: GET /api/admin/address-review/queue',
+  ].join('\n');
+  const html = `<p>A household voted to remove a member who <strong>proved the address and contested</strong> the vote. They keep access until it’s decided.</p>
+<ul>
+  <li>Case: <code>${caseId}</code></li>
+  <li>Area: ${where}</li>
+</ul>
+<p>Decide it: <code>${resolve}</code> with <code>{"outcome": "approved"}</code> to remove them, or <code>"rejected"</code> or <code>"dismissed"</code> to keep them.</p>
+<p>Open cases: <code>GET /api/admin/address-review/queue</code></p>`;
+
+  try {
+    await emailService.sendEmail({ to: to.join(','), subject, text, html });
+    return true;
+  } catch (err) {
+    logger.warn('adminAlerts: removal-vote-to-review email failed (non-fatal)', { caseId, error: err.message });
+    return false;
+  }
+}
+
+/**
+ * The address watch opened a case in the address review queue: a request to live at a home, or a home many people
+ * are asking to live at, that a person should look at. One email per case addressReviewService.flagAddressWatch
+ * says to send. It carries the case, home and account ids, the signal codes and the city: never the street address,
+ * a name or a document. The queue has no screen yet, so the email names its admin API.
+ *
+ * @param {object} params
+ * @param {string} params.caseId
+ * @param {string} params.homeId
+ * @param {string|null} [params.userId]  null for a case about the home.
+ * @param {string[]} [params.signals]    Address watch signal codes (homeSecurityPolicy.ADDRESS_WATCH_SIGNALS).
+ * @param {object} [params.home]         The Home row (city, state) — city only is printed.
+ * @returns {Promise<boolean>} true when an email was handed to the mailer.
+ */
+async function notifyAddressWatchCase({ caseId, homeId, userId = null, signals = [], home = null }) {
+  const to = recipients();
+  if (!to.length || !caseId) return false;
+
+  const where = [home && home.city, home && home.state].filter(Boolean).join(', ') || 'unknown area';
+  const what = userId ? 'A request to live at a home' : 'A home';
+  const codes = (Array.isArray(signals) ? signals : []).filter((s) => /^[A-Z_]+$/.test(s)).join(', ') || 'none recorded';
+  const subject = `[Pantopus] Address watch case to review · ${where}`;
+  const lines = [
+    ['Case', caseId],
+    ['Home', homeId],
+    ...(userId ? [['Account', userId]] : []),
+    ['Signals', codes],
+    ['Area', where],
+  ];
+  const text = [
+    `${what} needs a look from the address watch.`,
+    '',
+    ...lines.map(([label, value]) => `${label}: ${value}`),
+    '',
+    'Read the queue (admin sign-in; no screen yet): GET /api/admin/address-review/queue',
+    'Close a case: POST /api/admin/address-review/<case id>/resolve',
+  ].join('\n');
+  const html = `<p>${what} needs a look from the address watch.</p>
+<ul>
+${lines.map(([label, value]) => `  <li>${label}: <code>${value}</code></li>`).join('\n')}
+</ul>
+<p>Read the queue (admin sign-in; no screen yet): <code>GET /api/admin/address-review/queue</code><br>
+Close a case: <code>POST /api/admin/address-review/&lt;case id&gt;/resolve</code></p>`;
+
+  try {
+    await emailService.sendEmail({ to: to.join(','), subject, text, html });
+    return true;
+  } catch (err) {
+    logger.warn('adminAlerts: address watch email failed (non-fatal)', { caseId, error: err.message });
+    return false;
+  }
+}
+
+/**
+ * Someone a household turned down while on probation proved the address by mail, so an AddressReviewCase (trigger
+ * probation_dispute) waits for Pantopus and their access stays off until it's decided (homePostcardVerificationService).
+ * One email per case with the case id and how to decide it; never names or the address. No admin screen lists these
+ * cases yet, so the email says which API calls do.
+ *
+ * @param {object} params
+ * @param {string} params.caseId
+ * @param {object} [params.home] The Home row (city, state): city only is printed.
+ * @returns {Promise<boolean>} true when an email was handed to the mailer.
+ */
+async function notifyProbationDisputeToReview({ caseId, home }) {
+  const to = recipients();
+  if (!to.length || !caseId) return false;
+
+  const where = [home && home.city, home && home.state].filter(Boolean).join(', ') || 'unknown area';
+  const subject = `[Pantopus] Probation dispute to review · ${where}`;
+  const resolve = `POST /api/admin/address-review/${caseId}/resolve`;
+  const text = [
+    'A household said no to someone on probation, and they proved the address by mail. Their access stays off until it\'s decided.',
+    '',
+    `Case: ${caseId}`,
+    `Area: ${where}`,
+    '',
+    `Decide it: ${resolve} with {"outcome": "approved"} to restore their membership, "rejected" to keep the household's no, or "dismissed" to close it without a decision (either way they can send proof again).`,
+    'Open cases: GET /api/admin/address-review/queue',
+  ].join('\n');
+  const html = `<p>A household said no to someone on probation, and they <strong>proved the address by mail</strong>. Their access stays off until it’s decided.</p>
+<ul>
+  <li>Case: <code>${caseId}</code></li>
+  <li>Area: ${where}</li>
+</ul>
+<p>Decide it: <code>${resolve}</code> with <code>{"outcome": "approved"}</code> to restore their membership, <code>"rejected"</code> to keep the household’s no, or <code>"dismissed"</code> to close it without a decision (either way they can send proof again).</p>
+<p>Open cases: <code>GET /api/admin/address-review/queue</code></p>`;
+
+  try {
+    await emailService.sendEmail({ to: to.join(','), subject, text, html });
+    return true;
+  } catch (err) {
+    logger.warn('adminAlerts: probation-dispute email failed (non-fatal)', { caseId, error: err.message });
+    return false;
+  }
+}
+
+module.exports = { notifyClaimToReview, notifyReportToReview, notifyRemovalVoteToReview, notifyAddressWatchCase,
+  notifyProbationDisputeToReview, recipients };

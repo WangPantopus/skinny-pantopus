@@ -36,7 +36,9 @@ const logger = require('../utils/logger');
 const { OLD_TO_NEW_PERM, homeAccessExpiresAt } = require('../utils/homeAccessPolicy');
 const homeAuthorityService = require('../services/homeAuthorityService');
 const homeExternalShareService = require('../services/homeExternalShareService');
+const homeInstantClaimService = require('../services/homeInstantClaimService');
 const { describeHomeActivity } = require('../utils/homeActivityLabels');
+const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
 const {
   checkHomePermission,
   getUserAccess,
@@ -304,6 +306,26 @@ router.delete('/:id/members/:userId', verifyToken, async (req, res) => {
 
 
 // ============================================================
+// POST /:id/members/:userId/confirm-claim — "Yes, they live here"
+// ============================================================
+// Home claims PR 3: someone who proved the address confirms a person whose access is a claim, and the claim's
+// grants come back to them (services/homeInstantClaimService.js). Removing them uses the member-removal review.
+
+router.post('/:id/members/:userId/confirm-claim', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  try {
+    const result = await homeInstantClaimService.confirmMember({
+      homeId: req.params.id, actorId: req.user.id, targetId: req.params.userId,
+    });
+    invalidateRoleCache?.(req.params.userId);
+    res.json({ ...result, message: 'Confirmed' });
+  } catch (err) {
+    res.status(err.statusCode || 503).json({ error: err.message, code: err.code });
+  }
+});
+
+
+// ============================================================
 // GET /:id/audit-log — View audit log
 // ============================================================
 
@@ -336,8 +358,11 @@ router.get('/:id/audit-log', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch audit log' });
     }
 
-    // A readable sentence beside each raw code, the same one the Home activity timeline shows.
-    res.json({ entries: (data || []).map((entry) => ({ ...entry, description: describeHomeActivity(entry) })) });
+    // A readable sentence beside each raw code, the same one the Home activity timeline shows. Actors go by the Local
+    // Profile they show neighbors (services/chatPeople.js), as on the timeline.
+    const people = await loadChatPeople((data || []).map((entry) => entry.actor?.id));
+    res.json({ entries: (data || []).map((entry) => ({ ...entry, actor: chatPersonRow(entry.actor, people),
+      description: describeHomeActivity(entry) })) });
   } catch (err) {
     logger.error('Audit log error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch audit log' });
