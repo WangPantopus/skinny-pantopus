@@ -42,7 +42,7 @@ class HomeMemberRemovalCodecTest {
         val prepared = fixture.codec.context(json, fixture.scope, fixture.serverSession, fixture.intent())
         assertTrue(prepared.summary.contains("Fixture Home\n@member_fixture"))
         assertTrue(prepared.summary.contains("Role: Member"))
-        for ((role, label) in listOf("lease_resident" to "Lease resident", "service_provider" to "Service provider")) {
+        for ((role, label) in listOf("lease_resident" to "Resident", "service_provider" to "Service provider")) {
             assertTrue(
                 fixture.codec.context(
                     json.replace("\"role_base\":\"member\"", "\"role_base\":\"$role\""),

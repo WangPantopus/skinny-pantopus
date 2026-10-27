@@ -266,7 +266,7 @@ public enum AdminClaimApprovalRole: String, Codable, CaseIterable, Sendable, Has
         case .admin: "Admin"
         case .manager: "Manager"
         case .member: "Member"
-        case .leaseResident: "Renter"
+        case .leaseResident: "Resident"
         case .restrictedMember: "Restricted member"
         case .guest: "Guest"
         }

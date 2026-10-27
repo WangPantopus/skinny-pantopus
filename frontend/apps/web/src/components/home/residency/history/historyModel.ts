@@ -17,7 +17,7 @@ export interface HistoryDetail { home_id: string; actor_id: string; item: Histor
 export const HISTORY_BASE = '/api/homes/residency-review-history';
 export const historyRoles: Record<string, string> = {
   owner: 'Owner', admin: 'Admin', manager: 'Manager', member: 'Member', restricted_member: 'Restricted member',
-  guest: 'Guest', lease_resident: 'Lease resident', service_provider: 'Service provider',
+  guest: 'Guest', lease_resident: 'Resident', service_provider: 'Service provider',
 };
 const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 const keys = (value: Record<string, unknown>, expected: string[]) => Object.keys(value).sort().join() === [...expected].sort().join();

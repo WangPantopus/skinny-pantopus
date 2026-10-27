@@ -31,7 +31,7 @@ test('all supported household roles remain visible and named Remove opens review
   jest.mocked(api.homeIam.getHomeMembers).mockResolvedValue({ occupants: [row('lease_resident'),
     row('service_provider', '10000000-0000-4000-8000-000000000004', 'fixture_provider')] } as never);
   render(<MembersPage/>);
-  await screen.findByRole('heading', { name: 'Lease members' });
+  await screen.findByRole('heading', { name: 'Residents' });
   expect(screen.getByRole('heading', { name: 'Service providers' })).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'Review removal of fixture_member' }));
   expect(mockPush).toHaveBeenCalledWith(`/app/homes/member-removals?home=${home}&target=${target}`);

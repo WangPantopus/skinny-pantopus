@@ -27,7 +27,7 @@ enum HomeResidencyReviewRole: String, Codable, CaseIterable {
     var label: String {
         switch self {
         case .member: "Member"
-        case .leaseResident: "Lease resident"
+        case .leaseResident: "Resident"
         case .restrictedMember: "Restricted member"
         case .guest: "Guest"
         case .serviceProvider: "Service provider"

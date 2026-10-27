@@ -9,8 +9,9 @@
 //  for feature palette files that need to encode a per-category
 //  background+foreground pair.
 //
-//  Backend roles (see `backend/utils/homePermissions.js` ROLE_RANK):
-//      owner / admin / manager / member / restricted_member / guest
+//  Backend roles (see `backend/utils/homeAccessPolicy.js` ROLE_RANK):
+//      owner / admin / manager / lease_resident / member /
+//      restricted_member / guest / service_provider
 //
 //  Wire role strings to a stable display label + icon + chip tint.
 //  Unknown / null roles collapse to `.member`.
@@ -25,8 +26,9 @@ public enum MemberRole: String, CaseIterable, Sendable, Hashable {
     case manager
     case member
     case restricted
-    case tenant
+    case leaseResident
     case guest
+    case serviceProvider
 
     /// Roles routed to the **Guests** tab. Everything else lands in
     /// the **Members** tab (assuming an active occupancy).
@@ -42,8 +44,9 @@ public enum MemberRole: String, CaseIterable, Sendable, Hashable {
         case "manager": return .manager
         case "member": return .member
         case "restricted_member", "restricted", "limited": return .restricted
-        case "tenant", "lease_resident": return .tenant
+        case "tenant", "lease_resident": return .leaseResident
         case "guest": return .guest
+        case "service_provider": return .serviceProvider
         default: return .member
         }
     }
@@ -56,8 +59,9 @@ public enum MemberRole: String, CaseIterable, Sendable, Hashable {
         case .manager: "Manager"
         case .member: "Member"
         case .restricted: "Limited"
-        case .tenant: "Tenant"
+        case .leaseResident: "Resident"
         case .guest: "Guest"
+        case .serviceProvider: "Service provider"
         }
     }
 
@@ -69,8 +73,9 @@ public enum MemberRole: String, CaseIterable, Sendable, Hashable {
         case .manager: .shieldCheck
         case .member: .user
         case .restricted: .lock
-        case .tenant: .fileText
+        case .leaseResident: .fileText
         case .guest: .clock
+        case .serviceProvider: .wrench
         }
     }
 
@@ -107,7 +112,7 @@ public enum MemberRole: String, CaseIterable, Sendable, Hashable {
                 background: Theme.Color.warningBg,
                 foreground: Theme.Color.warning
             )
-        case .tenant:
+        case .leaseResident:
             // Business violet: a rental relationship (closest neutral
             // identity tint we have without inventing a new token).
             MemberRolePalette(
@@ -116,6 +121,12 @@ public enum MemberRole: String, CaseIterable, Sendable, Hashable {
             )
         case .guest:
             // Neutral sunken with darker fg — short-term, low-trust.
+            MemberRolePalette(
+                background: Theme.Color.appSurfaceSunken,
+                foreground: Theme.Color.appTextSecondary
+            )
+        case .serviceProvider:
+            // Same neutral as a guest: works at the home, doesn't live there.
             MemberRolePalette(
                 background: Theme.Color.appSurfaceSunken,
                 foreground: Theme.Color.appTextSecondary

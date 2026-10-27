@@ -108,7 +108,7 @@ class HomeResidencyHistoryCodecTest {
             assertEquals("pending", item.currentClaimStatus)
             assertEquals("verified", item.status)
         }
-        assertEquals("Lease resident", historyRole("lease_resident"))
+        assertEquals("Resident", historyRole("lease_resident"))
         assertEquals("Service provider", historyRole("service_provider"))
     }
 
