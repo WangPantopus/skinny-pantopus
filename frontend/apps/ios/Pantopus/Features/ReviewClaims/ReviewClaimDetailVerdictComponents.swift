@@ -48,10 +48,103 @@ struct StatementBlock: View {
     }
 }
 
+// MARK: - Approval choices
+
+/// The role Accept grants, and the admin's identity attestation when the claim has no verified identity.
+struct ApprovalChoiceCard: View {
+    let detail: AdminClaimDetailResponse
+    @Binding var role: AdminClaimApprovalRole
+    @Binding var identityConfirmed: Bool
+    let disabled: Bool
+
+    private var claimedRole: AdminClaimApprovalRole {
+        .claimed(by: detail.claim.claimType)
+    }
+
+    private var identityVerified: Bool {
+        ReviewClaimDetailViewModel.identityVerified(detail)
+    }
+
+    private var identityFailed: Bool {
+        detail.claim.identityStatus == "failed"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.s3) {
+            Menu {
+                ForEach(AdminClaimApprovalRole.allCases) { option in
+                    Button(title(for: option)) { role = option }
+                        .accessibilityIdentifier("reviewClaimDetail_role_\(option.rawValue)")
+                }
+            } label: {
+                HStack(spacing: Spacing.s2) {
+                    Text(title(for: role))
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Theme.Color.appText)
+                    Spacer(minLength: Spacing.s2)
+                    Icon(.chevronDown, size: 16, color: Theme.Color.appTextSecondary)
+                }
+                .padding(.horizontal, Spacing.s3)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .background(Theme.Color.appSurface)
+                .clipShape(RoundedRectangle(cornerRadius: Radii.md))
+                .overlay(
+                    RoundedRectangle(cornerRadius: Radii.md)
+                        .stroke(Theme.Color.appBorder, lineWidth: 1)
+                )
+            }
+            .disabled(disabled)
+            .accessibilityIdentifier("reviewClaimDetail_approveAs")
+            .accessibilityLabel("Approve as \(role.label)")
+            Text(role.hint)
+                .pantopusTextStyle(.caption)
+                .foregroundStyle(Theme.Color.appTextSecondary)
+            if identityVerified {
+                HStack(spacing: Spacing.s1) {
+                    Icon(.badgeCheck, size: 14, color: Theme.Color.success)
+                    Text("Identity verified")
+                        .pantopusTextStyle(.caption)
+                        .foregroundStyle(Theme.Color.success)
+                }
+            } else if identityFailed {
+                HStack(spacing: Spacing.s1) {
+                    Icon(.alertCircle, size: 14, color: Theme.Color.error)
+                    Text("Their identity check failed, so this claim can't be approved.")
+                        .pantopusTextStyle(.caption)
+                        .foregroundStyle(Theme.Color.error)
+                }
+            } else {
+                Toggle("I confirmed this person's identity", isOn: $identityConfirmed)
+                    .font(.system(size: 14))
+                    .disabled(disabled)
+                    .accessibilityIdentifier("reviewClaimDetail_identityConfirmed")
+                Text("They haven't verified an ID in the app. Turn this on once you've checked who they are, "
+                    + "or verify an ID document above.")
+                    .pantopusTextStyle(.caption)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+            }
+        }
+        .padding(Spacing.s4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.Color.appSurface)
+        .clipShape(RoundedRectangle(cornerRadius: Radii.xl))
+        .overlay(
+            RoundedRectangle(cornerRadius: Radii.xl)
+                .stroke(Theme.Color.appBorderSubtle, lineWidth: 1)
+        )
+    }
+
+    private func title(for option: AdminClaimApprovalRole) -> String {
+        option == claimedRole ? "\(option.label) (what they claimed)" : option.label
+    }
+}
+
 // MARK: - Verdict bar
 
 struct VerdictBar: View {
     let reviewingAction: AdminClaimReviewAction?
+    var acceptLabel = "Accept claim"
+    var acceptEnabled = true
     let onAccept: () -> Void
     let onChallenge: () -> Void
     let onReject: () -> Void
@@ -60,14 +153,15 @@ struct VerdictBar: View {
         VStack(spacing: Spacing.s2) {
             VerdictButton(
                 style: .accept,
-                label: reviewingAction == .approve ? "Accepting…" : "Accept claim",
+                label: reviewingAction == .approve ? "Accepting…" : acceptLabel,
                 icon: .checkCircle,
                 isLoading: reviewingAction == .approve,
-                disabled: reviewingAction != nil,
+                disabled: reviewingAction != nil || !acceptEnabled,
                 action: onAccept
             )
+            .opacity(acceptEnabled || reviewingAction == .approve ? 1 : 0.5)
             .accessibilityIdentifier("reviewClaimDetail_accept")
-            .accessibilityLabel("Accept claim")
+            .accessibilityLabel(acceptLabel)
 
             HStack(spacing: Spacing.s2) {
                 VerdictButton(

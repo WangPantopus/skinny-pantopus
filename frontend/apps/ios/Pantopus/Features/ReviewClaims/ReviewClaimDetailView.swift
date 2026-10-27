@@ -193,6 +193,15 @@ public struct ReviewClaimDetailView: View {
                     } else if !isReviewable {
                         TerminalStateBanner(state: detail.claim.state)
                             .accessibilityIdentifier("reviewClaimDetail_terminal")
+                    } else {
+                        OverlineSection(title: "Approve as") {
+                            ApprovalChoiceCard(
+                                detail: detail,
+                                role: $viewModel.approveAs,
+                                identityConfirmed: $viewModel.identityConfirmed,
+                                disabled: viewModel.reviewingAction != nil
+                            )
+                        }
                     }
                 }
                 .padding(.horizontal, Spacing.s4)
@@ -201,6 +210,8 @@ public struct ReviewClaimDetailView: View {
                 if isReviewable {
                     VerdictBar(
                         reviewingAction: viewModel.reviewingAction,
+                        acceptLabel: viewModel.acceptLabel(detail),
+                        acceptEnabled: viewModel.canAccept(detail),
                         onAccept: { Task { _ = await viewModel.review(.approve) } },
                         onChallenge: { showChallengeSheet = true },
                         onReject: { showRejectSheet = true }
