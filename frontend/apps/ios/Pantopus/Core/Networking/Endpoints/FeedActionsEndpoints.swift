@@ -69,17 +69,6 @@ public enum FeedActionsEndpoints {
         )
     }
 
-    /// `DELETE /api/posts/mute` `{ entityType: "topic", entityId, areaId? }`
-    /// — undoes one topic mute from Pulse preferences. Route
-    /// `backend/routes/posts.js:2220`.
-    public static func unmutePulseTopic(_ topic: String, areaId: String?) -> Endpoint {
-        Endpoint(
-            method: .delete,
-            path: "/api/posts/mute",
-            body: FeedUnmuteTopicRequest(topic: topic, areaId: areaId)
-        )
-    }
-
     /// `POST /api/posts/:id/not-helpful` — community "this isn't useful
     /// here" signal. `surface` is normalised server-side to
     /// `nearby` / `connections`. Route `backend/routes/posts.js:3191`.

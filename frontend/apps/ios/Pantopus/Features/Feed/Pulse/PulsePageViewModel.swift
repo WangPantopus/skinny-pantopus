@@ -71,6 +71,8 @@ public final class PulsePageViewModel {
     public private(set) var toastKind: ToastKind = .error
     /// The card whose "Close this question?" is showing (Pulse S7).
     public var closingAskCardId: String?
+    /// "Seeing too much?" is due (Pulse S10.6, `PulseSeeingTooMuchLine.swift`).
+    var seeingTooMuchDue = false
 
     // Internal for the card actions (`PulsePageCardActions.swift`).
     let store: ScreenStore

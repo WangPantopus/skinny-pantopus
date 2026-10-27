@@ -113,20 +113,6 @@ public struct FeedMuteTopicRequest: Encodable, Sendable, Hashable {
     }
 }
 
-/// Body for `DELETE /api/posts/mute` undoing one topic mute: the one in
-/// `areaId`, or the everywhere mute without it.
-public struct FeedUnmuteTopicRequest: Encodable, Sendable, Hashable {
-    public let entityType: String
-    public let entityId: String
-    public let areaId: String?
-
-    public init(topic: String, areaId: String?) {
-        entityType = "topic"
-        entityId = topic
-        self.areaId = areaId
-    }
-}
-
 /// Body for `POST /api/posts/:id/not-helpful`.
 public struct FeedNotHelpfulRequest: Encodable, Sendable, Hashable {
     public let surface: String
