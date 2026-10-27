@@ -35,8 +35,9 @@ const TODAY = new Date().toISOString().slice(0, 10);
 function seedScannedMail(userId, kinds) {
   const homeId = `${userId}-home`;
   // Mail is a trusted-occupancy surface (utils/homeMailAccess): the fixture
-  // occupancy must be verified for the push to be owed.
-  getTable('HomeOccupancy').push({ user_id: userId, home_id: homeId, is_active: true, verification_status: 'verified' });
+  // occupancy must be verified, by proof of the address, for the push to be owed.
+  getTable('HomeOccupancy').push({ user_id: userId, home_id: homeId, is_active: true, verification_status: 'verified',
+    verification_source: 'address' });
   kinds.forEach((kind, i) => {
     const mailId = `${userId}-mail-${i}`;
     getTable('Mail').push({
@@ -49,6 +50,7 @@ function seedScannedMail(userId, kinds) {
       mail_object_type: kind === 'package' ? 'package' : 'envelope',
       subject: 'A piece of mail',
       created_at: new Date().toISOString(),
+      delivered_at: new Date(Date.now() - 60000).toISOString(),
       deleted_at: null,
     });
     getTable('MailRoutingQueue').push({

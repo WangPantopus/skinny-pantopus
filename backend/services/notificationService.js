@@ -1250,6 +1250,7 @@ async function notifyMailDelivered({
   address,
   amount,
   vendorName,
+  special = false,
 }) {
   // Determine the intent — prefer the compose flow's mailIntent,
   // fall back to mapping backend mail_type to an intent
@@ -1263,10 +1264,11 @@ async function notifyMailDelivered({
     vendorName,
   });
 
+  // A special delivery came on its own, outside the morning round (services/mailDelivery), and says so.
   return createNotification({
     userId: recipientUserId,
     type: 'mail_delivered',
-    title,
+    title: special ? 'Special delivery' : title,
     body,
     icon,
     link: `/app/mailbox/${mailId}`,

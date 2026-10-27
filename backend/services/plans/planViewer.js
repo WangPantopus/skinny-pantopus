@@ -16,8 +16,8 @@ const { isFreshGps } = require('./planRules');
 const { postScopeAccess } = require('../pulse/readAccess');
 
 const VERIFIED_SELECT = 'home_id, verification_status, verification_source, verified_at, is_active';
-// A household member in a trusted state (the same states that may read the household's mail,
-// utils/homeMailAccess.js): never a pending claim, which anyone can file on any address.
+// A household member in a trusted state (the household states in utils/homeMailAccess.js,
+// householdHomeIds): never a pending claim, which anyone can file on any address.
 const TRUSTED_OCCUPANCY_STATUSES = ['verified', 'provisional', 'provisional_bootstrap'];
 
 /** Coordinates of a Home row: its geography point, or the map center the setup flow stored. */

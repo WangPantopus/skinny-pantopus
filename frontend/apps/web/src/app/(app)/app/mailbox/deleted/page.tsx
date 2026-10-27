@@ -1,6 +1,5 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
 import type { DeletedMail } from '@pantopus/api';
 import { useDeletedMail, useRestoreMail } from '@/lib/mailbox-queries';
 import { toast } from '@/components/ui/toast-store';
@@ -14,7 +13,6 @@ const shortDate = (iso: string) =>
  * after 30 days the nightly purge removes it.
  */
 export default function RecentlyDeletedPage() {
-  const router = useRouter();
   const { data: items, isLoading, error, refetch } = useDeletedMail();
   const restore = useRestoreMail();
 
@@ -30,16 +28,6 @@ export default function RecentlyDeletedPage() {
       {/* Header */}
       <div className="px-4 py-3 border-b border-app-border-subtle flex-shrink-0">
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => router.push('/app/mailbox')}
-            className="md:hidden p-1 text-app-text-secondary hover:text-app-text-strong"
-            aria-label="Back to mailbox"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
           <h1 className="text-base font-semibold text-app-text">
             Recently deleted
           </h1>

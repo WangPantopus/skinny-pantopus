@@ -110,13 +110,15 @@ async function collectInternalContext(userId, homeId = null, timezone = 'UTC') {
 
     // Launch cut #10 (Mailbox): no mail in the Hub Today card or the briefings
     // while the mailbox is off.
+    // A piece waiting for its morning round isn't there yet (SRV-1).
     unreadMail: !mailbox ? Promise.resolve({ count: 0 }) : supabaseAdmin
       .from('Mail')
       .select('id', { count: 'exact', head: true })
       .eq('recipient_user_id', userId)
       .in('lifecycle', ['delivered', 'opened'])
       .eq('archived', false)
-      .is('deleted_at', null),
+      .is('deleted_at', null)
+      .lte('delivered_at', now.toISOString()),
 
     urgentMail: !mailbox ? Promise.resolve({ count: 0 }) : supabaseAdmin
       .from('Mail')
@@ -125,6 +127,7 @@ async function collectInternalContext(userId, homeId = null, timezone = 'UTC') {
       .in('lifecycle', ['delivered', 'opened'])
       .eq('archived', false)
       .is('deleted_at', null)
+      .lte('delivered_at', now.toISOString())
       .neq('urgency', 'none'),
 
     activeGigs: supabaseAdmin

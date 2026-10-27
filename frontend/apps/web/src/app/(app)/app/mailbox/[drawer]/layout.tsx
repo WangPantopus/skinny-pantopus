@@ -4,19 +4,14 @@ import { use, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import type { MailItemV2 } from '@/types/mailbox';
 import type { BundleItem } from '@/types/mailbox';
-import { useDrawerItems, useMarkItemOpened } from '@/lib/mailbox-queries';
+import { useQueryClient } from '@tanstack/react-query';
+import { mailboxKeys, useDrawerItems, useMarkItemOpened } from '@/lib/mailbox-queries';
 import { MailItemCard, BundleCard, OfferCard, EmptyState, isMailRead } from '@/components/mailbox';
+import { DRAWER_LABELS, isMailboxDrawer, type MailboxDrawer } from '@/components/mailbox/MailboxHeader';
 import ErrorState from '@/components/ui/ErrorState';
 
 // ── Types ────────────────────────────────────────────────────
-type DrawerParam = 'personal' | 'home' | 'business' | 'earn';
-
-const DRAWER_LABELS: Record<string, string> = {
-  personal: 'Personal',
-  home: 'Home',
-  business: 'Business',
-  earn: 'Earn',
-};
+type DrawerParam = MailboxDrawer;
 
 const MAIL_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -79,11 +74,15 @@ export default function DrawerLayout({
   // letter's id as the drawer. Open the letter's existing detail page instead,
   // without loading a drawer by that id (it would fail and show an error).
   const isLetterLink = MAIL_ID.test(drawerParam);
+  // Any other word in the drawer's place (an old Mail Day link such as
+  // /app/mailbox/mailday, or Earn while it's hidden) opens Me.
+  const isUnknown = !isLetterLink && !isMailboxDrawer(drawerParam);
   useEffect(() => {
+    if (isUnknown) { router.replace('/app/mailbox/personal'); return; }
     if (!isLetterLink) return;
     const scope = new URLSearchParams(window.location.search).get('scope');
     router.replace(`/app/mailbox/${scope === 'home' ? 'home' : 'personal'}/${drawerParam.toLowerCase()}`);
-  }, [isLetterLink, drawerParam, router]);
+  }, [isLetterLink, isUnknown, drawerParam, router]);
 
   // ── State ───────────────────────────────────────────────
   const [filter, setFilter] = useState('');
@@ -120,8 +119,9 @@ export default function DrawerLayout({
     limit: 20,
     tab: 'incoming',
     filter: filter || undefined,
-  }, { enabled: !isLetterLink });
+  }, { enabled: !isLetterLink && !isUnknown });
   const markOpened = useMarkItemOpened();
+  const queryClient = useQueryClient();
 
   // Accumulate items for infinite scroll. A refetched later page (after a
   // retry or an invalidation) must not add its rows twice.
@@ -192,27 +192,28 @@ export default function DrawerLayout({
   const hasNewItems = unreadItems.length > 0 && readItems.length > 0;
 
   // A letter link has no drawer to show while it opens the letter.
-  if (isLetterLink) {
+  if (isLetterLink || isUnknown) {
     return (
-      <div className="flex items-center justify-center h-full" role="status" aria-label="Opening your letter">
+      <div className="flex items-center justify-center h-full min-h-[200px]" role="status" aria-label={isLetterLink ? 'Opening your letter' : 'Opening your mailbox'}>
         <div className="w-6 h-6 border-2 border-app-border border-t-gray-600 rounded-full animate-spin" />
       </div>
     );
   }
 
+  // Phones scroll the page (the Mailbox layout); from md up the list and the
+  // letter scroll side by side.
   return (
-    <div className="flex h-full overflow-hidden">
+    <div className="md:flex md:h-full md:overflow-hidden">
       {/* ── List panel ───────────────────────────────────── */}
       <div
-        className={`flex flex-col h-full flex-shrink-0 border-r border-app-border bg-app-surface ${
+        className={`flex flex-col md:h-full flex-shrink-0 md:border-r border-app-border bg-app-surface ${
           isItemView ? 'hidden md:flex md:w-[360px]' : 'w-full md:w-[360px]'
         }`}
       >
-        {/* Header */}
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-app-border-subtle flex-shrink-0">
-          <h1 className="text-base font-semibold text-app-text flex-1">
-            {DRAWER_LABELS[drawer] || drawer}
-          </h1>
+        {/* Header: the drawer and tab are in the Mailbox's chips and tabs above */}
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-app-border-subtle flex-shrink-0">
+          <h2 className="sr-only">{DRAWER_LABELS[drawer]} · Incoming</h2>
+          <div className="flex-1" />
 
           {/* Filter dropdown */}
           <select
@@ -264,7 +265,7 @@ export default function DrawerLayout({
         )}
 
         {/* Item list */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="md:flex-1 md:overflow-y-auto">
           {isPending && page === 1 ? (
             // Loading skeleton
             <div className="p-3 space-y-2">
@@ -287,7 +288,8 @@ export default function DrawerLayout({
                   ? "Can't reach Pantopus. Check your connection and try again."
                   : 'Something went wrong on our side. Please try again.'
               }
-              onRetry={() => { void refetch(); }}
+              // The drawer counts (chips and the Mail badge) failed with the list; bring them back too.
+              onRetry={() => { void refetch(); void queryClient.invalidateQueries({ queryKey: mailboxKeys.drawers() }); }}
             />
           ) : filteredItems.length === 0 ? (
             debouncedSearch ? (
@@ -307,7 +309,7 @@ export default function DrawerLayout({
             )
           ) : (
             <div>
-              <div role="list" aria-label={`${DRAWER_LABELS[drawer] || drawer} mail items`}>
+              <div role="list" aria-label={`${DRAWER_LABELS[drawer]} mail`}>
               {/* Unread items */}
               {unreadItems.map((item) => (
                 <div role="listitem" key={item.id}>
@@ -381,7 +383,7 @@ export default function DrawerLayout({
 
       {/* ── Detail panel ─────────────────────────────────── */}
       <div
-        className={`flex-1 min-w-0 overflow-hidden ${
+        className={`md:flex-1 min-w-0 md:overflow-hidden ${
           isItemView ? '' : 'hidden md:block'
         }`}
       >

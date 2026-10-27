@@ -1,21 +1,25 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { parseDisplayDate } from '@pantopus/ui-utils';
 import type { MailItemV2 } from '@/types/mailbox';
 import { useCounterItems } from '@/lib/mailbox-queries';
 import { UrgencyIndicator, DrawerBadge, TrustBadge } from '@/components/mailbox';
+import { DRAWER_LABELS, isMailboxDrawer } from '@/components/mailbox/MailboxHeader';
 
 /**
- * Counter page — shows all action-required items.
+ * Counter page — the action-required items of the drawer chosen in the
+ * Mailbox's chips (`?drawer=`, Me by default).
  * Sorted: overdue first, then by due_date ascending.
  */
 export default function CounterPage() {
   const router = useRouter();
+  const drawerParam = useSearchParams().get('drawer');
+  const drawer = isMailboxDrawer(drawerParam) ? drawerParam : 'personal';
   const { data: items, isLoading, error, refetch } = useCounterItems();
 
   // Sort: overdue first, then by due_date
-  const sorted = [...(items ?? [])].sort((a, b) => {
+  const sorted = (items ?? []).filter((item) => item.drawer === drawer).sort((a, b) => {
     const aOverdue = a.urgency === 'overdue' ? 0 : 1;
     const bOverdue = b.urgency === 'overdue' ? 0 : 1;
     if (aOverdue !== bOverdue) return aOverdue - bOverdue;
@@ -26,21 +30,12 @@ export default function CounterPage() {
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      {/* Header */}
+      {/* Header: the Mailbox's chips and tabs above name the drawer and the Counter */}
       <div className="px-4 py-3 border-b border-app-border-subtle flex-shrink-0">
         <div className="flex items-center gap-2">
-          <button aria-label="Back"
-            type="button"
-            onClick={() => router.push('/app/mailbox')}
-            className="md:hidden p-1 text-app-text-secondary hover:text-app-text-strong"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-          <h1 className="text-base font-semibold text-app-text">
-            Needs Attention
-          </h1>
+          <h2 className="text-base font-semibold text-app-text">
+            Needs Attention<span className="sr-only"> · {DRAWER_LABELS[drawer]}</span>
+          </h2>
           {sorted.length > 0 && (
             <span className="text-xs text-app-text-secondary">
               {sorted.length} item{sorted.length !== 1 ? 's' : ''}

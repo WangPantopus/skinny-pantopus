@@ -298,6 +298,8 @@ router.get('/', verifyToken, async (req, res) => {
           .in('lifecycle', ['delivered', 'opened'])
           .eq('archived', false)
           .is('deleted_at', null)
+          // A piece waiting for its morning round isn't there yet (SRV-1).
+          .lte('delivered_at', new Date().toISOString())
       ).catch(() => ({ data: null })),
       // Launch cut #4 (Open Gigs): the open-tasks-nearby count is hidden for the first launch.
       gigsNearby: !isLaunchFeatureEnabled('open_gigs') ? Promise.resolve({ count: 0 }) : Promise.resolve(
