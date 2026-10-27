@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const homeRecordService = require('../services/homeRecordService');
 // canAccessMail: the per-item rule, shared with the v2 mailbox routes.
-const { getAccessibleHomeIds, trustedHomeIdsOrThrow, canAccessMail, homeMailFilter, visibleMailFilter,
+const { getAccessibleHomeIds, trustedHomeIdsOrThrow, canAccessMail, readableMail, homeMailFilter, visibleMailFilter,
   restorableMail, isDeletedMail, removedMailInfo, sendHomeMailRemovedNotice, MAIL_RESTORE_DAYS } = require('../utils/homeMailAccess');
 const { HOME_DOCUMENT_TYPES } = require('../utils/homeDocumentAccess');
 const verifyToken = require('../middleware/verifyToken');
@@ -2837,11 +2837,13 @@ router.patch('/:id/view', verifyToken, async (req, res) => {
     const { id } = req.params;
     const userId = req.user.id;
 
-    // A deleted letter (recoverable) cannot be read or marked until restored.
-    if (await isDeletedMail({ id })) return res.status(404).json({ error: 'Mail not found' });
+    // The Mailbox's own rule decides who may open a letter (the caller's own, or a Home letter the Home mail rule shows
+    // them), as on every other mailbox route; a deleted letter (recoverable) can't be read or marked until restored.
+    // mark_mail_viewed decided by the mailbox.view permission, which only owners have by default, so a household member
+    // opening a household letter got 400 and it stayed unread.
+    if (!(await readableMail(id, userId))) return res.status(404).json({ error: 'Mail not found' });
 
-    // Use the SQL function to mark as viewed
-    const { data, error } = await supabaseAdmin.rpc('mark_mail_viewed', {
+    const { data, error } = await supabaseAdmin.rpc('mark_mail_viewed_by_reader', {
       p_mail_id: id,
       p_user_id: userId
     });
