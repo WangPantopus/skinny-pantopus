@@ -7,35 +7,26 @@ type VaultFolderCardProps = {
   onClick?: () => void;
 };
 
+/** A Vault folder drawn as a manila folder with its tab (Mail tab drawings, R10-Vault). */
 export default function VaultFolderCard({ folder, onClick }: VaultFolderCardProps) {
+  const count = folder.item_count ?? 0;
   return (
     <button
       type="button"
       onClick={onClick}
-      className="w-full flex items-center gap-3 p-3 rounded-lg border border-app-border hover:bg-app-hover dark:hover:bg-gray-800 transition-colors text-left"
+      aria-label={`${folder.label}, ${count === 0 ? 'nothing filed' : `${count} ${count === 1 ? 'piece' : 'pieces'}`}`}
+      className="group block w-full rounded-[10px] text-left text-[#111827] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
     >
-      {/* Folder icon with color */}
-      <div
-        className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
-        style={{ backgroundColor: folder.color ? `${folder.color}20` : undefined }}
-      >
-        <span className="text-xl" role="img" aria-label={folder.label}>
-          {folder.icon || '📁'}
+      <div aria-hidden="true" className="h-3 w-[46%] rounded-t-[7px] bg-[#e6cf92]" />
+      <div className="flex h-[76px] flex-col justify-between rounded-b-[10px] rounded-tr-[10px] bg-[#f3e3b5] px-3 py-2.5 shadow-sm transition group-hover:brightness-[0.97]">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="truncate text-[15px] font-semibold leading-5">{folder.label}</span>
+          <span aria-hidden="true" className="flex-shrink-0 text-[13px] leading-[18px] text-[#5c4410]">{count}</span>
+        </div>
+        <span aria-hidden="true" className="truncate text-xs leading-4 text-[#5c4410]">
+          {count === 0 ? 'Nothing filed yet' : folder.last_item_preview || `${count} ${count === 1 ? 'piece' : 'pieces'}`}
         </span>
       </div>
-
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-app-text truncate">
-          {folder.label}
-        </p>
-        <p className="text-xs text-app-text-secondary mt-0.5">
-          {folder.item_count} item{folder.item_count !== 1 ? 's' : ''}
-        </p>
-      </div>
-
-      <svg className="w-4 h-4 text-app-text-muted flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-      </svg>
     </button>
   );
 }

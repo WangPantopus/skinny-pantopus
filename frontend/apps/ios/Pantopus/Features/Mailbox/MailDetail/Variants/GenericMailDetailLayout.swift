@@ -8,6 +8,13 @@
 //  DTO. Extracted from the inlined fallback in `MailDetailView.swift`
 //  so the dispatcher routes to a real bespoke file in every case.
 //
+//  The Mail tab's letter page (boards "R5-Bill", "R6-Envelope"): when the
+//  server sends the piece as mail (`content.letter`), the same shell holds
+//  the envelope, Pantopus's note clipped to the letter, the letter on
+//  paper with its enclosures, a bundle's pieces, and the actions (Pay,
+//  Acknowledge, the counter, the Vault, Shred). The cards below stay for
+//  the sample seam and a server without those fields.
+//
 
 import SwiftUI
 
@@ -34,8 +41,94 @@ struct GenericMailDetailLayout: View {
     /// Tile currently POSTing to `/item/:id/action`.
     var categoryActionInFlight: MailCategoryAction?
     var onCategoryAction: (@MainActor (MailCategoryAction) -> Void)?
+    /// The letter page's state and taps; nil keeps the cards.
+    var letterHooks: MailLetterPageHooks?
 
     var body: some View {
+        if let letter = content.letter, let letterHooks {
+            letterPage(letter, hooks: letterHooks)
+        } else {
+            cards
+        }
+    }
+
+    /// The envelope, Pantopus's note, the letter (or a bundle's pieces) and the actions.
+    private func letterPage(_ letter: MailLetter, hooks: MailLetterPageHooks) -> some View {
+        MailItemDetailShell(
+            topBar: letterTopBar,
+            hero: {
+                MailEnvelopeButton(piece: letter.piece, onTap: hooks.onEnvelope)
+            },
+            body: {
+                VStack(alignment: .leading, spacing: Spacing.s0) {
+                    if let summary = letter.summary {
+                        // Clipped to the top of the letter, over its edge.
+                        MailReadForYouNote(summary: summary, isBill: letter.kind == .bill)
+                            .padding(.horizontal, 6)
+                            .padding(.top, Spacing.s3)
+                            .padding(.bottom, -18)
+                            .zIndex(1)
+                    }
+                    if let booklet = content.bookletDetail {
+                        // A booklet pages through.
+                        BookletPager(pages: booklet.pages, pageCount: booklet.pageCount, ocrTexts: booklet.ocrTexts)
+                            .padding(.top, Spacing.s2)
+                    } else if letter.kind == .bundle {
+                        MailBundleContents(
+                            pieces: hooks.bundlePieces,
+                            failure: hooks.bundleFailure,
+                            isLoading: hooks.bundleLoading,
+                            onOpen: hooks.onOpenPiece,
+                            onRetry: hooks.onRetryBundle
+                        )
+                        .padding(.top, Spacing.s2)
+                    } else {
+                        MailLetterPaper(
+                            letter: letter,
+                            openingEnclosure: hooks.openingEnclosure,
+                            onOpenEnclosure: hooks.onOpenEnclosure
+                        )
+                        .padding(.top, letter.summary == nil ? Spacing.s2 : Spacing.s0)
+                    }
+                }
+            },
+            actions: {
+                MailLetterActions(
+                    letter: letter,
+                    inFlight: hooks.inFlight,
+                    removed: hooks.removed,
+                    restoreInFlight: hooks.restoreInFlight,
+                    onAction: hooks.onAction,
+                    onRestore: hooks.onRestore
+                )
+            }
+        )
+        .accessibilityIdentifier("mailDetail_letter")
+    }
+
+    /// Back to the Mail tab, and the "…" menu: Translate and Create task
+    /// when they're open to this person.
+    private var letterTopBar: MailTopBarConfig {
+        var items: [MailOverflowItem] = []
+        if let onTranslate {
+            items.append(MailOverflowItem(id: "translate", icon: .globe, label: "Translate") { @Sendable in
+                Task { @MainActor in onTranslate() }
+            })
+        }
+        if let onCreateTask {
+            items.append(MailOverflowItem(id: "createTask", icon: .listChecks, label: "Create task") { @Sendable in
+                Task { @MainActor in onCreateTask() }
+            })
+        }
+        return MailTopBarConfig(
+            eyebrow: nil,
+            trust: content.detailTrust,
+            onBack: { @Sendable in Task { @MainActor in onBack() } },
+            overflowItems: items
+        )
+    }
+
+    private var cards: some View {
         MailItemDetailShell(
             topBar: topBar,
             aiElf: aiElf,
@@ -699,4 +792,23 @@ private struct MailActionsFlowLayout: Layout {
             rowHeight = max(rowHeight, size.height)
         }
     }
+}
+
+/// What the letter page needs from its screen: what's in flight, a
+/// bundle's pieces, and where each tap goes.
+struct MailLetterPageHooks {
+    var inFlight: MailLetterAction?
+    var openingEnclosure: String?
+    var bundlePieces: [MailPieceModel]
+    var bundleLoading: Bool
+    var bundleFailure: String?
+    /// Shredded (or dismissed for the household): Bring it back instead of the actions.
+    var removed: MailRemovedDTO?
+    var restoreInFlight: Bool
+    let onEnvelope: () -> Void
+    let onAction: (MailLetterAction) -> Void
+    let onOpenEnclosure: (MailEnclosure) -> Void
+    let onOpenPiece: (String) -> Void
+    let onRetryBundle: () -> Void
+    let onRestore: () -> Void
 }

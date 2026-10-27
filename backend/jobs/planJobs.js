@@ -28,6 +28,7 @@ const rules = require('../services/plans/planRules');
 const planService = require('../services/plans/planService');
 const planChat = require('../services/plans/planChat');
 const planNotify = require('../services/plans/planNotifications');
+const { isLaunchFeatureEnabled } = require('../utils/featureFlags');
 const { activeRequests, waitingRequests, userNames, firstOf } = require('../services/plans/planActions');
 
 const PLAN_NOTICE_TYPES = [
@@ -292,6 +293,10 @@ async function sendReminders() {
 
 async function sendHostSummaries() {
   const now = Date.now();
+  // With the mailbox on, the summary is a letter in the 7 a.m. round of the plan's day (Mail tab, SRV-9); with it
+  // off, the push at 8 as before.
+  const asLetter = isLaunchFeatureEnabled('mailbox');
+  const fromHour = asLetter ? 7 : 8;
   const { data: today, error } = await supabaseAdmin
     .from('Plan')
     .select(planService.PLAN_SELECT)
@@ -305,21 +310,24 @@ async function sendHostSummaries() {
   for (const plan of today || []) {
     const tz = rules.timezoneForPlan(plan);
     const local = rules.localParts(new Date(now), tz);
-    if (rules.localParts(new Date(plan.post.event_date), tz).date !== local.date || local.hour < 8) continue;
-    // A plan posted after 8 AM on its day gets no summary: the host just made it.
-    const eightAm = rules.zonedInstant(local.year, local.month, local.day, 8, 0, tz);
-    if (new Date(plan.created_at).getTime() >= eightAm.getTime()) continue;
+    if (rules.localParts(new Date(plan.post.event_date), tz).date !== local.date || local.hour < fromHour) continue;
+    // A plan posted after that hour on its day gets no summary: the host just made it.
+    const cutoff = rules.zonedInstant(local.year, local.month, local.day, fromHour, 0, tz);
+    if (new Date(plan.created_at).getTime() >= cutoff.getTime()) continue;
     const { data: claimed } = await supabaseAdmin.from('Plan')
       .update({ host_summary_sent_at: iso(now) }).eq('post_id', plan.post_id).is('host_summary_sent_at', null).select('post_id');
     if (!claimed || claimed.length === 0) continue;
     const requests = await activeRequests(plan.post_id);
     const going = planService.seatsTaken(plan, requests);
-    await planNotify.hostSummary({
+    const summary = {
       plan,
       comingCount: going,
       spotsLeft: Math.max(0, plan.spots - going),
       requestsCount: (await waitingRequests(plan, requests)).length,
-    });
+    };
+    // The letter takes the push's place; one that can't be written leaves the push to go as before.
+    const letter = asLetter ? await planNotify.hostSummaryLetter({ ...summary, roundAt: cutoff }) : null;
+    if (!letter) await planNotify.hostSummary(summary);
     sent += 1;
   }
   return sent;

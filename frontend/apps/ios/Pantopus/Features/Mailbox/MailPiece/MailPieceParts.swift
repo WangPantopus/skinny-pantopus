@@ -58,7 +58,7 @@ struct MailTrustLine: View {
         switch trust {
         case .business, .government, .utility: MailPaper.verifiedInk
         case .pantopus: MailPaper.pantopusInk
-        case .neighbor: MailPaper.printSoft
+        case .pantopusBusiness, .neighbor: MailPaper.printSoft
         case .unknown: MailPaper.warningInk
         }
     }

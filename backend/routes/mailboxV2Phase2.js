@@ -469,10 +469,17 @@ router.post('/bundle/action', validate(bundleActionSchema), async (req, res, nex
       if (itemsError) throw itemsError;
 
       const ids = (items || []).map(i => i.id);
-      const { error: openError } = await supabaseAdmin
+      // Opened, and out of "delivered"; a filed piece stays filed.
+      const opened = await supabaseAdmin
         .from('Mail')
-        .update({ lifecycle: 'opened', opened_at: new Date().toISOString() })
-        .in('id', ids);
+        .update({ opened_at: new Date().toISOString() })
+        .in('id', ids)
+        .is('opened_at', null);
+      const { error: openError } = opened.error ? opened : await supabaseAdmin
+        .from('Mail')
+        .update({ lifecycle: 'opened' })
+        .in('id', ids)
+        .eq('lifecycle', 'delivered');
       if (openError) {
         logger.error('Bundle open_all failed', { bundleId, error: openError.message });
         return res.status(500).json({ error: "Couldn't open this bundle. Please try again." });
@@ -598,7 +605,8 @@ router.post('/certified/acknowledge', validate(acknowledgeSchema), async (req, r
         acknowledged_at: now,
         acknowledged_by: req.user.id,
         audit_trail: auditTrail,
-        ...(mail.opened_at ? {} : { lifecycle: 'opened', opened_at: readAt }),
+        // A filed piece stays filed.
+        ...(mail.opened_at ? {} : { opened_at: readAt, ...(!mail.lifecycle || mail.lifecycle === 'delivered' ? { lifecycle: 'opened' } : {}) }),
       })
       .eq('id', mailId);
     // supabase-js reports a failed write instead of throwing: without this

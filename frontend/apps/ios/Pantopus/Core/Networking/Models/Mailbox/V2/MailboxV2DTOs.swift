@@ -168,6 +168,8 @@ public struct MailboxV2ItemResponse: Decodable, Sendable, Hashable {
         public let packageInfo: JSONValue?
         public let packageTimeline: [JSONValue]
         public let objectPayload: JSONValue?
+        /// A bundle's pieces this person may read, newest first (bundle only).
+        public let pieces: [DrawerItemsResponse.DrawerMail]
 
         public var id: String {
             base.id
@@ -183,6 +185,7 @@ public struct MailboxV2ItemResponse: Decodable, Sendable, Hashable {
             packageInfo = try c.decodeIfPresent(JSONValue.self, forKey: .packageInfo)
             packageTimeline = try c.decodeIfPresent([JSONValue].self, forKey: .packageTimeline) ?? []
             objectPayload = try c.decodeIfPresent(JSONValue.self, forKey: .objectPayload)
+            pieces = (try? c.decodeIfPresent([DrawerItemsResponse.DrawerMail].self, forKey: .pieces)) ?? []
         }
 
         private enum Keys: String, CodingKey {
@@ -193,6 +196,7 @@ public struct MailboxV2ItemResponse: Decodable, Sendable, Hashable {
             case packageInfo // backend: column on Mail (rare); currently no override
             case packageTimeline = "timeline" // backend response key
             case objectPayload = "object_payload" // backend response key (P18 fix)
+            case pieces
         }
     }
 }
@@ -203,9 +207,17 @@ public struct MailboxItemActionRequest: Encodable, Sendable {
     /// One of: `pay`, `sign`, `forward`, `file`, `shred`, `remind`, `split`,
     /// `acknowledge`, `share_household`, `create_task`, `dispute`.
     public let action: String
+    /// `file` and `done`: the Vault folder to file it in (the server picks one when nil).
+    public let folderId: String?
 
-    public init(action: String) {
+    public init(action: String, folderId: String? = nil) {
         self.action = action
+        self.folderId = folderId
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case action
+        case folderId = "folder_id"
     }
 }
 

@@ -1,20 +1,29 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import Link from 'next/link';
+import { createPortal } from 'react-dom';
 import { useRouter, useParams } from 'next/navigation';
-import type { MailAction, CertifiedMail, VaultFolder, BookletItem, AuditEvent, PartyParticipant } from '@/types/mailbox';
+import type { CertifiedMail, BookletItem, AuditEvent, PartyParticipant, MailboxHome } from '@/types/mailbox';
 import * as api from '@pantopus/api';
 import {
   useItemDetail,
+  useMailboxDrawers,
   useMarkItemOpened,
   useFileItemToVault,
   useAcknowledgeCertifiedMail,
   useVaultFolders,
   useRestoreMail,
+  useBooklet,
 } from '@/lib/mailbox-queries';
-import { MailItemDetail } from '@/components/mailbox';
+import VerifyPromptSheet from '@/components/place/VerifyPromptSheet';
 import { isMailboxDrawer } from '@/components/mailbox/MailboxHeader';
+import LetterView from '@/components/mailbox/LetterView';
+import BundlePieces from '@/components/mailbox/BundlePieces';
+import LetterActions from '@/components/mailbox/LetterActions';
+import SenderSheet from '@/components/mailbox/SenderSheet';
+import MailPiece, { pieceKind } from '@/components/mailbox/MailPiece';
+import useMailAddressee from '@/components/mailbox/useMailAddressee';
+import { mailLoadMessage } from '@/components/mailbox/mailLoadMessage';
 import { toast } from '@/components/ui/toast-store';
 import BookletViewer from '@/components/mailbox/BookletViewer';
 import PackageUnboxing from '@/components/mailbox/PackageUnboxing';
@@ -97,35 +106,18 @@ export default function ItemDetailPage() {
 
   const auditTrail: AuditEvent[] = acknowledge.data?.audit_trail ?? certifiedItem?.audit_trail ?? [];
 
-  // ── File to Vault ─────────────────────────────────────────
-  const {
-    data: vaultFolders,
-    isLoading: vaultFoldersLoading,
-    isError: vaultFoldersFailed,
-    refetch: refetchVaultFolders,
-  } = useVaultFolders();
+  // ── Package unboxing's Vault (Household extras) ──────────
+  const { data: vaultFolders } = useVaultFolders({ enabled: launchFeatures.householdExtras });
   const fileToVault = useFileItemToVault();
-  const [vaultOpen, setVaultOpen] = useState(false);
-  const vaultRef = useRef<HTMLDivElement>(null);
 
-  // Close vault dropdown on outside click
-  useEffect(() => {
-    if (!vaultOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (vaultRef.current && !vaultRef.current.contains(e.target as Node)) {
-        setVaultOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [vaultOpen]);
+  // ── Who it's addressed to; the envelope sheet; a booklet's pages ──
+  const { addressee, timeZone } = useMailAddressee();
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const booklet = useBooklet(itemId, !!detail && pieceKind(detail.piece) === 'booklet');
 
-  const handleFileToVault = useCallback((folderId: string) => {
-    fileToVault.mutate({ itemId, folderId }, {
-      onSuccess: () => setVaultOpen(false),
-      onError: (err) => toast.error(`Couldn't file this mail. ${err.message || 'Please try again.'}`),
-    });
-  }, [fileToVault, itemId]);
+  // ── A Home letter waiting on proof: which Home to verify ──
+  const { data: drawers } = useMailboxDrawers();
+  const [verifyHome, setVerifyHome] = useState<MailboxHome | null>(null);
 
   // ── Package / Unboxing ────────────────────────────────────
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -175,11 +167,12 @@ export default function ItemDetailPage() {
   // deleted letter refuses every other action until then.
   const removed = detail?.wrapper.removed;
   const isDeleted = removed?.action === 'deleted';
+  const shredByMe = isDeleted && Boolean(currentUserId) && detail?.piece.deleted_by === currentUserId;
   const restore = useRestoreMail();
   const handleRestore = useCallback(() => {
     restore.mutate(itemId, {
-      onSuccess: () => toast.success('Letter restored'),
-      onError: (err) => toast.error(`Couldn't restore this letter. ${err.message || 'Please try again.'}`),
+      onSuccess: () => toast.success('Brought back to your mail'),
+      onError: (err) => toast.error(`Couldn't bring it back. ${mailLoadMessage(err)}`),
     });
   }, [restore, itemId]);
   const [, setPartyRevealed] = useState(false);
@@ -213,37 +206,6 @@ export default function ItemDetailPage() {
     });
   }, [itemId]);
 
-  // ── Action handler ────────────────────────────────────────
-  const handleAction = useCallback((action: MailAction) => {
-    switch (action.action_type) {
-      case 'file_to_vault':
-        setVaultOpen(true);
-        break;
-      case 'acknowledge':
-        handleAcknowledge();
-        break;
-      case 'create_gig':
-        setGigSource('post_delivery');
-        setShowGigModal(true);
-        break;
-      case 'archive':
-      case 'shred':
-      case 'forward':
-      case 'pay_bill':
-      case 'create_task':
-      case 'open_offer':
-      case 'rsvp':
-      case 'view_on_map':
-      case 'share_to_community':
-      case 'download':
-      case 'link_to_asset':
-      case 'custom':
-        break;
-      default:
-        break;
-    }
-  }, [handleAcknowledge]);
-
   // ── Loading state ─────────────────────────────────────────
   if (isLoading) {
     return (
@@ -266,161 +228,128 @@ export default function ItemDetailPage() {
     );
   }
 
-  // ── Error state ───────────────────────────────────────────
+  // ── Couldn't open it ──────────────────────────────────────
+  // Home mail waiting on proof says so and opens the address check; mail that
+  // isn't yours (or is gone) says so plainly; only a failure offers Try again.
   if (error || !detail) {
+    const needsProof = error?.serverCode === 'MAIL_HOME_NEEDS_PROOF';
+    const notHere = !needsProof && (error?.status === 404 || error?.status === 403);
+    const toProve = (drawers?.homes ?? []).filter((home) => home.mail_access === 'needs_proof');
+    const button = 'inline-flex min-h-[44px] items-center justify-center rounded-xl px-4 text-sm font-semibold transition-colors';
     return (
       <div className="h-full flex flex-col">
-        <div className="md:hidden px-4 py-3 border-b border-app-border-subtle flex-shrink-0">
+        <div className="md:hidden px-2 py-1.5 flex-shrink-0">
           <button
             type="button"
             onClick={() => router.push(`/app/mailbox/${drawer}`)}
-            className="flex items-center gap-1 text-sm text-app-text-secondary hover:text-app-text-strong"
+            className="inline-flex min-h-[44px] items-center gap-1 rounded-lg px-2 text-sm font-medium text-app-text-secondary hover:bg-app-hover hover:text-app-text"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
-            Back
+            Mail
           </button>
         </div>
         <div className="flex-1 flex items-center justify-center p-8">
-          <div className="text-center max-w-sm">
-            <svg className="w-12 h-12 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
-            </svg>
-            <p className="text-sm font-semibold text-app-text mb-1">
-              Couldn&apos;t load this item
-            </p>
-            <p className="text-xs text-app-text-secondary mb-4">
-              {error?.message ?? 'Item not found'}
-            </p>
-            <button
-              type="button"
-              onClick={() => refetch()}
-              className="px-4 py-2 text-sm font-medium rounded-lg bg-primary-600 text-white hover:bg-primary-700 transition-colors"
-            >
-              Retry
-            </button>
+          <div role="alert" className="text-center max-w-sm">
+            <h1 className="text-base font-semibold text-app-text mb-1">
+              {needsProof ? "Your home's mail is waiting" : notHere ? "This mail isn't here" : "Couldn't open this mail"}
+            </h1>
+            <p className="text-sm text-app-text-secondary mb-4">{mailLoadMessage(error)}</p>
+            <div className="flex flex-wrap justify-center gap-2">
+              {needsProof ? (toProve.length ? toProve.map((home) => (
+                <button
+                  key={home.home_id}
+                  type="button"
+                  onClick={() => setVerifyHome(home)}
+                  className={`${button} bg-primary-600 text-white hover:bg-primary-700`}
+                >
+                  {toProve.length > 1 ? `Verify ${home.address_line}` : 'Verify your home'}
+                </button>
+              )) : (
+                <button type="button" onClick={() => router.push('/app/place')} className={`${button} bg-primary-600 text-white hover:bg-primary-700`}>
+                  Verify your home
+                </button>
+              )) : notHere ? (
+                <button type="button" onClick={() => router.push(`/app/mailbox/${drawer}`)} className={`${button} bg-primary-600 text-white hover:bg-primary-700`}>
+                  Back to your mail
+                </button>
+              ) : (
+                <button type="button" onClick={() => { void refetch(); }} className={`${button} bg-primary-600 text-white hover:bg-primary-700`}>
+                  Try again
+                </button>
+              )}
+            </div>
           </div>
         </div>
+        {/* On the document body, above the phone tab bar. */}
+        {verifyHome ? createPortal(
+          <VerifyPromptSheet
+            open
+            onClose={() => setVerifyHome(null)}
+            homeId={verifyHome.home_id}
+            address={verifyHome.address_line}
+          />,
+          document.body,
+        ) : null}
       </div>
     );
   }
 
-  // ── Booklet detection ─────────────────────────────────────
-  const isBooklet = detail.wrapper.mail_object_type === 'booklet';
-  const bookletData: BookletItem | null = isBooklet ? {
-    mail_id: detail.wrapper.id,
-    page_count: wrapperAny?.page_count ?? 0,
-    cover_image_url: wrapperAny?.cover_image_url,
-    download_url: wrapperAny?.download_url,
-    download_size_bytes: wrapperAny?.download_size_bytes,
-    streaming_available: (wrapperAny?.download_size_bytes ?? 0) > 10 * 1024 * 1024,
-    pages: wrapperAny?.pages ?? [],
+  // ── The piece ─────────────────────────────────────────────
+  const piece = detail.piece;
+  const to = addressee(piece);
+  const isBooklet = pieceKind(piece) === 'booklet';
+  const bookletPages = booklet.data?.pages ?? [];
+  const bookletData: BookletItem | null = isBooklet && bookletPages.length > 0 ? {
+    mail_id: piece.id,
+    // The pages it actually has (page_count can promise more than were scanned).
+    page_count: bookletPages.length,
+    cover_image_url: booklet.data?.cover_image_url,
+    download_url: booklet.data?.download_url,
+    download_size_bytes: booklet.data?.download_size_bytes,
+    streaming_available: (booklet.data?.download_size_bytes ?? 0) > 10 * 1024 * 1024,
+    pages: bookletPages,
   } : null;
 
   // ── Main render ───────────────────────────────────────────
   return (
-    <div className="h-full flex flex-col overflow-hidden">
-      {/* ── Mobile back button + toolbar ──────────────────── */}
-      <div className="flex items-center gap-2 px-4 py-2 border-b border-app-border-subtle flex-shrink-0">
-        <button aria-label="Back"
+    <div className="flex h-full flex-col md:overflow-hidden">
+      {/* Phones: back to the list (wider screens keep the list beside the letter) */}
+      <div className="flex flex-shrink-0 items-center px-2 py-1.5 md:hidden">
+        <button
           type="button"
           onClick={() => router.push(`/app/mailbox/${drawer}`)}
-          className="md:hidden p-1 text-app-text-secondary hover:text-app-text-strong dark:hover:text-gray-300"
+          className="inline-flex min-h-[44px] items-center gap-1 rounded-lg px-2 text-sm font-medium text-app-text-secondary hover:bg-app-hover hover:text-app-text"
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
+          Mail
         </button>
-
-        <div className="flex-1" />
-
-        {/* File to Vault button */}
-        <div ref={vaultRef} className={isDeleted ? 'hidden' : 'relative'}>
-          <button
-            type="button"
-            onClick={() => setVaultOpen(!vaultOpen)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border transition-colors ${
-              fileToVault.isPending
-                ? 'bg-app-surface-sunken text-app-text-muted cursor-not-allowed'
-                : 'border-app-border text-app-text-secondary dark:text-app-text-muted hover:bg-app-hover dark:hover:bg-gray-800'
-            }`}
-            disabled={fileToVault.isPending}
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8" />
-            </svg>
-            {fileToVault.isPending ? 'Filing...' : 'File to Vault'}
-          </button>
-
-          {vaultOpen && (
-            <div className="absolute right-0 top-full mt-1 w-56 bg-app-surface border border-app-border rounded-lg shadow-lg z-20 py-1 max-h-64 overflow-y-auto">
-              {vaultFoldersLoading ? (
-                <p className="px-3 py-2 text-xs text-app-text-muted">Loading folders...</p>
-              ) : vaultFoldersFailed ? (
-                <div className="px-3 py-2">
-                  <p className="text-xs text-app-text-muted">Couldn&apos;t load your vault folders.</p>
-                  <button
-                    type="button"
-                    onClick={() => refetchVaultFolders()}
-                    className="mt-1 text-xs font-medium text-primary-600 hover:text-primary-700"
-                  >
-                    Try again
-                  </button>
-                </div>
-              ) : !vaultFolders || vaultFolders.length === 0 ? (
-                <div className="px-3 py-2">
-                  <p className="text-xs text-app-text-muted">No vault folders yet</p>
-                  <Link
-                    href="/app/mailbox/vault"
-                    className="mt-1 inline-block text-xs font-medium text-primary-600 hover:text-primary-700"
-                  >
-                    Create one in Vault
-                  </Link>
-                </div>
-              ) : (
-                vaultFolders.map((folder: VaultFolder) => (
-                  <button
-                    key={folder.id}
-                    type="button"
-                    onClick={() => handleFileToVault(folder.id)}
-                    className="w-full text-left px-3 py-2 text-sm text-app-text-strong hover:bg-app-hover dark:hover:bg-gray-800 transition-colors flex items-center gap-2"
-                  >
-                    <span className="text-base">{folder.icon || '📁'}</span>
-                    <span className="truncate">{folder.label}</span>
-                    {folder.item_count > 0 && (
-                      <span className="ml-auto text-[10px] text-app-text-muted">{folder.item_count}</span>
-                    )}
-                  </button>
-                ))
-              )}
-            </div>
-          )}
-        </div>
       </div>
 
-      {/* ── Scrollable content ────────────────────────────── */}
-      <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-        {/* Deleted / dismissed letter — Restore */}
+      <div className="flex-1 md:min-h-0 md:overflow-y-auto">
+        {/* Shredded or dismissed — bring it back */}
         {removed && (
           <div
-            className="mx-6 mt-4 px-3 py-2 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg flex items-center gap-3 flex-shrink-0"
+            className="mx-4 mt-3 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-3"
             role="status"
           >
-            <p className="flex-1 min-w-0 text-xs text-amber-700 dark:text-amber-300 font-medium">
+            <p className="flex-1 min-w-0 text-sm text-amber-700 font-medium">
               {removed.action === 'deleted'
-                ? `Deleted${removed.by_name ? ` by ${removed.by_name}` : ''}${removed.restorable_until
-                  ? ` · You can restore it until ${new Date(removed.restorable_until).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
+                ? `${`Shredded${shredByMe ? ' by you' : removed.by_name ? ` by ${removed.by_name}` : ''}`.replace(/\.?$/, '.')}${removed.restorable_until
+                  ? ` You can bring it back until ${new Date(removed.restorable_until).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}.`
                   : ''}`
-                : 'Dismissed for the household · You can restore it'}
+                : 'Dismissed for the household. You can bring it back.'}
             </p>
             <button
               type="button"
               onClick={handleRestore}
               disabled={restore.isPending}
-              className="flex-shrink-0 text-xs font-semibold text-amber-800 dark:text-amber-200 hover:underline disabled:opacity-60"
+              className="flex-shrink-0 min-h-[44px] px-2 text-sm font-semibold text-amber-800 hover:underline disabled:opacity-60"
             >
-              {restore.isPending ? 'Restoring…' : 'Restore'}
+              {restore.isPending ? 'Bringing it back…' : 'Bring it back'}
             </button>
           </div>
         )}
@@ -455,70 +384,91 @@ export default function ItemDetailPage() {
           />
         )}
 
-        {/* Booklet viewer replaces standard detail for booklet items */}
-        {isBooklet && bookletData ? (
-          <div className="flex-1 min-h-0">
+        {/* A booklet with pages pages through; otherwise the piece reads as a letter */}
+        {bookletData ? (
+          <div className="min-h-[60vh]">
+            {/* The booklet as it came: tap it for who sent it and its trail */}
+            <div className="mx-auto w-full max-w-2xl px-4 pt-2">
+              <button
+                type="button"
+                onClick={() => setSheetOpen(true)}
+                aria-label={`Booklet from ${piece.sender_display || 'Unknown sender'}. Show who sent it and its trail`}
+                className="block w-full max-w-[358px] rounded-lg text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+              >
+                <MailPiece item={piece} recipientName={to.name} recipientLine={to.line} opened />
+              </button>
+            </div>
             <BookletViewer
               booklet={bookletData}
               title={detail.wrapper.outside_title}
               sender={detail.wrapper.sender_display}
-              onSaveToVault={() => setVaultOpen(true)}
-              onDownload={() => {}}
+              // The Download link opens the file itself; this only records the download.
+              onDownload={bookletData.download_url ? () => { void api.mailboxV2P2.downloadBooklet(piece.id).catch(() => {}); } : undefined}
             />
           </div>
         ) : (
-          <div className="flex-1 overflow-y-auto">
-            {/* Main detail component (original content) */}
-            <MailItemDetail
-              detail={detail}
-              onAction={handleAction}
-            />
-
-            {/* Package Unboxing — shown when package is delivered */}
-            {/* Launch cut #7 (Household extras): package tracking and media are hidden. */}
-            {launchFeatures.householdExtras && isDelivered && (
-              <PackageUnboxing
-                itemId={itemId}
-                deliveryPhoto={wrapperAny?.delivery_photo_url}
-                deliveryNote={wrapperAny?.delivery_location_note}
-                deliveredAt={wrapperAny?.delivered_at}
-                documentIds={
-                  detail.inside.attachments
-                    ?.filter((a) => a.mime_type?.includes('pdf') || a.filename?.match(/warranty|manual/i))
-                    .map((a) => ({
-                      type: a.filename?.match(/warranty/i) ? 'warranty' : 'manual',
-                      fileId: a.id,
-                      label: a.filename?.match(/warranty/i) ? 'Warranty' : 'Manual',
-                    })) ?? []
-                }
-                vaultFolders={vaultFolders}
-                onUploadConditionPhoto={handleConditionPhotoUpload}
-                onSaveToVault={(fileId, folderId) => {
-                  fileToVault.mutate({ itemId: fileId, folderId });
-                }}
-                onCreateGig={() => {
-                  setGigSource('post_delivery');
-                  setShowGigModal(true);
-                }}
-                onSkipUnboxing={async () => {
-                  try {
-                    await api.mailboxV2P2.recordUnboxing(itemId, { skip: true });
-                  } catch {}
-                }}
-              />
-            )}
-          </div>
+          <LetterView
+            piece={piece}
+            recipientName={to.name}
+            recipientLine={to.line}
+            onOpenEnvelope={() => setSheetOpen(true)}
+          />
         )}
 
-        {/* Filed success message */}
-        {fileToVault.isSuccess && (
-          <div className="mx-6 mb-4 px-3 py-2 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg flex-shrink-0">
-            <p className="text-xs text-green-700 dark:text-green-400 font-medium">
-              Filed to vault successfully
-            </p>
-          </div>
+        {/* A bundle: what came in it, each opening as its own letter */}
+        {pieceKind(piece) === 'bundle' ? (
+          <section aria-label="In this bundle" className="mx-auto w-full max-w-2xl px-4 pb-6">
+            <h2 className="text-[11px] font-semibold uppercase tracking-[0.06em] text-app-text-secondary">In this bundle</h2>
+            <BundlePieces
+              bundleId={piece.id}
+              addressee={addressee}
+              timeZone={timeZone}
+              onOpen={(inside) => router.push(`/app/mailbox/${inside.drawer}/${inside.id}`)}
+            />
+          </section>
+        ) : null}
+
+        {/* Package Unboxing — shown when package is delivered */}
+        {/* Launch cut #7 (Household extras): package tracking and media are hidden. */}
+        {launchFeatures.householdExtras && isDelivered && (
+          <PackageUnboxing
+            itemId={itemId}
+            deliveryPhoto={wrapperAny?.delivery_photo_url}
+            deliveryNote={wrapperAny?.delivery_location_note}
+            deliveredAt={wrapperAny?.delivered_at}
+            documentIds={
+              detail.inside.attachments
+                ?.filter((a) => a.mime_type?.includes('pdf') || a.filename?.match(/warranty|manual/i))
+                .map((a) => ({
+                  type: a.filename?.match(/warranty/i) ? 'warranty' : 'manual',
+                  fileId: a.id,
+                  label: a.filename?.match(/warranty/i) ? 'Warranty' : 'Manual',
+                })) ?? []
+            }
+            vaultFolders={vaultFolders}
+            onUploadConditionPhoto={handleConditionPhotoUpload}
+            onSaveToVault={(fileId, folderId) => {
+              fileToVault.mutate({ itemId: fileId, folderId });
+            }}
+            onCreateGig={() => {
+              setGigSource('post_delivery');
+              setShowGigModal(true);
+            }}
+            onSkipUnboxing={async () => {
+              try {
+                await api.mailboxV2P2.recordUnboxing(itemId, { skip: true });
+              } catch {}
+            }}
+          />
         )}
       </div>
+
+      {/* What to do with it, in mail words */}
+      <LetterActions piece={piece} />
+
+      {sheetOpen && (
+        <SenderSheet piece={piece} recipientName={to.name} recipientLine={to.line} onClose={() => setSheetOpen(false)} />
+      )}
 
       {/* ── Gig creation modal ────────────────────────────── */}
       {showGigModal && (

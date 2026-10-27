@@ -63,6 +63,9 @@ public struct MailDetailContent: Sendable {
     public let recordsDetail: RecordsDetailDTO?
     /// Facts read off the item (`Mail.key_facts`), such as a bill's amount due.
     public let extractedFacts: [MailKeyFact]
+    /// The piece as mail (Mail build contract v1): the envelope, Pantopus's
+    /// note, the letter on paper and where it stands. Nil on the sample seam.
+    var letter: MailLetter?
 
     public init(
         mailId: String,

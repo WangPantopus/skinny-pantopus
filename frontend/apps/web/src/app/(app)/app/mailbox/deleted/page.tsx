@@ -3,13 +3,14 @@
 import type { DeletedMail } from '@pantopus/api';
 import { useDeletedMail, useRestoreMail } from '@/lib/mailbox-queries';
 import { toast } from '@/components/ui/toast-store';
+import { mailLoadMessage } from '@/components/mailbox/mailLoadMessage';
 
 const shortDate = (iso: string) =>
   new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 
 /**
- * Recently deleted — letters deleted in the last 30 days that you could see,
- * newest first. Restore puts a letter back for everyone who could see it;
+ * Recently shredded — mail shredded in the last 30 days that you could see,
+ * newest first. Bring it back puts it back for everyone who could see it;
  * after 30 days the nightly purge removes it.
  */
 export default function RecentlyDeletedPage() {
@@ -18,8 +19,8 @@ export default function RecentlyDeletedPage() {
 
   const handleRestore = (item: DeletedMail) => {
     restore.mutate(item.id, {
-      onSuccess: () => toast.success('Letter restored'),
-      onError: (err) => toast.error(`Couldn't restore this letter. ${err.message || 'Please try again.'}`),
+      onSuccess: () => toast.success('Brought back to your mail'),
+      onError: (err) => toast.error(`Couldn't bring it back. ${mailLoadMessage(err)}`),
     });
   };
 
@@ -29,7 +30,7 @@ export default function RecentlyDeletedPage() {
       <div className="px-4 py-3 border-b border-app-border-subtle flex-shrink-0">
         <div className="flex items-center gap-2">
           <h1 className="text-base font-semibold text-app-text">
-            Recently deleted
+            Recently shredded
           </h1>
           {(items?.length ?? 0) > 0 && (
             <span className="text-xs text-app-text-secondary">
@@ -38,7 +39,7 @@ export default function RecentlyDeletedPage() {
           )}
         </div>
         <p className="text-xs text-app-text-muted mt-1">
-          Deleted letters stay here for 30 days. Anyone who could see a letter can restore it.
+          Shredded mail stays here for 30 days. Anyone who could see it can bring it back.
         </p>
       </div>
 
@@ -68,8 +69,8 @@ export default function RecentlyDeletedPage() {
           </div>
         ) : !items || items.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 px-4">
-            <p className="text-sm font-medium text-app-text-secondary dark:text-app-text-muted">Nothing deleted</p>
-            <p className="text-xs text-app-text-muted mt-1">Letters deleted in the last 30 days appear here</p>
+            <p className="text-sm font-medium text-app-text-secondary dark:text-app-text-muted">Nothing shredded</p>
+            <p className="text-xs text-app-text-muted mt-1">Mail you shred stays here for 30 days</p>
           </div>
         ) : (
           <div className="p-3 space-y-2">
@@ -86,7 +87,7 @@ export default function RecentlyDeletedPage() {
                       {item.display_title || item.subject || 'Untitled'}
                     </p>
                     <p className="text-xs text-app-text-secondary mt-0.5 truncate">
-                      {`Deleted${by ? ` ${by}` : ''} · ${shortDate(item.deleted_at)} · Restore until ${shortDate(item.restorable_until)}`}
+                      {`Shredded${by ? ` ${by}` : ''} · ${shortDate(item.deleted_at)} · You can bring it back until ${shortDate(item.restorable_until)}`}
                     </p>
                   </div>
                   <button
@@ -95,7 +96,7 @@ export default function RecentlyDeletedPage() {
                     disabled={restoring}
                     className="flex-shrink-0 px-3 py-1.5 text-xs font-medium rounded-md border border-app-border text-app-text-secondary hover:bg-app-hover disabled:opacity-60"
                   >
-                    {restoring ? 'Restoring…' : 'Restore'}
+                    {restoring ? 'Bringing it back…' : 'Bring it back'}
                   </button>
                 </div>
               );

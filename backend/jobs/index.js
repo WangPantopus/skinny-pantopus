@@ -37,6 +37,7 @@ const earnRiskReview = require('./earnRiskReview');
 const vaultWeeklyDigest = require('./vaultWeeklyDigest');
 // Phase 3 jobs
 const vacationHoldExpiry = require('./vacationHoldExpiry');
+const ballotGuideLetters = require('./ballotGuideLetters');
 const stampAwarder = require('./stampAwarder');
 const communityModeration = require('./communityModeration');
 // Discovery jobs
@@ -316,6 +317,13 @@ function startJobs(options = {}) {
   // Runs hourly at :25.
   // Expires completed vacation holds and activates scheduled ones.
   scheduleCron('25 * * * *', wrapJob('vacationHoldExpiry', vacationHoldExpiry), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+
+  // ─── Ballot guide letters (Mail tab, SRV-9) ───
+  // Runs hourly at :40. Four weeks before each election, one letter per proven Home; nothing while mailbox is off.
+  scheduleCron('40 * * * *', wrapJob('ballotGuideLetters', () => ballotGuideLetters()), {
     scheduled: true,
     timezone: 'UTC',
   });

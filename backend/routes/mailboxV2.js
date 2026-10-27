@@ -618,7 +618,9 @@ router.get('/item/:id', verifyToken, async (req, res) => {
     if (!mail.opened_at && !mail.removed) {
       await supabaseAdmin
         .from('Mail')
-        .update({ opened_at: new Date().toISOString(), lifecycle: 'opened', viewed: true, viewed_at: new Date().toISOString() })
+        // A piece filed before anyone opened it (a receipt filed in Receipts) stays filed.
+        .update({ opened_at: new Date().toISOString(), ...(!mail.lifecycle || mail.lifecycle === 'delivered' ? { lifecycle: 'opened' } : {}),
+          viewed: true, viewed_at: new Date().toISOString() })
         .eq('id', id);
       await logMailEvent('mail_opened', id, userId, {
         drawer: mail.drawer,

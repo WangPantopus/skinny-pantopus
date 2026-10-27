@@ -7,9 +7,10 @@
 //  `MailItemDetailShell` (P19) and lives under `Variants/`.
 //
 
+import QuickLook
 import SwiftUI
 
-// swiftlint:disable trailing_closure type_body_length
+// swiftlint:disable file_length trailing_closure type_body_length
 
 public struct MailDetailView: View {
     @State private var viewModel: MailDetailViewModel
@@ -42,6 +43,12 @@ public struct MailDetailView: View {
     /// package; the flag mirrors RN's `?mode=pre|post`
     /// (`src/app/mailbox/package.tsx:196-204`).
     private let onAskNeighbor: (@MainActor @Sendable (_ isPreDelivery: Bool) -> Void)?
+    /// Pay on a bill: opens the invoice (`invoice.id`).
+    private let onPay: (@MainActor (String) -> Void)?
+    /// A bundle's piece: opens its own letter page.
+    private let onOpenMail: (@MainActor (String) -> Void)?
+    /// "Verify your home" on a Home letter that waits for proof of address.
+    private let onVerifyHome: (@MainActor (String) -> Void)?
 
     public init(
         mailId: String,
@@ -53,7 +60,10 @@ public struct MailDetailView: View {
         onOpenCeremonialMail: (@MainActor (String) -> Void)? = nil,
         onCreateTask: (@MainActor @Sendable () -> Void)? = nil,
         onOpenUnboxing: (@MainActor @Sendable () -> Void)? = nil,
-        onAskNeighbor: (@MainActor @Sendable (_ isPreDelivery: Bool) -> Void)? = nil
+        onAskNeighbor: (@MainActor @Sendable (_ isPreDelivery: Bool) -> Void)? = nil,
+        onPay: (@MainActor (String) -> Void)? = nil,
+        onOpenMail: (@MainActor (String) -> Void)? = nil,
+        onVerifyHome: (@MainActor (String) -> Void)? = nil
     ) {
         self.mailId = mailId
         _viewModel = State(initialValue: MailDetailViewModel(mailId: mailId))
@@ -66,6 +76,9 @@ public struct MailDetailView: View {
         self.onCreateTask = onCreateTask
         self.onOpenUnboxing = onOpenUnboxing
         self.onAskNeighbor = onAskNeighbor
+        self.onPay = onPay
+        self.onOpenMail = onOpenMail
+        self.onVerifyHome = onVerifyHome
     }
 
     public var body: some View {
@@ -76,18 +89,19 @@ public struct MailDetailView: View {
             case let .loaded(content):
                 loaded(content)
             case let .error(message):
-                ErrorLayout(message: message, onBack: onBack) {
-                    Task { await viewModel.refresh() }
-                }
+                errorLayout(message)
             }
         }
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         // A deleted or household-dismissed letter opens from its notice with Restore.
         .safeAreaInset(edge: .top, spacing: Spacing.s0) {
-            if let removed = viewModel.removed {
+            // The letter page offers Bring it back where its actions are.
+            if let removed = viewModel.removed, !showsLetterPage {
                 removedBanner(removed)
             }
         }
+        // A container, so the page's buttons keep their own identifiers.
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("mailDetail")
         .task { await viewModel.load() }
         // A dismissed or archived letter has left the mailbox; the list has dropped it.
@@ -111,6 +125,52 @@ public struct MailDetailView: View {
             }
         }
         .pantopusAnimation(.componentState, value: viewModel.toast)
+        .sheet(isPresented: Binding(
+            get: { viewModel.showsSenderSheet },
+            set: { viewModel.showsSenderSheet = $0 }
+        )) {
+            if case let .loaded(content) = viewModel.state, let letter = content.letter {
+                MailSenderSheet(letter: letter, senderLink: senderLink(content))
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+            }
+        }
+        .confirmationDialog(
+            "File in the Vault",
+            isPresented: Binding(get: { viewModel.showsFilePicker }, set: { viewModel.showsFilePicker = $0 }),
+            titleVisibility: .visible
+        ) {
+            ForEach(viewModel.fileFolders) { folder in
+                Button(folder.label) { Task { await viewModel.act(.file, folderId: folder.id) } }
+                    .accessibilityIdentifier("mailLetterFolder.\(folder.id)")
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Choose a folder for it.")
+        }
+        .confirmationDialog(
+            "Done with it?",
+            isPresented: Binding(get: { viewModel.confirmsDone }, set: { viewModel.confirmsDone = $0 }),
+            titleVisibility: .visible
+        ) {
+            Button("Done") { Task { await viewModel.act(.done) } }
+                .accessibilityIdentifier("mailLetterDoneConfirm")
+            Button("Keep it on the counter", role: .cancel) {}
+        } message: {
+            Text("It comes off the counter and goes into the Vault.")
+        }
+        .confirmationDialog(
+            "Shred this?",
+            isPresented: Binding(get: { viewModel.confirmsShred }, set: { viewModel.confirmsShred = $0 }),
+            titleVisibility: .visible
+        ) {
+            Button("Shred", role: .destructive) { Task { await viewModel.act(.shred) } }
+                .accessibilityIdentifier("mailLetterShredConfirm")
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(shredMessage)
+        }
+        .quickLookPreview(Binding(get: { viewModel.quickLookURL }, set: { viewModel.quickLookURL = $0 }))
         .confirmationDialog(
             "Save to vault",
             isPresented: Binding(
@@ -218,7 +278,8 @@ public struct MailDetailView: View {
 
     @ViewBuilder
     private func booklet(_ content: MailDetailContent) -> some View {
-        if let booklet = content.bookletDetail {
+        // The Mail tab's letter page holds the pager with the new actions.
+        if content.letter == nil, let booklet = content.bookletDetail {
             BookletDetailLayout(
                 content: content,
                 booklet: booklet,
@@ -394,6 +455,84 @@ public struct MailDetailView: View {
         }
     }
 
+    private var showsLetterPage: Bool {
+        if case let .loaded(content) = viewModel.state { return content.letter != nil }
+        return false
+    }
+
+    /// Shredding Home mail takes it from everyone who gets it.
+    private var shredMessage: String {
+        guard case let .loaded(content) = viewModel.state, content.letter?.homeId != nil else {
+            return "It's gone from your mailbox. You can bring it back for 30 days."
+        }
+        return "It's gone for everyone who gets your home's mail. You can bring it back for 30 days."
+    }
+
+    /// "See their business page" or "See their profile", when there's one.
+    private func senderLink(_ content: MailDetailContent) -> (title: String, open: () -> Void)? {
+        guard let id = content.senderUserId else { return nil }
+        if content.senderIsBusiness, let onOpenSenderBusiness {
+            return ("See their business page", { onOpenSenderBusiness(id) })
+        }
+        if !content.senderIsBusiness, let onOpenSenderProfile {
+            return ("See their profile", { onOpenSenderProfile(id) })
+        }
+        return nil
+    }
+
+    /// The letter page's state, and where its taps go.
+    private func letterHooks(_ content: MailDetailContent) -> MailLetterPageHooks {
+        MailLetterPageHooks(
+            inFlight: viewModel.letterActionInFlight,
+            openingEnclosure: viewModel.openingEnclosure,
+            bundlePieces: viewModel.bundlePieces,
+            bundleLoading: viewModel.bundleLoading,
+            bundleFailure: viewModel.bundleFailure,
+            removed: viewModel.removed,
+            restoreInFlight: viewModel.restoreInFlight,
+            onEnvelope: { viewModel.showsSenderSheet = true },
+            onAction: { action in
+                if action == .pay {
+                    if let invoice = content.letter?.payable { onPay?(invoice.id) }
+                    return
+                }
+                Task { await viewModel.tapLetterAction(action) }
+            },
+            onOpenEnclosure: { enclosure in Task { await viewModel.openEnclosure(enclosure) } },
+            onOpenPiece: { id in onOpenMail?(id) },
+            onRetryBundle: { Task { await viewModel.loadBundle() } },
+            onRestore: { Task { await viewModel.restore() } }
+        )
+    }
+
+    /// Why it couldn't open, and what to do: verify the home for Home mail
+    /// waiting for proof, otherwise try again.
+    private func errorLayout(_ message: String) -> some View {
+        let proofHome = viewModel.proofHomeId
+        if viewModel.needsProof {
+            return ErrorLayout(
+                headline: "This is your home's mail",
+                message: message,
+                ctaTitle: proofHome == nil || onVerifyHome == nil ? "Try again" : "Verify your home",
+                onBack: onBack
+            ) {
+                if let proofHome, let onVerifyHome {
+                    onVerifyHome(proofHome)
+                } else {
+                    Task { await viewModel.refresh() }
+                }
+            }
+        }
+        if viewModel.isNotFound {
+            return ErrorLayout(headline: "Couldn't open this mail", message: message, ctaTitle: "Back to Mail", onBack: onBack) {
+                onBack()
+            }
+        }
+        return ErrorLayout(headline: "Couldn't open this mail", message: message, ctaTitle: "Try again", onBack: onBack) {
+            Task { await viewModel.refresh() }
+        }
+    }
+
     private func generic(_ content: MailDetailContent) -> some View {
         GenericMailDetailLayout(
             content: content,
@@ -414,7 +553,8 @@ public struct MailDetailView: View {
                 } else {
                     Task { await viewModel.tapCategoryAction(action) }
                 }
-            }
+            },
+            letterHooks: letterHooks(content)
         )
     }
 }
@@ -447,7 +587,9 @@ private struct LoadingLayout: View {
 }
 
 private struct ErrorLayout: View {
+    let headline: String
     let message: String
+    let ctaTitle: String
     let onBack: () -> Void
     let onRetry: () -> Void
 
@@ -462,9 +604,9 @@ private struct ErrorLayout: View {
             )
             EmptyState(
                 icon: .alertCircle,
-                headline: "Couldn't load this item",
+                headline: headline,
                 subcopy: message,
-                cta: EmptyState.CTA(title: "Try again") { await MainActor.run { onRetry() } }
+                cta: EmptyState.CTA(title: ctaTitle) { await MainActor.run { onRetry() } }
             )
             .frame(maxHeight: .infinity)
         }

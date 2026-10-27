@@ -14,6 +14,7 @@
 
 import {
   useQuery,
+  useInfiniteQuery,
   useMutation,
   useQueryClient,
   type UseQueryOptions,
@@ -22,6 +23,7 @@ import {
 
 import * as api from '@/lib/mailbox-api';
 import { MailboxApiError } from '@/lib/mailbox-api';
+import { businesses as businessesApi, mailboxV2P2 as mailboxV2P2Api } from '@pantopus/api';
 import type { AssetFullDetail } from '@/lib/mailbox-api';
 import type { DeletedMail } from '@pantopus/api';
 
@@ -159,6 +161,119 @@ export function useDrawerMeta(
   });
 }
 
+/** The whole drawers reply (the delivery and the Homes for the hero); shares the drawers request. */
+export function useMailboxDrawers(
+  options?: Omit<UseQueryOptions<MailboxDrawers, MailboxApiError>, 'queryKey' | 'queryFn'>,
+) {
+  return useQuery<MailboxDrawers, MailboxApiError>({
+    queryKey: mailboxKeys.drawers(),
+    queryFn: api.getDrawers,
+    staleTime: STALE_30S,
+    ...options,
+  });
+}
+
+/**
+ * Do something with a piece (counter, done, file, unfile, shred, acknowledge).
+ * The letter updates in place from the server's answer; lists and counts
+ * refresh. A failure leaves everything as it was.
+ */
+export function useMailAction(itemId: string) {
+  const qc = useQueryClient();
+  return useMutation<MailItemV2 | null, MailboxApiError, { action: api.MailActionName; folderId?: string }>({
+    mutationFn: ({ action, folderId }) => api.mailAction(itemId, action, folderId),
+    onSuccess: (piece) => {
+      if (piece) {
+        qc.setQueryData<MailItemDetailResponse>(mailboxKeys.itemDetail(itemId), (detail) => (detail ? {
+          ...detail,
+          piece: { ...detail.piece, ...piece },
+          wrapper: { ...detail.wrapper, lifecycle: piece.lifecycle, removed: piece.removed ?? undefined, acknowledged_at: piece.acknowledged_at ?? detail.wrapper.acknowledged_at },
+        } : detail));
+      }
+      qc.invalidateQueries({ queryKey: mailboxKeys.itemDetail(itemId) });
+      qc.invalidateQueries({ queryKey: mailboxKeys.drawers() });
+      qc.invalidateQueries({ queryKey: mailboxKeys.counter() });
+      qc.invalidateQueries({ queryKey: [...mailboxKeys.all, 'drawer'] });
+      qc.invalidateQueries({ queryKey: [...mailboxKeys.all, 'vault'] });
+      qc.invalidateQueries({ queryKey: mailboxKeys.deleted() });
+      qc.invalidateQueries({ queryKey: [...mailboxKeys.all, 'search'] });
+    },
+  });
+}
+
+type BookletPages = {
+  pages: { page_number: number; image_url?: string; text_content?: string }[];
+  cover_image_url?: string;
+  download_url?: string;
+  download_size_bytes?: number;
+};
+
+/**
+ * A booklet's pages, cover and download (GET /api/mailbox/v2/p2/booklet/:id);
+ * no pages when the sender sent only a cover.
+ */
+export function useBooklet(itemId: string, enabled: boolean) {
+  return useQuery<BookletPages, MailboxApiError>({
+    queryKey: [...mailboxKeys.all, 'booklet', itemId],
+    queryFn: async () => {
+      try {
+        const reply = await mailboxV2P2Api.getBooklet(itemId);
+        return {
+          pages: (reply?.pages ?? []).map((page) => ({ page_number: page.page_number, image_url: page.image_url, text_content: page.text_content })),
+          cover_image_url: reply?.booklet?.cover_image_url ?? undefined,
+          download_url: reply?.booklet?.download_url ?? undefined,
+          download_size_bytes: reply?.booklet?.download_size_bytes ?? undefined,
+        };
+      } catch (err) {
+        const e = err as { statusCode?: number; message?: string; data?: { code?: string } };
+        throw new MailboxApiError(e.statusCode ? 'REQUEST_ERROR' : 'NETWORK_ERROR', e.message || 'Error', e.statusCode ?? 0, (e.statusCode ?? 500) >= 500, e.data?.code);
+      }
+    },
+    enabled,
+    staleTime: STALE_5M,
+  });
+}
+
+/** A drawer's Counter, Vault (all of it or one folder) or Archived list, a page at a time ("Show more"). */
+export function useDrawerTab(
+  drawer: 'personal' | 'home' | 'business',
+  tab: 'counter' | 'vault' | 'archived',
+  params?: { folderId?: string; homeId?: string },
+  options?: { enabled?: boolean },
+) {
+  return useInfiniteQuery<MailboxPaginatedResponse<MailItemV2>, MailboxApiError>({
+    queryKey: [...mailboxKeys.drawerItems(drawer, { tab, ...params }), 'pages'],
+    queryFn: ({ pageParam }) => api.getDrawerItems(drawer, { tab, page: pageParam as number, limit: 30, ...params }),
+    initialPageParam: 1,
+    getNextPageParam: (last) => (last.has_more ? last.page + 1 : undefined),
+    enabled: options?.enabled ?? true,
+    staleTime: STALE_30S,
+  });
+}
+
+/** Search all mail on the server, a page at a time ("Show more"). */
+export function useMailSearch(query: string) {
+  const q = query.trim();
+  return useInfiniteQuery<MailboxPaginatedResponse<MailItemV2>, MailboxApiError>({
+    queryKey: [...mailboxKeys.all, 'search', q],
+    queryFn: ({ pageParam }) => api.searchMail(q, { page: pageParam as number, limit: 30 }),
+    initialPageParam: 1,
+    getNextPageParam: (last) => (last.has_more ? last.page + 1 : undefined),
+    enabled: q.length >= 2,
+    staleTime: STALE_30S,
+  });
+}
+
+/** Whether the person owns a business: the Biz drawer is for business owners. */
+export function useOwnsBusiness() {
+  return useQuery<{ businesses: { role_base: string }[] }, unknown, boolean>({
+    queryKey: [...mailboxKeys.all, 'owns-business'],
+    queryFn: () => businessesApi.getMyBusinesses(),
+    select: (reply) => (reply?.businesses ?? []).some((membership) => membership.role_base === 'owner'),
+    staleTime: STALE_5M,
+  });
+}
+
 /** The Mail tab badge count; shares the drawers request with useDrawerMeta. */
 export function useMailUnread(
   options?: Omit<UseQueryOptions<MailboxDrawers, MailboxApiError, number>, 'queryKey' | 'queryFn' | 'select'>,
@@ -174,7 +289,7 @@ export function useMailUnread(
 
 export function useDrawerItems(
   drawer: 'personal' | 'home' | 'business' | 'earn',
-  params?: { page?: number; limit?: number; filter?: string; tab?: 'incoming' | 'counter' | 'vault' },
+  params?: { page?: number; limit?: number; filter?: string; tab?: 'incoming' | 'counter' | 'vault' | 'archived'; homeId?: string; folderId?: string },
   options?: Omit<
     UseQueryOptions<MailboxPaginatedResponse<MailItemV2>, MailboxApiError>,
     'queryKey' | 'queryFn'
@@ -386,14 +501,14 @@ export function useCreateVaultFolder(
   options?: UseMutationOptions<
     VaultFolder,
     MailboxApiError,
-    { label: string; icon: string; color: string; drawer: 'personal' | 'home' | 'business' | 'earn'; autoFileRules?: AutoFileRule[] }
+    { label: string; icon: string; color: string; drawer: 'personal' | 'home' | 'business' | 'earn'; home_id?: string; autoFileRules?: AutoFileRule[] }
   >,
 ) {
   const qc = useQueryClient();
   return useMutation<
     VaultFolder,
     MailboxApiError,
-    { label: string; icon: string; color: string; drawer: 'personal' | 'home' | 'business' | 'earn'; autoFileRules?: AutoFileRule[] }
+    { label: string; icon: string; color: string; drawer: 'personal' | 'home' | 'business' | 'earn'; home_id?: string; autoFileRules?: AutoFileRule[] }
   >({
     mutationFn: api.createVaultFolder,
     onSuccess: () => {

@@ -33,6 +33,9 @@ public struct VaultFolderDTO: Decodable, Sendable, Hashable, Identifiable {
     public let itemCount: Int?
     public let sortOrder: Int?
     public let createdAt: String?
+    /// A Home's own cabinet, shared by everyone who reads its mail; nil for
+    /// the person's Me and Biz folders.
+    public let homeId: String?
 
     public init(
         id: String,
@@ -44,7 +47,8 @@ public struct VaultFolderDTO: Decodable, Sendable, Hashable, Identifiable {
         system: Bool?,
         itemCount: Int?,
         sortOrder: Int?,
-        createdAt: String?
+        createdAt: String?,
+        homeId: String? = nil
     ) {
         self.id = id
         self.userId = userId
@@ -56,6 +60,7 @@ public struct VaultFolderDTO: Decodable, Sendable, Hashable, Identifiable {
         self.itemCount = itemCount
         self.sortOrder = sortOrder
         self.createdAt = createdAt
+        self.homeId = homeId
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -69,6 +74,7 @@ public struct VaultFolderDTO: Decodable, Sendable, Hashable, Identifiable {
         case itemCount = "item_count"
         case sortOrder = "sort_order"
         case createdAt = "created_at"
+        case homeId = "home_id"
     }
 }
 

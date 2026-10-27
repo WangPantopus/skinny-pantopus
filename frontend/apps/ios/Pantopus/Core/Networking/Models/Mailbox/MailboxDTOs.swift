@@ -90,6 +90,17 @@ public struct MailItem: Decodable, Sendable, Hashable, Identifiable {
     public let bundleItemCount: Int?
     /// The bundle a piece came in, if any.
     public let bundleId: String?
+    /// The files enclosed (detail answers only; `[]` elsewhere). Each opens
+    /// through a short-lived link fetched when it's tapped.
+    public let enclosures: [MailEnclosure]
+    /// The Vault folder it's filed in, if any.
+    public let vaultFolderId: String?
+    /// When someone first opened it (opened is shared by the household).
+    public let firstOpenedAt: String?
+    /// The drawer it's in: `personal`, `home`, `business` (or `earn`).
+    public let drawer: String?
+    /// Where it is in its life: `delivered`, `opened`, `filed` (in the Vault) …
+    public let lifecycle: String?
 
     private enum CodingKeys: String, CodingKey {
         case id
@@ -138,6 +149,11 @@ public struct MailItem: Decodable, Sendable, Hashable, Identifiable {
         case bundleLabel = "bundle_label"
         case bundleItemCount = "bundle_item_count"
         case bundleId = "bundle_id"
+        case enclosures
+        case vaultFolderId = "vault_folder_id"
+        case firstOpenedAt = "first_opened_at"
+        case drawer
+        case lifecycle
     }
 
     public init(from decoder: any Decoder) throws {
@@ -195,6 +211,37 @@ public struct MailItem: Decodable, Sendable, Hashable, Identifiable {
         let count = try? c.decodeIfPresent(Int.self, forKey: .bundleItemCount)
         bundleItemCount = (count ?? 0) > 0 ? count : nil
         bundleId = try? c.decodeIfPresent(String.self, forKey: .bundleId)
+        enclosures = (try? c.decodeIfPresent([MailEnclosure].self, forKey: .enclosures)) ?? []
+        vaultFolderId = try? c.decodeIfPresent(String.self, forKey: .vaultFolderId)
+        firstOpenedAt = try? c.decodeIfPresent(String.self, forKey: .firstOpenedAt)
+        drawer = try? c.decodeIfPresent(String.self, forKey: .drawer)
+        lifecycle = try? c.decodeIfPresent(String.self, forKey: .lifecycle)
+    }
+}
+
+/// A file enclosed with a piece (Mail build contract, SRV-4).
+public struct MailEnclosure: Decodable, Sendable, Hashable, Identifiable {
+    public let id: String
+    public let name: String
+    public let mimeType: String?
+    public let sizeBytes: Int?
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name
+        case mimeType = "mime_type"
+        case sizeBytes = "size_bytes"
+    }
+}
+
+/// `GET /api/mailbox/:id/enclosures/:enclosure_id`: a link signed for a few
+/// minutes (nil `expiresAt` for an older piece's public attachment).
+public struct MailEnclosureLink: Decodable, Sendable, Hashable {
+    public let url: String
+    public let expiresAt: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case url
+        case expiresAt = "expires_at"
     }
 }
 
@@ -311,6 +358,9 @@ public struct MailDetailResponse: Decodable, Sendable, Hashable {
         /// Set when the letter was deleted or dismissed for the household;
         /// members who could see it open it from the notice and restore it.
         public let removed: MailRemovedDTO?
+        /// The same answer read as a list row (sender shown, trust, due day),
+        /// so the letter page draws the envelope as the Mailbox does.
+        public let piece: DrawerItemsResponse.DrawerMail?
 
         public var id: String {
             item.id
@@ -336,6 +386,7 @@ public struct MailDetailResponse: Decodable, Sendable, Hashable {
             links = try c.decodeIfPresent([JSONValue].self, forKey: .links) ?? []
             mailExtracted = try c.decodeIfPresent(JSONValue.self, forKey: .mailExtracted)
             removed = try c.decodeIfPresent(MailRemovedDTO.self, forKey: .removed)
+            piece = try? DrawerItemsResponse.DrawerMail(from: decoder)
         }
 
         /// The person who sent it, or, for a letter sent as a business, the

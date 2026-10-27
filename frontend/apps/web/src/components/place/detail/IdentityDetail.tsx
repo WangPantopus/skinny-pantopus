@@ -28,6 +28,9 @@ import { confirmStore } from '@/components/ui/confirm-store';
 import { failureMessage } from '@/components/home/share/shareFailure';
 import { queryKeys } from '@/lib/query-keys';
 import { launchFeatures } from '@/lib/featureFlags';
+import { getItemDetail, type MailboxApiError } from '@/lib/mailbox-api';
+import { mailboxKeys } from '@/lib/mailbox-queries';
+import { mailLoadMessage } from '@/components/mailbox/mailLoadMessage';
 import { detailAddress } from './sections';
 import {
   StateProgramSection,
@@ -57,28 +60,15 @@ function letterPurpose(purpose: string): string {
   return p || 'General verification of residency';
 }
 
-// Plain-text body for "Mail a copy" — mirrors the issued letter,
-// including the verification code so the mailed copy is checkable too.
-function letterPlainText(letter: ResidencyLetter): string {
-  const cityZip = [[letter.address.city, letter.address.state].filter(Boolean).join(', '), letter.address.zipcode]
-    .filter(Boolean)
-    .join(' ');
-  return [
-    fmtDate(letter.issued_at),
-    '',
-    'To whom it may concern,',
-    '',
-    `This letter certifies that ${letter.resident_name} is a verified resident of the address below, confirmed through the Pantopus address-verification process.`,
-    '',
-    'Verified address:',
-    letter.address.line1,
-    cityZip,
-    '',
-    `Issued for: ${letter.purpose}`,
-    '',
-    `Verify this letter — code ${letter.letter_code}`,
-    letter.verify_url,
-  ].join('\n');
+/**
+ * The Mail piece that brought this letter: Pantopus files each issued residency
+ * letter in Me under an id made from the letter's own (SRV-6, pantopusLetters
+ * letterId: sha256 of "pantopus:letter:v1:residency:<letter id>").
+ */
+async function residencyMailId(letterId: string): Promise<string> {
+  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`pantopus:letter:v1:residency:${letterId}`));
+  const hex = Array.from(new Uint8Array(bytes), (b) => b.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
 }
 
 // Browser-side download of the exact issued PDF.
@@ -173,6 +163,7 @@ function LetterPreview({ facts }: { facts: LetterFacts }) {
 // ── One issued letter — code, status, actions ────────────────
 function IssuedLetterCard({ letter, homeId }: { letter: ResidencyLetter; homeId: string }) {
   const queryClient = useQueryClient();
+  const router = useRouter();
   const [downloading, setDownloading] = useState(false);
   const [mailing, setMailing] = useState(false);
   const inactive = letter.status !== 'issued';
@@ -208,24 +199,22 @@ function IssuedLetterCard({ letter, homeId }: { letter: ResidencyLetter; homeId:
     }
   };
 
-  const onMail = async () => {
+  // Each issued letter also comes to Me in Mail with its PDF enclosed: open that piece.
+  const onOpenInMail = async () => {
     setMailing(true);
     try {
-      await api.mailCompose.sendComposedMail({
-        destination: { deliveryTargetType: 'home', homeId, attnLabel: 'Current Resident', visibility: 'home_members' },
-        envelope: { type: 'letter', subject: 'Verified residency letter' },
-        object: {
-          format: 'mailjson_v1',
-          mimeType: 'application/json',
-          title: 'Verified residency letter',
-          content: letterPlainText(letter),
-          payload: { bodyFormat: 'plain_text' },
-        },
-        tracking: { source: 'place_identity_residency_letter_web' },
-      });
-      toast.success('A copy is on its way through your mailbox.');
+      const id = await residencyMailId(letter.id);
+      await queryClient.fetchQuery({ queryKey: mailboxKeys.itemDetail(id), queryFn: () => getItemDetail(id) });
+      router.push(`/app/mailbox/personal/${id}`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'We couldn’t mail your letter. Try again.');
+      const failure = err as MailboxApiError;
+      // Not in Mail yet: a new letter comes with the next morning's mail; older ones may predate Mail keeping them.
+      const recent = Date.now() - new Date(letter.issued_at).getTime() < 24 * 60 * 60 * 1000;
+      toast.error(failure?.status !== 404
+        ? `Couldn't open Mail. ${mailLoadMessage(failure)}`
+        : recent
+          ? 'Your letter comes to your Mail with the next morning’s mail. Until then, use the PDF.'
+          : "This letter isn't in your Mail: letters issued before Mail kept them aren't there. Use the PDF instead.");
     } finally {
       setMailing(false);
     }
@@ -260,11 +249,11 @@ function IssuedLetterCard({ letter, homeId }: { letter: ResidencyLetter; homeId:
         {launchFeatures.mailbox && (
           <button
             type="button"
-            onClick={onMail}
-            disabled={mailing || inactive}
+            onClick={() => { void onOpenInMail(); }}
+            disabled={mailing}
             className="flex-1 h-10 rounded-[10px] border-[1.5px] border-app-border bg-app-surface text-app-text text-[13.5px] font-semibold flex items-center justify-center gap-1.5 hover:bg-app-hover transition disabled:opacity-50"
           >
-            <Mailbox size={15} strokeWidth={2} /> {mailing ? 'Sending…' : 'Mail'}
+            <Mailbox size={15} strokeWidth={2} /> {mailing ? 'Opening…' : 'Open in Mail'}
           </button>
         )}
         {!inactive && (

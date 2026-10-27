@@ -90,8 +90,35 @@ public final class MailDetailViewModel {
     /// (`src/app/mailbox/detail.tsx:43-49`).
     public private(set) var ceremonialRedirectMailId: String?
 
-    private let mailId: String
-    private let api: APIClient
+    // MARK: The letter page (Mail tab)
+
+    /// The letter page's action on its way, if any; the others wait.
+    var letterActionInFlight: MailLetterAction?
+    /// Asks "Done with it?" before the counter's Done, and before shredding.
+    var confirmsDone = false
+    var confirmsShred = false
+    /// The envelope, turned over: who sent it and its trail.
+    var showsSenderSheet = false
+    /// File in the Vault: the folders that fit this piece.
+    var showsFilePicker = false
+    var fileFolders: [VaultFolderDTO] = []
+    /// A bundle's pieces, once it's opened.
+    var bundlePieces: [MailPieceModel] = []
+    var bundleLoading = false
+    var bundleFailure: String?
+    /// The enclosure being fetched, and the file Quick Look shows.
+    var openingEnclosure: String?
+    var quickLookURL: URL?
+    /// A Home letter that waits for proof of address: the Home to verify.
+    var proofHomeId: String?
+    /// The load failed because this is a Home letter waiting for proof.
+    var needsProof = false
+    /// The load failed because the piece isn't this person's (or is gone):
+    /// trying again won't help, so the page offers the way back.
+    var isNotFound = false
+
+    let mailId: String
+    let api: APIClient
     public private(set) var gigPaymentPending = false
     private let bidAcceptance: GigBidAcceptanceCoordinator
     private let now: @Sendable () -> Date
@@ -143,7 +170,10 @@ public final class MailDetailViewModel {
                 return
             }
             let content = Self.project(detail: response.mail, now: now())
+            needsProof = false
+            isNotFound = false
             state = .loaded(content)
+            if content.letter?.kind == .bundle { await loadBundle() }
             // Certified mail is read like any letter (Received → Read); its
             // Sign for delivery confirmation keys on signed, not on read.
             // Unstructured so leaving the letter at once still records the
@@ -151,9 +181,9 @@ public final class MailDetailViewModel {
             if !response.mail.item.viewed { await Task { await markViewed() }.value }
             await refreshGigPaymentProgress()
         } catch {
-            state = .error(
-                message: (error as? APIError)?.errorDescription ?? "Couldn't load this item."
-            )
+            state = .error(message: Self.loadFailure(error))
+            if case .notFound = error as? APIError { isNotFound = true }
+            if case .forbidden = error as? APIError { await findHomeNeedingProof() }
         }
     }
 
@@ -166,7 +196,9 @@ public final class MailDetailViewModel {
         )
         guard response != nil else { return }
         if case let .loaded(content) = state {
-            state = .loaded(MailDetailContent.replacingRead(content))
+            var read = MailDetailContent.replacingRead(content)
+            read.letter = content.letter?.opened(at: now())
+            state = .loaded(read)
         }
         NotificationCenter.default.post(name: .mailboxMailViewed, object: mailId)
     }
@@ -183,9 +215,10 @@ public final class MailDetailViewModel {
         let optimistic = MailDetailContent.replacingAck(content, with: true)
         state = .loaded(optimistic)
         do {
-            if content.category == .certified {
-                // Signing certified mail goes through the recipient-only
-                // certified route, which records the receipt and its proof.
+            if content.category == .certified, LaunchFeatures.mailExtras {
+                // Signing certified mail (Mail extras) goes through the
+                // recipient-only certified route, which records the receipt
+                // and its proof; a plain acknowledgement never does.
                 let _: CertifiedAcknowledgeResponse = try await api.request(
                     MailboxDocumentEndpoints.certifiedAcknowledge(mailId: mailId)
                 )
@@ -583,10 +616,25 @@ public final class MailDetailViewModel {
             let _: RestoreMailResponse = try await api.request(MailboxEndpoints.restore(mailId: mailId))
             removed = nil
             toast = "Letter restored"
+            // Back in the Mailbox: its list reads again when it's next shown.
+            NotificationCenter.default.post(name: .mailboxMailChanged, object: mailId)
             await refresh()
         } catch {
             toast = (error as? APIError)?.errorDescription ?? "Couldn't restore this letter. Try again."
         }
+    }
+
+    /// The letter page's words for a shredded piece: who shredded it and how
+    /// long it can come back, or that it was dismissed for the household.
+    static func shreddedText(_ removed: MailRemovedDTO) -> (title: String, subtitle: String) {
+        guard removed.isDeleted else {
+            return ("Dismissed for the household", "You can bring it back.")
+        }
+        let title = removed.byName.map { "Shredded by \($0)" } ?? "Shredded"
+        guard let until = shortDate(removed.restorableUntil) else {
+            return (title, "You can bring it back for 30 days.")
+        }
+        return (title, "You can bring it back until \(until).")
     }
 
     /// Restore banner copy: who deleted it and until when, or that it was dismissed.

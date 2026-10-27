@@ -12,6 +12,8 @@ import {
 import { toast } from '@/components/ui/toast-store';
 import { launchFeatures } from '@/lib/featureFlags';
 import { useMailboxContext } from '@/contexts/MailboxContext';
+import ErrorState from '@/components/ui/ErrorState';
+import { mailLoadMessage } from '@/components/mailbox/mailLoadMessage';
 
 // ── Season helper ────────────────────────────────────────────
 
@@ -101,8 +103,8 @@ function useNotificationPermission(): [NotifState, () => void] {
 // ── Main Page ────────────────────────────────────────────────
 
 export default function MailDayPage() {
-  const { data: summary, isLoading: summaryLoading } = useMailDaySummary();
-  const { data: settings, isLoading: settingsLoading } = useMailDaySettings();
+  const { data: summary, isLoading: summaryLoading, error: summaryError, refetch: refetchSummary } = useMailDaySummary();
+  const { data: settings, isLoading: settingsLoading, error: settingsError, refetch: refetchSettings } = useMailDaySettings();
   const updateSettings = useUpdateMailDaySettings();
   const [notifState, requestNotif] = useNotificationPermission();
 
@@ -154,6 +156,17 @@ export default function MailDayPage() {
       <div className="flex items-center justify-center h-full">
         <div className="w-6 h-6 border-2 border-app-border border-t-gray-600 rounded-full animate-spin" />
       </div>
+    );
+  }
+
+  // Without your saved settings the form would show defaults as if they were yours (and saving would keep them).
+  if (settingsError || summaryError) {
+    return (
+      <ErrorState
+        title="Couldn't load your Mail Day settings"
+        message={mailLoadMessage(settingsError ?? summaryError)}
+        onRetry={() => { void refetchSettings(); void refetchSummary(); }}
+      />
     );
   }
 

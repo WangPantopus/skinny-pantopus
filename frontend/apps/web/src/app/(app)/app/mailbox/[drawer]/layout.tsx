@@ -1,13 +1,22 @@
 'use client';
 
 import { use, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { MailItemV2 } from '@/types/mailbox';
-import type { BundleItem } from '@/types/mailbox';
 import { useQueryClient } from '@tanstack/react-query';
 import { mailboxKeys, useDrawerItems, useMarkItemOpened } from '@/lib/mailbox-queries';
-import { MailItemCard, BundleCard, OfferCard, EmptyState, isMailRead } from '@/components/mailbox';
+import { OfferCard } from '@/components/mailbox';
 import { DRAWER_LABELS, isMailboxDrawer, type MailboxDrawer } from '@/components/mailbox/MailboxHeader';
+import MailRow, { deliveryDayLabel } from '@/components/mailbox/MailRow';
+import BundlePieces from '@/components/mailbox/BundlePieces';
+import HomeLockedBox from '@/components/mailbox/HomeLockedBox';
+import WelcomePorch, { isSealedWelcome } from '@/components/mailbox/WelcomePorch';
+import { useMe } from '@/lib/me';
+import MailboxIllustration from '@/components/mailbox/MailboxIllustration';
+import { mailLoadMessage } from '@/components/mailbox/mailLoadMessage';
+import useMailAddressee, { type Addressee } from '@/components/mailbox/useMailAddressee';
+import { useMailboxContext } from '@/contexts/MailboxContext';
 import ErrorState from '@/components/ui/ErrorState';
 
 // ── Types ────────────────────────────────────────────────────
@@ -15,27 +24,14 @@ type DrawerParam = MailboxDrawer;
 
 const MAIL_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const FILTER_OPTIONS = [
-  { value: '', label: 'All' },
-  { value: 'unread', label: 'Unread' },
-  { value: 'urgent', label: 'Urgent' },
-  { value: 'starred', label: 'Starred' },
-];
+const EMPTY_LINES: Record<DrawerParam, string> = {
+  personal: 'Letters, bills and notices for you arrive here each morning.',
+  home: 'Mail for your home arrives here each morning.',
+  business: 'Mail for your business arrives here each morning.',
+  earn: 'Offers you can open for a reward arrive here.',
+};
 
 // ── Helpers ──────────────────────────────────────────────────
-function toBundleItem(item: MailItemV2): BundleItem {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const a = item as any;
-  return {
-    bundle_id: item.id,
-    bundle_label: a.bundle_label || a.display_title || item.subject || 'Bundle',
-    bundle_type: a.bundle_type || 'auto',
-    item_count: a.bundle_item_count || 0,
-    collapsed_by_default: a.collapsed_by_default ?? true,
-    items: [],
-  };
-}
-
 function toOfferEnvelope(item: MailItemV2) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const a = item as any;
@@ -65,6 +61,9 @@ export default function DrawerLayout({
   const drawer = drawerParam as DrawerParam;
   const pathname = usePathname();
   const router = useRouter();
+  // The Home drawer narrowed to one Home (Home links carry ?homeId=).
+  const homeParam = useSearchParams().get('homeId');
+  const homeId = drawer === 'home' && homeParam && MAIL_ID.test(homeParam) ? homeParam.toLowerCase() : undefined;
 
   // Detect if we're on an item detail sub-route
   const isItemView = pathname.split('/').filter(Boolean).length > 3;
@@ -85,43 +84,66 @@ export default function DrawerLayout({
   }, [isLetterLink, isUnknown, drawerParam, router]);
 
   // ── State ───────────────────────────────────────────────
-  const [filter, setFilter] = useState('');
-  const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [searchOpen, setSearchOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [allItems, setAllItems] = useState<MailItemV2[]>([]);
-  const [expandedBundles, setExpandedBundles] = useState<Set<string>>(new Set());
+  const [openBundle, setOpenBundle] = useState<string | null>(null);
   const [openingOffers, setOpeningOffers] = useState<Set<string>>(new Set());
 
-  // Debounce search input (400ms)
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(search), 400);
-    return () => clearTimeout(timer);
-  }, [search]);
-
-  // Reset paging when the drawer or filter changes. Done while rendering, not
-  // in an effect: no request goes out for the old page under the new drawer
-  // or filter, and a cached first page is never wiped after it arrives.
-  const listKey = `${drawer}|${filter}`;
-  const [pagedListKey, setPagedListKey] = useState(listKey);
-  if (pagedListKey !== listKey) {
-    setPagedListKey(listKey);
+  // Reset paging when the drawer (or Home) changes. Done while rendering, not
+  // in an effect: no request goes out for the old page under the new drawer,
+  // and a cached first page is never wiped after it arrives.
+  const listKey = `${drawer}|${homeId ?? ''}`;
+  const [pagedDrawer, setPagedDrawer] = useState(listKey);
+  if (pagedDrawer !== listKey) {
+    setPagedDrawer(listKey);
     setPage(1);
     setAllItems([]);
+    setOpenBundle(null);
   }
 
   // ── Data fetching ───────────────────────────────────────
   // The drawer list is the drawer's incoming mail, like the apps' Incoming
-  // tab: dismissed, filed and archived letters leave it.
+  // tab: filed and archived pieces leave it.
   const { data, isPending, isError, isFetching, error, refetch } = useDrawerItems(drawer, {
     page,
     limit: 20,
     tab: 'incoming',
-    filter: filter || undefined,
+    homeId,
   }, { enabled: !isLetterLink && !isUnknown });
   const markOpened = useMarkItemOpened();
   const queryClient = useQueryClient();
+  const { addressee, timeZone, homes } = useMailAddressee();
+  const narrowedHome = homeId ? homes?.find((home) => home.home_id === homeId) : undefined;
+  // Homes whose mail waits on proof of address (R14): the closed box in place of
+  // the list when that's all there is (or it's the Home asked for), a card above
+  // the other Homes' mail otherwise.
+  const lockedHomes = drawer === 'home'
+    ? (homes ?? []).filter((home) => home.mail_access === 'needs_proof' && (!homeId || home.home_id === homeId))
+    : [];
+  const openHomeCount = (homes ?? []).filter((home) => home.mail_access === 'open').length;
+  const homeLocked = lockedHomes.length > 0
+    && (Boolean(homeId) || openHomeCount === 0 || error?.serverCode === 'MAIL_HOME_NEEDS_PROOF');
+
+  // The first day (R12): the porch with Pantopus's sealed welcome letter, once;
+  // closing it leaves the letter sealed in Incoming (remembered in this browser).
+  const { data: me } = useMe();
+  const welcome = drawer === 'personal' && !isItemView ? allItems.find(isSealedWelcome) : undefined;
+  const porchKey = me?.id ? `pantopus_mail_welcome_closed:${me.id}` : null;
+  const [porchClosed, setPorchClosed] = useState<{ key: string; id: string | null } | null>(null);
+  useEffect(() => {
+    if (!porchKey) return;
+    let closedId: string | null = null;
+    try { closedId = window.localStorage.getItem(porchKey); } catch { /* storage off: the porch shows each visit */ }
+    setPorchClosed({ key: porchKey, id: closedId });
+  }, [porchKey]);
+  const showPorch = Boolean(welcome && porchClosed && porchClosed.key === porchKey && porchClosed.id !== welcome.id);
+  const closePorch = useCallback(() => {
+    if (!welcome || !porchKey) return;
+    try { window.localStorage.setItem(porchKey, welcome.id); } catch { /* storage off */ }
+    setPorchClosed({ key: porchKey, id: welcome.id });
+  }, [welcome, porchKey]);
+  const ownAddress = homes?.find((home) => home.mail_access === 'open')?.address_line ?? null;
+  const { deliveryOpening } = useMailboxContext();
 
   // Accumulate items for infinite scroll. A refetched later page (after a
   // retry or an invalidation) must not add its rows twice.
@@ -175,21 +197,20 @@ export default function DrawerLayout({
     }
   }, [drawer, markOpened, router]);
 
-  // ── Filter items by search (debounced) ─────────────────
-  const filteredItems = useMemo(() => {
-    if (!debouncedSearch) return allItems;
-    const q = debouncedSearch.toLowerCase();
-    return allItems.filter(item =>
-      (item.sender_display || '').toLowerCase().includes(q) ||
-      (item.display_title || item.subject || '').toLowerCase().includes(q) ||
-      (item.preview_text || '').toLowerCase().includes(q)
-    );
-  }, [allItems, debouncedSearch]);
+  // Incoming lists a bundle once and leaves out its pieces (the server's rule, SRV-5).
+  const rows = allItems;
 
-  // ── Split into unread/read ──────────────────────────────
-  const unreadItems = filteredItems.filter(item => !isMailRead(item));
-  const readItems = filteredItems.filter(item => isMailRead(item));
-  const hasNewItems = unreadItems.length > 0 && readItems.length > 0;
+  // Pieces under day headings, in the mailbox's own time zone.
+  const groups = useMemo(() => {
+    const out: { label: string; items: MailItemV2[] }[] = [];
+    for (const item of rows) {
+      const label = deliveryDayLabel(item, timeZone);
+      const last = out[out.length - 1];
+      if (last && last.label === label) last.items.push(item);
+      else out.push({ label, items: [item] });
+    }
+    return out;
+  }, [rows, timeZone]);
 
   // A letter link has no drawer to show while it opens the letter.
   if (isLetterLink || isUnknown) {
@@ -200,82 +221,41 @@ export default function DrawerLayout({
     );
   }
 
+  let slideIndex = 0;
+
   // Phones scroll the page (the Mailbox layout); from md up the list and the
   // letter scroll side by side.
   return (
     <div className="md:flex md:h-full md:overflow-hidden">
       {/* ── List panel ───────────────────────────────────── */}
       <div
-        className={`flex flex-col md:h-full flex-shrink-0 md:border-r border-app-border bg-app-surface ${
-          isItemView ? 'hidden md:flex md:w-[360px]' : 'w-full md:w-[360px]'
+        className={`flex flex-col md:h-full flex-shrink-0 md:border-r border-app-border bg-app ${
+          isItemView ? 'hidden md:flex md:w-[380px] lg:w-[400px]' : 'w-full md:w-[380px] lg:w-[400px]'
         }`}
       >
-        {/* Header: the drawer and tab are in the Mailbox's chips and tabs above */}
-        <div className="flex items-center gap-2 px-4 py-2 border-b border-app-border-subtle flex-shrink-0">
-          <h2 className="sr-only">{DRAWER_LABELS[drawer]} · Incoming</h2>
-          <div className="flex-1" />
-
-          {/* Filter dropdown */}
-          <select
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            aria-label="Filter mail items"
-            className="text-xs border border-app-border rounded-md px-2 py-1 bg-app-surface text-app-text-strong"
-          >
-            {FILTER_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-
-          {/* Search toggle */}
-          <button
-            type="button"
-            onClick={() => setSearchOpen(!searchOpen)}
-            aria-label={searchOpen ? 'Close search' : 'Search this drawer'}
-            aria-expanded={searchOpen}
-            className="p-1.5 text-app-text-secondary hover:text-app-text-strong dark:hover:text-gray-300 hover:bg-app-hover dark:hover:bg-gray-800 rounded transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-          </button>
-        </div>
-
-        {/* Search input */}
-        {searchOpen && (
-          <div className="px-3 py-2 border-b border-app-border-subtle flex-shrink-0">
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search this drawer..."
-              autoFocus
-              className="w-full text-sm px-3 py-1.5 border border-app-border rounded-md bg-app-surface text-app-text placeholder:text-app-text-muted focus:outline-none focus:ring-1 focus:ring-primary-500"
-            />
-          </div>
-        )}
-
-        {/* New items banner */}
-        {hasNewItems && page === 1 && (
-          <div className="px-4 py-2 bg-primary-50 dark:bg-primary-900/20 border-b border-primary-100 dark:border-primary-800 flex-shrink-0" role="status" aria-live="polite">
-            <p className="text-xs font-medium text-primary-700 dark:text-primary-300">
-              {unreadItems.length} new item{unreadItems.length !== 1 ? 's' : ''}
+        {/* The drawer and tab are in the Mailbox's chips and tabs above */}
+        <h2 className="sr-only">{DRAWER_LABELS[drawer]} · Incoming</h2>
+        {homeId ? (
+          <div className="flex items-center justify-between gap-3 px-4 pt-3 text-sm">
+            <p className="min-w-0 truncate text-app-text-secondary">
+              {narrowedHome ? <>Mail for <span className="font-medium text-app-text">{narrowedHome.name || narrowedHome.address_line}</span></> : 'Mail for one of your homes'}
             </p>
+            <Link href="/app/mailbox/home" className="flex-shrink-0 font-semibold text-primary-600 hover:underline">All homes</Link>
           </div>
-        )}
+        ) : null}
 
         {/* Item list */}
         <div className="md:flex-1 md:overflow-y-auto">
-          {isPending && page === 1 ? (
-            // Loading skeleton
-            <div className="p-3 space-y-2">
-              {[1, 2, 3, 4, 5, 6].map((i) => (
-                <div key={i} className="flex items-center gap-3 py-3 px-2">
-                  <div className="w-8 h-8 rounded-full bg-app-surface-sunken animate-pulse flex-shrink-0" />
-                  <div className="flex-1 space-y-1.5">
-                    <div className="h-3 w-24 bg-app-surface-sunken rounded animate-pulse" />
-                    <div className="h-3 w-40 bg-app-surface-sunken rounded animate-pulse" />
-                  </div>
+          {!homeLocked ? lockedHomes.map((home) => <HomeLockedBox key={home.home_id} home={home} compact />) : null}
+          {homeLocked ? (
+            <HomeLockedBox home={lockedHomes[0]} />
+          ) : isPending && page === 1 ? (
+            // Loading: paper-shaped placeholders
+            <div className="space-y-5 px-4 py-4" role="status" aria-label="Loading your mail">
+              {[1, 2, 3].map((i) => (
+                <div key={i}>
+                  <div className="h-[150px] rounded-md bg-app-surface-sunken animate-pulse" />
+                  <div className="mt-2 h-3 w-32 rounded bg-app-surface-sunken animate-pulse" />
                 </div>
               ))}
             </div>
@@ -283,87 +263,59 @@ export default function DrawerLayout({
             // A failed first page is not an empty mailbox.
             <ErrorState
               title="Couldn't load your mail"
-              message={
-                error?.code === 'NETWORK_ERROR'
-                  ? "Can't reach Pantopus. Check your connection and try again."
-                  : 'Something went wrong on our side. Please try again.'
-              }
+              message={mailLoadMessage(error)}
               // The drawer counts (chips and the Mail badge) failed with the list; bring them back too.
               onRetry={() => { void refetch(); void queryClient.invalidateQueries({ queryKey: mailboxKeys.drawers() }); }}
             />
-          ) : filteredItems.length === 0 ? (
-            debouncedSearch ? (
-              <EmptyState
-                icon="🔍"
-                title="No results found"
-                description={`Nothing matches "${debouncedSearch}" in this drawer.`}
-              />
-            ) : filter ? (
-              <EmptyState
-                icon="🔍"
-                title={`No ${filter} mail`}
-                description="Choose All to see everything in this drawer."
-              />
-            ) : (
-              <EmptyState section={drawer} />
-            )
+          ) : rows.length === 0 ? (
+            <section aria-label="No mail" className="flex flex-col items-center px-6 py-12 text-center">
+              <MailboxIllustration state="open-empty" size={132} />
+              <h3 className="mt-3 text-lg font-semibold text-app-text">Your mailbox is empty</h3>
+              <p className="mt-1 max-w-xs text-sm text-app-text-secondary">{EMPTY_LINES[drawer]}</p>
+            </section>
           ) : (
-            <div>
-              <div role="list" aria-label={`${DRAWER_LABELS[drawer]} mail`}>
-              {/* Unread items */}
-              {unreadItems.map((item) => (
-                <div role="listitem" key={item.id}>
-                  <DrawerItemRenderer
-                    item={item}
-                    drawer={drawer}
-                    isSelected={selectedItemId === item.id}
-                    expandedBundles={expandedBundles}
-                    setExpandedBundles={setExpandedBundles}
-                    openingOffers={openingOffers}
-                    setOpeningOffers={setOpeningOffers}
-                    onClick={() => handleItemClick(item)}
-                  />
-                </div>
-              ))}
-
-              {/* Earlier divider */}
-              {hasNewItems && (
-                <div className="flex items-center gap-3 px-4 py-2">
-                  <div className="flex-1 h-px bg-app-surface-sunken" />
-                  <span className="text-[10px] font-medium text-app-text-muted uppercase tracking-wider">Earlier</span>
-                  <div className="flex-1 h-px bg-app-surface-sunken" />
-                </div>
-              )}
-
-              {/* Read items */}
-              {readItems.map((item) => (
-                <div role="listitem" key={item.id}>
-                  <DrawerItemRenderer
-                    item={item}
-                    drawer={drawer}
-                    isSelected={selectedItemId === item.id}
-                    expandedBundles={expandedBundles}
-                    setExpandedBundles={setExpandedBundles}
-                    openingOffers={openingOffers}
-                    setOpeningOffers={setOpeningOffers}
-                    onClick={() => handleItemClick(item)}
-                  />
-                </div>
+            <div className="pb-6">
+              {groups.map((group) => (
+                <section key={group.label} aria-label={group.label} className="px-3 pt-4">
+                  <h3 className="px-1 pb-2 text-[11px] font-semibold uppercase leading-4 tracking-[0.06em] text-app-text-secondary">{group.label}</h3>
+                  <div role="list" className="space-y-4">
+                    {group.items.map((item) => {
+                      // Today's pieces slide out of the box during the delivery moment.
+                      const slideInDelayMs = deliveryOpening && group.label === 'Today' && slideIndex < 6 ? 450 + 90 * slideIndex++ : undefined;
+                      return (
+                        <div role="listitem" key={item.id}>
+                          <DrawerItemRenderer
+                            item={item}
+                            drawer={drawer}
+                            isSelected={selectedItemId === item.id}
+                            addressee={addressee}
+                            timeZone={timeZone}
+                            slideInDelayMs={slideInDelayMs}
+                            bundleOpen={openBundle === item.id}
+                            onToggleBundle={() => setOpenBundle((open) => (open === item.id ? null : item.id))}
+                            openingOffers={openingOffers}
+                            setOpeningOffers={setOpeningOffers}
+                            onClick={handleItemClick}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
               ))}
 
               {/* Infinite scroll sentinel */}
               <div ref={sentinelRef} className="h-4" />
-              </div>
 
               {/* A later page failed: keep the rows, retry that same page */}
               {isError && page > 1 && (
                 <div role="alert" className="mx-3 my-4 flex items-center justify-between gap-3 rounded-xl border border-app-border bg-app-surface px-4 py-3 text-sm text-app-text-strong">
-                  <p>Couldn&apos;t load more mail.</p>
+                  <p>Couldn&apos;t load more mail. {mailLoadMessage(error)}</p>
                   <button
                     type="button"
                     disabled={isFetching}
                     onClick={() => { if (!isFetching) void refetch(); }}
-                    className="font-semibold text-primary-600 hover:underline disabled:opacity-50"
+                    className="flex-shrink-0 font-semibold text-primary-600 hover:underline disabled:opacity-50"
                   >
                     Try again
                   </button>
@@ -372,7 +324,7 @@ export default function DrawerLayout({
 
               {/* Loading more indicator */}
               {isPending && page > 1 && (
-                <div className="py-4 text-center" role="status" aria-label="Loading more items">
+                <div className="py-4 text-center" role="status" aria-label="Loading more mail">
                   <div className="inline-block w-5 h-5 border-2 border-app-border border-t-gray-600 rounded-full animate-spin" />
                 </div>
               )}
@@ -389,6 +341,14 @@ export default function DrawerLayout({
       >
         {children}
       </div>
+
+      {showPorch && welcome ? (
+        <WelcomePorch
+          address={ownAddress}
+          onOpen={() => { closePorch(); router.push(`/app/mailbox/personal/${welcome.id}`); }}
+          onClose={closePorch}
+        />
+      ) : null}
     </div>
   );
 }
@@ -398,8 +358,11 @@ function DrawerItemRenderer({
   item,
   drawer,
   isSelected,
-  expandedBundles,
-  setExpandedBundles,
+  addressee,
+  timeZone,
+  slideInDelayMs,
+  bundleOpen,
+  onToggleBundle,
   openingOffers,
   setOpeningOffers,
   onClick,
@@ -407,30 +370,31 @@ function DrawerItemRenderer({
   item: MailItemV2;
   drawer: string;
   isSelected: boolean;
-  expandedBundles: Set<string>;
-  setExpandedBundles: React.Dispatch<React.SetStateAction<Set<string>>>;
+  addressee: (item: MailItemV2) => Addressee;
+  timeZone?: string;
+  slideInDelayMs?: number;
+  bundleOpen: boolean;
+  onToggleBundle: () => void;
   openingOffers: Set<string>;
   setOpeningOffers: React.Dispatch<React.SetStateAction<Set<string>>>;
-  onClick: () => void;
+  onClick: (item: MailItemV2) => void;
 }) {
-  // Bundle items
-  if (item.mail_object_type === 'bundle') {
-    const bundle = toBundleItem(item);
+  const to = addressee(item);
+
+  // A bundle opens to its pieces.
+  if (item.mail_object_type === 'bundle' || item.kind === 'bundle') {
     return (
-      <div className="px-2">
-        <BundleCard
-          bundle={bundle}
-          isExpanded={expandedBundles.has(item.id)}
-          onToggle={() => {
-            setExpandedBundles(prev => {
-              const next = new Set(prev);
-              if (next.has(item.id)) next.delete(item.id);
-              else next.add(item.id);
-              return next;
-            });
-          }}
-          onFileAll={() => {/* vault folder picker — Phase 2 */}}
+      <div>
+        <MailRow
+          item={{ ...item, kind: 'bundle' }}
+          recipientName={to.name}
+          recipientLine={to.line}
+          timeZone={timeZone}
+          onOpen={onToggleBundle}
+          expanded={bundleOpen}
+          slideInDelayMs={slideInDelayMs}
         />
+        {bundleOpen ? <BundlePieces bundleId={item.id} addressee={addressee} timeZone={timeZone} onOpen={onClick} /> : null}
       </div>
     );
   }
@@ -440,7 +404,7 @@ function DrawerItemRenderer({
     const offer = toOfferEnvelope(item);
     if (offer.payout_amount > 0) {
       return (
-        <div className="px-3 py-1.5">
+        <div className="px-1">
           <OfferCard
             item={offer}
             isOpening={openingOffers.has(item.id)}
@@ -452,7 +416,7 @@ function DrawerItemRenderer({
                   next.delete(item.id);
                   return next;
                 });
-                onClick();
+                onClick(item);
               }, 1500);
             }}
           />
@@ -461,12 +425,15 @@ function DrawerItemRenderer({
     }
   }
 
-  // Default: MailItemCard
   return (
-    <MailItemCard
+    <MailRow
       item={item}
-      isSelected={isSelected}
-      onClick={onClick}
+      recipientName={to.name}
+      recipientLine={to.line}
+      timeZone={timeZone}
+      selected={isSelected}
+      onOpen={() => onClick(item)}
+      slideInDelayMs={slideInDelayMs}
     />
   );
 }

@@ -11,6 +11,7 @@ const { validTimezone } = require('../../utils/timezone');
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const homeRecordService = require('../homeRecordService');
 const homeListService = require('../homeListService');
+const mailDelivery = require('../mailDelivery');
 const logger = require('../../utils/logger');
 const { isLaunchFeatureEnabled } = require('../../utils/featureFlags');
 
@@ -21,6 +22,7 @@ const { isLaunchFeatureEnabled } = require('../../utils/featureFlags');
  * @property {Array<{id: string, title: string, start_at: string, end_at: string, event_type: string}>} calendar_events
  * @property {number} unread_mail_count
  * @property {number} urgent_mail_count
+ * @property {{last_at: string|null, last_unopened: number, needs_you_today: number, time_zone: string}|null} mail_today
  * @property {Array<{id: string, title: string, status: string, scheduled_date: string}>} active_gigs
  * @property {number} unread_notifications
  * @property {string} collected_at
@@ -130,6 +132,11 @@ async function collectInternalContext(userId, homeId = null, timezone = 'UTC') {
       .lte('delivered_at', now.toISOString())
       .neq('urgency', 'none'),
 
+    // Today's mail line (Mail tab): this morning's round and what needs the person today, as the Mailbox counts them;
+    // Home mail only after the address is proven.
+    mailToday: !mailbox ? Promise.resolve({ data: null })
+      : mailDelivery.todaySummary({ userId, now }).then((data) => ({ data })),
+
     activeGigs: supabaseAdmin
       .from('Gig')
       .select('id, title, status, scheduled_start')
@@ -208,6 +215,7 @@ async function collectInternalContext(userId, homeId = null, timezone = 'UTC') {
     })),
     unread_mail_count: resolved.unreadMail.count || 0,
     urgent_mail_count: resolved.urgentMail.count || 0,
+    mail_today: resolved.mailToday.data || null,
     active_gigs: (resolved.activeGigs.data || []).map((g) => ({
       id: g.id,
       title: g.title,

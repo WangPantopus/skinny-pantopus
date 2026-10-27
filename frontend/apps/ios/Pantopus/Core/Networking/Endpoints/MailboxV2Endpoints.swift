@@ -46,12 +46,13 @@ public enum MailboxV2Endpoints {
     /// `POST /api/mailbox/v2/item/:id/action` — route `backend/routes/mailboxV2.js:459`.
     public static func itemAction(
         mailId: String,
-        action: String
+        action: String,
+        folderId: String? = nil
     ) -> Endpoint {
         Endpoint(
             method: .post,
             path: "/api/mailbox/v2/item/\(mailId)/action",
-            body: MailboxItemActionRequest(action: action)
+            body: MailboxItemActionRequest(action: action, folderId: folderId)
         )
     }
 
