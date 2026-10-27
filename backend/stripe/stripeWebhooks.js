@@ -638,6 +638,9 @@ async function handlePaymentIntentSucceeded(paymentIntent) {
     logger.info('Updated SupportTrainFundContribution on PI succeeded', {
       contributionId: paymentIntent.metadata.contribution_id,
     });
+    // The donor's receipt in their Mail, made once whichever path recorded the gift (Mail tab, SRV-9).
+    // eslint-disable-next-line global-require
+    void require('../services/supportTrainNotifications').giftReceiptLetter(paymentIntent.metadata.contribution_id);
   }
 
   if (paymentIntent.capture_method === 'manual') {

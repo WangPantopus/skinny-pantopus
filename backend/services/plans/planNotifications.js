@@ -25,6 +25,8 @@ const supabaseAdmin = require('../../config/supabaseAdmin');
 const logger = require('../../utils/logger');
 const pushService = require('../pushService');
 const notificationService = require('../notificationService');
+const pantopusLetters = require('../pantopusLetters');
+const { isLaunchFeatureEnabled } = require('../../utils/featureFlags');
 const rules = require('./planRules');
 
 // Quiet hours for people who haven't set their own: 9 PM to 8 AM (minutes of the day).
@@ -443,6 +445,43 @@ async function hostSummary({ plan, comingCount, spotsLeft, requestsCount }) {
   });
 }
 
+/**
+ * The host's morning summary as a letter from Pantopus (Mail tab, SRV-9): while the mailbox is on it comes in the
+ * 7 a.m. round of the plan's day (`roundAt`) in place of the push. Like the notice, it carries no address or venue.
+ * Answers the letter, or null when the mailbox is off or it couldn't be written (the caller then pushes as before).
+ */
+async function hostSummaryLetter({ plan, comingCount, spotsLeft, requestsCount, roundAt }) {
+  if (!isLaunchFeatureEnabled('mailbox')) return null;
+  const time = timeText(new Date(plan.post.event_date), rules.timezoneForPlan(plan));
+  const what = noun(plan);
+  const counts = [`${comingCount} coming`];
+  if (spotsLeft > 0) counts.push(`${spotsLeft} ${spotsLeft === 1 ? 'spot' : 'spots'} left`);
+  if (requestsCount > 0) counts.push(`${requestsCount} ${requestsCount === 1 ? 'request' : 'requests'} waiting`);
+  return pantopusLetters.sendSafe(`plan-day:${plan.post_id}`, {
+    recipient_user_id: plan.host_user_id,
+    subject: `Your ${what} is today`,
+    content: [
+      `Your ${what} is today at ${time}.`,
+      '',
+      `${capitalized(counts.join(', '))}.`,
+      '',
+      requestsCount > 0
+        ? `Open it in Plans to answer the ${requestsCount === 1 ? 'request' : 'requests'} waiting.`
+        : 'Open it in Plans to see who’s coming.',
+      '',
+      'Your Pantopus carrier',
+    ].join('\n'),
+    summary: `Your ${what} is today at ${time}: ${counts.join(', ')}.`,
+    key_facts: [
+      { label: 'When', value: `Today, ${time}` },
+      { label: 'Coming', value: String(comingCount) },
+      ...(spotsLeft > 0 ? [{ label: 'Spots left', value: String(spotsLeft) }] : []),
+      ...(requestsCount > 0 ? [{ label: 'Requests waiting', value: String(requestsCount) }] : []),
+    ],
+    delivered_at: roundAt,
+  });
+}
+
 // ── Host notices and asking again ────────────────────────────
 
 // How a rule let someone in, as the host set it (who gets in).
@@ -511,6 +550,7 @@ async function stillComingReminder({ plan, request, hostFirst }) {
 }
 
 module.exports = {
+  hostSummaryLetter,
   CATEGORY_BY_TYPE,
   BUNDLE_WINDOW_MS,
   noun,
