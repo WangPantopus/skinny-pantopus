@@ -12,6 +12,8 @@ const mailDelivery = require('../services/mailDelivery');
 // What the apps read about a piece (SRV-2), and its kept "Pantopus read this for you" note.
 const mailPiece = require('../services/mailPiece');
 const mailSummaries = require('../services/mailSummaries');
+// Private enclosures (SRV-4).
+const mailEnclosures = require('../services/mailEnclosures');
 const { HOME_DOCUMENT_TYPES } = require('../utils/homeDocumentAccess');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
@@ -596,11 +598,17 @@ const normalizeSendMailPayload = (rawBody, senderId) => {
   const senderBusinessName = structuredEnvelope.senderBusinessName ?? body.senderBusinessName ?? null;
   const senderAddress = structuredEnvelope.senderAddress ?? body.senderAddress ?? null;
   const payoutAmount = structuredPolicy.payoutAmount ?? structuredEnvelope.payoutAmount ?? body.payoutAmount ?? null;
-  const attachments =
+  const attachmentList =
     structuredObject.attachments ||
     structuredEnvelope.attachments ||
     body.attachments ||
     [];
+  // Private enclosures (SRV-4): the sender's own uploads, by signed reference; anything else is an older public
+  // address. A reference that isn't this sender's own upload refuses the send.
+  const { urls: attachments, enclosures, refused } = mailEnclosures.fromAttachments(attachmentList, senderId);
+  if (refused.length) {
+    throw new Error("One of the files can't be sent with this letter. Attach it again and try once more.");
+  }
 
   const contentCandidate = (
     structuredObject.content ??
@@ -637,7 +645,9 @@ const normalizeSendMailPayload = (rawBody, senderId) => {
   const resolvedPrimaryAction = hasPay ? 'pay' : primaryAction;
 
   // Compose metadata — store stationery/ink in extractedData for quick access
-  const rawExtracted = structuredObject?.payload?.extractedData || structuredObject?.payload?.extraction || null;
+  // A sender never sets what only the server writes (the kept note, Pantopus's mark, enclosures): services/mailPiece.
+  const rawExtracted = mailPiece.withoutServerKeys(
+    structuredObject?.payload?.extractedData || structuredObject?.payload?.extraction || null);
   const composeMetadata = {};
   if (structuredObject?.payload?.stationeryTheme) {
     composeMetadata.stationeryTheme = structuredObject.payload.stationeryTheme;
@@ -650,6 +660,9 @@ const normalizeSendMailPayload = (rawBody, senderId) => {
   }
   if (outcomes.length > 0) {
     composeMetadata.outcomes = outcomes;
+  }
+  if (enclosures.length > 0) {
+    composeMetadata.enclosures = enclosures;
   }
   const extractedData = (rawExtracted || Object.keys(composeMetadata).length > 0)
     ? { ...(rawExtracted || {}), ...composeMetadata }
@@ -1802,6 +1815,8 @@ router.get('/:id', verifyToken, async (req, res) => {
     }
 
     mail.links = await getMailLinksSafely(mail.id);
+    // What the piece encloses, private ones included; each opens through GET /:id/enclosures/:enclosureId (SRV-4).
+    mail.enclosures = mailEnclosures.listFor(mail, mail.attachments);
 
     // "Pantopus read this for you": the kept note, or one made now on this first open (never for a removed piece;
     // a failure leaves no note).
@@ -1817,6 +1832,36 @@ router.get('/:id', verifyToken, async (req, res) => {
   } catch (err) {
     logger.error('Mail fetch error', { error: err.message, mailId: req.params.id });
     res.status(500).json({ error: "Couldn't open this mail. Try again in a moment.", code: 'MAIL_UNAVAILABLE' });
+  }
+});
+
+/**
+ * GET /api/mailbox/:id/enclosures/:enclosureId
+ * A short-lived link to one enclosure of a piece the caller may read: { url, expires_at } (Mail tab, SRV-4). A
+ * private enclosure's link is signed for a few minutes; ask again once it expires. An older piece's enclosure is its
+ * address as it was stored (expires_at null).
+ */
+router.get('/:id/enclosures/:enclosureId', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  try {
+    const userId = req.user.id;
+    const { data: mail, error } = await supabaseAdmin.from('Mail').select('*').eq('id', req.params.id).maybeSingle();
+    if (error || !mail || !(await canAccessMail(mail, userId))) {
+      return sendMailUnavailable(res, error ? null : mail, userId);
+    }
+    let objectAttachments = null;
+    if (mail.object_id) {
+      const objectData = await getMailObjectPayload(mail.object_id);
+      objectAttachments = objectData?.payload?.envelope?.attachments || objectData?.payload?.attachments || null;
+    }
+    const link = await mailEnclosures.linkFor(mail, req.params.enclosureId, objectAttachments);
+    if (!link) {
+      return res.status(404).json({ error: "This letter doesn't have that enclosure.", code: 'ENCLOSURE_NOT_FOUND' });
+    }
+    return res.json(link);
+  } catch (err) {
+    logger.error('Enclosure link error', { error: err.message, mailId: req.params.id });
+    return res.status(503).json({ error: "Couldn't open this file just now. Try again in a moment.", code: 'ENCLOSURE_UNAVAILABLE' });
   }
 });
 
