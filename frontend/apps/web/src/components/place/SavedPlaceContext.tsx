@@ -12,8 +12,11 @@ import { launchFeatures } from '@/lib/featureFlags';
 import { queryKeys } from '@/lib/query-keys';
 import { useMe } from '@/lib/me';
 
-/** SavedPlace is a private bookmark, never a Home or an access credential. */
-export default function SavedPlaceContext({ previewId, savedPlaceId }: { previewId?: string; savedPlaceId?: string }) {
+/**
+ * SavedPlace is a private bookmark, never a Home or an access credential. `claimInReview`: the overview
+ * already shows your claim in review above, so with no saved address there's nothing to start here.
+ */
+export default function SavedPlaceContext({ previewId, savedPlaceId, claimInReview = false }: { previewId?: string; savedPlaceId?: string; claimInReview?: boolean }) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [removing, setRemoving] = useState(false);
@@ -50,6 +53,7 @@ export default function SavedPlaceContext({ previewId, savedPlaceId }: { preview
   }} />;
   if (saved.isPending) return <p role="status">Loading your saved places…</p>;
   if (saved.isError) return <ErrorState message="We could not load your saved places." onRetry={() => saved.refetch()} />;
+  if (!active && claimInReview && !savedPlaceId) return null;
   if (!active) return (
     <section className="rounded-2xl border border-app-border bg-app-surface p-5">
       <h1 className="text-xl font-semibold">{savedPlaceId ? 'This saved place is unavailable' : 'Start with a place that matters to you'}</h1>

@@ -52,6 +52,13 @@ export function approvalSummary(approval: ClaimApprovalProgress): string {
   return approval.proof === 'pending' ? 'Document in review' : 'Document needed';
 }
 
+/** A claim's chip on My Homes and Place: its kind, then what it is waiting on. */
+export function claimStatusLabel(claim: { claim_type: string; approval?: ClaimApprovalProgress | null; has_evidence?: boolean | null }): string {
+  const waiting = claim.approval ? approvalSummary(claim.approval)
+    : claim.has_evidence === false ? 'Document needed' : claim.has_evidence === true ? 'Under review' : 'Check document status';
+  return `${claim.claim_type === 'resident' ? 'Residency claim' : 'Ownership claim'} · ${waiting}`;
+}
+
 function StepIcon({ tone }: { tone: Tone }) {
   if (tone === 'done') return <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" aria-hidden />;
   if (tone === 'waiting') return <Clock className="w-5 h-5 text-sky-600 dark:text-sky-400 shrink-0" aria-hidden />;

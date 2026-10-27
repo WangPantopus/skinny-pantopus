@@ -30,9 +30,10 @@ import javax.inject.Inject
 /**
  * The Place tab's root (founder direction 2026-10-12): the tab is the person's place. Works out what the root shows
  * from My homes, the kept copy first and then the server, and, only when there are no Home entries at all, from the
- * saved places. Holds the session's current home, and the arrival step that keeps a looked-up address privately (a
- * preview carried through sign-in opens it over the root once). Saved places' "Save a place" runs the same arrival
- * step on an instance of its own. An unfinished preview requires explicit bookmark consent.
+ * person's claims (one in review opens My homes, which shows it) and then the saved places. Holds the session's
+ * current home, and the arrival step that keeps a looked-up address privately (a preview carried through sign-in opens
+ * it over the root once). Saved places' "Save a place" runs the same arrival step on an instance of its own. An
+ * unfinished preview requires explicit bookmark consent.
  */
 @HiltViewModel
 class HomeTabHostViewModel
@@ -120,7 +121,19 @@ class HomeTabHostViewModel
                         _landing.value = root
                         return@launch
                     }
-                    // No Home entries at all: the address they saved decides.
+                    // No Home entries at all: a claim in review opens My homes, which shows it (a claim makes its Home
+                    // theirs only once it's approved); without one, the address they saved decides.
+                    val claims = homesRepository.myClaimsStored(forceHomes)
+                    if (current != generation) return@launch
+                    val claimsData = claims.data
+                    if (claimsData == null) {
+                        showFailure(claims.failure)
+                        return@launch
+                    }
+                    if (claimsData.claims.any { it.isInReview }) {
+                        _landing.value = HomeLanding.Homes
+                        return@launch
+                    }
                     val saved = savedPlacesRepository.listStored()
                     if (current != generation) return@launch
                     val savedData = saved.data
@@ -132,8 +145,14 @@ class HomeTabHostViewModel
         private fun keptRoot(): HomeLanding? {
             val homes = homesRepository.myHomesCopy() ?: return null
             rootFor(homes)?.let { return it }
-            val saved = savedPlacesRepository.listCopy() ?: return null
-            return savedRootFor(saved.savedPlaces)
+            // No Home entries: a kept claim in review opens My homes; without one, the kept saved places decide.
+            val claims = homesRepository.myClaimsCopy()?.claims ?: return null
+            val saved = savedPlacesRepository.listCopy()
+            return when {
+                claims.any { it.isInReview } -> HomeLanding.Homes
+                saved == null -> null
+                else -> savedRootFor(saved.savedPlaces)
+            }
         }
 
         private fun showFailure(failure: NetworkError?) {

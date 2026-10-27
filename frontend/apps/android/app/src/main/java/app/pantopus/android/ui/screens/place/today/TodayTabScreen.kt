@@ -45,6 +45,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.data.ai.AIScreenContext
+import app.pantopus.android.data.api.models.homes.OwnershipClaimDto
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.GhostButton
 import app.pantopus.android.ui.components.NavigationMenuButton
@@ -71,6 +72,10 @@ import java.util.Locale
 
 private const val PLACEHOLDER_ROWS = 3
 
+/** Today has something to show: its content, or the card for no place or a claim in review. */
+private val TodayTabUiState.showsContent: Boolean
+    get() = this is TodayTabUiState.Loaded || this == TodayTabUiState.NoPlace || this is TodayTabUiState.ClaimInReview
+
 /**
  * The Today tab root (Wedge v2 D2). Four states: loading placeholders,
  * a claim prompt when there is no place yet, the Today group with the
@@ -82,6 +87,8 @@ private const val PLACEHOLDER_ROWS = 3
 fun TodayTabScreen(
     onClaim: () -> Unit,
     onOpenPlace: ((homeId: String) -> Unit)? = null,
+    /** "Check status" on a claim in review: the Place tab, which shows it in My homes. */
+    onCheckClaim: () -> Unit = {},
     plans: PlansTodayActions? = null,
     onAsk: ((AIScreenContext) -> Unit)? = null,
     /** The side menu, on every tab (founder decision 2026-10-20); null hides the button. */
@@ -89,7 +96,7 @@ fun TodayTabScreen(
     viewModel: TodayTabViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    ReportContentShown("today", state is TodayTabUiState.Loaded || state == TodayTabUiState.NoPlace)
+    ReportContentShown("today", state.showsContent)
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     // Coming back keeps what's on screen; the view model reads again only once it is out of date.
     HomeCopyLifecycle(viewModel::load, viewModel::suspendContent)
@@ -132,6 +139,7 @@ fun TodayTabScreen(
             when (val current = state) {
                 TodayTabUiState.Loading -> TodayPlaceholders()
                 TodayTabUiState.NoPlace -> NoPlaceCard(onClaim)
+                is TodayTabUiState.ClaimInReview -> ClaimInReviewCard(current.claim, onCheckClaim)
                 is TodayTabUiState.Error -> ErrorState(message = current.message, onRetry = viewModel::refresh)
                 is TodayTabUiState.Loaded ->
                     Column(
@@ -242,6 +250,47 @@ private fun NoPlaceCard(onClaim: () -> Unit) {
         )
         PrimaryButton(title = "Claim your address", onClick = onClaim, modifier = Modifier.fillMaxWidth())
     }
+}
+
+/**
+ * No place yet, but a claim in review: the address claimed and when Today fills in, with the Place tab (My homes) for
+ * its status. Words match iOS and web's Place pages.
+ */
+@Composable
+private fun ClaimInReviewCard(
+    claim: OwnershipClaimDto,
+    onCheckClaim: () -> Unit,
+) {
+    Column(
+        modifier =
+            Modifier.padding(horizontal = 16.dp).fillMaxWidth().placeCard().padding(24.dp).testTag("addressTodayClaimInReview"),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Box(
+            modifier = Modifier.size(56.dp).clip(RoundedCornerShape(16.dp)).background(PantopusColors.homeBg),
+            contentAlignment = Alignment.Center,
+        ) {
+            PantopusIconImage(PantopusIcon.Clock, null, size = 28.dp, strokeWidth = 2f, tint = PantopusColors.home)
+        }
+        Text("Your claim is in review", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = PantopusColors.appText)
+        Text(
+            claimInReviewMessage(claim),
+            fontSize = 14.sp,
+            lineHeight = 20.sp,
+            textAlign = TextAlign.Center,
+            color = PantopusColors.appTextSecondary,
+        )
+        PrimaryButton(title = "Check status", onClick = onCheckClaim, modifier = Modifier.fillMaxWidth())
+    }
+}
+
+/** "You claimed 901 C Street, Vancouver, WA. Today fills in here once a Pantopus reviewer approves your claim." */
+internal fun claimInReviewMessage(claim: OwnershipClaimDto): String {
+    val home = claim.home
+    val street = home?.street
+    val claimed = if (home != null && street != null) "You claimed ${listOfNotNull(street, home.locality).joinToString(", ")}. " else ""
+    return claimed + "Today fills in here once a Pantopus reviewer approves your claim."
 }
 
 /** The box at the top of Today (AI assistant phase 1): it opens the assistant about today, nothing sent yet. */

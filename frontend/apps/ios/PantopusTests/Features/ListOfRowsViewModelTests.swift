@@ -36,6 +36,7 @@ final class ListOfRowsViewModelTests: XCTestCase {
                "verification_tier":"attom","occupancy":null,"pending_claim_id":null}
             ]}
             """),
+            .status(200, body: "{\"claims\":[]}"),
             .status(200, body: "{\"requests\":[],\"next_cursor\":null}")
         ]
         let vm = MyHomesListViewModel(api: makeAPI(), identity: { "list-tests" }, onOpenHome: { _ in })
@@ -49,7 +50,11 @@ final class ListOfRowsViewModelTests: XCTestCase {
     }
 
     func testMyHomesEmptyState() async {
-        SequencedURLProtocol.sequence = [.status(200, body: "{\"homes\":[]}"), .status(200, body: "{\"requests\":[],\"next_cursor\":null}")]
+        SequencedURLProtocol.sequence = [
+            .status(200, body: "{\"homes\":[]}"),
+            .status(200, body: "{\"claims\":[]}"),
+            .status(200, body: "{\"requests\":[],\"next_cursor\":null}")
+        ]
         let vm = MyHomesListViewModel(api: makeAPI(), identity: { "list-tests" }, onOpenHome: { _ in })
         await vm.load()
         guard case let .empty(content) = vm.state else {

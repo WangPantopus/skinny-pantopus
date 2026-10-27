@@ -258,6 +258,12 @@ interface HomesApi {
     @GET("api/homes/my-ownership-claims")
     suspend fun myOwnershipClaims(): MyOwnershipClaimsResponse
 
+    /** [myOwnershipClaims] for the screens' store: sends the stored ETag; a 304 means the stored copy is current. */
+    @GET("api/homes/my-ownership-claims")
+    suspend fun myOwnershipClaimsConditional(
+        @Header("If-None-Match") etag: String?,
+    ): Response<MyOwnershipClaimsResponse>
+
     /**
      * `POST /api/homes/:id/ownership-claims/:claimId/identity-check` — route
      * `backend/routes/homeOwnership.js:609`. Starts (or continues) the claimant's

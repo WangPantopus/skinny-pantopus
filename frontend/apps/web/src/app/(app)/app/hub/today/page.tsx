@@ -32,6 +32,7 @@ import { queryKeys } from '@/lib/query-keys';
 import { withoutLaunchCutTodayRows } from '@/lib/featureFlags';
 import type { HubToday } from '@pantopus/types';
 import BallotTodaySection, { useBallotToday } from '@/components/ballot/BallotTodaySection';
+import { claimInReviewNote, claimsInReview, myClaimsQuery } from '@/lib/myHomes';
 
 // ── Icon helpers ─────────────────────────────────────────────────
 
@@ -141,6 +142,12 @@ export default function HubTodayPage() {
   const ballot = useBallotToday(hasToken);
 
   const today = query.data ? withoutLaunchCutTodayRows(query.data) : null;
+  // No briefing yet, but a claim in review: say so, as the apps' Today does (a claim makes its Home
+  // yours only once it's approved).
+  const noBriefing = query.isSuccess && (!today || today.display_mode === 'hidden');
+  const claims = useQuery({ ...myClaimsQuery(), enabled: hasToken && noBriefing });
+  const claim = claimsInReview(claims.data)[0] ?? null;
+  const claimNote = claim ? claimInReviewNote(claim, 'Today') : null;
   // The first frame shows what this tab already loaded; the skeleton only while nothing has been
   // (a fresh page load starts with an empty cache, like the server).
   const loading = query.data === undefined && (!mounted || (query.isPending && hasToken));
@@ -232,7 +239,23 @@ export default function HubTodayPage() {
         {!loading && !error && (!today || today.display_mode === 'hidden') && (
           <div className="space-y-4">
             <div className="rounded-xl border border-app bg-surface dark:bg-surface-dark p-8 text-center">
-              <p className="text-sm text-app-text-secondary">No briefing available right now.</p>
+              {/* Wait for the claims, so "No briefing" doesn't flash before a claim in review. */}
+              {claims.isPending ? (
+                <p className="text-sm text-app-text-secondary" aria-hidden="true">&nbsp;</p>
+              ) : claimNote ? (
+                <>
+                  <p className="text-base font-semibold text-app-text">{claimNote.title}</p>
+                  <p className="mt-1 text-sm text-app-text-secondary">{claimNote.description}</p>
+                  <button
+                    onClick={() => router.push('/app/homes')}
+                    className="mt-4 text-sm font-semibold text-primary-600 dark:text-primary-400 hover:underline"
+                  >
+                    Check status
+                  </button>
+                </>
+              ) : (
+                <p className="text-sm text-app-text-secondary">No briefing available right now.</p>
+              )}
             </div>
             <BallotTodaySection data={ballot} />
           </div>

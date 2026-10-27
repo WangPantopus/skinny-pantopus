@@ -12,6 +12,7 @@ import app.pantopus.android.data.ai.RadonReportReader
 import app.pantopus.android.data.ai.RadonReportReading
 import app.pantopus.android.data.analytics.PilotEvents
 import app.pantopus.android.data.api.models.homes.MyHomesResponse
+import app.pantopus.android.data.api.models.homes.OwnershipClaimDto
 import app.pantopus.android.data.api.models.homes.showsCopyBeforeRecheck
 import app.pantopus.android.data.api.models.hub.NotificationPreferencesPatch
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
@@ -213,7 +214,7 @@ class TodayTabViewModel
                     showStoredToday()
                     if (loadJob?.isActive != true) refresh(force = false)
                 }
-                TodayTabUiState.NoPlace, is TodayTabUiState.Error -> refresh(force = false)
+                TodayTabUiState.NoPlace, is TodayTabUiState.ClaimInReview, is TodayTabUiState.Error -> refresh(force = false)
             }
         }
 
@@ -277,7 +278,7 @@ class TodayTabViewModel
             loadJob?.cancel()
             val version = ++loadVersion
             val shown = _state.value
-            if (shown !is TodayTabUiState.Loaded && shown != TodayTabUiState.NoPlace) {
+            if (shown !is TodayTabUiState.Loaded && shown != TodayTabUiState.NoPlace && shown !is TodayTabUiState.ClaimInReview) {
                 homeId = null
                 _state.value = TodayTabUiState.Loading
             }
@@ -385,7 +386,12 @@ class TodayTabViewModel
             if (!current(version)) return
             val places = saved.data
             if (places == null) {
-                val samePlace = _state.value.takeIf { it == TodayTabUiState.NoPlace || (it as? TodayTabUiState.Loaded)?.savedPlace != null }
+                val samePlace =
+                    _state.value.takeIf {
+                        it == TodayTabUiState.NoPlace ||
+                            it is TodayTabUiState.ClaimInReview ||
+                            (it as? TodayTabUiState.Loaded)?.savedPlace != null
+                    }
                 _state.value =
                     if (saved.failure.refusesStoredCopy) {
                         TodayTabUiState.Error(saved.failure.sentence("Couldn't load your place."))
@@ -396,7 +402,18 @@ class TodayTabViewModel
             }
             val place = places.savedPlaces.firstOrNull()
             if (place == null) {
-                _state.value = TodayTabUiState.NoPlace
+                // No place yet: a claim in review says so instead of "Claim your address" (a claim makes its Home
+                // theirs only once it's approved).
+                val claims = homesRepository.myClaimsStored(force)
+                if (current(version)) {
+                    val claimsData = claims.data
+                    _state.value =
+                        if (claimsData == null) {
+                            _state.value.afterFailedRead(claims.failure.sentence("Couldn't load your place."))
+                        } else {
+                            claimsData.claims.firstOrNull { it.isInReview }?.let(TodayTabUiState::ClaimInReview) ?: TodayTabUiState.NoPlace
+                        }
+                }
                 return
             }
             val copy = savedPlacesRepository.todayCopy(place.id)
@@ -553,7 +570,7 @@ private fun NetworkError?.sentence(fallback: String): String = this?.displayMess
 private fun TodayTabUiState?.afterFailedRead(message: String): TodayTabUiState =
     when (this) {
         is TodayTabUiState.Loaded -> copy(refreshFailed = true)
-        TodayTabUiState.NoPlace -> this
+        TodayTabUiState.NoPlace, is TodayTabUiState.ClaimInReview -> this
         else -> TodayTabUiState.Error(message)
     }
 
@@ -562,6 +579,9 @@ sealed interface TodayTabUiState {
 
     /** No primary home yet — the tab is a claim prompt. */
     data object NoPlace : TodayTabUiState
+
+    /** No place yet, but [claim] is in review: the tab says so and when Today fills in. */
+    data class ClaimInReview(val claim: OwnershipClaimDto) : TodayTabUiState
 
     /**
      * @property fetchedAt when this copy arrived (wall clock), for Today's freshness windows.

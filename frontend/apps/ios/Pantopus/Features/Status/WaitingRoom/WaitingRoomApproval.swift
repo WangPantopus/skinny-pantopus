@@ -54,6 +54,15 @@ public enum WaitingRoomApproval {
     static let confirmIdentityKey = "confirm_identity"
     static let uploadDocumentKey = "upload_document"
 
+    /// What a claim in review waits on, in a few words (web `approvalSummary`).
+    static func summary(_ approval: ClaimApprovalProgressDTO) -> String {
+        let identityDone = approval.identity == "verified"
+        if identityDone, approval.proof == "verified" { return "Waiting for approval" }
+        if !identityDone, approval.proof == "missing" { return "Identity and document needed" }
+        if !identityDone { return approval.identity == "processing" ? "Checking your ID" : "Identity check needed" }
+        return approval.proof == "pending" ? "Document in review" : "Document needed"
+    }
+
     /// Both steps for a claim in review, or none when the server didn't say.
     static func steps(_ approval: ClaimApprovalProgressDTO?, residency: Bool) -> [WaitingRoomApprovalStep] {
         guard let approval else { return [] }

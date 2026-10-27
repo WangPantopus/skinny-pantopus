@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
-import { myHomesQuery, type MyHomesReply } from '@/lib/myHomes';
+import { claimAddress, myClaimsQuery, myHomesQuery, type MyHomesReply } from '@/lib/myHomes';
 import { showsMyHomesCopy } from '@/lib/householdCopy';
 import { getAuthToken } from '@pantopus/api';
 import { removalLink } from '@/components/home/member-removals/removalModel';
@@ -18,7 +18,7 @@ import { confirmStore } from '@/components/ui/confirm-store';
 import { validateResidencyPage, residencyRequestLabel, residencyReviewLabel } from '@/components/homes/residencyProgressModel';
 import { unitText } from '@/components/homes/creation/homeCreationModel';
 import { useFeatureFlag } from '@/hooks/useFeatureFlag';
-import ClaimApprovalChecklist, { approvalSummary } from '@/components/homes/ClaimApprovalChecklist';
+import ClaimApprovalChecklist, { claimStatusLabel } from '@/components/homes/ClaimApprovalChecklist';
 import { EVERYTHING, RECONNECTED, onSyncTopic } from '@/lib/syncSignals';
 type ResidencyRequest = Awaited<ReturnType<typeof api.homes.getMyResidencyRequests>>['requests'][number];
 type PendingClaim = { claim: Claim; addressLine: string; cityLine: string };
@@ -103,7 +103,8 @@ export default function HomesPage() {
       const [homesRes, claimsRes, residencyRes] = await Promise.all([
         // Read now (never from the copy), shared with any read already on its way, and kept for Place.
         queryClient.fetchQuery({ ...myHomesQuery(), staleTime: 0 }),
-        api.homeOwnership.getMyOwnershipClaims(),
+        // Kept for Place, Today and Pulse, which name a claim in review when there's no Home to open.
+        queryClient.fetchQuery({ ...myClaimsQuery(), staleTime: 0 }),
         api.homes.getMyResidencyRequests(),
       ]);
       if (!current()) return;
@@ -121,22 +122,9 @@ export default function HomesPage() {
       const homeIds = new Set(list.filter((h) => h.access_kind !== 'private_setup').map((h) => h.id));
       const claims = claimsRes?.claims;
       if (!Array.isArray(claims)) throw new Error('Your verification progress could not be loaded. Please retry.');
-      const pending = claims.filter((c) => claimInProgress(c.status) && c.home_id && !homeIds.has(c.home_id));
-      const enriched = await Promise.all(
-        pending.map(async (claim) => {
-          try {
-            const prof = await api.homes.getPublicHomeProfile(claim.home_id);
-            const h = prof.home;
-            const addressLine = h.name || h.address || 'Home';
-            const cityLine = [h.city, h.state, h.zipcode].filter(Boolean).join(', ');
-            return { claim, addressLine, cityLine };
-          } catch {
-            return { claim, addressLine: 'Home',
-              cityLine: claim.claim_type === 'resident' ? 'Residency verification in progress' : 'Ownership verification in progress' };
-          }
-        }),
-      );
-      if (!current()) return;
+      // Each claim is named by the address you claimed (your own entry), as on iOS and Android.
+      const enriched = claims.filter((c) => claimInProgress(c.status) && c.home_id && !homeIds.has(c.home_id))
+        .map((claim) => { const { line, city } = claimAddress(claim); return { claim, addressLine: line, cityLine: city }; });
       // A page that opened on the kept list becomes ready with its first confirmed answer.
       if (!background || ready.current === null) ready.current = current;
       setHomes(list); setPendingClaims(enriched);
@@ -388,8 +376,7 @@ export default function HomesPage() {
                           <div className="text-base font-semibold text-app-text">{addressLine}</div>
                           <div className="text-sm text-app-text-secondary">{cityLine}</div>
                           <div className="mt-2 inline-flex items-center rounded-full bg-violet-100 dark:bg-violet-900/50 px-2.5 py-1 text-xs font-semibold text-violet-800 dark:text-violet-200">
-                            {residency ? 'Residency claim' : 'Ownership claim'} · {claim.approval ? approvalSummary(claim.approval)
-                              : claim.has_evidence === false ? 'Document needed' : claim.has_evidence === true ? 'Under review' : 'Check document status'}
+                            {claimStatusLabel(claim)}
                           </div>
                           <p className="mt-2 text-xs text-app-text-secondary">
                             This claim does not grant household access.

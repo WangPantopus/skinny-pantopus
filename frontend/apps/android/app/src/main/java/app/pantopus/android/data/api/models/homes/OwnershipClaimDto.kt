@@ -29,6 +29,10 @@ data class OwnershipClaimDto(
     /** What a claim in review still needs before it can be approved; null otherwise. */
     val approval: ClaimApprovalProgressDto? = null,
 ) {
+    /** Still in review: the server shows every open claim as `under_review`. */
+    val isInReview: Boolean
+        get() = status == "under_review"
+
     /** The claimed Home's address lines. */
     @JsonClass(generateAdapter = true)
     data class ClaimedHome(
@@ -40,11 +44,18 @@ data class OwnershipClaimDto(
         /** "901 C Street Unit 4, Vancouver", or null without a street. */
         val label: String?
             get() {
-                val street = listOfNotNull(address, address2).map { it.trim() }.filter { it.isNotEmpty() }.joinToString(" ")
-                if (street.isEmpty()) return null
+                val street = street ?: return null
                 val town = city?.trim().orEmpty()
                 return if (town.isEmpty()) street else "$street, $town"
             }
+
+        /** "901 C Street Unit 4", or null without a street. */
+        val street: String?
+            get() = listOfNotNull(address, address2).map { it.trim() }.filter { it.isNotEmpty() }.joinToString(" ").ifEmpty { null }
+
+        /** "Vancouver, WA", or null when neither is known. */
+        val locality: String?
+            get() = listOfNotNull(city, state).map { it.trim() }.filter { it.isNotEmpty() }.joinToString(", ").ifEmpty { null }
     }
 }
 

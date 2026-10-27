@@ -198,6 +198,13 @@ open class HomesRepository
         /** `GET /api/homes/my-ownership-claims`. */
         open suspend fun myOwnershipClaims(): NetworkResult<MyOwnershipClaimsResponse> = safeApiCall { api.myOwnershipClaims() }
 
+        /** The viewer's claims through the screens' store, saved on the phone like My Homes. [force] reads now. */
+        open suspend fun myClaimsStored(force: Boolean = false): Stored<MyOwnershipClaimsResponse> =
+            store.read(StoreKeys.myClaims, force, persist = true) { etag -> conditionalApiCall { api.myOwnershipClaimsConditional(etag) } }
+
+        /** The stored claims as they are now, without a request (null before the first read or after a wipe). */
+        open fun myClaimsCopy(): MyOwnershipClaimsResponse? = store.peek(StoreKeys.myClaims).data
+
         /** `POST /api/homes/:id/ownership-claims/:claimId/identity-check`. */
         open suspend fun startClaimIdentityCheck(
             homeId: String,

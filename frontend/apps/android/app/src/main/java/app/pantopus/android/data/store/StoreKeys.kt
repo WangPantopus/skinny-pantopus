@@ -10,6 +10,7 @@ import app.pantopus.android.data.api.models.feed.FeedPreferencesResponse
 import app.pantopus.android.data.api.models.feed.FeedResponse
 import app.pantopus.android.data.api.models.homedashboard.HomeDashboardResponse
 import app.pantopus.android.data.api.models.homes.MyHomesResponse
+import app.pantopus.android.data.api.models.homes.MyOwnershipClaimsResponse
 import app.pantopus.android.data.api.models.homes.showsInListBeforeRecheck
 import app.pantopus.android.data.api.models.hub.NotificationPreferences
 import app.pantopus.android.data.api.models.location.SavedViewingArea
@@ -142,6 +143,18 @@ object StoreKeys {
             topics = setOf(StoreTopics.HOMES),
             type = MyHomesResponse::class.java,
             saveWhen = { reply -> reply.homes.all { it.showsInListBeforeRecheck } },
+        )
+
+    /**
+     * The viewer's own claims: a claim makes its Home theirs only once it's approved, so until then My homes, the Place
+     * root and Today name the ones in review. Saved on the phone like My Homes, so a cold start lands on them at once.
+     */
+    val myClaims =
+        StoreKey<MyOwnershipClaimsResponse>(
+            "api/homes/my-ownership-claims",
+            kind = StoreKind.HOMES,
+            topics = setOf(StoreTopics.HOMES),
+            type = MyOwnershipClaimsResponse::class.java,
         )
 
     /**

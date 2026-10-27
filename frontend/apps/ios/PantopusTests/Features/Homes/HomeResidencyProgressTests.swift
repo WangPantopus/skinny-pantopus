@@ -23,6 +23,7 @@ final class HomeResidencyProgressTests: XCTestCase {
         let model = MyHomesListViewModel(
             api: api([
                 "/api/homes/my-homes": [.status(503, body: "{}")],
+                "/api/homes/my-ownership-claims": [.status(200, body: "{\"claims\":[]}")],
                 "/api/homes/my-residency": [.status(200, body: page())]
             ]),
             identity: { "residency-tests" },
@@ -48,6 +49,7 @@ final class HomeResidencyProgressTests: XCTestCase {
         let model = MyHomesListViewModel(
             api: api([
                 "/api/homes/my-homes": [.status(200, body: "{\"homes\":[]}")],
+                "/api/homes/my-ownership-claims": [.status(200, body: "{\"claims\":[]}")],
                 "/api/homes/my-residency": [.status(200, body: page(cursor: request))],
                 "/api/homes/my-residency?after=\(request)": [.status(503, body: "{}"), .status(200, body: page(items: false))]
             ]),

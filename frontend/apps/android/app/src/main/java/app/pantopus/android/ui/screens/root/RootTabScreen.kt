@@ -2864,6 +2864,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     ) = ChildRoutes.chatConversationRoom(roomId, title, title.trim().take(1).uppercase(), verified = false)
                     TodayTabScreen(
                         onClaim = { navController.navigate(ChildRoutes.ADD_HOME) },
+                        onCheckClaim = { navController.navigateToRootTab(PantopusRoute.Place) },
                         onAsk = { context -> navController.navigate(ChildRoutes.askPantopus(context)) },
                         onOpenMenu = openMenu,
                         onOpenPlace = { homeId ->

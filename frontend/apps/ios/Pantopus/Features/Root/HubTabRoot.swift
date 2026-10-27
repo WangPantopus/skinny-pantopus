@@ -3695,8 +3695,9 @@ public struct HubTabRoot: View {
 
     /// Works out the Place tab's root (see `PlaceRoot`). The kept home list
     /// answers at once, also offline; the server's list then confirms it.
-    /// Saved places count only when there are no Home entries at all. What is
-    /// on screen stays when a read fails; only an empty root shows the error.
+    /// Claims in review, then saved places, count only when there are no Home
+    /// entries at all. What is on screen stays when a read fails; only an
+    /// empty root shows the error.
     private func resolvePlaceRoot() async {
         guard mode == .hub, !currentUserId.isEmpty else { return }
         placeRootGeneration += 1
@@ -3705,6 +3706,8 @@ public struct HubTabRoot: View {
         let fresh = placeRootNeedsFreshList
         if !fresh, let copy = HomesStoreReads.peekMyHomes() {
             if let root = PlaceRootResolver.root(for: copy.value, current: currentHomeId) {
+                placeRoot = root
+            } else if let claims = HomesStoreReads.peekMyClaims(), let root = PlaceRootResolver.root(forClaims: claims.value) {
                 placeRoot = root
             } else if let saved = HomesStoreReads.peekSavedPlaces() {
                 placeRoot = PlaceRootResolver.savedPlace(in: saved.value.savedPlaces).map(PlaceRoot.savedPlace) ?? .firstRun
@@ -3716,6 +3719,12 @@ public struct HubTabRoot: View {
             // A newer read (a switch, a link, a retry) wins over this one.
             guard generation == placeRootGeneration else { return }
             if let root = PlaceRootResolver.root(for: homes, current: currentHomeId) {
+                placeRoot = root
+                return
+            }
+            let claims = try await HomesStoreReads.myClaims(force: fresh).value
+            guard generation == placeRootGeneration else { return }
+            if let root = PlaceRootResolver.root(forClaims: claims) {
                 placeRoot = root
                 return
             }
