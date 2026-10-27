@@ -17,7 +17,7 @@ const { DateTime } = require('luxon');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const { resolveHomeTimezone, validTimezone } = require('../utils/timezone');
-const { visibleMailFilter, mailReaderIdsOrThrow, canAccessMail } = require('../utils/homeMailAccess');
+const { visibleMailFilter, mailReaderIdsOrThrow, canAccessMail, getAccessibleHomeIds } = require('../utils/homeMailAccess');
 
 const MORNING_HOUR = 7;
 const FALLBACK_TIME_ZONE = 'America/Los_Angeles';
@@ -191,6 +191,26 @@ async function deliverySummary({ userId, homeIds, now = new Date() }) {
 }
 
 /**
+ * Today's mail, for the Today screen's line: this morning's round (when it came, how many of its pieces are still
+ * unopened) and how many pieces in the box need the person today (time-sensitive, overdue, or due today or earlier,
+ * opened or not, until they're done). Counted as the box shows them, from the person's own mail and their proven
+ * Homes'. `last_at` is null when no round came today in their zone.
+ * @returns {Promise<{ last_at: string|null, last_unopened: number, needs_you_today: number, time_zone: string }>}
+ */
+async function todaySummary({ userId, now = new Date() }) {
+  const homeIds = await getAccessibleHomeIds(userId);
+  const line = await deliverySummary({ userId, homeIds, now });
+  const today = localDate(now, line.time_zone);
+  const roundToday = Boolean(line.last_at) && localDate(new Date(line.last_at), line.time_zone) === today;
+  const needsYouToday = await countPieces((select, options) => readableDelivered(select, options, userId, homeIds, now)
+    .in('lifecycle', ['delivered', 'opened'])
+    .eq('archived', false)
+    .or(`urgency.in.(time_sensitive,overdue),due_date.lte.${today}`));
+  return { last_at: roundToday ? line.last_at : null, last_unopened: roundToday ? line.last_unopened : 0,
+    needs_you_today: needsYouToday, time_zone: line.time_zone };
+}
+
+/**
  * Tell the people who can read these special deliveries that they came, once, when they land (mail_delivered, which
  * opens the piece). Ordinary pieces wait for the morning notice instead. Each piece: { id, recipient_user_id,
  * recipient_home_id, senderName, mailType, mailIntent, amount, address, vendorName }; a household piece (no
@@ -224,5 +244,5 @@ async function announceSpecialDeliveries(pieces, { excludeUserId = null } = {}) 
 
 module.exports = {
   MORNING_HOUR, FALLBACK_TIME_ZONE, nextRound, localDate, isSpecialDelivery, homeTimeZone, personTimeZone,
-  mailboxTimeZone, deliveryFor, withDelivery, deliverySummary, announceSpecialDeliveries, afterStored, countPieces,
+  mailboxTimeZone, deliveryFor, withDelivery, deliverySummary, announceSpecialDeliveries, afterStored, countPieces, todaySummary,
 };
