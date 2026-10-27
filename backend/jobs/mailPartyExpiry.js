@@ -10,8 +10,9 @@ const logger = require('../utils/logger');
 const { skipForLaunchCut } = require('../utils/featureFlags');
 
 async function mailPartyExpiry() {
-  // Launch cut #10 (Mailbox): mailbox jobs don't run while the mailbox is off.
-  if (skipForLaunchCut('mailbox', 'mailPartyExpiry')) return;
+  // Launch cuts #8 and #10: community mail, Mail Party and Earn are mail extras inside the mailbox, so this job runs
+  // only while both are on.
+  if (skipForLaunchCut(['mailbox', 'mail_extras'], 'mailPartyExpiry')) return;
   const expiryThreshold = new Date(Date.now() - 90 * 1000).toISOString();
 
   // Find pending party sessions past the 90s window

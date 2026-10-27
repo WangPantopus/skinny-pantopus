@@ -895,6 +895,7 @@ no-bid nudges; it is not the launch activation command.
 | `SeederEnabled` | Local fetcher, poster and region discovery (3) | Production curator account and credentials, region/source rows, reviewed source coverage and paid-composition approval; national sports stays paused |
 | `HomeRemindersEnabled` | Recipient-local Home reminders (1) | Due-day task/bill/calendar checks and physical-phone receipt |
 | `AlertsEnabled` | Weather/AQI checks (1) | Location coverage, preferences and working weather/AQI providers |
+| `MailEnabled` | Mail notification pushes: urgent mail and the morning mailbox summary (1) | The Mailbox switched on (backend `LAUNCH_FEATURES` lists `mailbox`) and app builds that show it; until then the backend refuses these pushes anyway |
 | `MaintenanceJobsEnabled` | Post expiry, Ask reminders, chat redaction, ghost-business cleanup, response statistics and trust checks (6) | Review the existing jobs' effects and verify the worker is not also running them |
 | `PaymentJobsEnabled` | Authorization, transfers, capture retry, authorization expiry and stuck-payment checks (5) | Verify actual Stripe mode and review pending work before allowing financial side effects |
 
@@ -1019,12 +1020,12 @@ In this order:
    sam deploy --config-env prod \
      --parameter-overrides Environment=production SchedulesEnabled=false \
        BriefingsEnabled=true SeederEnabled=false HomeRemindersEnabled=true \
-       AlertsEnabled=false MaintenanceJobsEnabled=false PaymentJobsEnabled=false
+       AlertsEnabled=false MailEnabled=false MaintenanceJobsEnabled=false PaymentJobsEnabled=false
    ```
    This example is not production activation approval. Change only the approved
    groups, and explicitly include every switch so a retained parameter cannot
    keep an unintended group running. To pause everything, set `SchedulesEnabled`
-   and **all six group switches** to false. To roll back a single group, set its
+   and **all seven group switches** to false. To roll back a single group, set its
    switch false while preserving the other reviewed values.
    Whenever activation changes, update `parameter_overrides` in
    `pantopus-seeder/deploy/samconfig.toml` to the same values, so a later plain
@@ -1184,7 +1185,7 @@ GitHub environments; never in Git or chat.
    sam deploy --config-env prod \
      --parameter-overrides Environment=production SchedulesEnabled=false \
        BriefingsEnabled=true SeederEnabled=true HomeRemindersEnabled=true \
-       AlertsEnabled=true MaintenanceJobsEnabled=true PaymentJobsEnabled=true
+       AlertsEnabled=true MailEnabled=false MaintenanceJobsEnabled=true PaymentJobsEnabled=true
    ```
    Review the change set before executing it, and update `parameter_overrides` in `samconfig.toml` afterwards.
    Without these jobs no crew is ever paid.

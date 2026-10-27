@@ -21,8 +21,9 @@ const RISK_THRESHOLDS = {
 };
 
 async function earnRiskReview() {
-  // Launch cut #10 (Mailbox): mailbox jobs don't run while the mailbox is off.
-  if (skipForLaunchCut('mailbox', 'earnRiskReview')) return;
+  // Launch cuts #8 and #10: community mail, Mail Party and Earn are mail extras inside the mailbox, so this job runs
+  // only while both are on.
+  if (skipForLaunchCut(['mailbox', 'mail_extras'], 'earnRiskReview')) return;
   logger.info('[EarnRisk] Starting risk review job');
 
   // 1. Auto-lift expired suspensions
