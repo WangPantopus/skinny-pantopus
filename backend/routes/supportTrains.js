@@ -56,7 +56,7 @@ function withTrainPerson(row, people) {
 }
 const { isLaunchFeatureEnabled } = require('../utils/featureFlags');
 const { applyLocationPrecision } = require('../utils/locationPrivacy');
-const { getAccessibleHomeIds } = require('../utils/homeMailAccess');
+const { householdHomeIds } = require('../utils/homeMailAccess');
 const { isPublicStorageUrl } = require('../services/s3Service');
 const {
   countActiveReservationsForSlot,
@@ -282,7 +282,7 @@ async function resolveDeliveryLocation(userId, deliveryLocation) {
   // Existing home — only one the user belongs to (a trusted occupancy; a pending claim
   // is not membership), since the train shows its exact address. No new Home created.
   if (mode === 'home' && bodyHomeId) {
-    const homeIds = await getAccessibleHomeIds(userId);
+    const homeIds = await householdHomeIds(userId);
     if (!homeIds.includes(bodyHomeId)) {
       logger.warn('Support Train delivery_location home_id not a home the user belongs to', {
         userId,
@@ -800,7 +800,7 @@ router.post(
     // may only name a Home its organizer belongs to.
     const namedHomeIds = [recipient_home_id, home_id].filter(Boolean);
     if (namedHomeIds.length > 0) {
-      const homeIds = await getAccessibleHomeIds(userId);
+      const homeIds = await householdHomeIds(userId);
       if (namedHomeIds.some((id) => !homeIds.includes(id))) {
         return res.status(403).json({ error: 'HOME_NOT_ACCESSIBLE', message: 'You can only use a home you belong to.' });
       }

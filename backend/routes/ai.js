@@ -35,6 +35,8 @@ const validate = require('../middleware/validate');
 const { aiChatLimiter, aiDraftLimiter } = require('../middleware/rateLimiter');
 const { asyncHandler } = require('../errorHandler');
 const agentService = require('../services/ai/agentService');
+const { getAuthorizedMail } = require('../services/ai/mailAccess');
+const { storeSummary } = require('../services/mailSummaries');
 const nudgeEngine = require('../services/ai/nudges/engine');
 const cardState = require('../services/ai/cardState');
 const memory = require('../services/ai/memory');
@@ -425,6 +427,9 @@ router.post('/draft/mail-opening', verifyToken, aiDraftLimiter, validate(draftMa
 
 router.post('/summarize/mail', verifyToken, aiDraftLimiter, validate(summarizeMailSchema), asyncHandler(async (req, res) => {
   const { mailItemId } = req.body;
+  // A piece's summary is made once and kept (Mail tab, SRV-2): a second ask answers the kept one, with no AI call.
+  const kept = await getAuthorizedMail({ mailItemId, userId: req.user.id, select: 'mail_extracted' });
+  if (kept?.mail_extracted?.ai_summary?.summary) return res.json(kept.mail_extracted.ai_summary);
   const result = await agentService.summarizeMail({
     mailItemId,
     userId: req.user.id,
@@ -436,6 +441,7 @@ router.post('/summarize/mail', verifyToken, aiDraftLimiter, validate(summarizeMa
     return res.status(status).json(result);
   }
 
+  await storeSummary(mailItemId, result);
   res.json(result);
 }));
 

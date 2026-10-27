@@ -55,6 +55,14 @@ export function resolveWebNotificationPath(link: string | null | undefined, noti
     return `/app/invoice/${invoiceMatch[1]}${path.slice(invoiceMatch[0].length)}`;
   }
 
+  // A letter link (/app/mailbox/<id>) opens the letter in Me, which moves to
+  // the letter's own drawer once it loads. A Home letter's deleted or
+  // dismissed notice already knows its drawer: Home.
+  const letterMatch = path.match(/^\/(?:app\/)?mailbox\/([^/?#]+)(?=$|[?#])/i);
+  if (letterMatch && uuid.test(letterMatch[1]) && notification?.type === 'home_mail_removed') {
+    return `/app/mailbox/home/${letterMatch[1].toLowerCase()}`;
+  }
+
   if (path.startsWith('/app/')) return path;
 
   const postMatch = path.match(/^\/posts?\/([^/?#]+)/i);

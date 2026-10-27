@@ -898,15 +898,15 @@ function resolveHomeCoordinates(home) {
 
 // A poster is a visitor when every Home of their household is more than ~35 miles
 // (0.5° of latitude or longitude) from where they post; with no such Home they aren't one.
-// The household is the one shared rule (getAccessibleHomeIds: trusted, unexpired occupancies,
+// The household is the one shared rule (householdHomeIds: trusted, unexpired occupancies,
 // never a pending claim that anyone can file on any Home; fails closed).
 // Home.location arrives as WKB hex, so it goes through parsePostGISPoint.
 async function isVisitorAt(userId, latitude, longitude) {
   const lat = parseFloat(latitude);
   const lng = parseFloat(longitude);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
-  const { getAccessibleHomeIds } = require('../utils/homeMailAccess');
-  const homeIds = await getAccessibleHomeIds(userId);
+  const { householdHomeIds } = require('../utils/homeMailAccess');
+  const homeIds = await householdHomeIds(userId);
   if (homeIds.length === 0) return false;
   const { data, error } = await supabaseAdmin
     .from('Home')
@@ -1937,11 +1937,11 @@ router.get('/map', verifyToken, async (req, res) => {
     // Privacy (docs/location-privacy-matrix.md, "Home Pin Rules"): home pins are only
     // for the viewer's own household. Another Home's coordinates or street are never
     // returned, whatever its visibility. The household is the one shared rule
-    // (getAccessibleHomeIds: trusted occupancies only, never a pending claim that any
+    // (householdHomeIds: trusted occupancies only, never a pending claim that any
     // signed-in caller can file on any Home; fails closed).
     if (enabledLayers.includes('homes')) {
-      const { getAccessibleHomeIds } = require('../utils/homeMailAccess');
-      const ownHomeIds = await getAccessibleHomeIds(userId);
+      const { householdHomeIds } = require('../utils/homeMailAccess');
+      const ownHomeIds = await householdHomeIds(userId);
       const { data: homes, error: homeErr } = await supabaseAdmin
         .from('Home')
         .select('id, address, city, state, location, home_type')

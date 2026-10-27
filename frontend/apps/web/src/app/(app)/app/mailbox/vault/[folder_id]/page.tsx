@@ -10,6 +10,7 @@ import {
   useMarkItemOpened,
 } from '@/lib/mailbox-queries';
 import { MailItemCard, MailItemDetail } from '@/components/mailbox';
+import { isMailboxDrawer, mailboxHref } from '@/components/mailbox/MailboxHeader';
 
 // ── Main component ───────────────────────────────────────────
 
@@ -21,6 +22,8 @@ export default function VaultFolderPage() {
   // ── Folder meta ───────────────────────────────────────────
   const { data: allFolders } = useVaultFolders();
   const folder = allFolders?.find((f: VaultFolder) => f.id === folderId);
+  // Back goes to the Vault of the folder's own drawer.
+  const vaultHref = mailboxHref('vault', isMailboxDrawer(folder?.drawer) ? folder.drawer : 'personal');
 
   // ── Folder items (paginated) ──────────────────────────────
   const [page, setPage] = useState(1);
@@ -92,7 +95,7 @@ export default function VaultFolderPage() {
           <div className="flex items-center gap-2">
             <button aria-label="Back"
               type="button"
-              onClick={() => router.push('/app/mailbox/vault')}
+              onClick={() => router.push(vaultHref)}
               className="p-1 text-app-text-secondary hover:text-app-text-strong dark:hover:text-gray-300"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
