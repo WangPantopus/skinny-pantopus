@@ -16,7 +16,10 @@ const homeRecordService = require('../services/homeRecordService');
 const notificationService = require('../services/notificationService');
 const taskMediaStorage = require('../services/homeTaskMediaStorage');
 const { checkHomePermission } = require('../utils/homePermissions');
-const { getAccessibleHomeIds, canAccessMail, readableMail, visibleMailFilter, onlyDelivered } = require('../utils/homeMailAccess');
+const { getAccessibleHomeIds, canAccessMail, readableMail, visibleMailFilter, onlyDelivered, householdHomeIds } = require('../utils/homeMailAccess');
+// A vacation hold that holds (Mail tab, SRV-5), and the delivery rule's clock.
+const mailVacation = require('../services/mailVacation');
+const mailDelivery = require('../services/mailDelivery');
 // A letter sent as a business names the business to everyone it reaches, never the person who sent it; a person who
 // sent one in their own name is named as neighbors see them (their Local Profile).
 const { presentMailSenders, nameMailSenders } = require('../utils/mailSenderView');
@@ -1809,10 +1812,12 @@ router.get('/vacation/status', verifyToken, async (req, res) => {
       p_user_id: req.user.id, p_action: 'status',
     });
     if (error) throw error;
-    res.json({ active: data.active, upcoming: data.upcoming });
+    // held_count: the pieces the hold in effect (or the next one) keeps now (Mail tab, SRV-5).
+    const line = await mailVacation.vacationLine(req.user.id);
+    res.json({ active: data.active, upcoming: data.upcoming, held_count: line?.held_count ?? 0, hold: line });
   } catch (err) {
     logger.error('[P3] GET /vacation/status failed', { error: err.message });
-    res.status(500).json({ error: 'Failed to get vacation status' });
+    res.status(500).json({ error: "Couldn't load your vacation hold. Try again in a moment.", code: 'MAIL_UNAVAILABLE' });
   }
 });
 
@@ -1822,11 +1827,28 @@ router.post('/vacation/start', verifyToken, validate(startVacationSchema), async
     const userId = req.user.id;
     const { holdId, homeId, startDate, endDate, holdAction, packageAction, autoNeighborRequest } = req.body;
     if (endDate < startDate) {
-      return res.status(400).json({ error: 'Return date must be on or after departure.' });
+      return res.status(400).json({ error: 'Your return date must be on or after the day you leave.', code: 'VACATION_DATES_INVALID' });
     }
-    const homeIds = await getAccessibleHomeIds(userId);
-    if (!homeIds.includes(homeId)) {
-      return res.status(403).json({ error: 'Not a member of this home' });
+    // Dates are the person's own days: no hold starts or ends in the past (an active hold keeps the day it began).
+    const timeZone = (await mailDelivery.personTimeZone(userId)) || mailDelivery.FALLBACK_TIME_ZONE;
+    const today = mailDelivery.localDate(new Date(), timeZone);
+    let keptStart = null;
+    if (holdId) {
+      const { data: current } = await supabaseAdmin.from('VacationHold').select('start_date')
+        .eq('id', holdId).eq('user_id', userId).maybeSingle();
+      keptStart = current?.start_date ? String(current.start_date).slice(0, 10) : null;
+    }
+    if (endDate < today) {
+      return res.status(400).json({ error: 'Your return date has already passed. Choose a day from today on.', code: 'VACATION_DATES_INVALID' });
+    }
+    if (startDate < today && startDate !== keptStart) {
+      return res.status(400).json({ error: 'Choose a day from today on for when you leave.', code: 'VACATION_DATES_INVALID' });
+    }
+    // The hold keeps the person's own mail; any Home they belong to names it (Home mail keeps arriving for the rest
+    // of the household, whether or not they've proven the address).
+    const homeIds = await householdHomeIds(userId);
+    if (!homeIds.includes(String(homeId).toLowerCase())) {
+      return res.status(403).json({ error: 'Choose a home you live at for this hold.', code: 'VACATION_HOME_INVALID' });
     }
     const { data, error } = await supabaseAdmin.rpc('vacation_hold_transition', {
       p_user_id: userId, p_action: 'start', p_hold_id: holdId || null, p_home_id: homeId,
@@ -1835,10 +1857,13 @@ router.post('/vacation/start', verifyToken, validate(startVacationSchema), async
       p_auto_neighbor_request: autoNeighborRequest || false,
     });
     if (error?.message === 'VACATION_HOLD_NOT_OWNED') {
-      return res.status(403).json({ error: 'Not your vacation hold' });
+      return res.status(403).json({ error: "This vacation hold isn't yours.", code: 'VACATION_HOLD_NOT_OWNED' });
     }
     if (error?.message === 'VACATION_HOLD_NOT_EDITABLE') {
-      return res.status(409).json({ error: 'These travel dates are no longer editable. Reload to see your current dates.' });
+      return res.status(409).json({ error: 'These travel dates are no longer editable. Reload to see your current dates.', code: 'VACATION_HOLD_NOT_EDITABLE' });
+    }
+    if (error?.message === 'VACATION_DATES_INVALID') {
+      return res.status(400).json({ error: 'Your return date must be on or after the day you leave.', code: 'VACATION_DATES_INVALID' });
     }
     if (error) throw error;
     if (!data.reused) {
@@ -1846,10 +1871,13 @@ router.post('/vacation/start', verifyToken, validate(startVacationSchema), async
         holdId: data.hold.id, startDate, endDate, holdAction, packageAction,
       });
     }
-    res.json({ hold: data.hold });
+    // The hold holds: waiting mail moves to the morning they're back (and back out of a shortened hold).
+    await mailVacation.syncHeldMailSafe(userId);
+    const line = await mailVacation.vacationLine(userId).catch(() => null);
+    res.json({ hold: data.hold, held_count: line?.hold_id === data.hold.id ? line.held_count : 0 });
   } catch (err) {
     logger.error('[P3] POST /vacation/start failed', { error: err.message });
-    res.status(500).json({ error: 'Failed to start vacation' });
+    res.status(500).json({ error: "Couldn't save your vacation hold. Your dates are as they were. Try again in a moment.", code: 'MAIL_UNAVAILABLE' });
   }
 });
 
@@ -1860,14 +1888,16 @@ router.post('/vacation/cancel', verifyToken, validate(cancelVacationSchema), asy
       p_user_id: req.user.id, p_action: 'cancel', p_hold_id: req.body.holdId,
     });
     if (error?.message === 'VACATION_HOLD_NOT_OWNED') {
-      return res.status(403).json({ error: 'Not your vacation hold' });
+      return res.status(403).json({ error: "This vacation hold isn't yours.", code: 'VACATION_HOLD_NOT_OWNED' });
     }
     if (error) throw error;
     if (!data.reused) logMailEvent(req.user.id, 'vacation_cancelled', null, { holdId: req.body.holdId });
+    // What the hold kept comes at the next round (or its own, if that's still ahead).
+    await mailVacation.syncHeldMailSafe(req.user.id);
     res.json({ message: 'Vacation hold cancelled' });
   } catch (err) {
     logger.error('[P3] POST /vacation/cancel failed', { error: err.message });
-    res.status(500).json({ error: 'Failed to cancel vacation' });
+    res.status(500).json({ error: "Couldn't cancel your vacation hold. Try again in a moment.", code: 'MAIL_UNAVAILABLE' });
   }
 });
 

@@ -201,12 +201,18 @@ async function routeAndGroup(userId, addressId) {
     if (group.length >= 3) {
       const [sender, drawer] = key.split('|');
       // Create bundle wrapper
-      const { data: bundle } = await supabaseAdmin
+      // A wrapper is a Mail row like any other: type and content are required (the old insert lacked both and every
+      // bundle failed silently). It is in the box at once, with the pieces it holds.
+      const { data: bundle, error: bundleError } = await supabaseAdmin
         .from('Mail')
         .insert({
           recipient_user_id: userId,
           recipient_address_id: addressId,
           drawer,
+          type: 'other',
+          mail_type: 'other',
+          content: `${group.length} pieces from ${sender}.`,
+          subject: `${sender} · ${group.length} items`,
           mail_object_type: 'bundle',
           bundle_type: 'sender_grouped',
           bundle_label: `${sender} · ${group.length} items`,
@@ -220,6 +226,7 @@ async function routeAndGroup(userId, addressId) {
         })
         .select()
         .single();
+      if (bundleError) logger.error('Bundle create failed', { error: bundleError.message });
 
       if (bundle) {
         const ids = group.map(i => i.id);
@@ -250,12 +257,16 @@ async function routeAndGroup(userId, addressId) {
     if (group.length >= 5) {
       const [cat, drawer] = key.split('|');
       const label = `Today's ${cat.charAt(0).toUpperCase() + cat.slice(1)}s`;
-      const { data: bundle } = await supabaseAdmin
+      const { data: bundle, error: bundleError } = await supabaseAdmin
         .from('Mail')
         .insert({
           recipient_user_id: userId,
           recipient_address_id: addressId,
           drawer,
+          type: 'other',
+          mail_type: 'other',
+          content: `${label}: ${group.length} pieces.`,
+          subject: label,
           mail_object_type: 'bundle',
           bundle_type: 'date_grouped',
           bundle_label: label,
@@ -267,6 +278,7 @@ async function routeAndGroup(userId, addressId) {
         })
         .select()
         .single();
+      if (bundleError) logger.error('Bundle create failed', { error: bundleError.message });
 
       if (bundle) {
         const ids = group.map(i => i.id);

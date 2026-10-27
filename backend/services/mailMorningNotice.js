@@ -11,7 +11,7 @@
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const { getAccessibleHomeIds, mailReaderIdsOrThrow, visibleMailFilter } = require('../utils/homeMailAccess');
-const { personTimeZone, localDate, FALLBACK_TIME_ZONE } = require('./mailDelivery');
+const { personTimeZone, localDate, FALLBACK_TIME_ZONE, countPieces } = require('./mailDelivery');
 
 const LOOKBACK_MS = 24 * 60 * 60 * 1000;
 const NOTICE_START_HOUR = 7;
@@ -29,7 +29,9 @@ function newMail(select, options, since, now) {
     .eq('archived', false)
     .in('lifecycle', ['delivered', 'opened'])
     .is('deleted_at', null)
-    .or('drawer.is.null,drawer.neq.earn');
+    .or('drawer.is.null,drawer.neq.earn')
+    // A bundle is a wrapper: its pieces are what came.
+    .or('mail_object_type.is.null,mail_object_type.neq.bundle');
 }
 
 async function pagedRows(build) {
@@ -57,13 +59,13 @@ async function candidates(since, now) {
 /** What this person can read that came in the window: how many, and how many of them were special deliveries. */
 async function countFor(userId, since, now) {
   const homeIds = await getAccessibleHomeIds(userId);
-  const scoped = (q) => q.or(visibleMailFilter(userId, homeIds));
-  const [all, special] = await Promise.all([
-    scoped(newMail('id', { count: 'exact', head: true }, since, now)),
-    scoped(newMail('id', { count: 'exact', head: true }, since, now)).eq('special_delivery', true),
+  const scoped = (select, options) => newMail(select, options, since, now).or(visibleMailFilter(userId, homeIds));
+  // A bundle is one piece, as the box shows it (SRV-5).
+  const [total, special] = await Promise.all([
+    countPieces(scoped),
+    countPieces((select, options) => scoped(select, options).eq('special_delivery', true)),
   ]);
-  if (all.error || special.error) throw new Error((all.error || special.error).message);
-  return { total: all.count || 0, special: special.count || 0 };
+  return { total, special };
 }
 
 /** The notice's words: plain, no emoji. */

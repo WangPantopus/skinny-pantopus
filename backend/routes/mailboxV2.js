@@ -17,6 +17,7 @@ const mailPiece = require('../services/mailPiece');
 const mailSummaries = require('../services/mailSummaries');
 const mailVault = require('../services/mailVault');
 const mailEnclosures = require('../services/mailEnclosures');
+const mailVacation = require('../services/mailVacation');
 const { MAIL_HOME_NEEDS_PROOF, MAIL_NOT_FOUND } = require('../utils/homeMailAccess');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
@@ -236,48 +237,47 @@ router.get('/drawers', verifyToken, async (req, res) => {
 
     // Count unread + urgent per drawer in parallel. Only incoming mail counts
     // (the Incoming tab's filter): dismissed, filed and archived letters left it,
-    // and a piece waiting for its morning round isn't there yet.
-    const countForDrawer = async (drawer, filter) => {
-      let query = onlyDelivered(supabaseAdmin
-        .from('Mail')
-        .select('id, priority, delivered_at', { count: 'exact', head: false })
-        .eq('drawer', drawer)
-        .eq('viewed', false)
-        .in('lifecycle', ['delivered', 'opened'])
-        .eq('archived', false)
-        .is('deleted_at', null), now);
-
-      if (filter) filter(query);
-
-      if (drawer === 'personal') {
-        query = query.eq('recipient_user_id', userId);
-      } else if (drawer === 'home') {
-        if (homeIds.length > 0) {
+    // and a piece waiting for its morning round isn't there yet. A bundle counts
+    // once, as Incoming shows it, while any of its pieces is unopened (SRV-5).
+    const countForDrawer = async (drawer) => {
+      if (drawer === 'home' && homeIds.length === 0) return { unread_count: 0, urgent_count: 0, last_item_at: null };
+      const unopened = (select, options) => {
+        let query = onlyDelivered(supabaseAdmin
+          .from('Mail')
+          .select(select, options)
+          .eq('drawer', drawer)
+          .eq('viewed', false)
+          .in('lifecycle', ['delivered', 'opened'])
+          .eq('archived', false)
+          .is('deleted_at', null)
+          // A bundle is a wrapper: it counts through its pieces.
+          .or('mail_object_type.is.null,mail_object_type.neq.bundle'), now);
+        if (drawer === 'personal' || drawer === 'earn') {
+          query = query.eq('recipient_user_id', userId);
+        } else if (drawer === 'home') {
           // Only Home letters the Home mail rule shows this member (M01).
           query = query.or(homesMailFilter(homeIds, userId));
-        } else {
-          return { unread_count: 0, urgent_count: 0, last_item_at: null };
+        } else if (drawer === 'business') {
+          // The Business list's rule (the caller's own letters, or Home letters filed there that they may read).
+          query = query.or(visibleMailFilter(userId, homeIds));
         }
-      } else if (drawer === 'business') {
-        // The Business list's rule (the caller's own letters, or Home letters filed there that they may read).
-        query = query.or(visibleMailFilter(userId, homeIds));
-      } else if (drawer === 'earn') {
-        query = query.eq('recipient_user_id', userId);
-      }
+        return query;
+      };
 
-      const { data, count, error } = await query
-        .order('delivered_at', { ascending: false })
-        .limit(200);
-
-      if (error) {
+      try {
+        const [unreadCount, { data, error }] = await Promise.all([
+          mailDelivery.countPieces(unopened),
+          unopened('priority, delivered_at, bundle_id').order('delivered_at', { ascending: false }).limit(200),
+        ]);
+        if (error) throw new Error(error.message);
+        const urgent = (data || []).filter(m => m.priority === 'urgent' || m.priority === 'high');
+        const urgentCount = urgent.filter(m => !m.bundle_id).length
+          + new Set(urgent.filter(m => m.bundle_id).map(m => m.bundle_id)).size;
+        return { unread_count: unreadCount, urgent_count: urgentCount, last_item_at: data?.[0]?.delivered_at || null };
+      } catch (error) {
         logger.error(`Failed to count drawer ${drawer}`, { error: error.message });
         return { unread_count: 0, urgent_count: 0, last_item_at: null };
       }
-
-      const urgentCount = (data || []).filter(m => m.priority === 'urgent' || m.priority === 'high').length;
-      const lastItemAt = data?.[0]?.delivered_at || null;
-
-      return { unread_count: count || 0, urgent_count: urgentCount, last_item_at: lastItemAt };
     };
 
     // The Homes this person lives at, and whether each one's mail is open to them yet (D1: only after the
@@ -291,13 +291,19 @@ router.get('/drawers', verifyToken, async (req, res) => {
       logger.error('GET /drawers: delivery line unavailable', { error: error.message });
       return null;
     });
-    const [personal, home, business, earn, homes, delivery] = await Promise.all([
+    // The vacation hold in effect or the next one, with how many pieces it holds (SRV-5).
+    const vacationRead = mailVacation.vacationLine(userId, now).catch((error) => {
+      logger.error('GET /drawers: vacation line unavailable', { error: error.message });
+      return null;
+    });
+    const [personal, home, business, earn, homes, delivery, vacation] = await Promise.all([
       countForDrawer('personal'),
       countForDrawer('home'),
       countForDrawer('business'),
       countForDrawer('earn'),
       homesRead,
       deliveryRead,
+      vacationRead,
     ]);
 
     res.json({
@@ -312,6 +318,8 @@ router.get('/drawers', verifyToken, async (req, res) => {
       unread_total: personal.unread_count + home.unread_count + business.unread_count,
       homes,
       delivery,
+      vacation_hold: vacation ? { status: vacation.status, start_date: vacation.start_date, end_date: vacation.end_date,
+        held_count: vacation.held_count, release_at: vacation.release_at } : null,
     });
   } catch (err) {
     logger.error('GET /drawers failed', { error: err.message, stack: err.stack });
@@ -392,6 +400,10 @@ router.get('/drawer/:drawer', verifyToken, async (req, res) => {
 
     // Tabs: Incoming (in the box), Counter (due or put there, not done), Vault (filed), Archived (so nothing just
     // vanishes).
+    if (tab === 'incoming' || tab === undefined) {
+      // A bundle is one piece in the box; its pieces open from it (GET /api/mailbox/v2/p2/bundle/:id/items).
+      query = query.is('bundle_id', null);
+    }
     if (tab === 'incoming') {
       query = query.in('lifecycle', ['delivered', 'opened']).eq('archived', false);
     } else if (tab === 'counter') {
@@ -449,7 +461,8 @@ router.get('/drawer/:drawer', verifyToken, async (req, res) => {
       package: packageData[m.id] || null,
     }, userId), { timeZone }));
 
-    return res.json({ mail: enrichedMail, total: count || 0, drawer });
+    // A bundle's pieces (on the Counter, in the Vault, Archived) say which bundle they came in.
+    return res.json({ mail: await mailPiece.withBundleLabels(enrichedMail), total: count || 0, drawer });
   } catch (err) {
     logger.error('Drawer fetch error', { error: err.message });
     return res.status(500).json({ error: "Couldn't load your mail. Try again in a moment.", code: 'MAIL_UNAVAILABLE' });
@@ -485,6 +498,8 @@ router.get('/search', verifyToken, async (req, res) => {
       // Earn stays hidden with mail_extras.
       .or('drawer.is.null,drawer.neq.earn')
       .or('lifecycle.is.null,lifecycle.neq.shredded')
+      // Search finds pieces, a bundle's pieces on their own (with the bundle's label); the bundle itself isn't one.
+      .or('mail_object_type.is.null,mail_object_type.neq.bundle')
       .is('deleted_at', null));
     for (const term of terms) {
       query = query.or([...SEARCH_FIELDS.map((field) => `${field}.ilike.*${term}*`), `content.wfts(english).${term}`].join(','));
@@ -513,7 +528,7 @@ router.get('/search', verifyToken, async (req, res) => {
       sender_display: resolveSenderDisplay(m),
       sender_trust: resolveSenderTrust(m),
     }, userId), { timeZone }));
-    return res.json({ mail: rows, total: Math.max(0, (count || 0) - (named.length - kept.length)) });
+    return res.json({ mail: await mailPiece.withBundleLabels(rows), total: Math.max(0, (count || 0) - (named.length - kept.length)) });
   } catch (err) {
     logger.error('Mail search error', { error: err.message });
     return res.status(500).json({ error: "Couldn't search your mail. Try again in a moment.", code: 'MAIL_UNAVAILABLE' });
@@ -525,6 +540,28 @@ router.get('/search', verifyToken, async (req, res) => {
 function matchesStem(item, term) {
   const stem = term.slice(0, Math.max(4, Math.min(5, term.length)));
   return typeof item.content === 'string' && new RegExp(`\\b${stem.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i').test(item.content);
+}
+
+// A bundle's pieces this person may read (SRV-5): delivered, newest first, as the lists show them.
+async function bundlePieces(bundleId, userId, timeZone) {
+  const homeIds = await getAccessibleHomeIds(userId);
+  const { data, error } = await onlyDelivered(supabaseAdmin
+    .from('Mail')
+    .select('*, sender:sender_user_id(name, username)')
+    .eq('bundle_id', bundleId)
+    .or(visibleMailFilter(userId, homeIds))
+    .or('lifecycle.is.null,lifecycle.neq.shredded')
+    .is('deleted_at', null), new Date())
+    .order('delivered_at', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(100);
+  if (error) throw new Error(error.message);
+  const named = await nameMailSenders(data || [], userId);
+  return mailPiece.withBundleLabels(named.map((m) => mailPiece.present(presentMailSender({
+    ...m,
+    sender_display: resolveSenderDisplay(m),
+    sender_trust: resolveSenderTrust(m),
+  }, userId), { timeZone })));
 }
 
 // GET /api/mailbox/v2/item/:id — Get mail item detail
@@ -608,9 +645,9 @@ router.get('/item/:id', verifyToken, async (req, res) => {
       }
     }
 
-    // "Pantopus read this for you": the kept note, or one made now on this first open (never for a removed piece;
-    // a failure leaves no note).
-    if (!mail.removed && !mailPiece.summaryOf(mail)) {
+    // "Pantopus read this for you": the kept note, or one made now on this first open (never for a removed piece, nor
+    // for a bundle, whose pieces carry their own; a failure leaves no note).
+    if (!mail.removed && mail.mail_object_type !== 'bundle' && !mailPiece.summaryOf(mail)) {
       const note = await mailSummaries.ensureSummary(mail, userId);
       if (note) mail.mail_extracted = { ...(mail.mail_extracted || {}), summary: note.text };
       if (note && !mailPiece.keyFacts(mail.key_facts).length) mail.key_facts = note.key_facts;
@@ -618,8 +655,9 @@ router.get('/item/:id', verifyToken, async (req, res) => {
 
     const named = await nameMailSender(mail, userId);
     const timeZone = (await mailDelivery.personTimeZone(userId)) || mailDelivery.FALLBACK_TIME_ZONE;
-    return res.json({
-      mail: mailPiece.present(presentMailSender({
+    // A bundle opens to its pieces (SRV-5).
+    const pieces = mail.mail_object_type === 'bundle' && !mail.removed ? await bundlePieces(id, userId, timeZone) : null;
+    const piece = await mailPiece.withBundleLabels(mailPiece.present(presentMailSender({
         ...named,
         sender_display: resolveSenderDisplay(named),
         sender_trust: resolveSenderTrust(named),
@@ -629,8 +667,8 @@ router.get('/item/:id', verifyToken, async (req, res) => {
         // What the piece encloses, the letter's own attachments included; each opens through
         // GET /api/mailbox/:id/enclosures/:enclosureId (SRV-4).
         enclosures: mailEnclosures.listFor(named, objectPayload?.envelope?.attachments || objectPayload?.attachments),
-      }, userId), { timeZone }),
-    });
+      }, userId), { timeZone }));
+    return res.json({ mail: pieces ? { ...piece, pieces } : piece });
   } catch (err) {
     logger.error('Item fetch error', { error: err.message });
     return res.status(500).json({ error: "Couldn't open this mail. Try again in a moment.", code: 'MAIL_UNAVAILABLE' });
@@ -722,7 +760,7 @@ router.post('/item/:id/action', verifyToken, async (req, res) => {
       sender_trust: resolveSenderTrust(named),
     }, userId), { timeZone }) : null;
     if (piece && action === 'shred') piece.removed = await removedMailInfo(after);
-    return res.json({ mail: piece, message: `Action '${action}' recorded`, action });
+    return res.json({ mail: piece ? await mailPiece.withBundleLabels(piece) : piece, message: `Action '${action}' recorded`, action });
   } catch (err) {
     logger.error('Action error', { error: err.message });
     return res.status(500).json({ error: "Couldn't do that just now. Your mail is as it was. Try again in a moment.", code: 'MAIL_UNAVAILABLE' });

@@ -3,6 +3,8 @@
  * its postmark, whether it waits on the Counter, and the "Pantopus read this for you" note (`summary`). Every list,
  * search row and detail route answers pieces through present(), so the three apps draw the same piece the same way.
  */
+const supabaseAdmin = require('../config/supabaseAdmin');
+const logger = require('../utils/logger');
 const { localDate, FALLBACK_TIME_ZONE } = require('./mailDelivery');
 
 const KINDS = ['letter', 'bill', 'notice', 'postcard', 'booklet', 'parcel', 'bundle'];
@@ -10,7 +12,7 @@ const KINDS = ['letter', 'bill', 'notice', 'postcard', 'booklet', 'parcel', 'bun
 // mail_extracted keys only the server writes: the kept note, Pantopus's mark, the postmark town and the private
 // enclosures. A sender's own extractedData never sets them (the send route strips them).
 const SERVER_EXTRACTED_KEYS = ['summary', 'summary_source', 'summary_at', 'ai_summary', 'from_pantopus', 'postmark_town',
-  'enclosures', 'pantopus_letter', 'invoice_bill'];
+  'enclosures', 'pantopus_letter', 'invoice_bill', 'vacation_hold_id', 'natural_delivered_at', 'vacation_bundle_hold_id'];
 
 /** A sender's extractedData without the keys only the server writes. */
 function withoutServerKeys(extracted) {
@@ -89,5 +91,27 @@ function present(mail, { timeZone = FALLBACK_TIME_ZONE } = {}) {
   };
 }
 
+/**
+ * Pieces with the label of the bundle they came in (`bundle_label`, read from the bundle; SRV-5). A bundle is one piece
+ * in Incoming; the Counter, Vault, Archived, search and the bundle's own detail list its pieces on their own, and the
+ * label says which bundle each one came in. Answers new objects; never throws (a failed read leaves the label as stored).
+ */
+async function withBundleLabels(pieces) {
+  const list = Array.isArray(pieces) ? pieces : [pieces];
+  const ids = [...new Set(list.filter((p) => p?.bundle_id && !p.bundle_label).map((p) => p.bundle_id))];
+  if (!ids.length) return pieces;
+  let labels = new Map();
+  try {
+    const { data, error } = await supabaseAdmin.from('Mail').select('id, bundle_label, subject').in('id', ids);
+    if (error) throw new Error(error.message);
+    labels = new Map((data || []).map((b) => [b.id, b.bundle_label || b.subject || null]));
+  } catch (error) {
+    logger.warn('Bundle labels not read', { error: error.message });
+  }
+  const out = list.map((p) => (p?.bundle_id && !p.bundle_label && labels.get(p.bundle_id)
+    ? { ...p, bundle_label: labels.get(p.bundle_id) } : p));
+  return Array.isArray(pieces) ? out : out[0];
+}
+
 module.exports = { KINDS, SERVER_EXTRACTED_KEYS, withoutServerKeys, kindOf, fromPantopus, postmarkTown, onCounter, keyFacts,
-  summaryOf, present };
+  summaryOf, present, withBundleLabels };

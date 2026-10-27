@@ -1,7 +1,10 @@
-// Reconcile due vacation dates and User summaries atomically per user.
+// Reconcile due vacation dates and User summaries atomically per user, then
+// keep everyone's held mail in line with their holds (services/mailVacation:
+// a sync that failed after a change is made good here).
 // Stored delivery preferences do not execute postal/carrier handling.
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
+const { syncHeldMailSafe } = require('../services/mailVacation');
 
 async function vacationHoldExpiry() {
   const today = new Date().toISOString().slice(0, 10);
@@ -30,8 +33,18 @@ async function vacationHoldExpiry() {
         logger.error('[VacationHold] User reconciliation failed', { userId, error: error.message });
       }
     }
+    // Everyone with a hold in effect or coming: their waiting mail matches it.
+    const holders = new Set();
+    for (let offset = 0; ; offset += 500) {
+      const { data, error } = await supabaseAdmin.from('VacationHold').select('user_id')
+        .in('status', ['scheduled', 'active']).order('id').range(offset, offset + 499);
+      if (error) throw error;
+      for (const hold of data || []) holders.add(hold.user_id);
+      if ((data || []).length < 500) break;
+    }
+    for (const userId of [...holders, ...userIds]) await syncHeldMailSafe(userId);
     if (failedUsers > 0) throw new Error(`Vacation reconciliation failed for ${failedUsers} user(s)`);
-    logger.info('[VacationHold] Complete', { users: userIds.size });
+    logger.info('[VacationHold] Complete', { users: userIds.size, holders: holders.size });
   } catch (error) {
     logger.error('[VacationHold] Reconciliation failed', { error: error.message });
     throw error;

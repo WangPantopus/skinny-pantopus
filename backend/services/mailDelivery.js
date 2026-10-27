@@ -87,9 +87,10 @@ async function mailboxTimeZone(piece) {
   return zone || FALLBACK_TIME_ZONE;
 }
 
-// SRV-5's vacation hold plugs in here: given (piece, now), the time a hold keeps the piece until, or null. No hold yet.
-async function heldUntil() {
-  return null;
+// A vacation hold keeps a person's own ordinary mail until the morning they're back (services/mailVacation, SRV-5).
+async function heldUntil(piece, natural) {
+  // eslint-disable-next-line global-require
+  return require('./mailVacation').heldUntil(piece, natural);
 }
 
 /**
@@ -106,15 +107,48 @@ async function deliveryFor(piece, { now = new Date(), immediate = false } = {}) 
     logger.warn('mailDelivery: time zone unavailable, using the fallback', { error: error.message });
   }
   if (isSpecialDelivery(piece, timeZone, now)) return { delivered_at: now.toISOString(), special_delivery: true };
-  const held = await heldUntil(piece, now);
-  const at = held && held > nextRound(timeZone, now) ? held : nextRound(timeZone, now);
-  return { delivered_at: at.toISOString(), special_delivery: false };
+  const natural = nextRound(timeZone, now);
+  let held = null;
+  try {
+    held = await heldUntil(piece, natural);
+  } catch (error) {
+    logger.warn('mailDelivery: vacation hold unavailable, delivering normally', { error: error.message });
+  }
+  if (!held) return { delivered_at: natural.toISOString(), special_delivery: false };
+  // Held: it waits for the release round and remembers its own, so a changed hold can move it (mailVacation).
+  return { delivered_at: held.until.toISOString(), special_delivery: false, mail_extracted: {
+    ...(piece.mail_extracted || {}), vacation_hold_id: held.holdId, natural_delivered_at: natural.toISOString() } };
+}
+
+/**
+ * After a writer stored pieces: the people a vacation hold kept one for get their hold's bundle and count brought up to
+ * date (services/mailVacation). Never throws.
+ */
+async function afterStored(rows) {
+  const people = [...new Set((rows || []).filter((r) => r?.mail_extracted?.vacation_hold_id && r.recipient_user_id)
+    .map((r) => r.recipient_user_id))];
+  // eslint-disable-next-line global-require
+  for (const userId of people) await require('./mailVacation').syncHeldMailSafe(userId);
 }
 
 /** The rows with their delivery fields set, for a writer that inserts several at once. */
 async function withDelivery(rows, options = {}) {
   const now = options.now || new Date();
   return Promise.all((rows || []).map(async (row) => ({ ...row, ...(await deliveryFor(row, { ...options, now })) })));
+}
+
+/**
+ * How many pieces a query finds, counted as the box shows them (SRV-5): a bundle is one piece, counted once when any of
+ * its pieces is among them, and its pieces don't count on their own. `build(select, options)` answers the query, with
+ * bundle wrappers already left out.
+ */
+async function countPieces(build) {
+  const [loose, bundled] = await Promise.all([
+    build('id', { count: 'exact', head: true }).is('bundle_id', null),
+    build('bundle_id').not('bundle_id', 'is', null).limit(5000),
+  ]);
+  if (loose.error || bundled.error) throw new Error((loose.error || bundled.error).message);
+  return (loose.count || 0) + new Set((bundled.data || []).map((row) => row.bundle_id)).size;
 }
 
 // Pieces a person can read, for the mailbox-wide numbers: their own and their readable Homes' (not Earn, which stays
@@ -124,6 +158,8 @@ function readableDelivered(select, options, userId, homeIds, now) {
     .or(visibleMailFilter(userId, homeIds))
     .or('drawer.is.null,drawer.neq.earn')
     .or('lifecycle.is.null,lifecycle.neq.shredded')
+    // A bundle is a wrapper: its pieces are what came.
+    .or('mail_object_type.is.null,mail_object_type.neq.bundle')
     .is('deleted_at', null)
     .lte('delivered_at', now.toISOString());
 }
@@ -145,11 +181,13 @@ async function deliverySummary({ userId, homeIds, now = new Date() }) {
   if (!latest?.length) return summary;
   const lastAt = new Date(latest[0].delivered_at);
   const windowStart = new Date(lastAt.getTime() - 24 * 60 * 60 * 1000).toISOString();
-  const inWindow = () => readableDelivered('id', { count: 'exact', head: true }, userId, homeIds, lastAt)
+  const inWindow = (select, options) => readableDelivered(select, options, userId, homeIds, lastAt)
     .gt('delivered_at', windowStart);
-  const [all, unopened] = await Promise.all([inWindow(), inWindow().eq('viewed', false).is('opened_at', null)]);
-  if (all.error || unopened.error) throw new Error((all.error || unopened.error).message);
-  return { ...summary, last_at: lastAt.toISOString(), last_count: all.count || 0, last_unopened: unopened.count || 0 };
+  const [lastCount, lastUnopened] = await Promise.all([
+    countPieces(inWindow),
+    countPieces((select, options) => inWindow(select, options).eq('viewed', false).is('opened_at', null)),
+  ]);
+  return { ...summary, last_at: lastAt.toISOString(), last_count: lastCount, last_unopened: lastUnopened };
 }
 
 /**
@@ -186,5 +224,5 @@ async function announceSpecialDeliveries(pieces, { excludeUserId = null } = {}) 
 
 module.exports = {
   MORNING_HOUR, FALLBACK_TIME_ZONE, nextRound, localDate, isSpecialDelivery, homeTimeZone, personTimeZone,
-  mailboxTimeZone, deliveryFor, withDelivery, deliverySummary, announceSpecialDeliveries,
+  mailboxTimeZone, deliveryFor, withDelivery, deliverySummary, announceSpecialDeliveries, afterStored, countPieces,
 };
