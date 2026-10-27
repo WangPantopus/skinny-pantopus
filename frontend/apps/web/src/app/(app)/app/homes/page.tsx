@@ -19,7 +19,15 @@ import { validateResidencyPage, residencyRequestLabel, residencyReviewLabel } fr
 import { unitText } from '@/components/homes/creation/homeCreationModel';
 import { useFeatureFlag } from '@/hooks/useFeatureFlag';
 import ClaimApprovalChecklist, { approvalSummary } from '@/components/homes/ClaimApprovalChecklist';
+import { EVERYTHING, RECONNECTED, onSyncTopic } from '@/lib/syncSignals';
 type ResidencyRequest = Awaited<ReturnType<typeof api.homes.getMyResidencyRequests>>['requests'][number];
+type PendingClaim = { claim: Claim; addressLine: string; cityLine: string };
+
+// What My Homes last showed for this signed-in session (homes, claims and the first page of residency
+// requests), so opening it again shows that at once and re-checks behind it. Tab memory only; the
+// session marker changes on any sign-in, sign-out or account switch, so another account's copy never shows.
+type PageCopy = { session: string; homes: MyHome[]; pendingClaims: PendingClaim[]; residencyRequests: ResidencyRequest[]; residencyCursor: string | null };
+let lastPage: PageCopy | null = null;
 
 function claimInProgress(status: string) {
   return status === 'under_review';
@@ -32,25 +40,28 @@ const FOCUS_REFRESH_MS = 30_000;
 export default function HomesPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  // Coming back shows your homes at once from the list Place and the switcher share (lib/myHomes.ts).
-  // Homes still in verification, ownership claims and residency requests are verification, never
-  // shown from a copy: they appear when the re-check (always run) answers. A list with a guest home or
-  // access that ends shows nothing before the re-check (decision 3, lib/householdCopy.ts).
-  const [seed] = useState(() => {
+  // Coming back shows at once what this page last showed, or your homes from the list Place and the
+  // switcher share (lib/myHomes.ts); a re-check always runs behind it. Homes you asked to claim or join,
+  // your claims and your residency requests show like your homes (founder, 2026-10-27). A list with a
+  // guest home or access that ends shows nothing before the re-check (decision 3, lib/householdCopy.ts).
+  const [seed] = useState<Omit<PageCopy, 'session'> | null>(() => {
+    if (lastPage?.session === api.authSessionMarker() && showsMyHomesCopy({ homes: lastPage.homes })) return lastPage;
     const kept = queryClient.getQueryData<MyHomesReply>(myHomesQuery().queryKey);
-    return showsMyHomesCopy(kept) ? (kept?.homes ?? []).filter((h) => h.access_kind !== 'verification') : [];
+    return showsMyHomesCopy(kept) && kept?.homes.length
+      ? { homes: kept.homes, pendingClaims: [], residencyRequests: [], residencyCursor: null } : null;
   });
-  const seeded = useRef(seed.length > 0);
-  const [homes, setHomes] = useState<MyHome[]>(seed);
-  const mayKeep = useRef(false);
-  mayKeep.current = homes.length > 0 && showsMyHomesCopy({ homes });
+  const seeded = useRef(seed !== null);
+  const [homes, setHomes] = useState<MyHome[]>(seed?.homes ?? []);
   const recheckOnResume = useRef(false);
   const savedRemoval = useSavedRemoval();
-  const [pendingClaims, setPendingClaims] = useState<Array<{ claim: Claim; addressLine: string; cityLine: string }>>([]);
+  const [pendingClaims, setPendingClaims] = useState<PendingClaim[]>(seed?.pendingClaims ?? []);
   const [loading, setLoading] = useState(!seeded.current);
   const [error, setError] = useState('');
-  const [residencyRequests, setResidencyRequests] = useState<ResidencyRequest[]>([]);
-  const [residencyCursor, setResidencyCursor] = useState<string | null>(null);
+  // Leaving keeps what's shown, unless a home on it may not show before its re-check.
+  const mayKeep = useRef(false);
+  mayKeep.current = !loading && !error && showsMyHomesCopy({ homes });
+  const [residencyRequests, setResidencyRequests] = useState<ResidencyRequest[]>(seed?.residencyRequests ?? []);
+  const [residencyCursor, setResidencyCursor] = useState<string | null>(seed?.residencyCursor ?? null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [moreError, setMoreError] = useState('');
   const [deletingClaimId, setDeletingClaimId] = useState<string | null>(null);
@@ -81,7 +92,7 @@ export default function HomesPage() {
     }
     setRefreshError('');
     inFlight.current++;
-    const token = getAuthToken(), origin = api.getApiBaseUrl();
+    const token = getAuthToken(), origin = api.getApiBaseUrl(), session = api.authSessionMarker();
     let marker: string | null;
     const current = () => generation.current === revision && getAuthToken() === token
       && api.getApiBaseUrl() === origin && localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY) === marker;
@@ -133,6 +144,8 @@ export default function HomesPage() {
         residencyEpoch.current++; setLoadingMore(false); setMoreError('');
         setResidencyRequests(residencyRes.requests); setResidencyCursor(residencyRes.next_cursor);
       }
+      lastPage = showsMyHomesCopy({ homes: list }) ? { session, homes: list, pendingClaims: enriched,
+        residencyRequests: residencyRes.requests, residencyCursor: residencyRes.next_cursor } : null;
     } catch (e: unknown) {
       if (generation.current !== revision) return;
       if (background) { setRefreshError('Your homes couldn’t be refreshed, so this list may be out of date.'); return; }
@@ -165,7 +178,7 @@ export default function HomesPage() {
 
   useEffect(() => {
     // Another account's list must never show, so an account change clears the page and reloads it.
-    const restart = () => { retire(); void load(); };
+    const restart = () => { lastPage = null; retire(); void load(); };
     // Coming back keeps the list visible and refreshes it behind the scenes (a full load only
     // after an error, when there's no list to keep).
     const refresh = () => {
@@ -193,12 +206,18 @@ export default function HomesPage() {
     };
     const visibility = () => { if (document.visibilityState === 'hidden') leave(); else refresh(); };
     const storage = (event: StorageEvent) => { if (event.key === null || event.key === api.AUTH_SESSION_CHANGE_KEY) restart(); };
+    // The server says your homes changed (a claim or request decided, a Home added or left), or its
+    // signals may have been missed: re-check quietly with the list on screen.
+    const unsubscribeSync = onSyncTopic((topic) => {
+      if ((topic === 'homes' || topic === RECONNECTED || topic === EVERYTHING)
+        && inFlight.current === 0 && document.visibilityState !== 'hidden') void load(ready.current !== null);
+    });
     // Opened on the kept list: the first load re-checks behind it instead of clearing the page.
     void load(seeded.current);
     const unsubscribe = api.onTokenChange(restart);
     window.addEventListener('focus', refresh); window.addEventListener('storage', storage);
     document.addEventListener('visibilitychange', visibility);
-    return () => { retire(); unsubscribe();
+    return () => { retire(); unsubscribe(); unsubscribeSync();
       window.removeEventListener('focus', refresh); window.removeEventListener('storage', storage);
       document.removeEventListener('visibilitychange', visibility); };
   }, [load, retire, queryClient]);
