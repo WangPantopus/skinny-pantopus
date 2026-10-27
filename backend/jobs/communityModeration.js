@@ -11,8 +11,9 @@ const { skipForLaunchCut } = require('../utils/featureFlags');
 const FLAG_THRESHOLD = 3; // 3+ concerned reactions triggers review
 
 async function communityModeration() {
-  // Launch cut #10 (Mailbox): mailbox jobs don't run while the mailbox is off.
-  if (skipForLaunchCut('mailbox', 'communityModeration')) return;
+  // Launch cuts #8 and #10: community mail, Mail Party and Earn are mail extras inside the mailbox, so this job runs
+  // only while both are on.
+  if (skipForLaunchCut(['mailbox', 'mail_extras'], 'communityModeration')) return;
   logger.info('[CommunityMod] Starting community moderation check');
 
   // Find items with 3+ concerned reactions

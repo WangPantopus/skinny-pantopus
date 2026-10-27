@@ -169,19 +169,33 @@ def _process_urgent_mail(supabase, secrets: BriefingSecrets, stats: dict) -> Non
 # ── Daily mail summary ──────────────────────────────────────────
 
 
-def _process_daily_summary(supabase, secrets: BriefingSecrets, stats: dict) -> None:
-    """Send a daily mailbox summary push to users with active mail."""
-    now = datetime.now(timezone.utc)
+# The summary counts only mail that is new since the day before: delivered or opened, unread (neither the apps'
+# `viewed` nor the drawer view's `opened_at`), not archived and not deleted. A letter someone has read, filed, archived
+# or deleted never brings the push back, and old mail doesn't repeat it every morning.
+SUMMARY_LOOKBACK = timedelta(hours=24)
 
-    # Find users with unarchived, delivered/opened mail
+
+def _new_unread_mail(supabase, columns: str, since: str):
+    return (
+        supabase.table("Mail")
+        .select(columns)
+        .in_("lifecycle", ["delivered", "opened"])
+        .eq("archived", False)
+        .eq("viewed", False)
+        .is_("opened_at", "null")
+        .is_("deleted_at", "null")
+        .gte("created_at", since)
+    )
+
+
+def _process_daily_summary(supabase, secrets: BriefingSecrets, stats: dict) -> None:
+    """Send a morning push to users who got new unread mail since the day before."""
+    now = datetime.now(timezone.utc)
+    since = (now - SUMMARY_LOOKBACK).isoformat()
+
+    # Find users with new unread mail
     try:
-        result = (
-            supabase.table("Mail")
-            .select("recipient_user_id")
-            .in_("lifecycle", ["delivered", "opened"])
-            .eq("archived", False)
-            .execute()
-        )
+        result = _new_unread_mail(supabase, "recipient_user_id", since).execute()
         rows = result.data or []
     except Exception:
         log.exception("Failed to query mail for daily summary")
@@ -220,11 +234,8 @@ def _process_daily_summary(supabase, secrets: BriefingSecrets, stats: dict) -> N
         # Build per-user summary
         try:
             mail_result = (
-                supabase.table("Mail")
-                .select("category, mail_object_type, urgency")
+                _new_unread_mail(supabase, "category, mail_object_type, urgency", since)
                 .eq("recipient_user_id", uid)
-                .in_("lifecycle", ["delivered", "opened"])
-                .eq("archived", False)
                 .execute()
             )
             mail_items = mail_result.data or []
@@ -252,7 +263,7 @@ def _process_daily_summary(supabase, secrets: BriefingSecrets, stats: dict) -> N
             parts.append(f"{total} item{'s' if total > 1 else ''}")
 
         title = "Your mailbox summary"
-        body = f"You have mail: {', '.join(parts)}."
+        body = f"You have new mail: {', '.join(parts)}."
 
         result = _send_reminder(secrets, uid, title, body, "mail_summary", {
             "route": "/mailbox",

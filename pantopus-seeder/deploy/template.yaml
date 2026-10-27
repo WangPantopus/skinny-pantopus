@@ -36,6 +36,11 @@ Parameters:
     Default: 'false'
     AllowedValues: ['true', 'false']
     Description: Enable weather and air-quality alert checks.
+  MailEnabled:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: Enable the mail notification pushes (urgent mail and the morning mailbox summary). Turn on with the Mailbox (backend LAUNCH_FEATURES=mailbox).
   MaintenanceJobsEnabled:
     Type: String
     Default: 'false'
@@ -80,6 +85,9 @@ Conditions:
   RunAlerts: !Or
     - !Equals [!Ref SchedulesEnabled, 'true']
     - !Equals [!Ref AlertsEnabled, 'true']
+  RunMail: !Or
+    - !Equals [!Ref SchedulesEnabled, 'true']
+    - !Equals [!Ref MailEnabled, 'true']
   RunMaintenanceJobs: !Or
     - !Equals [!Ref SchedulesEnabled, 'true']
     - !Equals [!Ref MaintenanceJobsEnabled, 'true']
@@ -574,7 +582,7 @@ Resources:
             Name: !Sub pantopus-mail-notifications-${Environment}
             Schedule: rate(5 minutes)
             Description: !Sub 'Check for urgent mail every 5 minutes [${Environment}]'
-            State: !If [RunSchedules, ENABLED, DISABLED]
+            State: !If [RunMail, ENABLED, DISABLED]
       Policies:
         - Statement:
             - Effect: Allow
