@@ -87,9 +87,10 @@ async function mailboxTimeZone(piece) {
   return zone || FALLBACK_TIME_ZONE;
 }
 
-// SRV-5's vacation hold plugs in here: given (piece, now), the time a hold keeps the piece until, or null. No hold yet.
-async function heldUntil() {
-  return null;
+// A vacation hold keeps a person's own ordinary mail until the morning they're back (services/mailVacation, SRV-5).
+async function heldUntil(piece, natural) {
+  // eslint-disable-next-line global-require
+  return require('./mailVacation').heldUntil(piece, natural);
 }
 
 /**
@@ -106,9 +107,28 @@ async function deliveryFor(piece, { now = new Date(), immediate = false } = {}) 
     logger.warn('mailDelivery: time zone unavailable, using the fallback', { error: error.message });
   }
   if (isSpecialDelivery(piece, timeZone, now)) return { delivered_at: now.toISOString(), special_delivery: true };
-  const held = await heldUntil(piece, now);
-  const at = held && held > nextRound(timeZone, now) ? held : nextRound(timeZone, now);
-  return { delivered_at: at.toISOString(), special_delivery: false };
+  const natural = nextRound(timeZone, now);
+  let held = null;
+  try {
+    held = await heldUntil(piece, natural);
+  } catch (error) {
+    logger.warn('mailDelivery: vacation hold unavailable, delivering normally', { error: error.message });
+  }
+  if (!held) return { delivered_at: natural.toISOString(), special_delivery: false };
+  // Held: it waits for the release round and remembers its own, so a changed hold can move it (mailVacation).
+  return { delivered_at: held.until.toISOString(), special_delivery: false, mail_extracted: {
+    ...(piece.mail_extracted || {}), vacation_hold_id: held.holdId, natural_delivered_at: natural.toISOString() } };
+}
+
+/**
+ * After a writer stored pieces: the people a vacation hold kept one for get their hold's bundle and count brought up to
+ * date (services/mailVacation). Never throws.
+ */
+async function afterStored(rows) {
+  const people = [...new Set((rows || []).filter((r) => r?.mail_extracted?.vacation_hold_id && r.recipient_user_id)
+    .map((r) => r.recipient_user_id))];
+  // eslint-disable-next-line global-require
+  for (const userId of people) await require('./mailVacation').syncHeldMailSafe(userId);
 }
 
 /** The rows with their delivery fields set, for a writer that inserts several at once. */
@@ -124,6 +144,8 @@ function readableDelivered(select, options, userId, homeIds, now) {
     .or(visibleMailFilter(userId, homeIds))
     .or('drawer.is.null,drawer.neq.earn')
     .or('lifecycle.is.null,lifecycle.neq.shredded')
+    // A bundle is a wrapper: its pieces are what came.
+    .or('mail_object_type.is.null,mail_object_type.neq.bundle')
     .is('deleted_at', null)
     .lte('delivered_at', now.toISOString());
 }
@@ -186,5 +208,5 @@ async function announceSpecialDeliveries(pieces, { excludeUserId = null } = {}) 
 
 module.exports = {
   MORNING_HOUR, FALLBACK_TIME_ZONE, nextRound, localDate, isSpecialDelivery, homeTimeZone, personTimeZone,
-  mailboxTimeZone, deliveryFor, withDelivery, deliverySummary, announceSpecialDeliveries,
+  mailboxTimeZone, deliveryFor, withDelivery, deliverySummary, announceSpecialDeliveries, afterStored,
 };

@@ -936,6 +936,8 @@ const insertMailWithCompatibility = async (stored) => {
     .single();
 
   if (!primaryInsert.error) {
+    // A piece a vacation hold keeps joins its hold's bundle (SRV-5).
+    await mailDelivery.afterStored([primaryInsert.data]);
     return primaryInsert;
   }
 

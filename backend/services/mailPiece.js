@@ -10,7 +10,7 @@ const KINDS = ['letter', 'bill', 'notice', 'postcard', 'booklet', 'parcel', 'bun
 // mail_extracted keys only the server writes: the kept note, Pantopus's mark, the postmark town and the private
 // enclosures. A sender's own extractedData never sets them (the send route strips them).
 const SERVER_EXTRACTED_KEYS = ['summary', 'summary_source', 'summary_at', 'ai_summary', 'from_pantopus', 'postmark_town',
-  'enclosures', 'pantopus_letter', 'invoice_bill'];
+  'enclosures', 'pantopus_letter', 'invoice_bill', 'vacation_hold_id', 'natural_delivered_at', 'vacation_bundle_hold_id'];
 
 /** A sender's extractedData without the keys only the server writes. */
 function withoutServerKeys(extracted) {

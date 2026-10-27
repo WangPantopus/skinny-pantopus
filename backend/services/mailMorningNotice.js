@@ -29,7 +29,9 @@ function newMail(select, options, since, now) {
     .eq('archived', false)
     .in('lifecycle', ['delivered', 'opened'])
     .is('deleted_at', null)
-    .or('drawer.is.null,drawer.neq.earn');
+    .or('drawer.is.null,drawer.neq.earn')
+    // A bundle is a wrapper: its pieces are what came.
+    .or('mail_object_type.is.null,mail_object_type.neq.bundle');
 }
 
 async function pagedRows(build) {

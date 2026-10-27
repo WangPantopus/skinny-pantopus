@@ -17,6 +17,7 @@ const mailPiece = require('../services/mailPiece');
 const mailSummaries = require('../services/mailSummaries');
 const mailVault = require('../services/mailVault');
 const mailEnclosures = require('../services/mailEnclosures');
+const mailVacation = require('../services/mailVacation');
 const { MAIL_HOME_NEEDS_PROOF, MAIL_NOT_FOUND } = require('../utils/homeMailAccess');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
@@ -245,7 +246,9 @@ router.get('/drawers', verifyToken, async (req, res) => {
         .eq('viewed', false)
         .in('lifecycle', ['delivered', 'opened'])
         .eq('archived', false)
-        .is('deleted_at', null), now);
+        .is('deleted_at', null)
+        // A bundle is a wrapper: its pieces are what's counted (SRV-5).
+        .or('mail_object_type.is.null,mail_object_type.neq.bundle'), now);
 
       if (filter) filter(query);
 
@@ -291,13 +294,19 @@ router.get('/drawers', verifyToken, async (req, res) => {
       logger.error('GET /drawers: delivery line unavailable', { error: error.message });
       return null;
     });
-    const [personal, home, business, earn, homes, delivery] = await Promise.all([
+    // The vacation hold in effect or the next one, with how many pieces it holds (SRV-5).
+    const vacationRead = mailVacation.vacationLine(userId, now).catch((error) => {
+      logger.error('GET /drawers: vacation line unavailable', { error: error.message });
+      return null;
+    });
+    const [personal, home, business, earn, homes, delivery, vacation] = await Promise.all([
       countForDrawer('personal'),
       countForDrawer('home'),
       countForDrawer('business'),
       countForDrawer('earn'),
       homesRead,
       deliveryRead,
+      vacationRead,
     ]);
 
     res.json({
@@ -312,6 +321,8 @@ router.get('/drawers', verifyToken, async (req, res) => {
       unread_total: personal.unread_count + home.unread_count + business.unread_count,
       homes,
       delivery,
+      vacation_hold: vacation ? { status: vacation.status, start_date: vacation.start_date, end_date: vacation.end_date,
+        held_count: vacation.held_count, release_at: vacation.release_at } : null,
     });
   } catch (err) {
     logger.error('GET /drawers failed', { error: err.message, stack: err.stack });
@@ -392,6 +403,10 @@ router.get('/drawer/:drawer', verifyToken, async (req, res) => {
 
     // Tabs: Incoming (in the box), Counter (due or put there, not done), Vault (filed), Archived (so nothing just
     // vanishes).
+    if (tab === 'incoming' || tab === undefined) {
+      // A bundle is one piece in the box; its pieces open from it (GET /api/mailbox/v2/p2/bundle/:id/items).
+      query = query.is('bundle_id', null);
+    }
     if (tab === 'incoming') {
       query = query.in('lifecycle', ['delivered', 'opened']).eq('archived', false);
     } else if (tab === 'counter') {
