@@ -19,6 +19,7 @@ const mailObjects = require('../services/mailObjectStorage');
 const notificationService = require('../services/notificationService');
 const emailService = require('../services/emailService');
 const smsService = require('../services/smsService');
+const { isBlocked } = require('../services/blockService');
 const { skipForLaunchCut, areLaunchFeaturesEnabled } = require('../utils/featureFlags');
 // Other people are named the way neighbors see them: by their Local Profile (a business by the business).
 const { loadChatPeople } = require('../services/chatPeople');
@@ -293,6 +294,9 @@ async function logMailEvent(eventType, mailId, userId, metadata = {}) {
 }
 
 const DEFAULT_MAIL_TYPE = 'letter';
+// What a person (not a business) can send: a letter. Bills, statements, notices, packages, newsletters, ads and
+// promotions come from a business.
+const PERSON_MAIL_TYPES = new Set(['letter']);
 const DEFAULT_MAIL_PRIORITY = 'normal';
 const MAIL_OBJECT_FORMATS = ['mailjson_v1', 'html', 'markdown', 'plain_text', 'pdf', 'binary'];
 const MAILBOX_SCOPES = ['personal', 'home', 'all'];
@@ -1939,6 +1943,19 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
     const senderDisplayName = (senderBusinessName || senderPerson?.displayName || 'Someone').trim();
     const senderTrust = senderBusiness?.verified ? 'verified_business' : 'pantopus_user';
 
+    // A person writes letters: nobody can dress one up as a bill or notice, give it a made-up return address, or
+    // pay for it to be read (an ad's payout). Those come from a business.
+    if (!senderBusiness) {
+      if (!PERSON_MAIL_TYPES.has(type)) {
+        return res.status(400).json({ error: 'Only a business can send bills, notices or ads.', code: 'MAIL_TYPE_NOT_ALLOWED' });
+      }
+      if (payoutAmount) {
+        return res.status(400).json({ error: 'Only a business can pay people to read its mail.', code: 'MAIL_PAYOUT_NOT_ALLOWED' });
+      }
+    }
+    const senderReturnAddress = senderBusiness ? (senderAddress || null) : null;
+    objectPayload.envelope.senderAddress = senderReturnAddress;
+
     // ── Non-user escrow path ──────────────────────────────────
     const escrowContact = normalizeEscrowContact(req.body.recipientEmail || req.body.recipientPhone || null);
     const isEscrowSend = escrowContact && !recipientUserId && !recipientHomeId;
@@ -1997,7 +2014,7 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
         sender_display: senderDisplayName,
         sender_trust: senderTrust,
         sender_business_name: senderBusinessName || null,
-        sender_address: senderAddress || null,
+        sender_address: senderReturnAddress,
         type,
         subject: subject || null,
         content: objectResult ? contentExcerpt : content,
@@ -2098,6 +2115,25 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
           objectId: objectResult?.objectId || escrowMail.object_id || null,
         },
       });
+    }
+
+    // Launch cut #8 (Mail extras): writing to someone else is a mail extra. With it off, the only letters anyone
+    // sends go to themself or to their own Home with nobody else's name on it (the residency letter's copy).
+    const otherPeople = [...new Set([recipientUserId, attnUserId].filter((id) => id && id !== senderId))];
+    if (otherPeople.length && !areLaunchFeaturesEnabled('mail_extras')) {
+      return res.status(403).json({ error: 'This isn’t available yet.', code: 'MAIL_EXTRAS_UNAVAILABLE' });
+    }
+
+    // Nobody mails a person who blocked them, or whom they blocked.
+    for (const otherUserId of otherPeople) {
+      try {
+        if (await isBlocked(senderId, otherUserId)) {
+          return res.status(403).json({ error: 'You can’t send mail to this person.', code: 'MAIL_RECIPIENT_BLOCKED' });
+        }
+      } catch (blockErr) {
+        if (blockErr.code !== 'BLOCK_CHECK_UNAVAILABLE') throw blockErr;
+        return res.status(503).json({ error: blockErr.message, code: blockErr.code });
+      }
     }
 
     // Validate recipient exists
@@ -2208,7 +2244,7 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
       sender_display: senderDisplayName,
       sender_trust: senderTrust,
       sender_business_name: senderBusinessName || null,
-      sender_address: senderAddress || null,
+      sender_address: senderReturnAddress,
       type,
       subject: subject || null,
       content: objectResult ? contentExcerpt : content,

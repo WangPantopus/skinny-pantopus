@@ -1141,10 +1141,14 @@ router.get('/vault/folder/:folderId/items', async (req, res, next) => {
       .maybeSingle();
     if (!ownFolder) return res.status(404).json({ error: 'Folder not found' });
 
+    // Only letters the caller can still read: a Home letter filed here leaves with its Home (a member who was
+    // removed, moved out or whose guest access ended keeps the folder, not the household's letters).
+    const homeIds = await getAccessibleHomeIds(req.user.id);
     const { data: items, count } = await supabaseAdmin
       .from('Mail')
       .select('*', { count: 'exact' })
       .eq('vault_folder_id', folderId)
+      .or(visibleMailFilter(req.user.id, homeIds))
       .is('deleted_at', null)
       .order('created_at', { ascending: false })
       // Mail delivered together shares created_at; the id keeps the order the same on every page.
