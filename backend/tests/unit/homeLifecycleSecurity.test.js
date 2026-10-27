@@ -136,7 +136,7 @@ describe('CRIT-03 — household mail access has exactly one definition', () => {
 });
 
 describe('CRIT-03 — the shared helper fails closed', () => {
-  const { getAccessibleHomeIds } = require('../../utils/homeMailAccess');
+  const { getAccessibleHomeIds, householdHomeIds } = require('../../utils/homeMailAccess');
 
   test('returns nothing for a user with only an inactive occupancy', async () => {
     seedTable('HomeOccupancy', [{
@@ -156,19 +156,23 @@ describe('CRIT-03 — the shared helper fails closed', () => {
       user_id: 'resident',
       is_active: true,
       verification_status: 'verified',
+      verification_source: 'address',
     }]);
     await expect(getAccessibleHomeIds('resident')).resolves.toEqual(['home-9']);
   });
 
-  test('returns the home for the creator, whose status is provisional_bootstrap', async () => {
+  // D1 (2026-10-27): Home mail opens only once the address is proven. The creator still belongs to the household.
+  test('keeps the creator (provisional_bootstrap) in the household but out of its mail', async () => {
     seedTable('HomeOccupancy', [{
       id: 'occ-z',
       home_id: 'home-9',
       user_id: 'creator',
       is_active: true,
       verification_status: 'provisional_bootstrap',
+      verification_source: 'legacy',
     }]);
-    await expect(getAccessibleHomeIds('creator')).resolves.toEqual(['home-9']);
+    await expect(getAccessibleHomeIds('creator')).resolves.toEqual([]);
+    await expect(householdHomeIds('creator')).resolves.toEqual(['home-9']);
   });
 
   // applyOccupancyTemplate writes is_active: true for pending rows, and

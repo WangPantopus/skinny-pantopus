@@ -5,7 +5,8 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const homeRecordService = require('../services/homeRecordService');
 // canAccessMail: the per-item rule, shared with the v2 mailbox routes.
 const { getAccessibleHomeIds, trustedHomeIdsOrThrow, canAccessMail, readableMail, homeMailFilter, visibleMailFilter,
-  restorableMail, isDeletedMail, removedMailInfo, sendHomeMailRemovedNotice, MAIL_RESTORE_DAYS } = require('../utils/homeMailAccess');
+  restorableMail, isDeletedMail, removedMailInfo, sendHomeMailRemovedNotice, MAIL_RESTORE_DAYS,
+  sendMailUnavailable, mailHomesOrThrow, MAIL_HOME_NEEDS_PROOF } = require('../utils/homeMailAccess');
 const { HOME_DOCUMENT_TYPES } = require('../utils/homeDocumentAccess');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
@@ -1432,7 +1433,12 @@ router.get('/', verifyToken, async (req, res) => {
         return res.status(400).json({ error: 'homeId is required when scope=home' });
       }
       if (!accessibleHomeIds.includes(homeId)) {
-        return res.status(403).json({ error: 'You don\u2019t have permission to send mail to this home.' });
+        // Someone who lives there but hasn't proven the address yet is told what opens it (D1).
+        const homes = await mailHomesOrThrow(userId).catch(() => []);
+        if (homes.some((h) => h.home_id === homeId.toLowerCase() && h.mail_access === 'needs_proof')) {
+          return res.status(403).json(MAIL_HOME_NEEDS_PROOF);
+        }
+        return res.status(403).json({ error: "You can't open this home's mail.", code: 'MAIL_HOME_NOT_YOURS' });
       }
     }
 
@@ -1717,15 +1723,12 @@ router.get('/:id', verifyToken, async (req, res) => {
       .eq('id', id)
       .single();
 
-    if (error || !mail) {
-      return res.status(404).json({ error: 'Mail not found' });
-    }
-
     // A deleted letter still opens for the members who could see it, so its
-    // notice can offer Restore; a dismissed one says so too.
-    const allowed = await canAccessMail(mail, userId, { includeDeleted: true });
-    if (!allowed) {
-      return res.status(403).json({ error: 'You do not have access to this mail' });
+    // notice can offer Restore; a dismissed one says so too. A Home letter for
+    // someone who hasn't proven the address answers 403 MAIL_HOME_NEEDS_PROOF;
+    // anything else they can't open is not found (it doesn't say it exists).
+    if (error || !mail || !(await canAccessMail(mail, userId, { includeDeleted: true }))) {
+      return sendMailUnavailable(res, error ? null : mail, userId);
     }
     mail.removed = await removedMailInfo(mail);
 
@@ -1766,7 +1769,7 @@ router.get('/:id', verifyToken, async (req, res) => {
 
   } catch (err) {
     logger.error('Mail fetch error', { error: err.message, mailId: req.params.id });
-    res.status(500).json({ error: 'Failed to fetch mail' });
+    res.status(500).json({ error: "Couldn't open this mail. Try again in a moment.", code: 'MAIL_UNAVAILABLE' });
   }
 });
 

@@ -4,7 +4,7 @@ const { SAFE_CREATOR_SELECT, serializeUserAsLocalIdentity } = require('../serial
 const { getUserAccess } = require('../utils/homePermissions');
 const { ROLE_RANK, currentOccupancy, homeAccessExpiresAt, resolveHomeRole } = require('../utils/homeAccessPolicy');
 const { staleAffectsTrust } = require('../utils/verificationAge');
-const { homeMailVisibilityClauses } = require('../utils/homeMailAccess');
+const { homeMailVisibilityClauses, MAIL_PROVEN_SOURCES } = require('../utils/homeMailAccess');
 const { HOME_LIST, HOME_BILL_LIST, HOME_ISSUE_LIST, HOME_PACKAGE_LIST } = require('../utils/columns');
 const parsePostGISPoint = require('../utils/parsePostGISPoint');
 const records = require('./homeRecordService');
@@ -208,8 +208,10 @@ async function read({ homeId, actorId, includeHealthScore = false }) {
     hasExtra('calendar.view') ? records.list({ homeId, actorId, kind: 'event' }).then(result => result.records) : [],
     hasExtra('finance.view') ? rows(db.from('HomeBill').select(HOME_BILL_LIST).eq('home_id', homeId)
       .in('status', ['due', 'overdue']).order('due_date', { ascending: true }).limit(1)) : [],
-    // Launch cut #10 (Mailbox): no unread-mail count while the mailbox is off.
+    // Launch cut #10 (Mailbox): no unread-mail count while the mailbox is off. Home mail counts only for someone
+    // who proved the address (utils/homeMailAccess MAIL_PROVEN_SOURCES, D1): never a claim or probation.
     isLaunchFeatureEnabled('mailbox') && has('mailbox.view') && access.occupancy?.verification_status === 'verified'
+      && MAIL_PROVEN_SOURCES.includes(access.occupancy.verification_source)
       && !staleAffectsTrust(access.occupancy.verified_at) ? count(unreadMailQuery(homeId, actorId, nowISO)) : 0,
     has('members.manage') ? count(db.from('HomeGuestPass').select('id', { count: 'exact', head: true }).eq('home_id', homeId)
       .is('revoked_at', null).lte('start_at', nowISO).or(`end_at.is.null,end_at.gt.${nowISO}`)) : 0,
