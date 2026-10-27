@@ -45,6 +45,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
@@ -993,6 +994,8 @@ private fun FooterPrimaryButton(
             modifier
                 .fillMaxWidth()
                 .heightIn(min = 48.dp)
+                // Off (not just busy submitting) reads as off, as on iOS.
+                .alpha(if (enabled || isSubmitting) 1f else 0.5f)
                 .shadow(8.dp, RoundedCornerShape(Radii.xl))
                 .clip(RoundedCornerShape(Radii.xl))
                 .background(background)

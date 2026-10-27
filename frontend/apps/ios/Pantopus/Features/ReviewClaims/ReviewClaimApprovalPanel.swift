@@ -34,7 +34,9 @@ enum ReviewClaimApproval {
                 ? "Check the claimant\u{2019}s document first (Review private documents)."
                 : "No document yet. Use Request info to ask for one."
         case (false, false):
-            return "Needs a confirmed identity and a checked document. Use Request info to ask for a document."
+            return approval.proof == "pending"
+                ? "Confirm the claimant\u{2019}s identity and check their document (Review private documents)."
+                : "Needs a confirmed identity and a checked document. Use Request info to ask for a document."
         }
     }
 
@@ -61,7 +63,7 @@ enum ReviewClaimApproval {
     static func proofLine(_ approval: ClaimReviewApprovalDTO) -> (title: String, detail: String) {
         switch approval.proof {
         case "verified": ("Document checked", "A reviewer verified a document.")
-        case "pending": ("Document waiting for your check", "Open Review private documents and verify it.")
+        case "pending": ("Document waiting for your check", "Use Review private documents to verify it.")
         default: ("No document yet", "The claimant is asked to upload one.")
         }
     }

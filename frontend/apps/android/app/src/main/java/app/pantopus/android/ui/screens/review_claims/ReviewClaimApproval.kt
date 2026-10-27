@@ -55,6 +55,7 @@ object ReviewClaimApproval {
             proof -> "Confirm the claimant’s identity first."
             identity && approval.proof == "pending" -> "Check the claimant’s document first (Open private documents)."
             identity -> "No document yet. Use Request info to ask for one."
+            approval.proof == "pending" -> "Confirm the claimant’s identity and check their document (Open private documents)."
             else -> "Needs a confirmed identity and a checked document. Use Request info to ask for a document."
         }
     }
