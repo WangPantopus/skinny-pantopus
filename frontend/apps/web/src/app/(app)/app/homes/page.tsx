@@ -18,6 +18,7 @@ import { confirmStore } from '@/components/ui/confirm-store';
 import { validateResidencyPage, residencyRequestLabel, residencyReviewLabel } from '@/components/homes/residencyProgressModel';
 import { unitText } from '@/components/homes/creation/homeCreationModel';
 import { useFeatureFlag } from '@/hooks/useFeatureFlag';
+import ClaimApprovalChecklist, { approvalSummary } from '@/components/homes/ClaimApprovalChecklist';
 type ResidencyRequest = Awaited<ReturnType<typeof api.homes.getMyResidencyRequests>>['requests'][number];
 
 function claimInProgress(status: string) {
@@ -202,6 +203,43 @@ export default function HomesPage() {
       document.removeEventListener('visibilitychange', visibility); };
   }, [load, retire, queryClient]);
 
+  // Back from Stripe's identity check (?identity_check=<claim id>): read the check once the claims
+  // are listed, refresh the list and say where it stands.
+  const identityReturn = useRef<string | null>(null);
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const claimId = url.searchParams.get('identity_check');
+    if (!claimId) return;
+    identityReturn.current = claimId;
+    url.searchParams.delete('identity_check');
+    window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+  }, []);
+  const identityPoll = useRef<(() => void) | null>(null);
+  useEffect(() => () => identityPoll.current?.(), []);
+  useEffect(() => {
+    const claimId = identityReturn.current;
+    const entry = claimId ? pendingClaims.find(({ claim }) => claim.id === claimId) : undefined;
+    if (!claimId || !entry) return;
+    identityReturn.current = null;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    identityPoll.current?.();
+    identityPoll.current = () => { stopped = true; if (timer) clearTimeout(timer); };
+    // While Stripe is still checking, look again a few times so the answer shows without a reload.
+    const check = (round: number) => api.homeOwnership.getClaimIdentityCheck(entry.claim.home_id, claimId).then(({ approval }) => {
+      if (stopped || !approval) return;
+      setPendingClaims(previous => previous.map(item => item.claim.id === claimId
+        ? { ...item, claim: { ...item.claim, approval } } : item));
+      if (approval.identity === 'verified') toast.success('Your identity is confirmed.');
+      else if (approval.identity === 'requires_input') toast.warning('Your ID check didn’t go through. You can try again.');
+      else if (approval.identity === 'processing') {
+        if (round === 0) toast.info('Thanks. Stripe is checking your ID; this usually takes a few minutes.');
+        if (round < 12) timer = setTimeout(() => { void check(round + 1); }, 10_000);
+      }
+    }).catch(() => { /* the checklist keeps the last answer; the next refresh catches up */ });
+    void check(0);
+  }, [pendingClaims]);
+
   const remove = async (homeId: string) => {
     const opening = ready.current;
     if (!opening?.() || !homes.some(h => h.id === homeId && h.can_delete_home === true)) return;
@@ -315,8 +353,9 @@ export default function HomesPage() {
                     return (
                       <div
                         key={claim.id}
-                        className="rounded-xl border border-violet-200 bg-violet-50/80 dark:bg-violet-950/30 dark:border-violet-800 p-5 flex flex-row items-stretch gap-3"
+                        className="rounded-xl border border-violet-200 bg-violet-50/80 dark:bg-violet-950/30 dark:border-violet-800 p-5"
                       >
+                      <div className="flex flex-row items-stretch gap-3">
                         <div
                           role="button"
                           tabIndex={0}
@@ -327,7 +366,8 @@ export default function HomesPage() {
                           <div className="text-base font-semibold text-app-text">{addressLine}</div>
                           <div className="text-sm text-app-text-secondary">{cityLine}</div>
                           <div className="mt-2 inline-flex items-center rounded-full bg-violet-100 dark:bg-violet-900/50 px-2.5 py-1 text-xs font-semibold text-violet-800 dark:text-violet-200">
-                            {residency ? 'Residency claim' : 'Ownership claim'} · {claim.has_evidence === false ? 'Document needed' : claim.has_evidence === true ? 'Under review' : 'Check document status'}
+                            {residency ? 'Residency claim' : 'Ownership claim'} · {claim.approval ? approvalSummary(claim.approval)
+                              : claim.has_evidence === false ? 'Document needed' : claim.has_evidence === true ? 'Under review' : 'Check document status'}
                           </div>
                           <p className="mt-2 text-xs text-app-text-secondary">
                             This claim does not grant household access.
@@ -343,6 +383,16 @@ export default function HomesPage() {
                         >
                           {busy ? '…' : 'Withdraw'}
                         </button>
+                      </div>
+                      {claim.approval ? (
+                        <ClaimApprovalChecklist
+                          homeId={claim.home_id}
+                          claimId={claim.id}
+                          residency={residency}
+                          approval={claim.approval}
+                          onUpload={() => router.push(href)}
+                        />
+                      ) : null}
                       </div>
                     );
                   })}
