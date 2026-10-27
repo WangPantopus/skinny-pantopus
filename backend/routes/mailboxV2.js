@@ -6,7 +6,7 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 // before reading or changing anything and otherwise answers its not-found.
 const {
   getAccessibleHomeIds, canAccessMail, readableMail, homesMailFilter, visibleMailFilter, visibleMailIds,
-  removedMailInfo, sendHomeMailRemovedNotice, mailReaderIdsOrThrow,
+  removedMailInfo, sendHomeMailRemovedNotice, mailReaderIdsOrThrow, mailHomesOrThrow, sendMailUnavailable,
 } = require('../utils/homeMailAccess');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
@@ -267,11 +267,18 @@ router.get('/drawers', verifyToken, async (req, res) => {
       return { unread_count: count || 0, urgent_count: urgentCount, last_item_at: lastItemAt };
     };
 
-    const [personal, home, business, earn] = await Promise.all([
+    // The Homes this person lives at, and whether each one's mail is open to them yet (D1: only after the
+    // address is proven). A failed read lists none rather than failing the mailbox.
+    const homesRead = mailHomesOrThrow(userId).catch((error) => {
+      logger.error('GET /drawers: homes unavailable', { error: error.message });
+      return [];
+    });
+    const [personal, home, business, earn, homes] = await Promise.all([
       countForDrawer('personal'),
       countForDrawer('home'),
       countForDrawer('business'),
       countForDrawer('earn'),
+      homesRead,
     ]);
 
     res.json({
@@ -281,10 +288,11 @@ router.get('/drawers', verifyToken, async (req, res) => {
         { drawer: 'business', display_name: 'Business', icon: '💼', ...business },
         { drawer: 'earn', display_name: 'Earn', icon: '💰', ...earn },
       ],
+      homes,
     });
   } catch (err) {
     logger.error('GET /drawers failed', { error: err.message, stack: err.stack });
-    res.status(500).json({ error: 'Failed to load drawer metadata' });
+    res.status(500).json({ error: "Couldn't load your mailbox. Try again in a moment.", code: 'MAIL_UNAVAILABLE' });
   }
 });
 
@@ -412,9 +420,10 @@ router.get('/item/:id', verifyToken, async (req, res) => {
 
     // A deleted letter still opens for the members who could see it, so its
     // notice can offer Restore; a dismissed one says so too. Neither is marked
-    // opened by viewing it.
+    // opened by viewing it. A Home letter for someone who hasn't proven the
+    // address answers 403 MAIL_HOME_NEEDS_PROOF; anything else is not found.
     if (error || !mail || !(await canAccessMail(mail, userId, { includeDeleted: true }))) {
-      return res.status(404).json({ error: 'Mail not found' });
+      return sendMailUnavailable(res, error ? null : mail, userId);
     }
     mail.removed = await removedMailInfo(mail);
 
@@ -491,7 +500,7 @@ router.get('/item/:id', verifyToken, async (req, res) => {
     });
   } catch (err) {
     logger.error('Item fetch error', { error: err.message });
-    return res.status(500).json({ error: 'Server error' });
+    return res.status(500).json({ error: "Couldn't open this mail. Try again in a moment.", code: 'MAIL_UNAVAILABLE' });
   }
 });
 
