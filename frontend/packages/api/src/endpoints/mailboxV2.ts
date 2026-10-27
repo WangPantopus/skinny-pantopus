@@ -53,6 +53,8 @@ export interface MailItemV2 {
   privacy: Privacy;
   lifecycle: Lifecycle;
   removed?: MailRemovedInfo | null;
+  /** Who shredded it, while it can be brought back. */
+  deleted_by?: string | null;
   subject?: string;
   content?: string;
   preview_text?: string;
@@ -76,7 +78,43 @@ export interface MailItemV2 {
   // Package join
   package?: MailPackage | null;
   timeline?: PackageEvent[];
+  // Mail tab build (contract v1, 2026-10-27): what the piece is and how it arrived.
+  /** What to draw it as; an unknown value draws as a letter. */
+  kind?: MailKind | string;
+  /** When it went into the box (morning-round pieces: 7:00 a.m. in their mailbox's time zone). */
+  delivered_at?: string;
+  /** Arrived on its own, outside the morning round. */
+  special_delivery?: boolean;
+  /** Sent by Pantopus itself. */
+  from_pantopus?: boolean;
+  /** The sender's post office town and the date; a null town draws the date only. */
+  postmark?: { town: string | null; date: string } | null;
+  on_counter?: boolean;
+  certified?: boolean;
+  bundle_id?: string | null;
+  bundle_label?: string | null;
+  bundle_item_count?: number | null;
+  /** "Pantopus read this for you": made once and kept; null means no note. */
+  summary?: { text: string; key_facts: { label: string; value: string }[] } | null;
+  /** Bills from business invoices; the status is read live from the invoice. */
+  invoice?: {
+    id: string;
+    status: 'sent' | 'viewed' | 'paid' | 'void' | 'overdue';
+    total_cents: number;
+    currency: string;
+    due_date: string | null;
+    business_name: string | null;
+  } | null;
+  /** Detail only: what's in the envelope; fetch a short-lived link per enclosure. */
+  enclosures?: { id: string; name: string; mime_type: string; size_bytes: number }[];
+  vault_folder_id?: string | null;
+  acknowledged_at?: string | null;
+  first_opened_at?: string | null;
+  sender_address?: string | null;
+  page_count?: number | null;
 }
+
+export type MailKind = 'letter' | 'bill' | 'notice' | 'postcard' | 'booklet' | 'parcel' | 'bundle';
 
 export interface MailPackage {
   id: string;

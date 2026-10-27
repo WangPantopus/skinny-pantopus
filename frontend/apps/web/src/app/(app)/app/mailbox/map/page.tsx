@@ -10,6 +10,8 @@ import { TILE_URL, TILE_ATTRIBUTION } from '@/components/map/constants';
 // The map requires this Home's actual stored location.
 import useHomeProfile from '../_components/useMailboxHome';
 import { launchFeatures } from '@/lib/featureFlags';
+import ErrorState from '@/components/ui/ErrorState';
+import { mailLoadMessage } from '@/components/mailbox/mailLoadMessage';
 
 // ── Leaflet must be loaded client-side only ──────────────────
 const MapContainer = dynamic(
@@ -69,6 +71,8 @@ const TRUST_MAP: Record<string, 'verified_gov' | 'verified_utility' | 'verified_
   verified_utility: 'verified_utility',
   verified_business: 'verified_business',
   pantopus_user: 'pantopus_user',
+  // A sender Pantopus couldn't check shows as unverified, never no badge.
+  unknown: 'unknown',
 };
 
 // ── Main Page ────────────────────────────────────────────────
@@ -80,20 +84,26 @@ export default function MailMapPage() {
   const [activeFilter, setActiveFilter] = useState<PinFilter>('all');
   const [selectedPin, setSelectedPin] = useState<HomeMapPin | null>(null);
   const [leafletReady, setLeafletReady] = useState(false);
+  const [leafletFailed, setLeafletFailed] = useState(false);
+  const [leafletTry, setLeafletTry] = useState(0);
   const leafletRef = useRef<typeof import('leaflet') | null>(null);
 
-  const { data: allPins, isLoading } = useMapPins(home.homeId, undefined, {
+  const { data: allPins, isLoading, isError, error, refetch } = useMapPins(home.homeId, undefined, {
     enabled: hasLocation && !!home.homeId,
   });
   const pins = useMemo(() => allPins?.filter((p) => isLaunchVisiblePin(p.pin_type)), [allPins]);
 
-  // Load leaflet on client
+  // Load leaflet on client; if its code can't load, say so and offer Try again.
   useEffect(() => {
+    let cancelled = false;
+    setLeafletFailed(false);
     import('leaflet').then(L => {
+      if (cancelled) return;
       leafletRef.current = L;
       setLeafletReady(true);
-    });
-  }, []);
+    }).catch(() => { if (!cancelled) setLeafletFailed(true); });
+    return () => { cancelled = true; };
+  }, [leafletTry]);
 
   // Create icon for a pin type
   const makeIcon = useCallback((pinType: MapPinType, isSelected: boolean) => {
@@ -147,6 +157,33 @@ export default function MailMapPage() {
     if (activeFilter === 'all' || !pins) return new Set<string>();
     return new Set(pins.filter(p => p.pin_type !== activeFilter).map(p => p.id));
   }, [pins, activeFilter]);
+
+  // ── The home: still loading, or couldn't load ─────────────
+  if (home.isLoading) {
+    return (
+      <div className="flex-1 flex items-center justify-center py-16" role="status" aria-label="Loading your map">
+        <div className="w-6 h-6 border-2 border-app-border border-t-gray-600 rounded-full animate-spin" />
+      </div>
+    );
+  }
+  if (home.isError) {
+    return (
+      <ErrorState
+        title="Couldn't load your home"
+        message={mailLoadMessage(null)}
+        onRetry={() => { void home.refetch(); }}
+      />
+    );
+  }
+  if (leafletFailed) {
+    return (
+      <ErrorState
+        title="Couldn't load the map"
+        message={mailLoadMessage(null)}
+        onRetry={() => setLeafletTry((n) => n + 1)}
+      />
+    );
+  }
 
   // ── No home location ──────────────────────────────────────
   if (home.lat == null || home.lng == null) {
@@ -234,8 +271,21 @@ export default function MailMapPage() {
           </MapContainer>
         )}
 
+        {/* The pins couldn't load: say so over the map */}
+        {isError && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/10 z-20">
+            <div role="alert" className="bg-app-surface px-6 py-4 rounded-xl shadow-lg text-center max-w-xs">
+              <p className="text-sm font-semibold text-app-text">Couldn&apos;t load your mail on the map</p>
+              <p className="mt-1 text-sm text-app-text-secondary">{mailLoadMessage(error)}</p>
+              <button type="button" onClick={() => { void refetch(); }} className="mt-3 min-h-[44px] rounded-lg bg-primary-600 px-4 text-sm font-semibold text-white hover:bg-primary-700">
+                Try again
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Empty state overlay */}
-        {!isLoading && pins && pins.length === 0 && (
+        {!isLoading && !isError && pins && pins.length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/10 pointer-events-none z-20">
             <div className="bg-app-surface px-6 py-4 rounded-xl shadow-lg text-center max-w-xs pointer-events-auto">
               <svg className="w-8 h-8 text-gray-300 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -277,8 +327,8 @@ export default function MailMapPage() {
                   <span className="text-sm text-app-text-strong">
                     {selectedPin.sender_display}
                   </span>
-                  {selectedPin.sender_trust && TRUST_MAP[selectedPin.sender_trust] && (
-                    <TrustBadge trust={TRUST_MAP[selectedPin.sender_trust]} />
+                  {selectedPin.sender_trust && (
+                    <TrustBadge trust={TRUST_MAP[selectedPin.sender_trust] ?? 'unknown'} />
                   )}
                 </div>
               )}

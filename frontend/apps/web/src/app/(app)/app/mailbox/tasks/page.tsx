@@ -14,6 +14,8 @@ import { TaskCard } from '@/components/mailbox';
 import useHomeProfile from '../_components/useMailboxHome';
 import { launchFeatures } from '@/lib/featureFlags';
 import { toast } from '@/components/ui/toast-store';
+import ErrorState from '@/components/ui/ErrorState';
+import { mailLoadMessage } from '@/components/mailbox/mailLoadMessage';
 
 // ── Priority sort weight (high > medium > low) ──────────────
 const PRIORITY_WEIGHT: Record<string, number> = { high: 3, medium: 2, low: 1 };
@@ -441,7 +443,7 @@ function TaskDetailPanel({
 export default function MailTasksPage() {
   const router = useRouter();
   const home = useHomeProfile();
-  const { data: taskData, isLoading } = useTasks(home.homeId, { enabled: !!home.homeId });
+  const { data: taskData, isLoading, isError, error, refetch } = useTasks(home.homeId, { enabled: !!home.homeId });
   const updateTask = useUpdateTask();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -507,7 +509,7 @@ export default function MailTasksPage() {
 
         {/* Task list */}
         <div className="flex-1 overflow-y-auto">
-          {isLoading ? (
+          {home.isLoading || isLoading ? (
             <div className="p-3 space-y-2">
               {[1, 2, 3, 4].map((i) => (
                 <div key={i} className="flex items-center gap-3 py-3 px-2">
@@ -519,6 +521,20 @@ export default function MailTasksPage() {
                 </div>
               ))}
             </div>
+          ) : home.isError ? (
+            <ErrorState
+              title="Couldn't load your home"
+              message={mailLoadMessage(null)}
+              onRetry={() => { void home.refetch(); }}
+            />
+          ) : isError ? (
+            <ErrorState
+              title="Couldn't load your home's tasks"
+              message={mailLoadMessage(error)}
+              onRetry={() => { void refetch(); }}
+            />
+          ) : !home.homeId ? (
+            <p className="px-4 py-16 text-center text-sm text-app-text-secondary">Add your home to keep its tasks here.</p>
           ) : activeTasks.length === 0 && completedTasks.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 px-4">
               <svg className="w-10 h-10 text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">

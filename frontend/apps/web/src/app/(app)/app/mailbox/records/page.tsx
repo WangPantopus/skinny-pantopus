@@ -10,6 +10,8 @@ import {
 } from '@/lib/mailbox-queries';
 import { AssetCard } from '@/components/mailbox';
 import { toast } from '@/components/ui/toast-store';
+import ErrorState from '@/components/ui/ErrorState';
+import { mailLoadMessage } from '@/components/mailbox/mailLoadMessage';
 // The user's Home; each page used a hard-coded 'home_1' stub.
 import useHomeProfile from '../_components/useMailboxHome';
 
@@ -299,7 +301,7 @@ function AddAssetPanel({
 export default function MailRecordsPage() {
   const home = useHomeProfile();
   const router = useRouter();
-  const { data: assets, isLoading } = useHomeAssets(home.homeId);
+  const { data: assets, isLoading, isError, error, refetch } = useHomeAssets(home.homeId);
 
   const [roomFilter, setRoomFilter] = useState('All');
   const [showAddForm, setShowAddForm] = useState(false);
@@ -366,7 +368,7 @@ export default function MailRecordsPage() {
 
         {/* Asset list */}
         <div className="flex-1 overflow-y-auto">
-          {isLoading ? (
+          {home.isLoading || isLoading ? (
             <div className="p-3 space-y-2">
               {[1, 2, 3, 4].map((i) => (
                 <div key={i} className="flex items-center gap-3 p-3">
@@ -378,6 +380,20 @@ export default function MailRecordsPage() {
                 </div>
               ))}
             </div>
+          ) : home.isError ? (
+            <ErrorState
+              title="Couldn't load your home"
+              message={mailLoadMessage(null)}
+              onRetry={() => { void home.refetch(); }}
+            />
+          ) : isError ? (
+            <ErrorState
+              title="Couldn't load your home records"
+              message={mailLoadMessage(error)}
+              onRetry={() => { void refetch(); }}
+            />
+          ) : !home.homeId ? (
+            <p className="px-4 py-16 text-center text-sm text-app-text-secondary">Add your home to keep its records here.</p>
           ) : filteredAssets.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 px-4">
               <svg className="w-10 h-10 text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">

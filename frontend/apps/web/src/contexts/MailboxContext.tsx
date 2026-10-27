@@ -25,6 +25,9 @@ type MailboxContextValue = {
   travelModeActive: boolean;
   mailDayBannerDismissed: boolean;
   setMailDayBannerDismissed: (v: boolean) => void;
+  /** Today's delivery is being shown for the first time: the door opens and the pieces slide out. */
+  deliveryOpening: boolean;
+  setDeliveryOpening: (v: boolean) => void;
 };
 
 const MailboxContext = createContext<MailboxContextValue | null>(null);
@@ -48,6 +51,7 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
   const [activeDrawer, setActiveDrawer] = useState<DrawerType>('personal');
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [mailDayBannerDismissed, setDismissed] = useState(readMailDayDismissed);
+  const [deliveryOpening, setDeliveryOpening] = useState(false);
   const setMailDayBannerDismissed = useCallback((dismissed: boolean) => {
     setDismissed(dismissed);
     try {
@@ -90,8 +94,10 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
       travelModeActive,
       mailDayBannerDismissed,
       setMailDayBannerDismissed,
+      deliveryOpening,
+      setDeliveryOpening,
     }),
-    [activeDrawer, selectedItemId, activeTheme, travelModeActive, mailDayBannerDismissed, setMailDayBannerDismissed],
+    [activeDrawer, selectedItemId, activeTheme, travelModeActive, mailDayBannerDismissed, setMailDayBannerDismissed, deliveryOpening],
   );
 
   return (

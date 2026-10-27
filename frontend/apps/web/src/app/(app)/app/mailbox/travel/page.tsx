@@ -1,303 +1,202 @@
 'use client';
 
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import type { VacationHold } from '@/types/mailbox';
-import {
-  useVacationHold,
-  useCreateVacationHold,
-  useCancelVacationHold,
-} from '@/lib/mailbox-queries';
+import { useCancelVacationHold, useCreateVacationHold, useVacationHold } from '@/lib/mailbox-queries';
+import { mailLoadMessage } from '@/components/mailbox/mailLoadMessage';
+import ErrorState from '@/components/ui/ErrorState';
+import { toast } from '@/components/ui/toast-store';
 // The user's Home; the page sent a hard-coded 'home_1'.
 import useHomeProfile from '../_components/useMailboxHome';
 
-// ── Cancel confirmation dialog ───────────────────────────────
+/** "Fri, Nov 20" for a YYYY-MM-DD day, as that calendar day. */
+function day(value: string): string {
+  const date = new Date(`${value.slice(0, 10)}T12:00:00`);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
 
-function CancelConfirmDialog({
-  onConfirm,
-  onCancel,
-  confirming,
-  error,
-}: {
-  onConfirm: () => void;
-  onCancel: () => void;
-  confirming: boolean;
-  error: boolean;
-}) {
+function shortDay(value: string): string {
+  const date = new Date(`${value.slice(0, 10)}T12:00:00`);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+/** "Sun, Nov 29 at 7 a.m." from the server's release time (the person's zone, shown in this browser's). */
+function release(hold: VacationHold): string {
+  const at = hold.release_at ? new Date(hold.release_at) : null;
+  if (!at || Number.isNaN(at.getTime())) return `the morning of ${day(hold.end_date)}`;
+  const when = at.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  const time = at.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).replace(':00', '').replace(' AM', ' a.m.').replace(' PM', ' p.m.');
+  return `${when} at ${time}`;
+}
+
+/** The mailbox with its HOLD tag, and the bundle tied up for the return (R11-Vacation). */
+function HoldDrawings() {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="w-full max-w-sm mx-4 bg-app-surface rounded-xl shadow-2xl border border-app-border p-5">
-        <h3 className="text-sm font-semibold text-app-text mb-2">
-          Cancel Travel Mode?
-        </h3>
-        <p className="text-sm text-app-text-secondary dark:text-app-text-muted mb-1">
-          Remove these saved travel dates? This does not change any delivery arrangements.
-        </p>
-        <p className="text-xs text-amber-600 dark:text-amber-400 mb-4">
-          Contact your carrier directly to change a delivery or postal hold.
-        </p>
-        {error && <p role="alert" className="text-sm text-red-600 mb-3">Couldn&apos;t cancel your travel dates. Please try again.</p>}
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="flex-1 px-4 py-2 text-sm text-app-text-secondary dark:text-app-text-muted hover:bg-app-hover dark:hover:bg-gray-800 rounded-lg transition-colors"
-          >
-            Keep Dates
-          </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            disabled={confirming}
-            className={`flex-1 px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${
-              confirming
-                ? 'bg-app-surface-sunken text-app-text-muted cursor-not-allowed'
-                : 'bg-red-600 text-white hover:bg-red-700'
-            }`}
-          >
-            {confirming ? 'Cancelling...' : 'Cancel Travel Mode'}
-          </button>
-        </div>
-      </div>
+    <div aria-hidden="true" className="flex items-end justify-center gap-4 py-2">
+      <svg width="110" height="120" viewBox="0 0 120 130">
+        <rect x="54" y="96" width="12" height="34" rx="2" fill="#8a6a4a" />
+        <path d="M18 94 V50 A42 42 0 0 1 102 50 V94 Z" fill="#0284c7" />
+        <path d="M27 90 V53 A33 33 0 0 1 93 53 V90 Z" fill="#0369a1" />
+        <rect x="51" y="38" width="18" height="6" rx="3" fill="#e0f2fe" />
+        <rect x="102" y="64" width="16" height="7" rx="1.5" fill="#c2410c" />
+        <path d="M60 44 L60 58" stroke="#a16207" strokeWidth="1.4" />
+        <path d="M46 58 H74 L78 64 L74 70 H46 Z" fill="#f3e3b5" stroke="#d9c48c" />
+        <text x="60" y="67" textAnchor="middle" fontFamily="ui-monospace, Menlo, monospace" fontSize="7" fontWeight="700" fill="#5c4410">HOLD</text>
+      </svg>
+      <svg width="140" height="102" viewBox="0 0 150 110">
+        <rect x="10" y="62" width="130" height="34" rx="3" fill="#c9a676" />
+        <rect x="14" y="44" width="122" height="22" rx="2" fill="#ffffff" stroke="#e2e8f0" />
+        <rect x="8" y="26" width="128" height="22" rx="2" fill="#fbf6ea" stroke="#ebe1cb" transform="rotate(-2 72 37)" />
+        <rect x="18" y="12" width="116" height="18" rx="2" fill="#fffdf7" stroke="#ebe5d6" transform="rotate(2 76 21)" />
+        <path d="M75 8 V100" stroke="#8a6a4a" strokeWidth="2.2" />
+        <path d="M4 58 Q75 50 146 58" fill="none" stroke="#8a6a4a" strokeWidth="2.2" />
+        <path d="M75 10 q-12 -10 -6 -2 q4 4 6 2 q2 2 6 -2 q6 -8 -6 2" fill="none" stroke="#8a6a4a" strokeWidth="2" />
+      </svg>
     </div>
   );
 }
 
-// ── Days until return helper ─────────────────────────────────
+/** The hold in effect, or the next one: what's happening, what it has kept, and ending or cancelling it. */
+function HoldInEffect({ hold }: { hold: VacationHold }) {
+  const cancel = useCancelVacationHold();
+  const [asking, setAsking] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const active = hold.status === 'active';
+  const held = hold.held_count ?? hold.items_held_count ?? 0;
 
-function daysUntil(dateStr: string): number {
-  const target = new Date(`${dateStr.slice(0, 10)}T00:00:00`);
-  const now = new Date();
-  const diff = target.getTime() - now.getTime();
-  return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
-}
-
-function formatDateRange(start: string, end: string): string {
-  const s = new Date(`${start.slice(0, 10)}T00:00:00`);
-  const e = new Date(`${end.slice(0, 10)}T00:00:00`);
-  const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
-  return `${s.toLocaleDateString(undefined, opts)} – ${e.toLocaleDateString(undefined, opts)}`;
-}
-
-// ── Active state component ───────────────────────────────────
-
-function ActiveHoldView({
-  hold,
-  onCancel,
-}: {
-  hold: VacationHold;
-  onCancel: () => void;
-}) {
-  const returnDays = daysUntil(hold.end_date);
-  const scheduled = hold.status === 'scheduled';
-  const cancelMutation = useCancelVacationHold();
-  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
-
-  const handleCancel = useCallback(() => {
-    cancelMutation.mutate(hold.id, {
+  const end = () => {
+    setProblem(null);
+    cancel.mutate(hold.id, {
       onSuccess: () => {
-        setShowCancelConfirm(false);
-        onCancel();
+        setAsking(false);
+        toast.success(active ? 'Your hold has ended. What it kept comes with the next morning’s mail.' : 'Your hold is cancelled. Your mail keeps coming as usual.');
       },
+      onError: (err) => setProblem(`That didn't work: ${mailLoadMessage(err)} Your hold is as it was.`),
     });
-  }, [cancelMutation, hold.id, onCancel]);
+  };
 
   return (
-    <>
-      <div className="space-y-5">
-        {/* Header */}
-        <div className="flex items-center gap-3">
-          <span className="text-2xl">✈️</span>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-lg font-bold text-app-text">
-                Travel Mode
-              </h1>
-              <span className="px-2 py-0.5 text-[10px] font-bold uppercase rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">
-                {scheduled ? 'Scheduled' : 'Current'}
-              </span>
-            </div>
-            <p className="text-sm text-app-text-secondary dark:text-app-text-muted mt-0.5">
-              {formatDateRange(hold.start_date, hold.end_date)}{!scheduled && <> · Returns in {returnDays} day{returnDays !== 1 ? 's' : ''}</>}
-            </p>
+    <section aria-label="Your mail hold" className="space-y-4">
+      <div role="status" className={`rounded-2xl border px-4 py-3.5 ${active ? 'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30' : 'border-app-border bg-app-surface'}`}>
+        <p className="text-base font-semibold text-app-text">{active ? 'Your mail is on hold' : `Your mail hold starts ${day(hold.start_date)}`}</p>
+        <p className="mt-1 text-sm text-app-text-strong">
+          Back home {day(hold.end_date)}. What it keeps comes {release(hold)}, together as one bundle.
+        </p>
+        {active ? (
+          <p className="mt-1 text-sm font-semibold text-app-text">{held === 0 ? 'Nothing held yet.' : `${held} ${held === 1 ? 'piece' : 'pieces'} held so far.`}</p>
+        ) : null}
+      </div>
+      <p className="text-sm text-app-text-secondary">Special deliveries still come right away, and Home mail keeps coming for your household.</p>
+
+      {problem ? <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{problem}</p> : null}
+      {asking ? (
+        <div role="alertdialog" aria-label={active ? 'End your hold now?' : 'Cancel this hold?'} className="rounded-xl border border-app-border bg-app-surface p-3.5">
+          <p className="text-sm font-semibold text-app-text">{active ? 'End your hold now?' : 'Cancel this hold?'}</p>
+          <p className="mt-0.5 text-sm text-app-text-secondary">
+            {active ? 'What it kept comes with the next morning’s mail, and your mail comes as usual after that.' : 'Your mail keeps coming every morning as usual.'}
+          </p>
+          <div className="mt-3 flex gap-2">
+            <button type="button" onClick={end} disabled={cancel.isPending} className="min-h-[44px] flex-1 rounded-lg bg-primary-600 px-3 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-60">
+              {cancel.isPending ? 'Working…' : active ? 'End the hold' : 'Cancel the hold'}
+            </button>
+            <button type="button" onClick={() => setAsking(false)} disabled={cancel.isPending} className="min-h-[44px] flex-1 rounded-lg border border-app-border px-3 text-sm font-semibold text-app-text">
+              {active ? 'Keep holding' : 'Keep it'}
+            </button>
           </div>
         </div>
-
-        <p className="text-sm text-app-text-secondary">
-          Your travel dates are saved. This does not pause mail, arrange package handling, or show an away status to others. Contact your carrier directly for delivery changes.
-        </p>
-
-        {/* Cancel */}
-        <button
-          type="button"
-          onClick={() => setShowCancelConfirm(true)}
-          className="w-full py-2.5 text-sm font-semibold text-red-600 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors"
-        >
-          Cancel Travel Mode
+      ) : (
+        <button type="button" onClick={() => setAsking(true)} className="min-h-[48px] w-full rounded-xl border border-app-border bg-app-surface text-sm font-semibold text-app-text hover:bg-app-hover">
+          {active ? 'End the hold early' : 'Cancel the hold'}
         </button>
-      </div>
-
-      {showCancelConfirm && (
-        <CancelConfirmDialog
-          onConfirm={handleCancel}
-          onCancel={() => setShowCancelConfirm(false)}
-          confirming={cancelMutation.isPending}
-          error={cancelMutation.isError}
-        />
       )}
-    </>
+    </section>
   );
 }
 
-// ── Main Page ────────────────────────────────────────────────
-
-export default function TravelModePage() {
+/**
+ * Hold my mail (Mail tab drawings, R11-Vacation): while you're away your own
+ * mail waits, and comes back as one bundle the morning you're home (SRV-5).
+ */
+export default function HoldMailPage() {
   const home = useHomeProfile();
-  const { data: hold, isLoading, isError, refetch } = useVacationHold();
-  const createMutation = useCreateVacationHold();
+  const { data: hold, isPending, isError, error, refetch } = useVacationHold();
+  const create = useCreateVacationHold();
+  const [start, setStart] = useState('');
+  const [end, setEnd] = useState('');
+  const [problem, setProblem] = useState<string | null>(null);
 
-  // ── Form state (inactive mode) ────────────────────────
-  const [departure, setDeparture] = useState('');
-  const [returnDate, setReturnDate] = useState('');
-
-  // ── Validation ────────────────────────────────────────
-  // The user's own calendar day. toISOString() is the UTC day, which is a day off in the evening (Americas)
-  // or the morning (Asia/Pacific) and let a past departure through or blocked today's.
+  // The person's own calendar day (toISOString is the UTC day).
   const today = useMemo(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }, []);
 
-  const dateError = useMemo(() => {
-    if (!departure || !returnDate) return null;
-    if (departure >= returnDate) return 'Return date must be after departure';
-    if (departure < today) return 'Departure must be today or later';
-    return null;
-  }, [departure, returnDate, today]);
-
-  const canSubmit = departure && returnDate && !dateError && !!home.homeId && !home.isError;
-
-  // ── Poll active hold for package updates (30s) ────────
-  useEffect(() => {
-    if (!hold || hold.status !== 'active') return;
-    const interval = setInterval(() => refetch(), 30_000);
-    return () => clearInterval(interval);
-  }, [hold, refetch]);
-
-  // ── Submit ────────────────────────────────────────────
-  const handleCreate = useCallback(() => {
-    if (!canSubmit) return;
-    createMutation.mutate(
+  const submit = useCallback(() => {
+    if (!start) { setProblem('Choose the day you leave.'); return; }
+    if (!end) { setProblem('Choose the day you’re back home.'); return; }
+    if (start < today) { setProblem('Choose a day from today on for when you leave.'); return; }
+    if (end < start) { setProblem('Your return date must be on or after the day you leave.'); return; }
+    if (!home.homeId) { setProblem('Add your home before holding your mail.'); return; }
+    setProblem(null);
+    create.mutate(
+      // The server keeps the person's own mail; these older fields are stored only.
+      { homeId: home.homeId, startDate: start, endDate: end, holdAction: 'hold_in_vault', packageAction: 'hold_at_carrier', autoNeighborRequest: false },
       {
-        homeId: home.homeId,
-        startDate: departure,
-        endDate: returnDate,
-        // Compatibility fields are stored only; no delivery handling is performed.
-        holdAction: 'hold_in_vault',
-        packageAction: 'hold_at_carrier',
-        autoNeighborRequest: false,
-      },
-      {
-        onSuccess: () => refetch(),
+        onSuccess: () => { void refetch(); toast.success(`Holding your mail, ${shortDay(start)} to ${shortDay(end)}`); },
+        onError: (err) => setProblem(`Couldn't hold your mail: ${mailLoadMessage(err)}`),
       },
     );
-  }, [canSubmit, home.homeId, departure, returnDate, createMutation, refetch]);
+  }, [start, end, today, home.homeId, create, refetch]);
 
-  if (isLoading || (!hold && home.isLoading)) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="w-6 h-6 border-2 border-app-border border-t-gray-600 rounded-full animate-spin" />
-      </div>
-    );
-  }
-
-  if (!hold && (isError || home.isError)) {
-    return <div className="max-w-xl mx-auto p-6 text-center"><p role="alert" className="text-sm text-app-text-secondary mb-3">Couldn&apos;t load your travel dates or Home.</p><button type="button" onClick={() => { void refetch(); void home.refetch(); }} className="text-sm text-primary-600 hover:underline">Try again</button></div>;
-  }
-
-  // ── Active state ──────────────────────────────────────
-  const isActive = hold && (hold.status === 'active' || hold.status === 'scheduled');
+  const inEffect = hold && (hold.status === 'active' || hold.status === 'scheduled') ? hold : null;
 
   return (
-    <div className="h-full overflow-y-auto bg-app-surface">
-      <div className="max-w-xl mx-auto p-6">
-        {isError && hold && <p role="alert" className="text-sm text-red-600 mb-3">Couldn&apos;t refresh your travel dates. <button type="button" onClick={() => refetch()} className="underline">Try again</button></p>}
-        {isActive ? (
-          <ActiveHoldView hold={hold} onCancel={() => refetch()} />
+    <div className="mx-auto w-full max-w-xl pb-10 md:h-full md:overflow-y-auto">
+      <div className="px-4 pt-4">
+        <h1 className="text-2xl font-bold tracking-tight text-app-text">Hold my mail</h1>
+        <p className="mt-1 text-sm leading-5 text-app-text-secondary">
+          Deliveries pause while you&apos;re away. Everything that comes waits for you and arrives as one bundle the morning you&apos;re back.
+        </p>
+      </div>
+      <HoldDrawings />
+
+      <div className="px-4">
+        {isPending || (home.isLoading && !hold) ? (
+          <div className="h-32 rounded-2xl bg-app-surface-sunken animate-pulse" role="status" aria-label="Loading your mail hold" />
+        ) : isError && !hold ? (
+          <ErrorState title="Couldn't load your mail hold" message={mailLoadMessage(error)} onRetry={() => { void refetch(); }} />
+        ) : inEffect ? (
+          <>
+            {isError ? (
+              <p role="alert" className="mb-3 text-sm text-red-700">
+                Couldn&apos;t refresh your hold. {mailLoadMessage(error)}{' '}
+                <button type="button" onClick={() => { void refetch(); }} className="font-semibold underline">Try again</button>
+              </p>
+            ) : null}
+            <HoldInEffect hold={inEffect} />
+          </>
         ) : (
-          <div className="space-y-6">
-            {/* ── Header ─────────────────────────────────── */}
-            <div className="flex items-center gap-3">
-              <span className="text-2xl">✈️</span>
-              <div>
-                <h1 className="text-lg font-bold text-app-text">
-                  Travel Mode
-                </h1>
-                <p className="text-sm text-app-text-secondary mt-0.5">
-                  Save your travel dates for your own reference
-                </p>
-              </div>
-            </div>
-
-            {/* ── Travel dates ───────────────────────────── */}
-            <div>
-              <p className="text-[10px] font-semibold text-app-text-muted uppercase tracking-wider mb-3">
-                Travel Dates
-              </p>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label htmlFor="travel-departure" className="text-xs text-app-text-secondary mb-1 block">Departure</label>
-                  <input
-                    id="travel-departure"
-                    type="date"
-                    value={departure}
-                    min={today}
-                    onChange={(e) => setDeparture(e.target.value)}
-                    className="w-full text-sm px-3 py-2 border border-app-border rounded-lg bg-app-surface text-app-text focus:outline-none focus:ring-1 focus:ring-primary-500"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="travel-return" className="text-xs text-app-text-secondary mb-1 block">Return</label>
-                  <input
-                    id="travel-return"
-                    type="date"
-                    value={returnDate}
-                    min={departure || today}
-                    onChange={(e) => setReturnDate(e.target.value)}
-                    className="w-full text-sm px-3 py-2 border border-app-border rounded-lg bg-app-surface text-app-text focus:outline-none focus:ring-1 focus:ring-primary-500"
-                  />
-                </div>
-              </div>
-              {dateError && (
-                <p className="text-xs text-red-500 mt-1.5">{dateError}</p>
-              )}
-            </div>
-
-            <p className="text-sm text-app-text-secondary">
-              Saving dates does not pause mail, arrange package handling, or show an away status to others. Contact your carrier directly for delivery changes.
-            </p>
-
-            {!home.homeId && <p role="alert" className="text-sm text-app-text-secondary">Add a Home before saving travel dates.</p>}
-
-            {/* ── Submit ─────────────────────────────────── */}
-            <button
-              type="button"
-              onClick={handleCreate}
-              disabled={!canSubmit || createMutation.isPending}
-              className={`w-full py-2.5 text-sm font-semibold rounded-lg transition-colors ${
-                !canSubmit || createMutation.isPending
-                  ? 'bg-app-surface-sunken text-app-text-muted cursor-not-allowed'
-                  : 'bg-primary-600 text-white hover:bg-primary-700'
-              }`}
-            >
-              {createMutation.isPending ? 'Saving...' : 'Save Travel Dates'}
+          <form onSubmit={(event) => { event.preventDefault(); submit(); }} noValidate className="space-y-4">
+            <section aria-label="Dates" className="overflow-hidden rounded-2xl border border-app-border bg-app-surface">
+              <label className="flex min-h-[56px] items-center justify-between gap-3 border-b border-app-border-subtle px-4">
+                <span className="text-sm font-semibold text-app-text">Starts</span>
+                <input type="date" value={start} min={today} onChange={(event) => { setStart(event.target.value); setProblem(null); }} className="rounded-lg bg-transparent py-2 text-right text-sm text-app-text focus:outline-none focus:ring-2 focus:ring-primary-500" />
+              </label>
+              <label className="flex min-h-[56px] items-center justify-between gap-3 px-4">
+                <span className="text-sm font-semibold text-app-text">Back home</span>
+                <input type="date" value={end} min={start || today} onChange={(event) => { setEnd(event.target.value); setProblem(null); }} className="rounded-lg bg-transparent py-2 text-right text-sm text-app-text focus:outline-none focus:ring-2 focus:ring-primary-500" />
+              </label>
+            </section>
+            {end && (!start || end >= start) ? (
+              <p className="text-sm text-app-text-strong">Your held mail arrives the morning of {day(end)}, as one bundle with that day&apos;s mail.</p>
+            ) : null}
+            <p className="text-sm text-app-text-secondary">Special deliveries still come right away, and Home mail keeps coming for your household.</p>
+            {home.isError ? <p role="alert" className="text-sm text-red-700">Couldn&apos;t load your home. {mailLoadMessage(null)}</p> : null}
+            {problem ? <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{problem}</p> : null}
+            <button type="submit" disabled={create.isPending} className="min-h-[48px] w-full rounded-xl bg-primary-600 px-4 text-base font-semibold text-white hover:bg-primary-700 disabled:opacity-60">
+              {create.isPending ? 'Holding your mail…' : start && end && end >= start ? `Hold my mail, ${shortDay(start)} to ${shortDay(end)}` : 'Hold my mail'}
             </button>
-
-            {createMutation.isError && (
-              <p className="text-xs text-red-500 text-center">
-                Couldn&apos;t save your travel dates. Please try again.
-              </p>
-            )}
-          </div>
+          </form>
         )}
       </div>
     </div>

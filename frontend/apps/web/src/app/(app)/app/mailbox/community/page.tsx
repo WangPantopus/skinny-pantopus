@@ -292,6 +292,8 @@ const TRUST_MAP: Record<string, 'verified_gov' | 'verified_utility' | 'verified_
   verified_utility: 'verified_utility',
   verified_business: 'verified_business',
   pantopus_user: 'pantopus_user',
+  // A sender Pantopus couldn't check shows as unverified, never no badge.
+  unknown: 'unknown',
 };
 
 const TYPE_STYLES: Record<string, string> = {
@@ -359,8 +361,8 @@ function CommunityDetailPanel({
           <span className="text-sm text-app-text-secondary dark:text-app-text-muted">
             {item.sender_display || 'Anonymous'}
           </span>
-          {item.sender_trust && TRUST_MAP[item.sender_trust] && (
-            <TrustBadge trust={TRUST_MAP[item.sender_trust]} />
+          {item.sender_trust && (
+            <TrustBadge trust={TRUST_MAP[item.sender_trust] ?? 'unknown'} />
           )}
         </div>
 
