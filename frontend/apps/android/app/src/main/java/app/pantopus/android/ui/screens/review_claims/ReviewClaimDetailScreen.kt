@@ -45,6 +45,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
@@ -136,6 +137,7 @@ fun ReviewClaimDetailScreen(
     val toast by viewModel.toast.collectAsStateWithLifecycle()
     val selectedReasons by viewModel.selectedReasons.collectAsStateWithLifecycle()
     val challengeQuestion by viewModel.challengeQuestion.collectAsStateWithLifecycle()
+    val identityAttested by viewModel.identityAttested.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
 
     var showRejectSheet by rememberSaveable { mutableStateOf(false) }
@@ -167,6 +169,8 @@ fun ReviewClaimDetailScreen(
                     },
                     onReject = { showRejectSheet = true },
                     onChallenge = { showChallengeSheet = true },
+                    identityAttested = identityAttested,
+                    onIdentityAttested = viewModel::setIdentityAttested,
                 )
         }
 
@@ -307,6 +311,8 @@ private fun LoadedShell(
     onAccept: () -> Unit,
     onReject: () -> Unit,
     onChallenge: () -> Unit,
+    identityAttested: Boolean = false,
+    onIdentityAttested: (Boolean) -> Unit = {},
 ) {
     val isReviewable = detail.claim.state in REVIEWABLE_STATES && !detail.claim.requiresDisputeReview
     ContentDetailShell(
@@ -331,6 +337,18 @@ private fun LoadedShell(
                         model = claimantModel(detail, reviewable = isReviewable),
                         modifier = Modifier.testTag("reviewClaimDetail_claimant"),
                     )
+                }
+                val approval = detail.approval
+                if (isReviewable && approval != null) {
+                    OverlineSection(title = "Before you approve") {
+                        ReviewClaimApprovalPanel(
+                            approval = approval,
+                            identityFailed = detail.claim.identityStatus == "failed",
+                            identityAttested = identityAttested,
+                            onIdentityAttested = onIdentityAttested,
+                            enabled = reviewingAction == null,
+                        )
+                    }
                 }
                 OverlineSection(title = evidenceOverline(detail.evidence.size)) {
                     TextButton(onClick = onOpenEvidence, modifier = Modifier.testTag("reviewClaimDetail_openPrivateEvidence")) {
@@ -364,6 +382,7 @@ private fun LoadedShell(
             if (isReviewable) {
                 VerdictBar(
                     reviewingAction = reviewingAction,
+                    acceptBlockedReason = ReviewClaimApproval.blockedReason(detail, identityAttested),
                     onAccept = onAccept,
                     onChallenge = onChallenge,
                     onReject = onReject,
@@ -890,6 +909,7 @@ private fun terminalCopy(state: String): String =
 @Composable
 private fun VerdictBar(
     reviewingAction: AdminClaimReviewAction?,
+    acceptBlockedReason: String?,
     onAccept: () -> Unit,
     onChallenge: () -> Unit,
     onReject: () -> Unit,
@@ -905,13 +925,21 @@ private fun VerdictBar(
                 .padding(Spacing.s3),
         verticalArrangement = Arrangement.spacedBy(Spacing.s2),
     ) {
+        acceptBlockedReason?.let {
+            Text(
+                text = it,
+                fontSize = 12.5.sp,
+                color = PantopusColors.appTextSecondary,
+                modifier = Modifier.fillMaxWidth().testTag("reviewClaimDetail_acceptBlocked"),
+            )
+        }
         FooterPrimaryButton(
             label = if (reviewingAction == AdminClaimReviewAction.Approve) "Accepting…" else "Accept claim",
             icon = PantopusIcon.CheckCircle,
             background = PantopusColors.success,
             foreground = PantopusColors.appTextInverse,
             isSubmitting = reviewingAction == AdminClaimReviewAction.Approve,
-            enabled = !disabled,
+            enabled = !disabled && acceptBlockedReason == null,
             onClick = onAccept,
             modifier = Modifier.testTag("reviewClaimDetail_accept"),
             accessibilityLabel = "Accept claim",
@@ -961,13 +989,16 @@ private fun FooterPrimaryButton(
     modifier: Modifier = Modifier,
     accessibilityLabel: String,
 ) {
+    // Off (not just busy submitting) reads as off, as on iOS: faded and flat.
+    val dimmed = !enabled && !isSubmitting
     Row(
         modifier =
             modifier
                 .fillMaxWidth()
                 .heightIn(min = 48.dp)
-                .shadow(8.dp, RoundedCornerShape(Radii.xl))
+                .shadow(if (dimmed) 0.dp else 8.dp, RoundedCornerShape(Radii.xl))
                 .clip(RoundedCornerShape(Radii.xl))
+                .alpha(if (dimmed) 0.5f else 1f)
                 .background(background)
                 .conditionalClickable(enabled = enabled, onClick = onClick)
                 .padding(horizontal = Spacing.s3)

@@ -26,6 +26,8 @@ data class OwnershipClaimDto(
     val home: ClaimedHome? = null,
     /** Whether any documents are attached; null when the server didn't say. */
     @Json(name = "has_evidence") val hasEvidence: Boolean? = null,
+    /** What a claim in review still needs before it can be approved; null otherwise. */
+    val approval: ClaimApprovalProgressDto? = null,
 ) {
     /** The claimed Home's address lines. */
     @JsonClass(generateAdapter = true)
@@ -45,6 +47,35 @@ data class OwnershipClaimDto(
             }
     }
 }
+
+/**
+ * The claimant's approval checklist: approval needs a confirmed identity (a Stripe
+ * Identity check) and a document a reviewer checked. Mirrors iOS
+ * `ClaimApprovalProgressDTO` and the web `ClaimApprovalProgress`.
+ */
+@JsonClass(generateAdapter = true)
+data class ClaimApprovalProgressDto(
+    /** `not_started` · `started` · `processing` · `requires_input` · `verified`. */
+    val identity: String,
+    /** False while identity checks aren't set up; the claimant can't start one yet. */
+    @Json(name = "identity_check_available") val identityCheckAvailable: Boolean,
+    /** `missing` · `pending` (waiting for a reviewer) · `verified`. */
+    val proof: String,
+)
+
+/** Body for `POST …/identity-check`: the platform picks where Stripe sends them back. */
+@JsonClass(generateAdapter = true)
+data class ClaimIdentityCheckRequest(val platform: String = "android")
+
+/** Reply to `POST …/identity-check`: Stripe's single-use page, or none when the check is already with Stripe. */
+@JsonClass(generateAdapter = true)
+data class ClaimIdentityCheckStartResponse(
+    @Json(name = "verification_url") val verificationUrl: String? = null,
+)
+
+/** Reply to `GET …/identity-check`. */
+@JsonClass(generateAdapter = true)
+data class ClaimIdentityCheckResponse(val approval: ClaimApprovalProgressDto? = null)
 
 /** Envelope for `GET /api/homes/my-ownership-claims`. */
 @JsonClass(generateAdapter = true)

@@ -138,6 +138,24 @@ public enum HomesEndpoints {
         Endpoint(method: .get, path: "/api/homes/my-ownership-claims")
     }
 
+    /// `POST /api/homes/:id/ownership-claims/:claimId/identity-check` — route
+    /// `backend/routes/homeOwnership.js:609`. Starts (or continues) the claimant's
+    /// Stripe Identity check; the reply carries the Stripe page to open, if any.
+    public static func startClaimIdentityCheck(homeId: String, claimId: String) -> Endpoint {
+        Endpoint(
+            method: .post,
+            path: "/api/homes/\(homeId)/ownership-claims/\(claimId)/identity-check",
+            body: ClaimIdentityCheckRequest(platform: "ios")
+        )
+    }
+
+    /// `GET /api/homes/:id/ownership-claims/:claimId/identity-check` — route
+    /// `backend/routes/homeOwnership.js:622`. The claim's approval checklist after
+    /// the server re-reads an open identity check from Stripe.
+    public static func claimIdentityCheck(homeId: String, claimId: String) -> Endpoint {
+        Endpoint(method: .get, path: "/api/homes/\(homeId)/ownership-claims/\(claimId)/identity-check")
+    }
+
     /// `DELETE /api/homes/:id/ownership-claims/:claimId` — route
     /// `backend/routes/homeOwnership.js:603`.
     public static func deleteOwnershipClaim(homeId: String, claimId: String) -> Endpoint {
