@@ -77,6 +77,7 @@ export default function HomesPage() {
     generation.current++; ready.current = null; setHomes([]); setPendingClaims([]); setLoading(true);
     setResidencyRequests([]); setResidencyCursor(null); setLoadingMore(false); setMoreError(''); setRefreshError('');
   }, []);
+  const abandon = useCallback(() => { generation.current++; ready.current = null; }, []);
 
   // A full load clears the page first. A background refresh keeps the list on screen and replaces it
   // only with a newer, verified answer for the same account; if it fails, the list stays with a notice.
@@ -217,10 +218,12 @@ export default function HomesPage() {
     const unsubscribe = api.onTokenChange(restart);
     window.addEventListener('focus', refresh); window.addEventListener('storage', storage);
     document.addEventListener('visibilitychange', visibility);
-    return () => { retire(); unsubscribe(); unsubscribeSync();
+    // Leaving the page drops any answer still on its way but keeps what's shown, so a remount (React's
+    // development double mount included) opens on it instead of "Loading…".
+    return () => { abandon(); unsubscribe(); unsubscribeSync();
       window.removeEventListener('focus', refresh); window.removeEventListener('storage', storage);
       document.removeEventListener('visibilitychange', visibility); };
-  }, [load, retire, queryClient]);
+  }, [load, retire, abandon, queryClient]);
 
   // Back from Stripe's identity check (?identity_check=<claim id>): read the check once the claims
   // are listed, refresh the list and say where it stands.
