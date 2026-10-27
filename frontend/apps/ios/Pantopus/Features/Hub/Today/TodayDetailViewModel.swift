@@ -254,7 +254,9 @@ final class TodayDetailViewModel {
             title: dto.label ?? "Update",
             body: dto.detail ?? "",
             timing: "",
-            severity: signalSeverity(dto.urgency)
+            severity: signalSeverity(dto.urgency),
+            // The mail line opens the Mail tab, while the Mailbox is on.
+            route: dto.kind == "mail" && LaunchFeatures.mailbox ? (dto.action?.route ?? "/app/mailbox") : nil
         )
     }
 

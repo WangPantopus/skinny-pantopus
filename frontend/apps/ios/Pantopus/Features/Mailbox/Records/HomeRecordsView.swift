@@ -122,9 +122,6 @@ public struct HomeRecordsView: View {
                         Link mail items to home assets to track warranties, \
                         receipts, and repairs in one place.
                         """,
-                        cta: EmptyState.CTA(title: "Scan mail for assets") {
-                            await viewModel.runAutoDetect()
-                        },
                         tint: Theme.Color.homeBg,
                         accent: Theme.Color.home
                     )

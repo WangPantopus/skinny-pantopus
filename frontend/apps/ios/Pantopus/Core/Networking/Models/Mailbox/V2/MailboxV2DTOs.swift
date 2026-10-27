@@ -13,10 +13,79 @@ public struct DrawerListResponse: Decodable, Sendable, Hashable {
     /// The Mail tab badge: unopened, delivered pieces in Me + Home + Biz that
     /// this person can read (Mail build contract v1). Absent from older servers.
     public let unreadTotal: Int?
+    /// The morning round: the latest one that brought this person mail, its
+    /// size, and the next one. Absent from older servers.
+    public let delivery: MailDelivery?
+    /// The Homes this person lives at, and whether their mail is open yet.
+    public let homes: [MailboxHome]
 
     private enum CodingKeys: String, CodingKey {
         case drawers
         case unreadTotal = "unread_total"
+        case delivery
+        case homes
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        drawers = try c.decode([Drawer].self, forKey: .drawers)
+        unreadTotal = try? c.decodeIfPresent(Int.self, forKey: .unreadTotal)
+        delivery = try? c.decodeIfPresent(MailDelivery.self, forKey: .delivery)
+        homes = (try? c.decodeIfPresent([MailboxHome].self, forKey: .homes)) ?? []
+    }
+
+    /// The person's mailbox round (Mail build contract, SRV-1).
+    public struct MailDelivery: Decodable, Sendable, Hashable {
+        /// The latest morning round that brought this person a piece, or nil (never).
+        public let lastAt: String?
+        /// Pieces that came in the 24 hours up to that round, and how many are still unopened.
+        public let lastCount: Int
+        public let lastUnopened: Int
+        /// The next round of the person's own mailbox.
+        public let nextAt: String?
+        /// The person's own mailbox time zone (IANA).
+        public let timeZone: String?
+
+        private enum CodingKeys: String, CodingKey {
+            case lastAt = "last_at"
+            case lastCount = "last_count"
+            case lastUnopened = "last_unopened"
+            case nextAt = "next_at"
+            case timeZone = "time_zone"
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            lastAt = try? c.decodeIfPresent(String.self, forKey: .lastAt)
+            lastCount = (try? c.decodeIfPresent(Int.self, forKey: .lastCount)) ?? 0
+            lastUnopened = (try? c.decodeIfPresent(Int.self, forKey: .lastUnopened)) ?? 0
+            nextAt = try? c.decodeIfPresent(String.self, forKey: .nextAt)
+            timeZone = try? c.decodeIfPresent(String.self, forKey: .timeZone)
+        }
+    }
+
+    /// A Home the person lives at (SRV-8): `mail_access` is `open`, or
+    /// `needs_proof` until they prove the address.
+    public struct MailboxHome: Decodable, Sendable, Hashable, Identifiable {
+        public let homeId: String
+        public let addressLine: String?
+        public let name: String?
+        public let mailAccess: String
+
+        public var id: String {
+            homeId
+        }
+
+        public var isOpen: Bool {
+            mailAccess == "open"
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case homeId = "home_id"
+            case addressLine = "address_line"
+            case name
+            case mailAccess = "mail_access"
+        }
     }
 
     public struct Drawer: Decodable, Sendable, Hashable, Identifiable {

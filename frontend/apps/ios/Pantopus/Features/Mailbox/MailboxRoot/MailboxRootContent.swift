@@ -2,31 +2,30 @@
 //  MailboxRootContent.swift
 //  Pantopus
 //
-//  B.1 — chrome rendered in the List-of-Rows `customHeader` slot for the
-//  Mailbox root: the 4-drawer chip row (Me / Home / Biz / Earn) and the
-//  3-tab segmented underline bar (Incoming / Counter / Vault). Mirrors
-//  the JSX `DrawerRow` + `TabRow`.
+//  The Mailbox's drawers and tabs (Mail tab drawings, board "Main"): the
+//  Me · Home · Biz chips with their unopened counts, the routing banner when
+//  mail needs a Home picked, and the Incoming · Counter · Vault tabs. The
+//  "My mail day" button is gone with scanning (founder decision 2026-10-26).
 //
 
 import SwiftUI
 
-/// Drawer chips + segmented tab bar, stacked. Sits between the navigation
-/// bar and the list body. Above the drawer row sits the A13.16
-/// "My mail day" call-to-action — the host-supplied entry point into
-/// today's triage editor.
+/// Drawer chips, the routing banner and the tabs, between the hero and the mail.
 struct MailboxRootHeader: View {
     let viewModel: MailboxRootViewModel
 
     var body: some View {
         VStack(spacing: Spacing.s0) {
-            mailDayCTA
             drawerRow
             if viewModel.pendingRoutingCount > 0 {
                 pendingRoutingBanner
+                    .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
+                    .padding(.horizontal, Spacing.s4)
+                    .padding(.bottom, Spacing.s2)
             }
             tabBar
+                .padding(.horizontal, Spacing.s2)
         }
-        .background(Theme.Color.appSurface)
     }
 
     /// "N items need routing" — opens the disambiguation queue. Rendered
@@ -57,37 +56,6 @@ struct MailboxRootHeader: View {
         .accessibilityIdentifier("mailboxRootPendingBanner")
     }
 
-    private var mailDayCTA: some View {
-        Button(action: viewModel.onOpenMailDay) {
-            HStack(spacing: Spacing.s3) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
-                        .fill(Theme.Color.primary50)
-                    Icon(.mailbox, size: 16, strokeWidth: 2.2, color: Theme.Color.primaryInkStrong)
-                }
-                .frame(width: 32, height: 32)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("My mail day")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(Theme.Color.appText)
-                    Text("Triage today's stack")
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.Color.appTextSecondary)
-                }
-                Spacer(minLength: Spacing.s0)
-                Icon(.chevronRight, size: 15, strokeWidth: 2.2, color: Theme.Color.appTextMuted)
-            }
-            .padding(.horizontal, Spacing.s4)
-            .padding(.vertical, 10)
-            .frame(minHeight: 44)
-            .frame(maxWidth: .infinity)
-            .background(Theme.Color.appSurface)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("My mail day — triage today's stack")
-        .accessibilityIdentifier("mailboxRootMailDayCTA")
-    }
-
     private var drawerRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: Spacing.s2) {
@@ -105,11 +73,8 @@ struct MailboxRootHeader: View {
                 }
             }
             .padding(.horizontal, Spacing.s4)
-            .padding(.vertical, Spacing.s3)
-        }
-        .background(Theme.Color.appSurface)
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(Theme.Color.appBorderSubtle).frame(height: 1)
+            .padding(.top, Spacing.s4)
+            .padding(.bottom, Spacing.s1)
         }
         .accessibilityIdentifier("mailboxRootDrawerRow")
     }
@@ -127,7 +92,6 @@ struct MailboxRootHeader: View {
                 }
             }
         }
-        .background(Theme.Color.appSurface)
         .overlay(alignment: .bottom) {
             Rectangle().fill(Theme.Color.appBorder).frame(height: 1)
         }
@@ -153,6 +117,10 @@ private struct MailboxDrawerChip: View {
                 Text(label)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(foreground)
+                    .lineLimit(1)
+                if unread > 0 {
+                    MailboxChipBadge(count: unread, onAccent: isActive, accent: accent)
+                }
             }
             .padding(.leading, Spacing.s3)
             .padding(.trailing, 14)
@@ -162,17 +130,11 @@ private struct MailboxDrawerChip: View {
                 Capsule().stroke(isActive ? Color.clear : Theme.Color.appBorder, lineWidth: 1)
             )
             .clipShape(Capsule())
-            .overlay(alignment: .topTrailing) {
-                if unread > 0 {
-                    MailboxChipBadge(count: unread, onAccent: isActive, accent: accent)
-                        .offset(x: 4, y: -4)
-                }
-            }
             .frame(minHeight: 44, alignment: .center)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(unread > 0 ? "\(label), \(unread) unread" : label)
+        .accessibilityLabel(unread > 0 ? "\(label), \(unread) unopened" : label)
         .accessibilityAddTraits(isActive ? [.isButton, .isSelected] : .isButton)
     }
 
@@ -199,18 +161,18 @@ private struct MailboxChipBadge: View {
     var body: some View {
         Text("\(count)")
             .font(.system(size: 10, weight: .bold))
-            .foregroundStyle(onAccent ? accent : Theme.Color.appTextInverse)
-            .padding(.horizontal, 5)
-            .frame(minWidth: 18, minHeight: 18)
+            .foregroundStyle(onAccent ? accent : Theme.Color.primaryInkStrong)
+            .padding(.horizontal, 6)
+            .frame(minWidth: 20, minHeight: 20)
             .background(fill)
             .clipShape(Capsule())
-            .overlay(Capsule().stroke(Theme.Color.appSurface, lineWidth: 2))
             .accessibilityHidden(true)
     }
 
-    /// On the filled chip the badge is the page colour in dark mode (white there would put the accent number at 2.1:1).
+    /// On the filled chip the count sits on the page colour in dark mode (white there would put the accent number at
+    /// 2.1:1); on a plain chip, on a light tint of the brand colour.
     private var fill: Color {
-        guard onAccent else { return Theme.Color.primarySolid }
+        guard onAccent else { return Theme.Color.primary50 }
         return colorScheme == .dark ? Theme.Color.appBg : Theme.Color.appTextInverse
     }
 }
@@ -248,7 +210,7 @@ private struct MailboxTabSegment: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("mailboxRootTab.\(id)")
-        .accessibilityLabel(count.map { "\(label), \($0) unread" } ?? label)
+        .accessibilityLabel(count.map { "\(label), \($0) unopened" } ?? label)
         .accessibilityAddTraits(isActive ? [.isButton, .isSelected] : .isButton)
     }
 }

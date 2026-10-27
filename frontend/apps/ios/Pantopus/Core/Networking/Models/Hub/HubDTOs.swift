@@ -112,6 +112,13 @@ public struct HubTodayPayload: Decodable, Sendable, Hashable {
         public let label: String?
         public let detail: String?
         public let urgency: String?
+        /// The signal's button: `{ label, route }` (the mail line's is `/app/mailbox`).
+        public let action: SignalAction?
+    }
+
+    public struct SignalAction: Decodable, Sendable, Hashable {
+        public let label: String?
+        public let route: String?
     }
 
     public struct TodaySeasonal: Decodable, Sendable, Hashable {

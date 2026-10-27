@@ -276,8 +276,9 @@ final class MailboxRootViewModelTests: XCTestCase {
         XCTAssertEqual(vm.drawerBadge(.me), 3)
         XCTAssertEqual(vm.drawerBadge(.home), 2)
         XCTAssertEqual(vm.drawerBadge(.business), 0)
-        // The backend exposes no per-tab unread, so tab badges are nil live.
-        XCTAssertNil(vm.tabBadge(.incoming))
+        // Incoming counts the drawer's unopened pieces; no other tab is counted live.
+        XCTAssertEqual(vm.tabBadge(.incoming), 3)
+        XCTAssertNil(vm.tabBadge(.counter))
     }
 
     func test_live_emptyDrawerTransitionsToEmpty() async {

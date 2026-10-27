@@ -93,7 +93,7 @@ public enum MailboxTab: String, CaseIterable, Hashable, Sendable, Identifiable {
 @Observable
 @MainActor
 public final class MailboxRootViewModel: ListOfRowsDataSource {
-    public let title = "Mailbox"
+    public let title = "Mail"
 
     /// Active drawer. Changing it preserves the selected tab (B.1
     /// acceptance) and reloads the list for the new (drawer, tab) combo.
@@ -161,11 +161,32 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
 
     // MARK: - Header inputs
 
-    /// Launch cut #8 (Mail extras): Earn (offers and ad earnings that never
-    /// reach the withdrawable wallet) is hidden for the first launch.
+    /// Me and Home always. Biz for business owners, or anyone with Biz mail,
+    /// so nothing is hidden. Launch cut #8 (Mail extras): Earn (offers and ad
+    /// earnings that never reach the withdrawable wallet) is hidden.
     public var drawers: [MailboxDrawer] {
-        MailboxDrawer.allCases.filter { $0 != .earn || LaunchFeatures.mailExtras }
+        MailboxDrawer.allCases.filter { drawer in
+            switch drawer {
+            case .me, .home: true
+            case .business:
+                sampleProvider != nil || ownsBusiness || (drawerUnread[drawer.backendKey] ?? 0) > 0
+                    || selectedDrawer == .business
+            case .earn: LaunchFeatures.mailExtras
+            }
+        }
     }
+
+    // MARK: - The Mailbox as mail (Mail tab drawings)
+
+    /// Your mailbox, your address and the morning round.
+    private(set) var hero = MailboxHeroModel.make(delivery: nil, homes: [])
+    /// The loaded mail drawn as pieces, by the day it came.
+    private(set) var pieceSections: [MailPieceSection] = []
+    /// The Homes this person lives at (whose mail is open, or waits for proof).
+    private var homes: [DrawerListResponse.MailboxHome] = []
+    /// Owns a business (`GET /api/businesses/my-businesses`): shows Biz.
+    private var ownsBusiness = false
+    private var didCheckBusinesses = false
 
     public var mailTabs: [MailboxTab] {
         MailboxTab.allCases
@@ -192,7 +213,13 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
     /// breakdown), so the wired path returns `nil` for every tab — the
     /// drawer-chip badge carries the unread signal instead.
     public func tabBadge(_ tab: MailboxTab) -> Int? {
-        guard sampleProvider != nil, tab != .vault else { return nil }
+        if sampleProvider == nil {
+            // Live: Incoming counts the drawer's unopened pieces; the server
+            // counts nothing per tab beyond that.
+            guard tab == .incoming, let unread = drawerUnread[selectedDrawer.backendKey], unread > 0 else { return nil }
+            return unread
+        }
+        guard tab != .vault else { return nil }
         let count = unreadCount(drawer: selectedDrawer, tab: tab)
         return count > 0 ? count : nil
     }
@@ -363,6 +390,16 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
         onOpenVacationHoldHandler()
     }
 
+    /// A piece tapped in the list.
+    public func openMail(_ mailId: String) {
+        onOpenMail(mailId)
+    }
+
+    /// The header's search: every piece this person can read, on the server.
+    public func openSearch() {
+        onOpenSearch()
+    }
+
     /// A17.11 — invoked from the Mailbox root top-bar gift button to open
     /// the Stamps (postage wallet) screen.
     public func openStamps() {
@@ -422,11 +459,17 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
             rebuildFromSample()
             return
         }
-        if case .loaded = state, !loadedMail.isEmpty { return }
+        if case .loaded = state, !loadedMail.isEmpty {
+            // Back on the Mailbox: the round and the badges may have moved.
+            await fetchDrawerBadges()
+            return
+        }
         state = .loading
         await fetchDrawerBadges()
         await fetchPendingRouting()
         await reloadActiveCombo()
+        // After the mail: Biz shows for owners once this answers.
+        await fetchBusinessOwnership()
     }
 
     public func refresh() async {
@@ -566,10 +609,26 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
             }
             // The Mail tab's badge reads the same counts.
             if api === APIClient.shared { MailBadgeStore.shared.apply(response) }
+            homes = response.homes
+            hero = MailboxHeroModel.make(delivery: response.delivery, homes: response.homes)
+            if !loadedMail.isEmpty { applyLiveState(drawer: selectedDrawer, tab: currentTab) }
         } catch {
             // Badges are non-blocking chrome — leave them empty on failure
             // so the list still renders.
             drawerUnread = [:]
+        }
+    }
+
+    /// Biz shows for business owners. Once per Mailbox; a failure leaves it
+    /// to the Biz mail count.
+    private func fetchBusinessOwnership() async {
+        guard !didCheckBusinesses else { return }
+        do {
+            let response: BusinessRolesResponse = try await api.request(BusinessesEndpoints.myBusinesses())
+            ownsBusiness = response.businesses.contains { $0.roleBase == "owner" }
+            didCheckBusinesses = true
+        } catch {
+            ownsBusiness = false
         }
     }
 
@@ -589,6 +648,22 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
     }
 
     private func applyLiveState(drawer: MailboxDrawer, tab: MailboxTab) {
+        // A bundle holds its pieces: the ones whose bundle is in the list
+        // open from the bundle instead of lying beside it.
+        let bundles = Set(loadedMail.filter { MailPieceKind.of($0.item) == .bundle }.map(\.id))
+        let shown = loadedMail.filter { mail in mail.item.bundleId.map { !bundles.contains($0) } ?? true }
+        pieceSections = Self.sections(
+            of: shown.map { mail in
+                MailPieceModel(
+                    mail: mail,
+                    recipient: recipient(of: mail, drawer: drawer),
+                    opened: mail.item.viewed || viewedMailIds.contains(mail.id),
+                    clock: .current
+                )
+            },
+            mail: shown,
+            tab: tab
+        )
         if loadedMail.isEmpty {
             state = .empty(emptyContent(drawer: drawer, tab: tab))
         } else {
@@ -606,6 +681,37 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
             }
             state = .loaded(sections: [RowSection(rows: rows)], hasMore: hasMore)
         }
+    }
+
+    /// Incoming and Archived by the day each piece came; the Counter keeps
+    /// the server's order (soonest due first) and the Vault its filing order.
+    private static func sections(
+        of pieces: [MailPieceModel],
+        mail: [DrawerItemsResponse.DrawerMail],
+        tab: MailboxTab
+    ) -> [MailPieceSection] {
+        guard !pieces.isEmpty else { return [] }
+        guard tab == .incoming else {
+            return [MailPieceSection(id: tab.rawValue, title: tab == .counter ? "Waiting on you" : "Filed", pieces: pieces)]
+        }
+        let now = Date()
+        var sections: [MailPieceSection] = []
+        for (piece, row) in zip(pieces, mail) {
+            let delivered = MailDates.parse(row.item.deliveredAt) ?? MailDates.parse(row.item.createdAt) ?? now
+            let (id, title) = MailDates.sectionTitle(for: delivered, now: now, calendar: .current)
+            if let last = sections.last, last.id == id {
+                sections[sections.count - 1] = MailPieceSection(id: id, title: title, pieces: last.pieces + [piece])
+            } else {
+                sections.append(MailPieceSection(id: id, title: title, pieces: [piece]))
+            }
+        }
+        return sections
+    }
+
+    /// Who a piece came to: Home mail to the Home at its address, the rest
+    /// to the person at their home's address.
+    private func recipient(of mail: DrawerItemsResponse.DrawerMail, drawer: MailboxDrawer) -> MailPieceRecipient {
+        MailPieceRecipient.of(mail, homeMail: drawer == .home, homes: homes, personName: MailPieceRecipient.personName)
     }
 
     // MARK: - Sample projection (preview/test seam)
@@ -684,6 +790,20 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
                 headline: "No mail yet",
                 subcopy: "When letters, bills or notices arrive, they show up here."
             )
+        }
+    }
+}
+
+/// `GET /api/businesses/my-businesses`, only the roles: the Mailbox needs to
+/// know whether this person owns a business (Biz drawer).
+private struct BusinessRolesResponse: Decodable {
+    let businesses: [Seat]
+
+    struct Seat: Decodable {
+        let roleBase: String?
+
+        private enum CodingKeys: String, CodingKey {
+            case roleBase = "role_base"
         }
     }
 }

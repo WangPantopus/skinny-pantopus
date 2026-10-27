@@ -256,7 +256,8 @@ public struct MailDayView: View {
             MailboxEmptyHero(
                 streakDays: content.streakDays,
                 lastScanLabel: content.lastScanLabel,
-                onScan: viewModel.canScan ? { viewModel.requestScan() } : nil
+                // No scanning paper mail (founder decision 2026-10-26): no "Scan today's stack".
+                onScan: nil
             )
             if let recap = content.yesterdayRecap {
                 VStack(alignment: .leading, spacing: Spacing.s2) {

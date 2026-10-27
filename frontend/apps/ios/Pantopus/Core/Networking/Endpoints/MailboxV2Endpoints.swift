@@ -26,6 +26,18 @@ public enum MailboxV2Endpoints {
         return Endpoint(method: .get, path: "/api/mailbox/v2/drawer/\(drawer)", query: query)
     }
 
+    /// `GET /api/mailbox/v2/search?q=&limit=&offset=` — everything this person
+    /// can read (Me, Home after proof, Biz), filed and archived included, in the
+    /// drawer list's row shape; `limit` at most 50. Mail build contract v1
+    /// (SRV-3), route `backend/routes/mailboxV2.js`.
+    public static func search(query: String, limit: Int = 50, offset: Int = 0) -> Endpoint {
+        Endpoint(
+            method: .get,
+            path: "/api/mailbox/v2/search",
+            query: ["q": query, "limit": String(limit), "offset": String(offset)]
+        )
+    }
+
     /// `GET /api/mailbox/v2/item/:id` — route `backend/routes/mailboxV2.js:366`.
     public static func item(mailId: String) -> Endpoint {
         Endpoint(method: .get, path: "/api/mailbox/v2/item/\(mailId)")
