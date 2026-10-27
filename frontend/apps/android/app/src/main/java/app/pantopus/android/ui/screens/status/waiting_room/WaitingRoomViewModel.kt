@@ -7,6 +7,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.homes.OwnershipClaimDto
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.tenant.TenantRepository
@@ -14,12 +15,16 @@ import app.pantopus.android.ui.screens.homes.HomeDashboardAccessFactory
 import app.pantopus.android.ui.screens.homes.currentVerificationKind
 import app.pantopus.android.ui.screens.status.StatusCta
 import app.pantopus.android.ui.screens.status.StatusWaitingContent
+import app.pantopus.android.ui.theme.PantopusIcon
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -107,20 +112,109 @@ class WaitingRoomViewModel
         /** The claim is a renter's residency document (`claim_type` "resident"). */
         private var claimIsResidency = false
 
+        /** The approval checklist action in flight (its button reads "Opening…"). */
+        private val _approvalBusyKey = MutableStateFlow<String?>(null)
+        val approvalBusyKey: StateFlow<String?> = _approvalBusyKey.asStateFlow()
+
+        /** Why the last identity check action couldn't go ahead, shown on the checklist. */
+        private val _approvalNotice = MutableStateFlow<String?>(null)
+        val approvalNotice: StateFlow<String?> = _approvalNotice.asStateFlow()
+
+        /** Stripe's identity check page for the screen to open in a Custom Tab. */
+        private val _openUrl = MutableStateFlow<String?>(null)
+        val openUrl: StateFlow<String?> = _openUrl.asStateFlow()
+
+        /** Stripe's page was opened; coming back reads the check from Stripe. */
+        private var identityCheckOpened = false
+        private var identityPoll: Job? = null
+
         fun consumeNavEvent() {
             _navEvent.value = null
         }
 
         fun refresh() {
-            viewModelScope.launch {
-                when (val result = homesRepo.myOwnershipClaims()) {
-                    is NetworkResult.Success -> applyClaims(result.data.claims.firstOrNull { it.homeId == homeId })
-                    is NetworkResult.Failure -> {
-                        Log.w(TAG, "waitingRoom.load failed: ${result.error.message}")
-                        _phase.value = WaitingRoomPhase.Notice(WaitingRoomNotice.LoadFailed)
-                    }
+            viewModelScope.launch { load() }
+        }
+
+        private suspend fun load() {
+            when (val result = homesRepo.myOwnershipClaims()) {
+                is NetworkResult.Success -> applyClaims(result.data.claims.firstOrNull { it.homeId == homeId })
+                is NetworkResult.Failure -> {
+                    Log.w(TAG, "waitingRoom.load failed: ${result.error.message}")
+                    _phase.value = WaitingRoomPhase.Notice(WaitingRoomNotice.LoadFailed)
                 }
             }
+        }
+
+        /** Every resume reloads the room; coming back from Stripe's page also reads the check from Stripe. */
+        fun onResumed() {
+            val claim = claimId
+            if (identityCheckOpened && claim != null) {
+                identityCheckOpened = false
+                checkIdentity(claim)
+            } else {
+                refresh()
+            }
+        }
+
+        /** A checklist button: confirm identity (Stripe's page) or upload a document. */
+        fun handleApprovalAction(key: String) {
+            when (key) {
+                WaitingRoomApproval.UPLOAD_DOCUMENT ->
+                    handleInlineAction(
+                        WaitingRoomInlineAction(
+                            id = "updateEvidence",
+                            label = "",
+                            icon = PantopusIcon.FilePlus2,
+                            tone = WaitingRoomActionTone.Primary,
+                            actionKey = "update_evidence",
+                        ),
+                    )
+                WaitingRoomApproval.CONFIRM_IDENTITY -> confirmIdentity()
+                else -> log("approval.$key")
+            }
+        }
+
+        fun consumeOpenUrl() {
+            _openUrl.value = null
+        }
+
+        /** Starts (or continues) the Stripe Identity check approval needs and hands its page to the screen. */
+        private fun confirmIdentity() {
+            val claim = claimId ?: return
+            if (_approvalBusyKey.value != null) return
+            _approvalBusyKey.value = WaitingRoomApproval.CONFIRM_IDENTITY
+            _approvalNotice.value = null
+            viewModelScope.launch {
+                when (val result = homesRepo.startClaimIdentityCheck(homeId, claim)) {
+                    is NetworkResult.Success -> {
+                        val url = result.data.verificationUrl
+                        if (url != null && url.startsWith("https://")) {
+                            identityCheckOpened = true
+                            _openUrl.value = url
+                        } else {
+                            checkIdentity(claim)
+                        }
+                    }
+                    is NetworkResult.Failure -> _approvalNotice.value = identityFailureMessage(result.error)
+                }
+                _approvalBusyKey.value = null
+            }
+        }
+
+        /** Reads the check from Stripe; while Stripe is still checking, looks again a few times. */
+        private fun checkIdentity(claim: String) {
+            identityPoll?.cancel()
+            identityPoll =
+                viewModelScope.launch {
+                    repeat(IDENTITY_POLL_ROUNDS) { round ->
+                        if (round > 0) delay(IDENTITY_POLL_MS)
+                        val checked = homesRepo.claimIdentityCheck(homeId, claim)
+                        load()
+                        val processing = (checked as? NetworkResult.Success)?.data?.approval?.identity == "processing"
+                        if (!processing || claimId != claim) return@launch
+                    }
+                }
         }
 
         private suspend fun applyClaims(claim: OwnershipClaimDto?) {
@@ -170,9 +264,10 @@ class WaitingRoomViewModel
                         claimRef = ref,
                         submittedOn = dayCaption(claim.createdAt),
                         reviewCaption = null,
-                        needsDocuments = claim.hasEvidence == false,
+                        needsDocuments = claim.approval?.let { it.proof == "missing" } ?: (claim.hasEvidence == false),
                         addressVerified = home.addressVerified,
                         residency = claimIsResidency,
+                        approval = claim.approval,
                     )
                 }
             _phase.value = WaitingRoomPhase.Loaded
@@ -311,6 +406,20 @@ class WaitingRoomViewModel
 
         companion object {
             private const val TAG = "WaitingRoom"
+
+            private const val IDENTITY_POLL_ROUNDS = 7
+            private const val IDENTITY_POLL_MS = 10_000L
+
+            /** The server's own words for a refused identity check (it never names another person). */
+            fun identityFailureMessage(error: NetworkError): String =
+                when (error) {
+                    is NetworkError.ClientError -> error.message
+                    is NetworkError.Server ->
+                        runCatching { JSONObject(error.body.orEmpty()).optString("error") }
+                            .getOrNull()
+                            ?.takeIf { it.isNotBlank() }
+                    else -> null
+                } ?: "Your identity check couldn\u2019t start. Please try again."
 
             /** Claim reference shown in the waiting room = first 8 chars of the claim id. */
             private const val CLAIM_REF_LENGTH = 8

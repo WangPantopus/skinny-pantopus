@@ -200,23 +200,49 @@ public struct AdminClaimRecordDTO: Decodable, Sendable, Hashable, Identifiable {
     }
 }
 
-/// What a claim still needs before approval (`home_claim_approval_progress`). Only the server's identity
-/// test is read here: true once the claim's identity is verified or an ID check on it passed.
-public struct AdminClaimApprovalProgressDTO: Decodable, Sendable, Hashable {
-    public let identityConfirmed: Bool?
-
-    private enum CodingKeys: String, CodingKey {
-        case identityConfirmed = "identity_confirmed"
-    }
-}
-
-/// Full claim detail envelope returned by `GET /api/admin/claims/:claimId`. `evidence` leaves out ID checks.
+/// Full claim detail envelope returned by `GET /api/admin/claims/:claimId`.
 public struct AdminClaimDetailResponse: Decodable, Sendable, Hashable {
     public let claim: AdminClaimRecordDTO
     public let home: AdminClaimHomeDTO?
     public let claimant: AdminClaimUserDTO?
     public let evidence: [AdminClaimEvidenceDTO]
-    public let approval: AdminClaimApprovalProgressDTO?
+    /// What approval needs, as the server tests it; nil when it couldn't be read.
+    public let approval: ClaimReviewApprovalDTO?
+}
+
+/// The reviewer's approval panel (`approval` on the admin claim detail): a confirmed
+/// identity (a Stripe Identity check, or a platform admin's attestation) and a checked
+/// document. Mirrors the web `ClaimReviewApproval`.
+public struct ClaimReviewApprovalDTO: Decodable, Sendable, Hashable {
+    public let identityConfirmed: Bool
+    /// `not_started` · `started` · `processing` · `requires_input` · `verified`.
+    public let identity: String
+    /// The name on the confirmed ID, to compare with the ownership document.
+    public let identityName: String?
+    /// False while identity checks aren't set up: the claimant can't do one, so the reviewer confirms identity.
+    public let identityCheckAvailable: Bool
+    /// `missing` · `pending` · `verified`.
+    public let proof: String
+    public let canApprove: Bool
+
+    private enum CodingKeys: String, CodingKey {
+        case identityConfirmed = "identity_confirmed"
+        case identity
+        case identityName = "identity_name"
+        case identityCheckAvailable = "identity_check_available"
+        case proof
+        case canApprove = "can_approve"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        identityConfirmed = try container.decode(Bool.self, forKey: .identityConfirmed)
+        identity = try container.decode(String.self, forKey: .identity)
+        identityName = try container.decodeIfPresent(String.self, forKey: .identityName)
+        identityCheckAvailable = try container.decodeIfPresent(Bool.self, forKey: .identityCheckAvailable) ?? true
+        proof = try container.decode(String.self, forKey: .proof)
+        canApprove = try container.decode(Bool.self, forKey: .canApprove)
+    }
 }
 
 /// Household role a platform admin may approve a claim as (`approve_as`). Left out, the claim type decides:
@@ -274,7 +300,7 @@ public struct AdminClaimReviewRequest: Encodable, Sendable, Hashable {
     public let reviewToken: String
     /// Approve only: grant this role instead of the one the claim type gives.
     public let approveAs: AdminClaimApprovalRole?
-    /// Approve only: the admin attests that they confirmed the claimant's identity.
+    /// Approve only: the admin confirmed the claimant's identity themselves. Sent only when true.
     public let identityConfirmed: Bool?
 
     public init(
@@ -288,7 +314,7 @@ public struct AdminClaimReviewRequest: Encodable, Sendable, Hashable {
         self.note = note
         self.reviewToken = reviewToken
         self.approveAs = approveAs
-        self.identityConfirmed = identityConfirmed
+        self.identityConfirmed = identityConfirmed == true ? true : nil
     }
 
     private enum CodingKeys: String, CodingKey {

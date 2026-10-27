@@ -59,6 +59,11 @@ public final class ReviewClaimDetailViewModel {
 
     public private(set) var reviewingAction: AdminClaimReviewAction?
     public private(set) var toast: ToastMessage?
+    /// "I confirmed this person's identity" — a platform admin's own confirmation, sent with Approve
+    /// only while the claim has no confirmed identity.
+    public var identityAttested = false
+    /// The household role Accept grants. Starts as what the person claimed.
+    public var approveAs: AdminClaimApprovalRole = .owner
 
     // MARK: Challenge composer state
 
@@ -66,13 +71,6 @@ public final class ReviewClaimDetailViewModel {
     public private(set) var selectedReasons: Set<ChallengeReason> = []
     /// The free-text question the reviewer drafts for the claimant.
     public var challengeQuestion: String = ""
-
-    // MARK: Approval choices
-
-    /// The household role Accept grants. Starts as what the person claimed.
-    public var approveAs: AdminClaimApprovalRole = .owner
-    /// The admin's attestation that they confirmed the claimant's identity.
-    public var identityConfirmed = false
 
     private let api: APIClient
     private let claimId: String
@@ -84,7 +82,6 @@ public final class ReviewClaimDetailViewModel {
         let action: AdminClaimReviewAction
         let note: String?
         let approveAs: AdminClaimApprovalRole?
-        let identityConfirmed: Bool?
     }
 
     private var pendingDecision: PendingDecision?
@@ -114,10 +111,7 @@ public final class ReviewClaimDetailViewModel {
                   HomeClaimReviewSnapshot.validToken(response.claim.reviewToken) else { throw APIError.invalidResponse }
             contentState = .loaded(response)
             pendingDecision = nil
-            if !loadedOnce {
-                approveAs = .claimed(by: response.claim.claimType)
-                identityConfirmed = false
-            }
+            if !loadedOnce { approveAs = .claimed(by: response.claim.claimType) }
             loadedOnce = true
         } catch {
             guard revision == loadGeneration else { return }
@@ -152,22 +146,17 @@ public final class ReviewClaimDetailViewModel {
                 throw HomeClaimReviewError.snapshotChanged
             }
             guard !detail.claim.requiresDisputeReview else { throw HomeClaimReviewError.disputeReview }
-            // Only an approval carries the choices, and only when they change what the claim alone would do.
+            // Only an approval carries a role, and only when it differs from what they claimed.
             let role = approveAs
             let roleChoice = action == .approve && role != .claimed(by: detail.claim.claimType) ? role : nil
-            let identityChoice: Bool? = action == .approve && identityConfirmed && !Self.identityVerified(detail) ? true : nil
             if let pendingDecision,
                pendingDecision.claim != detail.claim || pendingDecision.action != action || pendingDecision.note != note
-               || pendingDecision.approveAs != roleChoice || pendingDecision.identityConfirmed != identityChoice {
+               || pendingDecision.approveAs != roleChoice {
                 throw HomeClaimReviewError.pendingDecision
             }
-            pendingDecision = PendingDecision(
-                claim: detail.claim,
-                action: action,
-                note: note,
-                approveAs: roleChoice,
-                identityConfirmed: identityChoice
-            )
+            pendingDecision = PendingDecision(claim: detail.claim, action: action, note: note, approveAs: roleChoice)
+            let attest = action == .approve && identityAttested
+                && detail.approval?.identityConfirmed != true && detail.claim.identityStatus != "verified"
             let receipt: AdminClaimReviewResponse = try await api.request(
                 AdminEndpoints.reviewClaim(
                     claimId: claimId,
@@ -176,7 +165,7 @@ public final class ReviewClaimDetailViewModel {
                         reviewToken: token,
                         note: note,
                         approveAs: roleChoice,
-                        identityConfirmed: identityChoice
+                        identityConfirmed: attest
                     )
                 )
             )
@@ -205,18 +194,9 @@ public final class ReviewClaimDetailViewModel {
         toast = nil
     }
 
-    // MARK: - Approval
-
-    /// Identity counts as confirmed once the claim says so, the server's approval progress says so, or an ID
-    /// document on it is verified.
-    static func identityVerified(_ detail: AdminClaimDetailResponse) -> Bool {
-        detail.claim.identityStatus == "verified" || detail.approval?.identityConfirmed == true
-            || detail.evidence.contains { $0.evidenceType == "idv" && $0.eligibleForReview == true }
-    }
-
-    /// Accept needs a confirmed identity: on the claim, from a verified ID document, or from the admin.
-    func canAccept(_ detail: AdminClaimDetailResponse) -> Bool {
-        detail.claim.identityStatus != "failed" && (Self.identityVerified(detail) || identityConfirmed)
+    /// Why Accept is off for the chosen role, or nil when it can go ahead.
+    func acceptBlockedReason(_ detail: AdminClaimDetailResponse) -> String? {
+        ReviewClaimApproval.blockedReason(detail, identityAttested: identityAttested, role: approveAs)
     }
 
     /// "Accept claim" while the role is what they claimed, otherwise the chosen role.

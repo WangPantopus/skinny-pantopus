@@ -48,31 +48,16 @@ struct StatementBlock: View {
     }
 }
 
-// MARK: - Approval choices
+// MARK: - Approval role
 
-/// The role Accept grants, and the admin's identity attestation when the claim has no verified identity.
+/// The household role Accept grants. Starts at what the person claimed; the "Before you approve" panel
+/// above follows the choice (owner and admin need an ownership document).
 struct ApprovalChoiceCard: View {
     let detail: AdminClaimDetailResponse
     @Bindable var viewModel: ReviewClaimDetailViewModel
 
-    private var role: AdminClaimApprovalRole {
-        viewModel.approveAs
-    }
-
-    private var disabled: Bool {
-        viewModel.reviewingAction != nil
-    }
-
     private var claimedRole: AdminClaimApprovalRole {
         .claimed(by: detail.claim.claimType)
-    }
-
-    private var identityVerified: Bool {
-        ReviewClaimDetailViewModel.identityVerified(detail)
-    }
-
-    private var identityFailed: Bool {
-        detail.claim.identityStatus == "failed"
     }
 
     var body: some View {
@@ -84,7 +69,7 @@ struct ApprovalChoiceCard: View {
                 }
             } label: {
                 HStack(spacing: Spacing.s2) {
-                    Text(title(for: role))
+                    Text(title(for: viewModel.approveAs))
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(Theme.Color.appText)
                     Spacer(minLength: Spacing.s2)
@@ -99,36 +84,12 @@ struct ApprovalChoiceCard: View {
                         .stroke(Theme.Color.appBorder, lineWidth: 1)
                 )
             }
-            .disabled(disabled)
+            .disabled(viewModel.reviewingAction != nil)
             .accessibilityIdentifier("reviewClaimDetail_approveAs")
-            .accessibilityLabel("Approve as \(role.label)")
-            Text(role.hint)
+            .accessibilityLabel("Approve as \(viewModel.approveAs.label)")
+            Text(viewModel.approveAs.hint)
                 .pantopusTextStyle(.caption)
                 .foregroundStyle(Theme.Color.appTextSecondary)
-            if identityVerified {
-                HStack(spacing: Spacing.s1) {
-                    Icon(.badgeCheck, size: 14, color: Theme.Color.success)
-                    Text("Identity verified")
-                        .pantopusTextStyle(.caption)
-                        .foregroundStyle(Theme.Color.success)
-                }
-            } else if identityFailed {
-                HStack(spacing: Spacing.s1) {
-                    Icon(.alertCircle, size: 14, color: Theme.Color.error)
-                    Text("Their identity check failed, so this claim can't be approved.")
-                        .pantopusTextStyle(.caption)
-                        .foregroundStyle(Theme.Color.error)
-                }
-            } else {
-                Toggle("I confirmed this person's identity", isOn: $viewModel.identityConfirmed)
-                    .font(.system(size: 14))
-                    .disabled(disabled)
-                    .accessibilityIdentifier("reviewClaimDetail_identityConfirmed")
-                Text("They haven't verified an ID in the app. Turn this on once you've checked who they are, "
-                    + "or verify an ID document above.")
-                    .pantopusTextStyle(.caption)
-                    .foregroundStyle(Theme.Color.appTextSecondary)
-            }
         }
         .padding(Spacing.s4)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -149,23 +110,30 @@ struct ApprovalChoiceCard: View {
 
 struct VerdictBar: View {
     let reviewingAction: AdminClaimReviewAction?
+    /// Why Accept is off (approval would refuse), shown above it; nil when it can go ahead.
+    var acceptBlockedReason: String?
     var acceptLabel = "Accept claim"
-    var acceptEnabled = true
     let onAccept: () -> Void
     let onChallenge: () -> Void
     let onReject: () -> Void
 
     var body: some View {
         VStack(spacing: Spacing.s2) {
+            if let acceptBlockedReason {
+                Text(acceptBlockedReason)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityIdentifier("reviewClaimDetail_acceptBlocked")
+            }
             VerdictButton(
                 style: .accept,
                 label: reviewingAction == .approve ? "Accepting…" : acceptLabel,
                 icon: .checkCircle,
                 isLoading: reviewingAction == .approve,
-                disabled: reviewingAction != nil || !acceptEnabled,
+                disabled: reviewingAction != nil || acceptBlockedReason != nil,
                 action: onAccept
             )
-            .opacity(acceptEnabled || reviewingAction == .approve ? 1 : 0.5)
             .accessibilityIdentifier("reviewClaimDetail_accept")
             .accessibilityLabel(acceptLabel)
 

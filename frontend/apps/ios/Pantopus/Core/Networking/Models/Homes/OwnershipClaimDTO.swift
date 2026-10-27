@@ -26,6 +26,8 @@ public struct OwnershipClaimDTO: Decodable, Sendable, Hashable, Identifiable {
     public var home: ClaimedHome?
     /// Whether any documents are attached; nil when the server didn't say.
     public var hasEvidence: Bool?
+    /// What a claim in review still needs before it can be approved; nil otherwise.
+    public var approval: ClaimApprovalProgressDTO?
 
     /// The claimed Home's address lines.
     public struct ClaimedHome: Decodable, Sendable, Hashable {
@@ -55,7 +57,53 @@ public struct OwnershipClaimDTO: Decodable, Sendable, Hashable, Identifiable {
         case updatedAt = "updated_at"
         case home
         case hasEvidence = "has_evidence"
+        case approval
     }
+}
+
+/// The claimant's approval checklist: approval needs a confirmed identity (a Stripe
+/// Identity check) and a document a reviewer checked. Values mirror the web
+/// `ClaimApprovalProgress` (`frontend/packages/api/src/endpoints/homeOwnership.ts`).
+public struct ClaimApprovalProgressDTO: Decodable, Sendable, Hashable {
+    /// `not_started` · `started` (opened, not submitted) · `processing` (Stripe is
+    /// checking) · `requires_input` (the last attempt didn't pass) · `verified`.
+    public let identity: String
+    /// False while identity checks aren't set up; the claimant can't start one yet.
+    public let identityCheckAvailable: Bool
+    /// `missing` · `pending` (waiting for a reviewer) · `verified`.
+    public let proof: String
+
+    public init(identity: String, identityCheckAvailable: Bool, proof: String) {
+        self.identity = identity
+        self.identityCheckAvailable = identityCheckAvailable
+        self.proof = proof
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case identity
+        case identityCheckAvailable = "identity_check_available"
+        case proof
+    }
+}
+
+/// Body for `POST …/identity-check`: the platform picks where Stripe sends them back.
+public struct ClaimIdentityCheckRequest: Encodable, Sendable, Hashable {
+    public let platform: String
+}
+
+/// Reply to `POST …/identity-check`. `verificationUrl` is Stripe's single-use page;
+/// nil when the check is already with Stripe.
+public struct ClaimIdentityCheckStartResponse: Decodable, Sendable, Hashable {
+    public let verificationUrl: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case verificationUrl = "verification_url"
+    }
+}
+
+/// Reply to `GET …/identity-check`.
+public struct ClaimIdentityCheckResponse: Decodable, Sendable, Hashable {
+    public let approval: ClaimApprovalProgressDTO?
 }
 
 /// Envelope for `GET /api/homes/my-ownership-claims`.

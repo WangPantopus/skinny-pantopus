@@ -169,23 +169,34 @@ data class AdminClaimRecordDto(
             challengeState == "challenged" || routingClassification == "challenge_claim"
 }
 
-/**
- * What a claim still needs before approval (`home_claim_approval_progress`). Only the server's identity test is
- * read here: true once the claim's identity is verified or an ID check on it passed.
- */
-@JsonClass(generateAdapter = true)
-data class AdminClaimApprovalProgressDto(
-    @Json(name = "identity_confirmed") val identityConfirmed: Boolean? = null,
-)
-
-/** Full claim detail envelope returned by `GET /api/admin/claims/:claimId`. `evidence` leaves out ID checks. */
+/** Full claim detail envelope returned by `GET /api/admin/claims/:claimId`. */
 @JsonClass(generateAdapter = true)
 data class AdminClaimDetailResponse(
     val claim: AdminClaimRecordDto,
     val home: AdminClaimHomeDto?,
     val claimant: AdminClaimUserDto?,
     val evidence: List<AdminClaimEvidenceDto>,
-    val approval: AdminClaimApprovalProgressDto? = null,
+    /** What approval needs, as the server tests it; null when it couldn't be read. */
+    val approval: ClaimReviewApprovalDto? = null,
+)
+
+/**
+ * The reviewer's approval panel (`approval` on the admin claim detail): a confirmed
+ * identity (a Stripe Identity check, or a platform admin's attestation) and a checked
+ * document. Mirrors iOS `ClaimReviewApprovalDTO` and the web `ClaimReviewApproval`.
+ */
+@JsonClass(generateAdapter = true)
+data class ClaimReviewApprovalDto(
+    @Json(name = "identity_confirmed") val identityConfirmed: Boolean,
+    /** `not_started` · `started` · `processing` · `requires_input` · `verified`. */
+    val identity: String,
+    /** The name on the confirmed ID, to compare with the ownership document. */
+    @Json(name = "identity_name") val identityName: String? = null,
+    /** False while identity checks aren't set up: the claimant can't do one, so the reviewer confirms identity. */
+    @Json(name = "identity_check_available") val identityCheckAvailable: Boolean = true,
+    /** `missing` · `pending` · `verified`. */
+    val proof: String,
+    @Json(name = "can_approve") val canApprove: Boolean,
 )
 
 /**
@@ -199,10 +210,10 @@ data class AdminClaimReviewRequest(
     val action: String,
     @Json(name = "review_token") val reviewToken: String,
     val note: String?,
-    // Approve only: grant this household role instead of the one the claim type gives.
-    @Json(name = "approve_as") val approveAs: String? = null,
-    // Approve only: the admin attests that they confirmed the claimant's identity.
+    /** Approve only: the admin confirmed the claimant's identity themselves. Sent only when true. */
     @Json(name = "identity_confirmed") val identityConfirmed: Boolean? = null,
+    /** Approve only: grant this household role instead of the one the claim type gives. */
+    @Json(name = "approve_as") val approveAs: String? = null,
 )
 
 /**

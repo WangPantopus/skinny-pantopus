@@ -121,25 +121,34 @@ class ReviewClaimDetailViewModel
         private val _challengeQuestion = MutableStateFlow("")
         val challengeQuestion: StateFlow<String> = _challengeQuestion.asStateFlow()
 
-        // Approval choices: the role Accept grants (starts as what the person claimed) and the
-        // admin's identity attestation.
+        /**
+         * "I confirmed this person's identity" — a platform admin's own confirmation, sent with
+         * Approve only while the claim has no confirmed identity.
+         */
+        private val _identityAttested = MutableStateFlow(false)
+        val identityAttested: StateFlow<Boolean> = _identityAttested.asStateFlow()
+
+        fun setIdentityAttested(attested: Boolean) {
+            _identityAttested.value = attested
+        }
+
+        /** The household role Accept grants. Starts as what the person claimed. */
         private val _approveAs = MutableStateFlow(ClaimApprovalRole.Owner)
         val approveAs: StateFlow<ClaimApprovalRole> = _approveAs.asStateFlow()
-
-        private val _identityConfirmed = MutableStateFlow(false)
-        val identityConfirmed: StateFlow<Boolean> = _identityConfirmed.asStateFlow()
 
         fun setApproveAs(role: ClaimApprovalRole) {
             _approveAs.value = role
         }
 
-        fun setIdentityConfirmed(confirmed: Boolean) {
-            _identityConfirmed.value = confirmed
-        }
-
-        /** Accept needs a confirmed identity: on the claim, from a verified ID document, or from the admin. */
-        fun canAccept(detail: AdminClaimDetailResponse): Boolean =
-            detail.claim.identityStatus != "failed" && (identityVerified(detail) || _identityConfirmed.value)
+        /** `true` only for an approve the admin attested while the claim has no confirmed identity. */
+        private fun identityAttestation(
+            action: AdminClaimReviewAction,
+            detail: AdminClaimDetailResponse,
+        ): Boolean? =
+            true.takeIf {
+                action == AdminClaimReviewAction.Approve && _identityAttested.value &&
+                    detail.approval?.identityConfirmed != true && detail.claim.identityStatus != "verified"
+            }
 
         private var loadedOnce: Boolean = false
         private val session = scopeFactory.create(viewModelScope)
@@ -170,8 +179,19 @@ class ReviewClaimDetailViewModel
             val action: AdminClaimReviewAction,
             val note: String?,
             val approveAs: String?,
-            val identityConfirmed: Boolean?,
         )
+
+        /** The decision to send. Only an approval carries a role, and only when it differs from what they claimed. */
+        private fun decisionFor(
+            detail: AdminClaimDetailResponse,
+            action: AdminClaimReviewAction,
+            note: String?,
+        ): PendingDecision {
+            val role = _approveAs.value
+            val roleChoice =
+                role.wire.takeIf { action == AdminClaimReviewAction.Approve && role != ClaimApprovalRole.claimed(detail.claim.claimType) }
+            return PendingDecision(detail.claim, action, note, roleChoice)
+        }
 
         private var pendingDecision: PendingDecision? = null
 
@@ -217,8 +237,8 @@ class ReviewClaimDetailViewModel
                         action = action.backendValue,
                         reviewToken = requireNotNull(detail.claim.reviewToken),
                         note = note,
+                        identityConfirmed = identityAttestation(action, detail),
                         approveAs = decision.approveAs,
-                        identityConfirmed = decision.identityConfirmed,
                     )
                 val result = repo.reviewClaim(claimId, request)
                 session.requireCurrent()
@@ -305,10 +325,7 @@ class ReviewClaimDetailViewModel
                 ) { CLAIM_SNAPSHOT_CHANGED }
                 _state.value = ReviewClaimDetailUiState.Loaded(detail)
                 pendingDecision = null
-                if (!loadedOnce) {
-                    _approveAs.value = ClaimApprovalRole.claimed(detail.claim.claimType)
-                    _identityConfirmed.value = false
-                }
+                if (!loadedOnce) _approveAs.value = ClaimApprovalRole.claimed(detail.claim.claimType)
                 loadedOnce = true
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -319,22 +336,6 @@ class ReviewClaimDetailViewModel
             } catch (error: IllegalArgumentException) {
                 if (revision == loadGeneration) _state.value = ReviewClaimDetailUiState.Error(error.message ?: CLAIM_SNAPSHOT_CHANGED)
             }
-        }
-
-        /**
-         * The decision to send. Only an approval carries the approval choices, and only when they change what the
-         * claim alone would do: a role other than the claimed one, or an identity the claim hasn't verified.
-         */
-        private fun decisionFor(
-            detail: AdminClaimDetailResponse,
-            action: AdminClaimReviewAction,
-            note: String?,
-        ): PendingDecision {
-            val approval = action == AdminClaimReviewAction.Approve
-            val role = _approveAs.value
-            val roleChoice = role.wire.takeIf { approval && role != ClaimApprovalRole.claimed(detail.claim.claimType) }
-            val identityChoice = true.takeIf { approval && _identityConfirmed.value && !identityVerified(detail) }
-            return PendingDecision(detail.claim, action, note, roleChoice, identityChoice)
         }
 
         private fun reviewFailed(error: Throwable): Boolean {
@@ -356,14 +357,6 @@ class ReviewClaimDetailViewModel
         companion object {
             /** Nav-arg key matching `ChildRoutes.REVIEW_CLAIM_DETAIL_ID_KEY`. */
             const val CLAIM_ID_KEY = "claimId"
-
-            /**
-             * Identity counts as confirmed once the claim says so, the server's approval progress says so, or an
-             * ID document on it is verified.
-             */
-            fun identityVerified(detail: AdminClaimDetailResponse): Boolean =
-                detail.claim.identityStatus == "verified" || detail.approval?.identityConfirmed == true ||
-                    detail.evidence.any { it.evidenceType == "idv" && it.eligibleForReview == true }
 
             /**
              * Fold the picked reasons + drafted question into a single review
