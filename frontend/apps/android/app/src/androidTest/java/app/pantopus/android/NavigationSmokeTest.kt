@@ -14,6 +14,8 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import app.pantopus.android.core.LaunchFeature
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.ui.screens.root.NotYetAvailableView
 import app.pantopus.android.ui.screens.root.PantopusBottomBar
 import app.pantopus.android.ui.screens.root.PantopusRoute
@@ -78,14 +80,20 @@ class NavigationSmokeTest {
      */
     @Test
     fun pantopusRoute_entriesEachExposeBottomBarTestTag() {
-        val expectedTags =
-            PantopusRoute.entries.map { route ->
-                "tab.${route.path.substringAfterLast('/')}"
-            }
+        fun tags() = PantopusRoute.entries.map { route -> "tab.${route.path.substringAfterLast('/')}" }
         // Place keeps its legacy home path for deep-link compatibility. These builds list no launch keys, so the
         // Pulse redesign is off: the October 13 bar with Plans (drawn while its switch is on).
-        check(expectedTags == listOf("tab.home", "tab.today", "tab.nearby", "tab.plans", "tab.mail")) {
-            "PantopusRoute.entries derived testTags drifted: $expectedTags"
+        check(tags() == listOf("tab.home", "tab.today", "tab.nearby", "tab.plans", "tab.mail")) {
+            "PantopusRoute.entries derived testTags drifted: ${tags()}"
+        }
+        // With Mailbox on, Messages follows Mail as a sixth tab (the Mail tab, 2026-10-27).
+        try {
+            LaunchFeatures.overrideForTesting = setOf(LaunchFeature.MAILBOX)
+            check(tags() == listOf("tab.home", "tab.today", "tab.nearby", "tab.plans", "tab.mail", "tab.messages")) {
+                "PantopusRoute.entries derived testTags drifted with Mailbox on: ${tags()}"
+            }
+        } finally {
+            LaunchFeatures.overrideForTesting = null
         }
     }
 

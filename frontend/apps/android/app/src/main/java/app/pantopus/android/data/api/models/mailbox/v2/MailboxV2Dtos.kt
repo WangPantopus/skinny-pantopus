@@ -9,6 +9,8 @@ import com.squareup.moshi.JsonClass
 @JsonClass(generateAdapter = true)
 data class DrawerListResponse(
     val drawers: List<Drawer>,
+    /** The Mail tab badge: unopened, delivered pieces in Me, Home and Biz this person can read (Mail build contract). */
+    @Json(name = "unread_total") val unreadTotal: Int? = null,
 )
 
 @JsonClass(generateAdapter = true)
