@@ -224,7 +224,22 @@ async function openSession(claimId) {
   const row = (data || []).find(item => item.metadata?.livemode === live
     && ['started', 'processing', 'requires_input'].includes(item.metadata?.check_status));
   return row ? { sessionId: row.metadata.session_id, checkStatus: row.metadata.check_status,
-    attempts: Number(row.metadata.attempts) || 0, sessions: (data || []).length } : { sessions: (data || []).length };
+    attempts: Number(row.metadata.attempts) || 0 } : {};
+}
+
+/**
+ * How many checks the claim has had (one row per Stripe session). It names the next session's
+ * idempotency key, so it's an exact count: a repeated key would hand back an earlier session.
+ */
+async function sessionCount(claimId) {
+  const { count, error } = await supabaseAdmin
+    .from('HomeVerificationEvidence')
+    .select('id', { count: 'exact', head: true })
+    .eq('claim_id', claimId)
+    .eq('provider', 'stripe_identity')
+    .eq('evidence_type', 'idv');
+  if (error || !Number.isInteger(count)) throw failure();
+  return count;
 }
 
 async function sessionsStartedToday(userId) {
@@ -276,6 +291,7 @@ async function start({ homeId, claimId, userId, returnUrl }) {
   }
 
   if (await sessionsStartedToday(userId) >= DAILY_SESSION_LIMIT) throw failure('IDENTITY_CHECK_LIMIT', 429);
+  const sessions = await sessionCount(claimId);
   let session;
   try {
     session = await stripeClient().identity.verificationSessions.create({
@@ -290,7 +306,7 @@ async function start({ homeId, claimId, userId, returnUrl }) {
       client_reference_id: claimId,
       metadata: { claim_id: claimId, home_id: homeId, user_id: userId },
       ...(returnUrl ? { return_url: returnUrl } : {}),
-    }, { idempotencyKey: `home-claim-identity-${claimId}-${open.sessions}` });
+    }, { idempotencyKey: `home-claim-identity-${claimId}-${sessions}` });
   } catch (error) {
     logger.warn('Stripe Identity session create failed', { errorType: error?.type, errorCode: error?.code });
     throw failure();
