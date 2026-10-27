@@ -302,20 +302,29 @@ function visibleMailFilter(userId, homeIds) {
 }
 
 /**
+ * Only pieces that are in the box by `now`: one waiting for its morning round
+ * isn't there yet (SRV-1, services/mailDelivery). Every read a recipient sees
+ * applies it: lists, counts, search, the Hub, Today and the assistant.
+ */
+function onlyDelivered(query, now = new Date()) {
+  return query.lte('delivered_at', now.toISOString());
+}
+
+/**
  * Of these mail ids, the ones the user may see: their own, or letters on
- * their accessible Homes that the Home rule shows them. Throws on a read
- * failure so each caller keeps its own failure semantics.
+ * their accessible Homes that the Home rule shows them, delivered by now.
+ * Throws on a read failure so each caller keeps its own failure semantics.
  */
 async function visibleMailIds(mailIds, userId, homeIds = null) {
   const ids = [...new Set((mailIds || []).filter(Boolean))];
   if (!ids.length || !userId) return new Set();
   const homes = homeIds || await getAccessibleHomeIds(userId);
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await onlyDelivered(supabaseAdmin
     .from('Mail')
     .select('id')
     .in('id', ids)
     .is('deleted_at', null)
-    .or(visibleMailFilter(userId, homes));
+    .or(visibleMailFilter(userId, homes)));
   if (error) throw new Error(error.message);
   return new Set((data || []).map((row) => row.id));
 }
@@ -326,12 +335,12 @@ async function visibleMailIds(mailIds, userId, homeIds = null) {
  */
 async function homeMailVisible(mailId, homeId, userId, { includeDeleted = false } = {}) {
   if (!mailId || !homeId || !userId) return false;
-  let query = supabaseAdmin
+  let query = onlyDelivered(supabaseAdmin
     .from('Mail')
     .select('id')
     .eq('id', mailId)
     .eq('recipient_home_id', homeId)
-    .or(homeMailFilter(homeId, userId));
+    .or(homeMailFilter(homeId, userId)));
   if (!includeDeleted) query = query.is('deleted_at', null);
   const { data, error } = await query.maybeSingle();
   if (error) {
@@ -356,6 +365,8 @@ const canAccessMail = async (mail, userId, { includeDeleted = false } = {}) => {
   // A deleted letter (recoverable for 30 days) is hidden from every route
   // except restore, which passes includeDeleted.
   if (!includeDeleted && await isDeletedMail(mail)) return false;
+  // A piece waiting for its morning round isn't in the box yet (SRV-1).
+  if (!(await isDeliveredMail(mail))) return false;
   if (mail.recipient_user_id === userId) return true;
   if (!mail.recipient_home_id) return false;
 
@@ -383,15 +394,38 @@ async function isDeletedMail(mail) {
 }
 
 /**
+ * Whether the piece has gone into the box (delivered_at has come). Callers that
+ * selected delivered_at are answered from the row; otherwise it is read. Fails
+ * closed.
+ */
+async function isDeliveredMail(mail, now = new Date()) {
+  let deliveredAt = mail.delivered_at;
+  if (deliveredAt === undefined) {
+    const { data, error } = await supabaseAdmin
+      .from('Mail')
+      .select('delivered_at')
+      .eq('id', mail.id)
+      .maybeSingle();
+    if (error) {
+      logger.error('isDeliveredMail: failing closed', { mailId: mail.id, error: error.message });
+      return false;
+    }
+    deliveredAt = data ? data.delivered_at : null;
+  }
+  return Boolean(deliveredAt) && new Date(deliveredAt).getTime() <= now.getTime();
+}
+
+/**
  * Load one mail's access fields and apply canAccessMail. Returns the row
- * (id, recipient_user_id, recipient_home_id, deleted_at, lifecycle) when the
- * caller may read it, otherwise null — callers answer their existing not-found.
+ * (id, recipient_user_id, recipient_home_id, deleted_at, delivered_at,
+ * lifecycle) when the caller may read it, otherwise null — callers answer
+ * their existing not-found.
  */
 async function readableMail(mailId, userId) {
   if (!mailId || !userId) return null;
   const { data: mail, error } = await supabaseAdmin
     .from('Mail')
-    .select('id, recipient_user_id, recipient_home_id, deleted_at, lifecycle')
+    .select('id, recipient_user_id, recipient_home_id, deleted_at, delivered_at, lifecycle')
     .eq('id', mailId)
     .maybeSingle();
   if (error || !mail) return null;
@@ -407,7 +441,7 @@ async function restorableMail(mailId, userId) {
   if (!mailId || !userId) return null;
   const { data: mail, error } = await supabaseAdmin
     .from('Mail')
-    .select('id, recipient_user_id, recipient_home_id, deleted_at, deleted_by, lifecycle, opened_at, viewed_at, display_title, subject')
+    .select('id, recipient_user_id, recipient_home_id, deleted_at, deleted_by, delivered_at, lifecycle, opened_at, viewed_at, display_title, subject')
     .eq('id', mailId)
     .maybeSingle();
   if (error || !mail) return null;
@@ -490,7 +524,8 @@ async function sendHomeMailRemovedNotice(mail, actorId, action) {
 }
 
 module.exports = { MAIL_TRUSTED_VERIFICATION_STATUSES, MAIL_PROVEN_SOURCES, getAccessibleHomeIds, trustedHomeIdsOrThrow,
-  mailReaderIdsOrThrow, householdHomeIds, mailHomesOrThrow, homeMailNeedsProof, sendMailUnavailable,
+  mailReaderIdsOrThrow, householdHomeIds, mailHomesOrThrow, homeMailNeedsProof, sendMailUnavailable, onlyDelivered,
+  isDeliveredMail,
   MAIL_HOME_NEEDS_PROOF, MAIL_NOT_FOUND, canAccessMail, readableMail, restorableMail,
   isDeletedMail, removedMailInfo, homeMailAudience, sendHomeMailRemovedNotice, MAIL_RESTORE_DAYS,
   homeMailVisibilityClauses, homeMailFilter, homesMailFilter, visibleMailFilter, visibleMailIds,

@@ -895,7 +895,7 @@ no-bid nudges; it is not the launch activation command.
 | `SeederEnabled` | Local fetcher, poster and region discovery (3) | Production curator account and credentials, region/source rows, reviewed source coverage and paid-composition approval; national sports stays paused |
 | `HomeRemindersEnabled` | Recipient-local Home reminders (1) | Due-day task/bill/calendar checks and physical-phone receipt |
 | `AlertsEnabled` | Weather/AQI checks (1) | Location coverage, preferences and working weather/AQI providers |
-| `MailEnabled` | Mail notification pushes: urgent mail and the morning mailbox summary (1) | The Mailbox switched on (backend `LAUNCH_FEATURES` lists `mailbox`) and app builds that show it; until then the backend refuses these pushes anyway |
+| `MailEnabled` | The Mail tab's morning notice, "Your mail is here" (1): every 5 minutes the Lambda asks the backend (`POST /api/internal/briefing/mail-morning`), which sends it once per person per local morning. Special deliveries are announced by the backend when they land, not by this schedule | The Mailbox switched on (backend `LAUNCH_FEATURES` lists `mailbox`) and app builds that show it; until then the backend refuses these pushes anyway |
 | `MaintenanceJobsEnabled` | Post expiry, Ask reminders, chat redaction, ghost-business cleanup, response statistics and trust checks (6) | Review the existing jobs' effects and verify the worker is not also running them |
 | `PaymentJobsEnabled` | Authorization, transfers, capture retry, authorization expiry and stuck-payment checks (5) | Verify actual Stripe mode and review pending work before allowing financial side effects |
 

@@ -7,7 +7,10 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const {
   getAccessibleHomeIds, canAccessMail, readableMail, homesMailFilter, visibleMailFilter, visibleMailIds,
   removedMailInfo, sendHomeMailRemovedNotice, mailReaderIdsOrThrow, mailHomesOrThrow, sendMailUnavailable,
+  onlyDelivered,
 } = require('../utils/homeMailAccess');
+// Mail comes in the morning (SRV-1): the delivery rule every writer follows, and the mailbox's delivery line.
+const mailDelivery = require('../services/mailDelivery');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const Joi = require('joi');
@@ -222,18 +225,20 @@ router.get('/drawers', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const homeIds = await getAccessibleHomeIds(userId);
+    const now = new Date();
 
     // Count unread + urgent per drawer in parallel. Only incoming mail counts
-    // (the Incoming tab's filter): dismissed, filed and archived letters left it.
+    // (the Incoming tab's filter): dismissed, filed and archived letters left it,
+    // and a piece waiting for its morning round isn't there yet.
     const countForDrawer = async (drawer, filter) => {
-      let query = supabaseAdmin
+      let query = onlyDelivered(supabaseAdmin
         .from('Mail')
-        .select('id, priority, created_at', { count: 'exact', head: false })
+        .select('id, priority, delivered_at', { count: 'exact', head: false })
         .eq('drawer', drawer)
         .eq('viewed', false)
         .in('lifecycle', ['delivered', 'opened'])
         .eq('archived', false)
-        .is('deleted_at', null);
+        .is('deleted_at', null), now);
 
       if (filter) filter(query);
 
@@ -253,7 +258,7 @@ router.get('/drawers', verifyToken, async (req, res) => {
       }
 
       const { data, count, error } = await query
-        .order('created_at', { ascending: false })
+        .order('delivered_at', { ascending: false })
         .limit(200);
 
       if (error) {
@@ -262,7 +267,7 @@ router.get('/drawers', verifyToken, async (req, res) => {
       }
 
       const urgentCount = (data || []).filter(m => m.priority === 'urgent' || m.priority === 'high').length;
-      const lastItemAt = data?.[0]?.created_at || null;
+      const lastItemAt = data?.[0]?.delivered_at || null;
 
       return { unread_count: count || 0, urgent_count: urgentCount, last_item_at: lastItemAt };
     };
@@ -273,12 +278,18 @@ router.get('/drawers', verifyToken, async (req, res) => {
       logger.error('GET /drawers: homes unavailable', { error: error.message });
       return [];
     });
-    const [personal, home, business, earn, homes] = await Promise.all([
+    // When the mail came and when it comes next. A failed read leaves it out rather than failing the mailbox.
+    const deliveryRead = mailDelivery.deliverySummary({ userId, homeIds, now }).catch((error) => {
+      logger.error('GET /drawers: delivery line unavailable', { error: error.message });
+      return null;
+    });
+    const [personal, home, business, earn, homes, delivery] = await Promise.all([
       countForDrawer('personal'),
       countForDrawer('home'),
       countForDrawer('business'),
       countForDrawer('earn'),
       homesRead,
+      deliveryRead,
     ]);
 
     res.json({
@@ -289,6 +300,7 @@ router.get('/drawers', verifyToken, async (req, res) => {
         { drawer: 'earn', display_name: 'Earn', icon: '💰', ...earn },
       ],
       homes,
+      delivery,
     });
   } catch (err) {
     logger.error('GET /drawers failed', { error: err.message, stack: err.stack });
@@ -309,13 +321,14 @@ router.get('/drawer/:drawer', verifyToken, async (req, res) => {
 
     const homeIds = await getAccessibleHomeIds(userId);
 
-    let query = supabaseAdmin
+    // Only delivered pieces, newest delivery first (a piece waiting for its morning round isn't there yet).
+    let query = onlyDelivered(supabaseAdmin
       .from('Mail')
       .select('*, sender:sender_user_id(name, username)', { count: 'exact' })
       .eq('drawer', drawer)
-      .is('deleted_at', null)
-      .order('created_at', { ascending: false })
-      // Mail delivered together shares created_at; the id keeps the order the same on every page.
+      .is('deleted_at', null))
+      .order('delivered_at', { ascending: false })
+      // Mail delivered together shares delivered_at; the id keeps the order the same on every page.
       .order('id', { ascending: false })
       .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
 
@@ -396,7 +409,7 @@ router.get('/drawer/:drawer', verifyToken, async (req, res) => {
       const ua = urgencyOrder[a.urgency] ?? 3;
       const ub = urgencyOrder[b.urgency] ?? 3;
       if (ua !== ub) return ua - ub;
-      return new Date(b.created_at) - new Date(a.created_at);
+      return new Date(b.delivered_at) - new Date(a.delivered_at);
     });
 
     return res.json({ mail: enrichedMail, total: count || 0, drawer });
@@ -456,7 +469,7 @@ router.get('/item/:id', verifyToken, async (req, res) => {
         .eq('id', id);
       await logMailEvent('mail_opened', id, userId, {
         drawer: mail.drawer,
-        time_since_delivered_ms: Date.now() - new Date(mail.created_at).getTime(),
+        time_since_delivered_ms: Date.now() - new Date(mail.delivered_at || mail.created_at).getTime(),
       });
     }
 
@@ -844,7 +857,8 @@ router.post('/package/:mailId/share-eta', verifyToken, async (req, res) => {
       // sender_user_id whenever the notice is read.
       const sharer = (await loadChatPeople([userId])).get(String(userId));
       const sharerName = (sharer?.displayName || 'A household member').trim();
-      const mailRows = otherResidents.map((resident) => ({
+      // A package arriving soon can't wait for tomorrow's round: the notice is time-sensitive, a special delivery.
+      const mailRows = await mailDelivery.withDelivery(otherResidents.map((resident) => ({
         recipient_user_id: resident.user_id,
         recipient_home_id: homeId,
         drawer: 'home',
@@ -855,12 +869,15 @@ router.post('/package/:mailId/share-eta', verifyToken, async (req, res) => {
         category: 'notice',
         subject: `Package from ${mail.sender_display} arriving soon`,
         content: `${sharerName} shared an ETA update for a package from ${mail.sender_display}.`,
-        urgency: 'none',
+        urgency: 'time_sensitive',
         privacy: 'shared_household',
         lifecycle: 'delivered',
         sender_user_id: userId,
-      }));
-      await supabaseAdmin.from('Mail').insert(mailRows);
+      })));
+      const { data: notices, error: noticeError } = await supabaseAdmin.from('Mail').insert(mailRows).select('id, recipient_user_id');
+      if (noticeError) throw new Error(noticeError.message);
+      await mailDelivery.announceSpecialDeliveries((notices || []).map((notice) => ({
+        ...notice, senderName: sharerName, mailType: 'notice' })));
     }
 
     await logMailEvent('package_eta_shared', mailId, userId, { household_members_notified: otherResidents.length });
@@ -1120,18 +1137,26 @@ router.get('/summary', verifyToken, async (req, res) => {
     const summary = {};
 
     for (const drawer of drawers) {
-      let query = supabaseAdmin
+      let query = onlyDelivered(supabaseAdmin
         .from('Mail')
         .select('category, urgency, mail_object_type', { count: 'exact' })
         .eq('drawer', drawer)
         .in('lifecycle', ['delivered', 'opened'])
         .eq('archived', false)
-        .is('deleted_at', null);
+        .is('deleted_at', null));
 
+      // Only what this person can read: their own, the Home letters the Home mail rule shows them, and for Business
+      // either (a Home letter filed there keeps its recipient). Nobody's Home drawer counts anything without a Home.
       if (drawer === 'personal') {
         query = query.eq('recipient_user_id', userId);
-      } else if (drawer === 'home' && homeIds.length > 0) {
-        query = query.in('recipient_home_id', homeIds);
+      } else if (drawer === 'home') {
+        if (homeIds.length === 0) {
+          summary[drawer] = { total: 0, bills: 0, packages: 0, urgent: 0 };
+          continue;
+        }
+        query = query.or(homesMailFilter(homeIds, userId));
+      } else {
+        query = query.or(visibleMailFilter(userId, homeIds));
       }
 
       const { data, count } = await query;
