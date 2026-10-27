@@ -137,6 +137,20 @@ async function withDelivery(rows, options = {}) {
   return Promise.all((rows || []).map(async (row) => ({ ...row, ...(await deliveryFor(row, { ...options, now })) })));
 }
 
+/**
+ * How many pieces a query finds, counted as the box shows them (SRV-5): a bundle is one piece, counted once when any of
+ * its pieces is among them, and its pieces don't count on their own. `build(select, options)` answers the query, with
+ * bundle wrappers already left out.
+ */
+async function countPieces(build) {
+  const [loose, bundled] = await Promise.all([
+    build('id', { count: 'exact', head: true }).is('bundle_id', null),
+    build('bundle_id').not('bundle_id', 'is', null).limit(5000),
+  ]);
+  if (loose.error || bundled.error) throw new Error((loose.error || bundled.error).message);
+  return (loose.count || 0) + new Set((bundled.data || []).map((row) => row.bundle_id)).size;
+}
+
 // Pieces a person can read, for the mailbox-wide numbers: their own and their readable Homes' (not Earn, which stays
 // hidden with mail_extras), delivered by `now`, neither deleted nor shredded.
 function readableDelivered(select, options, userId, homeIds, now) {
@@ -167,11 +181,13 @@ async function deliverySummary({ userId, homeIds, now = new Date() }) {
   if (!latest?.length) return summary;
   const lastAt = new Date(latest[0].delivered_at);
   const windowStart = new Date(lastAt.getTime() - 24 * 60 * 60 * 1000).toISOString();
-  const inWindow = () => readableDelivered('id', { count: 'exact', head: true }, userId, homeIds, lastAt)
+  const inWindow = (select, options) => readableDelivered(select, options, userId, homeIds, lastAt)
     .gt('delivered_at', windowStart);
-  const [all, unopened] = await Promise.all([inWindow(), inWindow().eq('viewed', false).is('opened_at', null)]);
-  if (all.error || unopened.error) throw new Error((all.error || unopened.error).message);
-  return { ...summary, last_at: lastAt.toISOString(), last_count: all.count || 0, last_unopened: unopened.count || 0 };
+  const [lastCount, lastUnopened] = await Promise.all([
+    countPieces(inWindow),
+    countPieces((select, options) => inWindow(select, options).eq('viewed', false).is('opened_at', null)),
+  ]);
+  return { ...summary, last_at: lastAt.toISOString(), last_count: lastCount, last_unopened: lastUnopened };
 }
 
 /**
@@ -208,5 +224,5 @@ async function announceSpecialDeliveries(pieces, { excludeUserId = null } = {}) 
 
 module.exports = {
   MORNING_HOUR, FALLBACK_TIME_ZONE, nextRound, localDate, isSpecialDelivery, homeTimeZone, personTimeZone,
-  mailboxTimeZone, deliveryFor, withDelivery, deliverySummary, announceSpecialDeliveries, afterStored,
+  mailboxTimeZone, deliveryFor, withDelivery, deliverySummary, announceSpecialDeliveries, afterStored, countPieces,
 };

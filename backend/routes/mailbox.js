@@ -1829,7 +1829,7 @@ router.get('/:id', verifyToken, async (req, res) => {
     }
 
     const timeZone = (await mailDelivery.personTimeZone(userId)) || mailDelivery.FALLBACK_TIME_ZONE;
-    res.json({ mail: mailPiece.present(presentMailSender(await nameMailSender(mail, userId), userId), { timeZone }) });
+    res.json({ mail: await mailPiece.withBundleLabels(mailPiece.present(presentMailSender(await nameMailSender(mail, userId), userId), { timeZone })) });
 
   } catch (err) {
     logger.error('Mail fetch error', { error: err.message, mailId: req.params.id });

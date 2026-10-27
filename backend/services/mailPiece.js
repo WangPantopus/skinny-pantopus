@@ -3,6 +3,8 @@
  * its postmark, whether it waits on the Counter, and the "Pantopus read this for you" note (`summary`). Every list,
  * search row and detail route answers pieces through present(), so the three apps draw the same piece the same way.
  */
+const supabaseAdmin = require('../config/supabaseAdmin');
+const logger = require('../utils/logger');
 const { localDate, FALLBACK_TIME_ZONE } = require('./mailDelivery');
 
 const KINDS = ['letter', 'bill', 'notice', 'postcard', 'booklet', 'parcel', 'bundle'];
@@ -89,5 +91,27 @@ function present(mail, { timeZone = FALLBACK_TIME_ZONE } = {}) {
   };
 }
 
+/**
+ * Pieces with the label of the bundle they came in (`bundle_label`, read from the bundle; SRV-5). A bundle is one piece
+ * in Incoming; the Counter, Vault, Archived, search and the bundle's own detail list its pieces on their own, and the
+ * label says which bundle each one came in. Answers new objects; never throws (a failed read leaves the label as stored).
+ */
+async function withBundleLabels(pieces) {
+  const list = Array.isArray(pieces) ? pieces : [pieces];
+  const ids = [...new Set(list.filter((p) => p?.bundle_id && !p.bundle_label).map((p) => p.bundle_id))];
+  if (!ids.length) return pieces;
+  let labels = new Map();
+  try {
+    const { data, error } = await supabaseAdmin.from('Mail').select('id, bundle_label, subject').in('id', ids);
+    if (error) throw new Error(error.message);
+    labels = new Map((data || []).map((b) => [b.id, b.bundle_label || b.subject || null]));
+  } catch (error) {
+    logger.warn('Bundle labels not read', { error: error.message });
+  }
+  const out = list.map((p) => (p?.bundle_id && !p.bundle_label && labels.get(p.bundle_id)
+    ? { ...p, bundle_label: labels.get(p.bundle_id) } : p));
+  return Array.isArray(pieces) ? out : out[0];
+}
+
 module.exports = { KINDS, SERVER_EXTRACTED_KEYS, withoutServerKeys, kindOf, fromPantopus, postmarkTown, onCounter, keyFacts,
-  summaryOf, present };
+  summaryOf, present, withBundleLabels };
