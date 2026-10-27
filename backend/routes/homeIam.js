@@ -260,6 +260,7 @@ router.post('/:id/members/:userId/permissions', verifyToken, async (req, res) =>
 // ============================================================
 
 router.get('/:id/members/:userId/permissions', verifyToken, async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
   try {
     const { id: homeId, userId: targetUserId } = req.params;
     const actorId = req.user.id;
@@ -268,11 +269,7 @@ router.get('/:id/members/:userId/permissions', verifyToken, async (req, res) => 
     if (targetUserId !== actorId) {
       const canView = await hasPermission(homeId, actorId, 'members.view');
       if (!canView) {
-        // Check basic access
-        const access = await checkHomePermission(homeId, actorId);
-        if (!access.hasAccess) {
-          return res.status(403).json({ error: 'No access' });
-        }
+        return res.status(403).json({ error: 'No permission to view household members' });
       }
     }
 
