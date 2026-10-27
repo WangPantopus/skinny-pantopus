@@ -7,6 +7,17 @@ const { localDate, FALLBACK_TIME_ZONE } = require('./mailDelivery');
 
 const KINDS = ['letter', 'bill', 'notice', 'postcard', 'booklet', 'parcel', 'bundle'];
 
+// mail_extracted keys only the server writes: the kept note, Pantopus's mark, the postmark town and the private
+// enclosures. A sender's own extractedData never sets them (the send route strips them).
+const SERVER_EXTRACTED_KEYS = ['summary', 'summary_source', 'summary_at', 'ai_summary', 'from_pantopus', 'postmark_town',
+  'enclosures', 'pantopus_letter', 'invoice_bill'];
+
+/** A sender's extractedData without the keys only the server writes. */
+function withoutServerKeys(extracted) {
+  if (!extracted || typeof extracted !== 'object' || Array.isArray(extracted)) return extracted;
+  return Object.fromEntries(Object.entries(extracted).filter(([key]) => !SERVER_EXTRACTED_KEYS.includes(key)));
+}
+
 /**
  * The object a piece is drawn as, from the stored type fields: its physical object first (bundle, parcel, booklet,
  * postcard), then what it says (a bill, from an invoice or a statement; a notice), else a letter. Promotions and ads
@@ -78,4 +89,5 @@ function present(mail, { timeZone = FALLBACK_TIME_ZONE } = {}) {
   };
 }
 
-module.exports = { KINDS, kindOf, fromPantopus, postmarkTown, onCounter, keyFacts, summaryOf, present };
+module.exports = { KINDS, SERVER_EXTRACTED_KEYS, withoutServerKeys, kindOf, fromPantopus, postmarkTown, onCounter, keyFacts,
+  summaryOf, present };

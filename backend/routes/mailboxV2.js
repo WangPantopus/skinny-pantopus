@@ -16,6 +16,7 @@ const mailDelivery = require('../services/mailDelivery');
 const mailPiece = require('../services/mailPiece');
 const mailSummaries = require('../services/mailSummaries');
 const mailVault = require('../services/mailVault');
+const mailEnclosures = require('../services/mailEnclosures');
 const { MAIL_HOME_NEEDS_PROOF, MAIL_NOT_FOUND } = require('../utils/homeMailAccess');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
@@ -625,6 +626,9 @@ router.get('/item/:id', verifyToken, async (req, res) => {
         package: packageInfo,
         timeline: packageTimeline,
         object_payload: objectPayload,
+        // What the piece encloses, the letter's own attachments included; each opens through
+        // GET /api/mailbox/:id/enclosures/:enclosureId (SRV-4).
+        enclosures: mailEnclosures.listFor(named, objectPayload?.envelope?.attachments || objectPayload?.attachments),
       }, userId), { timeZone }),
     });
   } catch (err) {
