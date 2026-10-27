@@ -4828,7 +4828,7 @@ async function homePollAccess(homeId, userId, permission = 'home.view') {
   // Polls use the same Home record visibility policy as documents.
   const visibility = await homeDocumentVisibilities(homeId, userId, opening.access);
   if (visibility.readFailed) throw Object.assign(new Error('Could not check poll access'), { statusCode: 503 });
-  return { opening, allowed: visibility.allowed };
+  return { opening, visibilities: visibility.allowed };
 }
 
 const createPollSchema = Joi.object({
@@ -4871,7 +4871,7 @@ router.get('/:id/polls', verifyToken, async (req, res) => {
       .from('HomePoll')
       .select('*')
       .eq('home_id', homeId)
-      .in('visibility', access.allowed)
+      .in('visibility', access.visibilities)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -4957,7 +4957,7 @@ router.post('/:id/polls', verifyToken, validate(createPollSchema), async (req, r
     if (!access) return res.status(403).json({ error: 'No permission to create polls' });
 
     const { title, description, poll_type, options, closes_at, visibility } = req.body;
-    if (!access.allowed.includes(visibility || 'members')) return res.status(403).json({ error: 'No access to that poll visibility' });
+    if (!access.visibilities.includes(visibility || 'members')) return res.status(403).json({ error: 'No access to that poll visibility' });
 
     const { data, error } = await supabaseAdmin
       .from('HomePoll')
@@ -5007,7 +5007,7 @@ router.post('/:id/polls/:pollId/vote', verifyToken, validate(voteSchema), async 
       .select('id, status, closes_at')
       .eq('id', pollId)
       .eq('home_id', homeId)
-      .in('visibility', access.allowed)
+      .in('visibility', access.visibilities)
       .single();
 
     if (pollErr || !poll) return res.status(404).json({ error: 'Poll not found' });
@@ -5062,7 +5062,7 @@ router.put('/:id/polls/:pollId', verifyToken, validate(updatePollSchema), async 
 
     const access = await homePollAccess(homeId, userId, 'home.edit');
     if (!access) return res.status(403).json({ error: 'No permission to edit polls' });
-    if (req.body.visibility !== undefined && !access.allowed.includes(req.body.visibility)) {
+    if (req.body.visibility !== undefined && !access.visibilities.includes(req.body.visibility)) {
       return res.status(403).json({ error: 'No access to that poll visibility' });
     }
 
@@ -5078,7 +5078,7 @@ router.put('/:id/polls/:pollId', verifyToken, validate(updatePollSchema), async 
       .update(updates)
       .eq('id', pollId)
       .eq('home_id', homeId)
-      .in('visibility', access.allowed)
+      .in('visibility', access.visibilities)
       .select()
       .maybeSingle();
 
