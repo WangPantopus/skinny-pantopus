@@ -24,7 +24,10 @@ function identityLine(approval: ClaimReviewApproval): { done: boolean; waiting: 
     case 'processing': return { done: false, waiting: true, title: 'Identity check in progress', detail: 'Stripe is checking the claimant’s ID.' };
     case 'requires_input': return { done: false, waiting: false, title: 'Identity check didn’t pass', detail: 'The claimant can try again.' };
     case 'started': return { done: false, waiting: false, title: 'Identity not confirmed', detail: 'The claimant started the ID check but hasn’t finished.' };
-    default: return { done: false, waiting: false, title: 'Identity not confirmed', detail: 'The claimant hasn’t done the ID check yet. They’re asked to on their claim.' };
+    default: return { done: false, waiting: false, title: 'Identity not confirmed',
+      detail: approval.identity_check_available === false
+        ? 'In-app ID checks aren’t set up yet, so confirm who they are yourself before approving.'
+        : 'The claimant hasn’t done the ID check yet. They’re asked to on their claim.' };
   }
 }
 

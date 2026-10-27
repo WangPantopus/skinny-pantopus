@@ -87,6 +87,8 @@ export interface ClaimReviewApproval {
   /** The name on the confirmed ID, to compare with the ownership document. */
   identity_name: string | null;
   identity_checked_at: string | null;
+  /** False while identity checks aren't set up: the claimant can't do one, so a reviewer confirms identity. */
+  identity_check_available?: boolean;
   proof: ClaimProofState;
   can_approve: boolean;
 }

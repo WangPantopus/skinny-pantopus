@@ -174,6 +174,8 @@ async function reviewerApproval(claimId) {
     identity: progress.identity,
     identity_name: identityName,
     identity_checked_at: progress.identity_checked_at || null,
+    // Without it the claimant can't do the check, so a reviewer confirms identity themselves.
+    identity_check_available: config().available,
     proof: progress.proof,
     can_approve: progress.identity_confirmed === true && progress.proof === 'verified',
   };
