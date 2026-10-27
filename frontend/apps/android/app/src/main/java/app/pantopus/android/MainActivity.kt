@@ -35,6 +35,7 @@ import app.pantopus.android.data.chats.ChatOutbox
 import app.pantopus.android.data.network.NetworkMonitor
 import app.pantopus.android.data.plans.PlansFeature
 import app.pantopus.android.data.realtime.SocketManager
+import app.pantopus.android.data.store.SavedCopyReadAhead
 import app.pantopus.android.data.store.StoreSync
 import app.pantopus.android.push.ASSISTANT_RECIPIENT
 import app.pantopus.android.push.PushTokenSyncer
@@ -93,6 +94,9 @@ class MainActivity : FragmentActivity() {
     /** Instant Screens §8: the change signal and the catch-up marks for the screens' store. */
     @Inject lateinit var storeSync: StoreSync
 
+    /** Instant Screens §6: the first screens' saved copies, read off the main thread while the session restores. */
+    @Inject lateinit var savedCopyReadAhead: SavedCopyReadAhead
+
     /** Nearby Plans' server flags: read at sign-in and on every foreground. */
     @Inject lateinit var plansFeature: PlansFeature
 
@@ -125,6 +129,8 @@ class MainActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // First, so the copies are in memory before the first screens ask for them.
+        savedCopyReadAhead.start()
         enableEdgeToEdge()
         secureWindowController.bind(this)
         storeSync.start()

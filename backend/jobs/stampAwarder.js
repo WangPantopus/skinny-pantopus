@@ -42,7 +42,7 @@ async function awardForUser(userId) {
 
   const totalMail = await countOf(
     supabaseAdmin.from('Mail').select('*', { count: 'exact', head: true })
-      .eq('recipient_user_id', userId).is('deleted_at', null),
+      .eq('recipient_user_id', userId).is('deleted_at', null).lte('delivered_at', new Date().toISOString()),
     'mail',
   );
   // Every other milestone counts mail the person received, so none can be met without any.

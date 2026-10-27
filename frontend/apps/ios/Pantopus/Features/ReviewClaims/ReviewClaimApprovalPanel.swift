@@ -12,32 +12,57 @@
 import SwiftUI
 
 enum ReviewClaimApproval {
-    /// Accept's blocked reason for a loaded claim, or nil (also when the server didn't send the panel).
+    /// Accept's blocked reason for a loaded claim approved as `role`, or nil (also when the server didn't send
+    /// the panel).
     @MainActor
-    static func blockedReason(_ detail: AdminClaimDetailResponse, identityAttested: Bool) -> String? {
+    static func blockedReason(_ detail: AdminClaimDetailResponse, identityAttested: Bool, role: AdminClaimApprovalRole) -> String? {
         detail.approval.flatMap {
-            blockedReason($0, identityAttested: identityAttested, identityFailed: detail.claim.identityStatus == "failed")
+            blockedReason(
+                $0,
+                identityAttested: identityAttested,
+                identityFailed: detail.claim.identityStatus == "failed",
+                proof: proof(detail, role: role)
+            )
         }
     }
 
-    /// Why Accept is off, or nil when it can go ahead. The app approves as claimed, so the
-    /// claimed type's document is needed; identity can be the admin's own confirmation.
-    static func blockedReason(_ approval: ClaimReviewApprovalDTO, identityAttested: Bool, identityFailed: Bool) -> String? {
+    /// Why Accept is off, or nil when it can go ahead. `proof` is the document status for the role being
+    /// granted (`approval.proof` when approving as claimed); identity can be the admin's own confirmation.
+    static func blockedReason(
+        _ approval: ClaimReviewApprovalDTO,
+        identityAttested: Bool,
+        identityFailed: Bool,
+        proof status: String? = nil
+    ) -> String? {
         if identityFailed { return "Their identity check failed, so this claim can\u{2019}t be approved." }
+        let proofStatus = status ?? approval.proof
         let identity = approval.identityConfirmed || identityAttested
-        let proof = approval.proof == "verified"
+        let proof = proofStatus == "verified"
         switch (identity, proof) {
         case (true, true): return nil
         case (false, true): return "Confirm the claimant\u{2019}s identity first."
         case (true, false):
-            return approval.proof == "pending"
+            return proofStatus == "pending"
                 ? "Check the claimant\u{2019}s document first (Review private documents)."
                 : "No document yet. Use Request info to ask for one."
         case (false, false):
-            return approval.proof == "pending"
+            return proofStatus == "pending"
                 ? "Confirm the claimant\u{2019}s identity and check their document (Review private documents)."
                 : "Needs a confirmed identity and a checked document. Use Request info to ask for a document."
         }
+    }
+
+    private static let ownershipDocuments: Set = ["deed", "closing_disclosure", "tax_bill", "escrow_attestation", "title_match"]
+
+    /// `verified` · `pending` · `missing` for approving as `role`. As claimed, the server's own test
+    /// (`approval.proof`); as another role, the approval function's rule: owner and admin need an ownership
+    /// document, any other role also accepts a utility bill or lease.
+    static func proof(_ detail: AdminClaimDetailResponse, role: AdminClaimApprovalRole) -> String {
+        if role == .claimed(by: detail.claim.claimType) { return detail.approval?.proof ?? "missing" }
+        let accepted = role == .owner || role == .admin ? ownershipDocuments : ownershipDocuments.union(["utility_bill", "lease"])
+        let documents = detail.evidence.filter { accepted.contains($0.evidenceType) }
+        if documents.contains(where: { $0.eligibleForReview == true }) { return "verified" }
+        return documents.contains { $0.status == "pending" && $0.availabilityCode == nil } ? "pending" : "missing"
     }
 
     static func identityLine(_ approval: ClaimReviewApprovalDTO) -> (title: String, detail: String) {
@@ -60,8 +85,8 @@ enum ReviewClaimApproval {
         }
     }
 
-    static func proofLine(_ approval: ClaimReviewApprovalDTO) -> (title: String, detail: String) {
-        switch approval.proof {
+    static func proofLine(_ proof: String) -> (title: String, detail: String) {
+        switch proof {
         case "verified": ("Document checked", "A reviewer verified a document.")
         case "pending": ("Document waiting for your check", "Use Review private documents to verify it.")
         default: ("No document yet", "The claimant is asked to upload one.")
@@ -71,6 +96,8 @@ enum ReviewClaimApproval {
 
 struct ReviewClaimApprovalPanel: View {
     let approval: ClaimReviewApprovalDTO
+    /// The document status for the role being granted (`ReviewClaimApproval.proof`).
+    let proof: String
     let identityFailed: Bool
     @Binding var identityAttested: Bool
     let disabled: Bool
@@ -103,13 +130,13 @@ struct ReviewClaimApprovalPanel: View {
                 .accessibilityIdentifier("reviewClaimDetail_identityAttested")
             }
             Rectangle().fill(Theme.Color.appBorder).frame(height: 1)
-            let proof = ReviewClaimApproval.proofLine(approval)
+            let proofLine = ReviewClaimApproval.proofLine(proof)
             row(
                 icon: .fileText,
-                title: proof.title,
-                detail: proof.detail,
-                done: approval.proof == "verified",
-                waiting: approval.proof == "pending"
+                title: proofLine.title,
+                detail: proofLine.detail,
+                done: proof == "verified",
+                waiting: proof == "pending"
             )
             .accessibilityIdentifier("reviewClaimDetail_approvalProof")
         }
@@ -146,16 +173,18 @@ struct ReviewClaimApprovalPanel: View {
     }
 }
 
-/// The "Before you approve" panel, bound to the review's identity confirmation toggle.
+/// The "Before you approve" panel, bound to the review's identity confirmation toggle and to the role
+/// being granted (which decides the document it needs).
 struct ReviewClaimApprovalSection: View {
     let approval: ClaimReviewApprovalDTO
-    let claim: AdminClaimRecordDTO
+    let detail: AdminClaimDetailResponse
     let viewModel: ReviewClaimDetailViewModel
 
     var body: some View {
         ReviewClaimApprovalPanel(
             approval: approval,
-            identityFailed: claim.identityStatus == "failed",
+            proof: ReviewClaimApproval.proof(detail, role: viewModel.approveAs),
+            identityFailed: detail.claim.identityStatus == "failed",
             identityAttested: Binding(get: { viewModel.identityAttested }, set: { viewModel.identityAttested = $0 }),
             disabled: viewModel.reviewingAction != nil
         )

@@ -8,6 +8,9 @@
 // re-check, and make every visit re-check one that may not. Same rules as iOS
 // (MyHome.showsCopyBeforeRecheck, PlaceStoreReads.showsBeforeRecheck). The Home
 // dashboard applies its own (components/home/homeDashboardCopy.ts).
+// Founder, 2026-10-27: a Home you have asked to claim or join (still in
+// verification) is your own request, so your homes list shows it like your
+// homes (iOS MyHome.showsInListBeforeRecheck). A Home's own screens don't change.
 
 import { useEffect, useRef, useState } from 'react';
 import type { QueryClient } from '@tanstack/react-query';
@@ -30,9 +33,15 @@ export function showsHomeCopy(home: HomeCopyContext): boolean {
   return home.access_kind === 'shared' && home.has_home_access === true && HOUSEHOLD.has(home.role_base ?? '');
 }
 
-/** Your homes list shows before its re-check only when every home on it may. */
+/** A Home you have asked to claim or join, still in verification, with no end date. */
+function isOwnRequest(home: HomeCopyContext): boolean {
+  return home.access_kind === 'verification' && home.has_home_access === false
+    && home.occupancy?.end_at == null && home.occupancy?.access_end_at == null && typeof home.can_delete_home === 'boolean';
+}
+
+/** Your homes list shows before its re-check only when every home on it may, or is your own request. */
 export function showsMyHomesCopy(reply: { homes?: MyHome[] } | null | undefined): boolean {
-  return !!reply && (reply.homes ?? []).every(showsHomeCopy);
+  return !!reply && (reply.homes ?? []).every((home) => showsHomeCopy(home) || isOwnRequest(home));
 }
 
 /** A Place read shows before its re-check only to the home's owner, renter or household member. */

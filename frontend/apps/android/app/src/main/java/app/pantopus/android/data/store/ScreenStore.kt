@@ -46,6 +46,9 @@ private const val IDLE_MS = 30 * 60 * 1000L
  */
 private const val CHAT_COPY_SETTLE_MS = 500L
 
+/** A copy read ahead at launch is for the first screens: one no screen opened within a minute is read from its file. */
+private const val READ_AHEAD_MS = 60 * 1000L
+
 /**
  * The app's one cache of server replies for screens (Instant Screens contract §6): a [StateFlow] per [StoreKey],
  * scoped to this server and the signed-in account. Screens read from here and never keep their own copy.
@@ -61,6 +64,8 @@ private const val CHAT_COPY_SETTLE_MS = 500L
  *   writes into the new state (generation number plus the account and session marker captured at the start).
  * - **Memory:** at most [MAX_ENTRIES] entries, unused ones go after 30 minutes, and a memory warning trims the store
  *   to what screens are showing.
+ * - **Launch:** the first screens' saved copies are read ahead off the main thread ([readAhead]), so their first
+ *   frames don't read and decode files.
  *
  * Sensitive replies (contract §5) never enter the store: their screens keep calling the repository directly.
  */
@@ -166,6 +171,21 @@ class ScreenStore
         // Guarded by slots.
         private val pendingDiskMarks = mutableListOf<DiskMark>()
 
+        /** A saved copy [readAhead] read before its entry opened, and the marks queued for its account since. */
+        private class ReadAhead(
+            val account: String,
+            val key: StoreKey<*>,
+            val copy: SavedCopies.Copy<Any>,
+            val until: Long,
+        ) {
+            val marks = mutableListOf<DiskMark>()
+        }
+
+        // Guarded by slots: the copies read ahead ("account|key id"), and a count of the removals, retirements, marks
+        // and wipes, so a copy read while one happened is not kept.
+        private val readAheads = HashMap<String, ReadAhead>()
+        private var savedChanges = 0L
+
         init {
             context.registerComponentCallbacks(
                 object : ComponentCallbacks2 {
@@ -190,6 +210,34 @@ class ScreenStore
 
         /** The entry as it is now, without a request. */
         fun <T : Any> peek(key: StoreKey<T>): Stored<T> = state(key).value
+
+        /**
+         * Launch (contract §6 "Read"): reads [key]'s saved copy for [account] on the caller's thread, never the main one,
+         * before a screen asks for it, and returns its reply. The entry that opens for it within a minute starts from this
+         * copy instead of reading and decoding the file on the screen's thread; marks queued meanwhile still apply, and a
+         * removal, a retirement or a wipe drops it. Null without a usable copy, or when the entry is already open.
+         */
+        fun <T : Any> readAhead(
+            key: StoreKey<T>,
+            account: String,
+        ): T? {
+            val type = key.type?.takeIf { key.savable } ?: return null
+            val id = "$account|${key.id}"
+            val changes =
+                synchronized(slots) {
+                    savedChanges.takeUnless { id in slots || id in readAheads || pendingDiskMarks.isNotEmpty() }
+                } ?: return null
+            val copy = saved.load<Any>(account, key.id, type, kind = key.kind) ?: return null
+            val kept =
+                synchronized(slots) {
+                    // Not when the saved copies changed while this one was read, or its screen opened it meanwhile.
+                    (changes == savedChanges && id !in slots).also { current ->
+                        if (current) readAheads[id] = ReadAhead(account, key, copy, SystemClock.elapsedRealtime() + READ_AHEAD_MS)
+                    }
+                }
+            @Suppress("UNCHECKED_CAST")
+            return (copy.data as T).takeIf { kept }
+        }
 
         class ChatMediaAccess internal constructor(
             val read: () -> SavedCopies.MediaCopy?,
@@ -598,6 +646,9 @@ class ScreenStore
                     retireChatLocked(account)
                     return
                 }
+                // A copy read ahead, or one still being read, can't bring the entry back.
+                readAheads.remove("$account|${key.id}")
+                savedChanges++
                 slots.remove("$account|${key.id}")?.let { slot ->
                     slot.retire()
                     slot.state.value = Stored()
@@ -654,6 +705,8 @@ class ScreenStore
             val retiring = slots.entries.filter { (id, slot) -> id.startsWith("$account|") && slot.key.path in paths }
             // Fence first: a queued write or a read in flight from before the correction can't land in the new epoch.
             retiring.forEach { it.value.retire() }
+            readAheads.values.removeAll { it.account == account && it.key.path in paths }
+            savedChanges++
             try {
                 synchronized(diskLock) { saved.retireChatThreads(account, paths, retiring.map { it.value.key.id }) }
             } catch (
@@ -680,6 +733,10 @@ class ScreenStore
                     iterator.remove()
                 }
             }
+            readAheads.values.removeAll {
+                it.account == account && (it.key.kind == StoreKind.CONVERSATION || it.key.kind == StoreKind.MESSAGES_LIST)
+            }
+            savedChanges++
             synchronized(diskLock) { saved.retireChat(account) }
         }
 
@@ -692,6 +749,8 @@ class ScreenStore
             synchronized(slots) {
                 generation++
                 pendingDiskMarks.clear()
+                readAheads.clear()
+                savedChanges++
                 slots.values.forEach { slot ->
                     slot.retire()
                     slot.state.value = Stored()
@@ -705,6 +764,7 @@ class ScreenStore
         /** Contract §6: when the phone warns about memory, keep only what screens are showing. */
         fun trimToVisible() {
             synchronized(slots) {
+                readAheads.clear()
                 slots.values.removeAll { slot ->
                     slot.removable.also { if (it) slot.retire() }
                 }
@@ -738,6 +798,9 @@ class ScreenStore
             val account = accountId() ?: return
             val pending = DiskMark(account, mark.copy(upTo = System.currentTimeMillis()))
             pendingDiskMarks += pending
+            // A copy read ahead learns the mark as its file will; one still being read is not kept.
+            readAheads.values.forEach { if (it.account == account) it.marks += pending }
+            savedChanges++
             val gen = generation
             scope.launch {
                 try {
@@ -760,19 +823,23 @@ class ScreenStore
             synchronized(diskLock) { saved.delete(account, keyId) }
         }
 
-        /** A new entry starts from its saved copy on the phone, when there is a usable one (contract §6 "Read"). */
+        /**
+         * A new entry starts from its saved copy on the phone, when there is a usable one (contract §6 "Read"): the copy
+         * read ahead at launch, with the marks queued since, else the file.
+         */
         private fun loadSavedLocked(
             slot: Slot,
             account: String,
         ) {
             val type = slot.key.type ?: return
             if (!slot.key.savable) return
-            val copy = saved.load<Any>(account, slot.key.id, type, kind = slot.key.kind) ?: return
+            val ahead = readAheads.remove("$account|${slot.key.id}")?.takeIf { SystemClock.elapsedRealtime() < it.until }
+            val copy = ahead?.copy ?: saved.load<Any>(account, slot.key.id, type, kind = slot.key.kind) ?: return
             if (!slot.key.permitsSavedCopy(copy.data)) {
                 deleteSaved(slot.key.id, account)
                 return
             }
-            val marks = pendingDiskMarks.filter { it.account == account && it.covers(slot.key, copy) }
+            val marks = (pendingDiskMarks + ahead?.marks.orEmpty()).filter { it.account == account && it.covers(slot.key, copy) }
             val edited = marks.any { it.mark.edited }
             val retired = marks.any { it.mark.edited && !(it.mark.retainChatList && slot.key.kind == StoreKind.MESSAGES_LIST) }
             // A queued own edit retires a current-format copy (its disk work is deleting the file): it is not shown.

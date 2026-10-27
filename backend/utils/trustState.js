@@ -16,7 +16,7 @@
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('./logger');
 const { getActiveOccupancy, mapLegacyRole } = require('./homePermissions');
-const { getAccessibleHomeIds } = require('./homeMailAccess');
+const { householdHomeIds } = require('./homeMailAccess');
 const { isPersonaEnabled } = require('./featureFlags');
 
 // Radius in meters for "nearby" determination
@@ -107,15 +107,15 @@ async function computeTrustState(userId, latitude, longitude) {
     }
 
     // Fallback: query homes manually with haversine approximation. Only the household
-    // counts (getAccessibleHomeIds: trusted, unexpired occupancies, never a pending claim
+    // counts (householdHomeIds: trusted, unexpired occupancies, never a pending claim
     // that anyone can file on any Home; fails closed). Home stores a geography `location`.
-    const householdHomeIds = new Set(await getAccessibleHomeIds(userId));
+    const householdIds = new Set(await householdHomeIds(userId));
     const { data: occupancies } = await supabaseAdmin
       .from('HomeOccupancy')
       .select('home_id, role, role_base')
       .eq('user_id', userId)
       .eq('is_active', true);
-    const userHomes = (occupancies || []).filter(h => householdHomeIds.has(h.home_id));
+    const userHomes = (occupancies || []).filter(h => householdIds.has(h.home_id));
 
     if (userHomes.length > 0) {
       const homeIds = userHomes.map(h => h.home_id);

@@ -113,7 +113,7 @@ describe('NotificationBell — split by firewall mode (P2.3)', () => {
           `${counts.unreadMessages}/${counts.totalMessages}/${counts.notifications}/${counts.pendingOffers}`
         }</span>;
       }
-      render(<actualBadges.BadgeProvider><BadgeProbe /></actualBadges.BadgeProvider>);
+      renderWithClient(<actualBadges.BadgeProvider><BadgeProbe /></actualBadges.BadgeProvider>);
       await act(async () => { await Promise.resolve(); });
       expect(screen.getByTestId('retained-shell-counts')).toHaveTextContent('7/11/12/0');
       const initialPolls = apiMock.chat.getChatStats.mock.calls.length;
@@ -136,7 +136,7 @@ describe('NotificationBell — split by firewall mode (P2.3)', () => {
       mockSocketConnected = true;
       apiMock.chat.getChatStats.mockClear();
       apiMock.notifications.getUnreadCount.mockClear();
-      render(<actualBadges.BadgeProvider><BadgeProbe /></actualBadges.BadgeProvider>);
+      renderWithClient(<actualBadges.BadgeProvider><BadgeProbe /></actualBadges.BadgeProvider>);
       await act(async () => { await Promise.resolve(); });
       expect(screen.getByTestId('retained-shell-counts')).toHaveTextContent('7/11/12/0');
       expect(apiMock.chat.getChatStats).toHaveBeenCalledTimes(initialPolls);
