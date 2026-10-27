@@ -9,6 +9,9 @@ const { getAccessibleHomeIds, trustedHomeIdsOrThrow, canAccessMail, readableMail
   sendMailUnavailable, mailHomesOrThrow, MAIL_HOME_NEEDS_PROOF, onlyDelivered } = require('../utils/homeMailAccess');
 // Mail comes in the morning (SRV-1): the delivery rule every writer follows.
 const mailDelivery = require('../services/mailDelivery');
+// What the apps read about a piece (SRV-2), and its kept "Pantopus read this for you" note.
+const mailPiece = require('../services/mailPiece');
+const mailSummaries = require('../services/mailSummaries');
 const { HOME_DOCUMENT_TYPES } = require('../utils/homeDocumentAccess');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
@@ -1773,7 +1776,16 @@ router.get('/:id', verifyToken, async (req, res) => {
 
     mail.links = await getMailLinksSafely(mail.id);
 
-    res.json({ mail: presentMailSender(await nameMailSender(mail, userId), userId) });
+    // "Pantopus read this for you": the kept note, or one made now on this first open (never for a removed piece;
+    // a failure leaves no note).
+    if (!mail.removed && !mailPiece.summaryOf(mail)) {
+      const note = await mailSummaries.ensureSummary(mail, userId);
+      if (note) mail.mail_extracted = { ...(mail.mail_extracted || {}), summary: note.text };
+      if (note && !mailPiece.keyFacts(mail.key_facts).length) mail.key_facts = note.key_facts;
+    }
+
+    const timeZone = (await mailDelivery.personTimeZone(userId)) || mailDelivery.FALLBACK_TIME_ZONE;
+    res.json({ mail: mailPiece.present(presentMailSender(await nameMailSender(mail, userId), userId), { timeZone }) });
 
   } catch (err) {
     logger.error('Mail fetch error', { error: err.message, mailId: req.params.id });
