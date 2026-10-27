@@ -169,13 +169,23 @@ data class AdminClaimRecordDto(
             challengeState == "challenged" || routingClassification == "challenge_claim"
 }
 
-/** Full claim detail envelope returned by `GET /api/admin/claims/:claimId`. */
+/**
+ * What a claim still needs before approval (`home_claim_approval_progress`). Only the server's identity test is
+ * read here: true once the claim's identity is verified or an ID check on it passed.
+ */
+@JsonClass(generateAdapter = true)
+data class AdminClaimApprovalProgressDto(
+    @Json(name = "identity_confirmed") val identityConfirmed: Boolean? = null,
+)
+
+/** Full claim detail envelope returned by `GET /api/admin/claims/:claimId`. `evidence` leaves out ID checks. */
 @JsonClass(generateAdapter = true)
 data class AdminClaimDetailResponse(
     val claim: AdminClaimRecordDto,
     val home: AdminClaimHomeDto?,
     val claimant: AdminClaimUserDto?,
     val evidence: List<AdminClaimEvidenceDto>,
+    val approval: AdminClaimApprovalProgressDto? = null,
 )
 
 /**

@@ -357,9 +357,12 @@ class ReviewClaimDetailViewModel
             /** Nav-arg key matching `ChildRoutes.REVIEW_CLAIM_DETAIL_ID_KEY`. */
             const val CLAIM_ID_KEY = "claimId"
 
-            /** Identity counts as confirmed once the claim says so or an ID document on it is verified. */
+            /**
+             * Identity counts as confirmed once the claim says so, the server's approval progress says so, or an
+             * ID document on it is verified.
+             */
             fun identityVerified(detail: AdminClaimDetailResponse): Boolean =
-                detail.claim.identityStatus == "verified" ||
+                detail.claim.identityStatus == "verified" || detail.approval?.identityConfirmed == true ||
                     detail.evidence.any { it.evidenceType == "idv" && it.eligibleForReview == true }
 
             /**

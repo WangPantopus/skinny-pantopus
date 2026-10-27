@@ -207,9 +207,10 @@ public final class ReviewClaimDetailViewModel {
 
     // MARK: - Approval
 
-    /// Identity counts as confirmed once the claim says so or an ID document on it is verified.
+    /// Identity counts as confirmed once the claim says so, the server's approval progress says so, or an ID
+    /// document on it is verified.
     static func identityVerified(_ detail: AdminClaimDetailResponse) -> Bool {
-        detail.claim.identityStatus == "verified"
+        detail.claim.identityStatus == "verified" || detail.approval?.identityConfirmed == true
             || detail.evidence.contains { $0.evidenceType == "idv" && $0.eligibleForReview == true }
     }
 

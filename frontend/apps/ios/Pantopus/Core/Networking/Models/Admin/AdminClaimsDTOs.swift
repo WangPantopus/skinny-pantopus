@@ -200,12 +200,23 @@ public struct AdminClaimRecordDTO: Decodable, Sendable, Hashable, Identifiable {
     }
 }
 
-/// Full claim detail envelope returned by `GET /api/admin/claims/:claimId`.
+/// What a claim still needs before approval (`home_claim_approval_progress`). Only the server's identity
+/// test is read here: true once the claim's identity is verified or an ID check on it passed.
+public struct AdminClaimApprovalProgressDTO: Decodable, Sendable, Hashable {
+    public let identityConfirmed: Bool?
+
+    private enum CodingKeys: String, CodingKey {
+        case identityConfirmed = "identity_confirmed"
+    }
+}
+
+/// Full claim detail envelope returned by `GET /api/admin/claims/:claimId`. `evidence` leaves out ID checks.
 public struct AdminClaimDetailResponse: Decodable, Sendable, Hashable {
     public let claim: AdminClaimRecordDTO
     public let home: AdminClaimHomeDTO?
     public let claimant: AdminClaimUserDTO?
     public let evidence: [AdminClaimEvidenceDTO]
+    public let approval: AdminClaimApprovalProgressDTO?
 }
 
 /// Household role a platform admin may approve a claim as (`approve_as`). Left out, the claim type decides:
