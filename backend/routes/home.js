@@ -2191,14 +2191,14 @@ router.get('/:id/occupants', verifyToken, async (req, res) => {
  * Add private data to home (owner/occupants only)
  */
 router.post('/:id/private-data', verifyToken, validate(homeDataSchema), async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
   try {
     const { id: homeId } = req.params;
     const { type, data } = req.body;
     const userId = req.user.id;
 
-    // Check access
-    const access = await checkHomePermission(homeId, userId);
-    if (!access.hasAccess) {
+    const { mode, access } = await homeListService.readAccessState(homeId, userId);
+    if (mode !== 'shared' || !access.permissions.includes('home.edit')) {
       return res.status(403).json({ error: 'You do not have access to this home' });
     }
 
@@ -2237,17 +2237,19 @@ router.post('/:id/private-data', verifyToken, validate(homeDataSchema), async (r
  * Get all private data for home (owner/occupants only)
  */
 router.get('/:id/private-data', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
     const { type } = req.query;
 
-    // Check access
-    const access = await checkHomePermission(homeId, userId);
-    if (!access.hasAccess) {
+    const { mode, access } = await homeListService.readAccessState(homeId, userId);
+    if (mode !== 'shared' || !access.permissions.includes('sensitive.view')) {
       return res.status(403).json({ error: 'You do not have access to this home' });
     }
 
+    // Both legacy tables carry the same visibility enum as Home documents.
+    const { allowed } = await homeDocumentVisibilities(homeId, userId, access);
     let query = supabaseAdmin
       .from('HomePrivateData')
       .select(`
@@ -2258,6 +2260,7 @@ router.get('/:id/private-data', verifyToken, async (req, res) => {
         )
       `)
       .eq('home_id', homeId)
+      .in('visibility', allowed)
       .order('created_at', { ascending: false });
 
     if (type) {
@@ -2286,14 +2289,14 @@ router.get('/:id/private-data', verifyToken, async (req, res) => {
  * Add public data to home (owner/occupants only)
  */
 router.post('/:id/public-data', verifyToken, validate(homeDataSchema), async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
   try {
     const { id: homeId } = req.params;
     const { type, data } = req.body;
     const userId = req.user.id;
 
-    // Check access
-    const access = await checkHomePermission(homeId, userId);
-    if (!access.hasAccess) {
+    const { mode, access } = await homeListService.readAccessState(homeId, userId);
+    if (mode !== 'shared' || !access.permissions.includes('home.edit')) {
       return res.status(403).json({ error: 'You do not have access to this home' });
     }
 
@@ -2332,17 +2335,19 @@ router.post('/:id/public-data', verifyToken, validate(homeDataSchema), async (re
  * Get all public data for home (anyone with home access)
  */
 router.get('/:id/public-data', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
     const { type } = req.query;
 
-    // Check access
-    const access = await checkHomePermission(homeId, userId);
-    if (!access.hasAccess) {
+    const { mode, access } = await homeListService.readAccessState(homeId, userId);
+    if (mode !== 'shared' || !access.permissions.includes('home.view')) {
       return res.status(403).json({ error: 'You do not have access to this home' });
     }
 
+    // Both legacy tables carry the same visibility enum as Home documents.
+    const { allowed } = await homeDocumentVisibilities(homeId, userId, access);
     let query = supabaseAdmin
       .from('HomePublicData')
       .select(`
@@ -2353,6 +2358,7 @@ router.get('/:id/public-data', verifyToken, async (req, res) => {
         )
       `)
       .eq('home_id', homeId)
+      .in('visibility', allowed)
       .order('created_at', { ascending: false });
 
     if (type) {
@@ -2381,27 +2387,31 @@ router.get('/:id/public-data', verifyToken, async (req, res) => {
  * Delete private data entry (creator or owner only)
  */
 router.delete('/:id/private-data/:dataId', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
   try {
     const { id: homeId, dataId } = req.params;
     const userId = req.user.id;
+
+    // Attribution does not retain access after leaving a household. Check current
+    // shared authority before looking up the record, including Home security state.
+    const { mode, access } = await homeListService.readAccessState(homeId, userId);
+    if (mode !== 'shared' || !access.permissions.includes('home.edit')) {
+      return res.status(403).json({ error: 'No permission to change home data' });
+    }
 
     // Get the data entry
     const { data: entry, error: fetchError } = await supabaseAdmin
       .from('HomePrivateData')
       .select('created_by, home_id')
       .eq('id', dataId)
+      .eq('home_id', homeId)
       .single();
 
     if (fetchError || !entry) {
       return res.status(404).json({ error: 'Data entry not found' });
     }
 
-    if (entry.home_id !== homeId) {
-      return res.status(400).json({ error: 'Data entry does not belong to this home' });
-    }
-
     // Check if user is creator or home owner
-    const access = await checkHomePermission(homeId, userId);
     if (entry.created_by !== userId && !access.isOwner) {
       return res.status(403).json({ error: 'Only the creator or home owner can delete this' });
     }
@@ -2409,7 +2419,8 @@ router.delete('/:id/private-data/:dataId', verifyToken, async (req, res) => {
     const { error } = await supabaseAdmin
       .from('HomePrivateData')
       .delete()
-      .eq('id', dataId);
+      .eq('id', dataId)
+      .eq('home_id', homeId);
 
     if (error) {
       logger.error('Error deleting private data', { error: error.message, dataId });
@@ -2431,27 +2442,31 @@ router.delete('/:id/private-data/:dataId', verifyToken, async (req, res) => {
  * Delete public data entry (creator or owner only)
  */
 router.delete('/:id/public-data/:dataId', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
   try {
     const { id: homeId, dataId } = req.params;
     const userId = req.user.id;
+
+    // Attribution does not retain access after leaving a household. Check current
+    // shared authority before looking up the record, including Home security state.
+    const { mode, access } = await homeListService.readAccessState(homeId, userId);
+    if (mode !== 'shared' || !access.permissions.includes('home.edit')) {
+      return res.status(403).json({ error: 'No permission to change home data' });
+    }
 
     // Get the data entry
     const { data: entry, error: fetchError } = await supabaseAdmin
       .from('HomePublicData')
       .select('created_by, home_id')
       .eq('id', dataId)
+      .eq('home_id', homeId)
       .single();
 
     if (fetchError || !entry) {
       return res.status(404).json({ error: 'Data entry not found' });
     }
 
-    if (entry.home_id !== homeId) {
-      return res.status(400).json({ error: 'Data entry does not belong to this home' });
-    }
-
     // Check if user is creator or home owner
-    const access = await checkHomePermission(homeId, userId);
     if (entry.created_by !== userId && !access.isOwner) {
       return res.status(403).json({ error: 'Only the creator or home owner can delete this' });
     }
@@ -2459,7 +2474,8 @@ router.delete('/:id/public-data/:dataId', verifyToken, async (req, res) => {
     const { error } = await supabaseAdmin
       .from('HomePublicData')
       .delete()
-      .eq('id', dataId);
+      .eq('id', dataId)
+      .eq('home_id', homeId);
 
     if (error) {
       logger.error('Error deleting public data', { error: error.message, dataId });
@@ -3058,12 +3074,13 @@ const maintenanceCostSchema = Joi.number().min(0).max(9999999999.99)
  * `status` (Scheduled = `scheduled|in_progress`).
  */
 router.get('/:id/maintenance', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
     const { status } = req.query;
 
-    const access = await checkHomePermission(homeId, userId);
+    const access = await checkHomePermission(homeId, userId, 'maintenance.view');
     if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
 
     // Upcoming work by due date, soonest first. Logged work usually has no due date, so among
@@ -3616,7 +3633,7 @@ router.get('/:id/vendors', verifyToken, async (req, res) => {
     const { id: homeId } = req.params;
     const userId = req.user.id;
 
-    const access = await checkHomePermission(homeId, userId);
+    const access = await checkHomePermission(homeId, userId, 'vendors.view');
     if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
 
     const { data, error } = await supabaseAdmin
@@ -3645,7 +3662,7 @@ router.post('/:id/vendors', verifyToken, async (req, res) => {
     const { id: homeId } = req.params;
     const userId = req.user.id;
 
-    const access = await checkHomePermission(homeId, userId);
+    const access = await checkHomePermission(homeId, userId, 'vendors.manage');
     if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
 
     const { name, service_category, phone, email, website, contact, rating, notes } = req.body;
@@ -3689,7 +3706,7 @@ router.put('/:id/vendors/:vendorId', verifyToken, async (req, res) => {
     const { id: homeId, vendorId } = req.params;
     const userId = req.user.id;
 
-    const access = await checkHomePermission(homeId, userId);
+    const access = await checkHomePermission(homeId, userId, 'vendors.manage');
     if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
 
     const allowed = ['name', 'service_category', 'phone', 'email', 'website', 'contact', 'rating', 'notes', 'trusted', 'history'];
@@ -3732,7 +3749,7 @@ router.get('/:id/businesses', verifyToken, async (req, res) => {
     const { id: homeId } = req.params;
     const userId = req.user.id;
 
-    const access = await checkHomePermission(homeId, userId);
+    const access = await checkHomePermission(homeId, userId, 'vendors.view');
     if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
 
     const { data, error } = await supabaseAdmin
@@ -3943,7 +3960,7 @@ router.get('/:id/businesses/search', verifyToken, async (req, res) => {
     const userId = req.user.id;
     const q = (req.query.q || '').trim();
 
-    const access = await checkHomePermission(homeId, userId);
+    const access = await checkHomePermission(homeId, userId, 'vendors.manage');
     if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
 
     if (!q || q.length < 2) return res.json({ results: [] });
@@ -4285,20 +4302,26 @@ router.post('/:id/invite', verifyToken, homeOutboundLimiter, async (req, res) =>
 
 // ============ HOME DEVICES ============
 
+const HOME_DEVICE_COLUMNS = 'id, home_id, device_type, label, status, settings, battery_change_date, created_by, created_at, updated_at';
+
 /**
  * GET /api/homes/:id/devices
  */
 router.get('/:id/devices', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
 
-    const access = await checkHomePermission(homeId, userId);
-    if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
+    const opening = await homeListService.readAccessState(homeId, userId);
+    if (opening.mode !== 'shared' || !opening.access.permissions.includes('devices.view')) {
+      return res.status(403).json({ error: 'No permission to view home devices' });
+    }
+    const canViewCodes = opening.access.permissions.includes('access.view_codes');
 
     const { data, error } = await supabaseAdmin
       .from('HomeDevice')
-      .select('*')
+      .select(HOME_DEVICE_COLUMNS + (canViewCodes ? ', access_codes' : ''))
       .eq('home_id', homeId)
       .order('label', { ascending: true });
 
@@ -4307,8 +4330,17 @@ router.get('/:id/devices', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch devices' });
     }
 
+    const current = await homeListService.readAccessState(homeId, userId);
+    if (current.mode !== 'shared' || !current.access.permissions.includes('devices.view')) {
+      return res.status(403).json({ error: 'No permission to view home devices' });
+    }
+    if (JSON.stringify(current) !== JSON.stringify(opening)) {
+      return res.status(503).json({ error: 'Home access changed while loading. Please retry.', code: 'HOME_LIST_ACCESS_CHANGED' });
+    }
+
     res.json({ devices: data || [] });
   } catch (err) {
+    if (err.statusCode === 503) return homeListService.sendError(res, err);
     logger.error('Devices fetch error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch devices' });
   }
@@ -4318,18 +4350,29 @@ router.get('/:id/devices', verifyToken, async (req, res) => {
  * POST /api/homes/:id/devices
  */
 router.post('/:id/devices', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
 
-    const access = await checkHomePermission(homeId, userId, 'can_manage_home');
-    if (!access.hasAccess) return res.status(403).json({ error: 'No permission to manage home' });
+    const opening = await homeListService.readAccessState(homeId, userId);
+    if (opening.mode !== 'shared' || !opening.access.permissions.includes('devices.manage')) {
+      return res.status(403).json({ error: 'No permission to manage home devices' });
+    }
 
     const { device_type, label, status: deviceStatus, settings, access_codes, battery_change_date } = req.body;
 
     if (!device_type || !label) {
       return res.status(400).json({ error: 'device_type and label are required' });
     }
+    if (access_codes != null && (typeof access_codes !== 'object' || Array.isArray(access_codes))) {
+      return res.status(400).json({ error: 'access_codes must be an object' });
+    }
+    // Device management does not grant management or viewing of entry codes.
+    if (Object.keys(access_codes || {}).length && !opening.access.permissions.includes('access.manage')) {
+      return res.status(403).json({ error: 'No permission to manage device access codes' });
+    }
+    const canViewCodes = opening.access.permissions.includes('access.view_codes');
 
     const { data, error } = await supabaseAdmin
       .from('HomeDevice')
@@ -4343,7 +4386,7 @@ router.post('/:id/devices', verifyToken, async (req, res) => {
         battery_change_date: battery_change_date || null,
         created_by: userId,
       })
-      .select()
+      .select(HOME_DEVICE_COLUMNS + (canViewCodes ? ', access_codes' : ''))
       .single();
 
     if (error) {
@@ -4353,6 +4396,7 @@ router.post('/:id/devices', verifyToken, async (req, res) => {
 
     res.status(201).json({ device: data });
   } catch (err) {
+    if (err.statusCode === 503) return homeListService.sendError(res, err);
     logger.error('Device creation error', { error: err.message });
     res.status(500).json({ error: 'Failed to create device' });
   }

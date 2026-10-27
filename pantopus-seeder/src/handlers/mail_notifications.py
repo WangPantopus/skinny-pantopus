@@ -1,12 +1,13 @@
-"""Lambda handler for mail notification push delivery.
+"""Lambda handler for the Mail tab's morning notice.
 
-Replaces the existing Node cron jobs that only log MailEvent rows:
-- mailDayNotification (daily summary) → now sends actual push
-- mailInterruptNotification (urgent items) → now sends actual push
+Triggered every 5 minutes by EventBridge (behind MailEnabled). Each run asks the backend to send "Your mail is here"
+to the people whose own morning it is and whose morning round brought them mail they can read
+(POST /api/internal/briefing/mail-morning). The backend applies the mailbox's own rules: which pieces have been
+delivered, who may read a Home's mail (only after the address is proven), one notice per person per local day, the
+person's mail_summary_enabled setting and quiet hours.
 
-Triggered every 5 minutes by EventBridge. Handles both:
-1. Urgent/interrupt notifications (time-sensitive, certified, package delivery)
-2. Daily mail summary (once per day per user, morning window)
+Special deliveries (certified, time-sensitive, overdue, due today) are announced once by the backend when they land,
+so this handler no longer pushes urgent mail itself.
 """
 
 from __future__ import annotations
@@ -14,14 +15,11 @@ from __future__ import annotations
 import logging
 import os
 import time
-from datetime import datetime, timedelta, timezone
 from typing import Any
-from zoneinfo import ZoneInfo
 
 import httpx
 
 from src.config.secrets import get_briefing_secrets, BriefingSecrets
-from src.utils.supabase_errors import is_missing_table_error, log_missing_table_once
 
 logging.basicConfig(level=logging.INFO, force=True)
 # httpx logs every request URL at INFO, and Supabase filters carry full user
@@ -30,7 +28,6 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 log = logging.getLogger("seeder.handlers.mail_notifications")
 
 SEND_TIMEOUT_S = 15
-from src.discovery.timezone import valid_timezone
 
 
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
@@ -54,20 +51,9 @@ def _run(event: dict[str, Any], context: Any) -> dict[str, Any]:
         log.exception("Failed to load or validate briefing secrets")
         return {"error": "secrets_load_failed"}
 
-    try:
-        from supabase import create_client
-        supabase = create_client(secrets.supabase_url, secrets.supabase_service_role_key)
-    except Exception:
-        log.exception("Failed to initialize Supabase client")
-        return {"error": "supabase_init_failed"}
+    stats = {"summary_sent": 0, "skipped": 0, "errors": 0}
 
-    stats = {"urgent_sent": 0, "summary_sent": 0, "skipped": 0, "errors": 0}
-
-    # 1. Always process urgent/interrupt items (runs every 5 min)
-    _process_urgent_mail(supabase, secrets, stats)
-
-    # Eligibility and date keys follow each recipient’s local morning.
-    _process_daily_summary(supabase, secrets, stats)
+    _send_morning_notices(secrets, stats)
 
     elapsed_ms = time.monotonic_ns() // 1_000_000 - start_ms
     stats["latency_ms"] = elapsed_ms
@@ -75,266 +61,40 @@ def _run(event: dict[str, Any], context: Any) -> dict[str, Any]:
     _publish_metrics(stats)
 
     log.info(
-        "Mail notifications complete: urgent=%d summary=%d skipped=%d errors=%d latency=%dms",
-        stats["urgent_sent"], stats["summary_sent"],
-        stats["skipped"], stats["errors"], elapsed_ms,
+        "Mail notifications complete: summary=%d skipped=%d errors=%d latency=%dms",
+        stats["summary_sent"], stats["skipped"], stats["errors"], elapsed_ms,
     )
     return stats
 
 
-# ── Urgent mail (time-sensitive, overdue, certified, package delivery) ──
+# ── Morning notice ───────────────────────────────────────────────
 
 
-def _process_urgent_mail(supabase, secrets: BriefingSecrets, stats: dict) -> None:
-    """Find recent urgent mail items and send push notifications."""
-    five_min_ago = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
-
-    # 1. Time-sensitive / overdue items
+def _send_morning_notices(secrets: BriefingSecrets, stats: dict) -> None:
+    """Ask the backend to send this run's morning notices; it answers counts only."""
     try:
-        result = (
-            supabase.table("Mail")
-            .select("id, recipient_user_id, sender_display, urgency")
-            .in_("urgency", ["time_sensitive", "overdue"])
-            .gte("created_at", five_min_ago)
-            .execute()
-        )
-        urgent_items = result.data or []
-    except Exception:
-        log.exception("Failed to query urgent mail")
-        stats["errors"] += 1
-        urgent_items = []
-
-    for item in urgent_items:
-        uid = item.get("recipient_user_id")
-        if not uid:
-            continue
-
-        dedup_key = f"mail_urgent_{item['id']}"
-        if _already_sent(supabase, dedup_key):
-            continue
-
-        sender = item.get("sender_display") or "Unknown sender"
-        urgency = item.get("urgency", "urgent")
-        title = "Urgent mail" if urgency == "time_sensitive" else "Overdue mail"
-        body = f"You have {urgency.replace('_', ' ')} mail from {sender}."
-
-        result = _send_reminder(secrets, uid, title, body, "mail_urgent", {
-            "entityId": item["id"],
-            "route": "/mailbox",
-        })
-        if result == "sent":
-            stats["urgent_sent"] += 1
-            _record_sent(supabase, dedup_key, 1)
-        elif result == "skipped":
-            stats["skipped"] += 1
-
-    # 2. Certified mail (ack required)
-    try:
-        result = (
-            supabase.table("Mail")
-            .select("id, recipient_user_id, sender_display")
-            .eq("ack_required", True)
-            .eq("ack_status", "pending")
-            .gte("created_at", five_min_ago)
-            .execute()
-        )
-        certified = result.data or []
-    except Exception:
-        log.exception("Failed to query certified mail")
-        stats["errors"] += 1
-        certified = []
-
-    for item in certified:
-        uid = item.get("recipient_user_id")
-        if not uid:
-            continue
-
-        dedup_key = f"mail_certified_{item['id']}"
-        if _already_sent(supabase, dedup_key):
-            continue
-
-        sender = item.get("sender_display") or "Unknown sender"
-        title = "Certified mail requires acknowledgment"
-        body = f"You have certified mail from {sender} that requires your acknowledgment."
-
-        result = _send_reminder(secrets, uid, title, body, "mail_urgent", {
-            "entityId": item["id"],
-            "route": "/mailbox",
-        })
-        if result == "sent":
-            stats["urgent_sent"] += 1
-            _record_sent(supabase, dedup_key, 1)
-
-
-# ── Daily mail summary ──────────────────────────────────────────
-
-
-# The summary counts only mail that is new since the day before: delivered or opened, unread (neither the apps'
-# `viewed` nor the drawer view's `opened_at`), not archived and not deleted. A letter someone has read, filed, archived
-# or deleted never brings the push back, and old mail doesn't repeat it every morning.
-SUMMARY_LOOKBACK = timedelta(hours=24)
-
-
-def _new_unread_mail(supabase, columns: str, since: str):
-    return (
-        supabase.table("Mail")
-        .select(columns)
-        .in_("lifecycle", ["delivered", "opened"])
-        .eq("archived", False)
-        .eq("viewed", False)
-        .is_("opened_at", "null")
-        .is_("deleted_at", "null")
-        .gte("created_at", since)
-    )
-
-
-def _process_daily_summary(supabase, secrets: BriefingSecrets, stats: dict) -> None:
-    """Send a morning push to users who got new unread mail since the day before."""
-    now = datetime.now(timezone.utc)
-    since = (now - SUMMARY_LOOKBACK).isoformat()
-
-    # Find users with new unread mail
-    try:
-        result = _new_unread_mail(supabase, "recipient_user_id", since).execute()
-        rows = result.data or []
-    except Exception:
-        log.exception("Failed to query mail for daily summary")
-        stats["errors"] += 1
-        return
-
-    # Deduplicate user IDs
-    user_ids = list(set(r["recipient_user_id"] for r in rows if r.get("recipient_user_id")))
-    if not user_ids:
-        return
-
-    zones = {}
-    try:
-        for offset in range(0, len(user_ids), 100):
-            response = httpx.post(f"{secrets.pantopus_api_base_url}/api/internal/briefing/timezones",
-                                  json={"userIds": user_ids[offset:offset + 100]},
-                                  headers={"x-internal-api-key": secrets.internal_api_key}, timeout=SEND_TIMEOUT_S)
-            response.raise_for_status()
-            zones.update(response.json().get("timezones", {}))
-    except Exception:
-        log.exception("Failed to resolve mail recipient timezones")
-        stats["errors"] += 1
-        return
-    for uid in user_ids:
-        zone = valid_timezone(zones.get(uid))
-        if not zone:
-            continue
-        local_now = now.astimezone(ZoneInfo(zone))
-        if not 7 <= local_now.hour < 9:
-            continue
-        today_str = local_now.strftime("%Y-%m-%d")
-        dedup_key = f"mail_summary_{uid}_{today_str}"
-        if _already_sent(supabase, dedup_key):
-            continue
-
-        # Build per-user summary
-        try:
-            mail_result = (
-                _new_unread_mail(supabase, "category, mail_object_type, urgency", since)
-                .eq("recipient_user_id", uid)
-                .execute()
-            )
-            mail_items = mail_result.data or []
-        except Exception:
-            stats["errors"] += 1
-            continue
-
-        if not mail_items:
-            continue
-
-        bills = sum(1 for m in mail_items if m.get("category") == "bill")
-        packages = sum(1 for m in mail_items if m.get("mail_object_type") == "package")
-        urgent = sum(1 for m in mail_items if m.get("urgency") not in (None, "none"))
-        total = len(mail_items)
-
-        parts = []
-        if bills > 0:
-            parts.append(f"{bills} bill{'s' if bills > 1 else ''}")
-        if packages > 0:
-            parts.append(f"{packages} package{'s' if packages > 1 else ''}")
-        if urgent > 0:
-            parts.append(f"{urgent} urgent")
-
-        if not parts:
-            parts.append(f"{total} item{'s' if total > 1 else ''}")
-
-        title = "Your mailbox summary"
-        body = f"You have new mail: {', '.join(parts)}."
-
-        result = _send_reminder(secrets, uid, title, body, "mail_summary", {
-            "route": "/mailbox",
-        })
-        if result == "sent":
-            stats["summary_sent"] += 1
-            _record_sent(supabase, dedup_key, 1)
-        elif result == "skipped":
-            stats["skipped"] += 1
-
-
-# ── Shared helpers (same pattern as home_reminders.py) ──────────
-
-
-def _already_sent(supabase, dedup_key: str) -> bool:
-    try:
-        result = (
-            supabase.table("AlertNotificationHistory")
-            .select("id")
-            .eq("alert_type", "mail")
-            .eq("alert_id", dedup_key)
-            .execute()
-        )
-        return bool(result.data)
-    except Exception as exc:
-        if is_missing_table_error(exc, "AlertNotificationHistory"):
-            log_missing_table_once(log, "AlertNotificationHistory", "mail dedup", exc)
-        return False
-
-
-def _record_sent(supabase, dedup_key: str, users_notified: int) -> None:
-    try:
-        supabase.table("AlertNotificationHistory").insert({
-            "alert_type": "mail",
-            "alert_id": dedup_key,
-            "geohash": "global",
-            "headline": dedup_key,
-            "users_notified": users_notified,
-            "expires_at": (datetime.now(timezone.utc) + timedelta(days=2)).isoformat(),
-        }).execute()
-    except Exception as exc:
-        if is_missing_table_error(exc, "AlertNotificationHistory"):
-            log_missing_table_once(log, "AlertNotificationHistory", "mail dedup writes", exc)
-        else:
-            log.warning("Failed to record mail notification dedup", exc_info=True)
-
-
-def _send_reminder(secrets: BriefingSecrets, user_id: str, title: str, body: str, reminder_type: str, data: dict) -> str:
-    try:
-        url = f"{secrets.pantopus_api_base_url}/api/internal/briefing/reminder-push"
         resp = httpx.post(
-            url,
-            json={
-                "userId": user_id,
-                "title": title,
-                "body": body,
-                "reminderType": reminder_type,
-                "data": data,
-            },
-            headers={
-                "Content-Type": "application/json",
-                "x-internal-api-key": secrets.internal_api_key,
-            },
-            timeout=SEND_TIMEOUT_S,
+            f"{secrets.pantopus_api_base_url}/api/internal/briefing/mail-morning",
+            json={},
+            headers={"Content-Type": "application/json", "x-internal-api-key": secrets.internal_api_key},
+            timeout=SEND_TIMEOUT_S * 4,
         )
-        if resp.status_code == 200:
-            return resp.json().get("status", "failed")
-        return "failed"
     except Exception:
-        log.warning("Mail push failed for user=%s", user_id[:8], exc_info=True)
-        return "failed"
+        log.exception("Mail morning notices request failed")
+        stats["errors"] += 1
+        return
+    if resp.status_code != 200:
+        log.error("Mail morning notices failed: status=%d", resp.status_code)
+        stats["errors"] += 1
+        return
+    body = resp.json()
+    if body.get("status") == "skipped":
+        log.info("Mail morning notices skipped: %s", body.get("reason"))
+        return
+    stats["summary_sent"] += int(body.get("sent") or 0)
+    stats["skipped"] += int(body.get("skipped") or 0)
+    # One person's push failing is retried by the next run; it isn't a failed invocation.
+    stats["push_failed"] = int(body.get("failed") or 0)
 
 
 def _publish_metrics(stats: dict) -> None:
@@ -347,7 +107,6 @@ def _publish_metrics(stats: dict) -> None:
         cw.put_metric_data(
             Namespace=f"Pantopus/MailNotifications/{env}",
             MetricData=[
-                {"MetricName": "UrgentMailSent", "Value": stats.get("urgent_sent", 0), "Unit": "Count"},
                 {"MetricName": "SummarySent", "Value": stats.get("summary_sent", 0), "Unit": "Count"},
                 {"MetricName": "MailNotifSkipped", "Value": stats.get("skipped", 0), "Unit": "Count"},
                 {"MetricName": "MailNotifErrors", "Value": stats.get("errors", 0), "Unit": "Count"},

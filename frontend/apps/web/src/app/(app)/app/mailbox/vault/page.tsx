@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import type { VaultFolder, VaultSearchResult } from '@/types/mailbox';
 import {
   useVaultFolders,
@@ -9,21 +9,13 @@ import {
   useCreateVaultFolder,
 } from '@/lib/mailbox-queries';
 import { VaultFolderCard } from '@/components/mailbox';
-import { launchFeatures } from '@/lib/featureFlags';
+import { DRAWER_LABELS, MAILBOX_DRAWERS, isMailboxDrawer, type MailboxDrawer } from '@/components/mailbox/MailboxHeader';
 import { toast } from '@/components/ui/toast-store';
 
 // ── Helpers ──────────────────────────────────────────────────
 
 // Launch cut #8 (Mail extras): Earn (offers and ad earnings) is hidden.
-const DRAWER_ORDER = (['personal', 'home', 'business', 'earn'] as const).filter(
-  (d) => d !== 'earn' || launchFeatures.mailExtras,
-);
-const DRAWER_LABELS: Record<string, string> = {
-  personal: 'Personal',
-  home: 'Home',
-  business: 'Business',
-  earn: 'Earn',
-};
+const DRAWER_ORDER = MAILBOX_DRAWERS;
 
 function groupByDrawer(folders: VaultFolder[]): Record<string, VaultFolder[]> {
   const groups: Record<string, VaultFolder[]> = {};
@@ -65,6 +57,9 @@ function highlightMatch(text: string, query: string): React.ReactNode {
 
 export default function VaultPage() {
   const router = useRouter();
+  // The drawer chosen in the Mailbox's chips (`?drawer=`, Me by default).
+  const drawerParam = useSearchParams().get('drawer');
+  const drawer: MailboxDrawer = isMailboxDrawer(drawerParam) ? drawerParam : 'personal';
 
   // ── Folder data ───────────────────────────────────────────
   const { data: folders, isLoading: foldersLoading } = useVaultFolders();
@@ -93,7 +88,8 @@ export default function VaultPage() {
   const [newLabel, setNewLabel] = useState('');
   const [newIcon, setNewIcon] = useState('📁');
   const [newColor, setNewColor] = useState('#6B7280');
-  const [newDrawer, setNewDrawer] = useState<'personal' | 'home' | 'business' | 'earn'>('personal');
+  const [newDrawer, setNewDrawer] = useState<MailboxDrawer>(drawer);
+  useEffect(() => { setNewDrawer(drawer); }, [drawer]);
   const createFolder = useCreateVaultFolder();
 
   const handleCreateFolder = useCallback(() => {
@@ -130,10 +126,9 @@ export default function VaultPage() {
   return (
     <div className="h-full overflow-y-auto">
       {/* ── Header ──────────────────────────────────────────── */}
-      <div className="px-6 pt-6 pb-4">
-        <div className="flex items-center justify-between mb-4">
-          <h1 className="text-lg font-semibold text-app-text">Vault</h1>
-        </div>
+      <div className="px-4 md:px-6 pt-4 md:pt-6 pb-4">
+        {/* The Mailbox's chips and tabs above name the drawer and the Vault */}
+        <h2 className="sr-only">Vault · {DRAWER_LABELS[drawer]}</h2>
 
         {/* Search bar */}
         <div className="relative">
@@ -168,7 +163,7 @@ export default function VaultPage() {
 
       {/* ── Search results ──────────────────────────────────── */}
       {isSearching ? (
-        <div className="px-6 pb-6">
+        <div className="px-4 md:px-6 pb-6">
           {searchLoading ? (
             <div className="space-y-3">
               {[1, 2, 3].map((i) => (
@@ -208,21 +203,21 @@ export default function VaultPage() {
         </div>
       ) : (
         /* ── Folder grid by drawer ─────────────────────────── */
-        <div className="px-6 pb-6 space-y-6">
-          {DRAWER_ORDER.map((drawerKey) => {
+        <div className="px-4 md:px-6 pb-6 space-y-6">
+          {DRAWER_ORDER.filter((drawerKey) => drawerKey === drawer).map((drawerKey) => {
             const drawerFolders = grouped[drawerKey];
             if (!drawerFolders || drawerFolders.length === 0) return null;
             return (
               <div key={drawerKey}>
-                <h2 className="text-xs font-semibold text-app-text-secondary uppercase tracking-wider mb-3">
-                  {DRAWER_LABELS[drawerKey]}
-                </h2>
+                <h3 className="text-xs font-semibold text-app-text-secondary uppercase tracking-wider mb-3">
+                  Folders
+                </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                   {drawerFolders.map((folder) => (
                     <VaultFolderCard
                       key={folder.id}
                       folder={folder}
-                      onClick={() => router.push(`/app/mailbox/vault/${folder.id}`)}
+                      onClick={() => router.push(drawerKey === 'personal' ? `/app/mailbox/vault/${folder.id}` : `/app/mailbox/vault/${folder.id}?drawer=${drawerKey}`)}
                     />
                   ))}
                 </div>
@@ -231,7 +226,7 @@ export default function VaultPage() {
           })}
 
           {/* Empty vault state */}
-          {(!folders || folders.length === 0) && (
+          {!grouped[drawer]?.length && (
             <div className="text-center py-16">
               <svg className="w-12 h-12 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8" />

@@ -14,6 +14,7 @@ import {
   useRestoreMail,
 } from '@/lib/mailbox-queries';
 import { MailItemDetail } from '@/components/mailbox';
+import { isMailboxDrawer } from '@/components/mailbox/MailboxHeader';
 import { toast } from '@/components/ui/toast-store';
 import BookletViewer from '@/components/mailbox/BookletViewer';
 import PackageUnboxing from '@/components/mailbox/PackageUnboxing';
@@ -42,6 +43,16 @@ export default function ItemDetailPage() {
   // ── Data fetching ─────────────────────────────────────────
   const { data: detail, isLoading, error, refetch } = useItemDetail(itemId);
   const markOpened = useMarkItemOpened();
+
+  // A link that didn't know the letter's drawer (a notification's
+  // /app/mailbox/<id> opens it in Me) moves to the letter's own drawer, so
+  // the list beside it and the drawer chips match the letter.
+  const ownDrawer = detail?.wrapper.drawer;
+  useEffect(() => {
+    if (ownDrawer && ownDrawer !== drawer && isMailboxDrawer(ownDrawer)) {
+      router.replace(`/app/mailbox/${ownDrawer}/${itemId}`);
+    }
+  }, [ownDrawer, drawer, itemId, router]);
 
   // Mark as opened on first load
   const markedRef = useRef(false);
