@@ -1,4 +1,4 @@
--- Backwards compatible: keep guest-pass DTOs, request-id rotation and revocation.
+-- Backwards compatible: yes. Keep guest-pass DTOs, request-id rotation and revocation.
 -- Entry and parking instructions use access.view_codes on Home detail reads;
 -- members.manage must not let an issuer recover them through a bearer pass.
 -- Recheck the same permission on existing pass reads so revocation takes effect.
