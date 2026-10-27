@@ -107,6 +107,16 @@ class ReviewClaimDetailViewModel
             _identityAttested.value = attested
         }
 
+        /** `true` only for an approve the admin attested while the claim has no confirmed identity. */
+        private fun identityAttestation(
+            action: AdminClaimReviewAction,
+            detail: AdminClaimDetailResponse,
+        ): Boolean? =
+            true.takeIf {
+                action == AdminClaimReviewAction.Approve && _identityAttested.value &&
+                    detail.approval?.identityConfirmed != true && detail.claim.identityStatus != "verified"
+            }
+
         private var loadedOnce: Boolean = false
         private val session = scopeFactory.create(viewModelScope)
         private var loadGeneration = 0
@@ -174,15 +184,12 @@ class ReviewClaimDetailViewModel
                     ) { CLAIM_PENDING_DECISION }
                 }
                 pendingDecision = PendingDecision(detail.claim, action, note)
-                val attest =
-                    action == AdminClaimReviewAction.Approve && _identityAttested.value &&
-                        detail.approval?.identityConfirmed != true && detail.claim.identityStatus != "verified"
                 val request =
                     AdminClaimReviewRequest(
                         action = action.backendValue,
                         reviewToken = requireNotNull(detail.claim.reviewToken),
                         note = note,
-                        identityConfirmed = if (attest) true else null,
+                        identityConfirmed = identityAttestation(action, detail),
                     )
                 val result = repo.reviewClaim(claimId, request)
                 session.requireCurrent()

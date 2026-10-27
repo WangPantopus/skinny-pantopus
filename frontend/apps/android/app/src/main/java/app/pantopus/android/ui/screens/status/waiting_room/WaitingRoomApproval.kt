@@ -63,8 +63,10 @@ object WaitingRoomApproval {
     fun steps(
         approval: ClaimApprovalProgressDto?,
         residency: Boolean,
-    ): List<WaitingRoomApprovalStep> =
-        if (approval == null) emptyList() else listOf(identityStep(approval), proofStep(approval, residency))
+    ): List<WaitingRoomApprovalStep> {
+        if (approval == null) return emptyList()
+        return listOf(identityStep(approval), proofStep(approval, residency))
+    }
 
     fun identityStep(approval: ClaimApprovalProgressDto): WaitingRoomApprovalStep =
         when {

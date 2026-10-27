@@ -200,6 +200,49 @@ data class WaitingRoomContent(
             }
         }
 
+        private fun activeHalo(
+            needsDocuments: Boolean,
+            needsIdentity: Boolean,
+        ): StatusHalo =
+            when {
+                needsDocuments -> StatusHalo(tone = HaloCircleTone.Info, icon = PantopusIcon.FilePlus2)
+                needsIdentity -> StatusHalo(tone = HaloCircleTone.Info, icon = PantopusIcon.IdCard)
+                else -> StatusHalo(tone = HaloCircleTone.Info, icon = PantopusIcon.Hourglass, isPulsing = true)
+            }
+
+        private fun activeHeadline(
+            needsDocuments: Boolean,
+            needsIdentity: Boolean,
+        ): String =
+            when {
+                needsIdentity && needsDocuments -> "Two steps left"
+                needsIdentity -> "Confirm your identity"
+                needsDocuments -> "Add your documents"
+                else -> "Under review"
+            }
+
+        private fun activeReviewCaption(
+            needsDocuments: Boolean,
+            needsIdentity: Boolean,
+            reviewCaption: String?,
+        ): String? =
+            when {
+                needsDocuments -> "Waiting for documents"
+                needsIdentity -> "Waiting for your ID check"
+                else -> reviewCaption
+            }
+
+        private fun activeEtaPill(
+            needsDocuments: Boolean,
+            needsIdentity: Boolean,
+        ): StatusWaitingPill =
+            when {
+                needsDocuments ->
+                    StatusWaitingPill("The review starts after you upload documents", PantopusIcon.FilePlus2, StatusPillTone.Primary)
+                needsIdentity -> StatusWaitingPill("Approval waits for your ID check", PantopusIcon.IdCard, StatusPillTone.Primary)
+                else -> StatusWaitingPill("We'll notify you when it's decided", PantopusIcon.Bell, StatusPillTone.Primary)
+            }
+
         /**
          * While an ownership claim waits, the claimant can still prove they live
          * here by mail (founder decision, 2026-10-06); ownership stays in review.
@@ -221,7 +264,9 @@ data class WaitingRoomContent(
          * so the room asks for them instead. Mail verification is offered until
          * the person's address is verified. [residency] marks a renter's
          * residency document, which asks for a lease or utility bill instead.
+         * [approval] (the server's checklist) adds the identity check approval needs.
          */
+        @Suppress("LongParameterList")
         fun active(
             address: String = SAMPLE_ADDRESS,
             claimRef: String = SAMPLE_CLAIM_REF,
@@ -242,19 +287,8 @@ data class WaitingRoomContent(
                 }
             return WaitingRoomContent(
                 title = ROOM_TITLE,
-                halo =
-                    when {
-                        needsDocuments -> StatusHalo(tone = HaloCircleTone.Info, icon = PantopusIcon.FilePlus2)
-                        needsIdentity -> StatusHalo(tone = HaloCircleTone.Info, icon = PantopusIcon.IdCard)
-                        else -> StatusHalo(tone = HaloCircleTone.Info, icon = PantopusIcon.Hourglass, isPulsing = true)
-                    },
-                headline =
-                    when {
-                        needsIdentity && needsDocuments -> "Two steps left"
-                        needsIdentity -> "Confirm your identity"
-                        needsDocuments -> "Add your documents"
-                        else -> "Under review"
-                    },
+                halo = activeHalo(needsDocuments, needsIdentity),
+                headline = activeHeadline(needsDocuments, needsIdentity),
                 subcopy = "$wait $meanwhile",
                 address = address,
                 claimRef = claimRef,
@@ -265,36 +299,13 @@ data class WaitingRoomContent(
                         StatusTimelineStage(
                             "review",
                             "Under review",
-                            when {
-                                needsDocuments -> "Waiting for documents"
-                                needsIdentity -> "Waiting for your ID check"
-                                else -> reviewCaption
-                            },
+                            activeReviewCaption(needsDocuments, needsIdentity, reviewCaption),
                             StatusStepState.Current,
                         ),
                         StatusTimelineStage("approved", "Approved", state = StatusStepState.Pending),
                     ),
                 timelinePaused = false,
-                etaPill =
-                    if (needsDocuments) {
-                        StatusWaitingPill(
-                            text = "The review starts after you upload documents",
-                            icon = PantopusIcon.FilePlus2,
-                            tone = StatusPillTone.Primary,
-                        )
-                    } else if (needsIdentity) {
-                        StatusWaitingPill(
-                            text = "Approval waits for your ID check",
-                            icon = PantopusIcon.IdCard,
-                            tone = StatusPillTone.Primary,
-                        )
-                    } else {
-                        StatusWaitingPill(
-                            text = "We'll notify you when it's decided",
-                            icon = PantopusIcon.Bell,
-                            tone = StatusPillTone.Primary,
-                        )
-                    },
+                etaPill = activeEtaPill(needsDocuments, needsIdentity),
                 manageSectionTitle = MANAGE_TITLE,
                 inlineActions =
                     listOfNotNull(
