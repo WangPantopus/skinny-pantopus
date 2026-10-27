@@ -4822,6 +4822,15 @@ router.delete('/:id/pets/:petId', verifyToken, async (req, res) => {
 
 // ============ HOME POLLS ============
 
+async function homePollAccess(homeId, userId, permission = 'home.view') {
+  const opening = await homeListService.readAccessState(homeId, userId);
+  if (opening.mode !== 'shared' || !opening.access.permissions.includes(permission)) return null;
+  // Polls use the same Home record visibility policy as documents.
+  const visibility = await homeDocumentVisibilities(homeId, userId, opening.access);
+  if (visibility.readFailed) throw Object.assign(new Error('Could not check poll access'), { statusCode: 503 });
+  return { opening, allowed: visibility.allowed };
+}
+
 const createPollSchema = Joi.object({
   title: Joi.string().required().max(200),
   description: Joi.string().max(2000).allow(null, ''),
@@ -4850,17 +4859,19 @@ const voteSchema = Joi.object({
  * GET /api/homes/:id/polls
  */
 router.get('/:id/polls', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
 
-    const access = await checkHomePermission(homeId, userId, 'home.view');
-    if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
+    const access = await homePollAccess(homeId, userId);
+    if (!access) return res.status(403).json({ error: 'No access to this home' });
 
     const { data: polls, error } = await supabaseAdmin
       .from('HomePoll')
       .select('*')
       .eq('home_id', homeId)
+      .in('visibility', access.allowed)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -4920,8 +4931,14 @@ router.get('/:id/polls', verifyToken, async (req, res) => {
       my_vote: myVotes[p.id] || null,
     }));
 
+    const current = await homePollAccess(homeId, userId);
+    if (!current) return res.status(403).json({ error: 'No access to this home' });
+    if (JSON.stringify(current) !== JSON.stringify(access)) {
+      return res.status(503).json({ error: 'Home access changed while loading. Please retry.', code: 'HOME_LIST_ACCESS_CHANGED' });
+    }
     res.json({ polls: enriched });
   } catch (err) {
+    if (err.statusCode === 503) return homeListService.sendError(res, err);
     logger.error('Polls fetch error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch polls' });
   }
@@ -4931,14 +4948,16 @@ router.get('/:id/polls', verifyToken, async (req, res) => {
  * POST /api/homes/:id/polls
  */
 router.post('/:id/polls', verifyToken, validate(createPollSchema), async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
 
-    const access = await checkHomePermission(homeId, userId, 'home.edit');
-    if (!access.hasAccess) return res.status(403).json({ error: 'No permission to create polls' });
+    const access = await homePollAccess(homeId, userId, 'home.edit');
+    if (!access) return res.status(403).json({ error: 'No permission to create polls' });
 
     const { title, description, poll_type, options, closes_at, visibility } = req.body;
+    if (!access.allowed.includes(visibility || 'members')) return res.status(403).json({ error: 'No access to that poll visibility' });
 
     const { data, error } = await supabaseAdmin
       .from('HomePoll')
@@ -4964,6 +4983,7 @@ router.post('/:id/polls', verifyToken, validate(createPollSchema), async (req, r
 
     res.status(201).json({ poll: data });
   } catch (err) {
+    if (err.statusCode === 503) return homeListService.sendError(res, err);
     logger.error('Poll creation error', { error: err.message });
     res.status(500).json({ error: 'Failed to create poll' });
   }
@@ -4973,12 +4993,13 @@ router.post('/:id/polls', verifyToken, validate(createPollSchema), async (req, r
  * POST /api/homes/:id/polls/:pollId/vote
  */
 router.post('/:id/polls/:pollId/vote', verifyToken, validate(voteSchema), async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
   try {
     const { id: homeId, pollId } = req.params;
     const userId = req.user.id;
 
-    const access = await checkHomePermission(homeId, userId, 'home.view');
-    if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
+    const access = await homePollAccess(homeId, userId);
+    if (!access) return res.status(403).json({ error: 'No access to this home' });
 
     // Verify poll exists and is open
     const { data: poll, error: pollErr } = await supabaseAdmin
@@ -4986,6 +5007,7 @@ router.post('/:id/polls/:pollId/vote', verifyToken, validate(voteSchema), async 
       .select('id, status, closes_at')
       .eq('id', pollId)
       .eq('home_id', homeId)
+      .in('visibility', access.allowed)
       .single();
 
     if (pollErr || !poll) return res.status(404).json({ error: 'Poll not found' });
@@ -5023,6 +5045,7 @@ router.post('/:id/polls/:pollId/vote', verifyToken, validate(voteSchema), async 
 
     res.json({ vote: data });
   } catch (err) {
+    if (err.statusCode === 503) return homeListService.sendError(res, err);
     logger.error('Vote error', { error: err.message });
     res.status(500).json({ error: 'Failed to cast vote' });
   }
@@ -5032,12 +5055,16 @@ router.post('/:id/polls/:pollId/vote', verifyToken, validate(voteSchema), async 
  * PUT /api/homes/:id/polls/:pollId
  */
 router.put('/:id/polls/:pollId', verifyToken, validate(updatePollSchema), async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
   try {
     const { id: homeId, pollId } = req.params;
     const userId = req.user.id;
 
-    const access = await checkHomePermission(homeId, userId, 'home.edit');
-    if (!access.hasAccess) return res.status(403).json({ error: 'No permission to edit polls' });
+    const access = await homePollAccess(homeId, userId, 'home.edit');
+    if (!access) return res.status(403).json({ error: 'No permission to edit polls' });
+    if (req.body.visibility !== undefined && !access.allowed.includes(req.body.visibility)) {
+      return res.status(403).json({ error: 'No access to that poll visibility' });
+    }
 
     const allowed = ['title', 'description', 'status', 'closes_at', 'visibility'];
     const updates = {};
@@ -5051,8 +5078,9 @@ router.put('/:id/polls/:pollId', verifyToken, validate(updatePollSchema), async 
       .update(updates)
       .eq('id', pollId)
       .eq('home_id', homeId)
+      .in('visibility', access.allowed)
       .select()
-      .single();
+      .maybeSingle();
 
     if (error) {
       logger.error('Error updating poll', { error: error.message, pollId });
@@ -5065,6 +5093,7 @@ router.put('/:id/polls/:pollId', verifyToken, validate(updatePollSchema), async 
 
     res.json({ poll: data });
   } catch (err) {
+    if (err.statusCode === 503) return homeListService.sendError(res, err);
     logger.error('Poll update error', { error: err.message });
     res.status(500).json({ error: 'Failed to update poll' });
   }
