@@ -23,8 +23,9 @@ function letterId(key) {
 
 /**
  * Store one Pantopus letter unless it is already there. `letter`: recipient fields, subject, content, summary,
- * key_facts, and optionally enclosures, drawer, privacy fields and `immediate` (in the box now, not special).
- * Answers { id, created }.
+ * key_facts, and optionally enclosures, drawer, privacy fields, category, `immediate` (in the box now, not special),
+ * `delivered_at` (a given round instead of the next one) and `filed_folder_id` (it goes straight into that Vault
+ * folder, a receipt in Receipts). Answers { id, created }.
  */
 async function send(key, letter) {
   const id = letterId(key);
@@ -54,7 +55,9 @@ async function send(key, letter) {
     content: letter.content,
     preview_text: letter.content.slice(0, 140),
     key_facts: letter.key_facts || [],
-    lifecycle: 'delivered',
+    lifecycle: letter.filed_folder_id ? 'filed' : 'delivered',
+    ...(letter.filed_folder_id ? { vault_folder_id: letter.filed_folder_id } : {}),
+    ...(letter.category ? { category: letter.category } : {}),
     tags: ['pantopus-letter'],
     mail_extracted: {
       from_pantopus: true,
@@ -65,7 +68,9 @@ async function send(key, letter) {
       ...(letter.enclosures?.length ? { enclosures: letter.enclosures } : {}),
     },
   };
-  const delivery = await mailDelivery.deliveryFor(row, { now, immediate: Boolean(letter.immediate) });
+  const delivery = letter.delivered_at
+    ? { delivered_at: new Date(letter.delivered_at).toISOString(), special_delivery: false }
+    : await mailDelivery.deliveryFor(row, { now, immediate: Boolean(letter.immediate) });
   const stored = { ...row, ...delivery };
   const { error } = await supabaseAdmin.from('Mail').insert(stored);
   if (error) {
@@ -205,4 +210,4 @@ async function residencyLetter({ userId, letter, pdf }) {
   }
 }
 
-module.exports = { letterId, ensureWelcomeLetter, ensureHomeLetter, ensureHomeLetters, residencyLetter };
+module.exports = { letterId, sendSafe, ensureWelcomeLetter, ensureHomeLetter, ensureHomeLetters, residencyLetter };

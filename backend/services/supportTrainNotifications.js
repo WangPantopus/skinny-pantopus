@@ -18,6 +18,8 @@ const { inferTimezone } = require('./context/locationResolver');
 const { DateTime } = require('luxon');
 const logger = require('../utils/logger');
 const { loadChatPeople } = require('./chatPeople');
+const { isLaunchFeatureEnabled } = require('../utils/featureFlags');
+const pantopusLetters = require('./pantopusLetters');
 
 const DEEP_LINK_PREFIX = '/app/support-trains';
 
@@ -126,6 +128,8 @@ async function emitSupportTrainEvent({ event, supportTrainId, actorUserId, paylo
             }))
           );
         }
+        // And an invitation in their Mail (SRV-9).
+        await inviteLetters(supportTrainId, recipients);
         break;
       }
 
@@ -272,6 +276,8 @@ async function emitSupportTrainEvent({ event, supportTrainId, actorUserId, paylo
             link,
             metadata: { support_train_id: supportTrainId, reservation_id: payload.reservation_id },
           });
+          // And a thank-you letter in their Mail (SRV-9).
+          await thanksLetter({ supportTrainId, reservationId: payload.reservation_id, helperUserId: payload.helper_user_id, confirmedBy: actorUserId });
         }
         break;
       }
@@ -459,6 +465,8 @@ async function emitSupportTrainEvent({ event, supportTrainId, actorUserId, paylo
               .map((s) => ({ slotLabel: s.slot_label || 'Your signup', slotDate: formatSlotDate(s.slot_date) })),
           });
         }
+        // Letters in their Mail (SRV-9): a thank-you to each helper, the summary to the person helped and organizers.
+        await doneLetters(supportTrainId);
         break;
       }
 
@@ -543,4 +551,262 @@ async function _getAllParticipants(supportTrainId, excludeUserId) {
   return [...ids];
 }
 
-module.exports = { emitSupportTrainEvent, formatSupportTrainSlotTime };
+// ─── Letters from Pantopus (Mail tab, SRV-9) ───────────────────────────────
+// The founder's picks for Support Trains: an invitation to help, a thank-you when the organizer confirms a delivery,
+// a thank-you or a summary when the Train is done, and a receipt for a gift. Each goes to people the Train already
+// shows itself to, beside its notice (never instead of it). Pantopus writes the words (no AI); each is made once.
+
+const NEEDS = [
+  ['enable_home_cooked_meals', 'home-cooked meals'],
+  ['enable_takeout', 'takeout'],
+  ['enable_groceries', 'groceries'],
+  ['enable_gift_funds', 'gifts to the gift fund'],
+];
+
+const capitalized = (text) => (text ? text.charAt(0).toUpperCase() + text.slice(1) : text);
+// A name can end in a period ("Sage A."): a sentence ending on one gets no second.
+const sentence = (text) => (/[.!?]$/.test(text) ? text : `${text}.`);
+const listText = (items) => (items.length <= 1 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`);
+
+// "Fri, Oct 9" or "Fri, Oct 9 – Sun, Oct 18".
+function dateRange(dates) {
+  const sorted = [...new Set((dates || []).filter(Boolean))].sort();
+  if (!sorted.length) return null;
+  const first = formatSlotDate(sorted[0]);
+  return sorted.length === 1 ? first : `${first} – ${formatSlotDate(sorted[sorted.length - 1])}`;
+}
+
+// What a Train's letters say about it: its title, who it's for, who organizes it, what it needs and its days.
+async function trainForLetters(supportTrainId) {
+  const [{ data: train, error }, { data: slots }] = await Promise.all([
+    supabaseAdmin.from('SupportTrain')
+      .select('id, organizer_user_id, recipient_user_id, status, enable_home_cooked_meals, enable_takeout, enable_groceries, enable_gift_funds, Activity!inner ( title )')
+      .eq('id', supportTrainId)
+      .single(),
+    supabaseAdmin.from('SupportTrainSlot').select('id, slot_date').eq('support_train_id', supportTrainId),
+  ]);
+  if (error || !train) throw new Error(error?.message || 'Support Train not found');
+  const people = await loadChatPeople([train.organizer_user_id, train.recipient_user_id].filter(Boolean));
+  const title = (train.Activity?.title || '').trim() || 'Support Train';
+  const recipientName = train.recipient_user_id ? people.get(String(train.recipient_user_id))?.displayName || null : null;
+  return {
+    train,
+    title,
+    reference: supportTrainReference(title),
+    organizerName: people.get(String(train.organizer_user_id))?.displayName || 'The organizer',
+    recipientName,
+    forWhom: recipientName || title,
+    needs: NEEDS.filter(([key]) => train[key]).map(([, label]) => label),
+    slots: slots || [],
+    dates: dateRange((slots || []).map((s) => s.slot_date)),
+  };
+}
+
+/** 1. Invited to help: a letter to each invitee with an account, once per Train. Never throws. */
+async function inviteLetters(supportTrainId, inviteeIds) {
+  const ids = [...new Set((inviteeIds || []).filter(Boolean))];
+  if (!ids.length || !isLaunchFeatureEnabled('mailbox')) return;
+  try {
+    const t = await trainForLetters(supportTrainId);
+    const needs = t.needs.length ? listText(t.needs) : null;
+    for (const userId of ids) {
+      await pantopusLetters.sendSafe(`st-invite:${supportTrainId}:${userId}`, {
+        recipient_user_id: userId,
+        subject: t.recipientName ? `You're invited to help ${t.recipientName}` : `You're invited to help: ${t.title}`,
+        content: [
+          sentence(`${t.organizerName} invited you to help with ${t.reference}${t.recipientName ? `, for ${t.recipientName}` : ''}`),
+          '',
+          ...(needs ? [`What's needed: ${needs}.`] : []),
+          ...(t.dates ? [`When: ${t.dates}.`] : []),
+          ...(needs || t.dates ? [''] : []),
+          'Open the Support Train in Pantopus to see the open days and sign up for one.',
+          '',
+          'Your Pantopus carrier',
+        ].join('\n'),
+        summary: sentence(`${t.organizerName} invited you to help ${t.forWhom}${needs ? ` with ${needs}` : ''}${t.dates ? `, ${t.dates}` : ''}`),
+        key_facts: [
+          { label: 'For', value: t.forWhom },
+          ...(needs ? [{ label: 'Needed', value: capitalized(needs) }] : []),
+          ...(t.dates ? [{ label: 'When', value: t.dates }] : []),
+          { label: 'Organizer', value: t.organizerName },
+        ],
+      });
+    }
+  } catch (err) {
+    logger.warn('Support Train invite letters not written', { supportTrainId, error: err.message });
+  }
+}
+
+/** 3. Thank you for helping: when an organizer confirms a helper's delivery, to that helper. Never throws. */
+async function thanksLetter({ supportTrainId, reservationId, helperUserId, confirmedBy }) {
+  if (!helperUserId || !reservationId || !isLaunchFeatureEnabled('mailbox')) return;
+  try {
+    const [t, { data: r }] = await Promise.all([
+      trainForLetters(supportTrainId),
+      supabaseAdmin.from('SupportTrainReservation')
+        .select('id, user_id, dish_title, restaurant_name, SupportTrainSlot:slot_id ( slot_date, slot_label )')
+        .eq('id', reservationId)
+        .maybeSingle(),
+    ]);
+    if (!r || r.user_id !== helperUserId) return;
+    const what = r.SupportTrainSlot?.slot_label || 'contribution';
+    const day = formatSlotDate(r.SupportTrainSlot?.slot_date);
+    const by = (await _getDisplayName(confirmedBy)) || t.organizerName;
+    const brought = r.dish_title || r.restaurant_name || null;
+    await pantopusLetters.sendSafe(`st-thanks:${reservationId}`, {
+      recipient_user_id: helperUserId,
+      subject: t.recipientName ? `Thank you for helping ${t.recipientName}` : 'Thank you for helping',
+      content: [
+        `${by} confirmed your ${what}${day ? ` on ${day}` : ''} for ${t.reference}.`,
+        '',
+        'Thank you for showing up for your neighbor.',
+        '',
+        'Your Pantopus carrier',
+      ].join('\n'),
+      summary: sentence(`${by} confirmed your ${what}${day ? ` on ${day}` : ''}. Thank you for helping ${t.forWhom}`),
+      key_facts: [
+        { label: 'For', value: t.forWhom },
+        { label: 'Your help', value: brought ? `${capitalized(what)}: ${brought}` : capitalized(what) },
+        ...(day ? [{ label: 'Day', value: day }] : []),
+      ],
+    });
+  } catch (err) {
+    logger.warn('Support Train thank-you letter not written', { supportTrainId, error: err.message });
+  }
+}
+
+/**
+ * 5. The Train is done: a thank-you to each helper, and a summary to the person helped and each organizer (days
+ * covered, helpers, gifts). Never throws.
+ */
+async function doneLetters(supportTrainId) {
+  if (!isLaunchFeatureEnabled('mailbox')) return;
+  try {
+    const t = await trainForLetters(supportTrainId);
+    const [{ data: reservations, error }, organizers, { data: fund }] = await Promise.all([
+      supabaseAdmin.from('SupportTrainReservation')
+        .select('user_id, guest_email, SupportTrainSlot:slot_id ( slot_date, slot_label )')
+        .eq('support_train_id', supportTrainId)
+        .neq('status', 'canceled'),
+      _getOrganizers(supportTrainId, null),
+      supabaseAdmin.from('SupportTrainFund').select('id, total_amount').eq('support_train_id', supportTrainId).maybeSingle(),
+    ]);
+    if (error) throw new Error(error.message);
+    const helpers = new Map();
+    const helperKeys = new Set();
+    for (const r of reservations || []) {
+      const key = r.user_id || (r.guest_email ? `guest:${r.guest_email.toLowerCase()}` : null);
+      if (key) helperKeys.add(key);
+      if (!r.user_id) continue;
+      if (!helpers.has(r.user_id)) helpers.set(r.user_id, []);
+      helpers.get(r.user_id).push(r.SupportTrainSlot?.slot_date);
+    }
+    const covered = new Set((reservations || []).map((r) => r.SupportTrainSlot?.slot_date).filter(Boolean));
+    const allDays = new Set(t.slots.map((s) => s.slot_date).filter(Boolean));
+    let gifts = null;
+    if (fund?.id && t.train.enable_gift_funds) {
+      const { count } = await supabaseAdmin.from('SupportTrainFundContribution').select('id', { count: 'exact', head: true })
+        .eq('support_train_fund_id', fund.id).eq('payment_status', 'succeeded');
+      if (count) gifts = { count, total: `$${(Number(fund.total_amount || 0) / 100).toFixed(2)}` };
+    }
+    const leaders = new Set([...organizers, t.train.organizer_user_id, t.train.recipient_user_id].filter(Boolean));
+
+    for (const [userId, dates] of helpers) {
+      if (leaders.has(userId)) continue;
+      const days = dates.filter(Boolean).length;
+      const range = dateRange(dates);
+      await pantopusLetters.sendSafe(`st-done:${supportTrainId}:${userId}`, {
+        recipient_user_id: userId,
+        subject: t.recipientName ? `Thank you for helping ${t.recipientName}` : `${t.title} is complete`,
+        content: [
+          `${t.organizerName} closed ${t.reference}: it's complete.`,
+          '',
+          `You signed up for ${days || 1} ${days === 1 || !days ? 'day' : 'days'}${range ? ` (${range})` : ''}. Thank you for helping.`,
+          '',
+          'Your Pantopus carrier',
+        ].join('\n'),
+        summary: sentence(`${capitalized(t.reference)} is complete. Thank you for helping ${t.forWhom}`),
+        key_facts: [{ label: 'For', value: t.forWhom }, ...(range ? [{ label: 'Your days', value: range }] : [])],
+      });
+    }
+
+    const lines = [
+      `Days covered: ${covered.size} of ${allDays.size || covered.size}${t.dates ? ` (${t.dates})` : ''}`,
+      `Helpers: ${helperKeys.size} ${helperKeys.size === 1 ? 'neighbor' : 'neighbors'}`,
+      ...(gifts ? [`Gifts: ${gifts.total} from ${gifts.count} ${gifts.count === 1 ? 'gift' : 'gifts'}`] : []),
+    ];
+    for (const userId of leaders) {
+      const helped = userId === t.train.recipient_user_id;
+      await pantopusLetters.sendSafe(`st-done:${supportTrainId}:${userId}`, {
+        recipient_user_id: userId,
+        subject: `${t.title} is complete`,
+        content: [
+          `${capitalized(t.reference)} is complete. Here's what neighbors gave:`,
+          '',
+          ...lines,
+          '',
+          helped ? 'Your neighbors were glad to help.' : 'Thank you for organizing it.',
+          '',
+          'Your Pantopus carrier',
+        ].join('\n'),
+        summary: `${capitalized(t.reference)} is complete: ${covered.size} of ${allDays.size || covered.size} days covered by ${helperKeys.size} ${helperKeys.size === 1 ? 'neighbor' : 'neighbors'}${gifts ? `, and ${gifts.total} in gifts` : ''}.`,
+        key_facts: [
+          { label: 'Days covered', value: `${covered.size} of ${allDays.size || covered.size}` },
+          { label: 'Helpers', value: String(helperKeys.size) },
+          ...(gifts ? [{ label: 'Gifts', value: gifts.total }] : []),
+        ],
+      });
+    }
+  } catch (err) {
+    logger.warn('Support Train done letters not written', { supportTrainId, error: err.message });
+  }
+}
+
+/**
+ * 6. Gift receipt: once a gift is recorded as made, a receipt to the donor, filed in their own Receipts folder (the
+ * donor gets it whether or not the gift showed their name). Never throws.
+ */
+async function giftReceiptLetter(contributionId) {
+  if (!contributionId || !isLaunchFeatureEnabled('mailbox')) return;
+  try {
+    const { data: c, error } = await supabaseAdmin.from('SupportTrainFundContribution')
+      .select('id, contributor_user_id, amount, is_anonymous, payment_status, created_at, SupportTrainFund:support_train_fund_id ( support_train_id )')
+      .eq('id', contributionId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!c?.contributor_user_id || c.payment_status !== 'succeeded' || !c.SupportTrainFund?.support_train_id) return;
+    const donor = c.contributor_user_id;
+    const t = await trainForLetters(c.SupportTrainFund.support_train_id);
+    /* eslint-disable global-require */
+    const { ensureSystemFolders } = require('./mailVault');
+    const { getAccessibleHomeIds } = require('../utils/homeMailAccess');
+    const mailDelivery = require('./mailDelivery');
+    /* eslint-enable global-require */
+    await ensureSystemFolders(donor, await getAccessibleHomeIds(donor));
+    const { data: receipts } = await supabaseAdmin.from('VaultFolder').select('id').eq('user_id', donor)
+      .eq('drawer', 'personal').eq('label', 'Receipts').eq('system', true).order('created_at').limit(1);
+    const zone = (await mailDelivery.personTimeZone(donor)) || mailDelivery.FALLBACK_TIME_ZONE;
+    const day = new Date(c.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: zone });
+    const amount = `$${(Number(c.amount || 0) / 100).toFixed(2)}`;
+    await pantopusLetters.sendSafe(`st-gift:${c.id}`, {
+      recipient_user_id: donor,
+      subject: `Your gift to ${t.forWhom}`,
+      content: [
+        `Thank you for your gift of ${amount} to ${t.reference} on ${day}.`,
+        '',
+        ...(c.is_anonymous ? ['You gave without your name: the Train shows your gift as anonymous.', ''] : []),
+        'This is your receipt. Pantopus keeps it in your Vault, under Receipts.',
+        '',
+        'Your Pantopus carrier',
+      ].join('\n'),
+      summary: `You gave ${amount} to ${t.reference} on ${day}.`,
+      key_facts: [{ label: 'Amount', value: amount }, { label: 'Date', value: day }, { label: 'For', value: t.forWhom }],
+      category: 'receipt',
+      filed_folder_id: receipts?.[0]?.id || null,
+    });
+  } catch (err) {
+    logger.warn('Support Train gift receipt not written', { contributionId, error: err.message });
+  }
+}
+
+module.exports = { emitSupportTrainEvent, formatSupportTrainSlotTime, inviteLetters, giftReceiptLetter };
