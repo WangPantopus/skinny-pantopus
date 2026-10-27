@@ -31,7 +31,7 @@ const ROLE_META: Record<string, { icon: typeof ShieldCheck; color: string; dark:
   owner:             { icon: ShieldCheck, color: '#7c3aed', dark: '#a78bfa', label: 'Owner' },
   admin:             { icon: Shield,      color: '#0369a1', dark: '#38bdf8', label: 'Admin' },
   manager:           { icon: Key,         color: '#0e7490', dark: '#22d3ee', label: 'Manager' },
-  lease_resident:    { icon: User,        color: '#047857', dark: '#34d399', label: 'Lease member' },
+  lease_resident:    { icon: User,        color: '#047857', dark: '#34d399', label: 'Resident' },
   member:            { icon: User,        color: '#047857', dark: '#34d399', label: 'Member' },
   restricted_member: { icon: Lock,        color: '#b45309', dark: '#fbbf24', label: 'Restricted' },
   guest:             { icon: Clock,       color: '#6b7280', dark: '#9ca3af', label: 'Guest' },

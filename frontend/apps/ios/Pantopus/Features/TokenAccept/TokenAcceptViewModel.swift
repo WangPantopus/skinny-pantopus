@@ -276,6 +276,7 @@ public final class TokenAcceptViewModel {
     }
 
     static func humanRole(_ raw: String) -> String {
+        if raw == "lease_resident" { return "Resident" }
         let normalized = raw.replacingOccurrences(of: "_", with: " ").trimmingCharacters(in: .whitespaces)
         guard !normalized.isEmpty else { return "Member" }
         return normalized.prefix(1).uppercased() + normalized.dropFirst()
@@ -354,7 +355,7 @@ extension TokenAcceptViewModel {
             inviteType: .leaseInvite,
             title: "Review your lease invitation",
             sender: "Your landlord invited you",
-            roleOffered: "Tenant",
+            roleOffered: "Resident",
             venue: [preview.home.name ?? "Your rental Home", preview.home.city].compactMap { $0 }.joined(separator: ", "),
             benefits: dates,
             expiry: formatExpiry(invitation.expiresAt),

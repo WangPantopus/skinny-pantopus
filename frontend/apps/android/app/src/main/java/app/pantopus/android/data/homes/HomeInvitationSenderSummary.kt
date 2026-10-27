@@ -29,7 +29,11 @@ internal fun senderInvitationSummary(
 
 /** "restricted_member" → "Restricted member": a role as a person reads it. */
 internal fun invitationRoleLabel(role: String): String =
-    role.replace('_', ' ').trim().replaceFirstChar { it.uppercase() }.ifEmpty { "Member" }
+    if (role == "lease_resident") {
+        "Resident"
+    } else {
+        role.replace('_', ' ').trim().replaceFirstChar { it.uppercase() }.ifEmpty { "Member" }
+    }
 
 /** A preset names the relationship chosen on the web (e.g. "Tenant / Roommate"). */
 internal fun invitationPresetLine(key: String): String =

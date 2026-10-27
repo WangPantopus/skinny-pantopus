@@ -47,7 +47,7 @@ enum HomeResidencyHistoryRole: String, CaseIterable {
         case .member: "Member"
         case .guest: "Guest"
         case .restrictedMember: "Restricted member"
-        case .leaseResident: "Lease resident"
+        case .leaseResident: "Resident"
         case .serviceProvider: "Service provider"
         }
     }

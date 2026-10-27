@@ -6,7 +6,7 @@ const nullableText = (v: unknown) => v === null || typeof v === 'string';
 const date = (v: unknown) => typeof v === 'string' && Number.isFinite(Date.parse(v));
 const nullableDate = (v: unknown) => v === null || date(v);
 export const residencyRoles: Record<ResidencyReviewRole, string> = {
-  member: 'Member', lease_resident: 'Lease resident', restricted_member: 'Restricted member', guest: 'Guest', service_provider: 'Service provider',
+  member: 'Member', lease_resident: 'Resident', restricted_member: 'Restricted member', guest: 'Guest', service_provider: 'Service provider',
 };
 export const actionLabel = (action: ResidencyReviewAction) => action === 'approve' ? 'Approve' : 'Reject';
 export interface PendingResidencyReview {

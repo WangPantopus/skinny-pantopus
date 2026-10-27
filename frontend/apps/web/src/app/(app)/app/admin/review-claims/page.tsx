@@ -45,7 +45,7 @@ const APPROVAL_ROLES: { value: api.admin.ClaimApprovalRole; label: string; hint:
   { value: 'admin', label: 'Admin', hint: 'Views the home and its ownership, and votes on household decisions.' },
   { value: 'manager', label: 'Manager', hint: 'Views the home and works on tasks.' },
   { value: 'member', label: 'Member', hint: 'Views the home and works on tasks.' },
-  { value: 'lease_resident', label: 'Renter', hint: 'Sees members, Wi-Fi, the calendar and packages, and works on tasks.' },
+  { value: 'lease_resident', label: 'Resident', hint: 'Sees members, Wi-Fi, the calendar and packages, and works on tasks.' },
   { value: 'restricted_member', label: 'Restricted member', hint: 'Views the home only.' },
   { value: 'guest', label: 'Guest', hint: 'Views the home only.' },
 ];

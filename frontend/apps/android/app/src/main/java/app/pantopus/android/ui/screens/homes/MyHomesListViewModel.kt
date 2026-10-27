@@ -594,7 +594,7 @@ class MyHomesListViewModel
                         "owner" -> "Owner role"
                         "admin" -> "Administrator"
                         "manager" -> "Manager"
-                        "lease_resident" -> "Tenant"
+                        "lease_resident" -> "Resident"
                         "member" -> "Member"
                         "restricted_member" -> "Restricted member"
                         "guest" -> "Guest"

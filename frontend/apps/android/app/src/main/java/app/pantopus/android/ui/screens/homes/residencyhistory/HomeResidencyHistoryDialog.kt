@@ -167,7 +167,7 @@ internal fun historyRole(role: String?): String =
         "member" -> "Member"
         "restricted_member" -> "Restricted member"
         "guest" -> "Guest"
-        "lease_resident" -> "Lease resident"
+        "lease_resident" -> "Resident"
         "service_provider" -> "Service provider"
         else -> "Not recorded"
     }

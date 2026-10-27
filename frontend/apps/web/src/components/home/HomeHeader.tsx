@@ -16,7 +16,7 @@ interface HomeHeaderProps {
 
 // The role names the Members page shows. Any other value reads as words, never as its snake_case code.
 const ROLE_LABELS: Record<string, string> = {
-  admin: 'Admin', manager: 'Manager', lease_resident: 'Lease member', member: 'Member',
+  admin: 'Admin', manager: 'Manager', lease_resident: 'Resident', member: 'Member',
   restricted_member: 'Restricted', guest: 'Guest', service_provider: 'Service provider',
 };
 const roleLabel = (role: string) => {
