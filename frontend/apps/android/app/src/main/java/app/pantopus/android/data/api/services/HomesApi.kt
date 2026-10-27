@@ -6,6 +6,9 @@ import app.pantopus.android.data.api.models.homes.CastVoteRequest
 import app.pantopus.android.data.api.models.homes.CastVoteResponse
 import app.pantopus.android.data.api.models.homes.CheckAddressRequest
 import app.pantopus.android.data.api.models.homes.CheckAddressResponse
+import app.pantopus.android.data.api.models.homes.ClaimIdentityCheckRequest
+import app.pantopus.android.data.api.models.homes.ClaimIdentityCheckResponse
+import app.pantopus.android.data.api.models.homes.ClaimIdentityCheckStartResponse
 import app.pantopus.android.data.api.models.homes.CreateAccessSecretRequest
 import app.pantopus.android.data.api.models.homes.CreateBillRequest
 import app.pantopus.android.data.api.models.homes.CreateDocumentRequest
@@ -254,6 +257,29 @@ interface HomesApi {
      */
     @GET("api/homes/my-ownership-claims")
     suspend fun myOwnershipClaims(): MyOwnershipClaimsResponse
+
+    /**
+     * `POST /api/homes/:id/ownership-claims/:claimId/identity-check` — route
+     * `backend/routes/homeOwnership.js:609`. Starts (or continues) the claimant's
+     * Stripe Identity check; the reply carries the Stripe page to open, if any.
+     */
+    @POST("api/homes/{id}/ownership-claims/{claimId}/identity-check")
+    suspend fun startClaimIdentityCheck(
+        @Path("id") homeId: String,
+        @Path("claimId") claimId: String,
+        @Body body: ClaimIdentityCheckRequest = ClaimIdentityCheckRequest(),
+    ): ClaimIdentityCheckStartResponse
+
+    /**
+     * `GET /api/homes/:id/ownership-claims/:claimId/identity-check` — route
+     * `backend/routes/homeOwnership.js:622`. The claim's approval checklist after the
+     * server re-reads an open identity check from Stripe.
+     */
+    @GET("api/homes/{id}/ownership-claims/{claimId}/identity-check")
+    suspend fun claimIdentityCheck(
+        @Path("id") homeId: String,
+        @Path("claimId") claimId: String,
+    ): ClaimIdentityCheckResponse
 
     /**
      * `POST /api/homes/:id/move-out` — route `backend/routes/home.js:3391`.

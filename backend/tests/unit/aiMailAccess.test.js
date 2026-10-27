@@ -15,6 +15,7 @@ describe('AI mail access guards', () => {
         recipient_home_id: null,
         subject: 'Your letter',
         deleted_at: null,
+        delivered_at: '2026-10-01T14:00:00.000Z',
       },
     ]);
 
@@ -36,6 +37,7 @@ describe('AI mail access guards', () => {
         privacy: 'shared_household',
         subject: 'Home bill',
         deleted_at: null,
+        delivered_at: '2026-10-01T14:00:00.000Z',
       },
     ]);
     supabaseAdmin.seedTable('HomeOccupancy', [
@@ -67,6 +69,7 @@ describe('AI mail access guards', () => {
         privacy: 'shared_household',
         subject: 'Restricted mail',
         deleted_at: null,
+        delivered_at: '2026-10-01T14:00:00.000Z',
       },
     ]);
 

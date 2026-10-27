@@ -176,6 +176,27 @@ data class AdminClaimDetailResponse(
     val home: AdminClaimHomeDto?,
     val claimant: AdminClaimUserDto?,
     val evidence: List<AdminClaimEvidenceDto>,
+    /** What approval needs, as the server tests it; null when it couldn't be read. */
+    val approval: ClaimReviewApprovalDto? = null,
+)
+
+/**
+ * The reviewer's approval panel (`approval` on the admin claim detail): a confirmed
+ * identity (a Stripe Identity check, or a platform admin's attestation) and a checked
+ * document. Mirrors iOS `ClaimReviewApprovalDTO` and the web `ClaimReviewApproval`.
+ */
+@JsonClass(generateAdapter = true)
+data class ClaimReviewApprovalDto(
+    @Json(name = "identity_confirmed") val identityConfirmed: Boolean,
+    /** `not_started` · `started` · `processing` · `requires_input` · `verified`. */
+    val identity: String,
+    /** The name on the confirmed ID, to compare with the ownership document. */
+    @Json(name = "identity_name") val identityName: String? = null,
+    /** False while identity checks aren't set up: the claimant can't do one, so the reviewer confirms identity. */
+    @Json(name = "identity_check_available") val identityCheckAvailable: Boolean = true,
+    /** `missing` · `pending` · `verified`. */
+    val proof: String,
+    @Json(name = "can_approve") val canApprove: Boolean,
 )
 
 /**
@@ -189,6 +210,10 @@ data class AdminClaimReviewRequest(
     val action: String,
     @Json(name = "review_token") val reviewToken: String,
     val note: String?,
+    /** Approve only: the admin confirmed the claimant's identity themselves. Sent only when true. */
+    @Json(name = "identity_confirmed") val identityConfirmed: Boolean? = null,
+    /** Approve only: grant this household role instead of the one the claim type gives. */
+    @Json(name = "approve_as") val approveAs: String? = null,
 )
 
 /**

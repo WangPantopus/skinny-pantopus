@@ -4,7 +4,7 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 // canAccessMail / readableMail: the mailbox's per-item rule (own mail, or mail
 // for a Home whose mail the caller may read), checked before any read or change.
 const {
-  getAccessibleHomeIds, canAccessMail, readableMail, visibleMailFilter,
+  getAccessibleHomeIds, canAccessMail, readableMail, visibleMailFilter, onlyDelivered,
 } = require('../utils/homeMailAccess');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
@@ -41,6 +41,8 @@ const partyAssignSchema = Joi.object({
 
 const createFolderSchema = Joi.object({
   drawer: Joi.string().valid('personal', 'home', 'business').required(),
+  // A Home folder belongs to one Home whose mail the caller may read.
+  home_id: Joi.string().uuid().optional(),
   label: Joi.string().max(100).required(),
   icon: Joi.string().max(10).optional(),
   color: Joi.string().max(20).optional(),
@@ -120,115 +122,9 @@ async function logMailEvent(userId, eventType, mailId, metadata = {}) {
 }
 
 
-async function ensureSystemFolders(userId, homeIds) {
-  const SYSTEM_FOLDERS = {
-    personal: [
-      { label: 'Taxes', icon: '📋', color: '#1E40AF' },
-      { label: 'Medical', icon: '🏥', color: '#065F46' },
-      { label: 'School', icon: '🎓', color: '#6D28D9' },
-      { label: 'Receipts', icon: '🧾', color: '#D97706' },
-      { label: 'Bank', icon: '🏦', color: '#374151' },
-    ],
-    home: [
-      { label: 'Utilities', icon: '⚡', color: '#065F46' },
-      { label: 'Warranties', icon: '🔧', color: '#7C3AED' },
-      { label: 'Permits', icon: '📜', color: '#B91C1C' },
-      { label: 'HOA', icon: '🏘', color: '#0C4A6E' },
-      { label: 'Mortgage', icon: '🏡', color: '#78350F' },
-    ],
-    business: [
-      { label: 'Invoices', icon: '📩', color: '#1E40AF' },
-      { label: 'Contracts', icon: '📝', color: '#065F46' },
-      { label: 'Government', icon: '🏛', color: '#991B1B' },
-      { label: 'Subscriptions', icon: '💳', color: '#7C3AED' },
-    ],
-  };
-
-  const AUTO_RULES = {
-    'personal:Taxes': [
-      { field: 'sender_name', operator: 'contains', value: 'IRS' },
-      { field: 'sender_trust', operator: 'equals', value: 'verified_gov' },
-    ],
-    'personal:Receipts': [
-      { field: 'category', operator: 'equals', value: 'receipt' },
-    ],
-    'personal:Medical': [
-      { field: 'keyword', operator: 'contains', value: 'EOB' },
-      { field: 'keyword', operator: 'contains', value: 'explanation of benefits' },
-    ],
-    'personal:Bank': [
-      { field: 'keyword', operator: 'contains', value: 'bank statement' },
-    ],
-    'home:Utilities': [
-      { field: 'sender_trust', operator: 'equals', value: 'verified_utility' },
-    ],
-    'home:Warranties': [
-      { field: 'keyword', operator: 'contains', value: 'warranty' },
-      { field: 'keyword', operator: 'contains', value: 'manual' },
-    ],
-    'home:Permits': [
-      { field: 'keyword', operator: 'contains', value: 'permit' },
-      { field: 'keyword', operator: 'contains', value: 'variance' },
-    ],
-    'home:HOA': [
-      { field: 'sender_name', operator: 'contains', value: 'HOA' },
-    ],
-    'home:Mortgage': [
-      { field: 'keyword', operator: 'contains', value: 'mortgage' },
-      { field: 'keyword', operator: 'contains', value: 'escrow' },
-    ],
-    'business:Invoices': [
-      { field: 'category', operator: 'equals', value: 'invoice' },
-      { field: 'category', operator: 'equals', value: 'receipt' },
-    ],
-    'business:Contracts': [
-      { field: 'keyword', operator: 'contains', value: 'contract' },
-      { field: 'keyword', operator: 'contains', value: 'NDA' },
-      { field: 'keyword', operator: 'contains', value: 'agreement' },
-    ],
-    'business:Government': [
-      { field: 'sender_trust', operator: 'equals', value: 'verified_gov' },
-    ],
-    'business:Subscriptions': [
-      { field: 'keyword', operator: 'contains', value: 'subscription' },
-      { field: 'keyword', operator: 'contains', value: 'renewal' },
-    ],
-  };
-
-  // Check if folders exist
-  const { data: existing } = await supabaseAdmin
-    .from('VaultFolder')
-    .select('id, drawer, label')
-    .eq('user_id', userId)
-    .eq('system', true);
-
-  const existingSet = new Set((existing || []).map(f => `${f.drawer}:${f.label}`));
-
-  const inserts = [];
-  for (const [drawer, folders] of Object.entries(SYSTEM_FOLDERS)) {
-    for (let i = 0; i < folders.length; i++) {
-      const f = folders[i];
-      const key = `${drawer}:${f.label}`;
-      if (!existingSet.has(key)) {
-        inserts.push({
-          user_id: userId,
-          home_id: drawer === 'home' ? (homeIds[0] || null) : null,
-          drawer,
-          label: f.label,
-          icon: f.icon,
-          color: f.color,
-          system: true,
-          sort_order: i,
-          auto_file_rules: AUTO_RULES[key] || [],
-        });
-      }
-    }
-  }
-
-  if (inserts.length > 0) {
-    await supabaseAdmin.from('VaultFolder').insert(inserts);
-  }
-}
+// The Vault's folders: Me and Biz folders are each person's, Home folders belong to the Home (services/mailVault).
+const mailVault = require('../services/mailVault');
+const { ensureSystemFolders } = mailVault;
 
 function evaluateAutoFileRule(rule, item) {
   const { field, operator, value } = rule;
@@ -279,11 +175,11 @@ async function routeAndGroup(userId, addressId) {
   // Only letters the caller may see: an address also receives other members'
   // private mail, which must never land in the caller's bundle.
   const homeIds = await getAccessibleHomeIds(userId);
-  const { data: items } = await supabaseAdmin
+  const { data: items } = await onlyDelivered(supabaseAdmin
     .from('Mail')
     .select('*')
     .eq('recipient_address_id', addressId)
-    .or(visibleMailFilter(userId, homeIds))
+    .or(visibleMailFilter(userId, homeIds)))
     .is('deleted_at', null)
     .is('bundle_id', null)
     .neq('mail_object_type', 'bundle')
@@ -477,11 +373,11 @@ router.get('/bundle/:bundleId/items', async (req, res, next) => {
 
     // Each item passes the per-item rule too: a bundle can hold letters the
     // caller may not read.
-    const { data: items } = await supabaseAdmin
+    const { data: items } = await onlyDelivered(supabaseAdmin
       .from('Mail')
       .select('*')
       .eq('bundle_id', bundleId)
-      .or(visibleMailFilter(req.user.id, await getAccessibleHomeIds(req.user.id)))
+      .or(visibleMailFilter(req.user.id, await getAccessibleHomeIds(req.user.id))))
       .is('deleted_at', null)
       .order('urgency', { ascending: true })
       .order('created_at', { ascending: false });
@@ -516,18 +412,14 @@ router.post('/bundle/action', validate(bundleActionSchema), async (req, res, nex
       .select('id')
       .eq('bundle_id', bundleId)
       .or(visibleMailFilter(req.user.id, homeIds))
+      .lte('delivered_at', new Date().toISOString())
       .is('deleted_at', null);
 
     if (action === 'file_all') {
       if (!folderId) return res.status(400).json({ error: 'folderId required for file_all' });
-      // Vault folders are per user (GET /vault/folders lists user_id = caller).
-      const { data: ownFolder } = await supabaseAdmin
-        .from('VaultFolder')
-        .select('id')
-        .eq('id', folderId)
-        .eq('user_id', req.user.id)
-        .maybeSingle();
-      if (!ownFolder) return res.status(404).json({ error: 'Folder not found' });
+      // The caller's own folder, or a folder of a Home whose mail they may read (services/mailVault).
+      const ownFolder = await mailVault.resolveFolder(folderId, req.user.id, homeIds);
+      if (!ownFolder) return res.status(404).json({ error: "This folder isn't in your Vault.", code: 'MAIL_FOLDER_NOT_FOUND' });
       const { data: items, error: itemsError } = await visibleItems();
       if (itemsError) throw itemsError;
 
@@ -1052,19 +944,12 @@ router.get('/vault/folders', async (req, res, next) => {
     const { drawer } = req.query;
     const homeIds = await getAccessibleHomeIds(req.user.id);
 
-    // Ensure system folders exist
+    // Ensure system folders exist: the caller's own Me and Biz folders, and one cabinet per readable Home.
     await ensureSystemFolders(req.user.id, homeIds);
 
-    let query = supabaseAdmin
-      .from('VaultFolder')
-      .select('*')
-      .eq('user_id', req.user.id)
-      .order('system', { ascending: false })
-      .order('sort_order', { ascending: true });
-
-    if (drawer) query = query.eq('drawer', drawer);
-
-    const { data: folders } = await query;
+    // Home folders are shared by everyone who may read that Home's mail; item_count is what the caller can read.
+    const folders = await mailVault.readableFolders(req.user.id, homeIds,
+      { drawer: ['personal', 'home', 'business'].includes(drawer) ? drawer : undefined });
 
     // Group by drawer
     const grouped = {};
@@ -1081,11 +966,21 @@ router.get('/vault/folders', async (req, res, next) => {
 router.post('/vault/folder', validate(createFolderSchema), async (req, res, next) => {
   try {
     const { drawer, label, icon, color, autoFileRules } = req.body;
+    // A Home folder goes in that Home's cabinet, which everyone who may read its mail shares.
+    let homeId = null;
+    if (drawer === 'home') {
+      const homeIds = await getAccessibleHomeIds(req.user.id);
+      homeId = req.body.home_id ? String(req.body.home_id).toLowerCase() : (homeIds.length === 1 ? homeIds[0] : null);
+      if (!homeId || !homeIds.includes(homeId)) {
+        return res.status(400).json({ error: "Choose a home whose mail you can open for this folder.", code: 'MAIL_FOLDER_INVALID' });
+      }
+    }
 
-    const { data: folder } = await supabaseAdmin
+    const { data: folder, error } = await supabaseAdmin
       .from('VaultFolder')
       .insert({
         user_id: req.user.id,
+        home_id: homeId,
         drawer,
         label,
         icon: icon || '📂',
@@ -1095,6 +990,10 @@ router.post('/vault/folder', validate(createFolderSchema), async (req, res, next
       })
       .select()
       .single();
+    if (error || !folder) {
+      logger.error('Vault folder create failed', { error: error?.message });
+      return res.status(500).json({ error: "Couldn't make this folder. Try again in a moment.", code: 'MAIL_UNAVAILABLE' });
+    }
 
     await logMailEvent(req.user.id, 'vault_folder_created', null, {
       folder_id: folder.id, drawer,
@@ -1115,11 +1014,13 @@ router.patch('/vault/folder/:folderId', validate(updateFolderSchema), async (req
     if (req.body.autoFileRules) updates.auto_file_rules = req.body.autoFileRules;
     updates.updated_at = new Date().toISOString();
 
+    // The caller's own folder, or a folder of a Home whose mail they may read (the Home's cabinet is shared).
+    const resolved = await mailVault.resolveFolder(folderId, req.user.id, await getAccessibleHomeIds(req.user.id));
+    if (!resolved) return res.status(404).json({ error: "This folder isn't in your Vault.", code: 'MAIL_FOLDER_NOT_FOUND' });
     const { data: folder } = await supabaseAdmin
       .from('VaultFolder')
       .update(updates)
-      .eq('id', folderId)
-      .eq('user_id', req.user.id)
+      .eq('id', resolved.folder.id)
       .select()
       .single();
 
@@ -1132,23 +1033,19 @@ router.get('/vault/folder/:folderId/items', async (req, res, next) => {
   try {
     const { folderId } = req.params;
     const { limit = 20, offset = 0 } = req.query;
-    // Vault folders are per user (GET /vault/folders lists user_id = caller).
-    const { data: ownFolder } = await supabaseAdmin
-      .from('VaultFolder')
-      .select('id')
-      .eq('id', folderId)
-      .eq('user_id', req.user.id)
-      .maybeSingle();
-    if (!ownFolder) return res.status(404).json({ error: 'Folder not found' });
+    // The caller's own Me or Biz folder, or a folder of a Home whose mail they may read (shared by its readers).
+    const homeIds = await getAccessibleHomeIds(req.user.id);
+    const resolved = await mailVault.resolveFolder(folderId, req.user.id, homeIds);
+    if (!resolved) return res.status(404).json({ error: "This folder isn't in your Vault.", code: 'MAIL_FOLDER_NOT_FOUND' });
 
     // Only letters the caller can still read: a Home letter filed here leaves with its Home (a member who was
-    // removed, moved out or whose guest access ended keeps the folder, not the household's letters).
-    const homeIds = await getAccessibleHomeIds(req.user.id);
+    // removed, moved out or whose guest access ended no longer sees the household's letters).
     const { data: items, count } = await supabaseAdmin
       .from('Mail')
       .select('*', { count: 'exact' })
-      .eq('vault_folder_id', folderId)
+      .in('vault_folder_id', resolved.ids)
       .or(visibleMailFilter(req.user.id, homeIds))
+      .lte('delivered_at', new Date().toISOString())
       .is('deleted_at', null)
       .order('created_at', { ascending: false })
       // Mail delivered together shares created_at; the id keeps the order the same on every page.
@@ -1166,16 +1063,17 @@ router.get('/vault/folder/:folderId/items', async (req, res, next) => {
 // POST /vault/file — file an item to a vault folder
 router.post('/vault/file', validate(fileToVaultSchema), async (req, res, next) => {
   try {
-    const { mailId, folderId } = req.body;
-    if (!(await readableMail(mailId, req.user.id))) return res.status(404).json({ error: 'Mail not found' });
-    // Vault folders are per user (GET /vault/folders lists user_id = caller).
-    const { data: ownFolder } = await supabaseAdmin
-      .from('VaultFolder')
-      .select('id')
-      .eq('id', folderId)
-      .eq('user_id', req.user.id)
-      .maybeSingle();
-    if (!ownFolder) return res.status(404).json({ error: 'Folder not found' });
+    const { mailId } = req.body;
+    const readable = await readableMail(mailId, req.user.id);
+    if (!readable) return res.status(404).json({ error: "This mail isn't in your mailbox. It may have been removed.", code: 'MAIL_NOT_FOUND' });
+    // A Home letter goes in its own Home's folder (shared by the household); other mail in the caller's own folder.
+    const resolved = await mailVault.resolveFolder(req.body.folderId, req.user.id, await getAccessibleHomeIds(req.user.id));
+    if (!resolved) return res.status(404).json({ error: "This folder isn't in your Vault.", code: 'MAIL_FOLDER_NOT_FOUND' });
+    const { data: piece } = await supabaseAdmin.from('Mail').select('drawer, recipient_home_id').eq('id', mailId).maybeSingle();
+    if (!mailVault.folderFits(resolved, piece)) {
+      return res.status(400).json({ error: "This mail can't go in that folder. Choose one in its own drawer.", code: 'MAIL_ACTION_INVALID' });
+    }
+    const folderId = resolved.folder.id;
 
     const { error: fileError } = await supabaseAdmin
       .from('Mail')
@@ -1228,6 +1126,8 @@ router.post('/vault/auto-file', async (req, res, next) => {
       .eq('recipient_user_id', req.user.id)
       .is('vault_folder_id', null)
       .is('deleted_at', null)
+      // Never files a piece that hasn't arrived yet (SRV-1).
+      .lte('delivered_at', new Date().toISOString())
       .in('lifecycle', ['delivered', 'opened'])
       .order('created_at', { ascending: false })
       .limit(100);
@@ -1279,8 +1179,9 @@ router.get('/vault/search', async (req, res, next) => {
       return res.status(400).json({ error: 'Query required' });
     }
 
+    // The words searched are never logged or stored (Mail tab, SRV-3).
     await logMailEvent(req.user.id, 'vault_search_performed', null, {
-      query: q, drawer_scope: drawer || 'all',
+      drawer_scope: drawer || 'all',
     });
 
     // Build search
@@ -1288,6 +1189,7 @@ router.get('/vault/search', async (req, res, next) => {
       .from('Mail')
       .select('*', { count: 'exact' })
       .eq('recipient_user_id', req.user.id)
+      .lte('delivered_at', new Date().toISOString())
       .is('deleted_at', null);
 
     if (drawer) query = query.eq('drawer', drawer);

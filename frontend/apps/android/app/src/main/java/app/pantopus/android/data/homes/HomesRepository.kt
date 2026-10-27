@@ -3,6 +3,8 @@ package app.pantopus.android.data.homes
 import app.pantopus.android.data.api.models.homes.CastVoteRequest
 import app.pantopus.android.data.api.models.homes.CastVoteResponse
 import app.pantopus.android.data.api.models.homes.CheckAddressRequest
+import app.pantopus.android.data.api.models.homes.ClaimIdentityCheckResponse
+import app.pantopus.android.data.api.models.homes.ClaimIdentityCheckStartResponse
 import app.pantopus.android.data.api.models.homes.CreateAccessSecretRequest
 import app.pantopus.android.data.api.models.homes.CreateBillRequest
 import app.pantopus.android.data.api.models.homes.CreateDocumentRequest
@@ -195,6 +197,18 @@ open class HomesRepository
 
         /** `GET /api/homes/my-ownership-claims`. */
         open suspend fun myOwnershipClaims(): NetworkResult<MyOwnershipClaimsResponse> = safeApiCall { api.myOwnershipClaims() }
+
+        /** `POST /api/homes/:id/ownership-claims/:claimId/identity-check`. */
+        open suspend fun startClaimIdentityCheck(
+            homeId: String,
+            claimId: String,
+        ): NetworkResult<ClaimIdentityCheckStartResponse> = safeApiCall { api.startClaimIdentityCheck(homeId, claimId) }
+
+        /** `GET /api/homes/:id/ownership-claims/:claimId/identity-check`. */
+        open suspend fun claimIdentityCheck(
+            homeId: String,
+            claimId: String,
+        ): NetworkResult<ClaimIdentityCheckResponse> = safeApiCall { api.claimIdentityCheck(homeId, claimId) }
 
         /** `POST /api/homes/:id/move-out`. */
         open suspend fun moveOut(homeId: String): NetworkResult<MoveOutResponse> = safeApiCall { api.moveOut(homeId) }.homesChanged()

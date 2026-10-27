@@ -166,6 +166,9 @@ public struct WaitingRoomContent: Sendable, Hashable {
     public let inlineActions: [WaitingRoomInlineAction]
     public let primaryCta: StatusCTA
     public let secondaryCta: StatusCTA
+    /// Why the claim isn't approved yet and what to do (identity check, document);
+    /// empty when the server didn't say.
+    public let approvalSteps: [WaitingRoomApprovalStep]
 
     public init(
         title: String,
@@ -181,7 +184,8 @@ public struct WaitingRoomContent: Sendable, Hashable {
         manageSectionTitle: String,
         inlineActions: [WaitingRoomInlineAction],
         primaryCta: StatusCTA,
-        secondaryCta: StatusCTA
+        secondaryCta: StatusCTA,
+        approvalSteps: [WaitingRoomApprovalStep] = []
     ) {
         self.title = title
         self.halo = halo
@@ -197,6 +201,7 @@ public struct WaitingRoomContent: Sendable, Hashable {
         self.inlineActions = inlineActions
         self.primaryCta = primaryCta
         self.secondaryCta = secondaryCta
+        self.approvalSteps = approvalSteps
     }
 }
 
@@ -246,6 +251,8 @@ public extension WaitingRoomContent {
     /// so the room asks for them instead. Mail verification is offered until
     /// the person's address is verified. `residency` marks a renter's
     /// residency document, which asks for a lease or utility bill instead.
+    /// `approval` (the server's checklist) adds the identity check approval
+    /// needs: until it's confirmed, the room asks for it.
     static func active(
         address: String = sampleAddress,
         claimRef: String = sampleClaimRef,
@@ -253,25 +260,31 @@ public extension WaitingRoomContent {
         reviewCaption: String? = "Started 9h ago",
         needsDocuments: Bool = false,
         addressVerified: Bool = false,
-        residency: Bool = false
+        residency: Bool = false,
+        approval: ClaimApprovalProgressDTO? = nil
     ) -> WaitingRoomContent {
         // A person reviews the documents (no county-records check), and no
-        // review time is promised while identity confirmation is undecided.
+        // review time is promised.
+        let needsIdentity = approval.map { $0.identity != "verified" } ?? false
         let requested = residency
             ? "Upload a lease or utility bill with your name and this address so a Pantopus reviewer can check that you live here."
             : "Upload a deed, closing disclosure or property tax bill so a Pantopus reviewer can check ownership."
-        let wait = needsDocuments
-            ? requested
-            : "Your documents are waiting for a Pantopus reviewer."
+        let wait = switch (needsIdentity, needsDocuments) {
+        case (true, true): "Confirm your identity and \(requested.prefix(1).lowercased())\(requested.dropFirst())"
+        case (true, false): "A Pantopus reviewer can approve your claim once your identity is confirmed."
+        case (false, true): requested
+        case (false, false): "Your documents are waiting for a Pantopus reviewer."
+        }
         let meanwhile = addressVerified
             ? "Your address is verified, so you can use your Home meanwhile."
             : "Meanwhile, you can verify your address by mail."
         return WaitingRoomContent(
             title: roomTitle,
-            halo: needsDocuments
-                ? StatusHalo(tone: .info, icon: .filePlus2)
+            halo: needsDocuments || needsIdentity
+                ? StatusHalo(tone: .info, icon: needsDocuments ? .filePlus2 : .idCard)
                 : StatusHalo(tone: .info, icon: .hourglass, isPulsing: true),
-            headline: needsDocuments ? "Add your documents" : "Under review",
+            headline: needsIdentity ? (needsDocuments ? "Two steps left" : "Confirm your identity")
+                : needsDocuments ? "Add your documents" : "Under review",
             subcopy: "\(wait) \(meanwhile)",
             address: address,
             claimRef: claimRef,
@@ -281,7 +294,7 @@ public extension WaitingRoomContent {
                 StatusTimelineStage(
                     id: "review",
                     label: "Under review",
-                    sub: needsDocuments ? "Waiting for documents" : reviewCaption,
+                    sub: needsDocuments ? "Waiting for documents" : needsIdentity ? "Waiting for your ID check" : reviewCaption,
                     state: .current
                 ),
                 StatusTimelineStage(id: "approved", label: "Approved", state: .pending)
@@ -289,6 +302,8 @@ public extension WaitingRoomContent {
             timelinePaused: false,
             etaPill: needsDocuments
                 ? StatusWaitingPill(text: "The review starts after you upload documents", icon: .filePlus2, tone: .primary)
+                : needsIdentity
+                ? StatusWaitingPill(text: "Approval waits for your ID check", icon: .idCard, tone: .primary)
                 : StatusWaitingPill(text: "We'll notify you when it's decided", icon: .bell, tone: .primary),
             manageSectionTitle: manageTitle,
             inlineActions: [
@@ -301,7 +316,8 @@ public extension WaitingRoomContent {
                 )
             ] + (addressVerified ? [] : [verifyByMailAction()]) + [cancelClaimAction()],
             primaryCta: viewClaim,
-            secondaryCta: backToHome
+            secondaryCta: backToHome,
+            approvalSteps: WaitingRoomApproval.steps(approval, residency: residency)
         )
     }
 

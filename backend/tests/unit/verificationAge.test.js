@@ -81,7 +81,7 @@ describe('describe()', () => {
 
 describe('enforcement has read sites (the flag changes real behaviour)', () => {
   const { seedTable } = require('../__mocks__/supabaseAdmin');
-  const { getAccessibleHomeIds } = require('../../utils/homeMailAccess');
+  const { getAccessibleHomeIds, householdHomeIds } = require('../../utils/homeMailAccess');
 
   function seedOccupancy(verifiedAt) {
     seedTable('HomeOccupancy', [{
@@ -90,6 +90,7 @@ describe('enforcement has read sites (the flag changes real behaviour)', () => {
       user_id: 'user-age-1',
       is_active: true,
       verification_status: 'verified',
+      verification_source: 'address',
       verified_at: verifiedAt,
     }]);
   }
@@ -116,16 +117,19 @@ describe('enforcement has read sites (the flag changes real behaviour)', () => {
     expect(await getAccessibleHomeIds('user-age-1')).toEqual(['home-age-1']);
   });
 
-  test('mail access: provisional_bootstrap has no verification to age', async () => {
+  // Since D1 (2026-10-27) provisional_bootstrap reads no Home mail at all; household membership keeps it.
+  test('household access: provisional_bootstrap has no verification to age', async () => {
     seedTable('HomeOccupancy', [{
       id: 'occ-age-2',
       home_id: 'home-age-2',
       user_id: 'user-age-1',
       is_active: true,
       verification_status: 'provisional_bootstrap',
+      verification_source: 'legacy',
       verified_at: null,
     }]);
     flags.__setOverrides({ enforceVerificationExpiry: true });
-    expect(await getAccessibleHomeIds('user-age-1')).toEqual(['home-age-2']);
+    expect(await householdHomeIds('user-age-1')).toEqual(['home-age-2']);
+    expect(await getAccessibleHomeIds('user-age-1')).toEqual([]);
   });
 });

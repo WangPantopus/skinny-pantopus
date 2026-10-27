@@ -112,6 +112,15 @@ public struct WaitingRoomView: View {
                 .padding(.top, Spacing.s2)
                 headlineBlock
                 addressRow
+                if !viewModel.content.approvalSteps.isEmpty {
+                    WaitingRoomApprovalCard(
+                        steps: viewModel.content.approvalSteps,
+                        busyKey: viewModel.approvalBusyKey,
+                        notice: viewModel.approvalNotice
+                    ) { key in
+                        Task { await viewModel.handleApprovalAction(key) }
+                    }
+                }
                 if let note = viewModel.content.reviewerNote {
                     WaitingRoomReviewerNoteCard(note: note)
                 }

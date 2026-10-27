@@ -418,13 +418,13 @@ extension MyHomesListViewModel {
 
 extension MyHomesListViewModel {
     /// The app went to the background. A list whose every Home may show before
-    /// its re-check (an owner's, a household member's, a private setup) stays
-    /// on screen for the app switcher and the first frame back; any other list
-    /// (a guest's, expiring access, a Home in verification) blanks until the
-    /// server answers (founder decision 3). Coming back re-reads either way.
+    /// its re-check (an owner's, a household member's, a private setup, or one
+    /// the person asked to claim or join), or no Homes at all, stays on screen
+    /// for the app switcher and the first frame back; a list with a guest's or
+    /// expiring access blanks until the server answers (founder decision 3).
+    /// Coming back re-reads either way.
     func suspendInBackground() {
-        guard case .loaded = state, !entries.isEmpty,
-              entries.allSatisfy(\.showsCopyBeforeRecheck), isCurrent else {
+        guard state.showsContent, entries.allSatisfy(\.showsInListBeforeRecheck), isCurrent else {
             suspend()
             return
         }

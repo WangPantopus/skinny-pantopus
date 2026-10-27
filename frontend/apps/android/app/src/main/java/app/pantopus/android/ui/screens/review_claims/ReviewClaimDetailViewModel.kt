@@ -49,6 +49,31 @@ enum class ChallengeReason(val label: String) {
     Other("Other"),
 }
 
+/**
+ * Household role a platform admin may approve a claim as (`approve_as`). Labels and hints match the web review
+ * page and the iOS mirror (`AdminClaimApprovalRole` in `AdminClaimsDTOs.swift`).
+ */
+enum class ClaimApprovalRole(val wire: String, val label: String, val hint: String) {
+    Owner("owner", "Owner", "Full control of the home, including ownership and security."),
+    Admin("admin", "Admin", "Views the home and its ownership, and votes on household decisions."),
+    Manager("manager", "Manager", "Views the home and works on tasks."),
+    Member("member", "Member", "Views the home and works on tasks."),
+    Renter("lease_resident", "Renter", "Sees members, Wi-Fi, the calendar and packages, and works on tasks."),
+    RestrictedMember("restricted_member", "Restricted member", "Views the home only."),
+    Guest("guest", "Guest", "Views the home only."),
+    ;
+
+    companion object {
+        /** The role an approval grants when the admin keeps what the person claimed. */
+        fun claimed(claimType: String?): ClaimApprovalRole =
+            when (claimType) {
+                "owner" -> Owner
+                "admin" -> Admin
+                else -> Renter
+            }
+    }
+}
+
 /** Lifecycle state for the claim detail screen. */
 sealed interface ReviewClaimDetailUiState {
     data object Loading : ReviewClaimDetailUiState
@@ -96,6 +121,35 @@ class ReviewClaimDetailViewModel
         private val _challengeQuestion = MutableStateFlow("")
         val challengeQuestion: StateFlow<String> = _challengeQuestion.asStateFlow()
 
+        /**
+         * "I confirmed this person's identity" — a platform admin's own confirmation, sent with
+         * Approve only while the claim has no confirmed identity.
+         */
+        private val _identityAttested = MutableStateFlow(false)
+        val identityAttested: StateFlow<Boolean> = _identityAttested.asStateFlow()
+
+        fun setIdentityAttested(attested: Boolean) {
+            _identityAttested.value = attested
+        }
+
+        /** The household role Accept grants. Starts as what the person claimed. */
+        private val _approveAs = MutableStateFlow(ClaimApprovalRole.Owner)
+        val approveAs: StateFlow<ClaimApprovalRole> = _approveAs.asStateFlow()
+
+        fun setApproveAs(role: ClaimApprovalRole) {
+            _approveAs.value = role
+        }
+
+        /** `true` only for an approve the admin attested while the claim has no confirmed identity. */
+        private fun identityAttestation(
+            action: AdminClaimReviewAction,
+            detail: AdminClaimDetailResponse,
+        ): Boolean? =
+            true.takeIf {
+                action == AdminClaimReviewAction.Approve && _identityAttested.value &&
+                    detail.approval?.identityConfirmed != true && detail.claim.identityStatus != "verified"
+            }
+
         private var loadedOnce: Boolean = false
         private val session = scopeFactory.create(viewModelScope)
         private var loadGeneration = 0
@@ -120,7 +174,24 @@ class ReviewClaimDetailViewModel
             load()
         }
 
-        private data class PendingDecision(val claim: AdminClaimRecordDto, val action: AdminClaimReviewAction, val note: String?)
+        private data class PendingDecision(
+            val claim: AdminClaimRecordDto,
+            val action: AdminClaimReviewAction,
+            val note: String?,
+            val approveAs: String?,
+        )
+
+        /** The decision to send. Only an approval carries a role, and only when it differs from what they claimed. */
+        private fun decisionFor(
+            detail: AdminClaimDetailResponse,
+            action: AdminClaimReviewAction,
+            note: String?,
+        ): PendingDecision {
+            val role = _approveAs.value
+            val roleChoice =
+                role.wire.takeIf { action == AdminClaimReviewAction.Approve && role != ClaimApprovalRole.claimed(detail.claim.claimType) }
+            return PendingDecision(detail.claim, action, note, roleChoice)
+        }
 
         private var pendingDecision: PendingDecision? = null
 
@@ -157,17 +228,17 @@ class ReviewClaimDetailViewModel
                     CLAIM_SNAPSHOT_CHANGED
                 }
                 check(!detail.claim.requiresDisputeReview) { CLAIM_DISPUTE_REVIEW }
-                pendingDecision?.let {
-                    check(
-                        it.claim == detail.claim && it.action == action && it.note == note,
-                    ) { CLAIM_PENDING_DECISION }
-                }
-                pendingDecision = PendingDecision(detail.claim, action, note)
+                val role = _approveAs.value
+                val decision = decisionFor(detail, action, note)
+                pendingDecision?.let { check(it == decision) { CLAIM_PENDING_DECISION } }
+                pendingDecision = decision
                 val request =
                     AdminClaimReviewRequest(
                         action = action.backendValue,
                         reviewToken = requireNotNull(detail.claim.reviewToken),
                         note = note,
+                        identityConfirmed = identityAttestation(action, detail),
+                        approveAs = decision.approveAs,
                     )
                 val result = repo.reviewClaim(claimId, request)
                 session.requireCurrent()
@@ -180,7 +251,7 @@ class ReviewClaimDetailViewModel
                     "Could not confirm the claim result. Please retry."
                 }
                 pendingDecision = null
-                _toast.value = ReviewClaimToast(text = successCopy(action), isError = false)
+                _toast.value = ReviewClaimToast(text = successCopy(action, role), isError = false)
                 _reviewingAction.value = null
                 reload()
                 true
@@ -254,6 +325,7 @@ class ReviewClaimDetailViewModel
                 ) { CLAIM_SNAPSHOT_CHANGED }
                 _state.value = ReviewClaimDetailUiState.Loaded(detail)
                 pendingDecision = null
+                if (!loadedOnce) _approveAs.value = ClaimApprovalRole.claimed(detail.claim.claimType)
                 loadedOnce = true
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -272,9 +344,12 @@ class ReviewClaimDetailViewModel
             return false
         }
 
-        private fun successCopy(action: AdminClaimReviewAction): String =
+        private fun successCopy(
+            action: AdminClaimReviewAction,
+            role: ClaimApprovalRole,
+        ): String =
             when (action) {
-                AdminClaimReviewAction.Approve -> "Claim approved."
+                AdminClaimReviewAction.Approve -> "Claim approved as ${role.label}."
                 AdminClaimReviewAction.Reject -> "Claim rejected."
                 AdminClaimReviewAction.Challenge -> "Request for more information saved."
             }

@@ -18,6 +18,7 @@ public struct ReviewClaimDetailView: View {
     @State private var rejectNote: String = ""
     @State private var showChallengeSheet = false
     @State private var evidenceTarget: PrivateClaimEvidenceViewModel?
+    @State private var verdictBarHeight: CGFloat = 0
     private let onClose: @MainActor () -> Void
 
     public init(
@@ -172,6 +173,11 @@ public struct ReviewClaimDetailView: View {
                         ClaimantCard(model: ReviewClaimMap.claimantModel(detail, reviewable: isReviewable))
                             .accessibilityIdentifier("reviewClaimDetail_claimant")
                     }
+                    if isReviewable, let approval = detail.approval {
+                        OverlineSection(title: "Before you approve") {
+                            ReviewClaimApprovalSection(approval: approval, detail: detail, viewModel: viewModel)
+                        }
+                    }
                     OverlineSection(title: evidenceOverline(detail.evidence.count)) {
                         evidenceContent(detail.evidence)
                             .accessibilityIdentifier("reviewClaimDetail_evidence")
@@ -193,6 +199,9 @@ public struct ReviewClaimDetailView: View {
                     } else if !isReviewable {
                         TerminalStateBanner(state: detail.claim.state)
                             .accessibilityIdentifier("reviewClaimDetail_terminal")
+                    } else { // Room under the card: the verdict bar floats over the scroll content.
+                        OverlineSection(title: "Approve as") { ApprovalChoiceCard(detail: detail, viewModel: viewModel) }
+                            .padding(.bottom, verdictBarHeight)
                     }
                 }
                 .padding(.horizontal, Spacing.s4)
@@ -201,10 +210,13 @@ public struct ReviewClaimDetailView: View {
                 if isReviewable {
                     VerdictBar(
                         reviewingAction: viewModel.reviewingAction,
+                        acceptBlockedReason: viewModel.acceptBlockedReason(detail),
+                        acceptLabel: viewModel.acceptLabel(detail),
                         onAccept: { Task { _ = await viewModel.review(.approve) } },
                         onChallenge: { showChallengeSheet = true },
                         onReject: { showRejectSheet = true }
                     )
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { verdictBarHeight = $0 }
                 } else {
                     EmptyView()
                 }

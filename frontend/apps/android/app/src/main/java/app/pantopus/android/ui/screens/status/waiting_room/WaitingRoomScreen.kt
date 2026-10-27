@@ -2,6 +2,8 @@
 
 package app.pantopus.android.ui.screens.status.waiting_room
 
+import android.net.Uri
+import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -29,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.heading
@@ -70,10 +73,25 @@ fun WaitingRoomRoute(
     val content by viewModel.content.collectAsStateWithLifecycle()
     val phase by viewModel.phase.collectAsStateWithLifecycle()
     val navEvent by viewModel.navEvent.collectAsStateWithLifecycle()
+    val approvalBusyKey by viewModel.approvalBusyKey.collectAsStateWithLifecycle()
+    val approvalNotice by viewModel.approvalNotice.collectAsStateWithLifecycle()
+    val openUrl by viewModel.openUrl.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     // Refetch on every resume, as iOS does on appear: returning from evidence
-    // upload, the postcard or the Home (or to the app) can change the claim.
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refresh() }
+    // upload, the postcard, Stripe's identity check or the Home (or to the app)
+    // can change the claim.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.onResumed() }
+
+    // Stripe's identity check page opens in a Custom Tab, as the Stripe Connect pages do.
+    LaunchedEffect(openUrl) {
+        openUrl?.let { url ->
+            runCatching {
+                CustomTabsIntent.Builder().setShowTitle(true).build().launchUrl(context, Uri.parse(url))
+            }
+            viewModel.consumeOpenUrl()
+        }
+    }
 
     LaunchedEffect(navEvent) {
         navEvent?.let {
@@ -93,6 +111,9 @@ fun WaitingRoomRoute(
         onSecondary = viewModel::handleSecondary,
         onRetry = viewModel::refresh,
         onVerificationAction = viewModel::handleVerificationAction,
+        approvalBusyKey = approvalBusyKey,
+        approvalNotice = approvalNotice,
+        onApprovalAction = viewModel::handleApprovalAction,
     )
 }
 
@@ -119,6 +140,9 @@ fun WaitingRoomScreen(
     onSecondary: (StatusCta) -> Unit = {},
     onRetry: () -> Unit = {},
     onVerificationAction: (HomeVerificationAction) -> Unit = {},
+    approvalBusyKey: String? = null,
+    approvalNotice: String? = null,
+    onApprovalAction: (String) -> Unit = {},
 ) {
     Column(
         modifier =
@@ -167,6 +191,9 @@ fun WaitingRoomScreen(
                     content = content,
                     modifier = Modifier.weight(1f),
                     onInlineAction = onInlineAction,
+                    approvalBusyKey = approvalBusyKey,
+                    approvalNotice = approvalNotice,
+                    onApprovalAction = onApprovalAction,
                 )
                 StickyDock(
                     content = content,
@@ -186,6 +213,9 @@ private fun LoadedFrame(
     content: WaitingRoomContent,
     modifier: Modifier = Modifier,
     onInlineAction: (WaitingRoomInlineAction) -> Unit = {},
+    approvalBusyKey: String? = null,
+    approvalNotice: String? = null,
+    onApprovalAction: (String) -> Unit = {},
 ) {
     Column(
         modifier =
@@ -203,6 +233,14 @@ private fun LoadedFrame(
         )
         HeadlineBlock(content)
         AddressRow(address = content.address, claimRef = content.claimRef)
+        if (content.approvalSteps.isNotEmpty()) {
+            WaitingRoomApprovalCard(
+                steps = content.approvalSteps,
+                busyKey = approvalBusyKey,
+                notice = approvalNotice,
+                onAction = onApprovalAction,
+            )
+        }
         content.reviewerNote?.let { ReviewerNoteCard(it) }
         StatusTimeline(
             stages = content.timeline,

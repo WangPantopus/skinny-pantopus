@@ -31,6 +31,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -39,18 +41,23 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -136,6 +143,8 @@ fun ReviewClaimDetailScreen(
     val toast by viewModel.toast.collectAsStateWithLifecycle()
     val selectedReasons by viewModel.selectedReasons.collectAsStateWithLifecycle()
     val challengeQuestion by viewModel.challengeQuestion.collectAsStateWithLifecycle()
+    val identityAttested by viewModel.identityAttested.collectAsStateWithLifecycle()
+    val approveAs by viewModel.approveAs.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
 
     var showRejectSheet by rememberSaveable { mutableStateOf(false) }
@@ -167,6 +176,10 @@ fun ReviewClaimDetailScreen(
                     },
                     onReject = { showRejectSheet = true },
                     onChallenge = { showChallengeSheet = true },
+                    identityAttested = identityAttested,
+                    onIdentityAttested = viewModel::setIdentityAttested,
+                    approveAs = approveAs,
+                    onApproveAs = viewModel::setApproveAs,
                 )
         }
 
@@ -307,8 +320,16 @@ private fun LoadedShell(
     onAccept: () -> Unit,
     onReject: () -> Unit,
     onChallenge: () -> Unit,
+    identityAttested: Boolean = false,
+    onIdentityAttested: (Boolean) -> Unit = {},
+    approveAs: ClaimApprovalRole = ClaimApprovalRole.claimed(detail.claim.claimType),
+    onApproveAs: (ClaimApprovalRole) -> Unit = {},
 ) {
     val isReviewable = detail.claim.state in REVIEWABLE_STATES && !detail.claim.requiresDisputeReview
+    val claimedRole = ClaimApprovalRole.claimed(detail.claim.claimType)
+    // The verdict bar floats over the scroll content; the body ends with room for it so the approval card
+    // can scroll fully into view above it.
+    var verdictBarHeight by remember { mutableIntStateOf(0) }
     ContentDetailShell(
         title = "Review claim",
         onBack = onBack,
@@ -331,6 +352,19 @@ private fun LoadedShell(
                         model = claimantModel(detail, reviewable = isReviewable),
                         modifier = Modifier.testTag("reviewClaimDetail_claimant"),
                     )
+                }
+                val approval = detail.approval
+                if (isReviewable && approval != null) {
+                    OverlineSection(title = "Before you approve") {
+                        ReviewClaimApprovalPanel(
+                            approval = approval,
+                            proof = ReviewClaimApproval.proof(detail, approveAs),
+                            identityFailed = detail.claim.identityStatus == "failed",
+                            identityAttested = identityAttested,
+                            onIdentityAttested = onIdentityAttested,
+                            enabled = reviewingAction == null,
+                        )
+                    }
                 }
                 OverlineSection(title = evidenceOverline(detail.evidence.size)) {
                     TextButton(onClick = onOpenEvidence, modifier = Modifier.testTag("reviewClaimDetail_openPrivateEvidence")) {
@@ -357,6 +391,16 @@ private fun LoadedShell(
                         state = detail.claim.state,
                         modifier = Modifier.testTag("reviewClaimDetail_terminal"),
                     )
+                } else {
+                    OverlineSection(title = "Approve as") {
+                        ApprovalChoiceCard(
+                            claimedRole = claimedRole,
+                            role = approveAs,
+                            onRole = onApproveAs,
+                            enabled = reviewingAction == null,
+                        )
+                    }
+                    Spacer(Modifier.height(with(LocalDensity.current) { verdictBarHeight.toDp() }))
                 }
             }
         },
@@ -364,9 +408,12 @@ private fun LoadedShell(
             if (isReviewable) {
                 VerdictBar(
                     reviewingAction = reviewingAction,
+                    acceptBlockedReason = ReviewClaimApproval.blockedReason(detail, identityAttested, approveAs),
+                    acceptLabel = if (approveAs == claimedRole) "Accept claim" else "Accept as ${approveAs.label}",
                     onAccept = onAccept,
                     onChallenge = onChallenge,
                     onReject = onReject,
+                    modifier = Modifier.onSizeChanged { verdictBarHeight = it.height },
                 )
             }
         },
@@ -885,16 +932,18 @@ private fun terminalCopy(state: String): String =
         else -> "This claim is in state \"$state\" and isn't reviewable from here."
     }
 
-// MARK: - Verdict bar
+// MARK: - Approval role
 
+/** The household role Accept grants; "Before you approve" above follows it (owner and admin need ownership proof). */
 @Composable
-private fun VerdictBar(
-    reviewingAction: AdminClaimReviewAction?,
-    onAccept: () -> Unit,
-    onChallenge: () -> Unit,
-    onReject: () -> Unit,
+private fun ApprovalChoiceCard(
+    claimedRole: ClaimApprovalRole,
+    role: ClaimApprovalRole,
+    onRole: (ClaimApprovalRole) -> Unit,
+    enabled: Boolean,
 ) {
-    val disabled = reviewingAction != null
+    var menuOpen by remember { mutableStateOf(false) }
+    val title = { option: ClaimApprovalRole -> if (option == claimedRole) "${option.label} (what they claimed)" else option.label }
     Column(
         modifier =
             Modifier
@@ -902,19 +951,95 @@ private fun VerdictBar(
                 .clip(RoundedCornerShape(Radii.xl))
                 .background(PantopusColors.appSurface)
                 .border(1.dp, PantopusColors.appBorderSubtle, RoundedCornerShape(Radii.xl))
+                .padding(Spacing.s4),
+        verticalArrangement = Arrangement.spacedBy(Spacing.s3),
+    ) {
+        Box {
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 44.dp)
+                        .clip(RoundedCornerShape(Radii.md))
+                        .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.md))
+                        .clickable(enabled = enabled) { menuOpen = true }
+                        .padding(horizontal = Spacing.s3)
+                        .semantics { contentDescription = "Approve as ${role.label}" }
+                        .testTag("reviewClaimDetail_approveAs"),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = title(role),
+                    style = PantopusTextStyle.small,
+                    fontWeight = FontWeight.SemiBold,
+                    color = PantopusColors.appText,
+                    modifier = Modifier.weight(1f),
+                )
+                PantopusIconImage(
+                    icon = PantopusIcon.ChevronDown,
+                    contentDescription = null,
+                    size = 16.dp,
+                    tint = PantopusColors.appTextSecondary,
+                )
+            }
+            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                ClaimApprovalRole.entries.forEach { option ->
+                    DropdownMenuItem(
+                        text = { Text(title(option)) },
+                        onClick = {
+                            menuOpen = false
+                            onRole(option)
+                        },
+                        modifier = Modifier.testTag("reviewClaimDetail_role_${option.wire}"),
+                    )
+                }
+            }
+        }
+        Text(text = role.hint, style = PantopusTextStyle.caption, color = PantopusColors.appTextSecondary)
+    }
+}
+
+// MARK: - Verdict bar
+
+@Composable
+private fun VerdictBar(
+    reviewingAction: AdminClaimReviewAction?,
+    acceptBlockedReason: String?,
+    onAccept: () -> Unit,
+    onChallenge: () -> Unit,
+    onReject: () -> Unit,
+    acceptLabel: String = "Accept claim",
+    modifier: Modifier = Modifier,
+) {
+    val disabled = reviewingAction != null
+    Column(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(Radii.xl))
+                .background(PantopusColors.appSurface)
+                .border(1.dp, PantopusColors.appBorderSubtle, RoundedCornerShape(Radii.xl))
                 .padding(Spacing.s3),
         verticalArrangement = Arrangement.spacedBy(Spacing.s2),
     ) {
+        acceptBlockedReason?.let {
+            Text(
+                text = it,
+                fontSize = 12.5.sp,
+                color = PantopusColors.appTextSecondary,
+                modifier = Modifier.fillMaxWidth().testTag("reviewClaimDetail_acceptBlocked"),
+            )
+        }
         FooterPrimaryButton(
-            label = if (reviewingAction == AdminClaimReviewAction.Approve) "Accepting…" else "Accept claim",
+            label = if (reviewingAction == AdminClaimReviewAction.Approve) "Accepting…" else acceptLabel,
             icon = PantopusIcon.CheckCircle,
             background = PantopusColors.success,
             foreground = PantopusColors.appTextInverse,
             isSubmitting = reviewingAction == AdminClaimReviewAction.Approve,
-            enabled = !disabled,
+            enabled = !disabled && acceptBlockedReason == null,
             onClick = onAccept,
             modifier = Modifier.testTag("reviewClaimDetail_accept"),
-            accessibilityLabel = "Accept claim",
+            accessibilityLabel = acceptLabel,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
             FooterSecondaryButton(
@@ -961,13 +1086,16 @@ private fun FooterPrimaryButton(
     modifier: Modifier = Modifier,
     accessibilityLabel: String,
 ) {
+    // Off (not just busy submitting) reads as off, as on iOS: faded and flat.
+    val dimmed = !enabled && !isSubmitting
     Row(
         modifier =
             modifier
                 .fillMaxWidth()
                 .heightIn(min = 48.dp)
-                .shadow(8.dp, RoundedCornerShape(Radii.xl))
+                .shadow(if (dimmed) 0.dp else 8.dp, RoundedCornerShape(Radii.xl))
                 .clip(RoundedCornerShape(Radii.xl))
+                .alpha(if (dimmed) 0.5f else 1f)
                 .background(background)
                 .conditionalClickable(enabled = enabled, onClick = onClick)
                 .padding(horizontal = Spacing.s3)

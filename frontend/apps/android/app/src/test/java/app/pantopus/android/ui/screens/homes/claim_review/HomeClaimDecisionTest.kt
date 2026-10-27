@@ -271,7 +271,7 @@ class HomeClaimDecisionTest {
             vm.load()
             assertTrue(vm.review(AdminClaimReviewAction.Approve))
             coVerify { adminRepo.reviewClaim("claim-1", AdminClaimReviewRequest("approve", token, null)) }
-            assertEquals("Claim approved.", vm.toast.value?.text)
+            assertEquals("Claim approved as Renter.", vm.toast.value?.text)
         }
 
     @Test fun platformUnknownResultRequiresSameNoteAndAction() =
