@@ -80,7 +80,7 @@ type MenuEntry = { label: string; href: string; icon: LucideIcon };
 // The pages the left column listed, minus Messages (its own tab now).
 const MENU_GROUPS: MenuEntry[][] = [
   [
-    { label: 'Recently deleted', href: '/app/mailbox/deleted', icon: MailboxIcons.deleted },
+    { label: 'Recently shredded', href: '/app/mailbox/deleted', icon: MailboxIcons.deleted },
     { label: 'Travel Mode', href: '/app/mailbox/travel', icon: MailboxIcons.travel },
   ],
   [

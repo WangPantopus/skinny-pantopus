@@ -13,6 +13,7 @@
 //   - Everything exported
 // ============================================================
 
+import type { MailItemV2 } from '@pantopus/api';
 import type { AuditEvent } from '@pantopus/api';
 
 // ── Re-exports from @pantopus/types ──────────────────────────
@@ -672,4 +673,6 @@ export interface MailItemDetailResponse {
   wrapper: MailWrapper;
   inside: MailInside;
   policy: MailPolicy;
+  /** The piece as the server sends it (kind, summary, enclosures, invoice, postmark …). */
+  piece: MailItemV2;
 }

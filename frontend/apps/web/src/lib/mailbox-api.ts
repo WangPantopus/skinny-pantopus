@@ -230,8 +230,28 @@ export async function getItemDetail(itemId: string): Promise<MailItemDetailRespo
         requires_acknowledgment: certified,
         certified,
       },
+      piece: mail,
     };
   });
+}
+
+/** What you can do with a piece (contract: POST /api/mailbox/v2/item/:id/action). */
+export type MailActionName = 'counter' | 'done' | 'file' | 'unfile' | 'shred' | 'acknowledge';
+
+/** Do something with a piece; returns the piece as it is now (null when it's gone). */
+export async function mailAction(itemId: string, action: MailActionName, folderId?: string): Promise<MailItemV2 | null> {
+  return call(async () => {
+    const res = await post<{ mail: MailItemV2 | null }>(`/api/mailbox/v2/item/${itemId}/action`, {
+      action,
+      ...(folderId ? { folder_id: folderId } : {}),
+    });
+    return res?.mail ?? null;
+  });
+}
+
+/** A short-lived link to one enclosure, fetched when the person opens it. */
+export async function getEnclosureLink(itemId: string, enclosureId: string): Promise<{ url: string; expires_at: string }> {
+  return call(() => get<{ url: string; expires_at: string }>(`/api/mailbox/${itemId}/enclosures/${enclosureId}`));
 }
 
 /** Certified-mail columns the item route returns with the Mail row. */

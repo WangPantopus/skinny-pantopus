@@ -23,7 +23,7 @@ import {
 
 import * as api from '@/lib/mailbox-api';
 import { MailboxApiError } from '@/lib/mailbox-api';
-import { businesses as businessesApi } from '@pantopus/api';
+import { businesses as businessesApi, mailboxV2P2 as mailboxV2P2Api } from '@pantopus/api';
 import type { AssetFullDetail } from '@/lib/mailbox-api';
 import type { DeletedMail } from '@pantopus/api';
 
@@ -170,6 +170,67 @@ export function useMailboxDrawers(
     queryFn: api.getDrawers,
     staleTime: STALE_30S,
     ...options,
+  });
+}
+
+/**
+ * Do something with a piece (counter, done, file, unfile, shred, acknowledge).
+ * The letter updates in place from the server's answer; lists and counts
+ * refresh. A failure leaves everything as it was.
+ */
+export function useMailAction(itemId: string) {
+  const qc = useQueryClient();
+  return useMutation<MailItemV2 | null, MailboxApiError, { action: api.MailActionName; folderId?: string }>({
+    mutationFn: ({ action, folderId }) => api.mailAction(itemId, action, folderId),
+    onSuccess: (piece) => {
+      if (piece) {
+        qc.setQueryData<MailItemDetailResponse>(mailboxKeys.itemDetail(itemId), (detail) => (detail ? {
+          ...detail,
+          piece: { ...detail.piece, ...piece },
+          wrapper: { ...detail.wrapper, lifecycle: piece.lifecycle, removed: piece.removed ?? undefined, acknowledged_at: piece.acknowledged_at ?? detail.wrapper.acknowledged_at },
+        } : detail));
+      }
+      qc.invalidateQueries({ queryKey: mailboxKeys.itemDetail(itemId) });
+      qc.invalidateQueries({ queryKey: mailboxKeys.drawers() });
+      qc.invalidateQueries({ queryKey: mailboxKeys.counter() });
+      qc.invalidateQueries({ queryKey: [...mailboxKeys.all, 'drawer'] });
+      qc.invalidateQueries({ queryKey: [...mailboxKeys.all, 'vault'] });
+      qc.invalidateQueries({ queryKey: mailboxKeys.deleted() });
+      qc.invalidateQueries({ queryKey: [...mailboxKeys.all, 'search'] });
+    },
+  });
+}
+
+type BookletPages = {
+  pages: { page_number: number; image_url?: string; text_content?: string }[];
+  cover_image_url?: string;
+  download_url?: string;
+  download_size_bytes?: number;
+};
+
+/**
+ * A booklet's pages, cover and download (GET /api/mailbox/v2/p2/booklet/:id);
+ * no pages when the sender sent only a cover.
+ */
+export function useBooklet(itemId: string, enabled: boolean) {
+  return useQuery<BookletPages, MailboxApiError>({
+    queryKey: [...mailboxKeys.all, 'booklet', itemId],
+    queryFn: async () => {
+      try {
+        const reply = await mailboxV2P2Api.getBooklet(itemId);
+        return {
+          pages: (reply?.pages ?? []).map((page) => ({ page_number: page.page_number, image_url: page.image_url, text_content: page.text_content })),
+          cover_image_url: reply?.booklet?.cover_image_url ?? undefined,
+          download_url: reply?.booklet?.download_url ?? undefined,
+          download_size_bytes: reply?.booklet?.download_size_bytes ?? undefined,
+        };
+      } catch (err) {
+        const e = err as { statusCode?: number; message?: string; data?: { code?: string } };
+        throw new MailboxApiError(e.statusCode ? 'REQUEST_ERROR' : 'NETWORK_ERROR', e.message || 'Error', e.statusCode ?? 0, (e.statusCode ?? 500) >= 500, e.data?.code);
+      }
+    },
+    enabled,
+    staleTime: STALE_5M,
   });
 }
 

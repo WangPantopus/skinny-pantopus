@@ -53,6 +53,8 @@ export interface MailItemV2 {
   privacy: Privacy;
   lifecycle: Lifecycle;
   removed?: MailRemovedInfo | null;
+  /** Who shredded it, while it can be brought back. */
+  deleted_by?: string | null;
   subject?: string;
   content?: string;
   preview_text?: string;
@@ -92,6 +94,24 @@ export interface MailItemV2 {
   bundle_id?: string | null;
   bundle_label?: string | null;
   bundle_item_count?: number | null;
+  /** "Pantopus read this for you": made once and kept; null means no note. */
+  summary?: { text: string; key_facts: { label: string; value: string }[] } | null;
+  /** Bills from business invoices; the status is read live from the invoice. */
+  invoice?: {
+    id: string;
+    status: 'sent' | 'viewed' | 'paid' | 'void' | 'overdue';
+    total_cents: number;
+    currency: string;
+    due_date: string | null;
+    business_name: string | null;
+  } | null;
+  /** Detail only: what's in the envelope; fetch a short-lived link per enclosure. */
+  enclosures?: { id: string; name: string; mime_type: string; size_bytes: number }[];
+  vault_folder_id?: string | null;
+  acknowledged_at?: string | null;
+  first_opened_at?: string | null;
+  sender_address?: string | null;
+  page_count?: number | null;
 }
 
 export type MailKind = 'letter' | 'bill' | 'notice' | 'postcard' | 'booklet' | 'parcel' | 'bundle';

@@ -29,6 +29,11 @@ export function pieceKind(item: Pick<MailItemV2, 'kind' | 'mail_object_type' | '
   return item.mail_type === 'bill' ? 'bill' : item.mail_type === 'notice' ? 'notice' : 'letter';
 }
 
+/** What you hold when you open it: "envelope" for letters, bills and notices, else the piece itself. */
+export function pieceOutside(kind: PieceKind): string {
+  return kind === 'postcard' || kind === 'booklet' || kind === 'parcel' || kind === 'bundle' ? kind : 'envelope';
+}
+
 type Trust = { label: string; color: string; mark: string | null };
 
 // How Pantopus checked the sender: the printed postage line and the label.

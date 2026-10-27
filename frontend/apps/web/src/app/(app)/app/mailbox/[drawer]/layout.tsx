@@ -5,10 +5,11 @@ import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { MailItemV2 } from '@/types/mailbox';
 import { useQueryClient } from '@tanstack/react-query';
-import { mailboxKeys, useBundleItems, useDrawerItems, useMarkItemOpened } from '@/lib/mailbox-queries';
+import { mailboxKeys, useDrawerItems, useMarkItemOpened } from '@/lib/mailbox-queries';
 import { OfferCard } from '@/components/mailbox';
 import { DRAWER_LABELS, isMailboxDrawer, type MailboxDrawer } from '@/components/mailbox/MailboxHeader';
 import MailRow, { deliveryDayLabel } from '@/components/mailbox/MailRow';
+import BundlePieces from '@/components/mailbox/BundlePieces';
 import MailboxIllustration from '@/components/mailbox/MailboxIllustration';
 import { mailLoadMessage } from '@/components/mailbox/mailLoadMessage';
 import useMailAddressee, { type Addressee } from '@/components/mailbox/useMailAddressee';
@@ -394,50 +395,5 @@ function DrawerItemRenderer({
       onOpen={() => onClick(item)}
       slideInDelayMs={slideInDelayMs}
     />
-  );
-}
-
-// The pieces inside an opened bundle, each opening as its own letter.
-function BundlePieces({
-  bundleId,
-  addressee,
-  timeZone,
-  onOpen,
-}: {
-  bundleId: string;
-  addressee: (item: MailItemV2) => Addressee;
-  timeZone?: string;
-  onOpen: (item: MailItemV2) => void;
-}) {
-  const { data: pieces, isPending, isError, error, refetch } = useBundleItems(bundleId);
-  if (isPending) {
-    return (
-      <div className="ml-4 mt-3 border-l-2 border-app-border pl-3" role="status" aria-label="Opening the bundle">
-        <div className="h-[150px] rounded-md bg-app-surface-sunken animate-pulse" />
-      </div>
-    );
-  }
-  if (isError) {
-    return (
-      <div role="alert" className="ml-4 mt-3 flex items-center justify-between gap-3 rounded-xl border border-app-border bg-app-surface px-4 py-3 text-sm text-app-text-strong">
-        <p>Couldn&apos;t open this bundle. {mailLoadMessage(error)}</p>
-        <button type="button" onClick={() => { void refetch(); }} className="flex-shrink-0 font-semibold text-primary-600 hover:underline">Try again</button>
-      </div>
-    );
-  }
-  if (!pieces?.length) {
-    return <p className="ml-4 mt-3 border-l-2 border-app-border pl-3 text-sm text-app-text-secondary">This bundle is empty. Its pieces may have been filed or shredded.</p>;
-  }
-  return (
-    <div role="list" aria-label="Pieces in this bundle" className="ml-4 mt-3 space-y-4 border-l-2 border-app-border pl-3">
-      {pieces.map((piece) => {
-        const to = addressee(piece);
-        return (
-          <div role="listitem" key={piece.id}>
-            <MailRow item={piece} recipientName={to.name} recipientLine={to.line} timeZone={timeZone} onOpen={() => onOpen(piece)} />
-          </div>
-        );
-      })}
-    </div>
   );
 }
