@@ -128,6 +128,15 @@ val MyHome.showsCopyBeforeRecheck: Boolean
                 else -> false
             }
 
+/**
+ * The homes list may also show a Home the person asked to claim or join (still in verification) before the re-check:
+ * it's their own request (founder, 2026-10-27). A Home's own screens keep [showsCopyBeforeRecheck].
+ */
+val MyHome.showsInListBeforeRecheck: Boolean
+    get() =
+        showsCopyBeforeRecheck ||
+            (accessKind == "verification" && hasValidListContext && occupancy?.endAt == null && occupancy?.accessEndAt == null)
+
 /** Human-readable area label for the compose target picker. */
 fun MyHome.areaLabel(): String {
     val parts = listOfNotNull(city, state).map { it.trim() }.filter { it.isNotEmpty() }

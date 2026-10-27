@@ -3632,7 +3632,7 @@ router.get('/:id/vendors', verifyToken, async (req, res) => {
     const { id: homeId } = req.params;
     const userId = req.user.id;
 
-    const access = await checkHomePermission(homeId, userId);
+    const access = await checkHomePermission(homeId, userId, 'vendors.view');
     if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
 
     const { data, error } = await supabaseAdmin
@@ -3661,7 +3661,7 @@ router.post('/:id/vendors', verifyToken, async (req, res) => {
     const { id: homeId } = req.params;
     const userId = req.user.id;
 
-    const access = await checkHomePermission(homeId, userId);
+    const access = await checkHomePermission(homeId, userId, 'vendors.manage');
     if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
 
     const { name, service_category, phone, email, website, contact, rating, notes } = req.body;
@@ -3705,7 +3705,7 @@ router.put('/:id/vendors/:vendorId', verifyToken, async (req, res) => {
     const { id: homeId, vendorId } = req.params;
     const userId = req.user.id;
 
-    const access = await checkHomePermission(homeId, userId);
+    const access = await checkHomePermission(homeId, userId, 'vendors.manage');
     if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
 
     const allowed = ['name', 'service_category', 'phone', 'email', 'website', 'contact', 'rating', 'notes', 'trusted', 'history'];
@@ -3748,7 +3748,7 @@ router.get('/:id/businesses', verifyToken, async (req, res) => {
     const { id: homeId } = req.params;
     const userId = req.user.id;
 
-    const access = await checkHomePermission(homeId, userId);
+    const access = await checkHomePermission(homeId, userId, 'vendors.view');
     if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
 
     const { data, error } = await supabaseAdmin
@@ -3959,7 +3959,7 @@ router.get('/:id/businesses/search', verifyToken, async (req, res) => {
     const userId = req.user.id;
     const q = (req.query.q || '').trim();
 
-    const access = await checkHomePermission(homeId, userId);
+    const access = await checkHomePermission(homeId, userId, 'vendors.manage');
     if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
 
     if (!q || q.length < 2) return res.json({ results: [] });

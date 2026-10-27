@@ -212,6 +212,8 @@ data class AdminClaimReviewRequest(
     val note: String?,
     /** Approve only: the admin confirmed the claimant's identity themselves. Sent only when true. */
     @Json(name = "identity_confirmed") val identityConfirmed: Boolean? = null,
+    /** Approve only: grant this household role instead of the one the claim type gives. */
+    @Json(name = "approve_as") val approveAs: String? = null,
 )
 
 /**

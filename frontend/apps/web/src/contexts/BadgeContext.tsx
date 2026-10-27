@@ -15,6 +15,7 @@ import { getAuthToken } from '@pantopus/api';
 import * as api from '@pantopus/api';
 import { useSocket, useSocketConnected } from '@/contexts/SocketContext';
 import { launchFeatures } from '@/lib/featureFlags';
+import { useMailUnread } from '@/lib/mailbox-queries';
 import { afterInboxRows } from '@/lib/shellReads';
 
 // ── Types ────────────────────────────────────────────────────
@@ -36,6 +37,8 @@ export interface BadgeCounts {
 }
 
 interface BadgeContextValue extends BadgeCounts {
+  /** Unopened mail in Me, Home and Biz: the Mail tab badge (0 while Mailbox is off). */
+  unreadMail: number;
   /** true when the socket is connected */
   connected: boolean;
   /** the underlying socket instance (for gig detail real-time, etc.) */
@@ -54,6 +57,7 @@ const defaultCounts: BadgeCounts = {
 
 const BadgeContext = createContext<BadgeContextValue>({
   ...defaultCounts,
+  unreadMail: 0,
   connected: false,
   socket: null,
   setUnreadMessages: () => {},
@@ -62,11 +66,23 @@ const BadgeContext = createContext<BadgeContextValue>({
 
 // ── Provider ─────────────────────────────────────────────────
 const FALLBACK_POLL_MS = 15_000;
+// Mail arrives in one morning round plus the odd special delivery, and no
+// socket event announces it, so the Mail badge reads the drawers each minute
+// while the page is visible (and when the window regains focus).
+const MAIL_POLL_MS = 60_000;
 
 export function BadgeProvider({ children }: { children: ReactNode }) {
   const socket = useSocket();
   const connected = useSocketConnected();
   const [counts, setCounts] = useState<BadgeCounts>(defaultCounts);
+  // Launch cut #10 (Mailbox): the Mail tab's count. It shares the Mailbox's
+  // drawers request, so opening a piece there lowers it at once; a failed
+  // read keeps the last count.
+  const { data: unreadMail = 0 } = useMailUnread({
+    enabled: launchFeatures.mailbox && !!getAuthToken(),
+    refetchInterval: MAIL_POLL_MS,
+    refetchOnWindowFocus: true,
+  });
   const socketNotifications = useRef<number | null>(null);
   const fallbackRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const active = useRef(true);
@@ -222,8 +238,8 @@ export function BadgeProvider({ children }: { children: ReactNode }) {
   }, [connected, pollBadges]);
 
   const contextValue = useMemo(
-    () => ({ ...counts, connected, socket, setUnreadMessages, setTotalMessages }),
-    [counts, connected, socket, setUnreadMessages, setTotalMessages],
+    () => ({ ...counts, unreadMail, connected, socket, setUnreadMessages, setTotalMessages }),
+    [counts, unreadMail, connected, socket, setUnreadMessages, setTotalMessages],
   );
 
   return (

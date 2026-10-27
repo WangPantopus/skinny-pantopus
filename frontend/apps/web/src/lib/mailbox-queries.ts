@@ -27,6 +27,7 @@ import type { DeletedMail } from '@pantopus/api';
 
 import type {
   DrawerMeta,
+  MailboxDrawers,
   MailItemV2,
   MailItemDetailResponse,
   MailboxPaginatedResponse,
@@ -132,12 +133,40 @@ const STALE_5M = 5 * 60 * 1000;
 // DRAWER HOOKS
 // ============================================================
 
+const selectDrawers = (data: MailboxDrawers): DrawerMeta[] => data.drawers;
+
+/**
+ * The Mail tab badge: unopened mail in Me, Home and Biz. The server's
+ * `unread_total` once it sends one, until then the drawers' unread counts
+ * without Earn.
+ */
+export function mailUnreadTotal(data: MailboxDrawers): number {
+  if (typeof data.unread_total === 'number' && Number.isFinite(data.unread_total)) return Math.max(0, data.unread_total);
+  return data.drawers
+    .filter((drawer) => drawer.drawer !== 'earn')
+    .reduce((sum, drawer) => sum + (Number(drawer.unread_count) || 0), 0);
+}
+
 export function useDrawerMeta(
-  options?: Omit<UseQueryOptions<DrawerMeta[], MailboxApiError>, 'queryKey' | 'queryFn'>,
+  options?: Omit<UseQueryOptions<MailboxDrawers, MailboxApiError, DrawerMeta[]>, 'queryKey' | 'queryFn' | 'select'>,
 ) {
-  return useQuery<DrawerMeta[], MailboxApiError>({
+  return useQuery<MailboxDrawers, MailboxApiError, DrawerMeta[]>({
     queryKey: mailboxKeys.drawers(),
-    queryFn: api.getDrawerMeta,
+    queryFn: api.getDrawers,
+    select: selectDrawers,
+    staleTime: STALE_30S,
+    ...options,
+  });
+}
+
+/** The Mail tab badge count; shares the drawers request with useDrawerMeta. */
+export function useMailUnread(
+  options?: Omit<UseQueryOptions<MailboxDrawers, MailboxApiError, number>, 'queryKey' | 'queryFn' | 'select'>,
+) {
+  return useQuery<MailboxDrawers, MailboxApiError, number>({
+    queryKey: mailboxKeys.drawers(),
+    queryFn: api.getDrawers,
+    select: mailUnreadTotal,
     staleTime: STALE_30S,
     ...options,
   });

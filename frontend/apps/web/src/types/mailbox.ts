@@ -235,6 +235,16 @@ export interface DrawerMeta {
   last_item_at: string | null;
 }
 
+/**
+ * GET /api/mailbox/v2/drawers. `unread_total` (the Mail tab badge: unopened,
+ * delivered pieces in Me, Home and Biz) is new in the Mail build's contract;
+ * servers before it send only the drawers.
+ */
+export interface MailboxDrawers {
+  drawers: DrawerMeta[];
+  unread_total?: number;
+}
+
 // ── Mail Wrapper / Envelope ──────────────────────────────────
 
 export interface MailWrapper {
