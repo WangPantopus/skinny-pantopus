@@ -1,17 +1,19 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useEffect, useState, useCallback } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { getAuthToken } from '@pantopus/api';
-import MailboxNav from '@/components/mailbox/MailboxNav';
+import MailboxHeader, { mailboxHref, mailboxView } from '@/components/mailbox/MailboxHeader';
 import MailboxErrorBoundary from '@/components/mailbox/MailboxErrorBoundary';
 import { MailboxToastProvider } from '@/components/mailbox/MailboxToast';
 import { MailboxProvider, useMailboxContext } from '@/contexts/MailboxContext';
 import {
-  useDrawerMeta,
   useMailDaySummary,
   useVacationHold,
 } from '@/lib/mailbox-queries';
+import { launchFeatures } from '@/lib/featureFlags';
+import { MailboxIcons } from '@/lib/icons';
+import ComposeLetter from './_components/ComposeLetter';
 
 /**
  * Route-level layout for all /mailbox/* pages.
@@ -19,13 +21,16 @@ import {
  * Provides:
  * - Auth redirect (client-side)
  * - MailboxContext + MailboxToastProvider
- * - Loading skeleton while DrawerMeta loads
- * - Error state with retry
+ * - The Mailbox's navigation in the page (MailboxHeader): the title and "…"
+ *   menu, drawer chips and tabs on the main screens, a back bar on the others
  * - Mail Day summary banner (dismissible for the rest of the day in this browser)
- * - Travel mode banner in left nav
- * - MailboxNav in the left column
+ * - Travel dates banner
  * - Error boundaries around each major section
  * - Children fill the remaining space (nested layouts handle list/detail split)
+ *
+ * Phones scroll the page like every other tab (and keep the tab's place);
+ * from md up the Mailbox fills the window and its list and letter scroll
+ * side by side.
  */
 export default function MailboxRouteLayout({
   children,
@@ -52,7 +57,9 @@ export default function MailboxRouteLayout({
   return (
     <MailboxProvider>
       <MailboxToastProvider>
-        <MailboxLayoutInner>{children}</MailboxLayoutInner>
+        <Suspense>
+          <MailboxLayoutInner>{children}</MailboxLayoutInner>
+        </Suspense>
       </MailboxToastProvider>
     </MailboxProvider>
   );
@@ -62,13 +69,19 @@ export default function MailboxRouteLayout({
 
 function MailboxLayoutInner({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname() ?? '';
+  const searchParams = useSearchParams();
+  const view = mailboxView(pathname, searchParams.get('drawer'));
 
-  // ── Drawer meta (non-blocking — nav degrades gracefully) ──
-  const {
-    isLoading: drawersLoading,
-    error: drawersError,
-    refetch: retryDrawers,
-  } = useDrawerMeta();
+  // The main screen last shown: where the other pages' back bar returns.
+  const [backHref, setBackHref] = useState('/app/mailbox/personal');
+  const mainHref = view.kind === 'main' && !view.pushed ? mailboxHref(view.tab, view.drawer) : null;
+  useEffect(() => {
+    if (mainHref) setBackHref(mainHref);
+  }, [mainHref]);
+
+  // Launch cut #8 (Mail extras): writing a letter is hidden.
+  const [composeOpen, setComposeOpen] = useState(false);
 
   // ── Mail Day summary banner ────────────────────────────
   const { data: mailDay } = useMailDaySummary();
@@ -96,123 +109,89 @@ function MailboxLayoutInner({ children }: { children: React.ReactNode }) {
     }
   }, [mailDay, router]);
 
-  // ── Travel mode banner ────────────────────────────────
+  // ── Travel dates banner ───────────────────────────────
   const { data: vacationHold } = useVacationHold();
   const isTravelActive =
     vacationHold &&
     (vacationHold.status === 'active' || vacationHold.status === 'scheduled');
 
-  // Drawer nav: show skeleton while loading, hide on error, show when ready.
-  // Never block page content — children always render.
-  const showNav = !drawersError && !drawersLoading;
+  // The banners belong to the main screens; a letter or folder opened from one
+  // is its own screen on phones.
+  const bannerClass = view.kind === 'main' ? (view.pushed ? 'hidden md:flex' : 'flex') : 'hidden';
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] overflow-hidden bg-app">
-      {/* ── Left Nav ─────────────────────────────────────── */}
-      <nav
-        className="hidden md:flex flex-col flex-shrink-0 w-[52px] lg:w-[220px] border-r border-app bg-surface-muted overflow-y-auto"
-        aria-label="Mailbox navigation"
-      >
-        {/* Skeleton while drawer meta is loading */}
-        {drawersLoading && (
-          <div className="p-3 space-y-3">
-            <div className="h-8 bg-gray-300 rounded animate-pulse" />
-            <div className="h-px bg-app my-2" />
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="flex items-center gap-3">
-                <div className="w-5 h-5 rounded bg-gray-300 animate-pulse" />
-                <div className="h-3 flex-1 bg-gray-300 rounded animate-pulse hidden lg:block" />
-              </div>
-            ))}
-          </div>
-        )}
+    <div className="bg-app md:flex md:h-[calc(100vh-3.5rem)] md:flex-col md:overflow-hidden">
+      <MailboxHeader
+        view={view}
+        backHref={backHref}
+        onWriteLetter={launchFeatures.mailExtras ? () => setComposeOpen(true) : undefined}
+      />
 
-        {/* Error state with retry — inline in nav, not blocking */}
-        {drawersError && !drawersLoading && (
-          <div className="p-3 text-center">
-            <p className="text-xs text-app-muted mb-2">Nav unavailable</p>
-            <button
-              type="button"
-              onClick={() => retryDrawers()}
-              className="text-xs text-primary-600 hover:underline"
-            >
-              Retry
-            </button>
-          </div>
-        )}
+      {/* Travel dates banner */}
+      {isTravelActive && (
+        <button
+          type="button"
+          onClick={() => router.push('/app/mailbox/travel')}
+          className={`${bannerClass} items-center gap-2 px-4 py-2 bg-amber-50 border-b border-amber-200 text-left flex-shrink-0`}
+          aria-label={`Travel dates ${vacationHold?.status === 'scheduled' ? 'scheduled' : 'current'}. Open Travel Mode.`}
+        >
+          <MailboxIcons.travel className="w-4 h-4 flex-shrink-0 text-amber-700" aria-hidden="true" />
+          <span className="text-xs font-medium text-amber-700 truncate">
+            Travel dates {vacationHold?.status === 'scheduled' ? 'scheduled' : 'current'} · Returns{' '}
+            {new Date(`${vacationHold!.end_date.slice(0, 10)}T00:00:00`).toLocaleDateString(undefined, {
+              month: 'short',
+              day: 'numeric',
+            })}
+          </span>
+        </button>
+      )}
 
-        {/* Actual nav when loaded */}
-        {showNav && <MailboxNav />}
-
-        {/* Travel mode banner in nav */}
-        {isTravelActive && (
-          <div className="px-2 py-2 mx-2 mb-2 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg flex-shrink-0">
-            <button
-              type="button"
-              onClick={() => router.push('/app/mailbox/travel')}
-              className="flex items-center gap-2 w-full text-left"
-              aria-label={`Travel dates ${vacationHold?.status === 'scheduled' ? 'scheduled' : 'current'}. Click to manage.`}
-            >
-              <span className="text-sm flex-shrink-0">✈️</span>
-              <span className="text-xs font-medium text-amber-700 dark:text-amber-300 truncate hidden lg:inline">
-                Travel dates {vacationHold?.status === 'scheduled' ? 'scheduled' : 'current'} · Returns{' '}
-                {new Date(`${vacationHold!.end_date.slice(0, 10)}T00:00:00`).toLocaleDateString(undefined, {
-                  month: 'short',
-                  day: 'numeric',
-                })}
-              </span>
-            </button>
-          </div>
-        )}
-      </nav>
-
-      {/* ── Content area ─────────────────────────────────── */}
-      <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
-        {/* Mail Day banner */}
-        {showMailDayBanner && (
-          <div
-            className="flex items-center gap-3 px-4 py-2.5 bg-primary-50 dark:bg-primary-900/20 border-b border-primary-100 dark:border-primary-800 flex-shrink-0"
-            role="status"
+      {/* Mail Day banner */}
+      {showMailDayBanner && (
+        <div
+          className={`${bannerClass} items-center gap-3 px-4 py-2.5 bg-primary-50 dark:bg-primary-900/20 border-b border-primary-100 dark:border-primary-800 flex-shrink-0`}
+          role="status"
+        >
+          <span className="text-base" aria-hidden="true">&#9993;</span>
+          <p className="flex-1 text-sm text-primary-800 dark:text-primary-200 min-w-0">
+            <span className="font-medium">{mailDay!.greeting}</span>
+            <span className="text-primary-600 dark:text-primary-400">
+              {' · '}
+              {mailDay!.total_new} new item{mailDay!.total_new !== 1 ? 's' : ''}
+              {/* The most urgent unread letter, which may be older than today's mail. */}
+              {mailDay!.needs_attention.length > 0 && (
+                <> · Needs attention: {mailDay!.needs_attention[0].display_title || mailDay!.needs_attention[0].subject}</>
+              )}
+            </span>
+          </p>
+          <button
+            type="button"
+            onClick={handleOpenMailDay}
+            className="flex-shrink-0 text-xs font-semibold text-primary-700 dark:text-primary-300 hover:underline"
           >
-            <span className="text-base" aria-hidden="true">&#9993;</span>
-            <p className="flex-1 text-sm text-primary-800 dark:text-primary-200 min-w-0">
-              <span className="font-medium">{mailDay!.greeting}</span>
-              <span className="text-primary-600 dark:text-primary-400">
-                {' · '}
-                {mailDay!.total_new} new item{mailDay!.total_new !== 1 ? 's' : ''}
-                {/* The most urgent unread letter, which may be older than today's mail. */}
-                {mailDay!.needs_attention.length > 0 && (
-                  <> · Needs attention: {mailDay!.needs_attention[0].display_title || mailDay!.needs_attention[0].subject}</>
-                )}
-              </span>
-            </p>
-            <button
-              type="button"
-              onClick={handleOpenMailDay}
-              className="flex-shrink-0 text-xs font-semibold text-primary-700 dark:text-primary-300 hover:underline"
-            >
-              Open
-            </button>
-            <button
-              type="button"
-              onClick={handleDismissMailDay}
-              className="flex-shrink-0 p-1 text-primary-400 hover:text-primary-600 dark:hover:text-primary-200 transition-colors"
-              aria-label="Dismiss mail day notification"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-        )}
-
-        {/* Nested layouts / pages fill remaining space */}
-        <div className="flex-1 min-h-0 overflow-hidden">
-          <MailboxErrorBoundary section="mailbox">
-            {children}
-          </MailboxErrorBoundary>
+            Open
+          </button>
+          <button
+            type="button"
+            onClick={handleDismissMailDay}
+            className="flex-shrink-0 p-1 text-primary-400 hover:text-primary-600 dark:hover:text-primary-200 transition-colors"
+            aria-label="Dismiss mail day notification"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
+      )}
+
+      {/* Nested layouts / pages fill remaining space */}
+      <div className="md:flex-1 md:min-h-0 md:overflow-hidden">
+        <MailboxErrorBoundary section="mailbox">
+          {children}
+        </MailboxErrorBoundary>
       </div>
+
+      {composeOpen && <ComposeLetter onClose={() => setComposeOpen(false)} />}
     </div>
   );
 }
