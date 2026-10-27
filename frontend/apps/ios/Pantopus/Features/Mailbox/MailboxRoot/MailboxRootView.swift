@@ -2,22 +2,25 @@
 //  MailboxRootView.swift
 //  Pantopus
 //
-//  B.1 — Mailbox root archetype. One screen: a 4-drawer chip row
-//  (Me / Home / Biz / Earn) + a 3-tab segmented bar (Incoming / Counter
-//  / Vault) + the mail list for the active (drawer, tab). Replaces the
-//  MailboxDrawersView (drawer list) + MailboxListView (flat list) pair.
-//
-//  Built on the List-of-Rows archetype: the drawer chips and tab bar
-//  render in the shell's `customHeader`; the list, loading, empty, and
-//  error states all come from the shell.
+//  The Mailbox, drawn as physical mail (Mail tab drawings, boards "Main",
+//  "R1-Before", "R2-Delivery", "R4-NoMail"; reskinned in place from the B.1
+//  Mailbox root): the side menu, "Mail" and search on top; your mailbox, your
+//  address and today's round; the Me · Home · Biz drawers and the Incoming ·
+//  Counter · Vault tabs; then the mail itself, each piece drawn as the object
+//  it is (`MailPieceView`), by the day it came. No scanning: mail comes from
+//  digital senders (founder decision 2026-10-26).
 //
 
 import SwiftUI
 
 public struct MailboxRootView: View {
     @State private var viewModel: MailboxRootViewModel
-    /// The Mail tab's top screen carries the side menu, as every tab's does.
+    /// The Mail tab's top screen carries the side menu, as every tab's does;
+    /// pushed anywhere else it has Back.
     private let showsMenuButton: Bool
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    private static let heroAnchor = "mailboxHero"
 
     /// Split init (see GigsFeedView): avoids a Swift 6.1.2 / Xcode 16.4 SILGen
     /// crash in the defaulted-view-model argument generator. Behaviour is
@@ -36,91 +39,44 @@ public struct MailboxRootView: View {
     }
 
     public var body: some View {
-        ListOfRowsView(dataSource: viewModel) {
-            MailboxRootHeader(viewModel: viewModel)
-        }
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    viewModel.openStamps()
-                } label: {
-                    Icon(.gift, size: 22, color: Theme.Color.appText)
-                        .frame(width: 44, height: 44)
+        VStack(spacing: Spacing.s0) {
+            // The header stays put; the mailbox and the mail scroll under it.
+            topBar
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: Spacing.s0) {
+                        MailboxHero(model: viewModel.hero, accountId: accountId)
+                            .padding(.horizontal, Spacing.s4)
+                            .padding(.top, 6)
+                            .id(Self.heroAnchor)
+                        MailboxRootHeader(viewModel: viewModel)
+                        MailboxPieceList(viewModel: viewModel)
+                            .padding(.bottom, Spacing.s6)
+                    }
                 }
-                .accessibilityLabel("Stamps")
-                .accessibilityIdentifier("mailboxRootStamps")
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    Button {
-                        viewModel.openMap()
-                    } label: {
-                        Label("Find a mailbox", systemImage: "map")
+                .refreshable { await viewModel.refresh() }
+                // A new round: back to the top, where the mailbox opens and
+                // today's mail lies, wherever the list was left.
+                .onChange(of: viewModel.hero.roundKey) { _, key in
+                    guard MailboxHero.isNew(roundKey: key, accountId: accountId) else { return }
+                    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) {
+                        proxy.scrollTo(Self.heroAnchor, anchor: .top)
                     }
-                    .accessibilityIdentifier("mailboxRootSettings.map")
-                    // Launch cut #7 (Household extras): this opens package unboxing.
-                    if LaunchFeatures.householdExtras {
-                        Button {
-                            viewModel.openUnboxing()
-                        } label: {
-                            Label("Scan an item", systemImage: "camera.viewfinder")
-                        }
-                        .accessibilityIdentifier("mailboxRootSettings.scanUnboxing")
-                    }
-                    Button {
-                        viewModel.openMailTasks()
-                    } label: {
-                        Label("Mail tasks", systemImage: "checklist")
-                    }
-                    .accessibilityIdentifier("mailboxRootSettings.mailTasks")
-                    // Launch cut #8 (Mail extras): Mail party and the community
-                    // mail stream are hidden for the first launch.
-                    if LaunchFeatures.mailExtras {
-                        Button {
-                            viewModel.openMailParty()
-                        } label: {
-                            Label("Mail party", systemImage: "party.popper")
-                        }
-                        .accessibilityIdentifier("mailboxRootSettings.mailParty")
-                        Button {
-                            viewModel.openCommunity()
-                        } label: {
-                            Label("Community mail", systemImage: "megaphone")
-                        }
-                        .accessibilityIdentifier("mailboxRootSettings.community")
-                    }
-                    Button {
-                        viewModel.openRecords()
-                    } label: {
-                        Label("Home records", systemImage: "house")
-                    }
-                    .accessibilityIdentifier("mailboxRootSettings.homeRecords")
-                    Button {
-                        viewModel.openStamps()
-                    } label: {
-                        Label("Stamps", systemImage: "giftcard")
-                    }
-                    .accessibilityIdentifier("mailboxRootSettings.stamps")
-                    Button {
-                        viewModel.openVacationHold()
-                    } label: {
-                        Label("Vacation hold", systemImage: "calendar")
-                    }
-                    .accessibilityIdentifier("mailboxRootSettings.vacationHold")
-                } label: {
-                    Icon(.moreVertical, size: 22, color: Theme.Color.appText)
-                        .frame(width: 44, height: 44)
-                }
-                .accessibilityLabel("Mailbox settings")
-                .accessibilityIdentifier("mailboxRootSettings")
-            }
-            if showsMenuButton {
-                // The side menu (founder decision 2026-10-20), leading as in the Mail tab drawing.
-                ToolbarItem(placement: .topBarLeading) {
-                    NavigationMenuButton(accessibilityIdentifier: "mail.menu")
                 }
             }
         }
+        .overlay(alignment: .bottomTrailing) {
+            // Writing letters (Mail extras, off for the first launch).
+            if let fab = viewModel.fab {
+                FABButton(action: fab)
+                    .padding(Spacing.s4)
+            }
+        }
+        .background(Theme.Color.appBg)
+        .toolbar(.hidden, for: .navigationBar)
+        .task { await viewModel.load() }
+        // A container, so its buttons keep their own identifiers.
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("mailboxRoot")
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .refreshFailureToast($viewModel.refreshFailureMessage)
@@ -131,6 +87,236 @@ public struct MailboxRootView: View {
             if let mailId = note.object as? String { viewModel.markLoadedMailViewed(mailId) }
         }
         .onAppear { Analytics.track(.screenMailboxRootViewed) }
+    }
+
+    private var accountId: String {
+        if case let .signedIn(user) = AuthManager.shared.state { user.id } else { "" }
+    }
+
+    /// ☰ (or Back), "Mail", search, and the "…" menu.
+    private var topBar: some View {
+        HStack(spacing: Spacing.s1) {
+            if showsMenuButton {
+                NavigationMenuButton(accessibilityIdentifier: "mail.menu")
+            } else {
+                Button { dismiss() } label: {
+                    Icon(.chevronLeft, size: 22, color: Theme.Color.appText)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Back")
+                .accessibilityIdentifier("mailboxRootBack")
+            }
+            Text(viewModel.title)
+                .font(.system(size: 30, weight: .bold))
+                .tracking(-0.6)
+                .foregroundStyle(Theme.Color.appText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .accessibilityAddTraits(.isHeader)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Button(action: viewModel.openSearch) {
+                Icon(.search, size: 22, color: Theme.Color.appText)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Search all mail")
+            .accessibilityIdentifier("mailboxRootSearch")
+            moreMenu
+        }
+        .padding(.horizontal, Spacing.s2)
+        .padding(.top, Spacing.s3)
+        .padding(.bottom, Spacing.s1)
+    }
+
+    /// Stamps, vacation hold, mail tasks and Home records. No scanning and no
+    /// map: mail comes from digital senders.
+    private var moreMenu: some View {
+        Menu {
+            Button {
+                viewModel.openMailTasks()
+            } label: {
+                Label("Mail tasks", systemImage: "checklist")
+            }
+            .accessibilityIdentifier("mailboxRootSettings.mailTasks")
+            // Launch cut #8 (Mail extras): Mail party and the community
+            // mail stream are hidden for the first launch.
+            if LaunchFeatures.mailExtras {
+                Button {
+                    viewModel.openMailParty()
+                } label: {
+                    Label("Mail party", systemImage: "party.popper")
+                }
+                .accessibilityIdentifier("mailboxRootSettings.mailParty")
+                Button {
+                    viewModel.openCommunity()
+                } label: {
+                    Label("Community mail", systemImage: "megaphone")
+                }
+                .accessibilityIdentifier("mailboxRootSettings.community")
+            }
+            Button {
+                viewModel.openRecords()
+            } label: {
+                Label("Home records", systemImage: "house")
+            }
+            .accessibilityIdentifier("mailboxRootSettings.homeRecords")
+            Button {
+                viewModel.openStamps()
+            } label: {
+                Label("Stamps", systemImage: "giftcard")
+            }
+            .accessibilityIdentifier("mailboxRootSettings.stamps")
+            Button {
+                viewModel.openVacationHold()
+            } label: {
+                Label("Vacation hold", systemImage: "calendar")
+            }
+            .accessibilityIdentifier("mailboxRootSettings.vacationHold")
+        } label: {
+            Icon(.moreVertical, size: 22, color: Theme.Color.appText)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel("More mail options")
+        .accessibilityIdentifier("mailboxRootSettings")
+    }
+}
+
+/// The mail of the selected drawer and tab, or what to say instead.
+private struct MailboxPieceList: View {
+    let viewModel: MailboxRootViewModel
+
+    var body: some View {
+        switch viewModel.state {
+        case .loading:
+            VStack(spacing: Spacing.s4) {
+                ForEach(0..<3, id: \.self) { _ in
+                    Shimmer(height: 150, cornerRadius: Radii.sm)
+                }
+            }
+            .padding(.horizontal, Spacing.s4)
+            .padding(.top, 18)
+            .accessibilityLabel("Loading your mail")
+        case let .empty(content):
+            EmptyState(
+                icon: content.icon,
+                headline: content.headline,
+                subcopy: content.subcopy,
+                cta: content.ctaTitle.flatMap { title in
+                    content.onCTA.map { handler in
+                        EmptyState.CTA(title: title) { await MainActor.run { handler() } }
+                    }
+                }
+            )
+            .padding(.top, Spacing.s8)
+            .padding(.horizontal, Spacing.s4)
+            .accessibilityIdentifier("mailboxRootEmpty")
+        case let .error(message):
+            ErrorState(headline: "Couldn't load your mail", message: message) {
+                await viewModel.refresh()
+            }
+            .padding(.top, Spacing.s8)
+            .padding(.horizontal, Spacing.s4)
+            .accessibilityIdentifier("mailboxRootError")
+        case let .loaded(sections, hasMore):
+            if viewModel.pieceSections.isEmpty {
+                // The sample seam (previews and tests) has rows, not pieces.
+                VStack(spacing: Spacing.s2) {
+                    ForEach(sections.flatMap(\.rows)) { row in
+                        RowView(row: row)
+                    }
+                }
+                .padding(Spacing.s4)
+            } else {
+                pieces(hasMore: hasMore)
+            }
+        }
+    }
+
+    private func pieces(hasMore: Bool) -> some View {
+        LazyVStack(alignment: .leading, spacing: Spacing.s4) {
+            ForEach(viewModel.pieceSections) { section in
+                Text(section.title)
+                    .font(.system(size: 11, weight: .semibold))
+                    .tracking(0.7)
+                    .textCase(.uppercase)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .padding(.top, Spacing.s2)
+                    .accessibilityAddTraits(.isHeader)
+                ForEach(section.pieces) { piece in
+                    MailPieceRow(piece: piece) { viewModel.openMail(piece.id) }
+                        .onAppear {
+                            if piece.id == viewModel.pieceSections.last?.pieces.last?.id {
+                                Task { await viewModel.loadMoreIfNeeded() }
+                            }
+                        }
+                }
+            }
+            if let error = viewModel.loadMoreError {
+                VStack(spacing: Spacing.s2) {
+                    Text(error)
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                        .multilineTextAlignment(.center)
+                    Button("Try again") { Task { await viewModel.retryLoadMore() } }
+                        .font(.system(size: 14, weight: .semibold))
+                        .frame(minHeight: 44)
+                        .accessibilityIdentifier("mailboxRootLoadMoreRetry")
+                }
+                .frame(maxWidth: .infinity)
+            } else if hasMore {
+                ProgressView()
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .accessibilityLabel("Loading more mail")
+            }
+        }
+        .padding(.horizontal, Spacing.s4)
+        .padding(.top, 18)
+    }
+}
+
+/// A piece and the line under it, opening the piece.
+private struct MailPieceRow: View {
+    let piece: MailPieceModel
+    let onOpen: () -> Void
+
+    var body: some View {
+        Button(action: onOpen) {
+            VStack(alignment: .leading, spacing: 6) {
+                MailPieceView(model: piece)
+                metaLine
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(MailPieceButtonStyle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(piece.spokenWithArrival)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityIdentifier("mailPiece.\(piece.id)")
+    }
+
+    private var metaLine: some View {
+        (Text(piece.meta.parts.joined(separator: " · "))
+            + Text(piece.meta.due.map { " · \($0)" } ?? "")
+            .foregroundColor(piece.meta.dueIsSettled ? Theme.Color.success : Theme.Color.warning)
+            .fontWeight(.semibold))
+            .font(.system(size: 13))
+            .foregroundStyle(Theme.Color.appTextMuted)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// Pressing a piece lifts it a little, like picking up an envelope.
+private struct MailPieceButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.985 : 1)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
 

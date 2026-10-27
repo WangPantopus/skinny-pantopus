@@ -62,12 +62,12 @@ struct AutoDetectBanner: View {
                 if isScanning {
                     ProgressView()
                         .controlSize(.small)
-                    Text("Scanning your recent mail…")
+                    Text("Reading your recent mail…")
                         .font(.system(size: 12, weight: .bold))
                         .foregroundStyle(Theme.Color.warning)
                 } else {
                     Icon(.fileSearch, size: 16, color: Theme.Color.warning)
-                    Text("Scan mail for new assets")
+                    Text("Look for assets in your mail")
                         .font(.system(size: 12, weight: .bold))
                         .foregroundStyle(Theme.Color.warning)
                 }

@@ -97,6 +97,8 @@ public struct TodaySignal: Identifiable, Equatable, Sendable {
     public let body: String
     public let timing: String
     public let severity: Severity?
+    /// Where a tap goes: the mail line opens the Mail tab (`/app/mailbox`).
+    public let route: String?
 
     public init(
         id: String,
@@ -105,7 +107,8 @@ public struct TodaySignal: Identifiable, Equatable, Sendable {
         title: String,
         body: String,
         timing: String,
-        severity: Severity? = nil
+        severity: Severity? = nil,
+        route: String? = nil
     ) {
         self.id = id
         self.icon = icon
@@ -113,6 +116,7 @@ public struct TodaySignal: Identifiable, Equatable, Sendable {
         self.title = title
         self.body = body
         self.timing = timing
+        self.route = route
         self.severity = severity
     }
 }

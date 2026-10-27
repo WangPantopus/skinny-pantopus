@@ -2,16 +2,15 @@
 //  MailboxSearchViewModel.swift
 //  Pantopus
 //
-//  P4.2 — Backs `MailboxSearchView`. Fetches the user's mailbox once
-//  (`GET /api/mailbox`, route `backend/routes/mailbox.js:1306`) and
-//  filters that corpus client-side across sender, subject, body, and
-//  category. The V1 list route has no `q` parameter yet, so search is
-//  local. Rows project through `MailboxListViewModel.makeRow` so each
-//  result is identical to a row on the Mailbox list.
+//  P4.2 — Backs `MailboxSearchView`. Searches everything this person can
+//  read on the server (`GET /api/mailbox/v2/search`, Mail build contract,
+//  SRV-3): Me, Home after proof, and Biz, filed and archived included. It
+//  used to filter only the newest 100 personal letters on the phone.
 //
 //  Drives the shared `SearchListShell` (P4.1): the shell owns the search
-//  bar + debounce + four lifecycle phases (recent / typing / results /
-//  empty); this VM just supplies `query`, `results`, and `isLoading`.
+//  bar and its phases (recent / typing / results / empty); this view model
+//  asks the server a moment after typing stops and supplies `results`,
+//  `isLoading` and what to say when nothing came back.
 //
 
 import Foundation
@@ -20,47 +19,44 @@ import Observation
 @Observable
 @MainActor
 final class MailboxSearchViewModel {
-    /// Bound to the shell's search field. `didSet` re-filters the cached
-    /// corpus synchronously — the corpus is a single fetched page.
+    /// Bound to the shell's search field. Each change asks the server again
+    /// once typing pauses.
     var query: String = "" {
-        didSet { recompute() }
+        didSet { if query != oldValue { scheduleSearch() } }
     }
 
-    private(set) var results: [MailItem] = []
+    private(set) var results: [DrawerItemsResponse.DrawerMail] = []
 
-    /// True until the corpus fetch settles. Gates the shell's
-    /// typing-shimmer: while mail is still loading and the user has typed,
-    /// the shell shows the skeleton instead of a false "no matches".
-    private(set) var isLoading: Bool = true
+    /// True while a search is on its way, so the shell shows its typing
+    /// shimmer instead of a false "no matches".
+    private(set) var isLoading = false
 
-    /// No-results payload for the shell's empty phase.
-    /// Set when the mailbox couldn't be read: an empty result then says so
-    /// instead of claiming no mail matches.
-    private(set) var loadFailed = false
+    /// Why the last search came back with nothing, when it failed.
+    private(set) var failureMessage: String?
 
     var emptyState: EmptyStateContent {
-        loadFailed
-            ? EmptyStateContent(
-                icon: .alertCircle,
-                headline: "Couldn't search your mail",
-                subcopy: "Check your connection, then go back and open search again."
-            )
-            : EmptyStateContent(
-                icon: .search,
-                headline: "No matching mail",
-                subcopy: "Try a different sender, subject, or category."
-            )
+        if let failureMessage {
+            return EmptyStateContent(icon: .alertCircle, headline: "Couldn't search your mail", subcopy: failureMessage)
+        }
+        return EmptyStateContent(
+            icon: .search,
+            headline: "No matching mail",
+            subcopy: "Search looks through all your mail, filed and archived too. Try a sender or a word from the letter."
+        )
     }
 
     /// Pop the search surface — wired to the shell's back control.
     let onCancel: @Sendable () -> Void
 
-    private var corpus: [MailItem] = []
-    private var didLoad = false
-
     private let api: APIClient
     private let onOpenMail: @Sendable (String) -> Void
-    private let corpusLimit = 100
+    private var searchTask: Task<Void, Never>?
+    /// The Homes this person lives at, so Home mail is addressed to its Home.
+    private var homes: [DrawerListResponse.MailboxHome] = []
+    /// The server's page size limit.
+    private let pageSize = 50
+    /// Longer text is refused by the server (`MAIL_SEARCH_INVALID`).
+    private let maxQueryLength = 200
 
     init(
         api: APIClient = .shared,
@@ -72,63 +68,83 @@ final class MailboxSearchViewModel {
         self.onCancel = onCancel
     }
 
-    /// Fetch the corpus once. Repeat calls (e.g. a re-entered `.task`)
-    /// are no-ops so typing doesn't trigger refetches; after a failed read
-    /// the next one tries again.
+    /// Search asks the server as the person types; up front only the Homes,
+    /// to address Home mail. Without them a piece is addressed to the person.
     func load() async {
-        guard !didLoad else { return }
+        guard homes.isEmpty else { return }
+        let response: DrawerListResponse? = try? await api.request(MailboxV2Endpoints.drawers())
+        homes = response?.homes ?? []
+    }
+
+    func open(_ mail: DrawerItemsResponse.DrawerMail) {
+        onOpenMail(mail.id)
+    }
+
+    /// A result drawn as the piece it is.
+    func piece(for mail: DrawerItemsResponse.DrawerMail) -> MailPieceModel {
+        MailPieceModel(
+            mail: mail,
+            recipient: MailPieceRecipient.of(mail, homeMail: false, homes: homes, personName: MailPieceRecipient.personName),
+            opened: mail.item.viewed,
+            clock: .current
+        )
+    }
+
+    private func scheduleSearch() {
+        searchTask?.cancel()
+        let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        failureMessage = nil
+        guard !text.isEmpty else {
+            results = []
+            isLoading = false
+            return
+        }
+        guard text.count <= maxQueryLength else {
+            results = []
+            isLoading = false
+            failureMessage = "That's longer than search takes. Try a few words."
+            return
+        }
         isLoading = true
+        searchTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled else { return }
+            await self?.search(text)
+        }
+    }
+
+    private func search(_ text: String) async {
         do {
-            let response: MailboxListResponse = try await api.request(
-                MailboxEndpoints.list(archived: false, limit: corpusLimit, offset: 0)
+            let response: MailSearchResponse = try await api.request(
+                MailboxV2Endpoints.search(query: text, limit: pageSize)
             )
-            corpus = response.mail
-            loadFailed = false
-            didLoad = true
+            guard !Task.isCancelled, text == query.trimmingCharacters(in: .whitespacesAndNewlines) else { return }
+            results = response.mail
+            failureMessage = nil
         } catch {
-            // The shell has no error phase: no results, and the empty state
-            // says the mailbox couldn't be read (not "No matching mail").
-            corpus = []
-            loadFailed = true
+            guard !Task.isCancelled else { return }
+            results = []
+            failureMessage = Self.message(for: error)
         }
         isLoading = false
-        recompute()
     }
 
-    /// Build a result row identical to the Mailbox list row, routing taps
-    /// to this surface's `onOpenMail`.
-    func rowModel(for mail: MailItem) -> RowModel {
-        MailboxListViewModel.makeRow(for: mail, onOpenMail: onOpenMail)
+    /// Offline, server trouble or the server's own sentence, told apart.
+    private static func message(for error: Error) -> String {
+        switch error as? APIError {
+        case .transport:
+            "You're offline. Check your connection and try again."
+        case let .clientError(_, message):
+            message ?? "Search couldn't use that text. Try different words."
+        case .server, .retriesExhausted:
+            "Search isn't working right now. Try again in a moment."
+        default:
+            (error as? APIError)?.errorDescription ?? "Search isn't working right now. Try again in a moment."
+        }
     }
+}
 
-    private func recompute() {
-        results = Self.filter(corpus, query: query)
-    }
-
-    // MARK: - Pure search (tested directly)
-
-    /// Filter the corpus by a free-text query. Returns `[]` for a blank
-    /// query so the shell falls back to its recent/empty canvas.
-    static func filter(_ mail: [MailItem], query: String) -> [MailItem] {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return [] }
-        return mail.filter { matches($0, query: trimmed) }
-    }
-
-    /// Case-insensitive substring match across the four fields the prompt
-    /// calls out: sender, subject/title, body, and category label.
-    static func matches(_ mail: MailItem, query: String) -> Bool {
-        let needle = query.lowercased()
-        let category = MailItemCategory.fromRaw(mail.mailType ?? mail.type)
-        let fields: [String?] = [
-            mail.senderBusinessName,
-            mail.senderAddress,
-            mail.subject,
-            mail.displayTitle,
-            mail.previewText,
-            mail.content,
-            category.label
-        ]
-        return fields.contains { $0?.lowercased().contains(needle) == true }
-    }
+/// `GET /api/mailbox/v2/search` — the drawer list's row shape.
+struct MailSearchResponse: Decodable {
+    let mail: [DrawerItemsResponse.DrawerMail]
 }

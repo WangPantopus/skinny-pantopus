@@ -3,8 +3,8 @@
 //  Pantopus
 //
 //  P4.2 — Mailbox Search surface. Hosts the shared `SearchListShell`
-//  (P4.1) and renders each match with the reused Mailbox row (`RowView`).
-//  Replaces the "Mail search" placeholder pushed from `MailboxListView`.
+//  (P4.1); each match is drawn as the piece it is, as in the Mailbox. The
+//  server searches all of this person's mail.
 //
 
 import SwiftUI
@@ -27,9 +27,23 @@ struct MailboxSearchView: View {
             isLoading: viewModel.isLoading,
             emptyState: viewModel.emptyState,
             row: { mail in
-                RowView(row: viewModel.rowModel(for: mail))
-                    .padding(.horizontal, Spacing.s4)
-                    .padding(.vertical, Spacing.s1)
+                let piece = viewModel.piece(for: mail)
+                Button { viewModel.open(mail) } label: {
+                    VStack(alignment: .leading, spacing: 6) {
+                        MailPieceView(model: piece)
+                        Text(piece.meta.line)
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.Color.appTextMuted)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(piece.spokenWithArrival)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityIdentifier("mailboxSearchResult.\(mail.id)")
+                .padding(.horizontal, Spacing.s4)
+                .padding(.vertical, Spacing.s2)
             },
             onCancel: { viewModel.onCancel() }
         )

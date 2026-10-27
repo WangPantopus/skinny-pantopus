@@ -64,6 +64,33 @@ public struct MailItem: Decodable, Sendable, Hashable, Identifiable {
     /// Facts read off the item (`Mail.key_facts`), such as "Amount due".
     public let keyFacts: [MailKeyFact]
 
+    // Mail build contract v1 (2026-10-27). All optional: an older server
+    // sends none of them, and a field of an unexpected shape reads as absent
+    // rather than failing the whole list.
+
+    /// What the piece is drawn as: `letter`, `bill`, `notice`, `postcard`,
+    /// `booklet`, `parcel` or `bundle` (`MailPieceKind`; anything else draws as a letter).
+    public let kind: String?
+    /// When it went into the box (morning-round pieces: 7:00 a.m. in the mailbox's zone).
+    public let deliveredAt: String?
+    /// Arrived on its own, outside the morning round.
+    public let specialDelivery: Bool
+    /// Sent by Pantopus itself (welcome, home and residency letters).
+    public let fromPantopus: Bool
+    /// The postmark: the sender's town (or nil) and the day it was posted.
+    public let postmark: MailPostmark?
+    /// Due, or put on the counter, and not done yet.
+    public let onCounter: Bool
+    /// "Pantopus read this for you"; nil when there is no note.
+    public let summary: MailSummary?
+    /// The business invoice a bill came from, with its live status.
+    public let invoice: MailInvoiceRef?
+    /// A bundle's label ("Held while you were away") and how many pieces it holds.
+    public let bundleLabel: String?
+    public let bundleItemCount: Int?
+    /// The bundle a piece came in, if any.
+    public let bundleId: String?
+
     private enum CodingKeys: String, CodingKey {
         case id
         case recipientUserId = "recipient_user_id"
@@ -100,6 +127,17 @@ public struct MailItem: Decodable, Sendable, Hashable, Identifiable {
         case expiresAt = "expires_at"
         case createdAt = "created_at"
         case keyFacts = "key_facts"
+        case kind
+        case deliveredAt = "delivered_at"
+        case specialDelivery = "special_delivery"
+        case fromPantopus = "from_pantopus"
+        case postmark
+        case onCounter = "on_counter"
+        case summary
+        case invoice
+        case bundleLabel = "bundle_label"
+        case bundleItemCount = "bundle_item_count"
+        case bundleId = "bundle_id"
     }
 
     public init(from decoder: any Decoder) throws {
@@ -145,6 +183,65 @@ public struct MailItem: Decodable, Sendable, Hashable, Identifiable {
         expiresAt = try c.decodeIfPresent(String.self, forKey: .expiresAt)
         createdAt = try c.decode(String.self, forKey: .createdAt)
         keyFacts = MailKeyFact.list(in: c, forKey: .keyFacts)
+        kind = try? c.decodeIfPresent(String.self, forKey: .kind)
+        deliveredAt = try? c.decodeIfPresent(String.self, forKey: .deliveredAt)
+        specialDelivery = (try? c.decodeIfPresent(Bool.self, forKey: .specialDelivery)) ?? false
+        fromPantopus = (try? c.decodeIfPresent(Bool.self, forKey: .fromPantopus)) ?? false
+        postmark = try? c.decodeIfPresent(MailPostmark.self, forKey: .postmark)
+        onCounter = (try? c.decodeIfPresent(Bool.self, forKey: .onCounter)) ?? false
+        summary = try? c.decodeIfPresent(MailSummary.self, forKey: .summary)
+        invoice = try? c.decodeIfPresent(MailInvoiceRef.self, forKey: .invoice)
+        bundleLabel = try? c.decodeIfPresent(String.self, forKey: .bundleLabel)
+        let count = try? c.decodeIfPresent(Int.self, forKey: .bundleItemCount)
+        bundleItemCount = (count ?? 0) > 0 ? count : nil
+        bundleId = try? c.decodeIfPresent(String.self, forKey: .bundleId)
+    }
+}
+
+/// A piece's postmark (Mail build contract): the town of the sender's post
+/// office, when known, and the day it was posted (`YYYY-MM-DD`).
+public struct MailPostmark: Decodable, Sendable, Hashable {
+    public let town: String?
+    public let date: String?
+}
+
+/// "Pantopus read this for you": a few plain sentences and the key facts.
+public struct MailSummary: Decodable, Sendable, Hashable {
+    public let text: String
+    public let keyFacts: [Fact]
+
+    public struct Fact: Decodable, Sendable, Hashable {
+        public let label: String
+        public let value: String
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case text
+        case keyFacts = "key_facts"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        text = try c.decode(String.self, forKey: .text)
+        keyFacts = (try? c.decodeIfPresent([Fact].self, forKey: .keyFacts)) ?? []
+    }
+}
+
+/// The business invoice behind a bill; `status` is read live from the invoice
+/// (`sent`, `viewed`, `paid`, `void`, `overdue`).
+public struct MailInvoiceRef: Decodable, Sendable, Hashable {
+    public let id: String
+    public let status: String?
+    public let totalCents: Int?
+    public let currency: String?
+    public let dueDate: String?
+    public let businessName: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case id, status, currency
+        case totalCents = "total_cents"
+        case dueDate = "due_date"
+        case businessName = "business_name"
     }
 }
 

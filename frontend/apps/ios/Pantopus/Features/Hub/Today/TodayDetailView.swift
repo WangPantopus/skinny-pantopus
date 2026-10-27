@@ -481,7 +481,16 @@ private struct SignalsList: View {
                 if index > 0 {
                     Rectangle().fill(Theme.Color.appBorderSubtle).frame(height: 1)
                 }
-                SignalRow(signal: signal)
+                if let route = signal.route {
+                    // The mail line opens the Mail tab.
+                    Button { DeepLinkRouter.shared.handle(path: route) } label: {
+                        SignalRow(signal: signal).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(.isButton)
+                } else {
+                    SignalRow(signal: signal)
+                }
             }
         }
     }
@@ -538,7 +547,10 @@ private struct SignalRow: View {
 
     private var accessibilityText: String {
         let severity = signal.severity.map { "\($0.label). " } ?? ""
-        return "\(severity)\(signal.title). \(signal.body) \(signal.timing)."
+        // The body often ends its own sentence, and a signal may have no timing.
+        let rest = [signal.body, signal.timing].filter { !$0.isEmpty }.joined(separator: " ")
+        let tail = rest.isEmpty || rest.hasSuffix(".") ? rest : "\(rest)."
+        return "\(severity)\(signal.title). \(tail)"
     }
 }
 

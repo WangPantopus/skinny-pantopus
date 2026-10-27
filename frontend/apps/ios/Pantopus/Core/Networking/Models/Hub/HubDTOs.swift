@@ -104,14 +104,43 @@ public struct HubTodayPayload: Decodable, Sendable, Hashable {
     }
 
     /// `data` is provider-specific (untyped on the wire) and unused by the
-    /// briefing, so the decoder simply ignores it. So is `action`, a
-    /// `{label, route}` object on bill, task, calendar, pickup, mail, gig and
-    /// local-update signals: declared as a String, it failed the whole payload.
+    /// briefing, so the decoder simply ignores it. `action` is a `{label,
+    /// route}` object on bill, task, calendar, pickup, mail, gig and
+    /// local-update signals (declared as a String, it failed the whole
+    /// payload); it's read leniently, for the mail line's route to the Mail tab.
     public struct TodaySignalDTO: Decodable, Sendable, Hashable {
         public let kind: String?
         public let label: String?
         public let detail: String?
         public let urgency: String?
+        /// The signal's button: `{ label, route }` (the mail line's is `/app/mailbox`).
+        public let action: SignalAction?
+
+        init(kind: String?, label: String?, detail: String?, urgency: String?, action: SignalAction? = nil) {
+            self.kind = kind
+            self.label = label
+            self.detail = detail
+            self.urgency = urgency
+            self.action = action
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            kind = try c.decodeIfPresent(String.self, forKey: .kind)
+            label = try c.decodeIfPresent(String.self, forKey: .label)
+            detail = try c.decodeIfPresent(String.self, forKey: .detail)
+            urgency = try c.decodeIfPresent(String.self, forKey: .urgency)
+            action = try? c.decodeIfPresent(SignalAction.self, forKey: .action)
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case kind, label, detail, urgency, action
+        }
+    }
+
+    public struct SignalAction: Decodable, Sendable, Hashable {
+        public let label: String?
+        public let route: String?
     }
 
     public struct TodaySeasonal: Decodable, Sendable, Hashable {

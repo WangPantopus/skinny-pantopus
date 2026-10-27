@@ -61,6 +61,7 @@ HEX_EXEMPT=(
   "Features/Mailbox/MailDay/MailDayContent.swift"
   "Features/Mailbox/MailDay/Components/MailboxEmptyHero.swift"
   "Features/Mailbox/MailDay/Components/UndoCountdown.swift"
+  "Features/Mailbox/MailPiece/MailPaper.swift"
   "Features/Mailbox/Stamps/StampsContent.swift"
   "Features/Mailbox/MailDetail/Components/CertifiedStampBadge.swift"
   "Features/Mailbox/MailDetail/Components/CombinedSenderCarrierCard.swift"

@@ -1885,7 +1885,8 @@ private struct LeadingBadge: View {
 
 // MARK: - FAB
 
-private struct FABButton: View {
+/// Also drawn by the Mailbox, which lays out its own screen.
+struct FABButton: View {
     let action: FABAction
 
     var body: some View {
