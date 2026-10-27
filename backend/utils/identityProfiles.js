@@ -8,7 +8,7 @@ const { serializeLocalProfileForViewer } = require('../serializers/identitySeria
 /**
  * Which of these users are verified residents, for the public "verified_resident" badge: an ACTIVE HomeOccupancy
  * whose verification_status is 'verified' and whose verification has not gone stale (verificationAge). Stricter than
- * household access (homeMailAccess.getAccessibleHomeIds also admits the provisional states a home's creator gets
+ * household access (homeMailAccess.householdHomeIds also admits the provisional states a home's creator gets
  * before any verification). User.verified is an email confirmation, never residency. Fails closed: on a read error
  * nobody is a verified resident.
  *

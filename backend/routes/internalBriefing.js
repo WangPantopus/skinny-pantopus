@@ -643,11 +643,31 @@ router.post('/reminder-push', verifyInternalApiKey, async (req, res) => {
     return res.json({ status: 'skipped', reason: 'feature_hidden' });
   }
   // Launch cut #10 (Mailbox): the mail notification Lambda's pushes are off while the mailbox is.
-  const mailTypes = new Set(['mail_summary', 'mail_urgent']);
-  if (mailTypes.has(reminderType) && skipForLaunchCut('mailbox', `reminder-push:${reminderType}`)) {
+  if (MAIL_REMINDER_TYPES.has(reminderType) && skipForLaunchCut('mailbox', `reminder-push:${reminderType}`)) {
     return res.json({ status: 'skipped', reason: 'feature_hidden' });
   }
+  const result = await sendReminderPush({ userId, title, body, reminderType, data });
+  return res.status(result.httpStatus || 200).json(result.payload);
+});
 
+// Mail pushes open the Mail tab: the morning notice the Mailbox, an urgent piece that piece (an older Lambda build
+// still says '/mailbox', and the Place link the other reminders use would open Place).
+const MAIL_REMINDER_TYPES = new Set(['mail_summary', 'mail_urgent']);
+function mailReminderRoute(reminderType, data) {
+  if (reminderType === 'mail_urgent' && data?.entityId && UUID_RE.test(String(data.entityId))) {
+    return `/app/mailbox/${data.entityId}`;
+  }
+  return '/app/mailbox';
+}
+
+/**
+ * Send one reminder push to one person, after their preference, quiet hours and push switch. Answers the response the
+ * reminder-push route gives: { httpStatus, payload: { status: 'sent' | 'skipped' | 'failed', reason } }.
+ */
+async function sendReminderPush({ userId, title, body, reminderType, data }) {
+  const mailTypes = MAIL_REMINDER_TYPES;
+  // Collects the answer the reminder-push route has always given (its HTTP status and body).
+  const res = { status(code) { this.httpStatus = code; return this; }, json(payload) { this.payload = payload; return this; } };
   try {
     // Check preference + quiet hours in a single query
     const prefField = mailTypes.has(reminderType) ? 'mail_summary_enabled' : 'home_reminders_enabled';
@@ -689,6 +709,7 @@ router.post('/reminder-push', verifyInternalApiKey, async (req, res) => {
       return res.json({ status: 'skipped', reason: 'no_push_token' });
     }
 
+    const mailRoute = mailTypes.has(reminderType) ? mailReminderRoute(reminderType, data) : null;
     const receipt = await pushService.sendToUserWithReceipt(userId, {
       title,
       body,
@@ -697,6 +718,7 @@ router.post('/reminder-push', verifyInternalApiKey, async (req, res) => {
         link: placeRoute(data?.homeId),
         route: placeRoute(data?.homeId),
         ...data,
+        ...(mailRoute ? { link: mailRoute, route: mailRoute } : {}),
         // Notification actions must refuse a prior account's notification
         // after a switch. Bind this to the server's exact push recipient.
         recipient_user_id: userId,
@@ -716,6 +738,32 @@ router.post('/reminder-push', verifyInternalApiKey, async (req, res) => {
   } catch (err) {
     logger.error('Reminder push failed', { userId, reminderType, error: err.message });
     return res.status(500).json({ status: 'failed', error: err.message });
+  }
+}
+
+// ── POST /mail-morning ─────────────────────────────────────────────
+
+/**
+ * POST /api/internal/briefing/mail-morning
+ * The Mail tab's morning notice ("Your mail is here"), called by the mail notification Lambda every five minutes.
+ * Each call sends the notice to the people whose own morning it is and whose round brought them mail they can read,
+ * once per person per local day (services/mailMorningNotice). Answers counts only.
+ */
+router.post('/mail-morning', verifyInternalApiKey, async (req, res) => {
+  // Launch cut #10 (Mailbox): no mail notices while the mailbox is off.
+  if (skipForLaunchCut('mailbox', 'mail-morning')) {
+    return res.json({ status: 'skipped', reason: 'feature_hidden' });
+  }
+  try {
+    const { runMorningNotices } = require('../services/mailMorningNotice');
+    const stats = await runMorningNotices({
+      send: async (push) => (await sendReminderPush(push)).payload || { status: 'failed' },
+    });
+    logger.info('Mail morning notices', stats);
+    return res.json({ status: 'ok', ...stats });
+  } catch (err) {
+    logger.error('Mail morning notices failed', { error: err.message });
+    return res.status(500).json({ status: 'failed', error: "Couldn't send this morning's mail notices.", code: 'MAIL_MORNING_FAILED' });
   }
 });
 

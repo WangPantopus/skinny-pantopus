@@ -16,6 +16,8 @@ const { S3_BUCKET } = require('../config/aws');
 const verifyToken = require('../middleware/verifyToken');
 const logger = require('../utils/logger');
 const s3 = require('../services/s3Service');
+// Letters' enclosures are kept privately (Mail tab, SRV-4).
+const mailEnclosures = require('../services/mailEnclosures');
 const imageResizeService = require('../services/marketplace/imageResizeService');
 const { photoReference, pdfFacts, MAX_PDF_BYTES, MAX_PDF_PAGES } = require('../services/ai/photos');
 const { calculateAndStoreCompleteness } = require('../utils/businessCompleteness');
@@ -1497,31 +1499,30 @@ router.delete('/listing-media/:listingId', verifyToken, async (req, res) => {
 
 /**
  * POST /api/upload/mail-attachments
- * Upload attachment files and return URLs to include in /api/mailbox/send payload.
+ * Upload files to enclose with a letter. They are stored privately (services/mailEnclosures, Mail tab SRV-4): each
+ * answer carries a reference (`url` and `ref`, `enclosure:<token>`, not an address to open) to include in the
+ * /api/mailbox/send payload's attachments. Only the person who uploaded a file can send it, and the letter's readers
+ * open it through GET /api/mailbox/:id/enclosures/:enclosureId.
  */
 router.post('/mail-attachments', uploadLimiter, verifyToken, upload.array('files', 5), enforceFileSizeLimits, validateAndStripUploads, async (req, res) => {
   try {
     const files = req.files || [];
 
     if (files.length === 0) {
-      return res.status(400).json({ error: 'No files provided' });
+      return res.status(400).json({ error: 'Choose a file to enclose.', code: 'ENCLOSURE_MISSING' });
     }
 
     const uploaded = [];
     for (const file of files) {
-      // The key names no uploader: the letter may go out as a business (s3.generateOpaqueS3Key).
-      const { url, key } = await s3.uploadToS3(
-        file.buffer,
-        s3.generateOpaqueS3Key('mailbox', file.originalname),
-        file.mimetype
-      );
-
+      const stored = await mailEnclosures.store({ buffer: file.buffer, name: file.originalname, mimeType: file.mimetype,
+        uploaderId: req.user.id });
       uploaded.push({
-        url,
-        key,
-        name: file.originalname,
-        mime_type: file.mimetype,
-        size: file.size,
+        url: stored.ref,
+        ref: stored.ref,
+        id: stored.id,
+        name: stored.name,
+        mime_type: stored.mime_type,
+        size: stored.size_bytes,
       });
     }
 
@@ -1531,7 +1532,7 @@ router.post('/mail-attachments', uploadLimiter, verifyToken, upload.array('files
     });
   } catch (err) {
     logger.error('Mail attachment upload error', { error: err.message });
-    return res.status(500).json({ error: err.message || 'Failed to upload attachments' });
+    return res.status(err.status === 503 ? 503 : 500).json({ error: "Couldn't keep this file. Try again in a moment.", code: 'ENCLOSURE_UNAVAILABLE' });
   }
 });
 
