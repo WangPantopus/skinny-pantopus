@@ -88,6 +88,7 @@ export default function MaintenanceCard({
   onViewIssue,
   onBack,
   canManage = false,
+  canViewVendors = false,
 }: {
   issues: Record<string, any>[];
   homeId: string;
@@ -96,6 +97,7 @@ export default function MaintenanceCard({
   onViewIssue: (issue: Record<string, any>) => void;
   onBack: () => void;
   canManage?: boolean;
+  canViewVendors?: boolean;
 }) {
   const router = useRouter();
   const [subTab, setSubTab] = useState<SubTab>('active');
@@ -107,7 +109,7 @@ export default function MaintenanceCard({
   const suggestions = getSeasonalSuggestions();
 
   useEffect(() => {
-    if (subTab !== 'providers') return;
+    if (subTab !== 'providers' || !canViewVendors) return;
     let active = true;
     setLoadingVendors(true);
     setVendorsError(null);
@@ -118,7 +120,7 @@ export default function MaintenanceCard({
       })
       .finally(() => { if (active) setLoadingVendors(false); });
     return () => { active = false; };
-  }, [subTab, homeId, vendorsRetry]);
+  }, [subTab, homeId, vendorsRetry, canViewVendors]);
 
   // An issue row opens the issue; keyboard users reach and open it the way DashboardCard works.
   const issueRow = (issue: (typeof issues)[number]) => ({
@@ -141,7 +143,8 @@ export default function MaintenanceCard({
     { key: 'suggested', label: 'Suggested', count: suggestions.length },
     { key: 'scheduled', label: 'Scheduled', count: scheduled.length },
     { key: 'history', label: 'History', count: history.length },
-    { key: 'providers', label: 'Providers' },
+    // The household's vendor contacts follow vendors.view, as on the Vendors tab.
+    ...(canViewVendors ? [{ key: 'providers' as const, label: 'Providers' }] : []),
   ];
 
   return (
@@ -260,7 +263,7 @@ export default function MaintenanceCard({
       )}
 
       {/* Providers */}
-      {subTab === 'providers' && (
+      {subTab === 'providers' && canViewVendors && (
         <div className="bg-app-surface rounded-xl border border-app-border shadow-sm divide-y divide-app-border-subtle">
           {loadingVendors ? (
             <div className="px-5 py-8 text-center text-sm text-app-text-muted">Loading vendors…</div>

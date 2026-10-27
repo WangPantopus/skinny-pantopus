@@ -37,9 +37,10 @@ function seedMembership(userId = USER, homeId = HOME_ID) {
       home_id: homeId,
       user_id: userId,
       is_active: true,
-      // getAccessibleHomeIds requires a trusted verification state, not just an
+      // getAccessibleHomeIds requires a proven verification, not just an
       // active row — a pending_approval occupancy must not read household mail.
       verification_status: 'verified',
+      verification_source: 'address',
       start_at: null,
       end_at: null,
     },
@@ -83,7 +84,8 @@ describe('GET /today', () => {
     seedMembership();
     // The queued letter itself: sent to the Home (column default privacy),
     // so every member may see it.
-    seedTable('Mail', [{ id: 'mail-1', recipient_home_id: HOME_ID, privacy: 'private_to_person', deleted_at: null }]);
+    seedTable('Mail', [{ id: 'mail-1', recipient_home_id: HOME_ID, privacy: 'private_to_person', deleted_at: null,
+      delivered_at: '2026-10-01T14:00:00.000Z' }]);
     seedTable('MailRoutingQueue', [{
       id: 'q-1',
       mail_id: 'mail-1',

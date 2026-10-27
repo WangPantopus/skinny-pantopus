@@ -136,10 +136,11 @@ describe('pilot Hub truthfulness', () => {
       seedTable('Mail', [
         ...['ad', 'newsletter', 'personal'].map((type, i) => ({
           id: String(i), type, recipient_user_id: actor, drawer: 'personal', lifecycle: 'delivered', viewed: false,
-          archived: false, deleted_at: null,
+          archived: false, deleted_at: null, delivered_at: '2026-10-01T14:00:00.000Z',
         })),
         // Home mail is counted on the Home card, not in the personal inbox row.
-        { id: '3', type: 'bill', recipient_user_id: actor, drawer: 'home', lifecycle: 'delivered', viewed: false, archived: false, deleted_at: null },
+        { id: '3', type: 'bill', recipient_user_id: actor, drawer: 'home', lifecycle: 'delivered', viewed: false, archived: false, deleted_at: null,
+          delivered_at: '2026-10-01T14:00:00.000Z' },
       ]);
       const res = await request(makeApp()).get('/api/hub').set('x-test-user-id', actor);
       expect(res.status).toBe(200);

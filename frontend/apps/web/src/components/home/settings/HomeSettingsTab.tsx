@@ -125,6 +125,9 @@ export default function HomeSettingsTab({
     home?.can_delete_home === true ||
     (home?.can_delete_home === undefined && home?.owner_id === currentUserId);
   const canEdit = can('home.edit');
+  // Entry and parking instructions follow access.view_codes, as the settings read does:
+  // an editor without it gets no instructions to read, so none to type over unseen.
+  const canViewInstructions = can('access.view_codes');
 
   // Loading
   const [loading, setLoading] = useState(true);
@@ -300,7 +303,8 @@ export default function HomeSettingsTab({
       const draft = settingsPayload(form);
       // Omit untouched values so another editor's unrelated changes survive.
       const changes = Object.fromEntries(Object.entries(draft).filter(
-        ([key, value]) => JSON.stringify(value) !== JSON.stringify(loadedSettings.current?.[key]),
+        ([key, value]) => JSON.stringify(value) !== JSON.stringify(loadedSettings.current?.[key])
+          && (canViewInstructions || (key !== 'entry_instructions' && key !== 'parking_instructions')),
       ));
       if (Object.keys(changes).length > 0) {
         await api.homeProfile.updateHomeSettings(homeId, changes);
@@ -487,31 +491,35 @@ export default function HomeSettingsTab({
               <p className="text-[10px] text-app-text-muted mt-0.5">Shown to guests via guest passes</p>
             </div>
 
-            <div>
-              <label className="block text-xs font-medium text-app-text-secondary mb-1">Parking Instructions</label>
-              <textarea
-                value={parkingInstructions}
-                disabled={saving}
-                onChange={(e) => setParkingInstructions(e.target.value)}
-                rows={2}
-                className="w-full rounded-lg border border-app-border px-3 py-2 text-sm resize-none"
-                placeholder="e.g., Park in driveway, street parking on Main St..."
-                maxLength={2000}
-              />
-            </div>
+            {canViewInstructions && (
+              <>
+                <div>
+                  <label className="block text-xs font-medium text-app-text-secondary mb-1">Parking Instructions</label>
+                  <textarea
+                    value={parkingInstructions}
+                    disabled={saving}
+                    onChange={(e) => setParkingInstructions(e.target.value)}
+                    rows={2}
+                    className="w-full rounded-lg border border-app-border px-3 py-2 text-sm resize-none"
+                    placeholder="e.g., Park in driveway, street parking on Main St..."
+                    maxLength={2000}
+                  />
+                </div>
 
-            <div>
-              <label className="block text-xs font-medium text-app-text-secondary mb-1">Entry Instructions</label>
-              <textarea
-                value={entryInstructions}
-                disabled={saving}
-                onChange={(e) => setEntryInstructions(e.target.value)}
-                rows={2}
-                className="w-full rounded-lg border border-app-border px-3 py-2 text-sm resize-none"
-                placeholder="e.g., Front door code is 1234, ring bell twice..."
-                maxLength={2000}
-              />
-            </div>
+                <div>
+                  <label className="block text-xs font-medium text-app-text-secondary mb-1">Entry Instructions</label>
+                  <textarea
+                    value={entryInstructions}
+                    disabled={saving}
+                    onChange={(e) => setEntryInstructions(e.target.value)}
+                    rows={2}
+                    className="w-full rounded-lg border border-app-border px-3 py-2 text-sm resize-none"
+                    placeholder="e.g., Front door code is 1234, ring bell twice..."
+                    maxLength={2000}
+                  />
+                </div>
+              </>
+            )}
 
             <div>
               <label className="block text-xs font-medium text-app-text-secondary mb-1">Trash Day</label>

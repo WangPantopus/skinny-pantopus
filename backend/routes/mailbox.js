@@ -5,7 +5,15 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const homeRecordService = require('../services/homeRecordService');
 // canAccessMail: the per-item rule, shared with the v2 mailbox routes.
 const { getAccessibleHomeIds, trustedHomeIdsOrThrow, canAccessMail, readableMail, homeMailFilter, visibleMailFilter,
-  restorableMail, isDeletedMail, removedMailInfo, sendHomeMailRemovedNotice, MAIL_RESTORE_DAYS } = require('../utils/homeMailAccess');
+  restorableMail, isDeletedMail, removedMailInfo, sendHomeMailRemovedNotice, MAIL_RESTORE_DAYS,
+  sendMailUnavailable, mailHomesOrThrow, MAIL_HOME_NEEDS_PROOF, onlyDelivered } = require('../utils/homeMailAccess');
+// Mail comes in the morning (SRV-1): the delivery rule every writer follows.
+const mailDelivery = require('../services/mailDelivery');
+// What the apps read about a piece (SRV-2), and its kept "Pantopus read this for you" note.
+const mailPiece = require('../services/mailPiece');
+const mailSummaries = require('../services/mailSummaries');
+// Private enclosures (SRV-4).
+const mailEnclosures = require('../services/mailEnclosures');
 const { HOME_DOCUMENT_TYPES } = require('../utils/homeDocumentAccess');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
@@ -590,11 +598,17 @@ const normalizeSendMailPayload = (rawBody, senderId) => {
   const senderBusinessName = structuredEnvelope.senderBusinessName ?? body.senderBusinessName ?? null;
   const senderAddress = structuredEnvelope.senderAddress ?? body.senderAddress ?? null;
   const payoutAmount = structuredPolicy.payoutAmount ?? structuredEnvelope.payoutAmount ?? body.payoutAmount ?? null;
-  const attachments =
+  const attachmentList =
     structuredObject.attachments ||
     structuredEnvelope.attachments ||
     body.attachments ||
     [];
+  // Private enclosures (SRV-4): the sender's own uploads, by signed reference; anything else is an older public
+  // address. A reference that isn't this sender's own upload refuses the send.
+  const { urls: attachments, enclosures, refused } = mailEnclosures.fromAttachments(attachmentList, senderId);
+  if (refused.length) {
+    throw new Error("One of the files can't be sent with this letter. Attach it again and try once more.");
+  }
 
   const contentCandidate = (
     structuredObject.content ??
@@ -631,7 +645,9 @@ const normalizeSendMailPayload = (rawBody, senderId) => {
   const resolvedPrimaryAction = hasPay ? 'pay' : primaryAction;
 
   // Compose metadata — store stationery/ink in extractedData for quick access
-  const rawExtracted = structuredObject?.payload?.extractedData || structuredObject?.payload?.extraction || null;
+  // A sender never sets what only the server writes (the kept note, Pantopus's mark, enclosures): services/mailPiece.
+  const rawExtracted = mailPiece.withoutServerKeys(
+    structuredObject?.payload?.extractedData || structuredObject?.payload?.extraction || null);
   const composeMetadata = {};
   if (structuredObject?.payload?.stationeryTheme) {
     composeMetadata.stationeryTheme = structuredObject.payload.stationeryTheme;
@@ -644,6 +660,9 @@ const normalizeSendMailPayload = (rawBody, senderId) => {
   }
   if (outcomes.length > 0) {
     composeMetadata.outcomes = outcomes;
+  }
+  if (enclosures.length > 0) {
+    composeMetadata.enclosures = enclosures;
   }
   const extractedData = (rawExtracted || Object.keys(composeMetadata).length > 0)
     ? { ...(rawExtracted || {}), ...composeMetadata }
@@ -843,8 +862,9 @@ const resolveSenderBusiness = async (senderId, requestedName) => {
 // to another member or for another member's attention only.
 const applyMailboxScopeToQuery = (query, { scope, userId, homeId, accessibleHomeIds }) => {
   // Deleted letters (recoverable for 30 days) and dismissed ones leave the
-  // lists and their counts.
-  query = query.is('deleted_at', null).or('lifecycle.is.null,lifecycle.neq.shredded');
+  // lists and their counts, and a piece waiting for its morning round isn't
+  // there yet (SRV-1).
+  query = onlyDelivered(query.is('deleted_at', null).or('lifecycle.is.null,lifecycle.neq.shredded'));
   if (scope === 'home') {
     return query.eq('recipient_home_id', homeId).or(homeMailFilter(homeId, userId));
   }
@@ -905,7 +925,10 @@ const createMailObject = async ({
   return { objectId: objectRow.id };
 };
 
-const insertMailWithCompatibility = async (mailData) => {
+const insertMailWithCompatibility = async (stored) => {
+  // Every piece follows the morning delivery rule (SRV-1, services/mailDelivery): it goes into the box at the next
+  // 7 a.m. where the mailbox is, or at once as a special delivery.
+  const mailData = { ...stored, ...(await mailDelivery.deliveryFor(stored)) };
   const primaryInsert = await supabaseAdmin
     .from('Mail')
     .insert(mailData)
@@ -1432,7 +1455,12 @@ router.get('/', verifyToken, async (req, res) => {
         return res.status(400).json({ error: 'homeId is required when scope=home' });
       }
       if (!accessibleHomeIds.includes(homeId)) {
-        return res.status(403).json({ error: 'You don\u2019t have permission to send mail to this home.' });
+        // Someone who lives there but hasn't proven the address yet is told what opens it (D1).
+        const homes = await mailHomesOrThrow(userId).catch(() => []);
+        if (homes.some((h) => h.home_id === homeId.toLowerCase() && h.mail_access === 'needs_proof')) {
+          return res.status(403).json(MAIL_HOME_NEEDS_PROOF);
+        }
+        return res.status(403).json({ error: "You can't open this home's mail.", code: 'MAIL_HOME_NOT_YOURS' });
       }
     }
 
@@ -1480,6 +1508,8 @@ router.get('/', verifyToken, async (req, res) => {
         attachments,
         expires_at,
         created_at,
+        delivered_at,
+        special_delivery,
         sender:sender_user_id (
           id,
           username,
@@ -1487,8 +1517,8 @@ router.get('/', verifyToken, async (req, res) => {
         )
       `, { count: 'exact' })
       .eq('archived', archived === 'true')
-      .order('created_at', { ascending: false })
-      // Mail delivered together shares created_at; the id keeps the order the same on every page.
+      .order('delivered_at', { ascending: false })
+      // Mail delivered together shares delivered_at; the id keeps the order the same on every page.
       .order('id', { ascending: false })
       .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
 
@@ -1699,6 +1729,33 @@ router.get('/deleted', verifyToken, async (req, res) => {
  * GET /api/mailbox/:id
  * Get single mail item
  */
+/**
+ * GET /api/mailbox/campaigns
+ * Get user's ad campaigns. Declared before GET /:id, which used to answer this path (Mail tab, SRV-3).
+ */
+router.get('/campaigns', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const { data: campaigns, error } = await supabaseAdmin
+      .from('AdCampaign')
+      .select('*')
+      .eq('business_user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      logger.error('Error fetching campaigns', { error: error.message, userId });
+      return res.status(500).json({ error: "Couldn't load your campaigns. Try again in a moment.", code: 'MAIL_UNAVAILABLE' });
+    }
+
+    res.json({ campaigns: campaigns || [] });
+
+  } catch (err) {
+    logger.error('Campaigns fetch error', { error: err.message, userId: req.user.id });
+    res.status(500).json({ error: "Couldn't load your campaigns. Try again in a moment.", code: 'MAIL_UNAVAILABLE' });
+  }
+});
+
 router.get('/:id', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
@@ -1717,15 +1774,12 @@ router.get('/:id', verifyToken, async (req, res) => {
       .eq('id', id)
       .single();
 
-    if (error || !mail) {
-      return res.status(404).json({ error: 'Mail not found' });
-    }
-
     // A deleted letter still opens for the members who could see it, so its
-    // notice can offer Restore; a dismissed one says so too.
-    const allowed = await canAccessMail(mail, userId, { includeDeleted: true });
-    if (!allowed) {
-      return res.status(403).json({ error: 'You do not have access to this mail' });
+    // notice can offer Restore; a dismissed one says so too. A Home letter for
+    // someone who hasn't proven the address answers 403 MAIL_HOME_NEEDS_PROOF;
+    // anything else they can't open is not found (it doesn't say it exists).
+    if (error || !mail || !(await canAccessMail(mail, userId, { includeDeleted: true }))) {
+      return sendMailUnavailable(res, error ? null : mail, userId);
     }
     mail.removed = await removedMailInfo(mail);
 
@@ -1761,12 +1815,53 @@ router.get('/:id', verifyToken, async (req, res) => {
     }
 
     mail.links = await getMailLinksSafely(mail.id);
+    // What the piece encloses, private ones included; each opens through GET /:id/enclosures/:enclosureId (SRV-4).
+    mail.enclosures = mailEnclosures.listFor(mail, mail.attachments);
 
-    res.json({ mail: presentMailSender(await nameMailSender(mail, userId), userId) });
+    // "Pantopus read this for you": the kept note, or one made now on this first open (never for a removed piece;
+    // a failure leaves no note).
+    if (!mail.removed && !mailPiece.summaryOf(mail)) {
+      const note = await mailSummaries.ensureSummary(mail, userId);
+      if (note) mail.mail_extracted = { ...(mail.mail_extracted || {}), summary: note.text };
+      if (note && !mailPiece.keyFacts(mail.key_facts).length) mail.key_facts = note.key_facts;
+    }
+
+    const timeZone = (await mailDelivery.personTimeZone(userId)) || mailDelivery.FALLBACK_TIME_ZONE;
+    res.json({ mail: mailPiece.present(presentMailSender(await nameMailSender(mail, userId), userId), { timeZone }) });
 
   } catch (err) {
     logger.error('Mail fetch error', { error: err.message, mailId: req.params.id });
-    res.status(500).json({ error: 'Failed to fetch mail' });
+    res.status(500).json({ error: "Couldn't open this mail. Try again in a moment.", code: 'MAIL_UNAVAILABLE' });
+  }
+});
+
+/**
+ * GET /api/mailbox/:id/enclosures/:enclosureId
+ * A short-lived link to one enclosure of a piece the caller may read: { url, expires_at } (Mail tab, SRV-4). A
+ * private enclosure's link is signed for a few minutes; ask again once it expires. An older piece's enclosure is its
+ * address as it was stored (expires_at null).
+ */
+router.get('/:id/enclosures/:enclosureId', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  try {
+    const userId = req.user.id;
+    const { data: mail, error } = await supabaseAdmin.from('Mail').select('*').eq('id', req.params.id).maybeSingle();
+    if (error || !mail || !(await canAccessMail(mail, userId))) {
+      return sendMailUnavailable(res, error ? null : mail, userId);
+    }
+    let objectAttachments = null;
+    if (mail.object_id) {
+      const objectData = await getMailObjectPayload(mail.object_id);
+      objectAttachments = objectData?.payload?.envelope?.attachments || objectData?.payload?.attachments || null;
+    }
+    const link = await mailEnclosures.linkFor(mail, req.params.enclosureId, objectAttachments);
+    if (!link) {
+      return res.status(404).json({ error: "This letter doesn't have that enclosure.", code: 'ENCLOSURE_NOT_FOUND' });
+    }
+    return res.json(link);
+  } catch (err) {
+    logger.error('Enclosure link error', { error: err.message, mailId: req.params.id });
+    return res.status(503).json({ error: "Couldn't open this file just now. Try again in a moment.", code: 'ENCLOSURE_UNAVAILABLE' });
   }
 });
 
@@ -2350,9 +2445,12 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
       stationeryTheme: composePayload.stationeryTheme || null,
     });
 
-    // Fire-and-forget: fetch sender name + home address, then notify
+    // Fire-and-forget: fetch sender name + home address, then notify. Only a
+    // special delivery is told now; a piece in the morning round is told in
+    // the morning notice with the rest of that day's mail (SRV-1).
     (async () => {
       try {
+        if (!mail.special_delivery) return;
         const senderName = senderDisplayName;
 
         // Fetch home address if available
@@ -2408,6 +2506,7 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
             address: homeAddress,
             amount: payoutAmount != null ? payoutAmount : undefined,
             vendorName,
+            special: true,
           });
         }
       } catch (notifErr) {
@@ -3281,73 +3380,6 @@ router.post('/campaigns', verifyToken, validate(createCampaignSchema), async (re
   } catch (err) {
     logger.error('Campaign creation error', { error: err.message, userId: req.user.id });
     res.status(500).json({ error: 'Failed to create campaign' });
-  }
-});
-
-/**
- * GET /api/mailbox/campaigns
- * Get user's ad campaigns
- */
-router.get('/campaigns', verifyToken, async (req, res) => {
-  try {
-    const userId = req.user.id;
-
-    const { data: campaigns, error } = await supabaseAdmin
-      .from('AdCampaign')
-      .select('*')
-      .eq('business_user_id', userId)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      logger.error('Error fetching campaigns', { error: error.message, userId });
-      return res.status(500).json({ error: 'Failed to fetch campaigns' });
-    }
-
-    res.json({ campaigns: campaigns || [] });
-
-  } catch (err) {
-    logger.error('Campaigns fetch error', { error: err.message, userId: req.user.id });
-    res.status(500).json({ error: 'Failed to fetch campaigns' });
-  }
-});
-
-// GET /api/mailbox/summary — counts by type for InboxEarnCard
-router.get('/summary', verifyToken, async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const scope = req.query.scope || 'personal';
-    const homeId = req.query.homeId;
-
-    let query = supabaseAdmin
-      .from('Mail')
-      .select('id, type, viewed')
-      .eq('archived', false);
-
-    if (scope === 'home' && homeId) {
-      query = query.eq('home_id', homeId);
-    } else {
-      query = query.eq('recipient_user_id', userId);
-    }
-
-    const { data, error } = await query;
-    if (error) throw error;
-
-    const items = data || [];
-    const unread = items.filter(m => !m.viewed).length;
-    const bills = items.filter(m => m.type === 'bill' || m.type === 'statement').length;
-    const notices = items.filter(m => m.type === 'notice').length;
-    const offers = items.filter(m => m.type === 'ad' || m.type === 'promotion' || m.type === 'newsletter').length;
-
-    res.json({
-      total: items.length,
-      unread,
-      bills,
-      notices,
-      offers,
-    });
-  } catch (err) {
-    logger.error('Failed to fetch mailbox summary:', err);
-    res.status(500).json({ error: 'Failed to fetch mailbox summary' });
   }
 });
 

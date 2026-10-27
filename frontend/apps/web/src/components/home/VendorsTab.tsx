@@ -147,12 +147,12 @@ export default function VendorsTab({ homeId }: { homeId: string }) {
           >
             + Link Business
           </button>}
-          <button
+          {canManageLinks && <button
             onClick={() => { setShowAddManual(!showAddManual); setShowSearch(false); }}
             className="px-3 py-1.5 rounded-lg border border-app-strong text-xs font-semibold text-app-strong hover:bg-surface-raised transition"
           >
             + Manual Vendor
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -217,7 +217,7 @@ export default function VendorsTab({ homeId }: { homeId: string }) {
         </div>
       )}
 
-      {showAddManual && (
+      {showAddManual && canManageLinks && (
         <div className="bg-surface rounded-xl border border-app p-4 space-y-3">
           <h3 className="text-sm font-semibold text-app">Add Manual Vendor</h3>
           <input

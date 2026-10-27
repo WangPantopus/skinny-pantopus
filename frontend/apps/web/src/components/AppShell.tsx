@@ -226,7 +226,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
     return () => cancelAnimationFrame(frame);
   }, [mounted]);
 
-  const { unreadMessages: chatUnread } = useBadges();
+  const { unreadMessages: chatUnread, unreadMail: mailUnread } = useBadges();
   // Audience-zone gating for the top-bar split (P2.3 / unified-IA §6.1). Asked only while Beacon is on.
   const audienceFlagState = useFeatureFlagState('audience_profile', { enabled: launchFeatures.beacon });
   // Launch cut #1 (Beacon): the Audience bell is hidden; one bell remains.
@@ -535,7 +535,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
 
           {/* ── Navigation ── */}
           <nav className="flex-1 overflow-y-auto overflow-x-hidden py-2" style={sidebarNavPadStyle}>
-            {isBusinessContext ? <BusinessSidebarContent businessId={businessId!} currentTab={currentTab} showLabels={showLabels} onNavigate={() => {}} /> : isHomeContext ? <HomeSidebarContent homeId={homeId!} currentTab={currentTab} showLabels={showLabels} onNavigate={() => {}} /> : <PersonalSidebarContent currentPath={pathname} showLabels={showLabels} chatUnread={chatUnread} onNavigate={() => {}} />}
+            {isBusinessContext ? <BusinessSidebarContent businessId={businessId!} currentTab={currentTab} showLabels={showLabels} onNavigate={() => {}} /> : isHomeContext ? <HomeSidebarContent homeId={homeId!} currentTab={currentTab} showLabels={showLabels} onNavigate={() => {}} /> : <PersonalSidebarContent currentPath={pathname} showLabels={showLabels} chatUnread={chatUnread} mailUnread={mailUnread} onNavigate={() => {}} />}
           </nav>
 
           {/* ── Bottom Section ── */}
@@ -592,7 +592,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
             </div>
 
             {/* Nav */}
-            <nav className="flex-1 overflow-y-auto px-2 py-2">{isBusinessContext ? <BusinessSidebarContent businessId={businessId!} currentTab={currentTab} showLabels onNavigate={() => sidebarDispatch({ type: 'SET_MOBILE_OPEN', value: false })} /> : isHomeContext ? <HomeSidebarContent homeId={homeId!} currentTab={currentTab} showLabels onNavigate={() => sidebarDispatch({ type: 'SET_MOBILE_OPEN', value: false })} /> : <PersonalSidebarContent currentPath={pathname} showLabels chatUnread={chatUnread} onNavigate={() => sidebarDispatch({ type: 'SET_MOBILE_OPEN', value: false })} />}</nav>
+            <nav className="flex-1 overflow-y-auto px-2 py-2">{isBusinessContext ? <BusinessSidebarContent businessId={businessId!} currentTab={currentTab} showLabels onNavigate={() => sidebarDispatch({ type: 'SET_MOBILE_OPEN', value: false })} /> : isHomeContext ? <HomeSidebarContent homeId={homeId!} currentTab={currentTab} showLabels onNavigate={() => sidebarDispatch({ type: 'SET_MOBILE_OPEN', value: false })} /> : <PersonalSidebarContent currentPath={pathname} showLabels chatUnread={chatUnread} mailUnread={mailUnread} onNavigate={() => sidebarDispatch({ type: 'SET_MOBILE_OPEN', value: false })} />}</nav>
 
             {/* Bottom */}
             <div className="border-t border-app px-2 py-1">
@@ -665,10 +665,10 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         {children}
       </main>
 
-      {/* Four-tab IA on phone-width web: Place · Today · Nearby · Messages as a
-          bottom bar (the sidebar carries it at md+). Business context keeps
-          its own navigation. */}
-      {showMobileTabs && <MobileTabBar unread={chatUnread} />}
+      {/* The tabs on phone-width web: Place · Today · Nearby · (Mail ·) Messages
+          as a bottom bar (the sidebar carries them at md+). Business context
+          keeps its own navigation. */}
+      {showMobileTabs && <MobileTabBar unreadMail={mailUnread} unreadMessages={chatUnread} />}
 
       {/* ═══════════════════════════════════════════════════════
        *  UNIFIED FAB + COMPOSER
@@ -741,7 +741,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 /* ─────────────────────────────────────────────────────────────
  * Personal Sidebar Content
  * ───────────────────────────────────────────────────────────── */
-export function PersonalSidebarContent({ currentPath, showLabels, chatUnread, onNavigate }: { currentPath: string; showLabels: boolean; chatUnread: number; onNavigate: () => void }) {
+export function PersonalSidebarContent({ currentPath, showLabels, chatUnread, mailUnread = 0, onNavigate }: { currentPath: string; showLabels: boolean; chatUnread: number; mailUnread?: number; onNavigate: () => void }) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const go = (path: string) => {
@@ -780,9 +780,13 @@ export function PersonalSidebarContent({ currentPath, showLabels, chatUnread, on
     router.prefetch('/app/feed');
   }, [router]);
 
-  // Messages — the conversation list (the mailbox too, while Mailbox is on).
+  // Mail — the Mailbox's Me drawer (launch cut #10: only while Mailbox is on).
   const prefetchMail = useCallback(() => {
-    if (launchFeatures.mailbox) router.prefetch('/app/mailbox');
+    router.prefetch('/app/mailbox/personal');
+  }, [router]);
+
+  // Messages — the conversation list.
+  const prefetchMessages = useCallback(() => {
     router.prefetch('/app/chat');
     queryClient.prefetchQuery(conversationsQuery());
   }, [router, queryClient]);
@@ -807,20 +811,19 @@ export function PersonalSidebarContent({ currentPath, showLabels, chatUnread, on
 
   return (
     <div className="space-y-0.5">
-      {/* Four-tab IA (wedge Phase 1.5): Place · Today · Nearby · Messages —
+      {/* The tabs (wedge Phase 1.5): Place · Today · Nearby · Messages —
           every tab alive at zero density. Today is the briefing; Nearby is
           social discovery at /app/nearby (Pulse / Beacons / Marketplace /
           Tasks open behind its meter); Messages is the conversation list at
-          /app/chat (launch cut #10: while Mailbox is on, the tab is Mail and
-          holds the mailbox too). Hub and the my-x screens keep their routes
-          (deep links resolve) but leave the nav. */}
+          /app/chat. Launch cut #10: while Mailbox is on, Mail is its own entry
+          before Messages (founder, 2026-10-26). Hub and the my-x screens keep
+          their routes (deep links resolve) but leave the nav. */}
       <SidebarItem icon={NavIcons.place} label="Place" active={startsWith('/app/place') || isActive('/app/hub')} onClick={() => go('/app/place')} onPrefetch={prefetchPlace} showLabel={showLabels} accent="home" testId="sidebar-place" />
       <SidebarItem icon={NavIcons.today} label="Today" active={startsWith('/app/today') || startsWith('/app/hub/today')} onClick={() => go('/app/today')} onPrefetch={prefetchToday} showLabel={showLabels} testId="sidebar-today" />
       {/* Nearby opens on its Pulse segment (/app/feed); Neighborhood is /app/nearby (founder decision 2026-10-20). */}
       <SidebarItem icon={NavIcons.nearby} label="Nearby" active={startsWith('/app/nearby') || startsWith('/app/neighborhood') || startsWith('/app/feed') || startsWith('/app/beacons') || startsWith('/app/gigs') || startsWith('/app/marketplace')} onClick={() => go('/app/feed')} onPrefetch={prefetchNearby} showLabel={showLabels} testId="sidebar-nearby" />
-      {launchFeatures.mailbox
-        ? <SidebarItem icon={NavIcons.mail} label="Mail" active={startsWith('/app/mailbox') || startsWith('/app/chat')} onClick={() => go('/app/mailbox?scope=personal')} onPrefetch={prefetchMail} showLabel={showLabels} count={chatUnread} testId="sidebar-mail" />
-        : <SidebarItem icon={NavIcons.messages} label="Messages" active={startsWith('/app/chat')} onClick={() => go('/app/chat')} onPrefetch={prefetchMail} showLabel={showLabels} count={chatUnread} testId="sidebar-mail" />}
+      {launchFeatures.mailbox ? <SidebarItem icon={NavIcons.mail} label="Mail" active={startsWith('/app/mailbox')} onClick={() => go('/app/mailbox/personal')} onPrefetch={prefetchMail} showLabel={showLabels} count={mailUnread} countLabel="unopened" testId="sidebar-mail" /> : null}
+      <SidebarItem icon={NavIcons.messages} label="Messages" active={startsWith('/app/chat')} onClick={() => go('/app/chat')} onPrefetch={prefetchMessages} showLabel={showLabels} count={chatUnread} testId="sidebar-messages" />
       {/* Launch cut #5 (Public scheduling): the Scheduling entry is hidden. */}
       {webFeatureFlags.scheduling && launchFeatures.publicScheduling ? <SidebarItem icon={NavIcons.scheduling} label="Scheduling" active={startsWith('/app/scheduling')} onClick={() => go('/app/scheduling')} onPrefetch={prefetchScheduling} showLabel={showLabels} testId="sidebar-scheduling" /> : null}
       {/* Launch cut #1 (Beacon): Audience and My Beacon are hidden (My Beacon is also #2). */}
@@ -916,7 +919,7 @@ function HomeSidebarNavigation({ homeId, currentTab, showLabels, onNavigate }: H
 
       {shared && can('packages.view') && launchFeatures.householdExtras ? <SidebarItem icon={HomeIcons.packages} label="Packages" active={isTabActive('packages')} onClick={() => goTab('packages')} showLabel={showLabels} /> : null}
       {shared && can('docs.view') && <SidebarItem icon={HomeIcons.documents} label="Documents" active={isTabActive('documents')} onClick={() => goTab('documents')} showLabel={showLabels} />}
-      {shared && <SidebarItem icon={HomeIcons.vendors} label="Vendors" active={isTabActive('vendors')} onClick={() => goTab('vendors')} showLabel={showLabels} />}
+      {shared && can('vendors.view') && <SidebarItem icon={HomeIcons.vendors} label="Vendors" active={isTabActive('vendors')} onClick={() => goTab('vendors')} showLabel={showLabels} />}
       {shared && can('sensitive.view') && <SidebarItem icon={HomeIcons.emergency} label="Emergency" active={isTabActive('emergency')} onClick={() => goTab('emergency')} showLabel={showLabels} />}
 
       {shared && <SidebarDivider showLabel={showLabels} />}
@@ -1004,6 +1007,7 @@ function SidebarItem({
   onClick,
   onPrefetch,
   count,
+  countLabel = 'unread',
   accent = 'blue',
   showLabel = true,
   accessory,
@@ -1015,6 +1019,8 @@ function SidebarItem({
   onClick: () => void;
   onPrefetch?: () => void;
   count?: number;
+  /** What the count counts, for screen readers ("Mail, 3 unopened"). */
+  countLabel?: string;
   accent?: 'blue' | 'emerald' | 'violet' | 'teal' | 'home';
   showLabel?: boolean;
   /** Optional trailing element (e.g. <ProBadge />) rendered before the count pill. */
@@ -1037,11 +1043,12 @@ function SidebarItem({
           : 'bg-blue-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-200 border-l-[3px] border-primary-600 dark:border-primary-400';
 
   const inactiveClasses = 'text-app-muted hover-bg-app border-l-[3px] border-transparent';
+  const ariaLabel = count != null && count > 0 ? `${label}, ${count} ${countLabel}` : undefined;
 
   if (!showLabel) {
     // Icon-only mode
     return (
-      <button onClick={onClick} onMouseEnter={onPrefetch} onFocus={onPrefetch} className={`w-full flex items-center justify-center py-2.5 rounded-lg transition relative group ${active ? activeClasses : inactiveClasses}`} title={label} data-testid={testId} data-accent={accent} data-active={active ? 'true' : 'false'}>
+      <button onClick={onClick} onMouseEnter={onPrefetch} onFocus={onPrefetch} className={`w-full flex items-center justify-center py-2.5 rounded-lg transition relative group ${active ? activeClasses : inactiveClasses}`} title={label} aria-label={ariaLabel} data-testid={testId} data-accent={accent} data-active={active ? 'true' : 'false'}>
         <Icon className="w-5 h-5 flex-shrink-0" />
         {accessory ? <span className="absolute bottom-0.5 right-0.5">{accessory}</span> : null}
         {count != null && count > 0 && <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 text-[9px] font-bold rounded-full flex items-center justify-center bg-red-600 text-white">{count > 99 ? '99+' : count}</span>}
@@ -1053,7 +1060,7 @@ function SidebarItem({
 
   // Full mode with label
   return (
-    <button onClick={onClick} onMouseEnter={onPrefetch} onFocus={onPrefetch} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition whitespace-nowrap ${active ? activeClasses : inactiveClasses}`} data-testid={testId} data-accent={accent} data-active={active ? 'true' : 'false'}>
+    <button onClick={onClick} onMouseEnter={onPrefetch} onFocus={onPrefetch} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition whitespace-nowrap ${active ? activeClasses : inactiveClasses}`} aria-label={ariaLabel} data-testid={testId} data-accent={accent} data-active={active ? 'true' : 'false'}>
       <Icon className="w-5 h-5 flex-shrink-0" />
       <span className="flex-1 text-left truncate">{label}</span>
       {accessory}
