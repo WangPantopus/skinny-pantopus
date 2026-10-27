@@ -18,6 +18,7 @@
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('./logger');
 const { localDisplayNames } = require('./identityProfiles');
+const { currentOccupancy, resolveHomeRole, NON_RESIDENT_ROLES } = require('./homeAccessPolicy');
 
 // The member who deleted or dismissed a Home letter, by the name they show their household (their Local Profile's),
 // or null when they have none or it can't be read.
@@ -51,8 +52,10 @@ const MAIL_TRUSTED_VERIFICATION_STATUSES = ['verified', 'provisional', 'provisio
 /**
  * Home ids whose household mail this user may read.
  *
- * Requires an ACTIVE occupancy in a trusted verification state. Fails closed:
- * on a lookup error the user is scoped to nothing rather than to everything.
+ * Requires an ACTIVE occupancy in a trusted verification state, held by a
+ * resident (not a guest or service provider) inside their access window.
+ * Fails closed: on a lookup error the user is scoped to nothing rather than
+ * to everything.
  *
  * @param {string} userId
  * @returns {Promise<string[]>}
@@ -76,11 +79,27 @@ async function getAccessibleHomeIds(userId) {
  */
 async function trustedHomeIdsOrThrow(userId) {
   if (!userId) return [];
+  const rows = await mailReaderOccupancies('user_id', userId);
+  return [...new Set(rows.map((r) => r.home_id).filter(Boolean))];
+}
 
+/**
+ * The people who may read this Home's mail now: the same rule as
+ * getAccessibleHomeIds, from the Home's side. Throws on a read failure.
+ */
+async function mailReaderIdsOrThrow(homeId) {
+  if (!homeId) return [];
+  const rows = await mailReaderOccupancies('home_id', homeId);
+  return [...new Set(rows.map((r) => r.user_id).filter(Boolean))];
+}
+
+// One person's or one Home's occupancies that may read household mail now. Throws on a read failure.
+async function mailReaderOccupancies(column, id) {
   const { data, error } = await supabaseAdmin
     .from('HomeOccupancy')
-    .select('home_id, verification_status, verified_at')
-    .eq('user_id', userId)
+    .select('home_id, user_id, role, role_base, is_active, start_at, end_at, access_start_at, access_end_at, '
+      + 'verification_status, verified_at')
+    .eq(column, id)
     .eq('is_active', true)
     .in('verification_status', MAIL_TRUSTED_VERIFICATION_STATUSES)
     // Probation (a request nobody answered, home claims PR 4) is provisional without proof: never mail.
@@ -96,11 +115,13 @@ async function trustedHomeIdsOrThrow(userId) {
   // verified_at predate the column and are never demoted.
   // eslint-disable-next-line global-require
   const verificationAge = require('./verificationAge');
-  const trusted = (data || []).filter((r) => (
-    r.verification_status !== 'verified' || !verificationAge.staleAffectsTrust(r.verified_at)
+  return (data || []).filter((r) => (
+    // Guests and service providers aren't residents (homeAccessPolicy): they never read the household's letters.
+    !NON_RESIDENT_ROLES.has(resolveHomeRole(r))
+    // Access that has ended, or hasn't started yet, reads nothing (a guest pass's checkout, a move-out date).
+    && currentOccupancy(r)
+    && (r.verification_status !== 'verified' || !verificationAge.staleAffectsTrust(r.verified_at))
   ));
-
-  return [...new Set(trusted.map((r) => r.home_id).filter(Boolean))];
 }
 
 /**
@@ -346,7 +367,8 @@ async function sendHomeMailRemovedNotice(mail, actorId, action) {
   }
 }
 
-module.exports = { MAIL_TRUSTED_VERIFICATION_STATUSES, getAccessibleHomeIds, trustedHomeIdsOrThrow, canAccessMail, readableMail, restorableMail,
+module.exports = { MAIL_TRUSTED_VERIFICATION_STATUSES, getAccessibleHomeIds, trustedHomeIdsOrThrow, mailReaderIdsOrThrow,
+  canAccessMail, readableMail, restorableMail,
   isDeletedMail, removedMailInfo, homeMailAudience, sendHomeMailRemovedNotice, MAIL_RESTORE_DAYS,
   homeMailVisibilityClauses, homeMailFilter, homesMailFilter, visibleMailFilter, visibleMailIds,
 };
