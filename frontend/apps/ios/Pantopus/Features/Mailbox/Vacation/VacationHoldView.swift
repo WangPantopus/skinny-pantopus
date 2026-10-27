@@ -45,6 +45,7 @@ public struct VacationHoldView: View {
                         ErrorState(headline: "Couldn't load travel dates", message: message) {
                             await viewModel.refresh()
                         }
+                        .padding(.top, Spacing.s8)
                     } else {
                         switch viewModel.mode {
                         case let .scheduling(draft):
