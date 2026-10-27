@@ -58,8 +58,39 @@ export interface OwnershipClaim {
   routing_classification?: ClaimRoutingClassification | null;
   /** Whether any documents are attached; null when the server couldn't tell. */
   has_evidence?: boolean | null;
+  /** What a claim in review still needs before it can be approved; null otherwise or when unknown. */
+  approval?: ClaimApprovalProgress | null;
   created_at: string;
   updated_at: string;
+}
+
+/**
+ * Where the claimant's Stripe Identity check stands. started: opened, not submitted;
+ * processing: Stripe is checking it; requires_input: the last attempt didn't pass.
+ */
+export type ClaimIdentityCheckState = 'not_started' | 'started' | 'processing' | 'requires_input' | 'verified';
+/** The ownership (or, for a residency claim, residency) document: none yet, waiting for a reviewer, or checked. */
+export type ClaimProofState = 'missing' | 'pending' | 'verified';
+
+/** The claimant's checklist: approval needs a confirmed identity and a checked document. */
+export interface ClaimApprovalProgress {
+  identity: ClaimIdentityCheckState;
+  /** False while identity checks aren't set up; the claimant can't start one yet. */
+  identity_check_available: boolean;
+  proof: ClaimProofState;
+}
+
+/** What a reviewer sees before approving. Approval refuses until can_approve is true. */
+export interface ClaimReviewApproval {
+  identity_confirmed: boolean;
+  identity: ClaimIdentityCheckState;
+  /** The name on the confirmed ID, to compare with the ownership document. */
+  identity_name: string | null;
+  identity_checked_at: string | null;
+  /** False while identity checks aren't set up: the claimant can't do one, so a reviewer confirms identity. */
+  identity_check_available?: boolean;
+  proof: ClaimProofState;
+  can_approve: boolean;
 }
 
 export interface OwnershipClaimDetail {
@@ -259,8 +290,21 @@ export async function getHomeOwnershipClaims(homeId: string): Promise<{ claims: 
   return get(`/api/homes/${homeId}/ownership-claims`);
 }
 
-export async function getOwnershipClaimDetail(homeId: string, claimId: string): Promise<{ claim: OwnershipClaimDetail }> {
+export async function getOwnershipClaimDetail(homeId: string, claimId: string): Promise<{ claim: OwnershipClaimDetail; approval?: ClaimReviewApproval | null }> {
   return get(`/api/homes/${homeId}/ownership-claims/${claimId}`);
+}
+
+/**
+ * The claimant starts (or continues) the Stripe Identity check their claim needs. Open
+ * verification_url (Stripe's page); there is none when the check is already with Stripe.
+ */
+export async function startClaimIdentityCheck(homeId: string, claimId: string): Promise<{ verification_url: string | null }> {
+  return post(`/api/homes/${homeId}/ownership-claims/${claimId}/identity-check`, { platform: 'web' });
+}
+
+/** The claimant's checklist after the server re-reads an open identity check from Stripe. */
+export async function getClaimIdentityCheck(homeId: string, claimId: string): Promise<{ approval: ClaimApprovalProgress | null }> {
+  return get(`/api/homes/${homeId}/ownership-claims/${claimId}/identity-check`);
 }
 
 export async function getOwnershipClaimComparison(homeId: string): Promise<OwnershipClaimComparison> {

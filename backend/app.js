@@ -20,6 +20,7 @@ const fileRoutes = require('./routes/files');
 const chatRoutes = require('./routes/chats');
 const payRoutes = require('./routes/pays');
 const stripeWebhooksRouter = require('./stripe/stripeWebhooks');
+const stripeIdentityWebhooksRouter = require('./stripe/stripeIdentityWebhooks');
 const lobWebhookRouter = require('./routes/lobWebhook');
 const debugRoutes = require('./debug');
 const geoRoutes = require('./routes/geo');
@@ -226,6 +227,11 @@ app.use(
   '/api/webhooks/stripe',
   express.raw({ type: 'application/json' }),
   stripeWebhooksRouter
+);
+app.use(
+  '/api/webhooks/stripe-identity',
+  express.raw({ type: 'application/json' }),
+  stripeIdentityWebhooksRouter
 );
 
 // Lob webhooks also need raw body for HMAC signature verification.

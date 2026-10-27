@@ -186,6 +186,16 @@ const ownershipClaimLimiter = rateLimit({
   message: { error: 'Too many ownership claim requests. Please try again later.' },
 });
 
+// Starting or refreshing a claim's identity check reads Stripe; a person needs a handful.
+const identityCheckLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 30,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  keyGenerator: (req) => req.user?.id || clientIpKey(req),
+  message: { error: 'Too many identity check requests. Please try again later.' },
+});
+
 // Saving/recovering a residency application sends no mail. Give retries their
 // own signed-in budget so they cannot consume the separate postcard allowance.
 // Status and cancellation remain available when submissions are throttled.
@@ -570,6 +580,7 @@ module.exports = {
   homeOutboundLimiter,
   homeDocumentUploadLimiter,
   ownershipClaimLimiter,
+  identityCheckLimiter,
   homeResidencySubmissionLimiter,
   homePostcardRequestLimiter,
   postcardLimiter,
