@@ -1,8 +1,10 @@
 import { activeMobileTab, MOBILE_TABS } from '@/components/MobileTabBar';
 
 describe('MobileTabBar route mapping', () => {
-  it('exposes exactly the four wedge tabs in order', () => {
-    expect(MOBILE_TABS.map((t) => t.key)).toEqual(['place', 'today', 'nearby', 'mail']);
+  // Tests run with every launch feature on, so Mail is its own tab beside
+  // Messages (Mail tab build, 2026-10-27); the web has no Plans tab yet.
+  it('exposes the tabs in order, Mail before Messages', () => {
+    expect(MOBILE_TABS.map((t) => t.key)).toEqual(['place', 'today', 'nearby', 'mail', 'messages']);
   });
 
   it.each([
@@ -16,7 +18,7 @@ describe('MobileTabBar route mapping', () => {
     ['/app/feed', 'nearby'],
     ['/app/mailbox', 'mail'],
     ['/app/mailbox/personal/123', 'mail'],
-    ['/app/chat/room-1', 'mail'],
+    ['/app/chat/room-1', 'messages'],
     ['/app/profile/settings', null],
   ])('%s highlights %s', (path, key) => {
     expect(activeMobileTab(path)).toBe(key);

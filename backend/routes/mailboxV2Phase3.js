@@ -16,7 +16,7 @@ const homeRecordService = require('../services/homeRecordService');
 const notificationService = require('../services/notificationService');
 const taskMediaStorage = require('../services/homeTaskMediaStorage');
 const { checkHomePermission } = require('../utils/homePermissions');
-const { getAccessibleHomeIds, canAccessMail, readableMail, visibleMailFilter } = require('../utils/homeMailAccess');
+const { getAccessibleHomeIds, canAccessMail, readableMail, visibleMailFilter, onlyDelivered } = require('../utils/homeMailAccess');
 // A letter sent as a business names the business to everyone it reaches, never the person who sent it; a person who
 // sent one in their own name is named as neighbors see them (their Local Profile).
 const { presentMailSenders, nameMailSenders } = require('../utils/mailSenderView');
@@ -396,6 +396,7 @@ router.get('/records/asset/:id/mail', verifyToken, async (req, res) => {
         .select('*')
         .in('id', mailIds)
         .or(visibleMailFilter(userId, homeIds))
+        .lte('delivered_at', new Date().toISOString())
         .is('deleted_at', null);
       if (mailError) throw mailError;
       mail = mailItems || [];
@@ -578,6 +579,7 @@ router.post('/records/auto-detect', verifyToken, validate(autoDetectSchema), asy
       .from('Mail')
       .select('id, subject, key_facts, sender_name:sender_display')
       .eq('recipient_user_id', userId)
+      .lte('delivered_at', new Date().toISOString())
       .is('deleted_at', null)
       .not('key_facts', 'is', null)
       .order('created_at', { ascending: false })
@@ -628,6 +630,7 @@ router.get('/records/suggestions', verifyToken, async (req, res) => {
       .from('Mail')
       .select('id, subject, key_facts, sender_name:sender_display, category')
       .eq('recipient_user_id', userId)
+      .lte('delivered_at', new Date().toISOString())
       .is('deleted_at', null)
       .not('key_facts', 'is', null)
       .order('created_at', { ascending: false })
@@ -1166,6 +1169,7 @@ router.get('/mailday/summary', verifyToken, async (req, res) => {
       .select('*')
       .eq('recipient_user_id', userId)
       .is('deleted_at', null)
+      .lte('delivered_at', new Date().toISOString())
       .eq('viewed', false)
       .eq('archived', false)
       .in('lifecycle', ['delivered', 'opened'])
@@ -1179,6 +1183,7 @@ router.get('/mailday/summary', verifyToken, async (req, res) => {
       .select('*')
       .eq('recipient_user_id', userId)
       .is('deleted_at', null)
+      .lte('delivered_at', new Date().toISOString())
       .eq('viewed', false)
       .eq('archived', false)
       .in('lifecycle', ['delivered', 'opened'])
@@ -1353,8 +1358,8 @@ router.patch('/mailday/settings', verifyToken, validate(updateMailDaySchema), as
 async function countStampMetric(userId, metric) {
   let query;
   if (metric === 'totalMail' || metric === 'vaultFiled') {
-    query = supabaseAdmin.from('Mail').select('*', { count: 'exact', head: true })
-      .eq('recipient_user_id', userId).is('deleted_at', null);
+    query = onlyDelivered(supabaseAdmin.from('Mail').select('*', { count: 'exact', head: true })
+      .eq('recipient_user_id', userId).is('deleted_at', null));
     if (metric === 'vaultFiled') query = query.not('vault_folder_id', 'is', null);
   } else if (metric === 'packages') {
     query = supabaseAdmin.from('MailPackage').select('id, mail:Mail!inner(recipient_user_id)', { count: 'exact', head: true })
