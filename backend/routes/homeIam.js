@@ -37,6 +37,7 @@ const { OLD_TO_NEW_PERM, homeAccessExpiresAt } = require('../utils/homeAccessPol
 const homeAuthorityService = require('../services/homeAuthorityService');
 const homeExternalShareService = require('../services/homeExternalShareService');
 const homeInstantClaimService = require('../services/homeInstantClaimService');
+const homeListService = require('../services/homeListService');
 const { describeHomeActivity } = require('../utils/homeActivityLabels');
 const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
 const {
@@ -558,20 +559,23 @@ router.delete('/:id/lockdown', verifyToken, async (req, res) => {
 // ============================================================
 
 router.get('/:id/settings', verifyToken, async (req, res) => {
+  res.setHeader('Cache-Control', 'private, no-store');
   try {
     const { id: homeId } = req.params;
     const actorId = req.user.id;
 
-    const access = await checkHomePermission(homeId, actorId, 'home.view');
-    if (!access.hasAccess) {
+    const opening = await homeListService.readAccessState(homeId, actorId);
+    if (opening.mode !== 'shared') {
       return res.status(403).json({ error: 'No access to view home settings' });
     }
+    const canViewInstructions = opening.access.permissions.includes('access.view_codes');
+    const fields = 'name, home_type, visibility, trash_day, house_rules, local_tips, guest_welcome_message, default_visibility, default_guest_pass_hours, lockdown_enabled';
 
     // Fetch home record and preferences in parallel
     const [homeRes, prefRes] = await Promise.allSettled([
       supabaseAdmin
         .from('Home')
-        .select('name, home_type, visibility, trash_day, house_rules, local_tips, guest_welcome_message, entry_instructions, parking_instructions, default_visibility, default_guest_pass_hours, lockdown_enabled')
+        .select(fields + (canViewInstructions ? ', entry_instructions, parking_instructions' : ''))
         .eq('id', homeId)
         .single(),
       supabaseAdmin
@@ -591,6 +595,16 @@ router.get('/:id/settings', verifyToken, async (req, res) => {
     const preferences = prefRes.status === 'fulfilled' ? (prefRes.value.data || []) : [];
     const prefMap = preferences[0]?.settings || {};
 
+    // The settings read must not bypass the Home detail reader's instruction
+    // permission or return a result from before access changed during the read.
+    const current = await homeListService.readAccessState(homeId, actorId);
+    if (current.mode !== 'shared') {
+      return res.status(403).json({ error: 'No access to view home settings' });
+    }
+    if (JSON.stringify(current) !== JSON.stringify(opening)) {
+      return res.status(503).json({ error: 'Home access changed while loading. Please retry.', code: 'HOME_LIST_ACCESS_CHANGED' });
+    }
+
     res.json({
       home: {
         name: home.name,
@@ -600,8 +614,10 @@ router.get('/:id/settings', verifyToken, async (req, res) => {
         house_rules: home.house_rules,
         local_tips: home.local_tips,
         guest_welcome_message: home.guest_welcome_message,
-        entry_instructions: home.entry_instructions,
-        parking_instructions: home.parking_instructions,
+        ...(canViewInstructions ? {
+          entry_instructions: home.entry_instructions,
+          parking_instructions: home.parking_instructions,
+        } : {}),
         default_visibility: home.default_visibility,
         default_guest_pass_hours: home.default_guest_pass_hours,
         lockdown_enabled: home.lockdown_enabled,
@@ -609,6 +625,7 @@ router.get('/:id/settings', verifyToken, async (req, res) => {
       preferences: prefMap,
     });
   } catch (err) {
+    if (err.statusCode === 503) return homeListService.sendError(res, err);
     logger.error('Get settings error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch home settings' });
   }
