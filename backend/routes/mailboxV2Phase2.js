@@ -1179,8 +1179,9 @@ router.get('/vault/search', async (req, res, next) => {
       return res.status(400).json({ error: 'Query required' });
     }
 
+    // The words searched are never logged or stored (Mail tab, SRV-3).
     await logMailEvent(req.user.id, 'vault_search_performed', null, {
-      query: q, drawer_scope: drawer || 'all',
+      drawer_scope: drawer || 'all',
     });
 
     // Build search
