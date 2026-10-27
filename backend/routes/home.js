@@ -4285,20 +4285,26 @@ router.post('/:id/invite', verifyToken, homeOutboundLimiter, async (req, res) =>
 
 // ============ HOME DEVICES ============
 
+const HOME_DEVICE_COLUMNS = 'id, home_id, device_type, label, status, settings, battery_change_date, created_by, created_at, updated_at';
+
 /**
  * GET /api/homes/:id/devices
  */
 router.get('/:id/devices', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
 
-    const access = await checkHomePermission(homeId, userId);
-    if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
+    const opening = await homeListService.readAccessState(homeId, userId);
+    if (opening.mode !== 'shared' || !opening.access.permissions.includes('devices.view')) {
+      return res.status(403).json({ error: 'No permission to view home devices' });
+    }
+    const canViewCodes = opening.access.permissions.includes('access.view_codes');
 
     const { data, error } = await supabaseAdmin
       .from('HomeDevice')
-      .select('*')
+      .select(HOME_DEVICE_COLUMNS + (canViewCodes ? ', access_codes' : ''))
       .eq('home_id', homeId)
       .order('label', { ascending: true });
 
@@ -4307,8 +4313,17 @@ router.get('/:id/devices', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch devices' });
     }
 
+    const current = await homeListService.readAccessState(homeId, userId);
+    if (current.mode !== 'shared' || !current.access.permissions.includes('devices.view')) {
+      return res.status(403).json({ error: 'No permission to view home devices' });
+    }
+    if (JSON.stringify(current) !== JSON.stringify(opening)) {
+      return res.status(503).json({ error: 'Home access changed while loading. Please retry.', code: 'HOME_LIST_ACCESS_CHANGED' });
+    }
+
     res.json({ devices: data || [] });
   } catch (err) {
+    if (err.statusCode === 503) return homeListService.sendError(res, err);
     logger.error('Devices fetch error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch devices' });
   }
@@ -4318,18 +4333,29 @@ router.get('/:id/devices', verifyToken, async (req, res) => {
  * POST /api/homes/:id/devices
  */
 router.post('/:id/devices', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
 
-    const access = await checkHomePermission(homeId, userId, 'can_manage_home');
-    if (!access.hasAccess) return res.status(403).json({ error: 'No permission to manage home' });
+    const opening = await homeListService.readAccessState(homeId, userId);
+    if (opening.mode !== 'shared' || !opening.access.permissions.includes('devices.manage')) {
+      return res.status(403).json({ error: 'No permission to manage home devices' });
+    }
 
     const { device_type, label, status: deviceStatus, settings, access_codes, battery_change_date } = req.body;
 
     if (!device_type || !label) {
       return res.status(400).json({ error: 'device_type and label are required' });
     }
+    if (access_codes != null && (typeof access_codes !== 'object' || Array.isArray(access_codes))) {
+      return res.status(400).json({ error: 'access_codes must be an object' });
+    }
+    // Device management does not grant management or viewing of entry codes.
+    if (Object.keys(access_codes || {}).length && !opening.access.permissions.includes('access.manage')) {
+      return res.status(403).json({ error: 'No permission to manage device access codes' });
+    }
+    const canViewCodes = opening.access.permissions.includes('access.view_codes');
 
     const { data, error } = await supabaseAdmin
       .from('HomeDevice')
@@ -4343,7 +4369,7 @@ router.post('/:id/devices', verifyToken, async (req, res) => {
         battery_change_date: battery_change_date || null,
         created_by: userId,
       })
-      .select()
+      .select(HOME_DEVICE_COLUMNS + (canViewCodes ? ', access_codes' : ''))
       .single();
 
     if (error) {
@@ -4353,6 +4379,7 @@ router.post('/:id/devices', verifyToken, async (req, res) => {
 
     res.status(201).json({ device: data });
   } catch (err) {
+    if (err.statusCode === 503) return homeListService.sendError(res, err);
     logger.error('Device creation error', { error: err.message });
     res.status(500).json({ error: 'Failed to create device' });
   }
