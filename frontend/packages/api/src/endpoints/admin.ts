@@ -65,9 +65,18 @@ export async function getClaimDetail(claimId: string, sessionScope?: string): Pr
   return get(`/api/admin/claims/${claimId}`, undefined, { headers: sessionScope ? { 'x-pantopus-session-scope': sessionScope } : undefined });
 }
 
+/** Household roles a platform admin may approve a claim as (`approve_as`); omit it to grant what the claim type gives. */
+export type ClaimApprovalRole = 'owner' | 'admin' | 'manager' | 'member' | 'lease_resident' | 'restricted_member' | 'guest';
+
 export async function reviewClaim(
   claimId: string,
-  data: { action: 'approve' | 'reject' | 'request_more_info'; review_token: string; note?: string },
+  data: {
+    action: 'approve' | 'reject' | 'request_more_info';
+    review_token: string;
+    note?: string;
+    approve_as?: ClaimApprovalRole;
+    identity_confirmed?: boolean;
+  },
   sessionScope?: string,
 ): Promise<{ message: string }> {
   return post(`/api/admin/claims/${claimId}/review`, data, { headers: sessionScope ? { 'x-pantopus-session-scope': sessionScope } : undefined });

@@ -251,14 +251,23 @@ router.get('/claims/:claimId', async (req, res) => {
   } catch (error) { homeClaimReviewService.sendError(res, error); }
 });
 
+// Household roles an approval may grant. "approve_as" overrides the role the claim type gives.
+const APPROVE_AS_ROLES = ['owner', 'admin', 'manager', 'member', 'lease_resident', 'restricted_member', 'guest'];
+
 router.post('/claims/:claimId/review', async (req, res) => {
-  if (!['approve', 'reject', 'request_more_info'].includes(req.body.action)) {
+  const { action, approve_as: approveAs = null, identity_confirmed: identityConfirmed = false } = req.body;
+  if (!['approve', 'reject', 'request_more_info'].includes(action)) {
+    return res.status(400).json({ error: 'Invalid claim review action.' });
+  }
+  if ((approveAs !== null && !APPROVE_AS_ROLES.includes(approveAs)) || typeof identityConfirmed !== 'boolean'
+    || ((approveAs !== null || identityConfirmed) && action !== 'approve')) {
     return res.status(400).json({ error: 'Invalid claim review action.' });
   }
   try {
     if (!requireExpectedSessionScope(req, res)) return;
     const result = await homeClaimReviewService.mutate({ claimId: req.params.claimId, actorId: req.user.id,
-      action: req.body.action, reviewToken: req.body.review_token, note: req.body.note, platformAdmin: true });
+      action, reviewToken: req.body.review_token, note: req.body.note, platformAdmin: true,
+      role: approveAs, identityConfirmed });
     res.json({ ...result, message: 'Claim review saved.' });
   } catch (error) { homeClaimReviewService.sendError(res, error); }
 });

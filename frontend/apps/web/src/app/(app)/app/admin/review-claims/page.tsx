@@ -38,6 +38,25 @@ const EVIDENCE_LABELS: Record<string, string> = {
   idv: 'ID Verification',
 };
 
+// The household role an approval grants. Each hint is the role's default access.
+const APPROVAL_ROLES: { value: api.admin.ClaimApprovalRole; label: string; hint: string }[] = [
+  { value: 'owner', label: 'Owner', hint: 'Full control of the home, including ownership and security.' },
+  { value: 'admin', label: 'Admin', hint: 'Views the home and its ownership, and votes on household decisions.' },
+  { value: 'manager', label: 'Manager', hint: 'Views the home and works on tasks.' },
+  { value: 'member', label: 'Member', hint: 'Views the home and works on tasks.' },
+  { value: 'lease_resident', label: 'Renter', hint: 'Sees members, Wi-Fi, the calendar and packages, and works on tasks.' },
+  { value: 'restricted_member', label: 'Restricted member', hint: 'Views the home only.' },
+  { value: 'guest', label: 'Guest', hint: 'Views the home only.' },
+];
+
+function claimedRole(claimType?: string): api.admin.ClaimApprovalRole {
+  return claimType === 'owner' ? 'owner' : claimType === 'admin' ? 'admin' : 'lease_resident';
+}
+
+function roleLabel(role: api.admin.ClaimApprovalRole) {
+  return APPROVAL_ROLES.find(r => r.value === role)?.label || role;
+}
+
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
@@ -56,6 +75,10 @@ export default function AdminReviewClaimsPage() {
   const [comparison, setComparison] = useState<api.homeOwnership.OwnershipClaimComparison | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [reviewingAction, setReviewingAction] = useState<string | null>(null);
+
+  // Approval choices for the open claim
+  const [approveAs, setApproveAs] = useState<api.admin.ClaimApprovalRole>('owner');
+  const [identityConfirmed, setIdentityConfirmed] = useState(false);
 
   // Reject modal
   const [showRejectModal, setShowRejectModal] = useState(false);
@@ -103,6 +126,8 @@ export default function AdminReviewClaimsPage() {
         throw new Error('Your session changed. Reload the queue.');
       }
       setClaimDetail(detail);
+      setApproveAs(claimedRole(detail.claim?.claim_type));
+      setIdentityConfirmed(false);
       try {
         const compare = await api.homeOwnership.getOwnershipClaimComparison(claim.home_id);
         if (request === detailGeneration.current) setComparison(compare);
@@ -230,6 +255,7 @@ export default function AdminReviewClaimsPage() {
     claimId: string,
     action: 'approve' | 'reject' | 'request_more_info',
     note?: string,
+    approval?: { approve_as?: api.admin.ClaimApprovalRole; identity_confirmed?: boolean },
   ) => {
     if (decisionInFlight.current) return;
     decisionInFlight.current = true;
@@ -240,11 +266,12 @@ export default function AdminReviewClaimsPage() {
         throw new Error('Reopen the claim before reviewing it.');
       }
       await api.claimEvidence.assertClaimSession(claimDetail.claim_session, true);
-      await api.admin.reviewClaim(claimId, { action, note, review_token: claimDetail.claim.review_token }, claimDetail.claim_session.session_scope);
+      await api.admin.reviewClaim(claimId, { action, note, review_token: claimDetail.claim.review_token, ...approval },
+        claimDetail.claim_session.session_scope);
       await api.claimEvidence.assertClaimSession(claimDetail.claim_session, true);
       if (request !== detailGeneration.current) return;
       toast.success(
-        action === 'approve' ? 'Claim approved.'
+        action === 'approve' ? `Claim approved as ${roleLabel(approval?.approve_as || claimedRole(claimDetail.claim.claim_type))}.`
           : action === 'reject' ? 'Claim rejected.'
           : 'Request for more information saved.',
       );
@@ -262,14 +289,27 @@ export default function AdminReviewClaimsPage() {
     }
   };
 
+  // Identity counts as confirmed once the claim says so or an ID document on it is verified.
+  const identityVerified = claimDetail?.claim?.identity_status === 'verified'
+    || !!claimDetail?.evidence?.some(ev => ev.evidence_type === 'idv' && ev.eligible_for_review === true);
+  const identityFailed = claimDetail?.claim?.identity_status === 'failed';
+
   const handleApprove = async (claimId: string) => {
     const request = detailGeneration.current;
+    const role = approveAs;
+    const confirmIdentity = !identityVerified && identityConfirmed;
     const ok = await confirmStore.open({
       title: 'Approve Claim',
-      description: 'Approve this claim using the evidence currently displayed? Access follows the claim type and current household policy.',
+      description: `Approve this claim as ${roleLabel(role)} using the evidence currently displayed?`
+        + (confirmIdentity ? ' You are confirming that you checked this person\'s identity.' : '')
+        + ' Access follows the role and current household policy.',
       confirmLabel: 'Approve',
     });
-    if (ok && request === detailGeneration.current) handleReview(claimId, 'approve');
+    if (!ok || request !== detailGeneration.current) return;
+    handleReview(claimId, 'approve', undefined, {
+      ...(role !== claimedRole(claimDetail?.claim?.claim_type) ? { approve_as: role } : {}),
+      ...(confirmIdentity ? { identity_confirmed: true } : {}),
+    });
   };
 
   // ── CLAIM LIST ──
@@ -438,7 +478,37 @@ export default function AdminReviewClaimsPage() {
 
             {/* Actions */}
             <section className="pt-4 border-t border-app-border space-y-3">
-              <button onClick={() => handleApprove(claimDetail.claim.id)} disabled={!!reviewingAction}
+              <div className="bg-app-surface border border-app-border rounded-xl p-4 space-y-3">
+                <label className="block">
+                  <span className="text-[11px] text-app-text-muted font-semibold">Approve as</span>
+                  <select value={approveAs} disabled={!!reviewingAction}
+                    onChange={e => setApproveAs(e.target.value as api.admin.ClaimApprovalRole)}
+                    className="mt-1 w-full text-sm px-3 py-2 border border-app-border rounded-lg bg-app-surface text-app-text focus:outline-none focus:ring-1 focus:ring-violet-500">
+                    {APPROVAL_ROLES.map(role => (
+                      <option key={role.value} value={role.value}>
+                        {role.label}{role.value === claimedRole(claimDetail.claim?.claim_type) ? ' (what they claimed)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="block mt-1 text-xs text-app-text-secondary">{APPROVAL_ROLES.find(r => r.value === approveAs)?.hint}</span>
+                </label>
+                {identityVerified ? (
+                  <p className="flex items-center gap-1.5 text-xs text-emerald-700"><CheckCircle className="w-4 h-4" /> Identity verified</p>
+                ) : identityFailed ? (
+                  <p className="flex items-center gap-1.5 text-xs text-red-600"><AlertCircle className="w-4 h-4" /> Their identity check failed, so this claim can&apos;t be approved.</p>
+                ) : (
+                  <div>
+                    <label className="flex items-start gap-2 text-sm text-app-text">
+                      <input type="checkbox" checked={identityConfirmed} disabled={!!reviewingAction}
+                        onChange={e => setIdentityConfirmed(e.target.checked)} className="mt-0.5" />
+                      I confirmed this person&apos;s identity
+                    </label>
+                    <p className="mt-1 ml-6 text-xs text-app-text-secondary">They haven&apos;t verified an ID in the app. Tick this once you&apos;ve checked who they are, or verify an ID document above.</p>
+                  </div>
+                )}
+              </div>
+              <button onClick={() => handleApprove(claimDetail.claim.id)}
+                disabled={!!reviewingAction || identityFailed || (!identityVerified && !identityConfirmed)}
                 className="w-full flex items-center justify-center gap-2 py-3 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 disabled:opacity-50 transition">
                 {reviewingAction === 'approve' ? 'Approving...' : <><CheckCircle className="w-5 h-5" /> Approve</>}
               </button>

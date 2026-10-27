@@ -47,10 +47,14 @@ async function read({ homeId = null, claimId, actorId, platformAdmin = false }) 
     || !/^[a-f0-9]{64}$/.test(result.claim.review_token) || !Array.isArray(result.evidence)) throw failure();
   return result;
 }
-async function mutate({ homeId = null, claimId, actorId, action, reviewToken = null, note = null, platformAdmin = false }) {
+async function mutate({ homeId = null, claimId, actorId, action, reviewToken = null, note = null, platformAdmin = false,
+  role = null, identityConfirmed = false }) {
+  // A platform admin may approve as another role or attest identity; the defaults send exactly the previous call.
   const result = await call('mutate_home_claim_review', { p_home_id: homeId, p_claim_id: claimId, p_actor_id: actorId,
     p_action: action, p_review_token: reviewToken, p_note: note, p_platform_admin: platformAdmin,
-    p_validity_days: verificationAge.validityDays() });
+    p_validity_days: verificationAge.validityDays(),
+    ...(role ? { p_role: role } : {}), ...(identityConfirmed ? { p_identity_confirmed: true } : {}) });
+  if (action === 'approve' && role && result.occupancy?.role_base !== role) throw failure();
   if (result.action !== action || typeof result.replayed !== 'boolean' || typeof result.state !== 'string') throw failure();
   if (action === 'withdraw' && (result.withdrawn !== true || result.deleted !== false)) throw failure();
   if (action === 'approve' && (!result.occupancy?.id || result.occupancy.home_id !== result.homeId

@@ -26,7 +26,7 @@ DO $$ DECLARE f text; t text; BEGIN
   RAISE EXCEPTION 'Review provenance table is client accessible'; END IF;
  IF (SELECT count(*) FROM public."HomeRolePermission")<>33 THEN RAISE EXCEPTION 'Expected shipped role rows'; END IF;
  FOREACH f IN ARRAY ARRAY['public.get_home_claim_review(uuid,uuid,uuid,boolean)',
- 'public.mutate_home_claim_review(uuid,uuid,uuid,text,text,text,boolean,integer)',
+ 'public.mutate_home_claim_review(uuid,uuid,uuid,text,text,text,boolean,integer,public.home_role_base,boolean)',
  'public.record_home_claim_provider_evidence(uuid,uuid,uuid,text,boolean,numeric,jsonb,text)'] LOOP
   IF has_function_privilege('anon',f,'EXECUTE') OR has_function_privilege('authenticated',f,'EXECUTE')
    OR NOT has_function_privilege('service_role',f,'EXECUTE') THEN RAISE EXCEPTION 'Unsafe review RPC ACL: %',f; END IF;
