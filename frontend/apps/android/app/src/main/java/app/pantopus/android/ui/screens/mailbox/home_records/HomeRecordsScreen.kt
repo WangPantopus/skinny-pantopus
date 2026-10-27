@@ -298,13 +298,16 @@ private fun OverviewBody(
                 contentPadding = PaddingValues(Spacing.s4),
                 verticalArrangement = Arrangement.spacedBy(Spacing.s3),
             ) {
-                item {
-                    AutoDetectBanner(
-                        detectionCount = detectionCount,
-                        isScanning = isScanning,
-                        onScan = onScan,
-                        onReview = onReview,
-                    )
+                // No scanning mail for assets (founder, 2026-10-26): only assets already found are offered for review.
+                if (detectionCount > 0) {
+                    item {
+                        AutoDetectBanner(
+                            detectionCount = detectionCount,
+                            isScanning = isScanning,
+                            onScan = onScan,
+                            onReview = onReview,
+                        )
+                    }
                 }
                 if (state.rooms.size > 1) {
                     item {
@@ -340,12 +343,14 @@ private fun OverviewBody(
                 modifier = Modifier.fillMaxSize().padding(Spacing.s4),
                 verticalArrangement = Arrangement.spacedBy(Spacing.s3),
             ) {
-                AutoDetectBanner(
-                    detectionCount = detectionCount,
-                    isScanning = isScanning,
-                    onScan = onScan,
-                    onReview = onReview,
-                )
+                if (detectionCount > 0) {
+                    AutoDetectBanner(
+                        detectionCount = detectionCount,
+                        isScanning = isScanning,
+                        onScan = onScan,
+                        onReview = onReview,
+                    )
+                }
                 EmptyState(
                     icon = PantopusIcon.Home,
                     headline = "No assets yet",
@@ -353,8 +358,6 @@ private fun OverviewBody(
                         "Link mail items to home assets to track warranties, receipts, " +
                             "and repairs in one place.",
                     modifier = Modifier.testTag("homeRecords_empty"),
-                    ctaTitle = "Scan mail for assets",
-                    onCta = onScan,
                     tint = PantopusColors.homeBg,
                     accent = PantopusColors.home,
                 )

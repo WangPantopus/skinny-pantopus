@@ -40,6 +40,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -49,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusElevations
@@ -249,7 +251,7 @@ internal fun TodayBriefing(
             action = SectionAction("Manage", "todaySignalsManage", onManage),
             modifier = Modifier.testTag("todayDetailSignals"),
         ) {
-            SignalsList(content.signals)
+            SignalsList(content.signals, onOpenRoute = { route -> if (DeepLinkRouter.canRoute(route)) DeepLinkRouter.handle(route) })
         }
 
         if (content.around.isNotEmpty()) {
@@ -541,20 +543,34 @@ private fun SunLabel(
 // MARK: - Signals
 
 @Composable
-private fun SignalsList(signals: List<TodaySignal>) {
+private fun SignalsList(
+    signals: List<TodaySignal>,
+    onOpenRoute: (String) -> Unit,
+) {
     Column(modifier = Modifier.fillMaxWidth()) {
         signals.forEachIndexed { index, signal ->
             if (index > 0) {
                 Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(PantopusColors.appBorderSubtle))
             }
-            SignalRow(signal)
+            SignalRow(signal, onOpen = signal.route?.let { route -> { onOpenRoute(route) } })
         }
     }
 }
 
 @Composable
-private fun SignalRow(signal: TodaySignal) {
-    Box(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min).testTag("todaySignal-${signal.id}")) {
+private fun SignalRow(
+    signal: TodaySignal,
+    onOpen: (() -> Unit)? = null,
+) {
+    Box(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Min)
+                // The mail line opens the Mail tab.
+                .then(if (onOpen != null) Modifier.clickable(onClickLabel = "Open", role = Role.Button, onClick = onOpen) else Modifier)
+                .testTag("todaySignal-${signal.id}"),
+    ) {
         signal.severity?.let { sev ->
             Box(
                 modifier =

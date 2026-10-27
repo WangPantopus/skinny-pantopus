@@ -95,9 +95,9 @@ data class TodayAlertDto(
 )
 
 /**
- * The wire's `action` (a `{label, route}` object on bill, task, calendar, pickup, mail, gig and local-update
- * signals) and `data` aren't used, so they aren't decoded. Declared as a String, `action` failed the whole
- * Today payload ("Couldn't load today") whenever a signal carried one.
+ * `data` isn't used, so it isn't decoded. The wire's `action` is a `{label, route}` object (or null) on bill, task,
+ * calendar, pickup, mail, gig and local-update signals; declared as a String once, it failed the whole Today payload
+ * ("Couldn't load today") whenever a signal carried one.
  */
 @JsonClass(generateAdapter = true)
 data class TodaySignalDto(
@@ -105,6 +105,14 @@ data class TodaySignalDto(
     val label: String? = null,
     val detail: String? = null,
     val urgency: String? = null,
+    /** Where the signal's button goes; the mail line's is `/app/mailbox` (Mail build contract, "Today's mail line"). */
+    val action: TodaySignalActionDto? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class TodaySignalActionDto(
+    val label: String? = null,
+    val route: String? = null,
 )
 
 // region Briefing delivery (GET /api/hub/briefings/:id — backend/routes/hub.js:612)

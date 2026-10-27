@@ -4,135 +4,127 @@ package app.pantopus.android.ui.screens.mailbox.search
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import app.pantopus.android.data.api.models.mailbox.MailItem
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.mailbox.MailboxRepository
-import app.pantopus.android.ui.screens.mailbox.MailboxListViewModel
-import app.pantopus.android.ui.screens.mailbox.item_detail.MailItemCategory
-import app.pantopus.android.ui.screens.shared.list_of_rows.RowModel
+import app.pantopus.android.data.network.NetworkMonitor
+import app.pantopus.android.ui.screens.mailbox.components.MailAddressBook
+import app.pantopus.android.ui.screens.mailbox.components.MailPieceMapper
+import app.pantopus.android.ui.screens.mailbox.components.MailPieceModel
+import app.pantopus.android.ui.screens.mailbox.components.mailMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.time.ZoneId
 import javax.inject.Inject
 
 /**
- * P4.2 — Backs `MailboxSearchScreen`. Fetches the user's mailbox once
- * (`GET /api/mailbox`, route `backend/routes/mailbox.js:1306`) and filters
- * the corpus client-side across sender, subject, body, and category. Rows
- * project through [MailboxListViewModel.makeRow] so each result is
- * identical to a Mailbox list row.
- *
- * Drives the shared `SearchListShell` (P4.1): the shell owns the search
- * bar + debounce + four phases; this VM supplies `query`, `results`, and
- * `isLoading`.
+ * Mailbox search, on the server (SRV-3): every piece the person can read (Me, Home once proven, Biz), filed and
+ * archived included, newest first. Typing searches after a short pause; each result is drawn as its piece (a sealed
+ * letter with its subject in the line under it). A failed search says why and offers Try again.
  */
 @HiltViewModel
 class MailboxSearchViewModel
     @Inject
     constructor(
         private val repo: MailboxRepository,
+        private val auth: AuthRepository,
+        private val network: NetworkMonitor,
     ) : ViewModel() {
         private val _query = MutableStateFlow("")
         val query: StateFlow<String> = _query.asStateFlow()
 
-        private val _results = MutableStateFlow<List<MailItem>>(emptyList())
-        val results: StateFlow<List<MailItem>> = _results.asStateFlow()
+        private val _results = MutableStateFlow<List<MailPieceModel>>(emptyList())
+        val results: StateFlow<List<MailPieceModel>> = _results.asStateFlow()
 
-        private val _isLoading = MutableStateFlow(true)
+        private val _isLoading = MutableStateFlow(false)
         val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
-        /** True when the mailbox couldn't be read: the empty state says so instead of "No matching mail". */
-        private val _loadFailed = MutableStateFlow(false)
-        val loadFailed: StateFlow<Boolean> = _loadFailed.asStateFlow()
+        private val _error = MutableStateFlow<String?>(null)
 
-        private var corpus: List<MailItem> = emptyList()
-        private var loaded = false
+        /** Why the last search failed, said plainly; null when it worked. */
+        val error: StateFlow<String?> = _error.asStateFlow()
+
         private var onOpenMail: (String) -> Unit = {}
+        private var book = MailAddressBook(personName = null)
+        private var zone: ZoneId = ZoneId.systemDefault()
+        private var search: Job? = null
 
         fun configureNavigation(onOpenMail: (String) -> Unit = {}) {
             this.onOpenMail = onOpenMail
         }
 
-        /** Fetch the corpus once; repeat calls are no-ops so typing
-         *  doesn't trigger refetches. After a failed read the next call tries again. */
+        fun openMail(mailId: String) = onOpenMail(mailId)
+
+        /** Who the person's mail is addressed to, for the drawn pieces; search works without it. */
         fun load() {
-            if (loaded) return
-            _isLoading.value = true
             viewModelScope.launch {
-                when (
-                    val result =
-                        repo.list(
-                            viewed = null,
-                            archived = false,
-                            starred = null,
-                            limit = CORPUS_LIMIT,
-                            offset = 0,
-                        )
-                ) {
+                val name = (auth.state.value as? AuthRepository.State.SignedIn)?.user?.displayName
+                when (val result = repo.drawers()) {
                     is NetworkResult.Success -> {
-                        corpus = result.data.mail
-                        _loadFailed.value = false
-                        loaded = true
+                        book = MailAddressBook(personName = name, homes = result.data.homes.orEmpty())
+                        zone = MailPieceMapper.zoneOf(result.data.delivery)
                     }
-                    // The shell has no error phase: no results, and the empty
-                    // state says the mailbox couldn't be read.
-                    is NetworkResult.Failure -> {
-                        corpus = emptyList()
-                        _loadFailed.value = true
-                    }
+                    is NetworkResult.Failure -> book = MailAddressBook(personName = name)
                 }
-                _isLoading.value = false
-                recompute()
             }
         }
 
         fun onQueryChange(value: String) {
             _query.value = value
-            recompute()
+            search?.cancel()
+            _error.value = null
+            if (value.isBlank()) {
+                _results.value = emptyList()
+                _isLoading.value = false
+                return
+            }
+            _isLoading.value = true
+            search =
+                viewModelScope.launch {
+                    delay(TYPING_PAUSE_MS)
+                    run(value.trim())
+                }
         }
 
-        /** Result row identical to the Mailbox list row, routing taps to
-         *  this surface's `onOpenMail`. */
-        fun rowModel(mail: MailItem): RowModel = MailboxListViewModel.makeRow(mail, onOpenMail = onOpenMail)
-
-        private fun recompute() {
-            _results.value = filter(corpus, _query.value)
+        fun retry() {
+            val text = _query.value.trim()
+            if (text.isEmpty()) return
+            search?.cancel()
+            _error.value = null
+            _isLoading.value = true
+            search = viewModelScope.launch { run(text) }
         }
 
-        companion object {
-            private const val CORPUS_LIMIT = 100
-
-            /** Filter the corpus by a free-text query. Blank query → []. */
-            fun filter(
-                mail: List<MailItem>,
-                query: String,
-            ): List<MailItem> {
-                val trimmed = query.trim()
-                if (trimmed.isEmpty()) return emptyList()
-                return mail.filter { matches(it, trimmed) }
+        private suspend fun run(text: String) {
+            when (val result = repo.search(text, limit = PAGE, offset = 0)) {
+                is NetworkResult.Success ->
+                    _results.value =
+                        result.data.mail.map { row ->
+                            val piece = MailPieceMapper.piece(row, book, zone)
+                            // A sealed letter shows only who sent it, so its subject goes in the line under it; other
+                            // pieces already carry theirs on the paper.
+                            val subject =
+                                (row.displayTitle?.takeIf { it.isNotBlank() } ?: row.subject?.takeIf { it.isNotBlank() })
+                                    .takeIf { piece.note == null }
+                            piece.copy(meta = listOfNotNull(subject, piece.meta.takeIf { it.isNotBlank() }).joinToString(" · "))
+                        }
+                is NetworkResult.Failure -> {
+                    _results.value = emptyList()
+                    _error.value = result.error.mailMessage(online = network.isOnline.value, doing = "search your mail")
+                }
             }
+            _isLoading.value = false
+        }
 
-            /** Case-insensitive substring match across sender, subject/title,
-             *  body, and category label. */
-            fun matches(
-                mail: MailItem,
-                query: String,
-            ): Boolean {
-                val needle = query.lowercase()
-                val category = MailItemCategory.fromRaw(mail.mailType ?: mail.type)
-                val fields =
-                    listOf(
-                        mail.senderBusinessName,
-                        mail.senderAddress,
-                        mail.subject,
-                        mail.displayTitle,
-                        mail.previewText,
-                        mail.content,
-                        category.label,
-                    )
-                return fields.any { it?.lowercase()?.contains(needle) == true }
-            }
+        private companion object {
+            const val TYPING_PAUSE_MS = 350L
+
+            /** The server's most per search; the newest matches first. */
+            const val PAGE = 50
         }
     }

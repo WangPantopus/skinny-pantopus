@@ -21,10 +21,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -37,6 +39,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -90,7 +93,8 @@ fun PerforatedStamp(
             modifier
                 .size(width, height)
                 .clip(RectangleShape)
-                .drawBehind {
+                .drawWithCache {
+                    // Built once per size, not every frame: a list of stamps scrolls without rebuilding the bites.
                     val radiusPx = toothRadius.toPx()
                     val perforated =
                         Path().apply {
@@ -107,17 +111,19 @@ fun PerforatedStamp(
                                 )
                             }
                         }
-                    drawPath(path = perforated, color = ink)
-
                     // Engraved hairline double-frame — white 30%, inset 7dp.
                     val inset = 7.dp.toPx()
-                    drawRoundRect(
-                        color = Color.White.copy(alpha = 0.30f),
-                        topLeft = Offset(inset, inset),
-                        size = Size(size.width - inset * 2, size.height - inset * 2),
-                        cornerRadius = CornerRadius(2.dp.toPx()),
-                        style = Stroke(width = 1.dp.toPx()),
-                    )
+                    val frame = Stroke(width = 1.dp.toPx())
+                    onDrawBehind {
+                        drawPath(path = perforated, color = ink)
+                        drawRoundRect(
+                            color = Color.White.copy(alpha = 0.30f),
+                            topLeft = Offset(inset, inset),
+                            size = Size(size.width - inset * 2, size.height - inset * 2),
+                            cornerRadius = CornerRadius(2.dp.toPx()),
+                            style = frame,
+                        )
+                    }
                 }
                 .semantics { contentDescription = label }
                 .testTag("perforatedStamp"),
@@ -244,10 +250,26 @@ private fun ForeverEmblem(
 /**
  * Circular cancellation drawn over a `used` stamp — concentric date-ring +
  * four wavy cancellation lines + "PANTOPUS / USED". Self-contained: bakes
- * the design's 0.55 opacity and −14° tilt.
+ * the design's 0.55 opacity and −14° tilt. A piece of mail in the Mailbox
+ * draws its postmark with the same ring in postal [ink], with the post
+ * office's town and the day as [topLine] and [bottomLine].
  */
 @Composable
-fun Postmark(modifier: Modifier = Modifier) {
+fun Postmark(
+    modifier: Modifier = Modifier,
+    ink: Color = Color.White,
+    topLine: String = "PANTOPUS",
+    bottomLine: String = "USED",
+) {
+    // One paint per ink, not one per frame.
+    val paint =
+        remember(ink) {
+            android.graphics.Paint().apply {
+                isAntiAlias = true
+                color = ink.toArgb()
+                textAlign = android.graphics.Paint.Align.CENTER
+            }
+        }
     Canvas(
         modifier =
             modifier.graphicsLayer {
@@ -260,7 +282,6 @@ fun Postmark(modifier: Modifier = Modifier) {
         val originX = (size.width - 90f * scale) / 2f
         val originY = (size.height - 70f * scale) / 2f
         val at = { x: Float, y: Float -> Offset(originX + x * scale, originY + y * scale) }
-        val ink = Color.White
 
         // Concentric date-ring (r 22 + r 16, centred at 45,35).
         listOf(22f, 16f).forEach { radius ->
@@ -294,20 +315,14 @@ fun Postmark(modifier: Modifier = Modifier) {
 
         // Cancellation text via the native canvas (baseline-anchored, centred).
         drawIntoCanvas { canvas ->
-            val paint =
-                android.graphics.Paint().apply {
-                    isAntiAlias = true
-                    color = android.graphics.Color.WHITE
-                    textAlign = android.graphics.Paint.Align.CENTER
-                    typeface = android.graphics.Typeface.DEFAULT_BOLD
-                    textSize = 6.5f * scale
-                }
+            paint.typeface = android.graphics.Typeface.DEFAULT_BOLD
+            paint.textSize = 6.5f * scale
             val name = at(45f, 33f)
-            canvas.nativeCanvas.drawText("PANTOPUS", name.x, name.y, paint)
+            canvas.nativeCanvas.drawText(topLine, name.x, name.y, paint)
             paint.typeface = android.graphics.Typeface.DEFAULT
             paint.textSize = 5.5f * scale
             val used = at(45f, 42f)
-            canvas.nativeCanvas.drawText("USED", used.x, used.y, paint)
+            canvas.nativeCanvas.drawText(bottomLine, used.x, used.y, paint)
         }
     }
 }

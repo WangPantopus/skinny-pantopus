@@ -53,6 +53,8 @@ data class TodaySignal(
     val body: String,
     val timing: String,
     val severity: TodaySignalSeverity? = null,
+    /** Where a tap goes: the mail line opens the Mail tab (`/app/mailbox`) while the Mailbox is on; null → not tappable. */
+    val route: String? = null,
 )
 
 /** A single "Around the block" datapoint (coloured dot + text). */

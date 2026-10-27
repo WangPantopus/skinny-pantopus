@@ -209,6 +209,52 @@ object PantopusColors {
      */
     val paperCream = Color(0xFFFDF8EE)
 
+    // Mail tab paper and ink — the pieces in the Mailbox drawn as the things they are (Mail tab drawings, 2026-10-27:
+    // `Parts`, `MailPiece`). Paper stays light in dark mode, as paper does.
+
+    /** A letter's cream envelope — `#FBF6EA` — and its edge, `#EBE1CB`. */
+    val mailLetterPaper = Color(0xFFFBF6EA)
+    val mailLetterEdge = Color(0xFFEBE1CB)
+
+    /** A postcard's card stock — `#FFFDF7` — its edge and the line between message and address, `#E2DCCD`. */
+    val mailPostcardPaper = Color(0xFFFFFDF7)
+    val mailPostcardRule = Color(0xFFE2DCCD)
+
+    /** A special delivery's inside stock — `#FFFDF8`. */
+    val mailSpecialPaper = Color(0xFFFFFDF8)
+
+    /** A bill's window — `#EEF5FA` — and its edge, `#CFE0EB`. */
+    val mailWindow = Color(0xFFEEF5FA)
+    val mailWindowEdge = Color(0xFFCFE0EB)
+
+    /** Kraft paper for parcels — `#C9A676` — its packing tape, `#F6E8BA`, and the label's ink, `#3B2A16`. */
+    val mailKraft = Color(0xFFC9A676)
+    val mailKraftTape = Color(0xFFF6E8BA)
+    val mailKraftInk = Color(0xFF3B2A16)
+
+    /** Postal ink: postmarks, printed postage and typed addresses — `#1F2937`; handwriting — `#334155`. */
+    val mailInk = Color(0xFF1F2937)
+    val mailInkHand = Color(0xFF334155)
+
+    /** A booklet's cover lettering — `#E0F2FE` — and its byline, `#BAE6FD`. */
+    val mailBookletInk = Color(0xFFE0F2FE)
+    val mailBookletByline = Color(0xFFBAE6FD)
+
+    /** Stamp inks: Fir (blue), Peak (amber) and River (green) — `#0369A1`, `#9A4A08`, `#15803D` — and their light art. */
+    val mailStampFir = Color(0xFF0369A1)
+    val mailStampPeak = Color(0xFF9A4A08)
+    val mailStampRiver = Color(0xFF15803D)
+    val mailStampFirArt = Color(0xFFE0F2FE)
+    val mailStampPeakArt = Color(0xFFFEF3C7)
+    val mailStampRiverArt = Color(0xFFBBF7D0)
+    val mailStampSun = Color(0xFFFDE68A)
+
+    /** The mailbox: its blue body `#0284C7`, the post `#8A6A4A`, the flag `#C2410C`, the dark inside `#0B2537`. */
+    val mailboxBody = Color(0xFF0284C7)
+    val mailboxPost = Color(0xFF8A6A4A)
+    val mailboxFlag = Color(0xFFC2410C)
+    val mailboxInside = Color(0xFF0B2537)
+
     // Ballot illustration — mirrors iOS `Ballot/*` in the asset catalog.
 
     /**

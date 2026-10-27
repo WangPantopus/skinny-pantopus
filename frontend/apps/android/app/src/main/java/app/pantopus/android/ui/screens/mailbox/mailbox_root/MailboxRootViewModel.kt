@@ -2,44 +2,44 @@
 
 package app.pantopus.android.ui.screens.mailbox.mailbox_root
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.LaunchFeatures
-import app.pantopus.android.data.api.models.mailbox.v2.DrawerMail
+import app.pantopus.android.data.api.models.mailbox.v2.DrawerListResponse
 import app.pantopus.android.data.api.net.NetworkResult
-import app.pantopus.android.data.api.net.displayMessage
+import app.pantopus.android.data.auth.AuthRepository
+import app.pantopus.android.data.businesses.BusinessesRepository
+import app.pantopus.android.data.mailbox.MailDeliverySeen
 import app.pantopus.android.data.mailbox.MailboxRepository
-import app.pantopus.android.ui.screens.mailbox.MailboxListViewModel
-import app.pantopus.android.ui.screens.mailbox.item_detail.MailTrust
-import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState
-import app.pantopus.android.ui.screens.shared.list_of_rows.RowSection
+import app.pantopus.android.data.network.NetworkMonitor
+import app.pantopus.android.ui.screens.mailbox.components.MailAddressBook
+import app.pantopus.android.ui.screens.mailbox.components.MailPieceMapper
+import app.pantopus.android.ui.screens.mailbox.components.MailSection
+import app.pantopus.android.ui.screens.mailbox.components.MailboxHeroState
+import app.pantopus.android.ui.screens.mailbox.components.MappedMail
+import app.pantopus.android.ui.screens.mailbox.components.mailMessage
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.time.Instant
 import javax.inject.Inject
 
 /**
- * The four mailbox drawers. `Business` carries the "Biz" short label per
- * the design; `Earn` (B.1) is new.
+ * The mailbox drawers. `Business` carries the "Biz" short label per the design; Earn stays hidden with Mail extras.
  */
 enum class MailboxDrawer(
     val id: String,
     val label: String,
     val icon: PantopusIcon,
-    /**
-     * Fill tint when the chip is the active drawer. Me/Home/Biz use their
-     * identity-pillar colour; Earn (not an identity pillar) uses the
-     * primary tint — matching the JSX `DrawerPill` active treatment and
-     * the Earn empty-state hero.
-     */
+    /** Fill tint when the chip is the active drawer: the drawer's identity colour. */
     val accent: Color,
 ) {
     Me("me", "Me", PantopusIcon.User, PantopusColors.personal),
@@ -48,12 +48,7 @@ enum class MailboxDrawer(
     Earn("earn", "Earn", PantopusIcon.DollarSign, PantopusColors.primary600),
     ;
 
-    /**
-     * Backend drawer key for `GET /api/mailbox/v2/drawer/:drawer`. The
-     * route validates `['personal', 'home', 'business', 'earn']`
-     * (`backend/routes/mailboxV2.js:286`); the UI's `Me` drawer is the
-     * backend's `personal` drawer.
-     */
+    /** Backend drawer key for `GET /api/mailbox/v2/drawer/:drawer`; the UI's `Me` is the backend's `personal`. */
     val backendKey: String get() = if (this == Me) "personal" else id
 }
 
@@ -67,325 +62,277 @@ enum class MailboxTab(
     Vault("vault", "Vault"),
 }
 
+/** The delivery moment to play: how many pieces the round brought, and when ("this morning", or "today" after noon). */
+data class MailDeliveryMoment(
+    val count: Int,
+    val cameWhen: String,
+)
+
+/** What the Mailbox's list shows for the open drawer and tab. */
+sealed interface MailboxUiState {
+    data object Loading : MailboxUiState
+
+    data class Loaded(
+        val sections: List<MailSection>,
+        val hasMore: Boolean,
+        /** Why the next page failed; the pieces stay and the end of the list offers Try again. */
+        val loadMoreError: String? = null,
+    ) : MailboxUiState
+
+    data class Empty(
+        val headline: String,
+        val body: String,
+    ) : MailboxUiState
+
+    data class Error(
+        val message: String,
+    ) : MailboxUiState
+}
+
 /**
- * B.1 — Mailbox root archetype. One screen, four drawer contexts
- * (Me / Home / Biz / Earn) × three tabs (Incoming / Counter / Vault).
- * Replaces the old MailboxDrawersScreen + MailboxListScreen pair with a
- * unified drawer-tabs hybrid.
+ * The Mailbox (Mail tab, receiving; drawings `Main`, `R1-Before`, `R2-Delivery`, `R4-NoMail`): the morning round in
+ * the hero, the drawers Me · Home · Biz (Biz for business owners, or whenever it holds mail) with Incoming · Counter ·
+ * Vault, and each piece drawn as the thing it is, grouped by the day it came.
  *
- * Wiring (P1-B): the production [Inject] path is live —
- *  • `GET /api/mailbox/v2/drawers` (`backend/routes/mailboxV2.js:214`)
- *    seeds the per-drawer unread badges, and
- *  • `GET /api/mailbox/v2/drawer/:drawer?tab=…` (`…:280`) feeds the mail
- *    list for the active (drawer, tab) with limit/offset paging.
- * The internal secondary constructor is the test / preview seam: it
- * projects deterministic [MailboxRootSampleData] into the
- * [ListOfRowsUiState] render states and never touches the network
- * (mirrors the iOS `dataProvider` / `seededState` seam).
+ * Reads `GET /api/mailbox/v2/drawers` (counts, `delivery`, `homes`) and `GET /api/mailbox/v2/drawer/:drawer?tab=`
+ * (pieces, paged by 25).
  */
 @HiltViewModel
 @Suppress("TooManyFunctions")
 class MailboxRootViewModel
     @Inject
     constructor(
-        // Nullable so the test/preview seam can construct without a repo;
-        // Hilt always injects the non-null singleton on the production path.
-        private val repo: MailboxRepository?,
+        private val repo: MailboxRepository,
+        private val businesses: BusinessesRepository,
+        private val auth: AuthRepository,
+        private val deliverySeen: MailDeliverySeen,
+        private val network: NetworkMonitor,
     ) : ViewModel() {
-        // Non-null → sample mode (offline preview/test seam); null → live.
-        private var dataProvider: ((MailboxDrawer, MailboxTab) -> List<MailboxSampleSection>)? = null
-        private var seededState: ListOfRowsUiState? = null
+        private val _state = MutableStateFlow<MailboxUiState>(MailboxUiState.Loading)
+        val state: StateFlow<MailboxUiState> = _state.asStateFlow()
 
-        /** Test / preview seam — sample-backed, never touches [repo]. */
-        internal constructor(
-            initialDrawer: MailboxDrawer = MailboxDrawer.Me,
-            initialTab: MailboxTab = MailboxTab.Incoming,
-            dataProvider: (MailboxDrawer, MailboxTab) -> List<MailboxSampleSection> = MailboxRootSampleData::sections,
-            seededState: ListOfRowsUiState? = null,
-        ) : this(repo = null) {
-            this.dataProvider = dataProvider
-            this.seededState = seededState
-            _selectedDrawer.value = initialDrawer
-            _selectedTab.value = initialTab
-        }
+        private val _hero = MutableStateFlow<MailboxHeroState?>(null)
 
-        private val _state = MutableStateFlow<ListOfRowsUiState>(ListOfRowsUiState.Loading)
-
-        /** Observed UI state. */
-        val state: StateFlow<ListOfRowsUiState> = _state.asStateFlow()
+        /** The top card; null until the mailbox's counts have been read once. */
+        val hero: StateFlow<MailboxHeroState?> = _hero.asStateFlow()
 
         private val _selectedDrawer = MutableStateFlow(MailboxDrawer.Me)
-
-        /** Active drawer. */
         val selectedDrawer: StateFlow<MailboxDrawer> = _selectedDrawer.asStateFlow()
 
         private val _selectedTab = MutableStateFlow(MailboxTab.Incoming)
-
-        /** Active tab. Preserved across drawer switches. */
         val selectedTab: StateFlow<MailboxTab> = _selectedTab.asStateFlow()
+
+        private val _drawers = MutableStateFlow(listOf(MailboxDrawer.Me, MailboxDrawer.Home))
+
+        /** Me and Home always; Biz for business owners and whenever it holds mail; Earn only with Mail extras. */
+        val drawers: StateFlow<List<MailboxDrawer>> = _drawers.asStateFlow()
+
+        private val _drawerUnread = MutableStateFlow<Map<String, Int>>(emptyMap())
+
+        /** Unopened pieces per drawer, keyed by [MailboxDrawer.backendKey]. */
+        val drawerUnread: StateFlow<Map<String, Int>> = _drawerUnread.asStateFlow()
 
         private val _pendingRoutingCount = MutableStateFlow(0)
 
-        /**
-         * Count of mail sitting unresolved in `MailRoutingQueue` — drives the
-         * "N items need routing" banner. `0` hides it. Source:
-         * `GET /api/mailbox/v2/pending` (`backend/routes/mailboxV2.js:612`),
-         * polled on load + refresh exactly like RN
-         * (`src/app/mailbox/index.tsx:65-70`).
-         */
+        /** Mail waiting in the routing queue ("N items need routing"); 0 hides the banner. */
         val pendingRoutingCount: StateFlow<Int> = _pendingRoutingCount.asStateFlow()
 
-        /** Launch cut #8 (Mail extras): Earn (offers and ad earnings that never reach the withdrawable wallet) is hidden. */
-        val drawers: List<MailboxDrawer> = MailboxDrawer.entries.filter { it != MailboxDrawer.Earn || LaunchFeatures.mailExtras }
-        val mailTabs: List<MailboxTab> = MailboxTab.entries
+        private val _refreshing = MutableStateFlow(false)
+
+        /** A pull to refresh is reading; the indicator stops when it's done, whatever it found. */
+        val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
+        private val _deliveryMoment = MutableStateFlow<MailDeliveryMoment?>(null)
+
+        /**
+         * What today's round brought, the first time this phone shows the Mailbox after that round: the door opens and
+         * the pieces slide out once. Null when there's nothing to play.
+         */
+        val deliveryMoment: StateFlow<MailDeliveryMoment?> = _deliveryMoment.asStateFlow()
 
         private var onOpenMail: (String) -> Unit = {}
-        private var onOpenSearch: () -> Unit = {}
-        private var onOpenMap: () -> Unit = {}
 
-        // A10.11 — opens the standalone Earn dashboard. Surfaced as the
-        // Earn-drawer empty-state CTA (the drawer is intentionally
-        // always-empty, so it acts as the launchpad into the Earn surface).
-        private var onOpenEarn: () -> Unit = {}
+        private var book = MailAddressBook(personName = null)
 
-        // ── Live paging state ──────────────────────────────────────────
+        /** The server listed the person's Homes (`homes`), so the Home drawer can say why it's empty. */
+        private var homesKnown = false
+        private var zone = java.time.ZoneId.systemDefault()
+        private var deliveredAt: String? = null
+        private var ownsBusiness = false
+
+        /** When everything was last read; the Mailbox reads again when it comes back after a while or on a new day. */
+        private var lastReadAt: Instant? = null
+
         private val pageSize = 25
         private var offset = 0
         private var hasMore = false
-        private var loadedMail: MutableList<DrawerMail> = mutableListOf()
+
+        /** The pieces read so far, each drawn once when its page came. */
+        private var loadedMail: MutableList<MappedMail> = mutableListOf()
         private var loading = false
 
-        /** Bumped on every combo reload so a late in-flight page from a
-         *  previous (drawer, tab) is discarded instead of clobbering the
-         *  current view. */
+        /** Bumped on every reload so a late page from an earlier drawer or tab can't replace the current one. */
         private var generation = 0
-
-        /** Why the next page failed while mail is on screen. The rows and
-         *  [offset] stay; only Try again re-requests that page. */
         private var loadMoreError: String? = null
 
-        /** Per-drawer unread counts from `GET /api/mailbox/v2/drawers`,
-         *  keyed by backend drawer key (`personal`/`home`/`business`/`earn`).
-         *  Compose state, so the drawer chips redraw when a refresh changes it. */
-        private var drawerUnread: Map<String, Int> by mutableStateOf(emptyMap())
-
         init {
-            // A letter dismissed, filed or archived from its detail leaves this
-            // tab: drop the row now rather than listing it until the next reload.
-            if (repo != null) {
-                viewModelScope.launch {
-                    MailboxRepository.mailLeftList.collect { mailId -> dropLoadedMail(mailId) }
-                }
-                viewModelScope.launch {
-                    MailboxRepository.mailViewed.collect { mailId -> markLoadedMailViewed(mailId) }
-                }
-                // A mail push came in: read the open tab and the drawer counts again, as the Mail tab's badge does,
-                // so the new piece is here when the badge says so.
-                viewModelScope.launch {
-                    MailboxRepository.mailArrived.collect { if (_state.value !is ListOfRowsUiState.Loading) refresh() }
-                }
+            // A letter shredded, filed or archived from its page leaves this tab; opening one breaks its seal.
+            viewModelScope.launch { MailboxRepository.mailLeftList.collect { mailId -> dropLoadedMail(mailId) } }
+            viewModelScope.launch { MailboxRepository.mailViewed.collect { mailId -> markLoadedMailViewed(mailId) } }
+            // A mail push came in: read the open tab and the counts again, as the Mail tab's badge does.
+            viewModelScope.launch {
+                MailboxRepository.mailArrived.collect { if (_state.value !is MailboxUiState.Loading) refreshQuietly() }
             }
         }
 
-        /** Wire nav callbacks before first load. */
-        fun configureNavigation(
-            onOpenMail: (String) -> Unit,
-            onOpenSearch: () -> Unit = {},
-            onOpenMap: () -> Unit = {},
-            onOpenEarn: () -> Unit = {},
-        ) {
+        fun configureNavigation(onOpenMail: (String) -> Unit) {
             this.onOpenMail = onOpenMail
-            this.onOpenSearch = onOpenSearch
-            this.onOpenMap = onOpenMap
-            this.onOpenEarn = onOpenEarn
         }
+
+        fun openMail(mailId: String) = onOpenMail(mailId)
 
         fun load() {
-            seededState?.let {
-                _state.value = it
-                return
-            }
-            if (dataProvider != null) {
-                rebuildFromSample()
-                return
-            }
-            if (_state.value is ListOfRowsUiState.Loaded && loadedMail.isNotEmpty()) return
-            _state.value = ListOfRowsUiState.Loading
-            viewModelScope.launch {
-                fetchDrawerBadges()
-                fetchPendingRouting()
-                reloadActiveCombo()
-            }
+            if (_state.value is MailboxUiState.Loaded && loadedMail.isNotEmpty()) return
+            _state.value = MailboxUiState.Loading
+            viewModelScope.launch { readAll() }
         }
 
+        /** Pull to refresh and Try again: everything read again, the pieces kept on screen meanwhile. */
         fun refresh() {
-            if (seededState != null) return
-            if (dataProvider != null) {
-                rebuildFromSample()
-                return
-            }
             viewModelScope.launch {
-                fetchDrawerBadges()
-                fetchPendingRouting()
-                reloadActiveCombo()
+                _refreshing.value = true
+                try {
+                    readAll()
+                } finally {
+                    _refreshing.value = false
+                }
             }
         }
 
-        /** Called when the list nears the bottom — fetches the next page.
-         *  After a failed page only [retryLoadMore] asks again. */
+        /**
+         * The Mailbox is showing again (back from a letter, another tab or the background): read again if the last
+         * read is a while ago or from another day, so the morning's mail, its moment and the hero are today's.
+         */
+        fun refreshIfStale() {
+            val read = lastReadAt ?: return
+            if (_state.value is MailboxUiState.Loading) return
+            val now = Instant.now()
+            val newDay = read.atZone(zone).toLocalDate() != now.atZone(zone).toLocalDate()
+            if (newDay || java.time.Duration.between(read, now) > STALE_AFTER) refreshQuietly()
+        }
+
+        /** The same read without the pull indicator, keeping as many pieces as are loaded (mail came in, or it was stale). */
+        private fun refreshQuietly() {
+            val keep = loadedMail.size.coerceIn(pageSize, MAX_PAGE)
+            viewModelScope.launch { readAll(limit = keep) }
+        }
+
+        private suspend fun readAll(limit: Int = pageSize) {
+            lastReadAt = Instant.now()
+            val owner = viewModelScope.async { readBusinessOwnership() }
+            readDrawers()
+            readPendingRouting()
+            owner.await()
+            updateDrawers()
+            reloadActiveTab(limit)
+        }
+
+        /** Near the end of the list: the next page, unless the last one failed (then only [retryLoadMore] asks). */
         fun loadMoreIfNeeded() {
-            if (loadMoreError != null) return
-            if (dataProvider != null || !hasMore || loading) return
+            if (loadMoreError != null || !hasMore || loading) return
             viewModelScope.launch { fetchPage(generation) }
         }
 
-        /** Try again on a failed page: the same offset, rows kept. */
         fun retryLoadMore() {
             if (loadMoreError == null || loading) return
             loadMoreError = null
-            applyLiveState(_selectedDrawer.value, _selectedTab.value)
+            publish()
             viewModelScope.launch { fetchPage(generation) }
         }
 
-        /** Switch drawer, preserving the active tab (B.1 acceptance). */
         fun selectDrawer(drawer: MailboxDrawer) {
             if (_selectedDrawer.value == drawer) return
             _selectedDrawer.value = drawer
-            handleSelectionChange()
+            switchList()
         }
 
         fun selectTab(tab: MailboxTab) {
             if (_selectedTab.value == tab) return
             _selectedTab.value = tab
-            handleSelectionChange()
+            switchList()
         }
 
-        /** Unread badge for a drawer chip — total unread across its tabs.
-         *  Live reads the per-drawer `unread_count` from `GET /drawers`;
-         *  the sample path counts unviewed rows across the fixture's tabs. */
-        fun drawerBadge(drawer: MailboxDrawer): Int =
-            if (dataProvider != null) {
-                MailboxTab.entries.sumOf { unreadCount(drawer, it) }
-            } else {
-                drawerUnread[drawer.backendKey] ?: 0
-            }
-
-        /**
-         * Per-(drawer, tab) unread count for the segmented bar. Vault never
-         * shows a count (saved mail isn't "unread"); a zero count hides the
-         * badge. The live backend exposes per-*drawer* unread only (no
-         * per-tab breakdown), so the wired path returns `null` for every
-         * tab — the drawer-chip badge carries the unread signal instead.
-         */
-        fun tabBadge(tab: MailboxTab): Int? {
-            if (dataProvider == null || tab == MailboxTab.Vault) return null
-            return unreadCount(_selectedDrawer.value, tab).takeIf { it > 0 }
+        /** The delivery moment played, or was skipped: it won't play again for this round. */
+        fun deliveryMomentShown() {
+            _deliveryMoment.value = null
+            val user = signedInUserId() ?: return
+            deliveredAt?.let { deliverySeen.markShown(user, it) }
         }
 
-        /** Sample-projection helper — counts unviewed rows for a
-         *  (drawer, tab) in the injected fixture. `0` on the live path. */
-        fun unreadCount(
-            drawer: MailboxDrawer,
-            tab: MailboxTab,
-        ): Int {
-            val provider = dataProvider ?: return 0
-            return provider(drawer, tab).sumOf { section -> section.items.count { !it.item.viewed } }
+        private fun switchList() {
+            _state.value = MailboxUiState.Loading
+            viewModelScope.launch { reloadActiveTab() }
         }
 
-        // ── Selection routing ──────────────────────────────────────────
-
-        private fun handleSelectionChange() {
-            if (seededState != null) return
-            if (dataProvider != null) {
-                rebuildFromSample()
-            } else {
-                _state.value = ListOfRowsUiState.Loading
-                viewModelScope.launch { reloadActiveCombo() }
-            }
-        }
-
-        // ── Live fetch ─────────────────────────────────────────────────
-
-        private suspend fun reloadActiveCombo() {
-            val gen = ++generation
-            offset = 0
-            loadedMail = mutableListOf()
-            loadMoreError = null
-            fetchPage(gen)
-        }
-
-        private suspend fun fetchPage(gen: Int) {
-            val repo = repo ?: return
-            loading = true
-            val drawer = _selectedDrawer.value
-            val tab = _selectedTab.value
-            val result = repo.drawer(drawer.backendKey, tab.id, pageSize, offset)
-            // Drop late responses if the user has since switched combo. A late
-            // page must not clear the loading guard of the current request.
-            if (gen != generation) return
-            loading = false
-            when (result) {
-                is NetworkResult.Success -> {
-                    loadedMail.addAll(result.data.mail)
-                    offset = loadedMail.size
-                    hasMore = result.data.mail.size >= pageSize
-                    applyLiveState(drawer, tab)
-                }
+        private suspend fun readDrawers() {
+            when (val result = repo.drawers()) {
+                is NetworkResult.Success -> showDrawers(result.data)
+                // The counts keep what they last showed; a hero never read says so instead of loading forever.
                 is NetworkResult.Failure ->
-                    if (loadedMail.isEmpty()) {
-                        _state.value = ListOfRowsUiState.Error(result.error.displayMessage("Couldn't load the list."))
-                    } else {
-                        // A later page failed: keep the mail on screen and say so.
-                        loadMoreError = "Couldn't load more mail. " + result.error.displayMessage("Please try again.")
-                        applyLiveState(drawer, tab)
+                    if (_hero.value == null) {
+                        _hero.value =
+                            MailboxHeroState(
+                                title = "Your mail",
+                                // The list below says what went wrong and offers Try again; this only says what's missing.
+                                detail = "Couldn't read today's delivery.",
+                                address = null,
+                                number = null,
+                            )
                     }
             }
         }
 
-        /** Opening a letter marked it read: clear its row's unread state and refresh the badges. */
-        private fun markLoadedMailViewed(mailId: String) {
-            val index = loadedMail.indexOfFirst { it.id == mailId }
-            if (index >= 0) {
-                loadedMail[index] = loadedMail[index].copy(viewed = true)
-                applyLiveState(_selectedDrawer.value, _selectedTab.value)
-            }
-            viewModelScope.launch { fetchDrawerBadges() }
-        }
-
-        /** Remove a letter that left this tab; keep paging aligned with the server. */
-        private fun dropLoadedMail(mailId: String) {
-            if (loadedMail.none { it.id == mailId }) return
-            loadedMail.removeAll { it.id == mailId }
-            offset = loadedMail.size
-            if (loadedMail.isEmpty() && hasMore) {
-                // Everything loaded is gone but more exists: load the tab again.
-                _state.value = ListOfRowsUiState.Loading
-                refresh()
-            } else {
-                applyLiveState(_selectedDrawer.value, _selectedTab.value)
-                // The letter no longer counts toward its drawer's unread badge.
-                viewModelScope.launch { fetchDrawerBadges() }
+        private fun showDrawers(response: DrawerListResponse) {
+            _drawerUnread.value = response.drawers.associate { it.drawer to it.unreadCount }
+            book = MailAddressBook(personName = signedInName(), homes = response.homes.orEmpty())
+            homesKnown = response.homes != null
+            zone = MailPieceMapper.zoneOf(response.delivery)
+            _hero.value = MailboxHeroState.from(response.delivery, book)
+            val last = response.delivery?.lastAt
+            deliveredAt = last
+            val today = Instant.now().atZone(zone).toLocalDate()
+            val lastTime = last?.let { runCatching { Instant.parse(it) }.getOrNull() }?.atZone(zone)
+            val user = signedInUserId()
+            val count = response.delivery?.lastCount ?: 0
+            // Today's round, with mail in it, not played yet on this phone for this person (kept as the server wrote it).
+            val round = last?.takeIf { lastTime?.toLocalDate() == today && count > 0 }
+            if (round != null && user != null && !deliverySeen.shown(user, round)) {
+                val morning = (lastTime?.hour ?: 0) < NOON
+                _deliveryMoment.value = MailDeliveryMoment(count, cameWhen = if (morning) "this morning" else "today")
             }
         }
 
-        private suspend fun fetchDrawerBadges() {
-            val repo = repo ?: return
-            when (val result = repo.drawers()) {
-                is NetworkResult.Success ->
-                    drawerUnread = result.data.drawers.associate { it.drawer to it.unreadCount }
-                // Badges are non-blocking chrome — leave them empty on
-                // failure so the list still renders.
-                is NetworkResult.Failure -> drawerUnread = emptyMap()
-            }
+        private suspend fun readBusinessOwnership() {
+            if (ownsBusiness) return
+            ownsBusiness =
+                when (val result = businesses.myBusinesses()) {
+                    is NetworkResult.Success -> result.data.businesses.any { it.roleBase == "owner" }
+                    is NetworkResult.Failure -> false
+                }
         }
 
-        /**
-         * Poll the disambiguation queue. The banner is non-blocking chrome —
-         * a transport failure just leaves the count at zero so the list
-         * still renders (mirrors RN's swallowed catch).
-         */
-        private suspend fun fetchPendingRouting() {
-            val repo = repo ?: return
+        private fun updateDrawers() {
+            val bizHasMail = (_drawerUnread.value[MailboxDrawer.Business.backendKey] ?: 0) > 0
+            _drawers.value =
+                buildList {
+                    add(MailboxDrawer.Me)
+                    add(MailboxDrawer.Home)
+                    if (ownsBusiness || bizHasMail || _selectedDrawer.value == MailboxDrawer.Business) add(MailboxDrawer.Business)
+                    if (LaunchFeatures.mailExtras) add(MailboxDrawer.Earn)
+                }
+        }
+
+        private suspend fun readPendingRouting() {
             _pendingRoutingCount.value =
                 when (val result = repo.pending()) {
                     is NetworkResult.Success -> result.data.pending.size
@@ -393,119 +340,134 @@ class MailboxRootViewModel
                 }
         }
 
-        private fun applyLiveState(
-            drawer: MailboxDrawer,
-            tab: MailboxTab,
+        private suspend fun reloadActiveTab(limit: Int = pageSize) {
+            val gen = ++generation
+            offset = 0
+            loadedMail = mutableListOf()
+            loadMoreError = null
+            hasMore = false
+            fetchPage(gen, limit)
+        }
+
+        private suspend fun fetchPage(
+            gen: Int,
+            limit: Int = pageSize,
         ) {
-            if (loadedMail.isEmpty()) {
-                _state.value = emptyState(drawer, tab)
-            } else {
-                val rows =
-                    loadedMail.map { dm ->
-                        MailboxListViewModel.makeRow(
-                            id = dm.id,
-                            categoryRaw = dm.mailType ?: dm.type,
-                            // The row anatomy: what it is as the title, who it's from (server-resolved) below.
-                            title = dm.displayTitle ?: dm.subject ?: dm.senderBusinessName ?: dm.senderDisplay,
-                            subtitle = dm.senderDisplay,
-                            body = dm.previewText,
-                            createdAt = dm.createdAt,
-                            viewed = dm.viewed,
-                            trust = MailTrust.fromRaw(dm.senderTrust),
-                            onOpenMail = { onOpenMail(it) },
-                            // Counter lists open mail with a due date, so its rows say when.
-                            dueDate = if (tab == MailboxTab.Counter) dm.dueDate else null,
-                        )
+            loading = true
+            val drawer = _selectedDrawer.value
+            val tab = _selectedTab.value
+            val result = repo.drawer(drawer.backendKey, tab.id, limit, offset)
+            // A late page from an earlier drawer or tab must not touch the current one or its loading guard.
+            if (gen != generation) return
+            // Each new piece is drawn once, off the main thread (dates and words), so a long list stays smooth.
+            val page =
+                (result as? NetworkResult.Success)?.data?.mail?.let { rows ->
+                    val book = book
+                    val zone = zone
+                    withContext(Dispatchers.Default) { rows.map { MailPieceMapper.map(it, book, zone) } }
+                }
+            if (gen != generation) return
+            loading = false
+            when (result) {
+                is NetworkResult.Success -> {
+                    loadedMail.addAll(page.orEmpty())
+                    offset = loadedMail.size
+                    hasMore = result.data.mail.size >= limit
+                    publish()
+                }
+                is NetworkResult.Failure -> {
+                    val message = result.error.mailMessage(online = network.isOnline.value)
+                    if (loadedMail.isEmpty()) {
+                        _state.value = MailboxUiState.Error(message)
+                    } else {
+                        loadMoreError = message
+                        publish()
                     }
-                _state.value =
-                    ListOfRowsUiState.Loaded(
-                        sections = listOf(RowSection(id = "mail", rows = rows)),
-                        hasMore = hasMore,
-                        loadMoreError = loadMoreError,
-                        onRetryLoadMore = ::retryLoadMore,
-                    )
+                }
             }
         }
 
-        // ── Sample projection (preview/test seam) ──────────────────────
-
-        private fun rebuildFromSample() {
-            val provider = dataProvider ?: return
-            val drawer = _selectedDrawer.value
-            val tab = _selectedTab.value
-            val sections = provider(drawer, tab).filter { it.items.isNotEmpty() }
+        private fun publish() {
             _state.value =
-                if (sections.isEmpty()) {
-                    emptyState(drawer, tab)
+                if (loadedMail.isEmpty()) {
+                    emptyState(_selectedDrawer.value, _selectedTab.value)
                 } else {
-                    ListOfRowsUiState.Loaded(
-                        sections = sections.map { rowSection(it, drawer, tab) },
-                        hasMore = false,
+                    MailboxUiState.Loaded(
+                        // Incoming by the day it came; the Counter keeps the server's soonest-due order, the Vault its own.
+                        sections = MailPieceMapper.sections(loadedMail, zone, byDay = _selectedTab.value == MailboxTab.Incoming),
+                        hasMore = hasMore,
+                        loadMoreError = loadMoreError,
                     )
                 }
         }
 
-        private fun rowSection(
-            section: MailboxSampleSection,
-            drawer: MailboxDrawer,
-            tab: MailboxTab,
-        ): RowSection =
-            RowSection(
-                id = "${drawer.id}.${tab.id}.${section.id}",
-                header = section.header,
-                rows =
-                    section.items.map { sample ->
-                        MailboxListViewModel.makeRow(
-                            mail = sample.item,
-                            onOpenMail = { onOpenMail(it) },
-                            trustOverride = sample.trust,
-                        )
-                    },
-            )
+        private fun markLoadedMailViewed(mailId: String) {
+            val index = loadedMail.indexOfFirst { it.row.id == mailId }
+            if (index >= 0) {
+                loadedMail[index] = MailPieceMapper.map(loadedMail[index].row.copy(viewed = true), book, zone)
+                publish()
+            }
+            viewModelScope.launch { readDrawers() }
+        }
+
+        private fun dropLoadedMail(mailId: String) {
+            if (loadedMail.none { it.row.id == mailId }) return
+            loadedMail.removeAll { it.row.id == mailId }
+            offset = loadedMail.size
+            if (loadedMail.isEmpty() && hasMore) {
+                _state.value = MailboxUiState.Loading
+                refreshQuietly()
+            } else {
+                publish()
+                viewModelScope.launch { readDrawers() }
+            }
+        }
+
+        /** Why the Home drawer is empty: no Home yet, a Home not verified yet (its mail waits), or simply no mail. */
+        private fun homeEmptyState(): MailboxUiState.Empty =
+            when {
+                homesKnown && book.homes.isEmpty() ->
+                    MailboxUiState.Empty(
+                        "No home on Pantopus yet",
+                        "Add your home and verify your address, and its mail comes here each morning.",
+                    )
+                homesKnown && book.homes.none { it.mailAccess == "open" } ->
+                    MailboxUiState.Empty(
+                        "Verify your home to open its mail",
+                        "Prove your address to open your home's mail. It waits here for you until then.",
+                    )
+                else -> MailboxUiState.Empty("No mail for your home yet", "Mail addressed to your home comes here each morning.")
+            }
+
+        private fun signedInUserId(): String? = (auth.state.value as? AuthRepository.State.SignedIn)?.user?.id
+
+        private fun signedInName(): String? =
+            (auth.state.value as? AuthRepository.State.SignedIn)?.user?.displayName?.takeIf { it.isNotBlank() }
 
         private fun emptyState(
             drawer: MailboxDrawer,
             tab: MailboxTab,
-        ): ListOfRowsUiState.Empty =
-            when {
-                drawer == MailboxDrawer.Earn && tab == MailboxTab.Incoming ->
-                    ListOfRowsUiState.Empty(
-                        icon = PantopusIcon.Wallet,
-                        headline = "No earn items yet",
-                        subcopy = "Task earnings go to your wallet in Payments.",
-                        ctaTitle = "Open Earn dashboard",
-                        onCta = { onOpenEarn() },
-                    )
-                drawer == MailboxDrawer.Earn && tab == MailboxTab.Counter ->
-                    ListOfRowsUiState.Empty(
-                        icon = PantopusIcon.Wallet,
-                        headline = "Nothing to action",
-                        subcopy = "Earn mail that needs you shows up here.",
-                    )
-                drawer == MailboxDrawer.Earn && tab == MailboxTab.Vault ->
-                    ListOfRowsUiState.Empty(
-                        icon = PantopusIcon.Archive,
-                        headline = "No saved earn mail",
-                        subcopy = "Earn mail you save shows up here.",
-                    )
-                // Copy follows each tab's server filter (mailboxV2 drawer route).
-                tab == MailboxTab.Counter ->
-                    ListOfRowsUiState.Empty(
-                        icon = PantopusIcon.Mailbox,
-                        headline = "Nothing due",
-                        subcopy = "Open mail with a due date shows up here.",
-                    )
-                tab == MailboxTab.Vault ->
-                    ListOfRowsUiState.Empty(
-                        icon = PantopusIcon.Archive,
-                        headline = "Nothing filed yet",
-                        subcopy = "Mail you file or save to your vault shows up here.",
-                    )
-                else ->
-                    ListOfRowsUiState.Empty(
-                        icon = PantopusIcon.Mailbox,
-                        headline = "No mail yet",
-                        subcopy = "When letters, bills or notices arrive, they show up here.",
-                    )
+        ): MailboxUiState.Empty =
+            when (tab) {
+                MailboxTab.Counter ->
+                    MailboxUiState.Empty("Nothing waiting on you", "Bills to pay and letters to answer wait here, soonest due first.")
+                MailboxTab.Vault -> MailboxUiState.Empty("Nothing filed yet", "Mail you file in the Vault waits here, in its folders.")
+                MailboxTab.Incoming ->
+                    when (drawer) {
+                        MailboxDrawer.Home -> homeEmptyState()
+                        MailboxDrawer.Business ->
+                            MailboxUiState.Empty("No business mail yet", "Mail for your business comes here each morning.")
+                        else -> MailboxUiState.Empty("No mail yet", "Your mail comes each morning. Letters, bills and notices land here.")
+                    }
             }
+
+        private companion object {
+            const val NOON = 12
+
+            /** The Mailbox reads again when it shows after this long. */
+            val STALE_AFTER: java.time.Duration = java.time.Duration.ofMinutes(5)
+
+            /** The server's most per page; a quiet read keeps up to this many pieces in place. */
+            const val MAX_PAGE = 100
+        }
     }

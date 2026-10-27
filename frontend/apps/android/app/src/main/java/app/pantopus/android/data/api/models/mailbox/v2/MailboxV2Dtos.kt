@@ -11,6 +11,72 @@ data class DrawerListResponse(
     val drawers: List<Drawer>,
     /** The Mail tab badge: unopened, delivered pieces in Me, Home and Biz this person can read (Mail build contract). */
     @Json(name = "unread_total") val unreadTotal: Int? = null,
+    /** The latest morning round that brought this person mail, how much came, and the next round (SRV-1). */
+    val delivery: MailDelivery? = null,
+    /** One row per Home the person lives at, and whether its mail opens for them yet (SRV-8). */
+    val homes: List<MailHome>? = null,
+)
+
+/** The drawers the Mail badge counts: Me, Home and Biz. Earn stays out while Mail extras are off. */
+private val MAIL_BADGE_DRAWERS = setOf("personal", "home", "business")
+
+/** The Mail tab badge: the server's `unread_total` once it sends one; else the Me, Home and Biz drawers' counts. */
+fun DrawerListResponse.unopenedTotal(): Int =
+    (unreadTotal ?: drawers.filter { it.drawer in MAIL_BADGE_DRAWERS }.sumOf { it.unreadCount }).coerceAtLeast(0)
+
+/** `delivery` on `GET /api/mailbox/v2/drawers`: the morning round, 7 a.m. where the mailbox is. */
+@JsonClass(generateAdapter = true)
+data class MailDelivery(
+    /** The latest round that brought this person a piece they can read; null when none ever did. */
+    @Json(name = "last_at") val lastAt: String? = null,
+    /** Pieces that came in the 24 hours up to and including that round, special deliveries included. */
+    @Json(name = "last_count") val lastCount: Int = 0,
+    /** How many of those are still unopened. */
+    @Json(name = "last_unopened") val lastUnopened: Int = 0,
+    /** The next round of the person's own mailbox. */
+    @Json(name = "next_at") val nextAt: String? = null,
+    /** The person's own mailbox's zone (IANA), which the rounds follow. */
+    @Json(name = "time_zone") val timeZone: String? = null,
+)
+
+/** `homes[]` on `GET /api/mailbox/v2/drawers`. `mail_access` is `open` or `needs_proof` (the closed Home box). */
+@JsonClass(generateAdapter = true)
+data class MailHome(
+    @Json(name = "home_id") val homeId: String,
+    @Json(name = "address_line") val addressLine: String? = null,
+    val name: String? = null,
+    @Json(name = "mail_access") val mailAccess: String? = null,
+)
+
+/** `postmark` on a piece: the sender's post office town (null → the date only) and the day it was posted. */
+@JsonClass(generateAdapter = true)
+data class MailPostmark(
+    val town: String? = null,
+    val date: String? = null,
+)
+
+/**
+ * `invoice` on a piece (SRV-7): a bill made from a business invoice. `status` is `sent`, `viewed`, `paid`, `void` or
+ * `overdue`; Pay goes by [id] on the existing invoice screen. Null for everything else.
+ */
+@JsonClass(generateAdapter = true)
+data class MailInvoice(
+    val id: String,
+    val status: String? = null,
+    @Json(name = "total_cents") val totalCents: Long? = null,
+    val currency: String? = null,
+    @Json(name = "due_date") val dueDate: String? = null,
+    @Json(name = "business_name") val businessName: String? = null,
+) {
+    /** Still to pay: sent, viewed or overdue. */
+    val owed: Boolean get() = status in setOf("sent", "viewed", "overdue")
+}
+
+/** `GET /api/mailbox/v2/search` — every piece this person can read, the same row shape as a drawer (SRV-3). */
+@JsonClass(generateAdapter = true)
+data class MailSearchResponse(
+    val mail: List<DrawerMail>,
+    val total: Int = 0,
 )
 
 @JsonClass(generateAdapter = true)
@@ -53,6 +119,31 @@ data class DrawerMail(
     val `package`: JsonValue?,
     /** `Mail.due_date`: the calendar day a bill or notice is due ("2026-10-20"). */
     @Json(name = "due_date") val dueDate: String? = null,
+    // ── The Mail tab (contract v1): optional, so a server without them still decodes. ──
+    /** What the piece is: letter, bill, notice, postcard, booklet, parcel or bundle; anything else draws as a letter. */
+    val kind: String? = null,
+    /** When it went into the box: 7 a.m. for the morning round, the moment it landed for a special delivery. */
+    @Json(name = "delivered_at") val deliveredAt: String? = null,
+    /** It came on its own, outside the morning round (time-sensitive, due, certified). */
+    @Json(name = "special_delivery") val specialDelivery: Boolean = false,
+    /** Sent by Pantopus itself. */
+    @Json(name = "from_pantopus") val fromPantopus: Boolean = false,
+    val postmark: MailPostmark? = null,
+    /** Due, or put on the counter, and not done yet. */
+    @Json(name = "on_counter") val onCounter: Boolean = false,
+    /** Home mail's Home; null for the person's own mail. */
+    @Json(name = "recipient_home_id") val recipientHomeId: String? = null,
+    /** Who the piece is addressed to, when the sender named someone ("The Alder household"). */
+    @Json(name = "recipient_name") val recipientName: String? = null,
+    /** The bundle a piece came in; the bundle's own piece carries [bundleItemCount]. */
+    @Json(name = "bundle_id") val bundleId: String? = null,
+    /** The bundle's label ("Willow Bank · 3 statements"), on the bundle and on its pieces listed on their own. */
+    @Json(name = "bundle_label") val bundleLabel: String? = null,
+    @Json(name = "bundle_item_count") val bundleItemCount: Int? = null,
+    /** A booklet's pages. */
+    @Json(name = "page_count") val pageCount: Int? = null,
+    /** The business invoice a bill was made from (SRV-7); null for everything else. */
+    val invoice: MailInvoice? = null,
 ) {
     @JsonClass(generateAdapter = true)
     data class SenderRef(
