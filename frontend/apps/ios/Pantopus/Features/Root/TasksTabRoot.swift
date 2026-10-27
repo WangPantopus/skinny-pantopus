@@ -385,8 +385,7 @@ public struct TasksTabRoot: View {
             },
             onOpenInbox: {
                 // The seller's own "Message" opens their Messages inbox.
-                MailTabStore.shared.pendingSegment = .messages
-                rootTabs?.selected = .mail
+                rootTabs?.selected = .messages
             },
             onViewOffers: { dto in
                 Task { @MainActor in

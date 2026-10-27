@@ -564,6 +564,8 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
             drawerUnread = response.drawers.reduce(into: [String: Int]()) { counts, drawer in
                 counts[drawer.drawer] = drawer.unreadCount
             }
+            // The Mail tab's badge reads the same counts.
+            if api === APIClient.shared { MailBadgeStore.shared.apply(response) }
         } catch {
             // Badges are non-blocking chrome — leave them empty on failure
             // so the list still renders.

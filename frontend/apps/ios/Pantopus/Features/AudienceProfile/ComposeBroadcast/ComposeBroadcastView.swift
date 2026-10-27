@@ -40,7 +40,7 @@ public struct ComposeBroadcastView: View {
             scrollBody
         }
         .background(Theme.Color.appBg)
-        .toolbar(.hidden, for: .tabBar)
+        .hidesTabBar()
         .task { await viewModel.load() }
         // Multi-select up to the remaining slots — RN parity
         // (`pickPostMediaFromLibrary(9 - mediaFiles.length)`).

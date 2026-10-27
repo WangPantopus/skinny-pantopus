@@ -44,7 +44,7 @@ public struct PostGigV1View: View {
             content
         }
         .task { await viewModel.load() }
-        .toolbar(.hidden, for: .tabBar)
+        .hidesTabBar()
         .background(Theme.Color.appBg)
         .accessibilityIdentifier("postGigV1")
     }

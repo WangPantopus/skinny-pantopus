@@ -181,8 +181,9 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
             await MainActor.run { PlansStoreReads.changed(planId: planId) }
         }
         // A connection request or acceptance: Connections reads its lists
-        // again, even when the socket missed the notice.
-        if ScreenStoreLive.isConnectionNotice(type) {
+        // again, even when the socket missed the notice. New mail: the Mail
+        // tab's badge reads its count again.
+        if ScreenStoreLive.isConnectionNotice(type) || MailBadgeStore.isMailNotice(type) {
             await MainActor.run { ScreenStoreLive.pushArrived(type: type) }
         }
         // First-launch scope: a push for a feature hidden for the first

@@ -41,7 +41,7 @@ public struct PersonaDmThreadView: View {
         .background(Theme.Color.appBg)
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .task { await viewModel.load() }
-        .toolbar(.hidden, for: .tabBar)
+        .hidesTabBar()
         .accessibilityIdentifier("personaDmThread")
     }
 

@@ -100,12 +100,8 @@ final class StoreScreenshots: XCTestCase {
         }
         app.buttons["tab.place"].firstMatch.tap()
 
-        // Mail tab → Messages segment → Chat list.
-        app.buttons["tab.mail"].firstMatch.tap()
-        let messagesSegment = app.buttons["Messages"].firstMatch
-        if messagesSegment.waitForExistence(timeout: 3) {
-            messagesSegment.tap()
-        }
+        // Messages tab → Chat list.
+        app.buttons["tab.messages"].firstMatch.tap()
         if app.descendants(matching: .any)
             .matching(identifier: "chatList").firstMatch
             .waitForExistence(timeout: 5) {

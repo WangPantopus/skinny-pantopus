@@ -17,8 +17,9 @@
 //  smoke test into a fixture-management project. This test instead walks
 //  one representative tap-path per route GROUP (root tab → first-class
 //  destination), covering every parent route enum and every entry point
-//  on the four tab landings (Place · Today · Nearby · Mail, the bar while
-//  the Pulse redesign is off, launch cut #11; You is a cover). The static
+//  on the tab landings (Place · Today · Nearby · Messages, the bar while
+//  the Pulse redesign is off, launch cut #11, with Mail before Messages
+//  while the Mailbox is on; You is a cover). The static
 //  reachability of the remaining ID-bearing children is enumerated in
 //  `docs/nav-graph-closure.md` and
 //  the route-by-route summary in `docs/nav-smoke-results.md`.
@@ -38,11 +39,18 @@ final class NavigationSmokeTest: XCTestCase {
 
     // MARK: - Launch helpers
 
-    private func launchSignedIn(file _: StaticString = #file, line _: UInt = #line) -> XCUIApplication? {
+    /// `launchFeatures` switches launch-cut features back on (Debug builds
+    /// read `PANTOPUS_LAUNCH_FEATURES`), for example `mailbox` for the Mail tab.
+    private func launchSignedIn(
+        launchFeatures: String? = nil,
+        file _: StaticString = #file,
+        line _: UInt = #line
+    ) -> XCUIApplication? {
         let app = XCUIApplication()
         app.launchEnvironment["UI_TESTS_SIGNED_IN"] = "1"
         app.launchEnvironment["UI_TESTS_STUB_API"] = "1"
         app.launchEnvironment["UI_TESTS_DISABLE_NOTIFICATIONS"] = "1"
+        if let launchFeatures { app.launchEnvironment["PANTOPUS_LAUNCH_FEATURES"] = launchFeatures }
         app.launch()
         let placeTab = app.buttons["tab.place"].firstMatch
         guard placeTab.waitForExistence(timeout: 5) else {
@@ -64,11 +72,9 @@ final class NavigationSmokeTest: XCTestCase {
         app.buttons["navDrawer.contextPill.profile"].firstMatch.tap()
     }
 
-    /// Chat lives in the Mail tab's Messages segment.
+    /// Chat is the Messages tab.
     private func openMessages(in app: XCUIApplication) {
-        tabButton("mail", in: app).tap()
-        let segment = app.buttons["Messages"].firstMatch
-        if segment.waitForExistence(timeout: 3) { segment.tap() }
+        tabButton("messages", in: app).tap()
     }
 
     /// Resolves an identifier that may appear as either a `button`, a
@@ -95,7 +101,7 @@ final class NavigationSmokeTest: XCTestCase {
         )
     }
 
-    // MARK: - Root tab landings (Place · Today · Nearby · Mail)
+    // MARK: - Root tab landings (Place · Today · Nearby · Mail · Messages)
 
     func testTab_placeLanding() throws {
         guard let app = launchSignedIn() else {
@@ -125,14 +131,15 @@ final class NavigationSmokeTest: XCTestCase {
     }
 
     func testTab_mailLanding() throws {
-        guard let app = launchSignedIn() else {
+        // The Mail tab is on the bar while the Mailbox is on (launch cut #10).
+        guard let app = launchSignedIn(launchFeatures: "mailbox") else {
             throw XCTSkip("Signed-in launch env not honoured.")
         }
         tabButton("mail", in: app).tap()
         assertReaches("mailboxRoot", in: app)
     }
 
-    func testTab_mailMessagesSegment() throws {
+    func testTab_messagesLanding() throws {
         guard let app = launchSignedIn() else {
             throw XCTSkip("Signed-in launch env not honoured.")
         }

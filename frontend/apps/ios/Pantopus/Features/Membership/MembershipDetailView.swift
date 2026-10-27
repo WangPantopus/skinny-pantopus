@@ -51,7 +51,7 @@ public struct MembershipDetailView: View {
         }
         .background(Theme.Color.appBg)
         .task { await viewModel.load() }
-        .toolbar(.hidden, for: .tabBar)
+        .hidesTabBar()
         .sheet(isPresented: $viewModel.isTierPickerPresented) { tierPickerSheet }
         .sheet(isPresented: $viewModel.isRefundSheetPresented) { refundSheet }
         .accessibilityIdentifier("membershipDetail")

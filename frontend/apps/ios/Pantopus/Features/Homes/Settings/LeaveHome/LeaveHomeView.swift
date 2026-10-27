@@ -26,7 +26,7 @@ public struct LeaveHomeView: View {
                 if viewModel.acknowledgedSelfRemoval(original) { onLeft() } else { onBack() }
             }
         )
-        .toolbar(.hidden, for: .tabBar)
+        .hidesTabBar()
         .accessibilityIdentifier("leaveHome")
     }
 }

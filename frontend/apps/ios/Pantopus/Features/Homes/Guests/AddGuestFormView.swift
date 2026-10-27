@@ -46,7 +46,7 @@ public struct AddGuestFormView: View {
                 AddGuestFormContent(viewModel: viewModel)
             }
         )
-        .toolbar(.hidden, for: .tabBar)
+        .hidesTabBar()
         .background(Theme.Color.appBg)
         .accessibilityIdentifier("addGuestForm")
         .task { await viewModel.loadHomeContext() }

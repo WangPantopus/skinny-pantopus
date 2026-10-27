@@ -729,7 +729,14 @@ public struct YouTabRoot: View {
     private func handleAction(_ tile: MeActionTile) {
         switch tile.routeKey {
         case "me.mail":
-            path.append(.mailboxRoot)
+            // The Mail tab, on its top, under this cover (every way into Mail opens the Mail tab).
+            if LaunchFeatures.mailbox, let rootTabs {
+                rootTabs.pendingMailRequest = .top
+                rootTabs.selected = .mail
+                onClose?()
+            } else {
+                path.append(.mailboxRoot)
+            }
         case "me.bids":
             path.append(.myBids)
         case "me.gigs":
@@ -1486,8 +1493,7 @@ public struct YouTabRoot: View {
                 },
                 onOpenInbox: {
                     // The seller's own "Message" opens their Messages inbox, under this cover.
-                    MailTabStore.shared.pendingSegment = .messages
-                    rootTabs?.selected = .mail
+                    rootTabs?.selected = .messages
                     onClose?()
                 },
                 onViewOffers: { dto in

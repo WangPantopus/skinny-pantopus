@@ -47,7 +47,7 @@ public struct BroadcastDetailView: View {
         }
         .background(Theme.Color.appBg)
         .task { await viewModel.load() }
-        .toolbar(.hidden, for: .tabBar)
+        .hidesTabBar()
         .accessibilityIdentifier("broadcastDetail")
     }
 

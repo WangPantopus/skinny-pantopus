@@ -73,6 +73,8 @@ enum ScreenStoreLive {
                 var topics: Set<String> = [ScreenTopic.notifications]
                 if isConnectionNotice(notice.type) { topics.insert(ScreenTopic.connections) }
                 changed(topics: topics, in: store)
+                // New mail: the Mail tab's badge reads its count again.
+                if MailBadgeStore.isMailNotice(notice.type) { MailBadgeStore.shared.refresh() }
             }
         })
         tasks.append(Task {
@@ -104,9 +106,10 @@ enum ScreenStoreLive {
 
     /// A push shown while the app is open, or opened (`AppDelegate`): a
     /// connection request or acceptance marks Connections even when the
-    /// socket missed the notice.
+    /// socket missed the notice, and mail reads the Mail tab's badge again.
     static func pushArrived(type: String?) {
         if isConnectionNotice(type) { connectionNoticed() }
+        if MailBadgeStore.isMailNotice(type) { MailBadgeStore.shared.refresh() }
     }
 
     /// A connection request, or the viewer's request accepted (types from
@@ -277,6 +280,9 @@ private final class WindowProbe {
             if let navigation = parent as? UINavigationController,
                navigation.topViewController !== controller { return false }
             if let tabs = parent as? UITabBarController,
+               tabs.selectedViewController !== controller { return false }
+            // The six-tab container while the Mailbox is on (`RootTabContainer`).
+            if let tabs = parent as? RootTabContainerController,
                tabs.selectedViewController !== controller { return false }
             controller = parent
         }

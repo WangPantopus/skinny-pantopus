@@ -508,6 +508,13 @@ public enum HubStackMode: Sendable {
     case hub, mailbox
 }
 
+/// Keeps the Mail tab's Mailbox view model once it's made. Not observed: it
+/// is written once, while the stack's root first draws.
+@MainActor
+final class MailboxRootModelBox {
+    var model: MailboxRootViewModel?
+}
+
 /// NavigationStack wrapper for the Hub tab.
 public struct HubTabRoot: View {
     @Environment(AuthManager.self) private var auth
@@ -545,6 +552,8 @@ public struct HubTabRoot: View {
     /// Set when that Identity Center's Public profile card is tapped: the
     /// profile cover opens on the audience profile once the sheet is gone.
     @State private var opensAudienceProfileAfterIdentityCenter = false
+    /// The Mail tab's Mailbox model, once made (`mailTabMailboxModel`).
+    @State private var mailboxModelBox = MailboxRootModelBox()
     #if DEBUG
     @State private var debugSheet: HubRoute?
     #endif
@@ -719,9 +728,7 @@ public struct HubTabRoot: View {
         .onChange(of: addHomeRequest) { _, _ in
             consumeAddHomeRequestIfNeeded()
         }
-        // In the Mail tab, the Mailbox/Messages switch hides below the root.
         .onChange(of: path.isEmpty, initial: true) { _, atRoot in
-            if mode == .mailbox { MailTabStore.shared.mailboxAtRoot = atRoot }
             if mode == .hub { rootTabs.placeAtRoot = atRoot }
             // Back on the root (a save, a join or a removal may have changed it).
             if atRoot, navigationReady { Task { await resolvePlaceRoot() } }
@@ -731,6 +738,7 @@ public struct HubTabRoot: View {
             // destination landed — re-attempt once ownership arrives.
             consumeDeepLinkIfNeeded(pending: router.pending)
             consumeMenuActionIfNeeded()
+            consumeMailRequestIfNeeded()
         }
         .task(id: rootTabs.selected) {
             // Let the NavigationStack install its initial binding before
@@ -742,8 +750,10 @@ public struct HubTabRoot: View {
             consumeAddHomeRequestIfNeeded()
             consumeDeepLinkIfNeeded(pending: router.pending)
             consumeMenuActionIfNeeded()
+            consumeMailRequestIfNeeded()
             if rootTabs.selected == owningTab { await resolvePlaceRoot() }
         }
+        .onChange(of: rootTabs.pendingMailRequest) { _, _ in consumeMailRequestIfNeeded() }
         .fullScreenCover(item: $modalRoute) { item in
             launchScopedDestination(for: item.route) { path.append($0) }
         }
@@ -814,28 +824,41 @@ public struct HubTabRoot: View {
     private func makeMailboxRoot(
         push: @escaping @MainActor @Sendable (HubRoute) -> Void
     ) -> some View {
-        MailboxRootView(
-            viewModel: MailboxRootViewModel(
-                onOpenMail: { mailId in
-                    Task { @MainActor in push(.mailItemDetail(mailId: mailId)) }
-                },
-                onOpenSearch: { push(.mailboxSearch) },
-                onOpenMap: { push(.mailboxMap) },
-                onOpenMailDay: { push(.mailDay(variant: .populated)) },
-                onOpenEarn: { push(.earn) },
-                onOpenVacationHold: { push(.vacationHold) },
-                onOpenStamps: { push(.stamps) },
-                onOpenUnboxing: { push(.unboxing(mailId: nil)) },
-                onOpenCompose: { push(.ceremonialMail) },
-                onOpenRoutingQueue: { push(.mailRoutingQueue) },
-                onOpenMailParty: { push(.mailParty) },
-                onOpenCommunity: { push(.communityMail) },
-                onOpenRecords: { push(.homeRecords) },
-                onOpenMailTasks: {
-                    push(.mailTaskList(mailId: nil, mailSubject: nil, mailSender: nil))
-                }
-            )
+        MailboxRootView(viewModel: makeMailboxRootModel(push: push))
+    }
+
+    private func makeMailboxRootModel(
+        push: @escaping @MainActor @Sendable (HubRoute) -> Void
+    ) -> MailboxRootViewModel {
+        MailboxRootViewModel(
+            onOpenMail: { mailId in
+                Task { @MainActor in push(.mailItemDetail(mailId: mailId)) }
+            },
+            onOpenSearch: { push(.mailboxSearch) },
+            onOpenMap: { push(.mailboxMap) },
+            onOpenMailDay: { push(.mailDay(variant: .populated)) },
+            onOpenEarn: { push(.earn) },
+            onOpenVacationHold: { push(.vacationHold) },
+            onOpenStamps: { push(.stamps) },
+            onOpenUnboxing: { push(.unboxing(mailId: nil)) },
+            onOpenCompose: { push(.ceremonialMail) },
+            onOpenRoutingQueue: { push(.mailRoutingQueue) },
+            onOpenMailParty: { push(.mailParty) },
+            onOpenCommunity: { push(.communityMail) },
+            onOpenRecords: { push(.homeRecords) },
+            onOpenMailTasks: {
+                push(.mailTaskList(mailId: nil, mailSubject: nil, mailSender: nil))
+            }
         )
+    }
+
+    /// The Mail tab's Mailbox model: made the first time the stack's root
+    /// draws and kept, so no pass of this body builds another.
+    private var mailTabMailboxModel: MailboxRootViewModel {
+        if let model = mailboxModelBox.model { return model }
+        let model = makeMailboxRootModel { path.append($0) }
+        mailboxModelBox.model = model
+        return model
     }
 
     /// Pushed screens that draw their own header (a Back or Close of their
@@ -896,8 +919,9 @@ public struct HubTabRoot: View {
                 .simultaneousGesture(debugTapGesture)
             #endif
         case .mailbox:
-            // The Mail tab: same destination universe, mailbox at the root.
-            makeMailboxRoot { path.append($0) }
+            // The Mail tab: same destination universe, mailbox at the root,
+            // with the side menu (every tab's top screen has it).
+            MailboxRootView(viewModel: mailTabMailboxModel, showsMenuButton: true)
         }
     }
 
@@ -920,6 +944,46 @@ public struct HubTabRoot: View {
         case .identityCenter:
             navDrawerIdentityCenter = LaunchFeatures.personas
         }
+    }
+
+    /// The just-moved card's mail step: My mail day, in the Mail tab while it
+    /// is on the bar (every way into Mail opens the Mail tab).
+    private func openMailDayFromPlace() {
+        guard LaunchFeatures.mailbox, mode == .hub else {
+            path.append(.mailDay(variant: .populated))
+            return
+        }
+        rootTabs.pendingMailRequest = .route(.mailDay(variant: .populated))
+        rootTabs.selected = .mail
+    }
+
+    /// Another tab asked the Mail tab for its top (the side menu's Mailbox
+    /// row, the You screen's mail tile) or a screen on it (a Place card).
+    private func consumeMailRequestIfNeeded() {
+        guard mode == .mailbox, navigationReady, rootTabs.selected == .mail,
+              let request = rootTabs.pendingMailRequest else { return }
+        rootTabs.pendingMailRequest = nil
+        switch request {
+        case .top:
+            path.removeAll { _ in true }
+        case let .route(route):
+            openMailboxScreen(route)
+        }
+    }
+
+    /// A mailbox screen opened from a link or another tab. In the Mail tab it
+    /// opens over the Mailbox at the root, so Back returns there and a second
+    /// Mailbox is never pushed; in the Place stack, over a pushed Mailbox.
+    private func openMailboxScreen(_ route: HubRoute) {
+        guard mode == .mailbox else {
+            path.append(.mailboxRoot)
+            path.append(route)
+            return
+        }
+        // Already showing it: the link lands where the person is.
+        if path.last == route { return }
+        path.removeAll { _ in true }
+        path.append(route)
     }
 
     /// Maps a drawer destination onto an existing `HubRoute`. Destinations with
@@ -1148,11 +1212,9 @@ public struct HubTabRoot: View {
             _ = router.consume()
         case .vacationHold:
             // A14.8 — `pantopus://mailbox/vacation` lands users on the
-            // Vacation hold screen via the Hub stack. We push through
-            // the Mailbox root so Back goes to the mailbox, not the
-            // hub home, matching the in-app entry point.
-            path.append(.mailboxRoot)
-            path.append(.vacationHold)
+            // Vacation hold screen over the Mailbox, so Back goes to the
+            // mailbox, matching the in-app entry point.
+            openMailboxScreen(.vacationHold)
             _ = router.consume()
         case let .place(homeId, slug):
             // `pantopus://place` — the destination every Place-derived push
@@ -1165,11 +1227,9 @@ public struct HubTabRoot: View {
                 openPlaceRoot(slug: slug)
             }
         case .mailDay:
-            // pantopus://mailbox/mailday lands on the Mailbox root first
-            // so Back walks back through the drawer view, then pushes
-            // the day editor on top.
-            path.append(.mailboxRoot)
-            path.append(.mailDay(variant: .populated))
+            // pantopus://mailbox/mailday opens the day editor over the
+            // Mailbox, so Back walks back through the drawer view.
+            openMailboxScreen(.mailDay(variant: .populated))
             _ = router.consume()
         case let .businessProfile(businessId):
             path.append(.businessProfile(businessId: businessId))
@@ -1184,34 +1244,28 @@ public struct HubTabRoot: View {
             _ = router.consume()
 
         // MARK: - B1.6 batch-2 routing seam
-        // The mailbox sub-screens push through `.mailboxRoot` first so Back
-        // walks back through the mailbox, matching `.vacationHold` / `.mailDay`.
+        // The mailbox sub-screens open over the Mailbox so Back walks back
+        // through the mailbox, matching `.vacationHold` / `.mailDay`.
         case .stamps:
-            path.append(.mailboxRoot)
-            path.append(.stamps)
+            openMailboxScreen(.stamps)
             _ = router.consume()
         case let .mailTask(taskId):
-            path.append(.mailboxRoot)
-            path.append(.mailTask(taskId: taskId))
+            openMailboxScreen(.mailTask(taskId: taskId))
             _ = router.consume()
         case let .mailTranslation(mailId):
-            path.append(.mailboxRoot)
-            path.append(.mailTranslation(mailId: mailId))
+            openMailboxScreen(.mailTranslation(mailId: mailId))
             _ = router.consume()
         case let .unboxing(mailId):
-            path.append(.mailboxRoot)
-            path.append(.unboxing(mailId: mailId))
+            openMailboxScreen(.unboxing(mailId: mailId))
             _ = router.consume()
         case let .packageGig(mailId, isPreDelivery):
-            path.append(.mailboxRoot)
             // While package tasks aren't available, the link opens the package's mail instead.
-            path.append(PackageGigAvailability.isAvailable
+            openMailboxScreen(PackageGigAvailability.isAvailable
                 ? .packageGig(mailId: mailId, isPreDelivery: isPreDelivery)
                 : .mailItemDetail(mailId: mailId))
             _ = router.consume()
         case .earn:
-            path.append(.mailboxRoot)
-            path.append(.earn)
+            openMailboxScreen(.earn)
             _ = router.consume()
         case let .businessOwner(businessId):
             path.append(.businessOwner(businessId: businessId))
@@ -1241,10 +1295,9 @@ public struct HubTabRoot: View {
             _ = router.consume()
         case let .mailItem(mailId):
             // A mail notification's letter, in the item detail the mailbox
-            // list opens; pushed through the mailbox root like the other
-            // mailbox links so Back returns to the mailbox.
-            path.append(.mailboxRoot)
-            path.append(.mailItemDetail(mailId: mailId))
+            // list opens, over the Mailbox like the other mailbox links so
+            // Back returns to the mailbox.
+            openMailboxScreen(.mailItemDetail(mailId: mailId))
             _ = router.consume()
         case let .neighborMessage(messageId):
             path.append(.neighborMessage(messageId: messageId))
@@ -2356,7 +2409,10 @@ public struct HubTabRoot: View {
             // on the stack so we don't pile mailbox screens on top of
             // each other.
             let goToMailbox: @MainActor () -> Void = {
-                if path.contains(.mailboxRoot) {
+                if mode == .mailbox {
+                    // The Mail tab: the Mailbox is this stack's root.
+                    path.removeAll { _ in true }
+                } else if path.contains(.mailboxRoot) {
                     while let last = path.last, last != .mailboxRoot {
                         path.removeLast()
                     }
@@ -2596,8 +2652,7 @@ public struct HubTabRoot: View {
                 },
                 onOpenInbox: {
                     // The seller's own "Message" opens their Messages inbox.
-                    MailTabStore.shared.pendingSegment = .messages
-                    rootTabs.selected = .mail
+                    rootTabs.selected = .messages
                 },
                 onViewOffers: { dto in
                     Task { @MainActor in
@@ -3559,7 +3614,7 @@ public struct HubTabRoot: View {
                 },
                 onOpenInbox: { path.append(.neighborInbox) },
                 onOpenPrivacyMirror: { path.append(.privacyMirror(homeId: homeId)) },
-                onOpenMailDay: { path.append(.mailDay(variant: .populated)) },
+                onOpenMailDay: { openMailDayFromPlace() },
                 onOpenHubHome: { path.append(.homeDashboard(homeId: homeId)) },
                 onOpenHomeShortcut: { shortcut in
                     switch shortcut {

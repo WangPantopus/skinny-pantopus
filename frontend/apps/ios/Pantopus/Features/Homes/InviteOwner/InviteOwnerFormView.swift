@@ -37,7 +37,7 @@ public struct InviteOwnerFormView: View {
     public var body: some View {
         content
             .formShakeOnChange(of: viewModel.shakeTrigger)
-            .toolbar(.hidden, for: .tabBar)
+            .hidesTabBar()
             .background(Theme.Color.appBg)
             .accessibilityIdentifier("inviteOwnerForm")
             .task { await viewModel.load() }
