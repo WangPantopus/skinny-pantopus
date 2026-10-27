@@ -14,6 +14,9 @@ import SwiftUI
 /// a bill, notice or special delivery.
 struct MailSenderBlock: View {
     let model: MailPieceModel
+    /// One where the piece has little height for the sender (special
+    /// delivery): a long name shrinks a little, then ends in "…".
+    var nameLines = 2
 
     var body: some View {
         HStack(alignment: .top, spacing: Spacing.s2) {
@@ -26,7 +29,8 @@ struct MailSenderBlock: View {
                 Text(model.from)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(MailPaper.handInk)
-                    .lineLimit(2)
+                    .lineLimit(nameLines)
+                    .minimumScaleFactor(nameLines == 1 ? 0.8 : 1)
                 if let line = model.fromLine {
                     Text(line)
                         .font(.system(size: 11))
@@ -51,6 +55,7 @@ struct MailTrustLine: View {
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(color)
                 .lineLimit(1)
+                .minimumScaleFactor(0.85)
         }
     }
 

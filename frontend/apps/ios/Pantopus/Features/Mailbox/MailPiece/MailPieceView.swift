@@ -175,7 +175,9 @@ private struct SpecialDeliveryPiece: View {
                     .padding(.leading, Spacing.s3)
                     .padding(.top, 10)
 
-                MailSenderBlock(model: model)
+                // One line for the name: two would run into the address on
+                // a narrow piece (the Counter).
+                MailSenderBlock(model: model, nameLines: 1)
                     .frame(maxWidth: geo.size.width * 0.58, alignment: .leading)
                     .padding(.leading, Spacing.s3)
                     .padding(.top, 28)
