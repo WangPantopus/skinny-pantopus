@@ -96,6 +96,17 @@ class ReviewClaimDetailViewModel
         private val _challengeQuestion = MutableStateFlow("")
         val challengeQuestion: StateFlow<String> = _challengeQuestion.asStateFlow()
 
+        /**
+         * "I confirmed this person's identity" — a platform admin's own confirmation, sent with
+         * Approve only while the claim has no confirmed identity.
+         */
+        private val _identityAttested = MutableStateFlow(false)
+        val identityAttested: StateFlow<Boolean> = _identityAttested.asStateFlow()
+
+        fun setIdentityAttested(attested: Boolean) {
+            _identityAttested.value = attested
+        }
+
         private var loadedOnce: Boolean = false
         private val session = scopeFactory.create(viewModelScope)
         private var loadGeneration = 0
@@ -163,11 +174,15 @@ class ReviewClaimDetailViewModel
                     ) { CLAIM_PENDING_DECISION }
                 }
                 pendingDecision = PendingDecision(detail.claim, action, note)
+                val attest =
+                    action == AdminClaimReviewAction.Approve && _identityAttested.value &&
+                        detail.approval?.identityConfirmed != true && detail.claim.identityStatus != "verified"
                 val request =
                     AdminClaimReviewRequest(
                         action = action.backendValue,
                         reviewToken = requireNotNull(detail.claim.reviewToken),
                         note = note,
+                        identityConfirmed = if (attest) true else null,
                     )
                 val result = repo.reviewClaim(claimId, request)
                 session.requireCurrent()

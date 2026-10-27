@@ -49,6 +49,10 @@ public final class WaitingRoomViewModel {
     public private(set) var content: WaitingRoomContent
     public private(set) var phase: WaitingRoomPhase = .loading
     public private(set) var pendingNav: WaitingRoomNav?
+    /// The approval checklist action in flight (its button reads "Opening…").
+    public private(set) var approvalBusyKey: String?
+    /// Why the last identity check action couldn't go ahead, shown on the checklist.
+    public private(set) var approvalNotice: String?
 
     /// The only masked status `GET /api/homes/my-ownership-claims` returns
     /// while a claim is still in flight — every other value it can return
@@ -67,17 +71,21 @@ public final class WaitingRoomViewModel {
     private var claimIsResidency = false
     private let api: APIClient
     private let authority: HomeDashboardAccess
+    /// Opens Stripe's identity check page in an in-app browser.
+    private let webPresenter: ConnectWebPresenting
     private let logger = Logger(label: "app.pantopus.ios.WaitingRoom")
 
     init(
         homeId: String,
         state: WaitingRoomState = .active,
         content: WaitingRoomContent? = nil,
-        api: APIClient = .shared
+        api: APIClient = .shared,
+        webPresenter: ConnectWebPresenting? = nil
     ) {
         self.homeId = homeId
         seedState = state
         self.api = api
+        self.webPresenter = webPresenter ?? ConnectWebPresenter()
         authority = HomeDashboardAccess(homeId: homeId, api: api)
         self.content = content ?? Self.content(for: state)
     }
@@ -141,9 +149,10 @@ public final class WaitingRoomViewModel {
                         claimRef: ref,
                         submittedOn: Self.dayCaption(claim.createdAt),
                         reviewCaption: nil,
-                        needsDocuments: claim.hasEvidence == false,
+                        needsDocuments: claim.approval.map { $0.proof == "missing" } ?? (claim.hasEvidence == false),
                         addressVerified: home.addressVerified,
-                        residency: claimIsResidency
+                        residency: claimIsResidency,
+                        approval: claim.approval
                     )
             phase = .loaded
         } catch {
@@ -234,6 +243,66 @@ public final class WaitingRoomViewModel {
 
     public func openNotifications() {
         pendingNav = .notifications
+    }
+
+    /// A checklist button: confirm identity (Stripe's page in an in-app browser) or upload a document.
+    public func handleApprovalAction(_ key: String) async {
+        switch key {
+        case WaitingRoomApproval.uploadDocumentKey:
+            handleInlineAction(WaitingRoomInlineAction(
+                id: "updateEvidence", label: "", icon: .filePlus2, tone: .primary, actionKey: "update_evidence"
+            ))
+        case WaitingRoomApproval.confirmIdentityKey:
+            await confirmIdentity()
+        default:
+            log("approval.\(key)")
+        }
+    }
+
+    /// Starts (or continues) the Stripe Identity check approval needs, opens Stripe's page, and
+    /// reads the result when the person comes back. While Stripe is still checking, it looks
+    /// again a few times so the answer shows without leaving the room.
+    private func confirmIdentity() async {
+        guard let claimId, approvalBusyKey == nil else { return }
+        approvalBusyKey = WaitingRoomApproval.confirmIdentityKey
+        approvalNotice = nil
+        do {
+            let started: ClaimIdentityCheckStartResponse = try await api.request(
+                HomesEndpoints.startClaimIdentityCheck(homeId: homeId, claimId: claimId)
+            )
+            if let raw = started.verificationUrl, let url = URL(string: raw), url.scheme == "https" {
+                approvalBusyKey = nil
+                await webPresenter.present(url: url)
+            }
+        } catch {
+            approvalNotice = Self.identityFailureMessage(error)
+        }
+        approvalBusyKey = nil
+        for round in 0..<7 {
+            if round > 0 { try? await Task.sleep(for: .seconds(10)) }
+            let checked: ClaimIdentityCheckResponse? = try? await api.request(
+                HomesEndpoints.claimIdentityCheck(homeId: homeId, claimId: claimId)
+            )
+            await refresh()
+            guard checked?.approval?.identity == "processing", self.claimId == claimId else { break }
+        }
+    }
+
+    /// The server's own words for a refused identity check (it never names another person).
+    static func identityFailureMessage(_ error: Error) -> String {
+        switch error {
+        case let APIError.clientError(_, message?) where !message.isEmpty:
+            return message
+        case let APIError.server(_, body):
+            if let data = body.data(using: .utf8),
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let message = json["error"] as? String, !message.isEmpty {
+                return message
+            }
+        default:
+            break
+        }
+        return "Your identity check couldn\u{2019}t start. Please try again."
     }
 
     public func handleInlineAction(_ action: WaitingRoomInlineAction) {

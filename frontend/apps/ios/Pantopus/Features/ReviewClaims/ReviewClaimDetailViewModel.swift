@@ -59,6 +59,9 @@ public final class ReviewClaimDetailViewModel {
 
     public private(set) var reviewingAction: AdminClaimReviewAction?
     public private(set) var toast: ToastMessage?
+    /// "I confirmed this person's identity" — a platform admin's own confirmation, sent with Approve
+    /// only while the claim has no confirmed identity.
+    public var identityAttested = false
 
     // MARK: Challenge composer state
 
@@ -144,10 +147,12 @@ public final class ReviewClaimDetailViewModel {
                 throw HomeClaimReviewError.pendingDecision
             }
             pendingDecision = PendingDecision(claim: detail.claim, action: action, note: note)
+            let attest = action == .approve && identityAttested
+                && detail.approval?.identityConfirmed != true && detail.claim.identityStatus != "verified"
             let receipt: AdminClaimReviewResponse = try await api.request(
                 AdminEndpoints.reviewClaim(
                     claimId: claimId,
-                    request: AdminClaimReviewRequest(action: action, reviewToken: token, note: note)
+                    request: AdminClaimReviewRequest(action: action, reviewToken: token, note: note, identityConfirmed: attest)
                 )
             )
             try scope.requireCurrent()

@@ -172,6 +172,11 @@ public struct ReviewClaimDetailView: View {
                         ClaimantCard(model: ReviewClaimMap.claimantModel(detail, reviewable: isReviewable))
                             .accessibilityIdentifier("reviewClaimDetail_claimant")
                     }
+                    if isReviewable, let approval = detail.approval {
+                        OverlineSection(title: "Before you approve") {
+                            ReviewClaimApprovalSection(approval: approval, claim: detail.claim, viewModel: viewModel)
+                        }
+                    }
                     OverlineSection(title: evidenceOverline(detail.evidence.count)) {
                         evidenceContent(detail.evidence)
                             .accessibilityIdentifier("reviewClaimDetail_evidence")
@@ -201,6 +206,7 @@ public struct ReviewClaimDetailView: View {
                 if isReviewable {
                     VerdictBar(
                         reviewingAction: viewModel.reviewingAction,
+                        acceptBlockedReason: ReviewClaimApproval.blockedReason(detail, identityAttested: viewModel.identityAttested),
                         onAccept: { Task { _ = await viewModel.review(.approve) } },
                         onChallenge: { showChallengeSheet = true },
                         onReject: { showRejectSheet = true }

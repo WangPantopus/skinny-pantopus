@@ -52,18 +52,27 @@ struct StatementBlock: View {
 
 struct VerdictBar: View {
     let reviewingAction: AdminClaimReviewAction?
+    /// Why Accept is off (approval would refuse), shown above it; nil when it can go ahead.
+    var acceptBlockedReason: String?
     let onAccept: () -> Void
     let onChallenge: () -> Void
     let onReject: () -> Void
 
     var body: some View {
         VStack(spacing: Spacing.s2) {
+            if let acceptBlockedReason {
+                Text(acceptBlockedReason)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityIdentifier("reviewClaimDetail_acceptBlocked")
+            }
             VerdictButton(
                 style: .accept,
                 label: reviewingAction == .approve ? "Accepting…" : "Accept claim",
                 icon: .checkCircle,
                 isLoading: reviewingAction == .approve,
-                disabled: reviewingAction != nil,
+                disabled: reviewingAction != nil || acceptBlockedReason != nil,
                 action: onAccept
             )
             .accessibilityIdentifier("reviewClaimDetail_accept")

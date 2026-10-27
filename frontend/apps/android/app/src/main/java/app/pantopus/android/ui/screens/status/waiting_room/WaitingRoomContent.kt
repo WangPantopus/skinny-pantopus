@@ -3,6 +3,7 @@
 package app.pantopus.android.ui.screens.status.waiting_room
 
 import androidx.compose.runtime.Immutable
+import app.pantopus.android.data.api.models.homes.ClaimApprovalProgressDto
 import app.pantopus.android.ui.components.HaloCircleTone
 import app.pantopus.android.ui.screens.status.StatusCta
 import app.pantopus.android.ui.screens.status.StatusHalo
@@ -153,6 +154,8 @@ data class WaitingRoomContent(
     val inlineActions: List<WaitingRoomInlineAction>,
     val primaryCta: StatusCta,
     val secondaryCta: StatusCta,
+    /** Why the claim isn't approved yet and what to do; empty when the server didn't say. */
+    val approvalSteps: List<WaitingRoomApprovalStep> = emptyList(),
 ) {
     companion object {
         const val ROOM_TITLE = "Waiting for approval"
@@ -175,19 +178,27 @@ data class WaitingRoomContent(
 
         /**
          * What the room waits for. A person reviews the documents (no county-records
-         * check), and no review time is promised while identity confirmation is undecided.
+         * check), and no review time is promised. Approval also needs a confirmed identity.
          */
         private fun waitCopy(
             needsDocuments: Boolean,
+            needsIdentity: Boolean,
             residency: Boolean,
-        ): String =
-            when {
-                !needsDocuments -> "Your documents are waiting for a Pantopus reviewer."
-                residency ->
+        ): String {
+            val requested =
+                if (residency) {
                     "Upload a lease or utility bill with your name and this address so a Pantopus reviewer " +
                         "can check that you live here."
-                else -> "Upload a deed, closing disclosure or property tax bill so a Pantopus reviewer can check ownership."
+                } else {
+                    "Upload a deed, closing disclosure or property tax bill so a Pantopus reviewer can check ownership."
+                }
+            return when {
+                needsIdentity && needsDocuments -> "Confirm your identity and " + requested.replaceFirstChar { it.lowercase() }
+                needsIdentity -> "A Pantopus reviewer can approve your claim once your identity is confirmed."
+                needsDocuments -> requested
+                else -> "Your documents are waiting for a Pantopus reviewer."
             }
+        }
 
         /**
          * While an ownership claim waits, the claimant can still prove they live
@@ -219,8 +230,10 @@ data class WaitingRoomContent(
             needsDocuments: Boolean = false,
             addressVerified: Boolean = false,
             residency: Boolean = false,
+            approval: ClaimApprovalProgressDto? = null,
         ): WaitingRoomContent {
-            val wait = waitCopy(needsDocuments = needsDocuments, residency = residency)
+            val needsIdentity = approval != null && approval.identity != "verified"
+            val wait = waitCopy(needsDocuments = needsDocuments, needsIdentity = needsIdentity, residency = residency)
             val meanwhile =
                 if (addressVerified) {
                     "Your address is verified, so you can use your Home meanwhile."
@@ -230,12 +243,18 @@ data class WaitingRoomContent(
             return WaitingRoomContent(
                 title = ROOM_TITLE,
                 halo =
-                    if (needsDocuments) {
-                        StatusHalo(tone = HaloCircleTone.Info, icon = PantopusIcon.FilePlus2)
-                    } else {
-                        StatusHalo(tone = HaloCircleTone.Info, icon = PantopusIcon.Hourglass, isPulsing = true)
+                    when {
+                        needsDocuments -> StatusHalo(tone = HaloCircleTone.Info, icon = PantopusIcon.FilePlus2)
+                        needsIdentity -> StatusHalo(tone = HaloCircleTone.Info, icon = PantopusIcon.IdCard)
+                        else -> StatusHalo(tone = HaloCircleTone.Info, icon = PantopusIcon.Hourglass, isPulsing = true)
                     },
-                headline = if (needsDocuments) "Add your documents" else "Under review",
+                headline =
+                    when {
+                        needsIdentity && needsDocuments -> "Two steps left"
+                        needsIdentity -> "Confirm your identity"
+                        needsDocuments -> "Add your documents"
+                        else -> "Under review"
+                    },
                 subcopy = "$wait $meanwhile",
                 address = address,
                 claimRef = claimRef,
@@ -246,7 +265,11 @@ data class WaitingRoomContent(
                         StatusTimelineStage(
                             "review",
                             "Under review",
-                            if (needsDocuments) "Waiting for documents" else reviewCaption,
+                            when {
+                                needsDocuments -> "Waiting for documents"
+                                needsIdentity -> "Waiting for your ID check"
+                                else -> reviewCaption
+                            },
                             StatusStepState.Current,
                         ),
                         StatusTimelineStage("approved", "Approved", state = StatusStepState.Pending),
@@ -257,6 +280,12 @@ data class WaitingRoomContent(
                         StatusWaitingPill(
                             text = "The review starts after you upload documents",
                             icon = PantopusIcon.FilePlus2,
+                            tone = StatusPillTone.Primary,
+                        )
+                    } else if (needsIdentity) {
+                        StatusWaitingPill(
+                            text = "Approval waits for your ID check",
+                            icon = PantopusIcon.IdCard,
                             tone = StatusPillTone.Primary,
                         )
                     } else {
@@ -281,6 +310,7 @@ data class WaitingRoomContent(
                     ),
                 primaryCta = viewClaim,
                 secondaryCta = backToHome,
+                approvalSteps = WaitingRoomApproval.steps(approval, residency),
             )
         }
 

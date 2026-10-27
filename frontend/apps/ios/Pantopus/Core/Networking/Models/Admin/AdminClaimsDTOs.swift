@@ -206,6 +206,43 @@ public struct AdminClaimDetailResponse: Decodable, Sendable, Hashable {
     public let home: AdminClaimHomeDTO?
     public let claimant: AdminClaimUserDTO?
     public let evidence: [AdminClaimEvidenceDTO]
+    /// What approval needs, as the server tests it; nil when it couldn't be read.
+    public let approval: ClaimReviewApprovalDTO?
+}
+
+/// The reviewer's approval panel (`approval` on the admin claim detail): a confirmed
+/// identity (a Stripe Identity check, or a platform admin's attestation) and a checked
+/// document. Mirrors the web `ClaimReviewApproval`.
+public struct ClaimReviewApprovalDTO: Decodable, Sendable, Hashable {
+    public let identityConfirmed: Bool
+    /// `not_started` · `started` · `processing` · `requires_input` · `verified`.
+    public let identity: String
+    /// The name on the confirmed ID, to compare with the ownership document.
+    public let identityName: String?
+    /// False while identity checks aren't set up: the claimant can't do one, so the reviewer confirms identity.
+    public let identityCheckAvailable: Bool
+    /// `missing` · `pending` · `verified`.
+    public let proof: String
+    public let canApprove: Bool
+
+    private enum CodingKeys: String, CodingKey {
+        case identityConfirmed = "identity_confirmed"
+        case identity
+        case identityName = "identity_name"
+        case identityCheckAvailable = "identity_check_available"
+        case proof
+        case canApprove = "can_approve"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        identityConfirmed = try container.decode(Bool.self, forKey: .identityConfirmed)
+        identity = try container.decode(String.self, forKey: .identity)
+        identityName = try container.decodeIfPresent(String.self, forKey: .identityName)
+        identityCheckAvailable = try container.decodeIfPresent(Bool.self, forKey: .identityCheckAvailable) ?? true
+        proof = try container.decode(String.self, forKey: .proof)
+        canApprove = try container.decode(Bool.self, forKey: .canApprove)
+    }
 }
 
 /// Request body for `POST /api/admin/claims/:claimId/review`.
@@ -213,16 +250,20 @@ public struct AdminClaimReviewRequest: Encodable, Sendable, Hashable {
     public let action: AdminClaimReviewAction
     public let note: String?
     public let reviewToken: String
+    /// Approve only: the admin confirmed the claimant's identity themselves. Sent only when true.
+    public let identityConfirmed: Bool?
 
-    public init(action: AdminClaimReviewAction, reviewToken: String, note: String? = nil) {
+    public init(action: AdminClaimReviewAction, reviewToken: String, note: String? = nil, identityConfirmed: Bool? = nil) {
         self.action = action
         self.note = note
         self.reviewToken = reviewToken
+        self.identityConfirmed = identityConfirmed == true ? true : nil
     }
 
     private enum CodingKeys: String, CodingKey {
         case action, note
         case reviewToken = "review_token"
+        case identityConfirmed = "identity_confirmed"
     }
 }
 
