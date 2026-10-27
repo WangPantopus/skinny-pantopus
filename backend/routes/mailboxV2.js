@@ -11,6 +11,12 @@ const {
 } = require('../utils/homeMailAccess');
 // Mail comes in the morning (SRV-1): the delivery rule every writer follows, and the mailbox's delivery line.
 const mailDelivery = require('../services/mailDelivery');
+// What the apps read about a piece (SRV-2): kind, from_pantopus, postmark, on_counter, summary; the kept summaries;
+// the Vault's folders (Home folders belong to the Home).
+const mailPiece = require('../services/mailPiece');
+const mailSummaries = require('../services/mailSummaries');
+const mailVault = require('../services/mailVault');
+const { MAIL_HOME_NEEDS_PROOF, MAIL_NOT_FOUND } = require('../utils/homeMailAccess');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const Joi = require('joi');
@@ -252,7 +258,8 @@ router.get('/drawers', verifyToken, async (req, res) => {
           return { unread_count: 0, urgent_count: 0, last_item_at: null };
         }
       } else if (drawer === 'business') {
-        query = query.eq('recipient_user_id', userId);
+        // The Business list's rule (the caller's own letters, or Home letters filed there that they may read).
+        query = query.or(visibleMailFilter(userId, homeIds));
       } else if (drawer === 'earn') {
         query = query.eq('recipient_user_id', userId);
       }
@@ -299,6 +306,9 @@ router.get('/drawers', verifyToken, async (req, res) => {
         { drawer: 'business', display_name: 'Business', icon: '💼', ...business },
         { drawer: 'earn', display_name: 'Earn', icon: '💰', ...earn },
       ],
+      // The Mail tab's badge: unopened, delivered pieces in Me, Home and Biz that this person can read (Earn stays
+      // hidden with mail_extras).
+      unread_total: personal.unread_count + home.unread_count + business.unread_count,
       homes,
       delivery,
     });
@@ -312,14 +322,40 @@ router.get('/drawers', verifyToken, async (req, res) => {
 router.get('/drawer/:drawer', verifyToken, async (req, res) => {
   try {
     const { drawer } = req.params;
-    const { tab, filter, limit = 50, offset = 0 } = req.query;
+    const { tab, filter } = req.query;
     const userId = req.user.id;
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 100);
+    const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
 
     if (!['personal', 'home', 'business', 'earn'].includes(drawer)) {
-      return res.status(400).json({ error: 'Invalid drawer' });
+      return res.status(400).json({ error: "That drawer doesn't exist. Choose Me, Home or Biz.", code: 'MAIL_DRAWER_INVALID' });
+    }
+    if (tab !== undefined && !['incoming', 'counter', 'vault', 'archived'].includes(tab)) {
+      return res.status(400).json({ error: "That tab doesn't exist. Choose Incoming, Counter, Vault or Archived.", code: 'MAIL_TAB_INVALID' });
     }
 
-    const homeIds = await getAccessibleHomeIds(userId);
+    let homeIds = await getAccessibleHomeIds(userId);
+    // home_id narrows the Home drawer to one Home the caller may read (SRV-2). One they live at but haven't proven
+    // says so (D1); any other isn't theirs.
+    if (drawer === 'home' && req.query.home_id) {
+      const homeId = String(req.query.home_id).toLowerCase();
+      if (!homeIds.includes(homeId)) {
+        const homes = await mailHomesOrThrow(userId).catch(() => []);
+        if (homes.some((h) => h.home_id === homeId && h.mail_access === 'needs_proof')) {
+          return res.status(403).json(MAIL_HOME_NEEDS_PROOF);
+        }
+        return res.status(403).json({ error: "You can't open this home's mail.", code: 'MAIL_HOME_NOT_YOURS' });
+      }
+      homeIds = [homeId];
+    }
+
+    // The Vault tab can narrow to one folder: the caller's own, or one of a readable Home's (shared by its readers).
+    let folderIds = null;
+    if (tab === 'vault' && req.query.folder_id) {
+      const resolved = await mailVault.resolveFolder(req.query.folder_id, userId, homeIds);
+      if (!resolved) return res.status(404).json({ error: "This folder isn't in your Vault.", code: 'MAIL_FOLDER_NOT_FOUND' });
+      folderIds = resolved.ids;
+    }
 
     // Only delivered pieces, newest delivery first (a piece waiting for its morning round isn't there yet).
     let query = onlyDelivered(supabaseAdmin
@@ -327,10 +363,12 @@ router.get('/drawer/:drawer', verifyToken, async (req, res) => {
       .select('*, sender:sender_user_id(name, username)', { count: 'exact' })
       .eq('drawer', drawer)
       .is('deleted_at', null))
+      // The Counter: soonest due first, undated last; every tab then newest delivery first.
+      .order(tab === 'counter' ? 'due_date' : 'delivered_at', tab === 'counter' ? { ascending: true, nullsFirst: false } : { ascending: false })
       .order('delivered_at', { ascending: false })
       // Mail delivered together shares delivered_at; the id keeps the order the same on every page.
       .order('id', { ascending: false })
-      .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
+      .range(offset, offset + limit - 1);
 
     // Scope by user or home
     if (drawer === 'personal') {
@@ -351,13 +389,18 @@ router.get('/drawer/:drawer', verifyToken, async (req, res) => {
       query = query.eq('recipient_user_id', userId);
     }
 
-    // Tab filter: incoming vs counter vs vault
+    // Tabs: Incoming (in the box), Counter (due or put there, not done), Vault (filed), Archived (so nothing just
+    // vanishes).
     if (tab === 'incoming') {
       query = query.in('lifecycle', ['delivered', 'opened']).eq('archived', false);
     } else if (tab === 'counter') {
-      query = query.not('due_date', 'is', null).in('lifecycle', ['delivered', 'opened']).eq('archived', false);
+      query = query.in('lifecycle', ['delivered', 'opened']).eq('archived', false)
+        .or('action_required.eq.true,due_date.not.is.null');
     } else if (tab === 'vault') {
       query = query.eq('lifecycle', 'filed');
+      if (folderIds) query = query.in('vault_folder_id', folderIds);
+    } else if (tab === 'archived') {
+      query = query.eq('archived', true).or('lifecycle.is.null,lifecycle.neq.shredded');
     }
 
     // Web drawer filter: the same fields the web row shows as unread, urgent and starred.
@@ -378,7 +421,7 @@ router.get('/drawer/:drawer', verifyToken, async (req, res) => {
     }
     if (error) {
       logger.error('Failed to fetch drawer mail', { error: error.message, drawer });
-      return res.status(500).json({ error: 'Failed to fetch mail' });
+      return res.status(500).json({ error: "Couldn't load your mail. Try again in a moment.", code: 'MAIL_UNAVAILABLE' });
     }
 
     // For packages, join MailPackage data
@@ -396,26 +439,19 @@ router.get('/drawer/:drawer', verifyToken, async (req, res) => {
       }
     }
 
-    const enrichedMail = (await nameMailSenders(mail || [], userId)).map(m => presentMailSender({
+    // The database's order is the order: newest delivery first, the Counter soonest due first.
+    const timeZone = (await mailDelivery.personTimeZone(userId)) || mailDelivery.FALLBACK_TIME_ZONE;
+    const enrichedMail = (await nameMailSenders(mail || [], userId)).map(m => mailPiece.present(presentMailSender({
       ...m,
       sender_display: resolveSenderDisplay(m),
       sender_trust: resolveSenderTrust(m),
       package: packageData[m.id] || null,
-    }, userId));
-
-    // Sort by urgency then recency
-    enrichedMail.sort((a, b) => {
-      const urgencyOrder = { time_sensitive: 0, overdue: 1, due_soon: 2, none: 3 };
-      const ua = urgencyOrder[a.urgency] ?? 3;
-      const ub = urgencyOrder[b.urgency] ?? 3;
-      if (ua !== ub) return ua - ub;
-      return new Date(b.delivered_at) - new Date(a.delivered_at);
-    });
+    }, userId), { timeZone }));
 
     return res.json({ mail: enrichedMail, total: count || 0, drawer });
   } catch (err) {
     logger.error('Drawer fetch error', { error: err.message });
-    return res.status(500).json({ error: 'Server error' });
+    return res.status(500).json({ error: "Couldn't load your mail. Try again in a moment.", code: 'MAIL_UNAVAILABLE' });
   }
 });
 
@@ -500,16 +536,25 @@ router.get('/item/:id', verifyToken, async (req, res) => {
       }
     }
 
+    // "Pantopus read this for you": the kept note, or one made now on this first open (never for a removed piece;
+    // a failure leaves no note).
+    if (!mail.removed && !mailPiece.summaryOf(mail)) {
+      const note = await mailSummaries.ensureSummary(mail, userId);
+      if (note) mail.mail_extracted = { ...(mail.mail_extracted || {}), summary: note.text };
+      if (note && !mailPiece.keyFacts(mail.key_facts).length) mail.key_facts = note.key_facts;
+    }
+
     const named = await nameMailSender(mail, userId);
+    const timeZone = (await mailDelivery.personTimeZone(userId)) || mailDelivery.FALLBACK_TIME_ZONE;
     return res.json({
-      mail: presentMailSender({
+      mail: mailPiece.present(presentMailSender({
         ...named,
         sender_display: resolveSenderDisplay(named),
         sender_trust: resolveSenderTrust(named),
         package: packageInfo,
         timeline: packageTimeline,
         object_payload: objectPayload,
-      }, userId),
+      }, userId), { timeZone }),
     });
   } catch (err) {
     logger.error('Item fetch error', { error: err.message });
@@ -518,44 +563,94 @@ router.get('/item/:id', verifyToken, async (req, res) => {
 });
 
 // POST /api/mailbox/v2/item/:id/action — Perform an action on a mail item
+//   counter      put on the Counter (on_counter)
+//   done         off the Counter and filed in the Vault (optional folder_id)
+//   file         filed in the Vault (optional folder_id; a Home letter in its Home's shared folder)
+//   unfile       back to Incoming (out of the Vault, and out of Archived)
+//   shred        the same as DELETE /api/mailbox/:id: gone for everyone, back from Recently shredded for 30 days
+//   acknowledge  a plain acknowledgement; never certified signing (that stays with mail_extras)
+// Older builds' actions (pay, sign, forward, remind, split, share_household, create_task, dispute) are recorded as
+// before. Answers { mail } (the piece as it is now) plus the older { message, action }.
+const NEW_ACTIONS = ['counter', 'done', 'file', 'unfile', 'shred', 'acknowledge'];
+const RECORDED_ACTIONS = ['pay', 'sign', 'forward', 'remind', 'split', 'share_household', 'create_task', 'dispute'];
 router.post('/item/:id/action', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { action } = req.body;
+    const { action } = req.body || {};
     const userId = req.user.id;
 
-    const validActions = ['pay', 'sign', 'forward', 'file', 'shred', 'remind', 'split', 'acknowledge', 'share_household', 'create_task', 'dispute'];
-    if (!validActions.includes(action)) {
-      return res.status(400).json({ error: 'Invalid action' });
+    if (![...NEW_ACTIONS, ...RECORDED_ACTIONS].includes(action)) {
+      return res.status(400).json({ error: "That isn't something you can do with this mail.", code: 'MAIL_ACTION_INVALID' });
     }
-    const readable = await readableMail(id, userId);
-    if (!readable) return res.status(404).json({ error: 'Mail not found' });
+    const { data: mail, error: readError } = await supabaseAdmin
+      .from('Mail')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+    if (readError || !mail || !(await canAccessMail(mail, userId))) {
+      return sendMailUnavailable(res, readError ? null : mail, userId);
+    }
 
-    // Update lifecycle based on action
-    const lifecycleMap = { file: 'filed', shred: 'shredded', forward: 'forwarded' };
-    if (lifecycleMap[action]) {
-      const { error: updateError } = await supabaseAdmin
-        .from('Mail')
-        .update({ lifecycle: lifecycleMap[action] })
-        .eq('id', id);
-      // supabase-js reports a failed write instead of throwing: without this
-      // check the apps said "Dismissed"/"Filed" for mail that did not move.
-      if (updateError) {
-        logger.error('Mail action lifecycle update failed', { mailId: id, action, error: updateError.message });
-        return res.status(500).json({ error: "Couldn't update this mail. Please try again." });
+    const homeIds = await getAccessibleHomeIds(userId);
+    let folderId;
+    if (['done', 'file'].includes(action) && req.body.folder_id) {
+      const resolved = await mailVault.resolveFolder(req.body.folder_id, userId, homeIds);
+      if (!resolved || !mailVault.folderFits(resolved, mail)) {
+        return res.status(400).json({ error: "This mail can't go in that folder. Choose a folder in its own drawer.", code: 'MAIL_ACTION_INVALID' });
       }
+      folderId = resolved.folder.id;
     }
 
-    await logMailEvent(`mail_action_clicked`, id, userId, { action_type: action });
-    // Dismissing a household letter hides it for everyone: the other members
-    // who could see it get the same notice as a delete, and can restore it.
-    if (action === 'shred' && readable.recipient_home_id && readable.lifecycle !== 'shredded') {
-      await sendHomeMailRemovedNotice(readable, userId, 'dismissed');
+    const now = new Date().toISOString();
+    let update = null;
+    if (action === 'counter') update = { action_required: true };
+    else if (action === 'done') update = { action_required: false, lifecycle: 'filed', ...(folderId ? { vault_folder_id: folderId } : {}) };
+    else if (action === 'file') update = { lifecycle: 'filed', ...(folderId ? { vault_folder_id: folderId } : {}) };
+    else if (action === 'unfile') update = { lifecycle: mail.opened_at || mail.viewed ? 'opened' : 'delivered', vault_folder_id: null, archived: false };
+    else if (action === 'shred') update = { deleted_at: now, deleted_by: userId };
+    else if (action === 'acknowledge') {
+      // A plain acknowledgement: it never writes certified fields (audit_trail, legal_timestamp) or signs anything.
+      update = { acknowledged_at: mail.acknowledged_at || now, acknowledged_by: mail.acknowledged_by || userId, action_required: false };
+      if (mail.ack_required && !mail.certified) update.ack_status = 'acknowledged';
+    } else if (action === 'forward') update = { lifecycle: 'forwarded' };
+
+    if (update) {
+      let write = supabaseAdmin.from('Mail').update(update).eq('id', id);
+      if (action === 'shred') write = write.is('deleted_at', null);
+      const { data: written, error: updateError } = await write.select('id');
+      // supabase-js reports a failed write instead of throwing: without this
+      // check the apps said "Filed" for mail that did not move.
+      if (updateError) {
+        logger.error('Mail action update failed', { mailId: id, action, error: updateError.message });
+        return res.status(500).json({ error: "Couldn't do that just now. Your mail is as it was. Try again in a moment.", code: 'MAIL_UNAVAILABLE' });
+      }
+      if (!written || written.length === 0) return res.status(404).json(MAIL_NOT_FOUND);
     }
-    return res.json({ message: `Action '${action}' recorded`, action });
+
+    await logMailEvent('mail_action_clicked', id, userId, { action_type: action });
+    // Shredding a household letter removes it for everyone: the other members who could see it get the same notice
+    // as a delete, and can restore it.
+    if (action === 'shred' && mail.recipient_home_id) {
+      await sendHomeMailRemovedNotice(mail, userId, 'deleted');
+    }
+
+    const { data: after } = await supabaseAdmin
+      .from('Mail')
+      .select('*, sender:sender_user_id(name, username)')
+      .eq('id', id)
+      .maybeSingle();
+    const named = after ? await nameMailSender(after, userId) : null;
+    const timeZone = (await mailDelivery.personTimeZone(userId)) || mailDelivery.FALLBACK_TIME_ZONE;
+    const piece = named ? mailPiece.present(presentMailSender({
+      ...named,
+      sender_display: resolveSenderDisplay(named),
+      sender_trust: resolveSenderTrust(named),
+    }, userId), { timeZone }) : null;
+    if (piece && action === 'shred') piece.removed = await removedMailInfo(after);
+    return res.json({ mail: piece, message: `Action '${action}' recorded`, action });
   } catch (err) {
     logger.error('Action error', { error: err.message });
-    return res.status(500).json({ error: 'Server error' });
+    return res.status(500).json({ error: "Couldn't do that just now. Your mail is as it was. Try again in a moment.", code: 'MAIL_UNAVAILABLE' });
   }
 });
 
