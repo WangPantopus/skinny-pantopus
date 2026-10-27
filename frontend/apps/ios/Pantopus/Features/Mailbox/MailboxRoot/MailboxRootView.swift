@@ -86,6 +86,9 @@ public struct MailboxRootView: View {
         .onReceive(NotificationCenter.default.publisher(for: .mailboxMailViewed)) { note in
             if let mailId = note.object as? String { viewModel.markLoadedMailViewed(mailId) }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .mailboxMailChanged)) { _ in
+            viewModel.markListStale()
+        }
         .onAppear { Analytics.track(.screenMailboxRootViewed) }
     }
 

@@ -187,6 +187,8 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
     /// Owns a business (`GET /api/businesses/my-businesses`): shows Biz.
     private var ownsBusiness = false
     private var didCheckBusinesses = false
+    /// Set when a letter changed where it stands while the Mailbox was covered.
+    private var listIsStale = false
 
     public var mailTabs: [MailboxTab] {
         MailboxTab.allCases
@@ -460,8 +462,13 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
             return
         }
         if case .loaded = state, !loadedMail.isEmpty {
-            // Back on the Mailbox: the round and the badges may have moved.
+            // Back on the Mailbox: the round and the badges may have moved,
+            // and a letter may have changed where it stands.
             await fetchDrawerBadges()
+            if listIsStale {
+                listIsStale = false
+                await reloadActiveCombo(keepingRows: true)
+            }
             return
         }
         state = .loading
@@ -499,6 +506,13 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
 
     /// A letter dismissed, filed or archived from its detail left this tab:
     /// drop its row now instead of listing it until the next reload.
+    /// A letter moved (on the counter, back in Incoming, restored): read the
+    /// list again when the Mailbox is next shown.
+    public func markListStale() {
+        guard sampleProvider == nil else { return }
+        listIsStale = true
+    }
+
     public func dropLoadedMail(_ mailId: String) {
         guard sampleProvider == nil, loadedMail.contains(where: { $0.id == mailId }) else { return }
         loadedMail.removeAll { $0.id == mailId }
