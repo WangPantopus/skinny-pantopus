@@ -48,6 +48,16 @@ enum MailPaper {
     static let sheetEdge = dynamic(light: 0xECE7DA, dark: 0xB9AF98)
     static let sheetRule = dynamic(light: 0xE7E1D2, dark: 0xBDB4A0)
     static let slip = dynamic(light: 0xF8F6F0, dark: 0xCFC9BB)
+    /// The Counter's surface, and the manila of due tags and Vault folders.
+    static let counter = dynamic(light: 0xEEEAE3, dark: 0x2A2723)
+    static let manila = dynamic(light: 0xF3E3B5, dark: 0xD9C79A)
+    static let manilaTab = dynamic(light: 0xE6CF92, dark: 0xC4AF7C)
+    static let manilaEdge = dynamic(light: 0xD9C48C, dark: 0xB39F6E)
+    static let manilaInk = Color(red: 0x5C / 255, green: 0x44 / 255, blue: 0x10 / 255)
+    /// The closed Home mailbox (grey, padlocked).
+    static let lockedBody = Color(red: 0x94 / 255, green: 0xA3 / 255, blue: 0xB8 / 255)
+    static let lockedDoor = Color(red: 0x64 / 255, green: 0x74 / 255, blue: 0x8B / 255)
+    static let lockedPlate = Color(red: 0xF1 / 255, green: 0xF5 / 255, blue: 0xF9 / 255)
     /// The paper clip holding Pantopus's note to the letter.
     static let clip = Color(red: 0x64 / 255, green: 0x74 / 255, blue: 0x8B / 255)
 

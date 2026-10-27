@@ -190,6 +190,60 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
     /// Set when a letter changed where it stands while the Mailbox was covered.
     private var listIsStale = false
 
+    /// The vacation hold in effect or coming (the banner on the Mailbox).
+    private(set) var vacationHold: DrawerListResponse.MailVacationHold?
+    /// The Vault tab: the drawer's folders, the one open now, the archived
+    /// mail, and what to say when they couldn't load.
+    private(set) var vaultFolders: [VaultFolderDTO] = []
+    private(set) var openFolder: VaultFolderDTO?
+    private(set) var archivedPieces: [MailPieceModel] = []
+    private(set) var vaultFailure: String?
+    /// Search inside the Vault: filed and archived mail only.
+    var vaultQuery = ""
+    private(set) var vaultResults: [MailPieceModel]?
+    private(set) var vaultSearching = false
+    private(set) var vaultSearchFailure: String?
+
+    /// Set by the Mail tab after it makes the model: Pay on the Counter, the
+    /// closed Home drawer's Verify your home, and the first day's porch.
+    var onOpenInvoice: (@MainActor (String) -> Void)?
+    var onVerifyHome: (@MainActor (String) -> Void)?
+    var onOpenWelcome: (@MainActor (String) -> Void)?
+
+    /// The Counter's pieces with their due tags, lines and buttons (board R9).
+    var counterItems: [MailCounterItem] {
+        guard currentTab == .counter else { return [] }
+        let rows = Dictionary(loadedMail.map { ($0.id, $0) }) { first, _ in first }
+        return pieceSections.flatMap(\.pieces).compactMap { piece in
+            rows[piece.id].map { MailCounterItem.make(piece: piece, mail: $0, clock: .current) }
+        }
+    }
+
+    /// The Counter's button for one piece: Pay opens the invoice, the rest the letter.
+    func act(on item: MailCounterItem) {
+        switch item.action {
+        case let .pay(invoiceId):
+            if let onOpenInvoice { onOpenInvoice(invoiceId) } else { openMail(item.id) }
+        case .open:
+            openMail(item.id)
+        }
+    }
+
+    /// Live mail (not the sample seam that previews and tests drive).
+    var isLive: Bool {
+        sampleProvider == nil
+    }
+
+    /// Homes the person lives at whose mail waits for proof of the address.
+    var homesWaitingForProof: [DrawerListResponse.MailboxHome] {
+        homes.filter { !$0.isOpen }
+    }
+
+    /// The Home drawer is a closed box: every Home here waits for proof.
+    var showsClosedHome: Bool {
+        selectedDrawer == .home && !homes.isEmpty && homes.allSatisfy { !$0.isOpen }
+    }
+
     public var mailTabs: [MailboxTab] {
         MailboxTab.allCases
     }
@@ -554,6 +608,12 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
     /// and refetches the active combo.
     private func handleSelectionChange() {
         guard seededState == nil else { return }
+        // Another drawer or tab: the Vault starts from all its folders again.
+        openFolder = nil
+        vaultFolders = []
+        archivedPieces = []
+        vaultFailure = nil
+        clearVaultSearch()
         if sampleProvider != nil {
             rebuildFromSample()
         } else {
@@ -575,6 +635,7 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
             loadedMail = []
         }
         await fetchPage(generation: generation, replacing: true)
+        if currentTab == .vault, sampleProvider == nil { await loadVaultExtras() }
     }
 
     private func fetchPage(generation: Int, replacing: Bool = false) async {
@@ -587,7 +648,8 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
                     drawer.backendKey,
                     tab: tab.rawValue,
                     limit: pageSize,
-                    offset: replacing ? 0 : offset
+                    offset: replacing ? 0 : offset,
+                    folderId: tab == .vault ? openFolder?.id : nil
                 )
             )
             // Drop late responses if the user has since switched combo. A late
@@ -599,6 +661,7 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
             offset = loadedMail.count
             hasMore = response.mail.count >= pageSize
             applyLiveState(drawer: drawer, tab: tab)
+            if replacing { presentWelcomeIfNeeded() }
         } catch {
             guard generation == loadGeneration else { return }
             isLoadingPage = false
@@ -624,6 +687,7 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
             // The Mail tab's badge reads the same counts.
             if api === APIClient.shared { MailBadgeStore.shared.apply(response) }
             homes = response.homes
+            vacationHold = response.vacationHold
             hero = MailboxHeroModel.make(delivery: response.delivery, homes: response.homes)
             if !loadedMail.isEmpty { applyLiveState(drawer: selectedDrawer, tab: currentTab) }
         } catch {
@@ -662,10 +726,8 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
     }
 
     private func applyLiveState(drawer: MailboxDrawer, tab: MailboxTab) {
-        // A bundle holds its pieces: the ones whose bundle is in the list
-        // open from the bundle instead of lying beside it.
-        let bundles = Set(loadedMail.filter { MailPieceKind.of($0.item) == .bundle }.map(\.id))
-        let shown = loadedMail.filter { mail in mail.item.bundleId.map { !bundles.contains($0) } ?? true }
+        // The server lists a bundle once in Incoming; its pieces open from it.
+        let shown = loadedMail
         pieceSections = Self.sections(
             of: shown.map { mail in
                 MailPieceModel(
@@ -726,6 +788,115 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
     /// to the person at their home's address.
     private func recipient(of mail: DrawerItemsResponse.DrawerMail, drawer: MailboxDrawer) -> MailPieceRecipient {
         MailPieceRecipient.of(mail, homeMail: drawer == .home, homes: homes, personName: MailPieceRecipient.personName)
+    }
+
+    // MARK: - The Vault tab
+
+    /// The drawer's folders (for Home, the cabinets of the Homes whose mail is
+    /// open) and its archived mail, beside the filed list.
+    private func loadVaultExtras() async {
+        let drawer = selectedDrawer
+        do {
+            let response: VaultFoldersResponse = try await api.request(
+                MailboxVaultEndpoints.folders(drawer: drawer.backendKey)
+            )
+            guard drawer == selectedDrawer, currentTab == .vault else { return }
+            vaultFolders = response.folders.filter { folder in
+                drawer == .home ? folder.homeId != nil : folder.homeId == nil && folder.drawer == drawer.backendKey
+            }
+            vaultFailure = nil
+        } catch {
+            guard drawer == selectedDrawer else { return }
+            vaultFailure = Self.vaultMessage(error, what: "your folders")
+        }
+        do {
+            let archived: DrawerItemsResponse = try await api.request(
+                MailboxV2Endpoints.drawer(drawer.backendKey, tab: "archived", limit: 20)
+            )
+            guard drawer == selectedDrawer, currentTab == .vault else { return }
+            archivedPieces = archived.mail.map { piece(for: $0, drawer: drawer) }
+        } catch {
+            // Archived is a side shelf: the filed list and folders still show.
+            archivedPieces = []
+        }
+    }
+
+    /// Opens one folder's mail, or all filed mail again with nil.
+    func openVaultFolder(_ folder: VaultFolderDTO?) {
+        guard openFolder?.id != folder?.id else { return }
+        openFolder = folder
+        state = .loading
+        Task { @MainActor in await reloadActiveCombo() }
+    }
+
+    /// Search inside the Vault: the server's search, kept to filed and
+    /// archived mail (the server refuses more than 100 characters).
+    func searchVault() async {
+        let text = vaultQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else {
+            clearVaultSearch()
+            return
+        }
+        vaultSearching = true
+        defer { vaultSearching = false }
+        do {
+            let response: MailSearchResponse = try await api.request(
+                MailboxV2Endpoints.search(query: String(text.prefix(100)), limit: 50)
+            )
+            guard text == vaultQuery.trimmingCharacters(in: .whitespacesAndNewlines) else { return }
+            let drawer = selectedDrawer
+            vaultResults = response.mail
+                .filter { MailLetter.isFiled($0.item) }
+                .map { piece(for: $0, drawer: drawer) }
+            vaultSearchFailure = nil
+        } catch {
+            vaultResults = []
+            vaultSearchFailure = Self.vaultMessage(error, what: "search results")
+        }
+    }
+
+    func clearVaultSearch() {
+        vaultQuery = ""
+        vaultResults = nil
+        vaultSearchFailure = nil
+    }
+
+    private func piece(for mail: DrawerItemsResponse.DrawerMail, drawer: MailboxDrawer) -> MailPieceModel {
+        MailPieceModel(
+            mail: mail,
+            recipient: recipient(of: mail, drawer: drawer),
+            opened: mail.item.viewed || viewedMailIds.contains(mail.id),
+            clock: .current
+        )
+    }
+
+    private static func vaultMessage(_ error: Error, what: String) -> String {
+        if case .transport = error as? APIError {
+            return "You're offline, so \(what) couldn't load. Check your connection and try again."
+        }
+        return "\(what.prefix(1).uppercased())\(what.dropFirst()) couldn't load just now. Try again in a moment."
+    }
+
+    // MARK: - The first day
+
+    /// The sealed welcome letter from Pantopus opens on the porch once per
+    /// account; after that it's an ordinary letter in Me.
+    private func presentWelcomeIfNeeded() {
+        guard sampleProvider == nil, selectedDrawer == .me, currentTab == .incoming, let onOpenWelcome,
+              case let .signedIn(user) = AuthManager.shared.state else { return }
+        guard let welcome = loadedMail.first(where: { mail in
+            Self.isWelcomeLetter(mail.item) && !mail.item.viewed && !viewedMailIds.contains(mail.id)
+        }) else { return }
+        let key = "mail.welcome.porch.\(user.id)"
+        guard UserDefaults.standard.string(forKey: key) == nil else { return }
+        UserDefaults.standard.set(welcome.id, forKey: key)
+        onOpenWelcome(welcome.id)
+    }
+
+    /// Pantopus's welcome letter (made on the first open of Mail, SRV-6).
+    static func isWelcomeLetter(_ item: MailItem) -> Bool {
+        guard item.fromPantopus, MailPieceKind.of(item) == .letter else { return false }
+        return (item.displayTitle ?? item.subject ?? "").lowercased().hasPrefix("welcome to your mailbox")
     }
 
     // MARK: - Sample projection (preview/test seam)
@@ -789,8 +960,8 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
         case (_, .counter):
             ListOfRowsState.EmptyContent(
                 icon: .mailbox,
-                headline: "Nothing due",
-                subcopy: "Open mail with a due date shows up here."
+                headline: "Nothing waiting on you.",
+                subcopy: "Bills and letters that need you wait here until they're done."
             )
         case (_, .vault):
             ListOfRowsState.EmptyContent(

@@ -18,11 +18,14 @@ public enum MailboxV2Endpoints {
         tab: String? = nil,
         limit: Int = 50,
         offset: Int = 0,
-        homeId: String? = nil
+        homeId: String? = nil,
+        folderId: String? = nil
     ) -> Endpoint {
         var query: [String: String] = ["limit": String(limit), "offset": String(offset)]
         if let tab { query["tab"] = tab }
         if let homeId { query["homeId"] = homeId }
+        // The Vault tab's one folder (Mail build contract, SRV-2).
+        if let folderId { query["folder_id"] = folderId }
         return Endpoint(method: .get, path: "/api/mailbox/v2/drawer/\(drawer)", query: query)
     }
 

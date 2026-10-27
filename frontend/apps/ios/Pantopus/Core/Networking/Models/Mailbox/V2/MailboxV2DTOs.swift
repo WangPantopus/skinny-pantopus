@@ -18,12 +18,15 @@ public struct DrawerListResponse: Decodable, Sendable, Hashable {
     public let delivery: MailDelivery?
     /// The Homes this person lives at, and whether their mail is open yet.
     public let homes: [MailboxHome]
+    /// The vacation hold in effect, or the next one; nil when none (SRV-5).
+    public let vacationHold: MailVacationHold?
 
     private enum CodingKeys: String, CodingKey {
         case drawers
         case unreadTotal = "unread_total"
         case delivery
         case homes
+        case vacationHold = "vacation_hold"
     }
 
     public init(from decoder: any Decoder) throws {
@@ -32,6 +35,38 @@ public struct DrawerListResponse: Decodable, Sendable, Hashable {
         unreadTotal = try? c.decodeIfPresent(Int.self, forKey: .unreadTotal)
         delivery = try? c.decodeIfPresent(MailDelivery.self, forKey: .delivery)
         homes = (try? c.decodeIfPresent([MailboxHome].self, forKey: .homes)) ?? []
+        vacationHold = try? c.decodeIfPresent(MailVacationHold.self, forKey: .vacationHold)
+    }
+
+    /// A vacation hold (Mail build contract, SRV-5): `scheduled` or `active`,
+    /// its days (`YYYY-MM-DD`), the pieces it keeps now, and when they come.
+    public struct MailVacationHold: Decodable, Sendable, Hashable {
+        public let status: String?
+        public let startDate: String?
+        public let endDate: String?
+        public let heldCount: Int
+        public let releaseAt: String?
+
+        private enum CodingKeys: String, CodingKey {
+            case status
+            case startDate = "start_date"
+            case endDate = "end_date"
+            case heldCount = "held_count"
+            case releaseAt = "release_at"
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            status = try? c.decodeIfPresent(String.self, forKey: .status)
+            startDate = try? c.decodeIfPresent(String.self, forKey: .startDate)
+            endDate = try? c.decodeIfPresent(String.self, forKey: .endDate)
+            heldCount = (try? c.decodeIfPresent(Int.self, forKey: .heldCount)) ?? 0
+            releaseAt = try? c.decodeIfPresent(String.self, forKey: .releaseAt)
+        }
+
+        public var isActive: Bool {
+            status == "active"
+        }
     }
 
     /// The person's mailbox round (Mail build contract, SRV-1).
