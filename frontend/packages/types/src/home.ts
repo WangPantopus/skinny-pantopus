@@ -128,8 +128,8 @@ export type HomePollType = 'single_choice' | 'multiple_choice' | 'yes_no' | 'ran
 export type HomePollStatus = 'open' | 'closed' | 'canceled';
 
 export interface HomePollOption {
+  id?: string | number;
   label: string;
-  votes?: number;
 }
 
 export interface HomePoll {
@@ -138,16 +138,17 @@ export interface HomePoll {
   title: string;
   description?: string | null;
   poll_type: HomePollType;
-  options: HomePollOption[];
+  options: (HomePollOption | string)[];
   status: HomePollStatus;
   closes_at?: string | null;
   visibility?: HomeRecordVisibility;
   created_by: string;
   created_at: string;
   updated_at?: string;
-  // Client-side enrichments
-  total_votes?: number;
-  my_vote?: number | null;
+  // Vote summary returned by GET /homes/:id/polls
+  vote_count?: number;
+  option_counts?: Record<string, number>;
+  my_vote?: (string | number)[] | null;
 }
 
 // ─── HomeDocument ───────────────────────────────────────────

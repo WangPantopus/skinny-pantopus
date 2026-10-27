@@ -6,6 +6,7 @@ import * as api from '@pantopus/api';
 import type { HomePoll } from '@pantopus/types';
 import DashboardCard from '../DashboardCard';
 import VisibilityChip from '../VisibilityChip';
+import { homePollOptions, isHomePollOpen } from '../homePolls';
 import { toast } from '@/components/ui/toast-store';
 
 // ---- Preview ----
@@ -14,10 +15,10 @@ export function PollsCardPreview({
   polls,
   onExpand,
 }: {
-  polls: Record<string, any>[];
+  polls: HomePoll[];
   onExpand: () => void;
 }) {
-  const openPolls = polls.filter((p) => p.status === 'open');
+  const openPolls = polls.filter(isHomePollOpen);
 
   return (
     <DashboardCard
@@ -31,7 +32,7 @@ export function PollsCardPreview({
       {openPolls.length > 0 ? (
         <div className="space-y-1.5">
           {openPolls.slice(0, 2).map((p) => (
-            <div key={p.id} className="text-sm text-app-text-strong truncate">{p.question}</div>
+            <div key={p.id} className="text-sm text-app-text-strong truncate">{p.title}</div>
           ))}
           {openPolls.length > 2 && <p className="text-xs text-app-text-muted">+{openPolls.length - 2} more</p>}
         </div>
@@ -50,12 +51,15 @@ export function PollsCardPreview({
 export default function PollsCard({
   homeId,
   onBack,
+  canEdit,
 }: {
   homeId: string;
   onBack: () => void;
+  canEdit: boolean;
 }) {
   const [polls, setPolls] = useState<HomePoll[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [votingId, setVotingId] = useState<string | null>(null);
 
@@ -63,18 +67,20 @@ export default function PollsCard({
     try {
       const res = await api.homeProfile.getHomePolls(homeId);
       setPolls(res.polls || []);
+      setLoadError(false);
     } catch {
       setPolls([]);
+      setLoadError(true);
     }
     setLoading(false);
   }, [homeId]);
 
   useEffect(() => { loadPolls(); }, [loadPolls]);
 
-  const handleVote = async (pollId: string, optionIndex: number) => {
+  const handleVote = async (pollId: string, optionKey: string) => {
     setVotingId(pollId);
     try {
-      await api.homeProfile.voteOnPoll(homeId, pollId, { option_index: optionIndex });
+      await api.homeProfile.voteOnPoll(homeId, pollId, { selected_options: [optionKey] });
       await loadPolls();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Failed to vote');
@@ -91,8 +97,8 @@ export default function PollsCard({
     }
   };
 
-  const openPolls = polls.filter((p) => p.status === 'open');
-  const closedPolls = polls.filter((p) => p.status !== 'open');
+  const openPolls = polls.filter(isHomePollOpen);
+  const closedPolls = polls.filter((p) => !isHomePollOpen(p));
 
   if (loading) {
     return <div className="text-center py-12 text-app-text-muted text-sm">Loading polls…</div>;
@@ -105,21 +111,28 @@ export default function PollsCard({
           <button onClick={onBack} className="text-sm text-app-text-secondary hover:text-app-text-strong transition flex items-center gap-1"><ChevronLeft className="w-4 h-4" /> Back</button>
           <h2 className="text-lg font-semibold text-app-text flex items-center gap-2"><BarChart3 className="w-5 h-5" /> Polls</h2>
         </div>
-        <button
+        {canEdit && <button
           onClick={() => setShowCreate(!showCreate)}
           className="px-3 py-1.5 bg-gray-900 text-white text-xs font-semibold rounded-lg hover:bg-gray-800 transition"
         >
           + Create Poll
-        </button>
+        </button>}
       </div>
 
       {/* Create form */}
-      {showCreate && (
+      {canEdit && showCreate && (
         <CreatePollForm
           homeId={homeId}
           onCreated={() => { setShowCreate(false); loadPolls(); }}
           onCancel={() => setShowCreate(false)}
         />
+      )}
+
+      {loadError && (
+        <div className="text-center py-8 text-sm text-app-text-secondary">
+          <p>Current polls could not be loaded.</p>
+          <button onClick={loadPolls} className="mt-2 text-blue-600 hover:text-blue-700">Retry</button>
+        </div>
       )}
 
       {/* Open polls */}
@@ -131,8 +144,8 @@ export default function PollsCard({
               <PollItem
                 key={poll.id}
                 poll={poll}
-                onVote={(idx) => handleVote(poll.id, idx)}
-                onClose={() => handleClosePoll(poll.id)}
+                onVote={(key) => handleVote(poll.id, key)}
+                onClose={canEdit ? () => handleClosePoll(poll.id) : undefined}
                 voting={votingId === poll.id}
               />
             ))}
@@ -152,16 +165,16 @@ export default function PollsCard({
         </div>
       )}
 
-      {polls.length === 0 && !showCreate && (
+      {!loadError && polls.length === 0 && !showCreate && (
         <div className="bg-app-surface rounded-xl border border-app-border p-8 text-center">
           <div className="mb-2"><BarChart3 className="w-8 h-8 mx-auto text-app-text-muted" /></div>
           <p className="text-sm text-app-text-secondary">No polls yet</p>
-          <button
+          {canEdit && <button
             onClick={() => setShowCreate(true)}
             className="mt-2 text-xs font-medium text-emerald-600 hover:text-emerald-700"
           >
             + Create your first poll
-          </button>
+          </button>}
         </div>
       )}
     </div>
@@ -177,29 +190,24 @@ function PollItem({
   voting,
   showResults,
 }: {
-  poll: Record<string, any>;
-  onVote?: (idx: number) => void;
+  poll: HomePoll;
+  onVote?: (key: string) => void;
   onClose?: () => void;
   voting?: boolean;
   showResults?: boolean;
 }) {
-  const options = poll.options || [];
-  const votes = poll.votes || [];
-  const totalVotes = votes.length;
-  const isClosed = poll.status !== 'open';
+  const options = homePollOptions(poll);
+  const totalVotes = poll.vote_count ?? 0;
+  const isClosed = !isHomePollOpen(poll);
   const shouldShowResults = showResults || isClosed;
-
-  // Count votes per option
-  const voteCounts = options.map((_: unknown, i: number) =>
-    votes.filter((v: Record<string, any>) => v.option_index === i).length
-  );
 
   return (
     <div className="bg-app-surface rounded-xl border border-app-border shadow-sm p-4">
       <div className="flex items-start justify-between gap-2 mb-3">
         <div className="min-w-0">
-          <div className="text-sm font-semibold text-app-text">{poll.question}</div>
+          <div className="text-sm font-semibold text-app-text">{poll.title}</div>
           <div className="flex items-center gap-2 mt-0.5">
+            {poll.status === 'canceled' && <span className="text-[10px] text-app-text-muted">Canceled</span>}
             {poll.closes_at && (
               <span className="text-[10px] text-app-text-muted">
                 {isClosed ? 'Closed' : `Closes ${new Date(poll.closes_at).toLocaleDateString()}`}
@@ -220,13 +228,13 @@ function PollItem({
       </div>
 
       <div className="space-y-1.5">
-        {options.map((option: string, i: number) => {
-          const count = voteCounts[i] || 0;
+        {options.map((option) => {
+          const count = option.count;
           const pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
-          const myVote = poll.my_vote_index === i;
+          const myVote = option.selected;
 
           return (
-            <div key={i} className="relative">
+            <div key={option.key} className="relative">
               {shouldShowResults ? (
                 <div className="relative rounded-lg overflow-hidden">
                   <div
@@ -235,7 +243,7 @@ function PollItem({
                   />
                   <div className="relative flex items-center justify-between px-3 py-2">
                     <span className={`text-sm ${myVote ? 'font-semibold text-blue-700' : 'text-app-text-strong'}`}>
-                      {option}
+                      {option.label}
                       {myVote && <Check className="ml-1 w-3 h-3 inline" />}
                     </span>
                     <span className="text-xs text-app-text-secondary">{pct}%</span>
@@ -243,15 +251,15 @@ function PollItem({
                 </div>
               ) : (
                 <button
-                  onClick={() => onVote?.(i)}
-                  disabled={voting}
+                  onClick={() => onVote?.(option.key)}
+                  disabled={voting || !onVote}
                   className={`w-full text-left px-3 py-2 rounded-lg border text-sm transition ${
                     myVote
                       ? 'border-blue-400 bg-blue-50 text-blue-700 font-medium'
                       : 'border-app-border text-app-text-strong hover:bg-app-hover'
                   } ${voting ? 'opacity-50' : ''}`}
                 >
-                  {option}
+                  {option.label}
                   {myVote && <Check className="ml-1 w-3 h-3 inline" />}
                 </button>
               )}
@@ -290,17 +298,18 @@ function CreatePollForm({
   };
 
   const handleSubmit = async () => {
-    const validOptions = options.filter((o) => o.trim());
+    const validOptions = options.map((o) => o.trim()).filter(Boolean);
     if (!question.trim()) { setError('Question is required'); return; }
     if (validOptions.length < 2) { setError('At least 2 options required'); return; }
+    if (new Set(validOptions).size !== validOptions.length) { setError('Each option must be different'); return; }
 
     setSaving(true);
     setError('');
     try {
       await api.homeProfile.createHomePoll(homeId, {
-        question: question.trim(),
-        options: validOptions,
-        closes_at: closesAt || undefined,
+        title: question.trim(),
+        options: validOptions.map((label) => ({ label })),
+        closes_at: closesAt ? new Date(`${closesAt}T23:59:59`).toISOString() : undefined,
       });
       onCreated();
     } catch (err: unknown) {

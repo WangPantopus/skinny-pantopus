@@ -838,7 +838,7 @@ function DashboardTab({
           <PetsCard homeId={homeId} onBack={onBack} />
         )}
         {expandedCard === 'polls' && (
-          <PollsCard homeId={homeId} onBack={onBack} />
+          <PollsCard homeId={homeId} onBack={onBack} canEdit={can('home.edit')} />
         )}
         {expandedCard === 'vendors' && (
           <div className="space-y-4">
