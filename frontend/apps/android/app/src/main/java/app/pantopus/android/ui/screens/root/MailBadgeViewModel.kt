@@ -3,15 +3,15 @@ package app.pantopus.android.ui.screens.root
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.LaunchFeatures
-import app.pantopus.android.data.api.models.mailbox.v2.DrawerListResponse
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.mailbox.MailboxRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
@@ -27,8 +27,8 @@ class MailBadgeViewModel
     constructor(
         private val repo: MailboxRepository,
     ) : ViewModel() {
-        private val _unopened = MutableStateFlow(0)
-        val unopened: StateFlow<Int> = _unopened.asStateFlow()
+        /** Every drawers read updates it, the Mailbox's own included, so the badge and the Mailbox agree. */
+        val unopened: StateFlow<Int> = repo.unopened.map { it ?: 0 }.stateIn(viewModelScope, SharingStarted.Eagerly, 0)
 
         private var refreshJob: Job? = null
         private var refreshAgain = false
@@ -53,10 +53,9 @@ class MailBadgeViewModel
             refreshJob =
                 viewModelScope.launch {
                     try {
-                        when (val result = repo.drawers()) {
-                            is NetworkResult.Success -> _unopened.value = result.data.unopenedTotal()
-                            // The badge is chrome: it keeps the last count it knew until a read works.
-                            is NetworkResult.Failure -> Timber.w("Mail badge refresh failed: the mailbox's drawers are unavailable")
+                        // A read that works updates [unopened]; the badge is chrome and keeps its count until one does.
+                        if (repo.drawers() is NetworkResult.Failure) {
+                            Timber.w("Mail badge refresh failed: the mailbox's drawers are unavailable")
                         }
                     } finally {
                         refreshJob = null
@@ -68,10 +67,3 @@ class MailBadgeViewModel
                 }
         }
     }
-
-/** The drawers the Mail badge counts: Me, Home and Biz. Earn stays out while Mail extras are off. */
-private val MAIL_BADGE_DRAWERS = setOf("personal", "home", "business")
-
-/** The server's `unread_total` once it sends one; until then the Me, Home and Biz drawers' unread counts. */
-internal fun DrawerListResponse.unopenedTotal(): Int =
-    (unreadTotal ?: drawers.filter { it.drawer in MAIL_BADGE_DRAWERS }.sumOf { it.unreadCount }).coerceAtLeast(0)

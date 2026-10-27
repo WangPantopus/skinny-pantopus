@@ -2,28 +2,24 @@
 
 package app.pantopus.android.ui.screens.mailbox.search
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import app.pantopus.android.ui.screens.shared.list_of_rows.RowCardContext
-import app.pantopus.android.ui.screens.shared.list_of_rows.RowView
+import app.pantopus.android.ui.components.ErrorState
+import app.pantopus.android.ui.screens.mailbox.mailbox_root.MailPieceRow
 import app.pantopus.android.ui.screens.shared.search_list.EmptyStateContent
 import app.pantopus.android.ui.screens.shared.search_list.SearchListShell
 import app.pantopus.android.ui.theme.PantopusIcon
-import app.pantopus.android.ui.theme.Spacing
 
 /**
- * P4.2 — Mailbox Search surface. Hosts the shared `SearchListShell` (P4.1)
- * and renders each match with the reused Mailbox row (`RowView`). Replaces
- * the "Mail search" placeholder reached from `MailboxListScreen`.
+ * Mailbox search (Mail tab, receiving): searched on the server over all the person's mail, each result drawn as its
+ * piece. Hosts the shared `SearchListShell` (P4.1).
  *
- * @param onOpenMail Invoked when a result row is tapped.
+ * @param onOpenMail Invoked when a result is tapped.
  * @param onCancel Invoked when the shell's back control fires.
  */
 @Composable
@@ -35,7 +31,7 @@ fun MailboxSearchScreen(
     val query by viewModel.query.collectAsStateWithLifecycle()
     val results by viewModel.results.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
-    val loadFailed by viewModel.loadFailed.collectAsStateWithLifecycle()
+    val error by viewModel.error.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
         viewModel.configureNavigation(onOpenMail = onOpenMail)
@@ -43,35 +39,29 @@ fun MailboxSearchScreen(
     }
 
     SearchListShell(
-        placeholder = "Search mail",
+        placeholder = "Search all your mail",
         query = query,
         onQueryChange = viewModel::onQueryChange,
         results = results,
         isLoading = isLoading,
         emptyState =
-            if (loadFailed) {
-                EmptyStateContent(
-                    icon = PantopusIcon.AlertCircle,
-                    headline = "Couldn't search your mail",
-                    subcopy = "Check your connection, then go back and open search again.",
-                )
-            } else {
-                EmptyStateContent(
-                    icon = PantopusIcon.Search,
-                    headline = "No matching mail",
-                    subcopy = "Try a different sender, subject, or category.",
-                )
-            },
-        row = { mail ->
-            Box(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = Spacing.s4, vertical = Spacing.s1),
-            ) {
-                RowView(row = viewModel.rowModel(mail), cardContext = RowCardContext.Standalone)
-            }
-        },
+            EmptyStateContent(
+                icon = PantopusIcon.Search,
+                headline = "No mail matches",
+                subcopy = "Try a sender's name or a word from the letter. Search covers all your mail, filed and archived too.",
+            ),
+        row = { piece -> MailPieceRow(piece, onOpen = { viewModel.openMail(piece.id) }) },
         onCancel = onCancel,
+        errorContent =
+            error?.let { message ->
+                {
+                    ErrorState(
+                        headline = "Search didn't work",
+                        message = message,
+                        modifier = Modifier.testTag("mailboxSearchError"),
+                        onRetry = viewModel::retry,
+                    )
+                }
+            },
     )
 }

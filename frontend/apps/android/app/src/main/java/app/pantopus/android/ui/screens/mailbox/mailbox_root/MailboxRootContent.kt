@@ -1,4 +1,4 @@
-@file:Suppress("PackageNaming", "MagicNumber", "LongParameterList")
+@file:Suppress("PackageNaming", "MagicNumber", "LongParameterList", "TooManyFunctions")
 
 package app.pantopus.android.ui.screens.mailbox.mailbox_root
 
@@ -14,8 +14,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -27,13 +27,29 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import app.pantopus.android.ui.components.CompactButton
+import app.pantopus.android.ui.components.CompactButtonSize
+import app.pantopus.android.ui.components.EmptyState
+import app.pantopus.android.ui.components.ErrorState
+import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.screens.mailbox.components.MailPiece
+import app.pantopus.android.ui.screens.mailbox.components.MailPieceModel
+import app.pantopus.android.ui.screens.mailbox.components.MailboxDrawing
+import app.pantopus.android.ui.screens.mailbox.components.MailboxHeroState
+import app.pantopus.android.ui.screens.shared.list_of_rows.CompactButtonVariant
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -41,341 +57,299 @@ import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
 
 /**
- * B.1 — chrome rendered in the List-of-Rows `customHeader` slot for the
- * Mailbox root: the 4-drawer chip row (Me / Home / Biz / Earn) and the
- * 3-tab segmented underline bar (Incoming / Counter / Vault). Mirrors the
- * JSX `DrawerRow` + `TabRow`.
- *
- * Above the drawer row sits the A13.16 "My mail day" call-to-action —
- * the host-supplied entry point into today's triage editor.
+ * The Mailbox's top card (drawings `Main`, `R1-Before`, `R4-NoMail`): the person's mailbox with their house number,
+ * the morning round in words, and the verified address the mail comes to. Read as one sentence.
  */
 @Composable
-fun MailboxRootHeader(
-    drawers: List<MailboxDrawer>,
-    selectedDrawer: MailboxDrawer,
-    tabs: List<MailboxTab>,
-    selectedTab: MailboxTab,
-    drawerBadge: (MailboxDrawer) -> Int,
-    tabBadge: (MailboxTab) -> Int?,
-    onSelectDrawer: (MailboxDrawer) -> Unit,
-    onSelectTab: (MailboxTab) -> Unit,
-    onOpenMailDay: () -> Unit = {},
-    pendingRoutingCount: Int = 0,
-    onOpenRoutingQueue: () -> Unit = {},
-) {
-    Column(modifier = Modifier.background(PantopusColors.appSurface)) {
-        MailDayCTA(onClick = onOpenMailDay)
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .background(PantopusColors.appSurface)
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = Spacing.s4, vertical = Spacing.s3)
-                    .testTag("mailboxRootDrawerRow"),
-            horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
-        ) {
-            drawers.forEach { drawer ->
-                DrawerChip(
-                    label = drawer.label,
-                    drawer = drawer,
-                    isActive = drawer == selectedDrawer,
-                    unread = drawerBadge(drawer),
-                    onClick = { onSelectDrawer(drawer) },
-                )
+fun MailboxHeroCard(hero: MailboxHeroState) {
+    // One sentence each, with words for the "·" a screen reader would otherwise read out.
+    val spoken =
+        listOfNotNull(hero.title, hero.detail, hero.address)
+            .joinToString(" ") { if (it.endsWith(".")) it else "$it." }
+            .replace(" · ", ", ")
+    Row(
+        modifier =
+            Modifier
+                .padding(horizontal = Spacing.s4, vertical = Spacing.s1)
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(20.dp))
+                .background(PantopusColors.appSurface)
+                .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(20.dp))
+                .padding(horizontal = Spacing.s4, vertical = 14.dp)
+                .clearAndSetSemantics { contentDescription = spoken }
+                .testTag("mailboxHero"),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        MailboxDrawing(modifier = Modifier.size(72.dp), number = hero.number)
+        Column(modifier = Modifier.weight(1f)) {
+            Text(hero.title, fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
+            Text(hero.detail, fontSize = 14.sp, lineHeight = 20.sp, color = PantopusColors.appTextSecondary)
+            hero.address?.let {
+                Spacer(Modifier.height(Spacing.s1))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s1)) {
+                    PantopusIconImage(icon = PantopusIcon.ShieldCheck, contentDescription = null, size = 13.dp, tint = PantopusColors.home)
+                    Text(it, fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium, color = PantopusColors.home)
+                }
             }
         }
-        HorizontalDivider(color = PantopusColors.appBorderSubtle)
-        if (pendingRoutingCount > 0) {
-            PendingRoutingBanner(
-                count = pendingRoutingCount,
-                onClick = onOpenRoutingQueue,
-            )
+    }
+}
+
+/** The top card's place while the mailbox's counts are read: the same size, so nothing jumps when it arrives. */
+@Composable
+fun MailboxHeroPlaceholder() {
+    Box(modifier = Modifier.padding(horizontal = Spacing.s4, vertical = Spacing.s1).testTag("mailboxHeroLoading")) {
+        Shimmer(width = 328.dp, height = 100.dp, cornerRadius = 20.dp, modifier = Modifier.fillMaxWidth())
+    }
+}
+
+/** The drawers: Me · Home · Biz, the open one filled with its colour, each with its unopened count inside. */
+@Composable
+fun MailboxDrawerRow(
+    drawers: List<MailboxDrawer>,
+    selected: MailboxDrawer,
+    unread: (MailboxDrawer) -> Int,
+    onSelect: (MailboxDrawer) -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(start = Spacing.s4, end = Spacing.s4, top = Spacing.s4, bottom = Spacing.s1)
+                .testTag("mailboxRootDrawerRow"),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+    ) {
+        drawers.forEach { drawer ->
+            val active = drawer == selected
+            val count = unread(drawer)
+            val foreground = if (active) PantopusColors.appTextInverse else PantopusColors.appTextStrong
+            Row(
+                modifier =
+                    Modifier
+                        .heightIn(min = 44.dp)
+                        .clip(CircleShape)
+                        .background(if (active) drawer.accent else PantopusColors.appSurface)
+                        .then(if (active) Modifier else Modifier.border(1.dp, PantopusColors.appBorder, CircleShape))
+                        .clickable { onSelect(drawer) }
+                        .padding(start = Spacing.s3, end = if (count > 0) Spacing.s2 else Spacing.s4)
+                        .clearAndSetSemantics {
+                            contentDescription = if (count > 0) "${drawer.label}, $count unopened" else drawer.label
+                            role = Role.Tab
+                            this.selected = active
+                        }.testTag("mailboxRootDrawer.${drawer.id}"),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+            ) {
+                PantopusIconImage(icon = drawer.icon, contentDescription = null, size = 16.dp, tint = foreground)
+                Text(drawer.label, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = foreground)
+                if (count > 0) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .sizeIn(minWidth = 20.dp, minHeight = 20.dp)
+                                .clip(CircleShape)
+                                .background(if (active) PantopusColors.appSurface else PantopusColors.primary100)
+                                .padding(horizontal = 6.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            if (count > 99) "99+" else "$count",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (active) drawer.accent else PantopusColors.info,
+                        )
+                    }
+                }
+            }
         }
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .background(PantopusColors.appSurface)
-                    .testTag("mailboxRootTabBar"),
-        ) {
+    }
+}
+
+/** Incoming · Counter · Vault, underlined. */
+@Composable
+fun MailboxTabRow(
+    tabs: List<MailboxTab>,
+    selected: MailboxTab,
+    onSelect: (MailboxTab) -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth().background(PantopusColors.appBg)) {
+        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s2).testTag("mailboxRootTabBar")) {
             tabs.forEach { tab ->
-                TabSegment(
-                    modifier = Modifier.weight(1f),
-                    id = tab.id,
-                    label = tab.label,
-                    count = tabBadge(tab),
-                    isActive = tab == selectedTab,
-                    onClick = { onSelectTab(tab) },
-                )
+                val active = tab == selected
+                Column(
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .clickable { onSelect(tab) }
+                            .heightIn(min = 44.dp)
+                            .padding(top = Spacing.s3)
+                            .semantics {
+                                role = Role.Tab
+                                this.selected = active
+                            }.testTag("mailboxRootTab.${tab.id}"),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        tab.label,
+                        fontSize = 14.sp,
+                        fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
+                        color = if (active) PantopusColors.primary600 else PantopusColors.appTextMuted,
+                    )
+                    Spacer(Modifier.height(Spacing.s2))
+                    Box(
+                        modifier =
+                            Modifier
+                                .padding(horizontal = Spacing.s5)
+                                .fillMaxWidth()
+                                .height(2.5.dp)
+                                .clip(CircleShape)
+                                .background(if (active) PantopusColors.primary600 else Color.Transparent),
+                    )
+                }
             }
         }
         HorizontalDivider(color = PantopusColors.appBorder)
     }
 }
 
-/**
- * "N items need routing" — opens the disambiguation queue. Rendered only
- * when `GET /api/mailbox/v2/pending` returned rows. Mirrors RN
- * (`src/app/mailbox/index.tsx:176-188`) and iOS `pendingRoutingBanner`.
- */
+/** "N items need routing": mail waiting in the routing queue, which opens from here. */
 @Composable
-private fun PendingRoutingBanner(
+fun PendingRoutingBanner(
     count: Int,
     onClick: () -> Unit,
 ) {
     val label = "$count item${if (count == 1) "" else "s"} need routing"
-    Column {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .background(PantopusColors.warningBg)
-                    .clickable(onClick = onClick)
-                    .padding(horizontal = Spacing.s4, vertical = 10.dp)
-                    .heightIn(min = 44.dp)
-                    .testTag("mailboxRootPendingBanner")
-                    .semantics { contentDescription = "$label. Opens the routing queue." },
-        ) {
-            PantopusIconImage(
-                icon = PantopusIcon.HelpCircle,
-                contentDescription = null,
-                size = Radii.xl,
-                strokeWidth = 2.2f,
-                tint = PantopusColors.warning,
-            )
-            Text(
-                text = label,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = PantopusColors.warning,
-                modifier = Modifier.weight(1f),
-            )
-            PantopusIconImage(
-                icon = PantopusIcon.ChevronRight,
-                contentDescription = null,
-                size = 14.dp,
-                strokeWidth = 2.2f,
-                tint = PantopusColors.warning,
-            )
-        }
-        HorizontalDivider(color = PantopusColors.warningLight)
-    }
-}
-
-@Composable
-private fun MailDayCTA(onClick: () -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
         modifier =
             Modifier
+                .padding(horizontal = Spacing.s4, vertical = Spacing.s1)
                 .fillMaxWidth()
-                .background(PantopusColors.appSurface)
+                .clip(RoundedCornerShape(Radii.lg))
+                .background(PantopusColors.warningBg)
                 .clickable(onClick = onClick)
                 .padding(horizontal = Spacing.s4, vertical = 10.dp)
                 .heightIn(min = 44.dp)
-                .testTag("mailboxRootMailDayCTA")
-                .semantics { contentDescription = "My mail day — triage today's stack" },
+                .testTag("mailboxRootPendingBanner")
+                .semantics { contentDescription = "$label. Opens the routing queue." },
     ) {
-        Box(
-            modifier =
-                Modifier
-                    .height(32.dp)
-                    .sizeIn(minWidth = 32.dp)
-                    .clip(RoundedCornerShape(Radii.md))
-                    .background(PantopusColors.primary50),
-            contentAlignment = Alignment.Center,
-        ) {
-            PantopusIconImage(
-                icon = PantopusIcon.Mailbox,
-                contentDescription = null,
-                size = Radii.xl,
-                strokeWidth = 2.2f,
-                tint = PantopusColors.primary700,
-            )
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = "My mail day",
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                color = PantopusColors.appText,
-            )
-            Text(
-                text = "Triage today's stack",
-                fontSize = 11.sp,
-                color = PantopusColors.appTextSecondary,
-            )
-        }
-        PantopusIconImage(
-            icon = PantopusIcon.ChevronRight,
-            contentDescription = null,
-            size = 15.dp,
-            strokeWidth = 2.2f,
-            tint = PantopusColors.appTextMuted,
-        )
+        PantopusIconImage(icon = PantopusIcon.HelpCircle, contentDescription = null, size = Radii.xl, tint = PantopusColors.warning)
+        Text(label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.warning, modifier = Modifier.weight(1f))
+        PantopusIconImage(icon = PantopusIcon.ChevronRight, contentDescription = null, size = 14.dp, tint = PantopusColors.warning)
     }
 }
 
+/** A day's heading: Today, Yesterday, Earlier this week, Earlier. */
 @Composable
-private fun DrawerChip(
-    label: String,
-    drawer: MailboxDrawer,
-    isActive: Boolean,
-    unread: Int,
-    onClick: () -> Unit,
-) {
-    val foreground = if (isActive) PantopusColors.appTextInverse else PantopusColors.appTextSecondary
-    val background = if (isActive) drawer.accent else PantopusColors.appSurface
-    // The badge grows with the font size and hangs over the pill's end; with large text it sat on the label's last
-    // letters ("Home" read "Hom"). The pill's end padding makes room for it.
-    val badgeRoom = if (unread > 0 && LocalDensity.current.fontScale > 1.3f) 20.dp else 0.dp
-    Box(
+fun MailSectionHeader(title: String) {
+    Text(
+        title.uppercase(),
+        fontSize = 11.sp,
+        lineHeight = 16.sp,
+        fontWeight = FontWeight.SemiBold,
+        letterSpacing = 0.06.em,
+        color = PantopusColors.appTextSecondary,
         modifier =
             Modifier
-                .heightIn(min = 44.dp)
-                .clickable(onClick = onClick)
-                .testTag("mailboxRootDrawer.${drawer.id}")
-                .semantics {
-                    contentDescription = if (unread > 0) "$label, $unread unread" else label
-                },
-        contentAlignment = Alignment.Center,
-    ) {
-        Row(
-            modifier =
-                Modifier
-                    .height(40.dp)
-                    .clip(CircleShape)
-                    .background(background)
-                    .then(
-                        if (isActive) {
-                            Modifier
-                        } else {
-                            Modifier.border(1.dp, PantopusColors.appBorder, CircleShape)
-                        },
-                    )
-                    .padding(start = Spacing.s3, end = 14.dp + badgeRoom),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
-        ) {
-            PantopusIconImage(
-                icon = drawer.icon,
-                contentDescription = null,
-                size = Radii.xl,
-                tint = foreground,
-            )
-            Text(
-                text = label,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = foreground,
-            )
-        }
-        if (unread > 0) {
-            ChipBadge(
-                count = unread,
-                onAccent = isActive,
-                modifier = Modifier.align(Alignment.TopEnd).offset(x = (-2).dp, y = 2.dp),
-            )
-        }
-    }
+                .padding(start = Spacing.s4, end = Spacing.s4, top = 18.dp, bottom = Spacing.s2)
+                .semantics { heading() },
+    )
 }
 
+/** A piece and the line under it, opened with a tap and read as one sentence. */
 @Composable
-private fun ChipBadge(
-    count: Int,
-    onAccent: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier =
-            modifier
-                .sizeIn(minWidth = 18.dp, minHeight = 18.dp)
-                .clip(CircleShape)
-                .background(if (onAccent) PantopusColors.appTextInverse else PantopusColors.primary600)
-                .border(2.dp, PantopusColors.appSurface, CircleShape)
-                .padding(horizontal = 5.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = "$count",
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold,
-            color = if (onAccent) PantopusColors.primary700 else PantopusColors.appTextInverse,
-        )
-    }
-}
-
-@Composable
-private fun TabSegment(
-    modifier: Modifier,
-    id: String,
-    label: String,
-    count: Int?,
-    isActive: Boolean,
-    onClick: () -> Unit,
+fun MailPieceRow(
+    piece: MailPieceModel,
+    onOpen: () -> Unit,
 ) {
     Column(
         modifier =
-            modifier
-                .clickable(onClick = onClick)
-                .heightIn(min = 44.dp)
-                .padding(top = Spacing.s3)
-                .testTag("mailboxRootTab.$id")
-                .semantics {
-                    contentDescription = if (count != null) "$label, $count unread" else label
-                },
-        horizontalAlignment = Alignment.CenterHorizontally,
+            Modifier
+                .padding(horizontal = Spacing.s4, vertical = Spacing.s2)
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .clickable(onClick = onOpen)
+                .clearAndSetSemantics {
+                    contentDescription = piece.accessibilityLabel
+                    role = Role.Button
+                }.testTag("mailPiece.${piece.id}"),
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
-        ) {
+        MailPiece(piece)
+        if (piece.meta.isNotBlank()) {
             Text(
-                text = label,
-                fontSize = 13.sp,
-                fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
-                color = if (isActive) PantopusColors.primary600 else PantopusColors.appTextMuted,
+                piece.meta,
+                fontSize = 12.sp,
+                lineHeight = 16.sp,
+                color = if (piece.special) PantopusColors.error else PantopusColors.appTextMuted,
+                modifier = Modifier.padding(top = 6.dp, start = 2.dp),
             )
-            if (count != null) {
-                TabCount(count = count, isActive = isActive)
-            }
         }
-        Spacer(Modifier.height(Spacing.s2))
-        Box(
-            modifier =
-                Modifier
-                    .padding(horizontal = Spacing.s5)
-                    .fillMaxWidth()
-                    .height(2.5.dp)
-                    .clip(CircleShape)
-                    .background(if (isActive) PantopusColors.primary600 else Color.Transparent),
-        )
     }
 }
 
+/** Pieces-shaped placeholders while the mail is read. */
 @Composable
-private fun TabCount(
-    count: Int,
-    isActive: Boolean,
+fun MailPieceSkeleton() {
+    Column(modifier = Modifier.padding(horizontal = Spacing.s4, vertical = Spacing.s2).testTag("mailboxRootLoading")) {
+        Shimmer(width = 328.dp, height = 150.dp, cornerRadius = 6.dp, modifier = Modifier.fillMaxWidth())
+        Spacer(Modifier.height(6.dp))
+        Shimmer(width = 120.dp, height = 12.dp, cornerRadius = 4.dp)
+    }
+}
+
+/** Nothing in this drawer and tab: what comes here, in plain words. */
+@Composable
+fun MailboxEmptyCard(
+    headline: String,
+    body: String,
 ) {
-    Box(
-        modifier =
-            Modifier
-                .sizeIn(minWidth = 18.dp, minHeight = 16.dp)
-                .clip(CircleShape)
-                .background(if (isActive) PantopusColors.primary600 else PantopusColors.appSurfaceSunken)
-                .padding(horizontal = 5.dp),
-        contentAlignment = Alignment.Center,
+    EmptyState(
+        icon = PantopusIcon.Mailbox,
+        headline = headline,
+        subcopy = body,
+        modifier = Modifier.padding(vertical = Spacing.s4).testTag("mailboxRootEmpty"),
+    )
+}
+
+/** The mail didn't load: what happened and what to do, with Try again. Never an empty screen. */
+@Composable
+fun MailboxErrorCard(
+    message: String,
+    onRetry: () -> Unit,
+) {
+    ErrorState(
+        headline = "Your mail didn't load",
+        message = message,
+        modifier = Modifier.padding(vertical = Spacing.s4).testTag("mailboxRootError"),
+        onRetry = onRetry,
+    )
+}
+
+/** The end of a long list: the next page loading, or why it didn't, with Try again. */
+@Composable
+fun MailboxListFooter(
+    loadMoreError: String?,
+    onRetry: () -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(Spacing.s4),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(
-            text = "$count",
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold,
-            color = if (isActive) PantopusColors.appTextInverse else PantopusColors.appTextSecondary,
-        )
+        if (loadMoreError != null) {
+            Text(loadMoreError, fontSize = 13.sp, color = PantopusColors.appTextSecondary, textAlign = TextAlign.Center)
+            Spacer(Modifier.height(Spacing.s2))
+            CompactButton(
+                title = "Try again",
+                variant = CompactButtonVariant.Primary,
+                size = CompactButtonSize.InlineAction,
+                onClick = onRetry,
+                modifier = Modifier.testTag("mailboxRootRetryMore"),
+            )
+        } else {
+            Shimmer(width = 120.dp, height = 12.dp, cornerRadius = 4.dp)
+        }
     }
 }

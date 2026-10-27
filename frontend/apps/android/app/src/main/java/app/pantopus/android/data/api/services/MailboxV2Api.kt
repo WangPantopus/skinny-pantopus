@@ -12,6 +12,7 @@ import app.pantopus.android.data.api.models.mailbox.v2.DrawerListResponse
 import app.pantopus.android.data.api.models.mailbox.v2.EarnBalanceResponse
 import app.pantopus.android.data.api.models.mailbox.v2.LogEventRequest
 import app.pantopus.android.data.api.models.mailbox.v2.LogEventResponse
+import app.pantopus.android.data.api.models.mailbox.v2.MailSearchResponse
 import app.pantopus.android.data.api.models.mailbox.v2.MailboxItemActionRequest
 import app.pantopus.android.data.api.models.mailbox.v2.MailboxItemActionResponse
 import app.pantopus.android.data.api.models.mailbox.v2.MailboxV2ItemResponse
@@ -57,6 +58,18 @@ interface MailboxV2Api {
         @Query("offset") offset: Int = 0,
         @Query("homeId") homeId: String? = null,
     ): DrawerItemsResponse
+
+    /**
+     * `GET /api/mailbox/v2/search` — every piece the person can read (Me, Home after proof, Biz), filed and archived
+     * included, newest first; `limit` at most 50 (SRV-3, route `backend/routes/mailboxV2.js`). Empty or over-long
+     * text is a 400 `MAIL_SEARCH_INVALID`.
+     */
+    @GET("api/mailbox/v2/search")
+    suspend fun search(
+        @Query("q") query: String,
+        @Query("limit") limit: Int,
+        @Query("offset") offset: Int,
+    ): MailSearchResponse
 
     /** `GET /api/mailbox/v2/item/:id` — route `backend/routes/mailboxV2.js:366`. */
     @GET("api/mailbox/v2/item/{id}")
