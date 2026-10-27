@@ -18,6 +18,7 @@ public struct ReviewClaimDetailView: View {
     @State private var rejectNote: String = ""
     @State private var showChallengeSheet = false
     @State private var evidenceTarget: PrivateClaimEvidenceViewModel?
+    @State private var verdictBarHeight: CGFloat = 0
     private let onClose: @MainActor () -> Void
 
     public init(
@@ -194,14 +195,9 @@ public struct ReviewClaimDetailView: View {
                         TerminalStateBanner(state: detail.claim.state)
                             .accessibilityIdentifier("reviewClaimDetail_terminal")
                     } else {
-                        OverlineSection(title: "Approve as") {
-                            ApprovalChoiceCard(
-                                detail: detail,
-                                role: $viewModel.approveAs,
-                                identityConfirmed: $viewModel.identityConfirmed,
-                                disabled: viewModel.reviewingAction != nil
-                            )
-                        }
+                        // The verdict bar floats over the scroll content; leave room so the card scrolls clear of it.
+                        OverlineSection(title: "Approve as") { ApprovalChoiceCard(detail: detail, viewModel: viewModel) }
+                            .padding(.bottom, verdictBarHeight)
                     }
                 }
                 .padding(.horizontal, Spacing.s4)
@@ -216,6 +212,7 @@ public struct ReviewClaimDetailView: View {
                         onChallenge: { showChallengeSheet = true },
                         onReject: { showRejectSheet = true }
                     )
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { verdictBarHeight = $0 }
                 } else {
                     EmptyView()
                 }

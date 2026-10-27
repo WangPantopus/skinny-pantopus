@@ -53,9 +53,15 @@ struct StatementBlock: View {
 /// The role Accept grants, and the admin's identity attestation when the claim has no verified identity.
 struct ApprovalChoiceCard: View {
     let detail: AdminClaimDetailResponse
-    @Binding var role: AdminClaimApprovalRole
-    @Binding var identityConfirmed: Bool
-    let disabled: Bool
+    @Bindable var viewModel: ReviewClaimDetailViewModel
+
+    private var role: AdminClaimApprovalRole {
+        viewModel.approveAs
+    }
+
+    private var disabled: Bool {
+        viewModel.reviewingAction != nil
+    }
 
     private var claimedRole: AdminClaimApprovalRole {
         .claimed(by: detail.claim.claimType)
@@ -73,7 +79,7 @@ struct ApprovalChoiceCard: View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
             Menu {
                 ForEach(AdminClaimApprovalRole.allCases) { option in
-                    Button(title(for: option)) { role = option }
+                    Button(title(for: option)) { viewModel.approveAs = option }
                         .accessibilityIdentifier("reviewClaimDetail_role_\(option.rawValue)")
                 }
             } label: {
@@ -114,7 +120,7 @@ struct ApprovalChoiceCard: View {
                         .foregroundStyle(Theme.Color.error)
                 }
             } else {
-                Toggle("I confirmed this person's identity", isOn: $identityConfirmed)
+                Toggle("I confirmed this person's identity", isOn: $viewModel.identityConfirmed)
                     .font(.system(size: 14))
                     .disabled(disabled)
                     .accessibilityIdentifier("reviewClaimDetail_identityConfirmed")

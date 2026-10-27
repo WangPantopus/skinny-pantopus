@@ -41,6 +41,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -54,7 +55,9 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -335,6 +338,9 @@ private fun LoadedShell(
 ) {
     val isReviewable = detail.claim.state in REVIEWABLE_STATES && !detail.claim.requiresDisputeReview
     val claimedRole = ClaimApprovalRole.claimed(detail.claim.claimType)
+    // The verdict bar floats over the scroll content; the body ends with room for it so the approval card
+    // can scroll fully into view above it.
+    var verdictBarHeight by remember { mutableIntStateOf(0) }
     ContentDetailShell(
         title = "Review claim",
         onBack = onBack,
@@ -393,6 +399,7 @@ private fun LoadedShell(
                             enabled = reviewingAction == null,
                         )
                     }
+                    Spacer(Modifier.height(with(LocalDensity.current) { verdictBarHeight.toDp() }))
                 }
             }
         },
@@ -405,6 +412,7 @@ private fun LoadedShell(
                     onAccept = onAccept,
                     onChallenge = onChallenge,
                     onReject = onReject,
+                    modifier = Modifier.onSizeChanged { verdictBarHeight = it.height },
                 )
             }
         },
@@ -1027,11 +1035,12 @@ private fun VerdictBar(
     onAccept: () -> Unit,
     onChallenge: () -> Unit,
     onReject: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val disabled = reviewingAction != null
     Column(
         modifier =
-            Modifier
+            modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(Radii.xl))
                 .background(PantopusColors.appSurface)
