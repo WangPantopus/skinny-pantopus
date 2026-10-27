@@ -16,7 +16,7 @@ function patch<T>(url: string, data?: Record<string, any>): Promise<T> {
 }
 
 import type {
-  DrawerMeta,
+  MailboxDrawers,
   MailItemV2,
   MailItemDetailResponse,
   MailboxPaginatedResponse,
@@ -118,10 +118,10 @@ async function call<T>(fn: () => Promise<T>): Promise<T> {
 // DRAWERS
 // ============================================================
 
-export async function getDrawerMeta(): Promise<DrawerMeta[]> {
+export async function getDrawers(): Promise<MailboxDrawers> {
   return call(async () => {
-    const res = await get<{ drawers: DrawerMeta[] }>('/api/mailbox/v2/drawers');
-    return res.drawers;
+    const res = await get<Partial<MailboxDrawers> | null>('/api/mailbox/v2/drawers');
+    return { ...res, drawers: Array.isArray(res?.drawers) ? res.drawers : [] };
   });
 }
 

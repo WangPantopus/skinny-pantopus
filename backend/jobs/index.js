@@ -10,7 +10,6 @@
 //   - expireUncapturedAuths      → daily at 3:00 AM
 //   - autoArchivePosts           → hourly at :23
 //   - askStillOpenReminders      → hourly at :41
-//   - mailDayNotification        → every 15 minutes
 //   - mailInterruptNotification  → every 5 minutes
 //   - mailPartyExpiry            → every minute (Phase 2)
 //   - earnRiskReview             → every 15 minutes (Phase 2)
@@ -31,7 +30,6 @@ const processPendingTransfers = require('./processPendingTransfers');
 const expireUncapturedAuthorizations = require('./expireUncapturedAuthorizations');
 const autoArchivePosts = require('./autoArchivePosts');
 const askStillOpenReminders = require('./askStillOpenReminders');
-const mailDayNotification = require('./mailDayNotification');
 const mailInterruptNotification = require('./mailInterruptNotification');
 // Phase 2 jobs
 const mailPartyExpiry = require('./mailPartyExpiry');
@@ -275,17 +273,8 @@ function startJobs(options = {}) {
     timezone: 'UTC',
   });
 
-  // ─── Mail Day Notification ───
-  // Runs every 15 minutes — the send is triggered by mail actually being
-  // scanned, not by the clock. Each run picks up users who have unreviewed
-  // pieces today and are currently inside their own local daytime window;
-  // MailDaySession.notified_at keeps that to exactly one push per user per
-  // mail day. (It previously ran once at 08:00 UTC — 1am Pacific — which
-  // is both the wrong hour and before most mail is scanned.)
-  scheduleCron('*/15 * * * *', wrapJob('mailDayNotification', mailDayNotification), {
-    scheduled: true,
-    timezone: 'UTC',
-  });
+  // The Mail Day reminder (jobs/mailDayNotification.js, for sorting scanned paper mail) no longer runs: the Mail tab
+  // has one morning notice, "Your mail is here" (POST /api/internal/briefing/mail-morning, SRV-1).
 
   // ─── Mail Interrupt Notification ───
   // Runs every 5 minutes.

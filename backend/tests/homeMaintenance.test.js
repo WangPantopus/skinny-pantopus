@@ -109,11 +109,13 @@ describe('GET /api/homes/:id/maintenance — list', () => {
     expect(completed[0].id).toBe('m-3');
   });
 
-  test('member-of-home has list access (home.view)', async () => {
-    const ownerAccess = await checkHomePermission(homeId, ownerId);
+  test('list access requires maintenance.view, not membership alone', async () => {
+    const ownerAccess = await checkHomePermission(homeId, ownerId, 'maintenance.view');
     expect(ownerAccess.hasAccess).toBe(true);
-    const memberAccess = await checkHomePermission(homeId, memberId);
-    expect(memberAccess.hasAccess).toBe(true);
+    const memberAccess = await checkHomePermission(homeId, memberId, 'maintenance.view');
+    expect(memberAccess.hasAccess).toBe(false);
+    seedRolePermissions('member', ['maintenance.view']);
+    expect((await checkHomePermission(homeId, memberId, 'maintenance.view')).hasAccess).toBe(true);
   });
 
   test('non-member is denied list access', async () => {

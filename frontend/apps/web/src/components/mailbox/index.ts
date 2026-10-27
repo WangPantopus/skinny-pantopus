@@ -24,7 +24,6 @@ export { default as WalletBalanceHeader } from './WalletBalanceHeader';
 export { default as MemoryCard } from './MemoryCard';
 export { default as AuditTrailTimeline } from './AuditTrailTimeline';
 export { default as MailboxLayout } from './MailboxLayout';
-export { default as MailboxNav } from './MailboxNav';
 export { default as BookletViewer } from './BookletViewer';
 export { default as CouponPipeline } from './CouponPipeline';
 export { default as PackageUnboxing } from './PackageUnboxing';

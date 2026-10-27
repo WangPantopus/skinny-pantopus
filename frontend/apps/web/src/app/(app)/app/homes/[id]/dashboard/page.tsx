@@ -722,7 +722,7 @@ function DashboardTab({
 
   const cardPermissions: Record<string, string> = {
     tasks: 'tasks.view', bills: 'finance.view', calendar: 'calendar.view', deliveries: 'packages.view',
-    maintenance: 'maintenance.view', documents: 'docs.view', emergency: 'sensitive.view',
+    maintenance: 'maintenance.view', documents: 'docs.view', emergency: 'sensitive.view', vendors: 'vendors.view',
   };
   const cardEntities: Record<string, keyof UseHomeDataReturn['entityErrors']> = {
     homehelp: 'homeGigs', access: 'secrets', emergency: 'emergencies', pets: 'pets', polls: 'polls',
@@ -807,6 +807,7 @@ function DashboardTab({
             onViewIssue={onViewIssue}
             onBack={onBack}
             canManage={can('maintenance.edit') || can('maintenance.manage')}
+            canViewVendors={can('vendors.view')}
           />
         )}
         {expandedCard === 'documents' && (
