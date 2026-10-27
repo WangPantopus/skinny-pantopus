@@ -25,7 +25,7 @@ function claimInProgress(status: string) {
   return status === 'under_review';
 }
 
-// Returning to the page (switching apps or tabs, clicking into the window) refreshes the list in
+// Returning to the page (switching tabs, clicking back into the window) refreshes the list in
 // the background at most this often. An account change always clears and reloads at once.
 const FOCUS_REFRESH_MS = 30_000;
 
@@ -183,6 +183,9 @@ export default function HomesPage() {
         || Date.now() - lastAttempt.current < FOCUS_REFRESH_MS) return;
       void load(ready.current !== null);
     };
+    // Leaving means the page is hidden (another tab, a minimized or covered window). A window that only
+    // loses focus (another app beside it, the address bar, DevTools) still shows the list, so it stays
+    // and refreshes in place when focus returns.
     const leave = () => {
       if (mayKeep.current || recheckOnResume.current) return;
       recheckOnResume.current = true;
@@ -193,10 +196,10 @@ export default function HomesPage() {
     // Opened on the kept list: the first load re-checks behind it instead of clearing the page.
     void load(seeded.current);
     const unsubscribe = api.onTokenChange(restart);
-    window.addEventListener('focus', refresh); window.addEventListener('blur', leave); window.addEventListener('storage', storage);
+    window.addEventListener('focus', refresh); window.addEventListener('storage', storage);
     document.addEventListener('visibilitychange', visibility);
     return () => { retire(); unsubscribe();
-      window.removeEventListener('focus', refresh); window.removeEventListener('blur', leave); window.removeEventListener('storage', storage);
+      window.removeEventListener('focus', refresh); window.removeEventListener('storage', storage);
       document.removeEventListener('visibilitychange', visibility); };
   }, [load, retire, queryClient]);
 

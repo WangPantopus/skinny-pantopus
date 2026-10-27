@@ -1,5 +1,5 @@
 const supabaseAdmin = require('../../config/supabaseAdmin');
-const { canUserViewMail, getAuthorizedMail } = require('../../services/ai/mailAccess');
+const { getAuthorizedMail } = require('../../services/ai/mailAccess');
 
 describe('AI mail access guards', () => {
   beforeEach(() => {
@@ -7,36 +7,47 @@ describe('AI mail access guards', () => {
     supabaseAdmin.resetRpc?.();
   });
 
-  test('allows direct recipient access without RPC', async () => {
-    const allowed = await canUserViewMail({
-      recipientUserId: 'user-1',
-      recipientHomeId: null,
+  test('allows the letter\'s own recipient', async () => {
+    supabaseAdmin.seedTable('Mail', [
+      {
+        id: 'mail-0',
+        recipient_user_id: 'user-1',
+        recipient_home_id: null,
+        subject: 'Your letter',
+        deleted_at: null,
+      },
+    ]);
+
+    const item = await getAuthorizedMail({
+      mailItemId: 'mail-0',
       userId: 'user-1',
+      select: 'subject',
     });
 
-    expect(allowed).toBe(true);
+    expect(item).toMatchObject({ id: 'mail-0', subject: 'Your letter' });
   });
 
-  test('allows home access when can_view_mail returns true', async () => {
+  test('allows a household letter to a resident who may read the Home\'s mail', async () => {
     supabaseAdmin.seedTable('Mail', [
       {
         id: 'mail-1',
         recipient_user_id: null,
         recipient_home_id: 'home-1',
+        privacy: 'shared_household',
         subject: 'Home bill',
         deleted_at: null,
       },
     ]);
-    supabaseAdmin.setRpcMock(async (fn, args) => {
-      if (fn !== 'can_view_mail') {
-        return { data: null, error: { message: 'Unexpected RPC call' } };
-      }
-      expect(args).toMatchObject({
-        p_recipient_home_id: 'home-1',
-        p_user_id: 'user-2',
-      });
-      return { data: true, error: null };
-    });
+    supabaseAdmin.seedTable('HomeOccupancy', [
+      {
+        home_id: 'home-1',
+        user_id: 'user-2',
+        role_base: 'member',
+        is_active: true,
+        verification_status: 'verified',
+        verification_source: 'address',
+      },
+    ]);
 
     const item = await getAuthorizedMail({
       mailItemId: 'mail-1',
@@ -47,17 +58,17 @@ describe('AI mail access guards', () => {
     expect(item).toMatchObject({ id: 'mail-1', subject: 'Home bill' });
   });
 
-  test('returns null when can_view_mail denies access', async () => {
+  test('returns null for a household letter to someone outside the household', async () => {
     supabaseAdmin.seedTable('Mail', [
       {
         id: 'mail-2',
         recipient_user_id: null,
         recipient_home_id: 'home-2',
+        privacy: 'shared_household',
         subject: 'Restricted mail',
         deleted_at: null,
       },
     ]);
-    supabaseAdmin.setRpcMock(async () => ({ data: false, error: null }));
 
     const item = await getAuthorizedMail({
       mailItemId: 'mail-2',

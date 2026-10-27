@@ -78,12 +78,12 @@ export function useAfterRecheck<T>(
       setVisit({ openedAt: Date.now(), hidden: false });
       void latest.current.query.refetch?.();
     };
+    // Leaving means the page is hidden. A window that only loses focus (another app beside it, the
+    // address bar, DevTools) still shows the screen, so what it shows stays.
     const visibility = () => { if (document.visibilityState === 'hidden') leave(); else resume(); };
-    window.addEventListener('blur', leave);
     window.addEventListener('focus', resume);
     document.addEventListener('visibilitychange', visibility);
     return () => {
-      window.removeEventListener('blur', leave);
       window.removeEventListener('focus', resume);
       document.removeEventListener('visibilitychange', visibility);
     };
