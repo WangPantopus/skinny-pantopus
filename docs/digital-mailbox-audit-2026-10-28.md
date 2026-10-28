@@ -17,7 +17,7 @@ Review in order; each PR after the first targets the preceding audit branch.
 | [2945](https://github.com/WangPantopus/skinny-pantopus/pull/2945) | Keep holds until local 07:00, process complete large bundles, converge concurrent hold syncs, and preserve filing counts. |
 | [2946](https://github.com/WangPantopus/skinny-pantopus/pull/2946) | Search full letter content and supply a dry-run repair command for older truncated rows. |
 | [2947](https://github.com/WangPantopus/skinny-pantopus/pull/2947) | Use decoded text in the current iOS paper-letter layout. |
-| `codex/digital-mailbox-overlapping-holds` | Keep mail and its bundle held through all connected hold windows, including the displayed final return date. |
+| [2948](https://github.com/WangPantopus/skinny-pantopus/pull/2948) | Keep mail and its bundle held through all connected hold windows, including the displayed final return date. |
 
 Three additive migrations must precede the backend changes. Existing migration
 history and tables are preserved. The search backfill is dry-run by default;
