@@ -26,10 +26,18 @@ public struct ToastMessage: Identifiable, Equatable, Sendable {
         self.text = text
         self.kind = kind
     }
+
+    /// Brief confirmations keep their existing dwell; explanatory messages get up to seven seconds.
+    public static func duration(for text: String, minimum: Double = 3) -> Duration {
+        .seconds(max(minimum, min(Double(text.count) * 0.06, 7)))
+    }
 }
 
-/// Pill-shaped banner, intended to be floated at the bottom of the screen.
+/// Short messages keep the pill; wrapped messages have room around every line.
 public struct ToastView: View {
+    @ScaledMetric(relativeTo: .subheadline) private var textSize = PantopusTextStyle.small.size
+    @ScaledMetric(relativeTo: .subheadline) private var lineSpacing =
+        PantopusTextStyle.small.lineHeight - PantopusTextStyle.small.size
     public let message: ToastMessage
 
     public init(message: ToastMessage) {
@@ -37,14 +45,27 @@ public struct ToastView: View {
     }
 
     public var body: some View {
+        ViewThatFits(in: .horizontal) {
+            label.fixedSize()
+                .background(background, in: Capsule())
+            label.fixedSize(horizontal: false, vertical: true)
+                .background(background, in: RoundedRectangle(cornerRadius: Radii.xl))
+        }
+        .padding(.horizontal, Spacing.s4)
+        .accessibilityLabel(message.text)
+        .task(id: message.text) {
+            AccessibilityNotification.Announcement(message.text).post()
+        }
+    }
+
+    private var label: some View {
         Text(message.text)
-            .pantopusTextStyle(.small)
+            .font(.system(size: textSize))
+            .lineSpacing(lineSpacing)
+            .multilineTextAlignment(.center)
             .foregroundStyle(Theme.Color.appTextInverse)
             .padding(.horizontal, Spacing.s4)
             .padding(.vertical, Spacing.s2)
-            .background(background)
-            .clipShape(RoundedRectangle(cornerRadius: Radii.pill))
-            .accessibilityLabel(message.text)
     }
 
     private var background: Color {
@@ -66,7 +87,12 @@ public extension View {
                 ToastView(message: ToastMessage(text: text, kind: .error))
                     .padding(.bottom, Spacing.s10)
                     .task(id: text) {
-                        try? await Task.sleep(nanoseconds: 3_000_000_000)
+                        do {
+                            try await Task.sleep(for: ToastMessage.duration(for: text))
+                        } catch {
+                            return
+                        }
+                        guard message.wrappedValue == text else { return }
                         message.wrappedValue = nil
                     }
             }
