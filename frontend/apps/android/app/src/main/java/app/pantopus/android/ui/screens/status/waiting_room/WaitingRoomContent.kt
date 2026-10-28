@@ -60,6 +60,8 @@ data class WaitingRoomNotice(
     val ctaLabel: String,
     val isRetry: Boolean,
 ) {
+    fun leavingToMyHomes(): WaitingRoomNotice = if (isRetry) this else copy(ctaLabel = "Back to My homes")
+
     companion object {
         /**
          * `GET /api/homes/my-ownership-claims` failed — never fall back to

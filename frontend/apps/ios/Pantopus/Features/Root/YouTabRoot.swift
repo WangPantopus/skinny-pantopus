@@ -1074,7 +1074,9 @@ public struct YouTabRoot: View {
                 if case .waitingRoom = route { return true }
                 return false
             }
-            path.append(.homeDashboard(homeId: id))
+            if path.last != .homeDashboard(homeId: id) {
+                path.append(.homeDashboard(homeId: id))
+            }
         case let .myHomes(id):
             showMyHomes(leavingClaimOn: id)
         case .viewClaim:

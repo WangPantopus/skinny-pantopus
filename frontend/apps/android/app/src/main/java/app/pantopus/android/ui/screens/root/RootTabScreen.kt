@@ -6966,10 +6966,18 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             when (nav) {
                                 WaitingRoomNav.Notifications ->
                                     navController.navigate(ChildRoutes.NOTIFICATIONS)
-                                is WaitingRoomNav.BackToHome ->
-                                    navController.navigate(ChildRoutes.homeDashboard(nav.homeId)) {
-                                        popUpTo(ChildRoutes.homeDashboard(nav.homeId)) { inclusive = true }
+                                is WaitingRoomNav.BackToHome -> {
+                                    navController.popBackStack(ChildRoutes.waitingRoom(nav.homeId), inclusive = true)
+                                    val under = navController.currentBackStackEntry
+                                    val isHome =
+                                        under?.destination?.route == ChildRoutes.HOME_DASHBOARD &&
+                                            under.arguments?.getString(HOME_DASHBOARD_HOME_ID_KEY) == nav.homeId
+                                    if (!isHome) {
+                                        navController.navigate(ChildRoutes.homeDashboard(nav.homeId)) {
+                                            popUpTo(ChildRoutes.homeDashboard(nav.homeId)) { inclusive = true }
+                                        }
                                     }
+                                }
                                 // No way into this Home yet: back to My homes, where the claim is listed, or onto
                                 // it, past the Home's dashboard a waiting-room link puts under the room. While there
                                 // are only claims, the Place tab's root is My homes. Mirrors iOS `showMyHomes`.
