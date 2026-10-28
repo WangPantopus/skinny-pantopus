@@ -2726,12 +2726,28 @@ router.post('/:id/tasks/:taskId/recurrence', verifyToken, async (req, res) => {
 });
 
 
+// These legacy content routes still apply their own resource permissions below.
+// Membership alone must not reopen content after a Home is frozen, disputed,
+// archived or merged (or the actor's ownership has been revoked).
+async function requireSharedHomeContent(req, res, next) {
+  res.set('Cache-Control', 'private, no-store');
+  try {
+    const current = await homeListService.readAccessState(req.params.id, req.user.id);
+    if (current.mode !== 'shared') {
+      return res.status(403).json({ error: 'No access to this home' });
+    }
+    return next();
+  } catch (error) {
+    return homeListService.sendError(res, error);
+  }
+}
+
 // ============ HOME ISSUES ============
 
 /**
  * GET /api/homes/:id/issues
  */
-router.get('/:id/issues', verifyToken, async (req, res) => {
+router.get('/:id/issues', verifyToken, requireSharedHomeContent, async (req, res) => {
   res.set('Cache-Control', 'private, no-store');
   if (Joi.string().uuid().validate(req.params.id).error) return res.status(400).json({ error: 'Invalid Home id' });
   const dashboardService = require('../services/homeDashboardService');
@@ -2745,7 +2761,7 @@ router.get('/:id/issues', verifyToken, async (req, res) => {
 /**
  * POST /api/homes/:id/issues
  */
-router.post('/:id/issues', verifyToken, async (req, res) => {
+router.post('/:id/issues', verifyToken, requireSharedHomeContent, async (req, res) => {
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
@@ -2824,7 +2840,7 @@ router.post('/:id/issues', verifyToken, async (req, res) => {
 /**
  * PUT /api/homes/:id/issues/:issueId
  */
-router.put('/:id/issues/:issueId', verifyToken, async (req, res) => {
+router.put('/:id/issues/:issueId', verifyToken, requireSharedHomeContent, async (req, res) => {
   try {
     const { id: homeId, issueId } = req.params;
     const userId = req.user.id;
@@ -2871,7 +2887,7 @@ router.put('/:id/issues/:issueId', verifyToken, async (req, res) => {
 /**
  * GET /api/homes/:id/bills
  */
-router.get('/:id/bills', verifyToken, async (req, res) => {
+router.get('/:id/bills', verifyToken, requireSharedHomeContent, async (req, res) => {
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
@@ -2904,7 +2920,7 @@ router.get('/:id/bills', verifyToken, async (req, res) => {
 /**
  * POST /api/homes/:id/bills
  */
-router.post('/:id/bills', verifyToken, async (req, res) => {
+router.post('/:id/bills', verifyToken, requireSharedHomeContent, async (req, res) => {
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
@@ -2950,7 +2966,7 @@ router.post('/:id/bills', verifyToken, async (req, res) => {
 /**
  * PUT /api/homes/:id/bills/:billId
  */
-router.put('/:id/bills/:billId', verifyToken, async (req, res) => {
+router.put('/:id/bills/:billId', verifyToken, requireSharedHomeContent, async (req, res) => {
   try {
     const { id: homeId, billId } = req.params;
     const userId = req.user.id;
@@ -2997,7 +3013,7 @@ router.put('/:id/bills/:billId', verifyToken, async (req, res) => {
 /**
  * GET /api/homes/:id/bills/:billId/splits
  */
-router.get('/:id/bills/:billId/splits', verifyToken, async (req, res) => {
+router.get('/:id/bills/:billId/splits', verifyToken, requireSharedHomeContent, async (req, res) => {
   try {
     const { id: homeId, billId } = req.params;
     const userId = req.user.id;
@@ -3073,7 +3089,7 @@ const maintenanceCostSchema = Joi.number().min(0).max(9999999999.99)
  * rows. The Scheduled / Completed / All client-side tabs filter by
  * `status` (Scheduled = `scheduled|in_progress`).
  */
-router.get('/:id/maintenance', verifyToken, async (req, res) => {
+router.get('/:id/maintenance', verifyToken, requireSharedHomeContent, async (req, res) => {
   res.set('Cache-Control', 'private, no-store');
   try {
     const { id: homeId } = req.params;
@@ -3120,7 +3136,7 @@ router.get('/:id/maintenance', verifyToken, async (req, res) => {
  *  - `task` is required (non-empty); everything else is optional.
  *  - `status` defaults to `scheduled`; `recurrence` defaults to `one_time`.
  */
-router.post('/:id/maintenance', verifyToken, async (req, res) => {
+router.post('/:id/maintenance', verifyToken, requireSharedHomeContent, async (req, res) => {
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
@@ -3231,7 +3247,7 @@ router.post('/:id/maintenance', verifyToken, async (req, res) => {
  * `performed_by` when the row flips to `completed` (so the historical
  * `HomeMaintenanceLog` interpretation stays consistent).
  */
-router.put('/:id/maintenance/:taskId', verifyToken, async (req, res) => {
+router.put('/:id/maintenance/:taskId', verifyToken, requireSharedHomeContent, async (req, res) => {
   try {
     const { id: homeId, taskId } = req.params;
     const userId = req.user.id;
@@ -3332,7 +3348,7 @@ router.put('/:id/maintenance/:taskId', verifyToken, async (req, res) => {
  * so hard-delete is fine. Web/mobile clients can still opt to mark
  * `status='cancelled'` via PUT for soft-cancel UX.
  */
-router.delete('/:id/maintenance/:taskId', verifyToken, async (req, res) => {
+router.delete('/:id/maintenance/:taskId', verifyToken, requireSharedHomeContent, async (req, res) => {
   try {
     const { id: homeId, taskId } = req.params;
     const userId = req.user.id;
@@ -3364,7 +3380,7 @@ router.delete('/:id/maintenance/:taskId', verifyToken, async (req, res) => {
 /**
  * GET /api/homes/:id/packages
  */
-router.get('/:id/packages', verifyToken, async (req, res) => {
+router.get('/:id/packages', verifyToken, requireSharedHomeContent, async (req, res) => {
   res.set('Cache-Control', 'private, no-store');
   if (Joi.string().uuid().validate(req.params.id).error) return res.status(400).json({ error: 'Invalid Home id' });
   const dashboardService = require('../services/homeDashboardService');
@@ -3378,7 +3394,7 @@ router.get('/:id/packages', verifyToken, async (req, res) => {
 /**
  * POST /api/homes/:id/packages
  */
-router.post('/:id/packages', verifyToken, async (req, res) => {
+router.post('/:id/packages', verifyToken, requireSharedHomeContent, async (req, res) => {
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
@@ -3422,7 +3438,7 @@ router.post('/:id/packages', verifyToken, async (req, res) => {
 /**
  * PUT /api/homes/:id/packages/:packageId
  */
-router.put('/:id/packages/:packageId', verifyToken, async (req, res) => {
+router.put('/:id/packages/:packageId', verifyToken, requireSharedHomeContent, async (req, res) => {
   try {
     const { id: homeId, packageId } = req.params;
     const userId = req.user.id;
@@ -3628,7 +3644,7 @@ router.post('/:id/documents', verifyToken, validate(createHomeDocumentSchema), a
 /**
  * GET /api/homes/:id/vendors
  */
-router.get('/:id/vendors', verifyToken, async (req, res) => {
+router.get('/:id/vendors', verifyToken, requireSharedHomeContent, async (req, res) => {
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
@@ -3657,7 +3673,7 @@ router.get('/:id/vendors', verifyToken, async (req, res) => {
 /**
  * POST /api/homes/:id/vendors
  */
-router.post('/:id/vendors', verifyToken, async (req, res) => {
+router.post('/:id/vendors', verifyToken, requireSharedHomeContent, async (req, res) => {
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
@@ -3701,7 +3717,7 @@ router.post('/:id/vendors', verifyToken, async (req, res) => {
 /**
  * PUT /api/homes/:id/vendors/:vendorId
  */
-router.put('/:id/vendors/:vendorId', verifyToken, async (req, res) => {
+router.put('/:id/vendors/:vendorId', verifyToken, requireSharedHomeContent, async (req, res) => {
   try {
     const { id: homeId, vendorId } = req.params;
     const userId = req.user.id;
@@ -4426,7 +4442,7 @@ router.post('/:id/devices', verifyToken, async (req, res) => {
  * dates) need assets.view, as the table's own policy and the records photo reads require;
  * being in the home (a guest, a service provider) isn't enough.
  */
-router.get('/:id/assets', verifyToken, async (req, res) => {
+router.get('/:id/assets', verifyToken, requireSharedHomeContent, async (req, res) => {
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
@@ -4462,7 +4478,7 @@ router.get('/:id/assets', verifyToken, async (req, res) => {
  * With `request_id` (the assistant card's id), the same request for this home and person
  * answers 200 with the item it added (`replayed: true`) instead of adding it again.
  */
-router.post('/:id/assets', verifyToken, validate(createHomeAssetSchema), async (req, res) => {
+router.post('/:id/assets', verifyToken, requireSharedHomeContent, validate(createHomeAssetSchema), async (req, res) => {
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
@@ -4720,7 +4736,7 @@ const updatePetSchema = createPetSchema.fork(
 /**
  * GET /api/homes/:id/pets
  */
-router.get('/:id/pets', verifyToken, async (req, res) => {
+router.get('/:id/pets', verifyToken, requireSharedHomeContent, async (req, res) => {
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
@@ -4750,7 +4766,7 @@ router.get('/:id/pets', verifyToken, async (req, res) => {
 /**
  * POST /api/homes/:id/pets
  */
-router.post('/:id/pets', verifyToken, validate(createPetSchema), async (req, res) => {
+router.post('/:id/pets', verifyToken, requireSharedHomeContent, validate(createPetSchema), async (req, res) => {
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
@@ -4804,7 +4820,7 @@ router.post('/:id/pets', verifyToken, validate(createPetSchema), async (req, res
 /**
  * PUT /api/homes/:id/pets/:petId
  */
-router.put('/:id/pets/:petId', verifyToken, validate(updatePetSchema), async (req, res) => {
+router.put('/:id/pets/:petId', verifyToken, requireSharedHomeContent, validate(updatePetSchema), async (req, res) => {
   try {
     const { id: homeId, petId } = req.params;
     const userId = req.user.id;
@@ -4850,7 +4866,7 @@ router.put('/:id/pets/:petId', verifyToken, validate(updatePetSchema), async (re
 /**
  * DELETE /api/homes/:id/pets/:petId
  */
-router.delete('/:id/pets/:petId', verifyToken, async (req, res) => {
+router.delete('/:id/pets/:petId', verifyToken, requireSharedHomeContent, async (req, res) => {
   try {
     const { id: homeId, petId } = req.params;
     const userId = req.user.id;
