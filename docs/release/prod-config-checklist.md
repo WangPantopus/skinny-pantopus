@@ -1223,6 +1223,7 @@ This section supersedes the historical signing/upload instructions below. Both s
 | Android Kotlin namespace | Keep `app.pantopus.android`; this is source packaging, not the store identity |
 | Android debug application ID | `com.pantopus.app.debug` |
 | Store title | `Pantopus` |
+| Launch keys | GitHub Actions variable `PANTOPUS_LAUNCH_FEATURES`; unset, every launch-cut feature stays hidden. Every build cut while it is set (for example to `mailbox`) carries those features, and each build's log lists its keys ([flags doc](../launch-scope-flags-2026-10-01.md#switching-a-feature-back-on)) |
 
 - [x] Read the original records: iOS 1.5.0 (84), iPhone family, team `6UYZBA546R`; Android original production listing exists. The old Android Play-signing SHA-256 matches the repository's `com.pantopus.app` association.
 - [x] Created the original iOS record's **2.0.4 / Prepare for Submission** draft, with current description, subtitle, keywords, promotional text, update notes, support/marketing links and reviewer instructions. Manual release is selected. Updated age-rating answers (13+ in most regions) and content-rights information to the current app's answers. No build is selected or submitted.
