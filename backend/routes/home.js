@@ -41,7 +41,6 @@ const { unpublishedBusinessIds, isUnpublishedBusiness } = require('../utils/visi
 const homeClaimMergeService = require('../services/homeClaimMergeService');
 const homeClaimRoutingService = require('../services/homeClaimRoutingService');
 const propertySuggestionsService = require('../services/ai/propertySuggestionsService');
-const { shouldBlockCoordinateOverwrite, stripCoordinateFields } = require('../utils/verifiedCoordinateGuard');
 const { encodeGeohash } = require('../utils/geohash');
 const { HOME_ISSUE_LIST, HOME_BILL_LIST, HOME_PACKAGE_LIST } = require('../utils/columns');
 const { excludeHiddenHomeActivity } = require('../utils/featureFlags');
@@ -1968,111 +1967,31 @@ router.get('/', verifyToken, async (req, res) => {
  * PATCH /api/homes/:id
  * Update home details (owner only)
  */
-router.patch('/:id', verifyToken, validate(updateHomeSchema), async (req, res) => {
+router.patch('/:id', verifyToken, requireSharedHomeContent, validate(updateHomeSchema), async (req, res) => {
   try {
-    const { id } = req.params;
-    const userId = req.user.id;
-
-    // Check ownership + fetch geocode_mode for verified coordinate guard
-    const { data: existingHome, error: fetchError } = await supabaseAdmin
-      .from('Home')
-      .select('owner_id, geocode_mode')
-      .eq('id', id)
-      .single();
-
-    if (fetchError || !existingHome) {
-      return res.status(404).json({ error: 'Home not found' });
-    }
-
-    const updateAccess = await checkHomePermission(id, userId, 'home.edit');
-    if (!updateAccess.hasAccess) {
-      return res.status(403).json({ error: 'You do not have permission to update this home' });
-    }
-
-    const updates = {};
-
-    if (req.body.address) updates.address = req.body.address;
-    if (req.body.city) updates.city = req.body.city;
-    if (req.body.state) updates.state = req.body.state;
-    if (req.body.zip_code) updates.zip_code = req.body.zip_code;
-    // A blank name clears it (null), as the Settings tab's PATCH /:id/settings
-    // does, so the Home shows its address instead of an empty name.
-    if (req.body.name !== undefined) {
-      updates.name = typeof req.body.name === 'string' && !req.body.name.trim() ? null : req.body.name;
-    }
-    if (req.body.home_type) updates.home_type = req.body.home_type;
-    if (req.body.description !== undefined) updates.description = req.body.description;
-    if (req.body.entry_instructions !== undefined) updates.entry_instructions = req.body.entry_instructions;
-    if (req.body.parking_instructions !== undefined) updates.parking_instructions = req.body.parking_instructions;
-    if (req.body.visibility) updates.visibility = req.body.visibility;
-    if (req.body.bedrooms !== undefined) updates.bedrooms = req.body.bedrooms;
-    if (req.body.bathrooms !== undefined) updates.bathrooms = req.body.bathrooms;
-    if (req.body.sq_ft !== undefined) updates.sq_ft = req.body.sq_ft;
-    if (req.body.lot_sq_ft !== undefined) updates.lot_sq_ft = req.body.lot_sq_ft;
-    if (req.body.year_built !== undefined) updates.year_built = req.body.year_built;
-    if (req.body.move_in_date !== undefined) updates.move_in_date = req.body.move_in_date;
-    if (req.body.is_owner !== undefined) updates.is_owner = req.body.is_owner;
-    if (req.body.amenities) updates.amenities = req.body.amenities;
-
-    if (req.body.location) {
-      // CRIT-05: provenance must never be self-asserted. This handler used to
-      // read geocode_mode straight from the request body and default it to
-      // 'verified' with 'rooftop' accuracy, so any member with home.edit could
-      // move a home to arbitrary coordinates and have that pin recorded as a
-      // verified rooftop fix. The overwrite guard then consulted the same
-      // field, so it protected the false value from every subsequent
-      // correction — inverting the guard's purpose.
-      //
-      // A coordinate that did not come from runValidationPipeline is
-      // user-asserted, full stop. 'verified' is reserved for writes originating
-      // in canonicalAddressService.
-      const block = shouldBlockCoordinateOverwrite(
-        existingHome,
-        { geocode_mode: 'user_asserted' },
-        'PATCH /api/homes/:id',
-      );
-      if (block.blocked) {
-        logger.warn('Home coordinate overwrite blocked', { homeId: id, userId, reason: block.reason });
-        // Allow the rest of the update to proceed, just strip coordinate fields
-      } else {
-        updates.location = formatLocationForDB(
-          req.body.location.latitude,
-          req.body.location.longitude
-        );
-        // Geocode provenance — recorded, not accepted.
-        updates.geocode_provider = 'client';
-        updates.geocode_mode = 'user_asserted';
-        updates.geocode_accuracy = 'unknown';
-        updates.geocode_place_id = null;
-        updates.geocode_source_flow = 'home_edit';
-        updates.geocode_created_at = new Date().toISOString();
-      }
-    }
-
-    updates.updated_at = new Date().toISOString();
-
-    const { data: home, error } = await supabaseAdmin
-      .from('Home')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) {
-      logger.error('Error updating home', { error: error.message, homeId: id });
-      return res.status(500).json({ error: 'Failed to update home' });
-    }
-
-    logger.info('Home updated', { homeId: id, userId });
-
-    res.json({
-      message: 'Home updated successfully',
-      home
+    const fields = { ...req.body };
+    if (typeof fields.name === 'string' && !fields.name.trim()) fields.name = null;
+    // The same transaction as Settings rechecks current authority after taking
+    // the Home lock, preserves address identity, and audits the whole edit.
+    const { data, error } = await supabaseAdmin.rpc('update_home_settings', {
+      p_home_id: req.params.id, p_actor_id: req.user.id, p_fields: fields, p_preferences: {},
     });
-
+    if (error || !data || typeof data.ok !== 'boolean') {
+      return res.status(503).json({ error: 'The home change could not be confirmed. Reload before trying again.' });
+    }
+    if (!data.ok) {
+      if (data.code === 'HOME_ADDRESS_CHANGE_REQUIRED') {
+        return res.status(409).json({ error: 'The address and unit identify this home. Add a new home for a different address.', code: data.code });
+      }
+      const status = { HOME_SETTINGS_INVALID: 400, HOME_NOT_FOUND: 404, HOME_SETTINGS_DENIED: 403 }[data.code] || 503;
+      return res.status(status).json({ error: status === 400 ? 'Invalid home details.' : 'Current permission to change this home could not be confirmed.', code: data.code });
+    }
+    // Use the same permission-filtered projection as GET; a successful edit
+    // must not expose private fields that the editor cannot normally read.
+    const { home } = await homeDetailService.detail(req.params.id, req.user.id);
+    res.json({ message: 'Home updated successfully', home });
   } catch (err) {
-    logger.error('Home update error', { error: err.message, homeId: req.params.id });
-    res.status(500).json({ error: 'Failed to update home' });
+    homeDetailService.sendError(res, err);
   }
 });
 
@@ -2506,7 +2425,7 @@ router.delete('/:id/public-data/:dataId', verifyToken, async (req, res) => {
  * origin_home_id, so only tasks posted by someone who can access this Home
  * are listed.
  */
-router.get('/:id/gigs', verifyToken, async (req, res) => {
+router.get('/:id/gigs', verifyToken, requireSharedHomeContent, async (req, res) => {
   if (Joi.string().uuid().validate(req.params.id).error) return res.status(400).json({ error: 'Invalid Home id' });
   try {
     const { id: homeId } = req.params;
@@ -2543,7 +2462,7 @@ router.get('/:id/gigs', verifyToken, async (req, res) => {
  * GET /api/homes/:id/nearby-gigs
  * Get gigs posted near this home address
  */
-router.get('/:id/nearby-gigs', verifyToken, async (req, res) => {
+router.get('/:id/nearby-gigs', verifyToken, requireSharedHomeContent, async (req, res) => {
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
@@ -2726,12 +2645,32 @@ router.post('/:id/tasks/:taskId/recurrence', verifyToken, async (req, res) => {
 });
 
 
+// These legacy content routes still apply their own resource permissions below.
+// Membership alone must not reopen content after a Home is frozen, disputed,
+// archived or merged (or the actor's ownership has been revoked).
+async function requireSharedHomeContent(req, res, next) {
+  res.set('Cache-Control', 'private, no-store');
+  if (Joi.string().uuid().validate(req.params.id).error) return res.status(400).json({ error: 'Invalid Home id' });
+  try {
+    const current = await homeListService.readAccessState(req.params.id, req.user.id);
+    if (current.mode !== 'shared') {
+      return res.status(403).json({ error: 'No access to this home' });
+    }
+    return next();
+  } catch (error) {
+    if (await homeListService.homeDeleted(error, req.params.id)) {
+      return res.status(403).json({ error: 'No access to this home' });
+    }
+    return homeListService.sendError(res, error);
+  }
+}
+
 // ============ HOME ISSUES ============
 
 /**
  * GET /api/homes/:id/issues
  */
-router.get('/:id/issues', verifyToken, async (req, res) => {
+router.get('/:id/issues', verifyToken, requireSharedHomeContent, async (req, res) => {
   res.set('Cache-Control', 'private, no-store');
   if (Joi.string().uuid().validate(req.params.id).error) return res.status(400).json({ error: 'Invalid Home id' });
   const dashboardService = require('../services/homeDashboardService');
@@ -2745,7 +2684,7 @@ router.get('/:id/issues', verifyToken, async (req, res) => {
 /**
  * POST /api/homes/:id/issues
  */
-router.post('/:id/issues', verifyToken, async (req, res) => {
+router.post('/:id/issues', verifyToken, requireSharedHomeContent, async (req, res) => {
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
@@ -2824,7 +2763,7 @@ router.post('/:id/issues', verifyToken, async (req, res) => {
 /**
  * PUT /api/homes/:id/issues/:issueId
  */
-router.put('/:id/issues/:issueId', verifyToken, async (req, res) => {
+router.put('/:id/issues/:issueId', verifyToken, requireSharedHomeContent, async (req, res) => {
   try {
     const { id: homeId, issueId } = req.params;
     const userId = req.user.id;
@@ -2871,7 +2810,7 @@ router.put('/:id/issues/:issueId', verifyToken, async (req, res) => {
 /**
  * GET /api/homes/:id/bills
  */
-router.get('/:id/bills', verifyToken, async (req, res) => {
+router.get('/:id/bills', verifyToken, requireSharedHomeContent, async (req, res) => {
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
@@ -2904,7 +2843,7 @@ router.get('/:id/bills', verifyToken, async (req, res) => {
 /**
  * POST /api/homes/:id/bills
  */
-router.post('/:id/bills', verifyToken, async (req, res) => {
+router.post('/:id/bills', verifyToken, requireSharedHomeContent, async (req, res) => {
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
@@ -2950,7 +2889,7 @@ router.post('/:id/bills', verifyToken, async (req, res) => {
 /**
  * PUT /api/homes/:id/bills/:billId
  */
-router.put('/:id/bills/:billId', verifyToken, async (req, res) => {
+router.put('/:id/bills/:billId', verifyToken, requireSharedHomeContent, async (req, res) => {
   try {
     const { id: homeId, billId } = req.params;
     const userId = req.user.id;
@@ -2997,7 +2936,7 @@ router.put('/:id/bills/:billId', verifyToken, async (req, res) => {
 /**
  * GET /api/homes/:id/bills/:billId/splits
  */
-router.get('/:id/bills/:billId/splits', verifyToken, async (req, res) => {
+router.get('/:id/bills/:billId/splits', verifyToken, requireSharedHomeContent, async (req, res) => {
   try {
     const { id: homeId, billId } = req.params;
     const userId = req.user.id;
@@ -3073,7 +3012,7 @@ const maintenanceCostSchema = Joi.number().min(0).max(9999999999.99)
  * rows. The Scheduled / Completed / All client-side tabs filter by
  * `status` (Scheduled = `scheduled|in_progress`).
  */
-router.get('/:id/maintenance', verifyToken, async (req, res) => {
+router.get('/:id/maintenance', verifyToken, requireSharedHomeContent, async (req, res) => {
   res.set('Cache-Control', 'private, no-store');
   try {
     const { id: homeId } = req.params;
@@ -3120,7 +3059,7 @@ router.get('/:id/maintenance', verifyToken, async (req, res) => {
  *  - `task` is required (non-empty); everything else is optional.
  *  - `status` defaults to `scheduled`; `recurrence` defaults to `one_time`.
  */
-router.post('/:id/maintenance', verifyToken, async (req, res) => {
+router.post('/:id/maintenance', verifyToken, requireSharedHomeContent, async (req, res) => {
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
@@ -3231,7 +3170,7 @@ router.post('/:id/maintenance', verifyToken, async (req, res) => {
  * `performed_by` when the row flips to `completed` (so the historical
  * `HomeMaintenanceLog` interpretation stays consistent).
  */
-router.put('/:id/maintenance/:taskId', verifyToken, async (req, res) => {
+router.put('/:id/maintenance/:taskId', verifyToken, requireSharedHomeContent, async (req, res) => {
   try {
     const { id: homeId, taskId } = req.params;
     const userId = req.user.id;
@@ -3332,7 +3271,7 @@ router.put('/:id/maintenance/:taskId', verifyToken, async (req, res) => {
  * so hard-delete is fine. Web/mobile clients can still opt to mark
  * `status='cancelled'` via PUT for soft-cancel UX.
  */
-router.delete('/:id/maintenance/:taskId', verifyToken, async (req, res) => {
+router.delete('/:id/maintenance/:taskId', verifyToken, requireSharedHomeContent, async (req, res) => {
   try {
     const { id: homeId, taskId } = req.params;
     const userId = req.user.id;
@@ -3364,7 +3303,7 @@ router.delete('/:id/maintenance/:taskId', verifyToken, async (req, res) => {
 /**
  * GET /api/homes/:id/packages
  */
-router.get('/:id/packages', verifyToken, async (req, res) => {
+router.get('/:id/packages', verifyToken, requireSharedHomeContent, async (req, res) => {
   res.set('Cache-Control', 'private, no-store');
   if (Joi.string().uuid().validate(req.params.id).error) return res.status(400).json({ error: 'Invalid Home id' });
   const dashboardService = require('../services/homeDashboardService');
@@ -3378,7 +3317,7 @@ router.get('/:id/packages', verifyToken, async (req, res) => {
 /**
  * POST /api/homes/:id/packages
  */
-router.post('/:id/packages', verifyToken, async (req, res) => {
+router.post('/:id/packages', verifyToken, requireSharedHomeContent, async (req, res) => {
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
@@ -3422,7 +3361,7 @@ router.post('/:id/packages', verifyToken, async (req, res) => {
 /**
  * PUT /api/homes/:id/packages/:packageId
  */
-router.put('/:id/packages/:packageId', verifyToken, async (req, res) => {
+router.put('/:id/packages/:packageId', verifyToken, requireSharedHomeContent, async (req, res) => {
   try {
     const { id: homeId, packageId } = req.params;
     const userId = req.user.id;
@@ -3628,7 +3567,7 @@ router.post('/:id/documents', verifyToken, validate(createHomeDocumentSchema), a
 /**
  * GET /api/homes/:id/vendors
  */
-router.get('/:id/vendors', verifyToken, async (req, res) => {
+router.get('/:id/vendors', verifyToken, requireSharedHomeContent, async (req, res) => {
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
@@ -3657,7 +3596,7 @@ router.get('/:id/vendors', verifyToken, async (req, res) => {
 /**
  * POST /api/homes/:id/vendors
  */
-router.post('/:id/vendors', verifyToken, async (req, res) => {
+router.post('/:id/vendors', verifyToken, requireSharedHomeContent, async (req, res) => {
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
@@ -3701,7 +3640,7 @@ router.post('/:id/vendors', verifyToken, async (req, res) => {
 /**
  * PUT /api/homes/:id/vendors/:vendorId
  */
-router.put('/:id/vendors/:vendorId', verifyToken, async (req, res) => {
+router.put('/:id/vendors/:vendorId', verifyToken, requireSharedHomeContent, async (req, res) => {
   try {
     const { id: homeId, vendorId } = req.params;
     const userId = req.user.id;
@@ -3744,7 +3683,7 @@ router.put('/:id/vendors/:vendorId', verifyToken, async (req, res) => {
  * GET /api/homes/:id/businesses
  * List all businesses linked to this home
  */
-router.get('/:id/businesses', verifyToken, async (req, res) => {
+router.get('/:id/businesses', verifyToken, requireSharedHomeContent, async (req, res) => {
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
@@ -3813,7 +3752,7 @@ const linkBusinessSchema = Joi.object({
   notes: Joi.string().allow('', null).optional(),
 }).or('business_user_id', 'username');
 
-router.post('/:id/businesses', verifyToken, validate(linkBusinessSchema), async (req, res) => {
+router.post('/:id/businesses', verifyToken, requireSharedHomeContent, validate(linkBusinessSchema), async (req, res) => {
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
@@ -3882,7 +3821,7 @@ router.post('/:id/businesses', verifyToken, validate(linkBusinessSchema), async 
  * PATCH /api/homes/:id/businesses/:linkId
  * Update a home-business link (change kind or notes)
  */
-router.patch('/:id/businesses/:linkId', verifyToken, async (req, res) => {
+router.patch('/:id/businesses/:linkId', verifyToken, requireSharedHomeContent, async (req, res) => {
   try {
     const { id: homeId, linkId } = req.params;
     const userId = req.user.id;
@@ -3924,7 +3863,7 @@ router.patch('/:id/businesses/:linkId', verifyToken, async (req, res) => {
  * DELETE /api/homes/:id/businesses/:linkId
  * Remove a home-business link
  */
-router.delete('/:id/businesses/:linkId', verifyToken, async (req, res) => {
+router.delete('/:id/businesses/:linkId', verifyToken, requireSharedHomeContent, async (req, res) => {
   try {
     const { id: homeId, linkId } = req.params;
     const userId = req.user.id;
@@ -3954,7 +3893,7 @@ router.delete('/:id/businesses/:linkId', verifyToken, async (req, res) => {
  * GET /api/homes/:id/businesses/search
  * Search businesses to link (by name/username)
  */
-router.get('/:id/businesses/search', verifyToken, async (req, res) => {
+router.get('/:id/businesses/search', verifyToken, requireSharedHomeContent, async (req, res) => {
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
@@ -4055,6 +3994,15 @@ router.get('/:id/emergencies', verifyToken, async (req, res) => {
   }
 });
 
+// Mutating a household record requires the same current Home/ownership context
+// as reading it. home.edit alone can outlive a freeze or an archived Home.
+async function canWriteHomeEmergency(homeId, userId) {
+  const access = await checkHomePermission(homeId, userId, 'can_manage_home');
+  if (!access.hasAccess) return false;
+  const current = await homeListService.readAccessState(homeId, userId);
+  return current.mode === 'shared' && current.access.permissions.includes('home.edit');
+}
+
 /**
  * POST /api/homes/:id/emergencies
  */
@@ -4063,8 +4011,9 @@ router.post('/:id/emergencies', verifyToken, async (req, res) => {
     const { id: homeId } = req.params;
     const userId = req.user.id;
 
-    const access = await checkHomePermission(homeId, userId, 'can_manage_home');
-    if (!access.hasAccess) return res.status(403).json({ error: 'No permission to manage home' });
+    if (!await canWriteHomeEmergency(homeId, userId)) {
+      return res.status(403).json({ error: 'No permission to manage emergency info for this home' });
+    }
 
     const { type, label, location, details, clientRequestId } = req.body;
 
@@ -4129,6 +4078,7 @@ router.post('/:id/emergencies', verifyToken, async (req, res) => {
 
     created(data);
   } catch (err) {
+    if (err.statusCode === 503 || err.code === 'HOME_ACCESS_UNAVAILABLE') return homeListService.sendError(res, err);
     logger.error('Emergency creation error', { error: err.message });
     res.status(500).json({ error: 'Failed to create emergency info' });
   }
@@ -4142,8 +4092,9 @@ router.put('/:id/emergencies/:emergencyId', verifyToken, async (req, res) => {
     const { id: homeId, emergencyId } = req.params;
     const userId = req.user.id;
 
-    const access = await checkHomePermission(homeId, userId, 'can_manage_home');
-    if (!access.hasAccess) return res.status(403).json({ error: 'No permission to manage home' });
+    if (!await canWriteHomeEmergency(homeId, userId)) {
+      return res.status(403).json({ error: 'No permission to manage emergency info for this home' });
+    }
 
     const { type, label, location, details } = req.body;
     if (!type || !label) {
@@ -4176,6 +4127,7 @@ router.put('/:id/emergencies/:emergencyId', verifyToken, async (req, res) => {
     const emergency = data[0];
     res.json({ emergency: { ...emergency, info_type: emergency.type, location_in_home: emergency.location } });
   } catch (err) {
+    if (err.statusCode === 503 || err.code === 'HOME_ACCESS_UNAVAILABLE') return homeListService.sendError(res, err);
     logger.error('Emergency update error', { error: err.message });
     res.status(500).json({ error: 'Failed to update emergency info' });
   }
@@ -4189,8 +4141,9 @@ router.delete('/:id/emergencies/:emergencyId', verifyToken, async (req, res) => 
     const { id: homeId, emergencyId } = req.params;
     const userId = req.user.id;
 
-    const access = await checkHomePermission(homeId, userId, 'can_manage_home');
-    if (!access.hasAccess) return res.status(403).json({ error: 'No permission to manage home' });
+    if (!await canWriteHomeEmergency(homeId, userId)) {
+      return res.status(403).json({ error: 'No permission to manage emergency info for this home' });
+    }
 
     const { data, error } = await supabaseAdmin
       .from('HomeEmergency')
@@ -4209,6 +4162,7 @@ router.delete('/:id/emergencies/:emergencyId', verifyToken, async (req, res) => 
 
     res.json({ message: 'Emergency info deleted' });
   } catch (err) {
+    if (err.statusCode === 503 || err.code === 'HOME_ACCESS_UNAVAILABLE') return homeListService.sendError(res, err);
     logger.error('Emergency deletion error', { error: err.message });
     res.status(500).json({ error: 'Failed to delete emergency info' });
   }
@@ -4411,7 +4365,7 @@ router.post('/:id/devices', verifyToken, async (req, res) => {
  * dates) need assets.view, as the table's own policy and the records photo reads require;
  * being in the home (a guest, a service provider) isn't enough.
  */
-router.get('/:id/assets', verifyToken, async (req, res) => {
+router.get('/:id/assets', verifyToken, requireSharedHomeContent, async (req, res) => {
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
@@ -4447,7 +4401,7 @@ router.get('/:id/assets', verifyToken, async (req, res) => {
  * With `request_id` (the assistant card's id), the same request for this home and person
  * answers 200 with the item it added (`replayed: true`) instead of adding it again.
  */
-router.post('/:id/assets', verifyToken, validate(createHomeAssetSchema), async (req, res) => {
+router.post('/:id/assets', verifyToken, requireSharedHomeContent, validate(createHomeAssetSchema), async (req, res) => {
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
@@ -4705,7 +4659,7 @@ const updatePetSchema = createPetSchema.fork(
 /**
  * GET /api/homes/:id/pets
  */
-router.get('/:id/pets', verifyToken, async (req, res) => {
+router.get('/:id/pets', verifyToken, requireSharedHomeContent, async (req, res) => {
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
@@ -4735,7 +4689,7 @@ router.get('/:id/pets', verifyToken, async (req, res) => {
 /**
  * POST /api/homes/:id/pets
  */
-router.post('/:id/pets', verifyToken, validate(createPetSchema), async (req, res) => {
+router.post('/:id/pets', verifyToken, requireSharedHomeContent, validate(createPetSchema), async (req, res) => {
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
@@ -4789,7 +4743,7 @@ router.post('/:id/pets', verifyToken, validate(createPetSchema), async (req, res
 /**
  * PUT /api/homes/:id/pets/:petId
  */
-router.put('/:id/pets/:petId', verifyToken, validate(updatePetSchema), async (req, res) => {
+router.put('/:id/pets/:petId', verifyToken, requireSharedHomeContent, validate(updatePetSchema), async (req, res) => {
   try {
     const { id: homeId, petId } = req.params;
     const userId = req.user.id;
@@ -4835,7 +4789,7 @@ router.put('/:id/pets/:petId', verifyToken, validate(updatePetSchema), async (re
 /**
  * DELETE /api/homes/:id/pets/:petId
  */
-router.delete('/:id/pets/:petId', verifyToken, async (req, res) => {
+router.delete('/:id/pets/:petId', verifyToken, requireSharedHomeContent, async (req, res) => {
   try {
     const { id: homeId, petId } = req.params;
     const userId = req.user.id;

@@ -13,17 +13,29 @@ const {
   hasPermission,
 } = require('../utils/homePermissions');
 
-beforeEach(() => resetTables());
+beforeEach(() => {
+  resetTables();
+  supabaseAdmin.setRpcMock(async (name, args) => {
+    if (name !== 'home_record_context') return { data: null, error: { message: 'Unexpected RPC' } };
+    const access = await require('../utils/homePermissions').getUserAccess(args.p_home_id, args.p_user_id);
+    return { data: { allowed: access.hasAccess, private: false, permissions: access.permissions,
+      role: access.effective_role_base, user_id: args.p_user_id }, error: null };
+  });
+});
+afterEach(() => supabaseAdmin.resetRpc());
 
-const homeId = 'home-1';
-const ownerId = 'user-owner';
-const memberId = 'user-member';
-const outsiderId = 'user-outsider';
+const homeId = 'aaaaaaaa-0000-4000-8000-000000000001';
+const ownerId = 'aaaaaaaa-0000-4000-8000-000000000002';
+const memberId = 'aaaaaaaa-0000-4000-8000-000000000003';
+const outsiderId = 'aaaaaaaa-0000-4000-8000-000000000004';
 
 function seedHome() {
   seedTable('Home', [{
     id: homeId,
     owner_id: ownerId,
+    created_by_user_id: ownerId,
+    home_status: 'active',
+    security_state: 'normal',
     name: 'Test Home',
     home_type: 'house',
     visibility: 'public',
@@ -35,7 +47,7 @@ function seedOccupancy(userId, role = 'member') {
   seedTable('HomeOccupancy', [
     ...existing,
     {
-      id: `occ-${userId}`,
+      id: userId,
       home_id: homeId,
       user_id: userId,
       role,
