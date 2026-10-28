@@ -4055,6 +4055,15 @@ router.get('/:id/emergencies', verifyToken, async (req, res) => {
   }
 });
 
+// Mutating a household record requires the same current Home/ownership context
+// as reading it. home.edit alone can outlive a freeze or an archived Home.
+async function canWriteHomeEmergency(homeId, userId) {
+  const access = await checkHomePermission(homeId, userId, 'can_manage_home');
+  if (!access.hasAccess) return false;
+  const current = await homeListService.readAccessState(homeId, userId);
+  return current.mode === 'shared' && current.access.permissions.includes('home.edit');
+}
+
 /**
  * POST /api/homes/:id/emergencies
  */
@@ -4063,8 +4072,9 @@ router.post('/:id/emergencies', verifyToken, async (req, res) => {
     const { id: homeId } = req.params;
     const userId = req.user.id;
 
-    const access = await checkHomePermission(homeId, userId, 'can_manage_home');
-    if (!access.hasAccess) return res.status(403).json({ error: 'No permission to manage home' });
+    if (!await canWriteHomeEmergency(homeId, userId)) {
+      return res.status(403).json({ error: 'No permission to manage emergency info for this home' });
+    }
 
     const { type, label, location, details, clientRequestId } = req.body;
 
@@ -4129,6 +4139,7 @@ router.post('/:id/emergencies', verifyToken, async (req, res) => {
 
     created(data);
   } catch (err) {
+    if (err.statusCode === 503 || err.code === 'HOME_ACCESS_UNAVAILABLE') return homeListService.sendError(res, err);
     logger.error('Emergency creation error', { error: err.message });
     res.status(500).json({ error: 'Failed to create emergency info' });
   }
@@ -4142,8 +4153,9 @@ router.put('/:id/emergencies/:emergencyId', verifyToken, async (req, res) => {
     const { id: homeId, emergencyId } = req.params;
     const userId = req.user.id;
 
-    const access = await checkHomePermission(homeId, userId, 'can_manage_home');
-    if (!access.hasAccess) return res.status(403).json({ error: 'No permission to manage home' });
+    if (!await canWriteHomeEmergency(homeId, userId)) {
+      return res.status(403).json({ error: 'No permission to manage emergency info for this home' });
+    }
 
     const { type, label, location, details } = req.body;
     if (!type || !label) {
@@ -4176,6 +4188,7 @@ router.put('/:id/emergencies/:emergencyId', verifyToken, async (req, res) => {
     const emergency = data[0];
     res.json({ emergency: { ...emergency, info_type: emergency.type, location_in_home: emergency.location } });
   } catch (err) {
+    if (err.statusCode === 503 || err.code === 'HOME_ACCESS_UNAVAILABLE') return homeListService.sendError(res, err);
     logger.error('Emergency update error', { error: err.message });
     res.status(500).json({ error: 'Failed to update emergency info' });
   }
@@ -4189,8 +4202,9 @@ router.delete('/:id/emergencies/:emergencyId', verifyToken, async (req, res) => 
     const { id: homeId, emergencyId } = req.params;
     const userId = req.user.id;
 
-    const access = await checkHomePermission(homeId, userId, 'can_manage_home');
-    if (!access.hasAccess) return res.status(403).json({ error: 'No permission to manage home' });
+    if (!await canWriteHomeEmergency(homeId, userId)) {
+      return res.status(403).json({ error: 'No permission to manage emergency info for this home' });
+    }
 
     const { data, error } = await supabaseAdmin
       .from('HomeEmergency')
@@ -4209,6 +4223,7 @@ router.delete('/:id/emergencies/:emergencyId', verifyToken, async (req, res) => 
 
     res.json({ message: 'Emergency info deleted' });
   } catch (err) {
+    if (err.statusCode === 503 || err.code === 'HOME_ACCESS_UNAVAILABLE') return homeListService.sendError(res, err);
     logger.error('Emergency deletion error', { error: err.message });
     res.status(500).json({ error: 'Failed to delete emergency info' });
   }
