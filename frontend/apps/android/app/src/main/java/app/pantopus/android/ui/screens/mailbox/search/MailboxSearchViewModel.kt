@@ -141,8 +141,8 @@ class MailboxSearchViewModel
                             piece.copy(meta = listOfNotNull(subject, piece.meta.takeIf { it.isNotBlank() }).joinToString(" · "))
                         }
                     _results.value = ((if (loadMore) _results.value else emptyList()) + rows).distinctBy { it.id }
-                    nextOffset = (if (loadMore) nextOffset else 0) + result.data.mail.size
-                    _hasMore.value = result.data.mail.isNotEmpty() && nextOffset < result.data.total
+                    nextOffset = result.data.nextOffset ?: ((if (loadMore) nextOffset else 0) + result.data.mail.size)
+                    _hasMore.value = result.data.hasMore ?: (result.data.mail.isNotEmpty() && nextOffset < result.data.total)
                 }
                 is NetworkResult.Failure -> {
                     if (!loadMore) _results.value = emptyList()

@@ -517,31 +517,38 @@ router.get('/search', verifyToken, async (req, res) => {
     for (const term of terms) {
       query = query.or([...SEARCH_FIELDS.map((field) => `${field}.ilike.*${term}*`), `content.wfts(english).${term}`].join(','));
     }
-    const { data: found, error, count } = await query
-      .order('delivered_at', { ascending: false })
-      .order('id', { ascending: false })
-      .range(offset, offset + limit - 1);
-    if (error?.code === 'PGRST103') return res.json({ mail: [], total: offset });
-    if (error) {
-      logger.error('Mail search failed', { error: error.message });
-      return res.status(500).json({ error: "Couldn't search your mail. Try again in a moment.", code: 'MAIL_UNAVAILABLE' });
-    }
-
     // Each sender as neighbors see them now (their Local Profile): a letter only the name stored when it came
     // matched is left out, so no one finds a sender by a name they no longer show.
-    const named = await nameMailSenders(found || [], userId);
     const matches = (item, term) => [item.sender_display, item.sender_business_name && !item.sender_user_id ? item.sender_business_name : null,
       item.subject, item.display_title, item.preview_text, item.content, item.mail_extracted?.summary]
       .some((value) => typeof value === 'string' && value.toLowerCase().includes(term));
-    const kept = named.filter((item) => (found || []).find((f) => f.id === item.id)?.sender_user_id
-      ? terms.every((term) => matches(item, term) || matchesStem(item, term)) : true);
+    let kept = [], nextOffset = offset, count = 0, excluded = 0;
+    query = query.order('delivered_at', { ascending: false }).order('id', { ascending: false });
+    do {
+      const result = await query.range(nextOffset, nextOffset + limit - 1);
+      if (result.error?.code === 'PGRST103') break;
+      if (result.error) {
+        logger.error('Mail search failed', { code: result.error.code });
+        return res.status(500).json({ error: "Couldn't search your mail. Try again in a moment.", code: 'MAIL_UNAVAILABLE' });
+      }
+      const found = result.data || [];
+      count = result.count || 0;
+      nextOffset += found.length;
+      const named = await nameMailSenders(found, userId);
+      kept = named.filter((item) => item.sender_user_id
+        ? terms.every((term) => matches(item, term) || matchesStem(item, term)) : true);
+      excluded += named.length - kept.length;
+      if (!found.length) break;
+      // A page matched only retired sender names. Keep looking without showing those names or claiming no matches.
+    } while (!kept.length && nextOffset < count);
     const timeZone = (await mailDelivery.personTimeZone(userId)) || mailDelivery.FALLBACK_TIME_ZONE;
     const rows = kept.map((m) => mailPiece.present(presentMailSender({
       ...m,
       sender_display: resolveSenderDisplay(m),
       sender_trust: resolveSenderTrust(m),
     }, userId), { timeZone }));
-    return res.json({ mail: await attachInvoices(await mailPiece.withBundleLabels(rows)), total: Math.max(0, (count || 0) - (named.length - kept.length)) });
+    return res.json({ mail: await attachInvoices(await mailPiece.withBundleLabels(rows)), total: Math.max(0, count - excluded),
+      nextOffset, hasMore: nextOffset < count });
   } catch (err) {
     logger.error('Mail search error', { error: err.message });
     return res.status(500).json({ error: "Couldn't search your mail. Try again in a moment.", code: 'MAIL_UNAVAILABLE' });

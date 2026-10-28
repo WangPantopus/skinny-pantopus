@@ -872,8 +872,9 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
             let existing = loadMore ? (vaultResults ?? []) : []
             let seen = Set(existing.map(\.id))
             vaultResults = existing + rows.filter { !seen.contains($0.id) }
-            vaultSearchOffset += response.mail.count
-            vaultHasMore = !response.mail.isEmpty && (response.total.map { vaultSearchOffset < $0 } ?? (response.mail.count == 50))
+            vaultSearchOffset = response.nextOffset ?? (vaultSearchOffset + response.mail.count)
+            vaultHasMore = response
+                .hasMore ?? (!response.mail.isEmpty && (response.total.map { vaultSearchOffset < $0 } ?? (response.mail.count == 50)))
         } catch {
             guard vaultSearchRequest == request, text == vaultQuery.trimmingCharacters(in: .whitespacesAndNewlines) else { return }
             vaultSearchFailure = Self.vaultMessage(error, what: "search results")

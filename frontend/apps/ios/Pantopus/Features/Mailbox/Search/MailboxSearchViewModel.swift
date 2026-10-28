@@ -138,8 +138,9 @@ final class MailboxSearchViewModel {
             let existing = loadMore ? results : []
             let seen = Set(existing.map(\.id))
             results = existing + response.mail.filter { !seen.contains($0.id) }
-            nextOffset = (loadMore ? nextOffset : 0) + response.mail.count
-            hasMore = !response.mail.isEmpty && (response.total.map { nextOffset < $0 } ?? (response.mail.count == pageSize))
+            nextOffset = response.nextOffset ?? ((loadMore ? nextOffset : 0) + response.mail.count)
+            hasMore = response
+                .hasMore ?? (!response.mail.isEmpty && (response.total.map { nextOffset < $0 } ?? (response.mail.count == pageSize)))
             failureMessage = nil
         } catch {
             guard !Task.isCancelled, text == query.trimmingCharacters(in: .whitespacesAndNewlines) else { return }
@@ -169,4 +170,6 @@ final class MailboxSearchViewModel {
 struct MailSearchResponse: Decodable {
     let mail: [DrawerItemsResponse.DrawerMail]
     let total: Int?
+    let nextOffset: Int?
+    let hasMore: Bool?
 }
