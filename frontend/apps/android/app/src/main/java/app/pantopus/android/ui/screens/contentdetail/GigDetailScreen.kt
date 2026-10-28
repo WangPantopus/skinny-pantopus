@@ -36,6 +36,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -46,6 +47,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.core.security.SensitiveClipboard
 import app.pantopus.android.data.api.models.offers.BidDto
+import app.pantopus.android.ui.components.Toast
+import app.pantopus.android.ui.components.ToastAppearance
+import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.gigs.checkout.GigBidCheckoutHost
 import app.pantopus.android.ui.screens.my_bids.EditBidFailure
 import app.pantopus.android.ui.screens.my_bids.EditBidSheetContent
@@ -199,7 +203,7 @@ fun GigDetailScreen(
 
     LaunchedEffect(toastText) {
         if (toastText != null) {
-            kotlinx.coroutines.delay(2_500)
+            kotlinx.coroutines.delay(toastDurationMillis(toastText.orEmpty(), minimumMillis = 2_500))
             toastText = null
         }
     }
@@ -533,21 +537,20 @@ fun GigDetailScreen(
             modifier = Modifier.fillMaxWidth(),
             contentAlignment = Alignment.BottomCenter,
         ) {
-            Box(
+            Toast(
+                text = text,
+                appearance =
+                    ToastAppearance(
+                        background = if (toastIsError) PantopusColors.error else PantopusColors.success,
+                        foreground = PantopusColors.appTextInverse,
+                        textStyle = PantopusTextStyle.small,
+                        sideMargin = 0.dp,
+                    ),
                 modifier =
                     Modifier
                         .padding(Spacing.s4)
-                        .clip(RoundedCornerShape(Radii.pill))
-                        .background(if (toastIsError) PantopusColors.error else PantopusColors.success)
-                        .padding(horizontal = Spacing.s4, vertical = Spacing.s2)
                         .testTag("gig-detail-toast"),
-            ) {
-                Text(
-                    text = text,
-                    style = PantopusTextStyle.small,
-                    color = PantopusColors.appTextInverse,
-                )
-            }
+            )
         }
     }
 }

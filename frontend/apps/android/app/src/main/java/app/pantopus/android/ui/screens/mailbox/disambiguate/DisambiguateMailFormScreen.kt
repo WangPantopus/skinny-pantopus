@@ -40,6 +40,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.EnvelopeOcrBox
 import app.pantopus.android.ui.components.EnvelopeOcrTone
 import app.pantopus.android.ui.components.PrimaryButton
+import app.pantopus.android.ui.components.Toast
+import app.pantopus.android.ui.components.ToastAppearance
+import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.mailbox.disambiguate.components.CandidateRow
 import app.pantopus.android.ui.screens.mailbox.disambiguate.components.FallbackRow
 import app.pantopus.android.ui.screens.mailbox.disambiguate.components.OcrStrip
@@ -68,7 +71,7 @@ fun DisambiguateMailFormScreen(
 
     LaunchedEffect(state.toast) {
         if (state.toast != null) {
-            delay(2_500)
+            delay(toastDurationMillis(state.toast?.text.orEmpty(), minimumMillis = 2_500))
             viewModel.dismissToast()
         }
     }
@@ -141,21 +144,19 @@ internal fun DisambiguateContent(
         }
 
         state.toast?.let { toast ->
-            Box(
+            Toast(
+                text = toast.text,
+                appearance =
+                    ToastAppearance(
+                        background = if (toast.isError) PantopusColors.error else PantopusColors.success,
+                        foreground = PantopusColors.appTextInverse,
+                        textStyle = PantopusTextStyle.small,
+                    ),
                 modifier =
                     Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = 110.dp)
-                        .clip(RoundedCornerShape(Radii.pill))
-                        .background(if (toast.isError) PantopusColors.error else PantopusColors.success)
-                        .padding(horizontal = Spacing.s4, vertical = Spacing.s2),
-            ) {
-                Text(
-                    text = toast.text,
-                    style = PantopusTextStyle.small,
-                    color = PantopusColors.appTextInverse,
-                )
-            }
+                        .padding(bottom = 110.dp),
+            )
         }
     }
 }

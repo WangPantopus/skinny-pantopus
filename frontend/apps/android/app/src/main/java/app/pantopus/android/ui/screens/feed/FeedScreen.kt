@@ -72,6 +72,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -90,6 +91,9 @@ import androidx.lifecycle.repeatOnLifecycle
 import app.pantopus.android.data.ai.AIScreenContext
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
+import app.pantopus.android.ui.components.Toast
+import app.pantopus.android.ui.components.ToastAppearance
+import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.feed.map.FeedMapQuery
 import app.pantopus.android.ui.screens.feed.map.FeedMapSection
 import app.pantopus.android.ui.screens.feed.map.FeedViewMode
@@ -273,7 +277,7 @@ fun FeedScreen(
 
     LaunchedEffect(toast) {
         if (toast != null) {
-            delay(2_500)
+            delay(toastDurationMillis(toast.orEmpty(), minimumMillis = 2_500))
             viewModel.dismissToast()
         }
     }
@@ -512,18 +516,20 @@ fun FeedScreen(
             modifier = Modifier.align(Alignment.TopCenter),
         )
         toast?.let { message ->
-            Box(
+            Toast(
+                text = message,
+                appearance =
+                    ToastAppearance(
+                        background = PantopusColors.appText,
+                        foreground = PantopusColors.appTextInverse,
+                        textStyle = TextStyle(fontSize = 13.sp),
+                    ),
                 modifier =
                     Modifier
                         .align(Alignment.BottomCenter)
                         .padding(bottom = Spacing.s16)
-                        .clip(RoundedCornerShape(Radii.pill))
-                        .background(PantopusColors.appText)
-                        .padding(horizontal = Spacing.s4, vertical = Spacing.s2)
                         .testTag("pulseFeedToast"),
-            ) {
-                Text(text = message, fontSize = 13.sp, color = PantopusColors.appTextInverse)
-            }
+            )
         }
         if (showsIntentPicker) {
             AlertDialog(

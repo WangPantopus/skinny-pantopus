@@ -45,6 +45,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -52,6 +53,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.Toast
+import app.pantopus.android.ui.components.ToastAppearance
+import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailTopBar
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailTopBarAction
 import app.pantopus.android.ui.theme.PantopusColors
@@ -109,7 +113,7 @@ fun BusinessCatalogScreen(
     LaunchedEffect(Unit) { viewModel.load() }
     LaunchedEffect(toast) {
         if (toast?.kind == BusinessCatalogToastKind.Success) {
-            delay(2_000)
+            delay(toastDurationMillis(toast?.text.orEmpty(), minimumMillis = 2_000))
             viewModel.dismissToast()
         }
     }
@@ -531,14 +535,16 @@ private fun CatalogToast(
             BusinessCatalogToastKind.Success -> PantopusColors.success
             BusinessCatalogToastKind.Error -> PantopusColors.error
         }
-    Box(
+    Toast(
+        text = toast.text,
+        appearance =
+            ToastAppearance(
+                background = background,
+                foreground = PantopusColors.appTextInverse,
+                textStyle = TextStyle(fontSize = 13.sp),
+            ),
         modifier =
             modifier
-                .clip(RoundedCornerShape(Radii.pill))
-                .background(background)
-                .padding(horizontal = Spacing.s4, vertical = Spacing.s2)
                 .testTag("businessCatalog.toast"),
-    ) {
-        Text(text = toast.text, color = PantopusColors.appTextInverse, fontSize = 13.sp)
-    }
+    )
 }
