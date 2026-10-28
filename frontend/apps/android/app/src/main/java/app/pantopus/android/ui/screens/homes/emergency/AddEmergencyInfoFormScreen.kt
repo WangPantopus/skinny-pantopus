@@ -92,7 +92,7 @@ fun AddEmergencyInfoFormScreen(
     }
 
     val screenTitle =
-        if (state.mode is AddEmergencyInfoUiState.Mode.Edit) "Edit emergency info" else "Add emergency info"
+        if (state.isEditRequest || state.mode is AddEmergencyInfoUiState.Mode.Edit) "Edit emergency info" else "Add emergency info"
 
     Box(
         modifier =
@@ -109,6 +109,14 @@ fun AddEmergencyInfoFormScreen(
             onCommit = { viewModel.submit() },
             isSaving = state.isSaving,
         ) {
+            if (state.isLoadingEdit || state.editLoadError != null) {
+                Text(
+                    text = state.editLoadError ?: "Loading emergency info…",
+                    style = PantopusTextStyle.small,
+                    color = PantopusColors.appText,
+                )
+                return@FormShell
+            }
             CategorySection(
                 selected = state.category,
                 onSelect = viewModel::setCategory,
