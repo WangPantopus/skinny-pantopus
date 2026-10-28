@@ -43,9 +43,23 @@ const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
 const {
   checkHomePermission,
   getUserAccess,
-  hasPermission,
 } = require('../utils/homePermissions');
 
+
+// Reuse the Home list/detail decision: effective membership alone does not
+// authorize shared reads from a blocked Home. Recheck after loading payloads.
+async function requireCurrentIamAccess(homeId, actorId, permission, opening) {
+  const current = await homeListService.readAccessState(homeId, actorId);
+  if (current.mode !== 'shared' || (permission && !current.access.permissions.includes(permission))) {
+    throw Object.assign(new Error('No access to this home'), { statusCode: 403 });
+  }
+  if (opening && JSON.stringify(current) !== JSON.stringify(opening)) {
+    throw Object.assign(new Error('Home access changed while loading. Please retry.'), {
+      statusCode: 503, code: 'HOME_LIST_ACCESS_CHANGED',
+    });
+  }
+  return current;
+}
 
 // ============================================================
 // GET /:id/me — Current user's access for this home
@@ -57,9 +71,10 @@ router.get('/:id/me', verifyToken, async (req, res) => {
     const { id: homeId } = req.params;
     const userId = req.user.id;
 
-    const access = await getUserAccess(homeId, userId);
+    const opening = await homeListService.readAccessState(homeId, userId);
+    const access = opening.access;
 
-    if (!access.hasAccess) {
+    if (opening.mode !== 'shared') {
       return res.status(403).json({
         hasAccess: false,
         role_base: null,
@@ -124,6 +139,7 @@ router.get('/:id/me', verifyToken, async (req, res) => {
       ownership_claim_state = latestClaim.state;
     }
 
+    await requireCurrentIamAccess(homeId, userId, null, opening);
     res.json({
       hasAccess: true,
       access_expires_at: homeAccessExpiresAt(occ),
@@ -163,7 +179,8 @@ router.get('/:id/me', verifyToken, async (req, res) => {
     });
   } catch (err) {
     logger.error('GET /me error', { error: err.message, homeId: req.params.id });
-    res.status(err.code === 'HOME_ACCESS_UNAVAILABLE' ? 503 : 500).json({ error: 'Failed to load access info. Please retry.' });
+    res.status(err.statusCode || 503).json({ hasAccess: false, permissions: [], role_base: null,
+      error: 'Current home access could not be confirmed. Please retry.' });
   }
 });
 
@@ -265,22 +282,21 @@ router.get('/:id/members/:userId/permissions', verifyToken, async (req, res) => 
     const { id: homeId, userId: targetUserId } = req.params;
     const actorId = req.user.id;
 
-    // Need members.view at minimum, or be the target user
-    if (targetUserId !== actorId) {
-      const canView = await hasPermission(homeId, actorId, 'members.view');
-      if (!canView) {
-        return res.status(403).json({ error: 'No permission to view household members' });
-      }
-    }
-
+    const permission = targetUserId === actorId ? null : 'members.view';
+    const opening = await requireCurrentIamAccess(homeId, actorId, permission);
     const access = await getUserAccess(homeId, targetUserId);
+    await requireCurrentIamAccess(homeId, actorId, permission, opening);
+    const currentTarget = await getUserAccess(homeId, targetUserId);
+    if (JSON.stringify(currentTarget) !== JSON.stringify(access)) {
+      return res.status(503).json({ error: 'Member access changed while loading. Please retry.' });
+    }
     res.json({
       permissions: access.permissions,
       role_base: access.role_base,
     });
   } catch (err) {
     logger.error('Get member permissions error', { error: err.message });
-    res.status(500).json({ error: 'Failed to get permissions' });
+    res.status(err.statusCode || 503).json({ error: 'Current member permissions could not be confirmed.' });
   }
 });
 
@@ -328,14 +344,12 @@ router.post('/:id/members/:userId/confirm-claim', verifyToken, async (req, res) 
 // ============================================================
 
 router.get('/:id/audit-log', verifyToken, async (req, res) => {
+  res.setHeader('Cache-Control', 'private, no-store');
   try {
     const { id: homeId } = req.params;
     const actorId = req.user.id;
 
-    const access = await checkHomePermission(homeId, actorId, 'members.manage');
-    if (!access.hasAccess) {
-      return res.status(403).json({ error: 'No permission to view audit log' });
-    }
+    const opening = await requireCurrentIamAccess(homeId, actorId, 'members.manage');
 
     const { limit = 50, offset = 0 } = req.query;
 
@@ -359,11 +373,12 @@ router.get('/:id/audit-log', verifyToken, async (req, res) => {
     // A readable sentence beside each raw code, the same one the Home activity timeline shows. Actors go by the Local
     // Profile they show neighbors (services/chatPeople.js), as on the timeline.
     const people = await loadChatPeople((data || []).map((entry) => entry.actor?.id));
+    await requireCurrentIamAccess(homeId, actorId, 'members.manage', opening);
     res.json({ entries: (data || []).map((entry) => ({ ...entry, actor: chatPersonRow(entry.actor, people),
       description: describeHomeActivity(entry) })) });
   } catch (err) {
     logger.error('Audit log error', { error: err.message });
-    res.status(500).json({ error: 'Failed to fetch audit log' });
+    res.status(err.statusCode || 503).json({ error: 'Current access to the audit log could not be confirmed.' });
   }
 });
 
