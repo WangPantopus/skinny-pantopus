@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useCallback, useId, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 
 interface BottomSheetProps {
@@ -14,6 +14,23 @@ interface BottomSheetProps {
 }
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+const topDialog = () => Array.from(document.querySelectorAll('[aria-modal="true"]')).pop();
+
+// Open sheets, oldest first, share one Escape listener and one scroll lock:
+// Escape closes only the newest sheet (or nothing, if a dialog such as a
+// confirm is open above it and handles its own Escape), and the page scrolls
+// again once the last sheet has closed. With one of each per sheet, Escape
+// closed the sheet underneath first, and the page could stay locked.
+const openSheets: { panel: RefObject<HTMLDivElement | null>; close: () => void }[] = [];
+let pageOverflow = '';
+
+function closeTopSheet(e: KeyboardEvent) {
+  if (e.key !== 'Escape') return;
+  const top = openSheets[openSheets.length - 1];
+  const dialog = topDialog();
+  if (top && (!dialog || dialog === top.panel.current)) top.close();
+}
 
 export default function BottomSheet({
   open,
@@ -29,27 +46,27 @@ export default function BottomSheet({
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    },
-    [onClose],
-  );
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
-  // ESC listener
+  // Escape and body scroll lock, shared with the other open sheets
   useEffect(() => {
     if (!open) return;
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [open, handleKeyDown]);
-
-  // Lock body scroll while open
-  useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    const entry = { panel: sheetRef, close: () => onCloseRef.current() };
+    if (!openSheets.length) {
+      pageOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      document.addEventListener('keydown', closeTopSheet);
+    }
+    openSheets.push(entry);
     return () => {
-      document.body.style.overflow = prev;
+      openSheets.splice(openSheets.indexOf(entry), 1);
+      if (!openSheets.length) {
+        document.removeEventListener('keydown', closeTopSheet);
+        document.body.style.overflow = pageOverflow;
+      }
     };
   }, [open]);
 
@@ -67,8 +84,7 @@ export default function BottomSheet({
     const handleTab = (e: KeyboardEvent) => {
       if (e.key !== 'Tab') return;
       const active = document.activeElement;
-      const dropped = (!active || active === document.body)
-        && Array.from(document.querySelectorAll('[aria-modal="true"]')).pop() === sheet;
+      const dropped = (!active || active === document.body) && topDialog() === sheet;
       if (!dropped && !sheet.contains(active)) return;
       const controls = Array.from(sheet.querySelectorAll<HTMLElement>(FOCUSABLE))
         .filter((el) => el.getClientRects().length > 0);
