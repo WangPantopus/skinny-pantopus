@@ -32,6 +32,24 @@ enum HomesStoreReads {
         ScreenStore.shared.peek(HomesEndpoints.myHomes(), as: MyHomesResponse.self)
     }
 
+    /// `GET /api/homes/my-ownership-claims`: the person's own claims, one copy
+    /// for My claims, My homes, Place and Today. A claim makes its Home theirs
+    /// only once it's approved, so until then those screens name the claim in
+    /// review. Their own entries, so the copy shows at once, like their homes.
+    static func myClaims(store: ScreenStore = .shared, force: Bool = false) async throws -> ScreenSnapshot<MyOwnershipClaimsResponse> {
+        try await store.load(
+            HomesEndpoints.myOwnershipClaims(),
+            as: MyOwnershipClaimsResponse.self,
+            kind: .homes,
+            topics: [ScreenTopic.homes],
+            force: force
+        )
+    }
+
+    static func peekMyClaims(store: ScreenStore = .shared) -> ScreenSnapshot<MyOwnershipClaimsResponse>? {
+        store.peek(HomesEndpoints.myOwnershipClaims(), as: MyOwnershipClaimsResponse.self)
+    }
+
     /// `GET /api/saved-places`: the account's own saved addresses, one copy
     /// for every screen that lists them.
     static func savedPlaces(store: ScreenStore = .shared, force: Bool = false) async throws -> ScreenSnapshot<SavedPlacesListResponse> {

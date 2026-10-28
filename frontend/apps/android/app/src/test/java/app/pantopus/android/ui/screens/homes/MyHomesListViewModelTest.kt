@@ -4,6 +4,7 @@ import app.pantopus.android.data.api.models.homes.DeleteHomeResponse
 import app.pantopus.android.data.api.models.homes.HomeOccupancy
 import app.pantopus.android.data.api.models.homes.MyHome
 import app.pantopus.android.data.api.models.homes.MyHomesResponse
+import app.pantopus.android.data.api.models.homes.MyOwnershipClaimsResponse
 import app.pantopus.android.data.api.models.homes.PersonalHomeResidencyPage
 import app.pantopus.android.data.api.models.homes.PersonalHomeResidencyRequest
 import app.pantopus.android.data.api.net.NetworkError
@@ -58,6 +59,10 @@ class MyHomesListViewModelTest {
         every { session.invalidated } returns MutableStateFlow(false)
         coEvery { session.requireCurrent() } just Runs
         coEvery { residencyRepo.requests(null) } returns NetworkResult.Success(PersonalHomeResidencyPage(emptyList(), null))
+        // No claims in review unless a test says so.
+        every { repo.myClaimsCopy() } returns null
+        coEvery { repo.myClaimsStored(any()) } returns
+            Stored(MyOwnershipClaimsResponse(emptyList()), fetchedAt = System.currentTimeMillis())
         // The screens' store hands back what the endpoint answered (Instant Screens); nothing is stored yet.
         every { repo.myHomesCopy() } returns null
         coEvery { repo.myHomesStored(any()) } coAnswers {

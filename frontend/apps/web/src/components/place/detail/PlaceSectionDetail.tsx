@@ -15,7 +15,7 @@ import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
-import { MapPinned } from 'lucide-react';
+import { Clock, MapPinned } from 'lucide-react';
 import type { PlaceGroup, PlaceViewer } from '@pantopus/types';
 import { queryKeys } from '@/lib/query-keys';
 import { useMe } from '@/lib/me';
@@ -33,7 +33,7 @@ import MoneyDetail from './MoneyDetail';
 import CivicDetail from './CivicDetail';
 import IdentityDetail from './IdentityDetail';
 import { usePrimaryHome } from '@/lib/primaryHome';
-import { myHomesQuery as sharedMyHomesQuery } from '@/lib/myHomes';
+import { claimInReviewNote, claimsInReview, myClaimsQuery, myHomesQuery as sharedMyHomesQuery } from '@/lib/myHomes';
 import { PLACE_FRESH_MS, gatedStaleTime, placeCopyGate, useAfterRecheck } from '@/lib/householdCopy';
 
 function DetailShell({ section, hidden, children }: { section: string; hidden?: string[]; children: React.ReactNode }) {
@@ -116,6 +116,12 @@ export default function PlaceSectionDetail({ section }: { section: string }) {
     staleTime: 60_000,
   });
   const savedPlace = savedQuery.data?.savedPlaces?.[0] ?? null;
+  // ...and so does a claim in review: the claim makes the Home yours only once it's approved.
+  const claimsQuery = useQuery({
+    ...myClaimsQuery(),
+    enabled: authed && valid && noSharedHome && myHomesQuery.isFetched && !privateSetupId,
+  });
+  const claim = claimsInReview(claimsQuery.data)[0] ?? null;
 
   const showsCopy = placeCopyGate(myHomesQuery.data?.homes.find((home) => home.id === homeId));
   const intelQuery = useQuery({
@@ -173,20 +179,24 @@ export default function PlaceSectionDetail({ section }: { section: string }) {
   }
 
   if (homeQuery.isSuccess && !homeId) {
-    if (myHomesQuery.isError || savedQuery.isError) {
+    if (myHomesQuery.isError || savedQuery.isError || claimsQuery.isError) {
       return (
         <DetailShell section={section}>
           <DetailHeader title={meta.title} />
           <div className="px-4 sm:px-5">
             <ErrorState
               message="We couldn't load your place. Check your connection and try again."
-              onRetry={() => { void (myHomesQuery.isError ? myHomesQuery.refetch() : savedQuery.refetch()); }}
+              onRetry={() => {
+                if (myHomesQuery.isError) { void myHomesQuery.refetch(); return; }
+                if (savedQuery.isError) void savedQuery.refetch();
+                if (claimsQuery.isError) void claimsQuery.refetch();
+              }}
             />
           </div>
         </DetailShell>
       );
     }
-    if (myHomesQuery.isPending || savedQuery.isPending) {
+    if (myHomesQuery.isPending || savedQuery.isPending || claimsQuery.isPending) {
       return (
         <DetailShell section={section}>
           <DetailHeader title={meta.title} />
@@ -198,7 +208,15 @@ export default function PlaceSectionDetail({ section }: { section: string }) {
       <DetailShell section={section}>
         <DetailHeader title={meta.title} />
         <div className="px-4 sm:px-5">
-          {savedPlace ? (
+          {claim ? (
+            <EmptyState
+              icon={Clock}
+              {...claimInReviewNote(claim, meta.title)}
+              actionLabel="Check status"
+              headingLevel={2}
+              onAction={() => router.push('/app/homes')}
+            />
+          ) : savedPlace ? (
             <EmptyState
               icon={MapPinned}
               title="Set up this home to see this"

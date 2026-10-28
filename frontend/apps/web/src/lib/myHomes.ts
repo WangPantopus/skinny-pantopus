@@ -24,3 +24,46 @@ export function myHomesQuery() {
     staleTime: gatedStaleTime<MyHomesReply>(MY_HOMES_FRESH_MS, showsMyHomesCopy),
   };
 }
+
+export type MyClaimsReply = Awaited<ReturnType<typeof api.homeOwnership.getMyOwnershipClaims>>;
+export type MyClaim = MyClaimsReply['claims'][number];
+
+// Your own claims (GET /api/homes/my-ownership-claims), shared by My Homes and the Place pages. A claim
+// doesn't make its Home one of yours until it's approved, so with no Home to open, Place, Today and Pulse
+// name your claim in review instead of "no place". Only your own claims, so the copy shows at once, like
+// your homes; the `homes` change signal marks it out of date.
+export function myClaimsQuery() {
+  return {
+    queryKey: queryKeys.placeMyClaims(),
+    queryFn: () => api.homeOwnership.getMyOwnershipClaims(),
+    staleTime: MY_HOMES_FRESH_MS,
+  };
+}
+
+/** Your claims still in review, newest first. */
+export function claimsInReview(reply: MyClaimsReply | undefined): MyClaim[] {
+  return (reply?.claims ?? []).filter((claim) => claim.status === 'under_review' && !!claim.home_id);
+}
+
+function claimedParts(claim: Pick<MyClaim, 'home'>): { line: string; city: string } {
+  const line = [claim.home?.address, claim.home?.address2].map((part) => part?.trim()).filter(Boolean).join(' ');
+  const city = [claim.home?.city, claim.home?.state].map((part) => part?.trim()).filter(Boolean).join(', ');
+  return { line, city };
+}
+
+/** The address you claimed (street with any unit, then town), as the iOS and Android apps show it. */
+export function claimAddress(claim: Pick<MyClaim, 'claim_type' | 'home'>): { line: string; city: string } {
+  const { line, city } = claimedParts(claim);
+  if (line) return { line, city };
+  return { line: 'Home', city: city || (claim.claim_type === 'resident' ? 'Residency verification in progress' : 'Ownership verification in progress') };
+}
+
+/**
+ * What a Place page says instead of "no place" while your claim is in review: `what` (Today, Your home…)
+ * fills in once it's approved. Names the address you claimed when the server sent it.
+ */
+export function claimInReviewNote(claim: Pick<MyClaim, 'home'>, what: string): { title: string; description: string } {
+  const { line, city } = claimedParts(claim);
+  const claimed = line ? `You claimed ${[line, city].filter(Boolean).join(', ')}. ` : '';
+  return { title: 'Your claim is in review', description: `${claimed}${what} fills in here once a Pantopus reviewer approves your claim.` };
+}

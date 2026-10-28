@@ -20,7 +20,7 @@ import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
-import { MapPinned } from 'lucide-react';
+import { Clock, MapPinned } from 'lucide-react';
 import { queryKeys } from '@/lib/query-keys';
 import ErrorState from '@/components/ui/ErrorState';
 import EmptyState from '@/components/ui/EmptyState';
@@ -30,7 +30,7 @@ import { detailAddress } from '@/components/place/detail/sections';
 import PulseStreamView from './PulseStreamView';
 import PlaceShell from '../PlaceShell';
 import { usePrimaryHome } from '@/lib/primaryHome';
-import { myHomesQuery as sharedMyHomesQuery } from '@/lib/myHomes';
+import { claimInReviewNote, claimsInReview, myClaimsQuery, myHomesQuery as sharedMyHomesQuery } from '@/lib/myHomes';
 import { PLACE_FRESH_MS, gatedStaleTime, placeCopyGate, useAfterRecheck } from '@/lib/householdCopy';
 
 const REDIRECT_TO = encodeURIComponent('/app/place/pulse');
@@ -116,6 +116,10 @@ export default function PulseStream() {
   // A guest's or service provider's copy is used only once the re-check answers (decision 3).
   const { data: intelligence } = useAfterRecheck(intelQuery, showsCopy);
 
+  // With no place, a claim in review says so: the claim makes the Home yours only once it's approved.
+  const claimsQuery = useQuery({ ...myClaimsQuery(), enabled: authed && homeQuery.isSuccess && !homeId });
+  const claim = claimsInReview(claimsQuery.data)[0] ?? null;
+
   const homeAddress = home ? [home.address, home.city].filter(Boolean).join(' · ') : undefined;
   const address = intelligence ? detailAddress(intelligence.place) : homeAddress;
   const verifyAddress = intelligence?.place.label ?? homeAddress;
@@ -147,17 +151,44 @@ export default function PulseStream() {
   }
 
   if (homeQuery.isSuccess && !homeId) {
+    if (claimsQuery.isError) {
+      return (
+        <StreamShell>
+          <DetailHeader title="Today's Pulse" backHref="/app/place" />
+          <div className="px-4 sm:px-5">
+            <ErrorState message="We couldn't load your place. Check your connection and try again." onRetry={() => claimsQuery.refetch()} />
+          </div>
+        </StreamShell>
+      );
+    }
+    if (claimsQuery.isPending) {
+      return (
+        <StreamShell>
+          <DetailHeader title="Today's Pulse" backHref="/app/place" />
+          <StreamSkeleton />
+        </StreamShell>
+      );
+    }
     return (
       <StreamShell>
         <DetailHeader title="Today's Pulse" backHref="/app/place" />
         <div className="px-4 sm:px-5">
-          <EmptyState
-            icon={MapPinned}
-            title="You haven't added a place yet"
-            description="Claim your address to see today's air, local alerts, and what's happening on your block."
-            actionLabel="Add your place"
-            onAction={() => router.push('/app/homes')}
-          />
+          {claim ? (
+            <EmptyState
+              icon={Clock}
+              {...claimInReviewNote(claim, "Today's Pulse")}
+              actionLabel="Check status"
+              onAction={() => router.push('/app/homes')}
+            />
+          ) : (
+            <EmptyState
+              icon={MapPinned}
+              title="You haven't added a place yet"
+              description="Claim your address to see today's air, local alerts, and what's happening on your block."
+              actionLabel="Add your place"
+              onAction={() => router.push('/app/homes')}
+            />
+          )}
         </div>
       </StreamShell>
     );

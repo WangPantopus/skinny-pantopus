@@ -99,6 +99,8 @@ export const queryKeys = {
   // ── Place (address-led home intelligence) ─────────────────
   placePrimaryHome: () => ['place', 'primary-home'] as const,
   placeMyHomes: () => ['place', 'my-homes'] as const,
+  /** Your own ownership and residency claims (GET /api/homes/my-ownership-claims); lib/myHomes.ts. */
+  placeMyClaims: () => ['place', 'my-claims'] as const,
   placeIntelligence: (homeId: string) =>
     ['place', 'intelligence', homeId] as const,
   /** The civic_election section alone (Today's ballot card). */

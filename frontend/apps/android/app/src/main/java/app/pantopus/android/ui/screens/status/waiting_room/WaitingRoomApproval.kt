@@ -59,6 +59,18 @@ object WaitingRoomApproval {
     const val CONFIRM_IDENTITY = "confirm_identity"
     const val UPLOAD_DOCUMENT = "upload_document"
 
+    /** What a claim in review waits on, in a few words (web `approvalSummary`). */
+    fun summary(approval: ClaimApprovalProgressDto): String {
+        val identityDone = approval.identity == "verified"
+        return when {
+            identityDone && approval.proof == "verified" -> "Waiting for approval"
+            !identityDone && approval.proof == "missing" -> "Identity and document needed"
+            !identityDone -> if (approval.identity == "processing") "Checking your ID" else "Identity check needed"
+            approval.proof == "pending" -> "Document in review"
+            else -> "Document needed"
+        }
+    }
+
     /** Both steps for a claim in review, or none when the server didn't say. */
     fun steps(
         approval: ClaimApprovalProgressDto?,

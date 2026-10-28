@@ -23,7 +23,7 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
 
     /// One add control: with no Homes the empty state's button adds one.
     var fab: FABAction? {
-        guard case .loaded = state, !entries.isEmpty else { return nil }
+        guard case .loaded = state, !entries.isEmpty || !shownClaims.isEmpty else { return nil }
         return FABAction(icon: .plusCircle, accessibilityLabel: "Add a home", variant: .secondaryCreate, tint: .home, handler: onAddHome)
     }
 
@@ -62,6 +62,11 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
     private var homesError: String?
     private var historyError: String?
     private var loadingHistory = false
+    /// The person's claims; the ones in review for a Home not listed here show
+    /// under "Verification in progress" (a claim makes a Home theirs only once
+    /// it's approved), as on web My Homes.
+    private var claims: [OwnershipClaimDTO] = []
+    private var claimsError: String?
 
     init(
         api: APIClient = .shared,
@@ -99,6 +104,8 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
         homesError = nil
         historyError = nil
         loadingHistory = false
+        claims = []
+        claimsError = nil
         pendingEvent = nil
         actionError = nil
         state = .loading
@@ -137,10 +144,12 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
         // The store withholds guest, temporary and other restricted copies.
         let homes = store.peek(HomesEndpoints.myHomes(), as: MyHomesResponse.self)?.value
         let page = store.peek(Self.residencyPage(cursor: nil), as: PersonalHomeResidencyPage.self)?.value
+        let claimsCopy = HomesStoreReads.peekMyClaims(store: store)?.value
         entries = homes?.homes ?? []
         requests = page?.requests ?? []
+        claims = claimsCopy?.claims ?? []
         nextCursor = page?.nextCursor
-        if homes != nil || page != nil {
+        if homes != nil || page != nil || claimsCopy != nil {
             render(revision: revision)
         }
         do {
@@ -155,6 +164,8 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
             if ScreenStore.isRefusal(error) { entries = [] }
             homesError = "Your saved Homes could not be checked. Retry."
         }
+        guard current(revision) else { return }
+        await loadClaims(revision: revision, force: force)
         guard current(revision) else { return }
         await loadHistory(revision: revision, cursor: nil, force: force)
     }
@@ -321,20 +332,6 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
         )
     }
 
-    /// "301" reads "Unit 301"; a unit stored with its own designator
-    /// ("Apt 4B", "Unit 12", "#3") stays as it is instead of "Unit Apt 4B".
-    static func unitText(_ unit: String) -> String {
-        unit.range(of: unitDesignatorPattern, options: [.regularExpression, .caseInsensitive]) == nil ? "Unit \(unit)" : unit
-    }
-
-    /// USPS secondary-unit designators (and their long forms), or a leading "#".
-    private static let unitDesignatorPattern = "^(#|(" + [
-        "apt", "apartment", "unit", "ste", "suite", "bldg", "building", "fl", "floor", "rm", "room",
-        "lot", "spc", "space", "trlr", "trailer", "ph", "penthouse", "bsmt", "basement", "dept", "ofc",
-        "office", "lowr", "lower", "uppr", "upper", "frnt", "front", "rear", "side", "pier", "slip",
-        "hngr", "hangar", "lbby", "lobby", "key", "stop"
-    ].joined(separator: "|") + #")(?=[\s.#0-9]|$))"#
-
     private func roleLabel(for entry: MyHome) -> String? {
         if entry.accessKind == "private_setup" { return "Your private Home" }
         if entry
@@ -352,6 +349,24 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
         default: return nil
         }
     }
+}
+
+// MARK: - Units
+
+extension MyHomesListViewModel {
+    /// "301" reads "Unit 301"; a unit stored with its own designator
+    /// ("Apt 4B", "Unit 12", "#3") stays as it is instead of "Unit Apt 4B".
+    static func unitText(_ unit: String) -> String {
+        unit.range(of: unitDesignatorPattern, options: [.regularExpression, .caseInsensitive]) == nil ? "Unit \(unit)" : unit
+    }
+
+    /// USPS secondary-unit designators (and their long forms), or a leading "#".
+    private static let unitDesignatorPattern = "^(#|(" + [
+        "apt", "apartment", "unit", "ste", "suite", "bldg", "building", "fl", "floor", "rm", "room",
+        "lot", "spc", "space", "trlr", "trailer", "ph", "penthouse", "bsmt", "basement", "dept", "ofc",
+        "office", "lowr", "lower", "uppr", "upper", "frnt", "front", "rear", "side", "pier", "slip",
+        "hngr", "hangar", "lbby", "lobby", "key", "stop"
+    ].joined(separator: "|") + #")(?=[\s.#0-9]|$))"#
 }
 
 // MARK: - Row footers
@@ -438,11 +453,11 @@ extension MyHomesListViewModel {
 private extension MyHomesListViewModel {
     func render(revision: Int) {
         guard current(revision) else { return }
-        if homesError != nil, historyError != nil, entries.isEmpty, requests.isEmpty {
+        if homesError != nil, historyError != nil, entries.isEmpty, requests.isEmpty, shownClaims.isEmpty {
             state = .error(message: "Your Homes and residency requests could not be checked. Retry.")
             return
         }
-        var sections: [RowSection] = []
+        var sections = claimSections(revision: revision)
         if !entries.isEmpty {
             sections.append(RowSection(id: "homes", rows: entries.map { row(for: $0, revision: revision) }))
         }
@@ -539,6 +554,89 @@ private extension MyHomesListViewModel {
                 )
             ])
         )
+    }
+}
+
+// MARK: - Claims in review
+
+private extension MyHomesListViewModel {
+    /// Claims in review for a Home the list doesn't show already. A private
+    /// setup is not a verification receipt, so its claim still shows (web).
+    var shownClaims: [OwnershipClaimDTO] {
+        let listed = Set(entries.filter { $0.accessKind != "private_setup" }.map(\.id))
+        return claims.filter { $0.isInReview && !listed.contains($0.homeId) }
+    }
+
+    func loadClaims(revision: Int, force: Bool) async {
+        do {
+            try scope.requireCurrent()
+            let response = try await HomesStoreReads.myClaims(store: store, force: force).value
+            guard current(revision), !Task.isCancelled else { return }
+            claims = response.claims
+            claimsError = nil
+        } catch {
+            guard current(revision) else { return }
+            if ScreenStore.isRefusal(error) { claims = [] }
+            claimsError = "Your claims could not be checked. Retry."
+        }
+    }
+
+    /// "Verification in progress" comes first, as on web My Homes.
+    func claimSections(revision: Int) -> [RowSection] {
+        var rows = shownClaims.map { claimRow(for: $0, revision: revision) }
+        if let claimsError {
+            rows.append(recoveryRow(id: "claims-retry", message: claimsError, title: "Retry claims", revision: revision, refreshAll: true))
+        }
+        return rows.isEmpty ? [] : [RowSection(id: "claims", header: "Verification in progress", rows: rows)]
+    }
+
+    /// The address claimed, the claim's kind and what it waits on. It opens
+    /// the claim's Waiting Room: its checklist, documents and withdraw.
+    func claimRow(for claim: OwnershipClaimDTO, revision: Int) -> RowModel {
+        let open: @Sendable () -> Void = { [weak self] in
+            Task { @MainActor in
+                guard let self, self.current(revision) else { return }
+                self.onOpenWaitingRoom?(claim.homeId)
+            }
+        }
+        return RowModel(
+            id: "claim_" + claim.id,
+            title: claim.home?.street ?? "Home",
+            subtitle: [claim.kindLabel, claim.home?.locality].compactMap { $0 }.joined(separator: " · "),
+            template: .avatarKebab,
+            leading: .typeIcon(.home, background: Theme.Color.homeBg, foreground: Theme.Color.home),
+            trailing: .chevron,
+            onTap: open,
+            body: "This claim does not grant household access.",
+            chips: [RowChip(text: claim.waitingLabel, icon: .clock, tint: .status(.warning))],
+            wrapChips: true,
+            footer: RowFooter(actions: [
+                RowFooterAction(
+                    title: "Check claim status",
+                    icon: .arrowRight,
+                    variant: .primary,
+                    identifier: "myHomes.claim_\(claim.id).continue",
+                    handler: open
+                )
+            ])
+        )
+    }
+}
+
+extension OwnershipClaimDTO {
+    /// "Ownership claim", or "Residency claim" for a renter's residency document.
+    var kindLabel: String {
+        claimType == "resident" ? "Residency claim" : "Ownership claim"
+    }
+
+    /// What the claim waits on, as web My Homes says it.
+    var waitingLabel: String {
+        if let approval { return WaitingRoomApproval.summary(approval) }
+        switch hasEvidence {
+        case false?: return "Document needed"
+        case true?: return "Under review"
+        case nil: return "Check document status"
+        }
     }
 }
 

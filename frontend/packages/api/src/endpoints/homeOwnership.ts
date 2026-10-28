@@ -60,6 +60,8 @@ export interface OwnershipClaim {
   has_evidence?: boolean | null;
   /** What a claim in review still needs before it can be approved; null otherwise or when unknown. */
   approval?: ClaimApprovalProgress | null;
+  /** The address the person claimed (their own entry), on GET /api/homes/my-ownership-claims. */
+  home?: { address: string | null; address2: string | null; city: string | null; state: string | null } | null;
   created_at: string;
   updated_at: string;
 }

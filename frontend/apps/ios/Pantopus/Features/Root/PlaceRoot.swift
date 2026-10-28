@@ -5,7 +5,8 @@
 //  What the Place tab shows at its root. The tab is the person's place:
 //  Your Place for a Home they can open, the address they saved, or the
 //  address-first screen. My homes roots the tab only while every entry
-//  still waits on verification. Nothing sits under Your Place.
+//  still waits on verification, or while the person has no Home entries
+//  but a claim in review. Nothing sits under Your Place.
 //
 
 import Foundation
@@ -19,7 +20,8 @@ enum PlaceRoot: Equatable {
     case savedPlace(SavedPlaceDTO)
     /// No Home entries and no saved address: the address-first screen.
     case firstRun
-    /// Entries that all still wait on verification: My homes shows them.
+    /// Entries that all still wait on verification, or none but a claim in
+    /// review: My homes shows them.
     case homes
     /// The first read failed and there was no kept copy.
     case error(String)
@@ -44,12 +46,18 @@ enum PlaceRootResolver {
 
     /// The root the home list decides, keeping the session's current Home while
     /// it can still be opened. Nil when there are no Home entries at all: the
-    /// saved places decide then.
+    /// claims and then the saved places decide.
     static func root(for response: MyHomesResponse, current: String?) -> PlaceRoot? {
         if let current, isOpenable(current, in: response) { return .home(current) }
         if let homeId = landingHomeId(in: response) { return .home(homeId) }
         if response.homes.contains(where: \.hasValidListContext) { return .homes }
         return nil
+    }
+
+    /// With no Home entries, a claim in review roots the tab at My homes, which
+    /// shows it (a claim makes its Home the person's only once it's approved).
+    static func root(forClaims response: MyOwnershipClaimsResponse) -> PlaceRoot? {
+        response.claims.contains(where: \.isInReview) ? .homes : nil
     }
 
     /// The saved address the Place tab shows: the newest one saved as a home,

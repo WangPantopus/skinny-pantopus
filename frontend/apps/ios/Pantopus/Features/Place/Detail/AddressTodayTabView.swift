@@ -19,6 +19,8 @@ struct AddressTodayTabView: View {
     @State private var loadFailed = false
     @State private var detail: PlaceDetailViewModel?
     @State private var savedPlace: SavedPlaceDTO?
+    /// No place yet, but a claim in review: Today says so instead of "Claim your address".
+    @State private var claimInReview: OwnershipClaimDTO?
     @State private var resolveID = UUID()
     /// The account the shown place was resolved for. Another account starts blank.
     @State private var resolvedUserID: String?
@@ -136,7 +138,7 @@ struct AddressTodayTabView: View {
         } else {
             VStack(spacing: 0) {
                 if PlansFlags.shared.plans { PlansTodayCards().padding(.horizontal, Spacing.s4) }
-                noPlace
+                if let claimInReview { claimPending(claimInReview) } else { noPlace }
             }
         }
     }
@@ -211,6 +213,7 @@ struct AddressTodayTabView: View {
             loadFailed = false
             detail = nil
             savedPlace = nil
+            claimInReview = nil
             WidgetSnapshotStore.shared.clearToday()
         }
         resolvedUserID = userID
@@ -231,6 +234,7 @@ struct AddressTodayTabView: View {
                     detail = PlaceDetailViewModel(homeId: id, group: .today)
                 }
                 savedPlace = nil
+                claimInReview = nil
             } else {
                 let saved = try await HomesStoreReads.savedPlaces().value
                 try Task.checkCancellation()
@@ -238,12 +242,19 @@ struct AddressTodayTabView: View {
                 guard resolveID == requestID else { return }
                 if let place = saved.savedPlaces.first {
                     savedPlace = place
+                    claimInReview = nil
                     if detail?.savedPlaceId != place.id {
                         detail = PlaceDetailViewModel(homeId: "", group: .today, savedPlaceId: place.id)
                     }
                 } else {
+                    // A claim makes its Home theirs only once it's approved; until then Today names it.
+                    let claims = try await HomesStoreReads.myClaims().value
+                    try Task.checkCancellation()
+                    try scope.requireCurrent()
+                    guard resolveID == requestID else { return }
                     detail = nil
                     savedPlace = nil
+                    claimInReview = claims.claims.first(where: \.isInReview)
                 }
             }
         } catch is CancellationError {
@@ -268,6 +279,47 @@ struct AddressTodayTabView: View {
             return
         }
         DeepLinkRouter.shared.handle(path: "/place/\(homeId)")
+    }
+}
+
+extension AddressTodayTabView {
+    /// No place yet, but a claim in review: the address claimed and when
+    /// Today fills in, with My homes (the Place tab) for its status. Words
+    /// match web's Place pages and Android.
+    func claimPending(_ claim: OwnershipClaimDTO) -> some View {
+        VStack(spacing: 10) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.Color.homeBg)
+                Icon(.clock, size: 28, strokeWidth: 2, color: Theme.Color.home)
+            }
+            .frame(width: 56, height: 56)
+            Text("Your claim is in review")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundStyle(Theme.Color.appText)
+            Text(Self.claimPendingMessage(claim))
+                .font(.system(size: 14))
+                .lineSpacing(3)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(Theme.Color.appTextSecondary)
+            PrimaryButton(title: "Check status") { rootTabs.selected = .place }
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity)
+        .background(Theme.Color.appSurface)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.Color.appBorder, lineWidth: 1))
+        .padding(.horizontal, 16)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .accessibilityIdentifier("addressTodayClaimInReview")
+    }
+
+    /// "You claimed 901 C Street, Vancouver, WA. Today fills in here once a
+    /// Pantopus reviewer approves your claim."
+    static func claimPendingMessage(_ claim: OwnershipClaimDTO) -> String {
+        let claimed = claim.home?.street.map { street in
+            "You claimed \([street, claim.home?.locality].compactMap { $0 }.joined(separator: ", ")). "
+        } ?? ""
+        return claimed + "Today fills in here once a Pantopus reviewer approves your claim."
     }
 }
 

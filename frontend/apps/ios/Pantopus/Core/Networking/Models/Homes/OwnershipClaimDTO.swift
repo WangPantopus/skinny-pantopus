@@ -38,14 +38,30 @@ public struct OwnershipClaimDTO: Decodable, Sendable, Hashable, Identifiable {
 
         /// "901 C Street Unit 4, Vancouver", or nil without a street.
         var label: String? {
+            guard let street else { return nil }
+            guard let city = city?.trimmingCharacters(in: .whitespaces), !city.isEmpty else { return street }
+            return "\(street), \(city)"
+        }
+
+        /// "901 C Street Unit 4", or nil without a street.
+        var street: String? {
             let street = [address, address2]
                 .compactMap { $0?.trimmingCharacters(in: .whitespaces) }
                 .filter { !$0.isEmpty }
                 .joined(separator: " ")
-            guard !street.isEmpty else { return nil }
-            guard let city = city?.trimmingCharacters(in: .whitespaces), !city.isEmpty else { return street }
-            return "\(street), \(city)"
+            return street.isEmpty ? nil : street
         }
+
+        /// "Vancouver, WA", or nil when neither is known.
+        var locality: String? {
+            let parts = [city, state].compactMap { $0?.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+            return parts.isEmpty ? nil : parts.joined(separator: ", ")
+        }
+    }
+
+    /// Still in review: the server shows every open claim as `under_review`.
+    var isInReview: Bool {
+        status == "under_review"
     }
 
     private enum CodingKeys: String, CodingKey {

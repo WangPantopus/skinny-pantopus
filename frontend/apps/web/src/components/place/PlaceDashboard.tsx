@@ -20,13 +20,14 @@ import type { PlaceSwitcherHome } from '@/components/archetypes/place';
 import { PlaceHomeContext, placeHomeQuery } from '@/components/archetypes/place';
 import ErrorState from '@/components/ui/ErrorState';
 import SavedPlaceContext from './SavedPlaceContext';
+import ClaimsInReview from './ClaimsInReview';
 import { placeSlugsNotForViewer } from './detail/sections';
 import PlaceDashboardView from './PlaceDashboardView';
 import PlaceDashboardSkeleton from './PlaceDashboardSkeleton';
 import PlaceShell from './PlaceShell';
 import SetupBanner from '@/components/hub/SetupBanner';
 import { usePrimaryHome } from '@/lib/primaryHome';
-import { myHomesQuery as sharedMyHomesQuery } from '@/lib/myHomes';
+import { claimsInReview, myClaimsQuery, myHomesQuery as sharedMyHomesQuery } from '@/lib/myHomes';
 import { PLACE_FRESH_MS, gatedStaleTime, placeCopyGate, useAfterRecheck } from '@/lib/householdCopy';
 
 const REDIRECT_TO = encodeURIComponent('/app/place');
@@ -96,6 +97,10 @@ export default function PlaceDashboard() {
   // The active home: an explicit switch wins, then the primary home, then
   // the private setup.
   const homeId = selectedHomeId ?? homeQuery.data?.home?.id ?? privateSetupId;
+
+  // With no Home to open, your claims in review (a claim makes a Home yours only once it's approved).
+  const noHome = homeQuery.isSuccess && !homeId;
+  const claimsQuery = useQuery({ ...myClaimsQuery(), enabled: authed && noHome && myHomesQuery.isFetched });
   // Links carry the place only when it isn't the primary home.
   const linkHomeId = homeId !== homeQuery.data?.home?.id ? homeId : null;
 
@@ -147,13 +152,19 @@ export default function PlaceDashboard() {
     );
   }
 
-  // No home yet: saved addresses, or a pointer to adding one (the funnel
-  // claims/verifies elsewhere). Wait for the Home list first, so a private
-  // setup doesn't flash the no-home view.
-  if (homeQuery.isSuccess && !homeId) {
+  // No home yet: your claims in review, saved addresses, or a pointer to adding one (the funnel
+  // claims/verifies elsewhere). Wait for the Home list and your claims first, so a private setup or
+  // a claim doesn't flash the no-home view; if the claims can't be read, the page goes on without them.
+  if (noHome) {
+    const claims = claimsInReview(claimsQuery.data);
     return (
       <Shell>
-        {myHomesQuery.isPending ? <PlaceDashboardSkeleton /> : <SavedPlaceContext />}
+        {myHomesQuery.isPending || claimsQuery.isPending ? <PlaceDashboardSkeleton /> : (
+          <div className="space-y-4">
+            {claims.length > 0 ? <ClaimsInReview claims={claims} /> : null}
+            <SavedPlaceContext claimInReview={claims.length > 0} />
+          </div>
+        )}
       </Shell>
     );
   }

@@ -39,6 +39,7 @@ export function markTopic(client: QueryClient, topic: string): void {
     case 'homes':
       mark(client, queryKeys.placePrimaryHome());
       mark(client, queryKeys.placeMyHomes());
+      mark(client, queryKeys.placeMyClaims());
       mark(client, queryKeys.hub());
       break;
     case 'home': // its dashboard copy and summary cards, and its property details
@@ -95,6 +96,7 @@ export function useSyncChanged(): void {
         mark(client, ['homes']);
         mark(client, queryKeys.placePrimaryHome());
         mark(client, queryKeys.placeMyHomes());
+        mark(client, queryKeys.placeMyClaims());
         markTopic(client, 'chats');
         void client.invalidateQueries({ queryKey: ['chat'],
           refetchType: navigator.onLine && document.visibilityState === 'visible' ? 'active' : 'none' });

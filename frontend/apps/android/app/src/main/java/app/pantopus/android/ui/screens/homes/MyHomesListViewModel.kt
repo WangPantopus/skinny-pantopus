@@ -170,6 +170,12 @@ class MyHomesListViewModel
         private var loadingHistory = false
         private var quietHistory = false
         private var historyJob: Job? = null
+
+        /**
+         * The person's claims; the ones in review for a Home not listed here show under "Verification in progress" (a
+         * claim makes a Home theirs only once it's approved), as on web My Homes.
+         */
+        private val claims = MyHomesClaims()
         private var deleting = false
         private val _state = MutableStateFlow<ListOfRowsUiState>(ListOfRowsUiState.Loading)
         val state = _state.asStateFlow()
@@ -237,6 +243,7 @@ class MyHomesListViewModel
             historyJob = null
             homesError = null
             historyError = null
+            claims.clearError()
             loadingHistory = false
             quietHistory = false
             _pendingEvent.value = null
@@ -246,6 +253,7 @@ class MyHomesListViewModel
             store.remove(StoreKeys.myHomes)
             entries = emptyList()
             requests = emptyList()
+            claims.clear()
             nextCursor = null
             _state.value = ListOfRowsUiState.Loading
             _banner.value = null
@@ -274,8 +282,9 @@ class MyHomesListViewModel
                 val stored = repo.myHomesCopy()?.homes
                 if (stored != null && listChecksOut(stored) && stored.all { it.showsInListBeforeRecheck }) entries = stored
             }
-            // The stored Homes and the requests still on screen show at once.
-            if (entries.size + requests.size > 0) render(revision)
+            claims.showStored(repo)
+            // The stored Homes and the requests and claims still on screen show at once.
+            if (entries.size + requests.size + claims.claims.size > 0) render(revision)
             _refreshing.value = force && entries.isNotEmpty()
             refreshJob =
                 viewModelScope.launch {
@@ -300,6 +309,8 @@ class MyHomesListViewModel
                             }
                             else -> entries = homes
                         }
+                        claims.read(repo, force)
+                        session.requireCurrent()
                         loadHistory(revision, null)
                     } catch (error: CancellationException) {
                         throw error
@@ -392,13 +403,19 @@ class MyHomesListViewModel
 
         private fun render(revision: Long) {
             if (!current(revision)) return
-            val noUsableRows = entries.isEmpty() && requests.isEmpty()
+            val shownClaims = claimsInReview(claims.claims, entries)
+            val noUsableRows = entries.isEmpty() && requests.isEmpty() && shownClaims.isEmpty()
             if (homesError != null && historyError != null && noUsableRows) {
                 _state.value = ListOfRowsUiState.Error("Your Homes and residency requests could not be checked. Retry.")
                 return
             }
             val sections =
                 buildList {
+                    addAll(
+                        listOfNotNull(
+                            claimsSection(shownClaims, claims.error, { current(revision) }, { onOpenWaitingRoom?.invoke(it) }, ::refresh),
+                        ),
+                    )
                     if (entries.isNotEmpty()) add(RowSection(id = "my-homes", rows = entries.map { rowFor(it, revision) }))
                     homesError?.let { message ->
                         add(
