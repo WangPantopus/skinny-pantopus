@@ -283,8 +283,7 @@ public struct PulsePageView: View {
             ToastView(message: ToastMessage(text: text, kind: viewModel.toastKind))
                 .padding(.bottom, Spacing.s16 + Spacing.s5)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
-                .task(id: text) {
-                    try? await Task.sleep(nanoseconds: 2_500_000_000)
+                .dismissToast(after: text, minimum: 2.5) {
                     viewModel.toastMessage = nil
                 }
         }

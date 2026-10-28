@@ -37,6 +37,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -45,7 +46,10 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.Toast
+import app.pantopus.android.ui.components.ToastAppearance
 import app.pantopus.android.ui.components.shareText
+import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -1085,21 +1089,24 @@ private fun BoxScope.ToastOverlay(
 ) {
     if (message == null) return
     LaunchedEffect(message) {
-        delay(2500)
+        delay(toastDurationMillis(message, minimumMillis = 2500))
         onDismiss()
     }
-    Box(
+    Toast(
+        text = message,
+        appearance =
+            ToastAppearance(
+                background = PantopusColors.appText,
+                foreground = PantopusColors.appTextInverse,
+                textStyle = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Medium),
+                verticalPadding = Spacing.s3,
+            ),
         modifier =
             Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = Spacing.s8)
-                .clip(RoundedCornerShape(Radii.pill))
-                .background(PantopusColors.appText)
-                .padding(horizontal = Spacing.s4, vertical = Spacing.s3)
                 .testTag("audienceToast"),
-    ) {
-        Text(text = message, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = PantopusColors.appTextInverse)
-    }
+    )
 }
 
 /**

@@ -50,8 +50,7 @@ public struct ReviewClaimDetailView: View {
             if let toast = viewModel.toast {
                 ToastView(message: toast)
                     .padding(.bottom, Spacing.s10)
-                    .task {
-                        try? await Task.sleep(nanoseconds: 2_000_000_000)
+                    .dismissToast(after: toast, minimum: 2) {
                         viewModel.clearToast()
                     }
             }

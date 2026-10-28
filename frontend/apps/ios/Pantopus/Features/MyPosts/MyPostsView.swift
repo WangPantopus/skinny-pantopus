@@ -30,8 +30,7 @@ public struct MyPostsView: View {
                     ToastView(message: ToastMessage(text: toast, kind: .error))
                         .padding(.bottom, 96)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
-                        .task(id: toast) {
-                            try? await Task.sleep(nanoseconds: 2_500_000_000)
+                        .dismissToast(after: toast, minimum: 2.5) {
                             viewModel.toastMessage = nil
                         }
                 }
@@ -42,8 +41,7 @@ public struct MyPostsView: View {
                     ToastView(message: ToastMessage(text: toast, kind: .error))
                         .padding(.bottom, 96)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
-                        .task(id: toast) {
-                            try? await Task.sleep(nanoseconds: 2_500_000_000)
+                        .dismissToast(after: toast, minimum: 2.5) {
                             viewModel.saved.toastMessage = nil
                         }
                 }

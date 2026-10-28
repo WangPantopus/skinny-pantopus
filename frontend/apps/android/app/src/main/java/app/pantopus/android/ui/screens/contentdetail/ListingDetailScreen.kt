@@ -38,7 +38,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.ui.components.Toast
+import app.pantopus.android.ui.components.ToastAppearance
 import app.pantopus.android.ui.components.ToastKind
+import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.settings.payments.StripePaymentSheets
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -106,7 +109,7 @@ fun ListingDetailScreen(
     LaunchedEffect(Unit) { viewModel.load() }
     LaunchedEffect(toastText) {
         if (toastText != null) {
-            kotlinx.coroutines.delay(2_500)
+            kotlinx.coroutines.delay(toastDurationMillis(toastText.orEmpty(), minimumMillis = 2_500))
             toastText = null
         }
     }
@@ -214,21 +217,20 @@ fun ListingDetailScreen(
             modifier = Modifier.fillMaxWidth(),
             contentAlignment = Alignment.BottomCenter,
         ) {
-            Box(
+            Toast(
+                text = text,
+                appearance =
+                    ToastAppearance(
+                        background = listingToastColor(toastKind),
+                        foreground = PantopusColors.appTextInverse,
+                        textStyle = PantopusTextStyle.small,
+                        sideMargin = 0.dp,
+                    ),
                 modifier =
                     Modifier
                         .padding(Spacing.s4)
-                        .clip(RoundedCornerShape(Radii.pill))
-                        .background(listingToastColor(toastKind))
-                        .padding(horizontal = Spacing.s4, vertical = Spacing.s2)
                         .testTag("listing-detail-toast"),
-            ) {
-                Text(
-                    text = text,
-                    style = PantopusTextStyle.small,
-                    color = PantopusColors.appTextInverse,
-                )
-            }
+            )
         }
     }
 }

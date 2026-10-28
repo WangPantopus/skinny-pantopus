@@ -52,6 +52,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -65,6 +66,9 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.Toast
+import app.pantopus.android.ui.components.ToastAppearance
+import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingPillar
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusElevations
@@ -152,7 +156,7 @@ fun EventTypeListScreen(
     }
     LaunchedEffect(toastText) {
         if (toastText != null) {
-            delay(TOAST_MS)
+            delay(toastDurationMillis(toastText.orEmpty(), minimumMillis = TOAST_MS))
             toastText = null
         }
     }
@@ -1024,17 +1028,21 @@ private fun Toast(
     text: String,
     modifier: Modifier = Modifier,
 ) {
-    Row(
+    Toast(
+        text = text,
+        appearance =
+            ToastAppearance(
+                background = PantopusColors.appText,
+                foreground = PantopusColors.appTextInverse,
+                textStyle = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.SemiBold),
+                verticalPadding = 10.dp,
+                iconSpacing = Spacing.s1,
+            ),
         modifier =
             modifier
-                .padding(top = Spacing.s12)
-                .clip(RoundedCornerShape(Radii.pill))
-                .background(PantopusColors.appText)
-                .padding(horizontal = Spacing.s4, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
-    ) {
-        PantopusIconImage(icon = PantopusIcon.Check, contentDescription = null, size = 15.dp, tint = PantopusColors.appTextInverse)
-        Text(text = text, color = PantopusColors.appTextInverse, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-    }
+                .padding(top = Spacing.s12),
+        leading = {
+            PantopusIconImage(icon = PantopusIcon.Check, contentDescription = null, size = 15.dp, tint = PantopusColors.appTextInverse)
+        },
+    )
 }

@@ -67,6 +67,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -82,6 +83,9 @@ import app.pantopus.android.ui.components.RefreshFailedLine
 import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.Toast
+import app.pantopus.android.ui.components.ToastAppearance
+import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.saved_places.PendingSavePlace
 import app.pantopus.android.ui.screens.saved_places.SaveBookmarkButton
 import app.pantopus.android.ui.screens.saved_places.SavePlaceSheet
@@ -285,7 +289,7 @@ fun ExploreMapScreen(
     }
     LaunchedEffect(saveToast) {
         if (saveToast != null) {
-            delay(2_500L)
+            delay(toastDurationMillis(saveToast?.text.orEmpty(), minimumMillis = 2_500L))
             savedPlacesStore.dismissToast()
         }
     }
@@ -1699,16 +1703,16 @@ private fun ExploreSaveToast(
     toast: SavedPlacesToast,
     modifier: Modifier = Modifier,
 ) {
-    Text(
+    Toast(
         text = toast.text,
-        color = PantopusColors.appTextInverse,
-        fontSize = 13.sp,
-        fontWeight = FontWeight.SemiBold,
-        modifier =
-            modifier
-                .clip(RoundedCornerShape(Radii.pill))
-                .background(if (toast.isError) PantopusColors.error else PantopusColors.appText)
-                .padding(horizontal = Spacing.s4, vertical = Spacing.s3),
+        appearance =
+            ToastAppearance(
+                background = if (toast.isError) PantopusColors.error else PantopusColors.appText,
+                foreground = PantopusColors.appTextInverse,
+                textStyle = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.SemiBold),
+                verticalPadding = Spacing.s3,
+            ),
+        modifier = modifier,
     )
 }
 

@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -41,6 +42,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.api.models.scheduling.ConnectedCalendarDto
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.Toast
+import app.pantopus.android.ui.components.ToastAppearance
+import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingPillar
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -112,7 +116,7 @@ fun ConnectedCalendarsScreen(
     }
     LaunchedEffect(toastText) {
         if (toastText != null) {
-            delay(2200)
+            delay(toastDurationMillis(toastText.orEmpty(), minimumMillis = 2200))
             toastText = null
         }
     }
@@ -134,25 +138,29 @@ fun ConnectedCalendarsScreen(
             }
         }
         toastText?.let { msg ->
-            Row(
+            Toast(
+                text = msg,
+                appearance =
+                    ToastAppearance(
+                        background = PantopusColors.appText,
+                        foreground = PantopusColors.appTextInverse,
+                        textStyle = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.SemiBold),
+                        verticalPadding = 10.dp,
+                        iconSpacing = Spacing.s1,
+                    ),
                 modifier =
                     Modifier
                         .align(Alignment.TopCenter)
-                        .padding(top = Spacing.s12)
-                        .clip(RoundedCornerShape(Radii.pill))
-                        .background(PantopusColors.appText)
-                        .padding(horizontal = Spacing.s4, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
-            ) {
-                PantopusIconImage(
-                    icon = PantopusIcon.CalendarSync,
-                    contentDescription = null,
-                    size = 15.dp,
-                    tint = PantopusColors.primary300,
-                )
-                Text(text = msg, color = PantopusColors.appTextInverse, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-            }
+                        .padding(top = Spacing.s12),
+                leading = {
+                    PantopusIconImage(
+                        icon = PantopusIcon.CalendarSync,
+                        contentDescription = null,
+                        size = 15.dp,
+                        tint = PantopusColors.primary300,
+                    )
+                },
+            )
         }
     }
 }
