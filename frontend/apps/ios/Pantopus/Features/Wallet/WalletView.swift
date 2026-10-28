@@ -468,8 +468,7 @@ public struct WalletView: View {
                 .padding(.bottom, Spacing.s10)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .accessibilityIdentifier(toastIdentifier(for: toast.kind))
-                .task(id: toast) {
-                    try? await Task.sleep(nanoseconds: 2_500_000_000)
+                .dismissToast(after: toast, minimum: 2.5) {
                     self.toast = nil
                 }
         }

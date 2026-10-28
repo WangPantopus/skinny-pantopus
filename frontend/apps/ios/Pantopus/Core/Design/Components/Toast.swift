@@ -97,4 +97,40 @@ public extension View {
             }
         }
     }
+
+    /// Runs `action` once `message` has been up long enough to read
+    /// (`ToastMessage.duration`, never less than `minimum` seconds). A new
+    /// message restarts the wait, and a wait cut short — the toast replaced
+    /// or the screen gone — clears nothing.
+    func dismissToast(
+        after message: ToastMessage,
+        minimum: Double = 3,
+        action: @escaping @MainActor () -> Void
+    ) -> some View {
+        task(id: message.id) { @MainActor in
+            do {
+                try await Task.sleep(for: ToastMessage.duration(for: message.text, minimum: minimum))
+            } catch {
+                return
+            }
+            action()
+        }
+    }
+
+    /// `dismissToast(after:minimum:action:)` for a screen that holds its
+    /// message as plain text.
+    func dismissToast(
+        after text: String,
+        minimum: Double = 3,
+        action: @escaping @MainActor () -> Void
+    ) -> some View {
+        task(id: text) { @MainActor in
+            do {
+                try await Task.sleep(for: ToastMessage.duration(for: text, minimum: minimum))
+            } catch {
+                return
+            }
+            action()
+        }
+    }
 }

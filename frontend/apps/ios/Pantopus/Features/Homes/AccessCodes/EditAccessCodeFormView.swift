@@ -160,8 +160,7 @@ public struct EditAccessCodeFormView: View {
                 .padding(.bottom, Spacing.s10)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .accessibilityIdentifier(EditAccessCodeA11y.toast)
-                .task(id: toast) {
-                    try? await Task.sleep(nanoseconds: 1_800_000_000)
+                .dismissToast(after: toast, minimum: 1.8) {
                     viewModel.toast = nil
                 }
         }
