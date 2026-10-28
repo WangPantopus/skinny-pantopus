@@ -2894,6 +2894,18 @@ router.patch('/:id/view', verifyToken, async (req, res) => {
       return res.status(400).json({ error: data.error });
     }
 
+    // The phones open a letter through GET /:id and mark it read here. Record the opened time and state the web reader
+    // writes (GET /v2/item/:id), so a letter read on a phone shows when it was opened; a piece filed first stays filed.
+    // The letter is read either way, so a failed write is only logged.
+    const openedAt = data.viewedAt || new Date().toISOString();
+    const { error: openedError } = await supabaseAdmin.from('Mail').update({ opened_at: openedAt })
+      .eq('id', id).is('opened_at', null).is('deleted_at', null);
+    const { error: lifecycleError } = await supabaseAdmin.from('Mail').update({ lifecycle: 'opened' })
+      .eq('id', id).is('deleted_at', null).or('lifecycle.is.null,lifecycle.eq.delivered');
+    if (openedError || lifecycleError) {
+      logger.warn('Mail viewed: opened time not recorded', { mailId: id, error: (openedError || lifecycleError).message });
+    }
+
     logger.info('Mail viewed', { mailId: id, userId, payout: data.payout });
 
     res.json({
