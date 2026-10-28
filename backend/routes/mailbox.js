@@ -1784,7 +1784,7 @@ router.get('/:id', verifyToken, async (req, res) => {
         }
       }
     } else {
-      mail.content_format = mail.content?.includes('<') ? 'html' : 'plain_text';
+      mail.content_format = mailObjects.storedFormat(mail.content);
     }
     mail.content_text = mailObjects.textContent(mail.content, mail.content_format);
 

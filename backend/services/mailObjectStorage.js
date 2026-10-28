@@ -79,9 +79,17 @@ async function readPayload(objectId) {
   return { metadata: clientFields(row), payload };
 }
 
+// A letter with no stored copy keeps its whole body in Mail.content, which has no format column: tags mean HTML.
+function storedFormat(content) {
+  return typeof content === 'string' && /<\/?[a-z][a-z0-9]*(\s[^>]*)?\/?>/i.test(content) ? 'html' : 'plain_text';
+}
+
 async function hydrateMail(mail) {
   if (!mail) return mail;
-  if (!mail.object_id) return { ...mail, content_text: textContent(mail.content, mail.content_format) };
+  if (!mail.object_id) {
+    const format = mail.content_format || storedFormat(mail.content);
+    return { ...mail, content_format: format, content_text: textContent(mail.content, format) };
+  }
   const { metadata, payload } = await readPayload(mail.object_id);
   const content = payload?.body?.content ?? payload?.content;
   const attachments = payload?.envelope?.attachments ?? payload?.attachments;
@@ -114,4 +122,4 @@ function textContent(content, format) {
   return text.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
-module.exports = { PROVIDER, store, remove, readText, clientFields, readPayload, hydrateMail, textContent };
+module.exports = { PROVIDER, store, remove, readText, clientFields, readPayload, hydrateMail, storedFormat, textContent };
