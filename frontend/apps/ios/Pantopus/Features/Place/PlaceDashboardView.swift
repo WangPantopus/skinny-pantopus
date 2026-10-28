@@ -7,7 +7,9 @@
 //  `place-dashboard.jsx` + `place-dashboard-claimed.jsx`. A chip beside
 //  the title says where the person stands (Verified, Claimed or Private
 //  setup); before verification a verify banner and a "Locked until you
-//  verify" group lead to it. The address opens the person's homes.
+//  verify" group lead to it. While a claim on the Home is in review, it is
+//  the Home's public view with the claim's status on top instead. The
+//  address opens the person's homes.
 //
 
 import SwiftUI
@@ -60,7 +62,15 @@ struct PlaceDashboardView: View {
             case let .loaded(intel):
                 loaded(intel)
             case let .error(message):
-                if viewModel.accessDenied {
+                if viewModel.accessDenied, let claim = viewModel.claim {
+                    // The claimed Home's public view was refused (an older server, or a closed Home).
+                    VStack(spacing: 0) {
+                        claimBanner(claim)
+                            .padding(.horizontal, 16)
+                            .padding(.top, Spacing.s3)
+                        PlaceDeniedState()
+                    }
+                } else if viewModel.accessDenied {
                     PlaceDeniedState()
                 } else {
                     ErrorState(message: message) {
@@ -165,6 +175,8 @@ struct PlaceDashboardView: View {
         // setup (by mail). Guests and service providers can't verify, so they
         // get no verify prompts; older servers don't say, and claimed decides.
         let showsVerify = !isVerified && (intel.verifyAvailable ?? (intel.tier == .t3))
+        // A claim in review: the public view, with no household tools or verify steps.
+        let claim = viewModel.claim
         let pulse = PlacePresentation.derivePulse(intel)
         return ScrollViewReader { proxy in
             ScrollView {
@@ -176,25 +188,7 @@ struct PlaceDashboardView: View {
 
                     // One order on both apps: verify (the resident's next step), Home tools,
                     // movers, Today's Pulse, then the privacy line.
-                    if showsVerify {
-                        PlaceVerifyBanner { showVerify = true }
-                            .padding(.horizontal, 16)
-                            .padding(.top, Spacing.s3)
-                    }
-
-                    PlaceHomeToolsCard(
-                        shortcuts: viewModel.homeShortcuts,
-                        onOpen: {
-                            viewModel.reloadOnReturn()
-                            viewModel.onOpenHubHome()
-                        },
-                        onShortcut: { shortcut in
-                            viewModel.reloadOnReturn()
-                            viewModel.onOpenHomeShortcut(shortcut)
-                        }
-                    )
-                    .padding(.horizontal, Spacing.s4)
-                    .padding(.top, Spacing.s3)
+                    leadCards(claim: claim, showsVerify: showsVerify)
 
                     // Movers first (Wedge v2 D5): the first-week card leads for a recent move-in.
                     JustMovedCard(
@@ -217,16 +211,19 @@ struct PlaceDashboardView: View {
                         nudgeIcon: pulse.nudgeIcon,
                         nudgeText: pulse.nudgeText ?? "",
                         // Both labelled: an unlabelled trailing closure fills only `onTap`, which left the nudge row's
-                        // own button with no action (Android opens Pulse from either).
-                        onNudgeTap: { viewModel.onOpenPulse() },
-                        onTap: { viewModel.onOpenPulse() }
+                        // own button with no action (Android opens Pulse from either). Pulse is the household's:
+                        // a claim's card opens the address's Today.
+                        onNudgeTap: { claim == nil ? viewModel.onOpenPulse() : viewModel.onOpenDetail(.today) },
+                        onTap: { claim == nil ? viewModel.onOpenPulse() : viewModel.onOpenDetail(.today) }
                     )
                     .padding(.horizontal, 16)
-                    .padding(.top, showsVerify ? 12 : 14)
+                    .padding(.top, showsVerify || claim != nil ? 12 : 14)
 
                     VStack(spacing: 24) {
                         // The privacy mirror (Wedge v2 §2): one tap to see yourself as a neighbor does.
-                        privacyMirrorRow
+                        if claim == nil {
+                            privacyMirrorRow
+                        }
                         if isVerified {
                             messagesEntry(address: intel.place.label)
                         }
@@ -238,11 +235,13 @@ struct PlaceDashboardView: View {
                         ForEach(Self.groups(intel), id: \.group) { group in
                             groupBlock(
                                 group,
-                                canVerify: !(intel.tier == .t3 && intel.verifyAvailable == false),
+                                canVerify: claim == nil && !(intel.tier == .t3 && intel.verifyAvailable == false),
                                 verifiesFirst: intel.verifiesFirst
                             )
                         }
-                        identityEntry
+                        if claim == nil {
+                            identityEntry
+                        }
                         if showsVerify {
                             verifyLockedGroup
                         }
@@ -260,6 +259,46 @@ struct PlaceDashboardView: View {
 
     private static let topAnchor = "place.top"
 
+    /// The verify banner and Home tools; a claim in review has its status instead.
+    @ViewBuilder
+    private func leadCards(claim: OwnershipClaimDTO?, showsVerify: Bool) -> some View {
+        if let claim {
+            claimBanner(claim)
+                .padding(.horizontal, 16)
+                .padding(.top, Spacing.s3)
+        } else {
+            if showsVerify {
+                PlaceVerifyBanner { showVerify = true }
+                    .padding(.horizontal, 16)
+                    .padding(.top, Spacing.s3)
+            }
+            PlaceHomeToolsCard(
+                shortcuts: viewModel.homeShortcuts,
+                onOpen: {
+                    viewModel.reloadOnReturn()
+                    viewModel.onOpenHubHome()
+                },
+                onShortcut: { shortcut in
+                    viewModel.reloadOnReturn()
+                    viewModel.onOpenHomeShortcut(shortcut)
+                }
+            )
+            .padding(.horizontal, Spacing.s4)
+            .padding(.top, Spacing.s3)
+        }
+    }
+
+    /// My homes' words for what the claim waits on; its Waiting Room has the steps.
+    private func claimBanner(_ claim: OwnershipClaimDTO) -> some View {
+        PlaceVerifyBanner(
+            icon: .clock,
+            message: "Your claim is in review. \(claim.waitingLabel).",
+            action: "Check claim status",
+            identifier: "place.claimBanner",
+            onTap: viewModel.onOpenVerificationStatus
+        )
+    }
+
     // MARK: - Header
 
     /// "Your Place", where the person stands at this Home, the bell and the
@@ -275,7 +314,7 @@ struct PlaceDashboardView: View {
                     .minimumScaleFactor(0.8)
                     .layoutPriority(1)
                     .accessibilityAddTraits(.isHeader)
-                if let status = Self.status(intel) {
+                if let status = viewModel.claim == nil ? Self.status(intel) : Self.claimStatus {
                     PlaceChip(model: status)
                         .accessibilityIdentifier("place.status")
                 }
@@ -308,6 +347,9 @@ struct PlaceDashboardView: View {
             }
         }
     }
+
+    /// A claim on the Home is in review.
+    static let claimStatus = PlaceChipModel(tone: .warning, text: "In review", icon: .clock)
 
     /// Where the person stands at this Home. Guests and service providers
     /// aren't residents: no status.
@@ -487,6 +529,10 @@ struct BallotGovernmentsSheet: Identifiable {
 // MARK: - Verify banner (sky-tinted nudge, before verification)
 
 struct PlaceVerifyBanner: View {
+    var icon: PantopusIcon = .shieldCheck
+    var message = "Verify your address to message neighbors and get your badge."
+    var action = "Verify address"
+    var identifier = "place.verifyBanner"
     var onTap: () -> Void
 
     var body: some View {
@@ -497,18 +543,18 @@ struct PlaceVerifyBanner: View {
                         .fill(Theme.Color.primary100)
                     RoundedRectangle(cornerRadius: 11, style: .continuous)
                         .strokeBorder(Theme.Color.primary200, lineWidth: 1)
-                    Icon(.shieldCheck, size: 20, strokeWidth: 2, color: Theme.Color.primaryInk)
+                    Icon(icon, size: 20, strokeWidth: 2, color: Theme.Color.primaryInk)
                 }
                 .frame(width: 38, height: 38)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Verify your address to message neighbors and get your badge.")
+                    Text(message)
                         .font(.system(size: 14.5, weight: .semibold))
                         .kerning(-0.14)
                         .lineSpacing(2)
                         .foregroundStyle(Theme.Color.primary900)
                         .multilineTextAlignment(.leading)
                     HStack(spacing: 4) {
-                        Text("Verify address")
+                        Text(action)
                             .font(.system(size: 13.5, weight: .semibold))
                         Icon(.arrowRight, size: 14, strokeWidth: 2.5, color: Theme.Color.primaryInk)
                     }
@@ -527,7 +573,7 @@ struct PlaceVerifyBanner: View {
             )
         }
         .buttonStyle(.plain)
-        .accessibilityIdentifier("place.verifyBanner")
+        .accessibilityIdentifier(identifier)
     }
 }
 

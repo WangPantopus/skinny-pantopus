@@ -691,7 +691,6 @@ router.post('/item/:id/action', verifyToken, async (req, res) => {
     if (readError || !mail || !(await canAccessMail(mail, userId))) {
       return sendMailUnavailable(res, readError ? null : mail, userId);
     }
-    Object.assign(mail, await mailObjects.hydrateMail(mail));
 
     const homeIds = await getAccessibleHomeIds(userId);
     let folderId;
@@ -741,7 +740,19 @@ router.post('/item/:id/action', verifyToken, async (req, res) => {
       .select('*, sender:sender_user_id(name, username)')
       .eq('id', id)
       .maybeSingle();
-    const named = after ? await nameMailSender({ ...mail, ...after, content: mail.content, attachments: mail.attachments }, userId) : null;
+    // The answer carries the whole letter when its stored copy reads. The action is done either way: a storage failure
+    // leaves the body out of the answer (the apps keep the letter they have) instead of failing a filed or shredded piece.
+    let full = after;
+    if (after) {
+      try {
+        full = await mailObjects.hydrateMail(after);
+      } catch (error) {
+        logger.warn('Mail action: stored letter not read for the answer', { mailId: id, action, error: error.message });
+        full = { ...after };
+        delete full.content;
+      }
+    }
+    const named = full ? await nameMailSender(full, userId) : null;
     const timeZone = (await mailDelivery.personTimeZone(userId)) || mailDelivery.FALLBACK_TIME_ZONE;
     const piece = named ? mailPiece.present(presentMailSender({
       ...named,

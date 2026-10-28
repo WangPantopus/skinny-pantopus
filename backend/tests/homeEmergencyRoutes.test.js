@@ -53,6 +53,13 @@ const originalFrom = supabaseAdmin.from;
 afterEach(() => { supabaseAdmin.from = originalFrom; supabaseAdmin.resetRpc(); jest.clearAllMocks(); });
 beforeEach(() => {
   resetTables();
+  seedTable('Home', [{ id: HOME_ID, owner_id: OWNER, created_by_user_id: OWNER, home_status: 'active', security_state: 'normal' }]);
+  supabaseAdmin.setRpcMock(async (name, args) => {
+    if (name !== 'home_record_context') return { data: null, error: { message: 'Unexpected RPC' } };
+    const access = await jest.requireActual('../utils/homePermissions').getUserAccess(args.p_home_id, args.p_user_id);
+    return { data: { allowed: access.hasAccess, private: false, permissions: access.permissions,
+      role: access.effective_role_base, user_id: args.p_user_id }, error: null };
+  });
   seedTable('HomeEmergency', [{
     id: ROW_ID, home_id: HOME_ID, type: 'shutoff_water', label: 'Water shutoff',
     location: 'Garage wall', details: {}, created_by: OWNER,
@@ -312,6 +319,7 @@ describe('DELETE /api/homes/:id/emergencies/:emergencyId', () => {
 
   test('a manager of another home reaches the query and still cannot remove this home\'s row', async () => {
     const otherHome = 'eeeeeeee-eeee-1eee-8eee-eeeeeeeeeeee';
+    seedTable('Home', [{ id: otherHome, owner_id: OWNER, created_by_user_id: OWNER, home_status: 'active', security_state: 'normal' }]);
     checkHomePermission.mockImplementation(async () => ({ hasAccess: true, permissions: [], readFailed: false }));
     const res = await request(makeApp()).delete(`/api/homes/${otherHome}/emergencies/${ROW_ID}`).set('x-test-user-id', OWNER);
     expect(res.status).toBe(404);
