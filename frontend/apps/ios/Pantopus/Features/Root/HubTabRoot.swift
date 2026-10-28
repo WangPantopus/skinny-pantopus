@@ -428,8 +428,10 @@ public enum HubRoute: Hashable {
     /// Reached by redirect from the generic mail detail.
     case ceremonialMailOpen(mailId: String)
     /// The first day: Pantopus's sealed welcome letter on the porch, opened
-    /// with the ceremonial open (a Mailbox screen, not a Mail extra).
-    case mailWelcome(mailId: String)
+    /// with the ceremonial open (a Mailbox screen, not a Mail extra). It
+    /// carries the letter as the Mailbox listed it: fetching the letter
+    /// would mark it opened before its seal breaks.
+    case mailWelcome(DrawerItemsResponse.DrawerMail)
     /// Disambiguation queue behind the Mailbox root's
     /// "N items need routing" banner.
     case mailRoutingQueue
@@ -693,6 +695,8 @@ public struct HubTabRoot: View {
             }
         case let .myHomes(id):
             showMyHomes(leavingClaimOn: id)
+        case let .leave(id):
+            leaveRoom(withoutHome: id)
         case .viewClaim:
             path.append(.myClaims)
         case let .updateEvidence(id, _):
@@ -716,7 +720,7 @@ public struct HubTabRoot: View {
     /// A claim in review that gives no way into its Home yet: back to My homes,
     /// where the claim is listed, or onto it. The Home's own screens can't show
     /// it (a waiting-room link puts its dashboard underneath). While there are
-    /// only claims, the Place tab's root is My homes.
+    /// only claims, the Place tab's root is the claimed address (`PlaceRoot.claim`).
     @MainActor
     private func showMyHomes(leavingClaimOn homeId: String) {
         if path.contains(.myHomes) {
@@ -735,6 +739,21 @@ public struct HubTabRoot: View {
         }
         if !path.isEmpty || mode != .hub || placeRoot != .homes {
             path.append(.myHomes)
+        }
+    }
+
+    /// Back from a claim's room that gives no way into its Home: the screen it
+    /// was opened from (the claimed address, My homes), past that Home's own
+    /// screen a link puts underneath.
+    @MainActor
+    private func leaveRoom(withoutHome homeId: String) {
+        path.removeAll { route in
+            switch route {
+            case let .waitingRoom(id), let .homeDashboard(id):
+                id == homeId
+            default:
+                false
+            }
         }
     }
 
@@ -908,7 +927,7 @@ public struct HubTabRoot: View {
         // The Counter's Pay, the closed Home drawer, and the first day's porch.
         model.onOpenInvoice = { invoiceId in push(.invoiceDetail(invoiceId: invoiceId)) }
         model.onVerifyHome = { homeId in showVerifyHome(homeId) }
-        model.onOpenWelcome = { mailId in push(.mailWelcome(mailId: mailId)) }
+        model.onOpenWelcome = { mail in push(.mailWelcome(mail)) }
         return model
     }
 
@@ -1355,7 +1374,11 @@ public struct HubTabRoot: View {
         case let .waitingRoom(homeId):
             // Drop the home dashboard underneath so a back-tap from the
             // waiting room lands on the home, mirroring `.homeOwnersTransfer`.
-            path.append(.homeDashboard(homeId: homeId))
+            // A Home the person can't open yet (a claim in review) has no
+            // dashboard to show: Back lands on the tab's root, its address.
+            if HomesStoreReads.peekMyHomes().map({ PlaceRootResolver.isOpenable(homeId, in: $0.value) }) ?? true {
+                path.append(.homeDashboard(homeId: homeId))
+            }
             path.append(.waitingRoom(homeId: homeId))
             _ = router.consume()
         case .mailbox:
@@ -1421,6 +1444,11 @@ public struct HubTabRoot: View {
                 // Another Home is another dashboard, with its own state.
                 .id(homeId)
                 .onAppear { Self.placeRootViewed("home") }
+        case let .claim(homeId):
+            // The same dashboard: the claimed Home's public view, its claim's status on top.
+            placeDashboard(homeId: homeId, isActive: path.isEmpty && rootTabs.selected == owningTab, isRoot: true)
+                .id(homeId)
+                .onAppear { Self.placeRootViewed("claim") }
         case let .savedPlace(place):
             SavedPlaceRootView(
                 viewModel: SavedPlaceRootViewModel(place: place),
@@ -3369,19 +3397,19 @@ public struct HubTabRoot: View {
                 onBack: { Task { @MainActor in pop() } },
                 onWriteBack: { _ in Task { @MainActor in push(.ceremonialMail) } }
             )
-        case let .mailWelcome(mailId):
+        case let .mailWelcome(mail):
             CeremonialMailOpenView(
-                viewModel: CeremonialMailOpenViewModel(mailId: mailId),
+                viewModel: CeremonialMailOpenViewModel(sealed: mail),
                 onBack: { Task { @MainActor in pop() } },
                 onWriteBack: { _ in },
                 onLetterOpened: {
                     // Once its seal breaks the welcome letter reads on the
                     // letter page, in place of the porch (Back returns to Mail).
-                    // The porch opened it, so the Mailbox draws it opened.
+                    // The letter page opens it, so the Mailbox draws it opened.
                     Task { @MainActor in
-                        NotificationCenter.default.post(name: .mailboxMailViewed, object: mailId)
+                        NotificationCenter.default.post(name: .mailboxMailViewed, object: mail.id)
                         if !path.isEmpty { path.removeLast() }
-                        push(.mailItemDetail(mailId: mailId))
+                        push(.mailItemDetail(mailId: mail.id))
                     }
                 }
             )

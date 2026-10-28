@@ -1079,6 +1079,16 @@ public struct YouTabRoot: View {
             }
         case let .myHomes(id):
             showMyHomes(leavingClaimOn: id)
+        case let .leave(id):
+            // The screen the room was opened from, past the Home's own screen a link puts underneath.
+            path.removeAll { route in
+                switch route {
+                case let .waitingRoom(rid), let .homeDashboard(rid):
+                    rid == id
+                default:
+                    false
+                }
+            }
         case .viewClaim:
             path.append(.myClaims)
         case let .updateEvidence(id, _):

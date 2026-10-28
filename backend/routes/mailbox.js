@@ -1746,7 +1746,7 @@ router.get('/:id', verifyToken, async (req, res) => {
         }
       }
     } else {
-      mail.content_format = mail.content?.includes('<') ? 'html' : 'plain_text';
+      mail.content_format = mailObjects.storedFormat(mail.content);
     }
     mail.content_text = mailObjects.textContent(mail.content, mail.content_format);
 
@@ -2780,12 +2780,12 @@ router.post('/:id/read/start', verifyToken, validate(startReadSessionSchema), as
     const userId = req.user.id;
     const { clientMeta = {} } = req.body;
 
-    // Use the same recipient, Home and delivery rule as the reader itself.
+    // Use the same recipient, Home and delivery rule as the reader itself, and read the letter before counting it read.
     const mail = await readableMail(id, userId);
     if (!mail) return res.status(404).json({ error: 'Mail not found' });
     await mailObjects.hydrateMail(mail);
 
-    const { data, error } = await supabaseAdmin.rpc('open_mail_read_session_by_reader', {
+    const { data, error } = await supabaseAdmin.rpc('open_mail_read_session', {
       p_mail_id: id,
       p_user_id: userId,
       p_client_meta: clientMeta
@@ -2892,6 +2892,18 @@ router.patch('/:id/view', verifyToken, async (req, res) => {
 
     if (!data.success) {
       return res.status(400).json({ error: data.error });
+    }
+
+    // The phones open a letter through GET /:id and mark it read here. Record the opened time and state the web reader
+    // writes (GET /v2/item/:id), so a letter read on a phone shows when it was opened; a piece filed first stays filed.
+    // The letter is read either way, so a failed write is only logged.
+    const openedAt = data.viewedAt || new Date().toISOString();
+    const { error: openedError } = await supabaseAdmin.from('Mail').update({ opened_at: openedAt })
+      .eq('id', id).is('opened_at', null).is('deleted_at', null);
+    const { error: lifecycleError } = await supabaseAdmin.from('Mail').update({ lifecycle: 'opened' })
+      .eq('id', id).is('deleted_at', null).or('lifecycle.is.null,lifecycle.eq.delivered');
+    if (openedError || lifecycleError) {
+      logger.warn('Mail viewed: opened time not recorded', { mailId: id, error: (openedError || lifecycleError).message });
     }
 
     logger.info('Mail viewed', { mailId: id, userId, payout: data.payout });

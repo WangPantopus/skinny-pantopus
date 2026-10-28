@@ -141,7 +141,16 @@ test('another kind of ownership subject cannot impersonate a user', async () => 
   expect((await getUserAccess(HOME, USER)).hasAccess).toBe(false);
 });
 
+// These /me tests exercise navigation flags; Home state admission is supplied
+// by the separately tested list/detail policy and real database contracts.
+function sharedHomeState() {
+  jest.spyOn(require('../services/homeListService'), 'readAccessState').mockImplementation(async () => ({
+    mode: 'shared', access: await getUserAccess(HOME, USER),
+  }));
+}
+
 test('/me advertises effective rights rather than stale navigation flags', async () => {
+  sharedHomeState();
   seed({ role_base: 'lease_resident', can_manage_tasks: false, can_view_sensitive: true, can_manage_home: true });
   const router = require('../routes/homeIam');
   const handler = router.stack.find(layer => layer.route?.path === '/:id/me').route.stack.at(-1).handle;
@@ -176,6 +185,7 @@ test('pending mailbox nudge never queries or returns stored household postal val
 });
 
 test('/me reports a minor owner as limited and keeps explicit denial errors retryable', async () => {
+  sharedHomeState();
   seed({ role_base: 'owner', age_band: 'child', can_manage_home: true });
   const router = require('../routes/homeIam');
   const handler = router.stack.find(layer => layer.route?.path === '/:id/me').route.stack.at(-1).handle;
@@ -203,6 +213,7 @@ async function homeRoute(path, method = 'get', params = {}, body = {}) {
 }
 
 test('finance.view permits reading bills but never legacy finance mutation or its /me flag', async () => {
+  sharedHomeState();
   override('finance.view');
   db.seedTable('HomeBill', [{ id: 'bill', home_id: HOME, amount: 42 }]);
   db.seedTable('HomeBillSplit', [{ bill_id: 'bill', user_id: USER, amount: 42 }]);

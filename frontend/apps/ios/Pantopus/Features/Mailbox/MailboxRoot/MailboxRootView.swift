@@ -180,7 +180,7 @@ public struct MailboxRootView: View {
             Button {
                 viewModel.openVacationHold()
             } label: {
-                Label("Vacation hold", systemImage: "calendar")
+                Label("Hold my mail", systemImage: "calendar")
             }
             .accessibilityIdentifier("mailboxRootSettings.vacationHold")
         } label: {

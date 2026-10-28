@@ -5,7 +5,9 @@
 //  Fetches the mail item via `GET /api/mailbox/v2/item/:id`, projects
 //  it into a `CeremonialMailLetter`, owns the four-phase progression
 //  (sealed → breaking → open → replying), and exposes a play/pause
-//  hook for the optional voice postscript.
+//  hook for the optional voice postscript. The first day's porch instead
+//  draws Pantopus's welcome letter from the Mailbox's list, because that
+//  fetch marks a letter opened.
 //
 
 import Foundation
@@ -19,13 +21,27 @@ public final class CeremonialMailOpenViewModel {
 
     private let mailId: String
     private let api: APIClient
+    /// The letter came sealed from the Mailbox's list (the first day's porch).
+    private let drawnFromList: Bool
 
     init(mailId: String, api: APIClient = .shared) {
         self.mailId = mailId
         self.api = api
+        drawnFromList = false
+    }
+
+    /// The first day's porch: Pantopus's welcome letter as the Mailbox listed
+    /// it. Nothing is fetched, so closing the porch leaves the letter sealed;
+    /// the letter page opens it once the seal breaks.
+    init(sealed mail: DrawerItemsResponse.DrawerMail, api: APIClient = .shared) {
+        mailId = mail.id
+        self.api = api
+        drawnFromList = true
+        state = .loaded(Self.project(sealed: mail), phase: .sealed)
     }
 
     public func load() async {
+        guard !drawnFromList else { return }
         state = .loading
         do {
             let response: MailboxV2ItemResponse =
@@ -137,6 +153,31 @@ public final class CeremonialMailOpenViewModel {
             outcomeCtas: CeremonialMailLetter.defaultOutcomeCtas()
         )
         letter.isFromPantopus = item.base.fromPantopus
+        return letter
+    }
+
+    /// The sealed envelope from a list row: the porch shows only who sent it
+    /// and its seal (Pantopus's letters carry no stationery), never the body.
+    static func project(sealed mail: DrawerItemsResponse.DrawerMail) -> CeremonialMailLetter {
+        var letter = CeremonialMailLetter(
+            mailId: mail.id,
+            sender: CeremonialSenderCard(
+                displayName: mail.senderDisplay,
+                handle: mail.sender?.username,
+                trustLabel: trustLabel(for: mail.senderTrust),
+                avatarUrl: nil
+            ),
+            category: "letter",
+            subject: mail.item.subject ?? "A letter",
+            bodyParagraphs: [],
+            stationery: CeremonialMailStationeryTone(wire: nil),
+            ink: CeremonialMailInkTone(wire: nil),
+            seal: CeremonialMailSealTone(wire: nil),
+            voicePostscriptUri: nil,
+            receivedAt: mail.item.createdAt,
+            outcomeCtas: CeremonialMailLetter.defaultOutcomeCtas()
+        )
+        letter.isFromPantopus = mail.item.fromPantopus
         return letter
     }
 

@@ -43,9 +43,32 @@ const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
 const {
   checkHomePermission,
   getUserAccess,
-  hasPermission,
 } = require('../utils/homePermissions');
 
+
+// A deleted Home has no access state to read. It reads as null (no access),
+// the 403 these routes gave before reading this state, rather than a retry.
+async function readIamState(homeId, actorId) {
+  try { return await homeListService.readAccessState(homeId, actorId); } catch (error) {
+    if (await homeListService.homeDeleted(error, homeId)) return null;
+    throw error;
+  }
+}
+
+// Reuse the Home list/detail decision: effective membership alone does not
+// authorize shared reads from a blocked Home. Recheck after loading payloads.
+async function requireCurrentIamAccess(homeId, actorId, permission, opening) {
+  const current = await readIamState(homeId, actorId);
+  if (current?.mode !== 'shared' || (permission && !current.access.permissions.includes(permission))) {
+    throw Object.assign(new Error('No access to this home'), { statusCode: 403 });
+  }
+  if (opening && JSON.stringify(current) !== JSON.stringify(opening)) {
+    throw Object.assign(new Error('Home access changed while loading. Please retry.'), {
+      statusCode: 503, code: 'HOME_LIST_ACCESS_CHANGED',
+    });
+  }
+  return current;
+}
 
 // ============================================================
 // GET /:id/me — Current user's access for this home
@@ -57,9 +80,10 @@ router.get('/:id/me', verifyToken, async (req, res) => {
     const { id: homeId } = req.params;
     const userId = req.user.id;
 
-    const access = await getUserAccess(homeId, userId);
+    const opening = await readIamState(homeId, userId);
+    const access = opening?.access || {};
 
-    if (!access.hasAccess) {
+    if (opening?.mode !== 'shared') {
       return res.status(403).json({
         hasAccess: false,
         role_base: null,
@@ -124,6 +148,7 @@ router.get('/:id/me', verifyToken, async (req, res) => {
       ownership_claim_state = latestClaim.state;
     }
 
+    await requireCurrentIamAccess(homeId, userId, null, opening);
     res.json({
       hasAccess: true,
       access_expires_at: homeAccessExpiresAt(occ),
@@ -163,7 +188,8 @@ router.get('/:id/me', verifyToken, async (req, res) => {
     });
   } catch (err) {
     logger.error('GET /me error', { error: err.message, homeId: req.params.id });
-    res.status(err.code === 'HOME_ACCESS_UNAVAILABLE' ? 503 : 500).json({ error: 'Failed to load access info. Please retry.' });
+    res.status(err.statusCode || 503).json({ hasAccess: false, permissions: [], role_base: null,
+      error: 'Current home access could not be confirmed. Please retry.' });
   }
 });
 
@@ -265,22 +291,21 @@ router.get('/:id/members/:userId/permissions', verifyToken, async (req, res) => 
     const { id: homeId, userId: targetUserId } = req.params;
     const actorId = req.user.id;
 
-    // Need members.view at minimum, or be the target user
-    if (targetUserId !== actorId) {
-      const canView = await hasPermission(homeId, actorId, 'members.view');
-      if (!canView) {
-        return res.status(403).json({ error: 'No permission to view household members' });
-      }
-    }
-
+    const permission = targetUserId === actorId ? null : 'members.view';
+    const opening = await requireCurrentIamAccess(homeId, actorId, permission);
     const access = await getUserAccess(homeId, targetUserId);
+    await requireCurrentIamAccess(homeId, actorId, permission, opening);
+    const currentTarget = await getUserAccess(homeId, targetUserId);
+    if (JSON.stringify(currentTarget) !== JSON.stringify(access)) {
+      return res.status(503).json({ error: 'Member access changed while loading. Please retry.' });
+    }
     res.json({
       permissions: access.permissions,
       role_base: access.role_base,
     });
   } catch (err) {
     logger.error('Get member permissions error', { error: err.message });
-    res.status(500).json({ error: 'Failed to get permissions' });
+    res.status(err.statusCode || 503).json({ error: 'Current member permissions could not be confirmed.' });
   }
 });
 
@@ -328,14 +353,12 @@ router.post('/:id/members/:userId/confirm-claim', verifyToken, async (req, res) 
 // ============================================================
 
 router.get('/:id/audit-log', verifyToken, async (req, res) => {
+  res.setHeader('Cache-Control', 'private, no-store');
   try {
     const { id: homeId } = req.params;
     const actorId = req.user.id;
 
-    const access = await checkHomePermission(homeId, actorId, 'members.manage');
-    if (!access.hasAccess) {
-      return res.status(403).json({ error: 'No permission to view audit log' });
-    }
+    const opening = await requireCurrentIamAccess(homeId, actorId, 'members.manage');
 
     const { limit = 50, offset = 0 } = req.query;
 
@@ -359,11 +382,12 @@ router.get('/:id/audit-log', verifyToken, async (req, res) => {
     // A readable sentence beside each raw code, the same one the Home activity timeline shows. Actors go by the Local
     // Profile they show neighbors (services/chatPeople.js), as on the timeline.
     const people = await loadChatPeople((data || []).map((entry) => entry.actor?.id));
+    await requireCurrentIamAccess(homeId, actorId, 'members.manage', opening);
     res.json({ entries: (data || []).map((entry) => ({ ...entry, actor: chatPersonRow(entry.actor, people),
       description: describeHomeActivity(entry) })) });
   } catch (err) {
     logger.error('Audit log error', { error: err.message });
-    res.status(500).json({ error: 'Failed to fetch audit log' });
+    res.status(err.statusCode || 503).json({ error: 'Current access to the audit log could not be confirmed.' });
   }
 });
 
@@ -427,8 +451,21 @@ router.get('/:id/scoped-grants', verifyToken, async (req, res) => {
     return res.status(400).json({ error: 'Choose what to list share links for.', code: 'SHARE_INVALID' });
   }
   try {
-    const access = await checkHomePermission(homeId, req.user.id, 'home.edit');
-    if (!access.hasAccess) return res.status(403).json({ error: 'No permission to manage share links', code: 'SHARE_DENIED' });
+    // Listing links obeys the same current issuer policy as creating/reading
+    // them, including Home state, lockdown, age, and the access window.
+    const readAuthority = async () => {
+      const { data, error } = await supabaseAdmin.rpc('home_external_share_context', {
+        p_home_id: homeId, p_actor_id: req.user.id,
+      });
+      if (error || !Array.isArray(data?.permissions)) throw new Error('Share authority unavailable');
+      if (!data.permissions.includes('home.edit')) {
+        throw Object.assign(new Error('No permission to manage share links'), {
+          code: 'SHARE_DENIED', statusCode: 403,
+        });
+      }
+      return data;
+    };
+    const opening = await readAuthority();
     const now = new Date().toISOString();
     let query = supabaseAdmin.from('HomeScopedGrant')
       .select('id, home_id, resource_type, resource_id, can_view, can_edit, start_at, end_at, max_views, view_count, created_by, created_at')
@@ -438,10 +475,13 @@ router.get('/:id/scoped-grants', verifyToken, async (req, res) => {
     if (resourceId !== undefined) query = query.eq('resource_id', String(resourceId));
     const { data, error } = await query;
     if (error || !Array.isArray(data)) throw error || new Error('Share links could not be read');
+    if (JSON.stringify(await readAuthority()) !== JSON.stringify(opening)) {
+      throw new Error('Share authority changed while loading');
+    }
     return res.json({ grants: data.filter(g => g.max_views == null || (g.view_count || 0) < g.max_views) });
   } catch (err) {
     logger.error('Error listing share links', { error: err.message, homeId });
-    return res.status(503).json({ error: 'Share links could not be loaded. Retry.', code: 'SHARE_UNAVAILABLE' });
+    return shareFailure(res, err);
   }
 });
 router.get('/:id/guest-passes', verifyToken, async (req, res) => {
