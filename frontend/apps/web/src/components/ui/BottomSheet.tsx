@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useCallback, type ReactNode } from 'react';
+import { useEffect, useCallback, useId, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 
 interface BottomSheetProps {
   open: boolean;
@@ -12,6 +13,8 @@ interface BottomSheetProps {
   className?: string;
 }
 
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 export default function BottomSheet({
   open,
   onClose,
@@ -21,6 +24,11 @@ export default function BottomSheet({
   footer,
   className = '',
 }: BottomSheetProps) {
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -45,9 +53,55 @@ export default function BottomSheet({
     };
   }, [open]);
 
-  if (!open) return null;
+  // On document.body the sheet comes last in the Tab order, so it takes focus
+  // when it opens (unless a field in it already has it), keeps Tab inside and
+  // gives focus back when it closes (unless focus is already elsewhere, e.g.
+  // in a sheet still open on top). Tab inside a sheet opened on top of this
+  // one is left to that sheet; focus that fell to the page (the focused
+  // control was removed) comes back to the top sheet.
+  useEffect(() => {
+    const sheet = sheetRef.current;
+    if (!open || !mounted || !sheet) return;
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    if (!sheet.contains(document.activeElement)) sheet.focus();
+    const handleTab = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return;
+      const active = document.activeElement;
+      const dropped = (!active || active === document.body)
+        && Array.from(document.querySelectorAll('[aria-modal="true"]')).pop() === sheet;
+      if (!dropped && !sheet.contains(active)) return;
+      const controls = Array.from(sheet.querySelectorAll<HTMLElement>(FOCUSABLE))
+        .filter((el) => el.getClientRects().length > 0);
+      const first = controls[0];
+      const last = controls[controls.length - 1];
+      if (!first) {
+        e.preventDefault();
+        sheet.focus();
+      } else if (dropped) {
+        e.preventDefault();
+        (e.shiftKey ? last : first).focus();
+      } else if (e.shiftKey && (active === first || active === sheet)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', handleTab);
+    return () => {
+      document.removeEventListener('keydown', handleTab);
+      const active = document.activeElement;
+      if ((!active || active === document.body) && opener?.isConnected) opener.focus();
+    };
+  }, [open, mounted]);
 
-  return (
+  if (!open || !mounted) return null;
+
+  // Rendered on document.body, like ModalShell: AppShell's <main> is its own
+  // stacking context (relative z-0), so from inside it the phone tab bar (z-40)
+  // covered the sheet's footer, and the header stayed above the backdrop.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       {/* Backdrop – fade in */}
       <div
@@ -57,7 +111,12 @@ export default function BottomSheet({
 
       {/* Sheet – slide up */}
       <div
-        className={`relative w-full max-w-md sm:max-w-lg bg-surface rounded-t-2xl sm:rounded-2xl border border-app shadow-2xl overflow-hidden animate-[slideUp_0.25s_ease-out] ${className}`}
+        ref={sheetRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={title ? titleId : undefined}
+        tabIndex={-1}
+        className={`relative w-full max-w-md sm:max-w-lg bg-surface rounded-t-2xl sm:rounded-2xl border border-app shadow-2xl overflow-hidden outline-none animate-[slideUp_0.25s_ease-out] ${className}`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Drag handle (mobile feel) */}
@@ -69,7 +128,7 @@ export default function BottomSheet({
           <div className="flex-shrink-0 border-b border-app px-5 py-3">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
-                {title && <h3 className="text-sm font-bold text-app">{title}</h3>}
+                {title && <h3 id={titleId} className="text-sm font-bold text-app">{title}</h3>}
                 {subhead && <p className="mt-0.5 text-xs text-app-muted">{subhead}</p>}
               </div>
               <button aria-label="Close"
@@ -90,6 +149,7 @@ export default function BottomSheet({
           <div className="px-5 py-3 border-t border-app">{footer}</div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
