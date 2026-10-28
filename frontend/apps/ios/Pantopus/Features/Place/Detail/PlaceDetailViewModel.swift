@@ -29,9 +29,23 @@ final class PlaceDetailViewModel {
     var refreshFailureMessage: String?
     let homeId: String
     let savedPlaceId: String?
+    /// The Home whose household calendar this page reads and changes (the
+    /// pickup day, the radon kit): none for a saved place or a claim in review.
     var calendarHomeId: String? {
-        savedPlaceId == nil ? homeId : nil
+        savedPlaceId == nil && !claimView ? homeId : nil
     }
+
+    /// Someone whose claim on this Home is in review sees its public view: the
+    /// server sends T1 with no verify step (a private setup verifies by mail).
+    /// Today says so up front, before the copy loads.
+    var claimView: Bool {
+        if claimInReview { return true }
+        if case let .loaded(intel) = state { return savedPlaceId == nil && intel.tier == .t1 && intel.verifyAvailable == false }
+        return false
+    }
+
+    /// Made for a claim in review (Today's claimed address).
+    let claimInReview: Bool
 
     let group: PlaceDetailGroup
     /// The host's real verification flows (the dashboard's verify sheet doors).
@@ -52,11 +66,13 @@ final class PlaceDetailViewModel {
         group: PlaceDetailGroup,
         api: APIClient = .shared,
         savedPlaceId: String? = nil,
+        claimInReview: Bool = false,
         onStartVerify: ((PlaceVerifyMethod) -> Void)? = nil,
         onOpenVerificationStatus: (() -> Void)? = nil
     ) {
         self.homeId = homeId
         self.savedPlaceId = savedPlaceId
+        self.claimInReview = claimInReview
         self.group = group
         self.api = api
         sessionScope = HomeClaimSessionScope(api: api)
@@ -64,9 +80,10 @@ final class PlaceDetailViewModel {
         self.onOpenVerificationStatus = onOpenVerificationStatus
     }
 
-    /// Guests and service providers can't verify this address (server `verify_available`).
+    /// Guests and service providers can't verify this address (server `verify_available`),
+    /// and neither can someone whose claim is in review: their locks say who an item is for.
     var nonResidentViewer: Bool {
-        if case let .loaded(intel) = state { return intel.tier == .t3 && intel.verifyAvailable == false }
+        if case let .loaded(intel) = state { return (intel.tier == .t3 && intel.verifyAvailable == false) || claimView }
         return false
     }
 

@@ -197,7 +197,7 @@ private fun GroupContent(
         PlaceDetailGroup.TODAY ->
             PlaceTodayDetailContent(
                 intel,
-                viewModel.takeIf { it.savedPlaceId == null },
+                viewModel.takeIf { it.savedPlaceId == null && !intel.claimView },
                 onOpenBallot = onOpenBallot,
                 alertsCheck = alertsCheck,
             )
@@ -275,9 +275,19 @@ private fun PlaceNotForViewerState(
     )
 }
 
-/** Guests and service providers can't verify this address (server `verify_available`). */
+/**
+ * Guests and service providers can't verify this address (server `verify_available`), and neither can someone whose
+ * claim is in review ([claimView]): their locks say who an item is for.
+ */
 internal val PlaceIntelligence.nonResidentViewer: Boolean
-    get() = tier == PlaceTier.T3 && verifyAvailable == false
+    get() = (tier == PlaceTier.T3 && verifyAvailable == false) || claimView
+
+/**
+ * Someone whose claim on this Home is in review sees its public view: T1 with no verify step and a viewer (a private
+ * setup verifies by mail; a saved address has no viewer). They can't change the household's calendar either.
+ */
+internal val PlaceIntelligence.claimView: Boolean
+    get() = tier == PlaceTier.T1 && verifyAvailable == false && viewer != null
 
 /**
  * Fallback card for a section with no bespoke layout.

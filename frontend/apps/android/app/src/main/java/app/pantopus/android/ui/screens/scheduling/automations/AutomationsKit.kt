@@ -45,6 +45,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.Toast
+import app.pantopus.android.ui.components.ToastAppearance
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -947,16 +949,18 @@ fun AutoToast(
     icon: PantopusIcon = PantopusIcon.CheckCircle,
     tint: Color = PantopusColors.success,
 ) {
-    Row(
-        modifier =
-            modifier
-                .clip(RoundedCornerShape(Radii.pill))
-                .background(PantopusColors.appText)
-                .padding(horizontal = Spacing.s4, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
-    ) {
-        PantopusIconImage(icon = icon, contentDescription = null, size = 15.dp, strokeWidth = 2.4f, tint = tint)
-        Text(text = text, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appTextInverse)
-    }
+    Toast(
+        text = text,
+        appearance =
+            ToastAppearance(
+                background = PantopusColors.appText,
+                foreground = PantopusColors.appTextInverse,
+                textStyle = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.SemiBold),
+                verticalPadding = 10.dp,
+            ),
+        modifier = modifier,
+        leading = {
+            PantopusIconImage(icon = icon, contentDescription = null, size = 15.dp, strokeWidth = 2.4f, tint = tint)
+        },
+    )
 }

@@ -85,6 +85,11 @@ public struct WaitingRoomNotice: Sendable, Hashable {
         self.isRetry = isRetry
     }
 
+    public func leavingToMyHomes() -> WaitingRoomNotice {
+        guard !isRetry else { return self }
+        return WaitingRoomNotice(headline: headline, body: body, ctaLabel: "Back to My homes", isRetry: false)
+    }
+
     /// `GET /api/homes/my-ownership-claims` failed — never fall back to the
     /// seeded fixture, which would read as real claim data.
     public static let loadFailed = WaitingRoomNotice(

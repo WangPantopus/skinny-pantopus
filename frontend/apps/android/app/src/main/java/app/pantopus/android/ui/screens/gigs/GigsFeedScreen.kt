@@ -51,6 +51,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.ui.components.Toast
+import app.pantopus.android.ui.components.ToastAppearance
+import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.shared.feed.FeedComposeFAB
 import app.pantopus.android.ui.screens.shared.feed.FeedSkeletonCard
 import app.pantopus.android.ui.theme.PantopusColors
@@ -110,7 +113,15 @@ fun GigsFeedScreen(
     // P1.D — undo window: the toast auto-dismisses after ~5s.
     LaunchedEffect(toast) {
         if (toast != null) {
-            delay(TOAST_DISMISS_DELAY_MS)
+            // The undo window keeps its own length; a plain message stays up long enough to read.
+            val shown = toast
+            delay(
+                if (shown?.undo != null) {
+                    TOAST_DISMISS_DELAY_MS
+                } else {
+                    toastDurationMillis(shown?.text.orEmpty(), minimumMillis = TOAST_DISMISS_DELAY_MS)
+                },
+            )
             viewModel.dismissToast()
         }
     }
@@ -1378,35 +1389,43 @@ internal fun GigsFeedToastOverlay(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.BottomCenter,
     ) {
-        Row(
-            modifier =
-                Modifier
-                    .padding(bottom = Spacing.s10, start = Spacing.s4, end = Spacing.s4)
-                    .clip(RoundedCornerShape(Radii.pill))
-                    .background(if (payload.isError) PantopusColors.error else PantopusColors.success)
-                    .padding(horizontal = Spacing.s4, vertical = Spacing.s2)
-                    .testTag("gigsFeed.toast"),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
-        ) {
-            Text(
+        if (payload.undo == null) {
+            Toast(
                 text = payload.text,
-                style = PantopusTextStyle.small,
-                color = PantopusColors.appTextInverse,
+                appearance = ToastAppearance(if (payload.isError) PantopusColors.error else PantopusColors.success),
+                modifier = Modifier.padding(bottom = Spacing.s10).testTag("gigsFeed.toast"),
             )
-            payload.undo?.let { undo ->
+        } else {
+            Row(
+                modifier =
+                    Modifier
+                        .padding(bottom = Spacing.s10, start = Spacing.s4, end = Spacing.s4)
+                        .clip(RoundedCornerShape(Radii.pill))
+                        .background(if (payload.isError) PantopusColors.error else PantopusColors.success)
+                        .padding(horizontal = Spacing.s4, vertical = Spacing.s2)
+                        .testTag("gigsFeed.toast"),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
+            ) {
                 Text(
-                    text = "Undo",
-                    fontSize = 12.5.sp,
-                    fontWeight = FontWeight.Bold,
+                    text = payload.text,
+                    style = PantopusTextStyle.small,
                     color = PantopusColors.appTextInverse,
-                    modifier =
-                        Modifier
-                            .clip(RoundedCornerShape(Radii.pill))
-                            .clickable { onUndo(undo) }
-                            .padding(horizontal = Spacing.s1)
-                            .testTag("gigsFeed.undoButton"),
                 )
+                payload.undo?.let { undo ->
+                    Text(
+                        text = "Undo",
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = PantopusColors.appTextInverse,
+                        modifier =
+                            Modifier
+                                .clip(RoundedCornerShape(Radii.pill))
+                                .clickable { onUndo(undo) }
+                                .padding(horizontal = Spacing.s1)
+                                .testTag("gigsFeed.undoButton"),
+                    )
+                }
             }
         }
     }

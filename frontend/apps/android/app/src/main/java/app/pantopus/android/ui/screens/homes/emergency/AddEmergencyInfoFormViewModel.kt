@@ -45,13 +45,14 @@ data class EmergencyFormDraft(
     val location: String? = null,
     val rawDetails: Map<String, String> = emptyMap(),
     val homeId: String? = null,
+    val backendType: String? = null,
 ) {
     companion object {
         /**
          * Build a draft from a backend DTO. Returns `null` when the
          * DTO's type doesn't map to one of the seven form categories
-         * (legacy list-of-rows types like `shutoff_water` aren't
-         * editable through this form).
+         * (projectDraft retains legacy types such as `shutoff_water`
+         * under the generic Other category for display and editing).
          */
         fun from(dto: HomeEmergencyDto): EmergencyFormDraft? {
             val category = EmergencyFormCategory.fromType(dto.type) ?: return null
@@ -66,6 +67,7 @@ data class EmergencyFormDraft(
                 location = dto.location,
                 rawDetails = dto.details.orEmpty(),
                 homeId = dto.homeId,
+                backendType = dto.type,
             )
         }
 
@@ -81,6 +83,9 @@ data class EmergencyFormDraft(
 /** Aggregate UI state for the Add Emergency Info form. */
 data class AddEmergencyInfoUiState(
     val mode: Mode = Mode.Create,
+    val isEditRequest: Boolean = false,
+    val isLoadingEdit: Boolean = false,
+    val editLoadError: String? = null,
     val category: EmergencyFormCategory = EmergencyFormCategory.Other,
     val severity: EmergencySeverity? = null,
     val verifiedByUserId: String? = null,
@@ -99,7 +104,9 @@ data class AddEmergencyInfoUiState(
 
     val isValid: Boolean
         get() =
-            titleField.value.trim().isNotEmpty() &&
+            !isLoadingEdit &&
+                editLoadError == null &&
+                titleField.value.trim().isNotEmpty() &&
                 titleField.error == null &&
                 detailsField.error == null
 
@@ -165,7 +172,13 @@ class AddEmergencyInfoFormViewModel
         private val editEmergencyId: String? =
             savedStateHandle.get<String>(ADD_EMERGENCY_ITEM_ID_KEY)
 
-        private val _state = MutableStateFlow(AddEmergencyInfoUiState())
+        private val _state =
+            MutableStateFlow(
+                AddEmergencyInfoUiState(
+                    isEditRequest = editEmergencyId != null,
+                    isLoadingEdit = editEmergencyId != null,
+                ),
+            )
         val state: StateFlow<AddEmergencyInfoUiState> = _state.asStateFlow()
 
         private var onCreated: (HomeEmergencyDto) -> Unit = {}
@@ -200,10 +213,22 @@ class AddEmergencyInfoFormViewModel
         private suspend fun seedFromList(id: String) {
             when (val result = homesRepo.getHomeEmergencies(homeId)) {
                 is NetworkResult.Success -> {
-                    val dto = result.data.emergencies.firstOrNull { it.id == id } ?: return
-                    EmergencyFormDraft.from(dto)?.let { applyEditSeed(it) }
+                    val dto = result.data.emergencies.firstOrNull { it.id == id && it.homeId == homeId }
+                    if (dto == null) {
+                        _state.update {
+                            it.copy(isLoadingEdit = false, editLoadError = "This emergency item is no longer available.")
+                        }
+                    } else {
+                        applyEditSeed(EmergencyInfoDetailViewModel.projectDraft(dto))
+                    }
                 }
-                is NetworkResult.Failure -> Unit
+                is NetworkResult.Failure ->
+                    _state.update {
+                        it.copy(
+                            isLoadingEdit = false,
+                            editLoadError = result.error.message ?: "Couldn't load this emergency item. Close and try again.",
+                        )
+                    }
             }
         }
 
@@ -211,6 +236,8 @@ class AddEmergencyInfoFormViewModel
             _state.update { current ->
                 current.copy(
                     mode = AddEmergencyInfoUiState.Mode.Edit(draft),
+                    isLoadingEdit = false,
+                    editLoadError = null,
                     category = draft.category,
                     severity = draft.severity,
                     verifiedByUserId = draft.verifiedByUserId,
@@ -295,6 +322,8 @@ class AddEmergencyInfoFormViewModel
         // MARK: - Submit
 
         fun submit() {
+            // A failed or unfinished edit load must never fall through to POST.
+            if (editEmergencyId != null && _state.value.mode !is AddEmergencyInfoUiState.Mode.Edit) return
             val invalid = validateAll()
             if (invalid != null) {
                 _state.update { it.copy(toast = EmergencyToast("Fix the highlighted fields.", isError = true)) }
@@ -373,15 +402,20 @@ class AddEmergencyInfoFormViewModel
                 val current = _state.value
                 val request =
                     CreateEmergencyRequest(
-                        type = current.category.backendType,
+                        type =
+                            if (current.category == originalDraft.category) {
+                                originalDraft.backendType ?: current.category.backendType
+                            } else {
+                                current.category.backendType
+                            },
                         label = current.titleField.value.trim(),
                         location = originalDraft.location,
                         details = buildEditDetailsMap(originalDraft, current).takeIf { it.isNotEmpty() },
                     )
                 when (val result = homesRepo.updateHomeEmergency(homeId, originalDraft.id, request)) {
                     is NetworkResult.Success -> {
-                        val updated = EmergencyFormDraft.from(result.data.emergency)
-                        if (updated == null || updated.id != originalDraft.id || updated.homeId != homeId) {
+                        val updated = EmergencyInfoDetailViewModel.projectDraft(result.data.emergency)
+                        if (updated.id != originalDraft.id || updated.homeId != homeId) {
                             _state.update {
                                 it.copy(
                                     isSaving = false,

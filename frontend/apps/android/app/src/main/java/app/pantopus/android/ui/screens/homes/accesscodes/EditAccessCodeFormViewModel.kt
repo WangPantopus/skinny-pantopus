@@ -12,6 +12,7 @@ import app.pantopus.android.data.api.models.homes.UpdateAccessSecretRequest
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.homes.HomeMembersRepository
 import app.pantopus.android.data.homes.HomesRepository
+import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.shared.form.FormAggregate
 import app.pantopus.android.ui.screens.shared.form.FormFieldState
 import app.pantopus.android.ui.screens.shared.form.FormValidator
@@ -553,7 +554,7 @@ class EditAccessCodeFormViewModel
             toastJob?.cancel()
             toastJob =
                 viewModelScope.launch {
-                    delay(TOAST_DURATION_MS)
+                    delay(toastDurationMillis(text, minimumMillis = TOAST_DURATION_MS))
                     _state.update { it.copy(toast = null) }
                 }
         }

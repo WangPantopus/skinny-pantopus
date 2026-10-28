@@ -2870,7 +2870,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     ) = ChildRoutes.chatConversationRoom(roomId, title, title.trim().take(1).uppercase(), verified = false)
                     TodayTabScreen(
                         onClaim = { navController.navigate(ChildRoutes.ADD_HOME) },
-                        onCheckClaim = { navController.navigateToRootTab(PantopusRoute.Place) },
+                        onCheckClaim = { homeId -> navController.navigate(ChildRoutes.waitingRoom(homeId)) },
                         onAsk = { context -> navController.navigate(ChildRoutes.askPantopus(context)) },
                         onOpenMenu = openMenu,
                         onOpenPlace = { homeId ->
@@ -6966,13 +6966,22 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             when (nav) {
                                 WaitingRoomNav.Notifications ->
                                     navController.navigate(ChildRoutes.NOTIFICATIONS)
-                                is WaitingRoomNav.BackToHome ->
-                                    navController.navigate(ChildRoutes.homeDashboard(nav.homeId)) {
-                                        popUpTo(ChildRoutes.homeDashboard(nav.homeId)) { inclusive = true }
+                                is WaitingRoomNav.BackToHome -> {
+                                    navController.popBackStack(ChildRoutes.waitingRoom(nav.homeId), inclusive = true)
+                                    val under = navController.currentBackStackEntry
+                                    val isHome =
+                                        under?.destination?.route == ChildRoutes.HOME_DASHBOARD &&
+                                            under.arguments?.getString(HOME_DASHBOARD_HOME_ID_KEY) == nav.homeId
+                                    if (!isHome) {
+                                        navController.navigate(ChildRoutes.homeDashboard(nav.homeId)) {
+                                            popUpTo(ChildRoutes.homeDashboard(nav.homeId)) { inclusive = true }
+                                        }
                                     }
+                                }
                                 // No way into this Home yet: back to My homes, where the claim is listed, or onto
                                 // it, past the Home's dashboard a waiting-room link puts under the room. While there
-                                // are only claims, the Place tab's root is My homes. Mirrors iOS `showMyHomes`.
+                                // are only claims, the Place tab's root is the claimed address. Mirrors iOS
+                                // `showMyHomes`.
                                 is WaitingRoomNav.MyHomes ->
                                     if (!navController.popBackStack(ChildRoutes.MY_HOMES, inclusive = false)) {
                                         navController.popBackStack(ChildRoutes.waitingRoom(nav.homeId), inclusive = true)
@@ -6987,6 +6996,18 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                                 currentPlaceHost?.landing?.value == HomeLanding.Homes
                                         if (!rootShowsMyHomes) navController.navigate(ChildRoutes.MY_HOMES)
                                     }
+                                // Back while the claim gives no way into this Home: the screen the room was opened
+                                // from (the claimed address, Today, My homes), past the Home's dashboard a
+                                // waiting-room link puts under the room. Mirrors iOS `leaveRoom(withoutHome:)`.
+                                is WaitingRoomNav.Leave -> {
+                                    navController.popBackStack(ChildRoutes.waitingRoom(nav.homeId), inclusive = true)
+                                    val under = navController.currentBackStackEntry
+                                    if (under?.destination?.route == ChildRoutes.HOME_DASHBOARD &&
+                                        under.arguments?.getString(HOME_DASHBOARD_HOME_ID_KEY) == nav.homeId
+                                    ) {
+                                        navController.popBackStack()
+                                    }
+                                }
                                 is WaitingRoomNav.ViewClaim ->
                                     navController.navigate(ChildRoutes.MY_CLAIMS)
                                 is WaitingRoomNav.UpdateEvidence ->
@@ -7388,6 +7409,21 @@ private fun PlaceTabRoot(
                         onBallotOpened = onBallotOpened,
                         // A new default changes where Place lands next time, not the Home on screen now.
                         onDefaultHomeChange = { host.switchHome(current.homeId) },
+                    )
+                }
+            // The same dashboard: the claimed Home's public view, its claim's status on top.
+            is HomeLanding.Claim ->
+                key(current.homeId) {
+                    PlaceRootViewed("claim")
+                    PlaceDashboardDestination(
+                        navController = navController,
+                        homeId = current.homeId,
+                        onOpenMenu = onOpenMenu,
+                        onSwitchHome = host::switchHome,
+                        onPlaceUnavailable = host::replaceUnavailable,
+                        scrollToTop = scrollToTop,
+                        scrollToBallot = ballotHomeId == current.homeId,
+                        onBallotOpened = onBallotOpened,
                     )
                 }
             HomeLanding.Homes -> {
