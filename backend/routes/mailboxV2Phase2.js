@@ -65,11 +65,11 @@ const updateFolderSchema = Joi.object({
 });
 
 const vaultSearchSchema = Joi.object({
-  q: Joi.string().min(1).max(255).required(),
+  q: Joi.string().trim().min(1).max(255).required(),
   drawer: Joi.string().valid('personal', 'home', 'business').optional(),
   folderId: Joi.string().uuid().optional(),
-  limit: Joi.number().integer().min(1).max(50).optional(),
-  offset: Joi.number().integer().min(0).optional(),
+  limit: Joi.number().integer().min(1).max(50).default(20),
+  offset: Joi.number().integer().min(0).default(0),
 });
 
 const fileToVaultSchema = Joi.object({
@@ -1177,11 +1177,11 @@ router.post('/vault/auto-file', async (req, res, next) => {
 // GET /vault/search — semantic search across mail
 router.get('/vault/search', async (req, res, next) => {
   try {
-    const { q, drawer, folderId, limit = 20, offset = 0 } = req.query;
-
-    if (!q || q.length < 1) {
-      return res.status(400).json({ error: 'Query required' });
+    const { error: validationError, value } = vaultSearchSchema.validate(req.query);
+    if (validationError) {
+      return res.status(400).json({ error: 'Enter a search of 1–255 characters and a valid drawer, folder and page.', code: 'MAIL_SEARCH_INVALID' });
     }
+    const { q, drawer, folderId, limit, offset } = value;
 
     // The words searched are never logged or stored (Mail tab, SRV-3).
     await logMailEvent(req.user.id, 'vault_search_performed', null, {
@@ -1189,48 +1189,66 @@ router.get('/vault/search', async (req, res, next) => {
     });
 
     // Build search
-    let query = supabaseAdmin
+    const homeIds = await getAccessibleHomeIds(req.user.id);
+    let query = onlyDelivered(supabaseAdmin
       .from('Mail')
       .select('*', { count: 'exact' })
-      .eq('recipient_user_id', req.user.id)
-      .lte('delivered_at', new Date().toISOString())
-      .is('deleted_at', null);
+      .or(visibleMailFilter(req.user.id, homeIds))
+      .or('drawer.is.null,drawer.neq.earn')
+      .or('lifecycle.is.null,lifecycle.neq.shredded')
+      .or('mail_object_type.is.null,mail_object_type.neq.bundle')
+      .is('deleted_at', null));
 
     if (drawer) query = query.eq('drawer', drawer);
-    if (folderId) query = query.eq('vault_folder_id', folderId);
+    if (folderId) {
+      const resolved = await mailVault.resolveFolder(folderId, req.user.id, homeIds);
+      if (!resolved) return res.status(404).json({ error: "This folder isn't in your Vault.", code: 'MAIL_FOLDER_NOT_FOUND' });
+      query = query.in('vault_folder_id', resolved.ids);
+    }
+
+    // Only real month names are dates; an ordinary phrase ending in a year stays text.
+    const monthNames = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+    const dateMatch = /^([a-z]+)\s+(\d{4})$/i.exec(q);
+    const month = dateMatch ? monthNames.findIndex((name) => name === dateMatch[1].toLowerCase()
+      || name.slice(0, 3) === dateMatch[1].toLowerCase()) : -1;
 
     // Amount search: "$87" or "$87.00"
     const amountMatch = q.match(/^\$(\d+(?:\.\d{1,2})?)$/);
     if (amountMatch) {
       const amount = amountMatch[1];
       // Search in key_facts jsonb for the amount value
-      query = query.or(`key_facts.cs.{"value":"${amount}"},key_facts.cs.{"value":"$${amount}"},subject.ilike.%${amount}%,content.ilike.%${amount}%`);
+      const facts = [amount, `$${amount}`].map((value) => `key_facts.cs.${JSON.stringify(JSON.stringify([{ value }]))}`);
+      query = query.or([...facts, `subject.ilike.%${amount}%`, `content.ilike.%${amount}%`].join(','));
     }
     // Date search: "March 2025" or "Mar 2025"
-    else if (/^[a-z]+ \d{4}$/i.test(q)) {
-      const [month, year] = q.split(' ');
-      const monthNum = new Date(`${month} 1, ${year}`).getMonth();
-      const startDate = new Date(parseInt(year), monthNum, 1).toISOString();
-      const endDate = new Date(parseInt(year), monthNum + 1, 0).toISOString();
-      query = query.gte('created_at', startDate).lte('created_at', endDate);
+    else if (month !== -1) {
+      const startDate = new Date(`${dateMatch[2]}-${String(month + 1).padStart(2, '0')}-01T00:00:00.000Z`);
+      const endDate = new Date(startDate);
+      endDate.setUTCMonth(endDate.getUTCMonth() + 1);
+      query = query.gte('created_at', startDate.toISOString()).lt('created_at', endDate.toISOString());
     }
     // General text search
     else {
-      const escapedQ = escapeIlike(q);
-      query = query.or(`subject.ilike.%${escapedQ}%,content.ilike.%${escapedQ}%,sender_display.ilike.%${escapedQ}%`);
+      // Quote the complete pattern so commas, parentheses and quotes remain search text.
+      const pattern = JSON.stringify(`%${escapeIlike(q)}%`);
+      query = query.or(`subject.ilike.${pattern},content.ilike.${pattern},sender_display.ilike.${pattern}`);
     }
 
     query = query.order('created_at', { ascending: false })
       // Mail delivered together shares created_at; the id keeps the order the same on every page.
       .order('id', { ascending: false })
-      .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
+      .range(offset, offset + limit - 1);
 
-    const { data: found, count } = await query;
+    const { data: found, count, error: searchError } = await query;
+    if (searchError) {
+      logger.error('Vault search failed', { code: searchError.code });
+      return res.status(500).json({ error: "Couldn't search your mail. Try again in a moment.", code: 'MAIL_UNAVAILABLE' });
+    }
     // Each sender as neighbors see them now (their Local Profile). A text search matched the name stored when the
     // letter came: a letter only that older name matched is left out, so no one finds a sender by a name they no
     // longer show.
     const named = await nameMailSenders(found || [], req.user.id);
-    const textSearch = !amountMatch && !/^[a-z]+ \d{4}$/i.test(q);
+    const textSearch = !amountMatch && month === -1;
     const lq = q.toLowerCase();
     const results = textSearch
       ? named.filter((item) => [item.sender_display, item.subject, item.content].some((text) => text?.toLowerCase().includes(lq)))
