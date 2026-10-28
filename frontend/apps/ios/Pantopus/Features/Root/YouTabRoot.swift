@@ -1043,6 +1043,27 @@ public struct YouTabRoot: View {
         path.append(.myBusinesses)
     }
 
+    /// A claim in review that gives no way into its Home yet: back to My homes,
+    /// where the claim is listed, or onto it. The Home's own screens can't show it.
+    @MainActor
+    private func showMyHomes(leavingClaimOn homeId: String) {
+        if path.contains(.myHomes) {
+            while let last = path.last, last != .myHomes {
+                path.removeLast()
+            }
+            return
+        }
+        path.removeAll { route in
+            switch route {
+            case let .waitingRoom(id), let .homeDashboard(id):
+                id == homeId
+            default:
+                false
+            }
+        }
+        path.append(.myHomes)
+    }
+
     @MainActor
     private func handleWaitingRoomNav(_ nav: WaitingRoomNav, homeId _: String) {
         switch nav {
@@ -1054,6 +1075,8 @@ public struct YouTabRoot: View {
                 return false
             }
             path.append(.homeDashboard(homeId: id))
+        case let .myHomes(id):
+            showMyHomes(leavingClaimOn: id)
         case .viewClaim:
             path.append(.myClaims)
         case let .updateEvidence(id, _):

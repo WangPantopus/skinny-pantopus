@@ -6959,6 +6959,23 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                     navController.navigate(ChildRoutes.homeDashboard(nav.homeId)) {
                                         popUpTo(ChildRoutes.homeDashboard(nav.homeId)) { inclusive = true }
                                     }
+                                // No way into this Home yet: back to My homes, where the claim is listed, or onto
+                                // it, past the Home's dashboard a waiting-room link puts under the room. While there
+                                // are only claims, the Place tab's root is My homes. Mirrors iOS `showMyHomes`.
+                                is WaitingRoomNav.MyHomes ->
+                                    if (!navController.popBackStack(ChildRoutes.MY_HOMES, inclusive = false)) {
+                                        navController.popBackStack(ChildRoutes.waitingRoom(nav.homeId), inclusive = true)
+                                        val under = navController.currentBackStackEntry
+                                        if (under?.destination?.route == ChildRoutes.HOME_DASHBOARD &&
+                                            under.arguments?.getString(HOME_DASHBOARD_HOME_ID_KEY) == nav.homeId
+                                        ) {
+                                            navController.popBackStack()
+                                        }
+                                        val rootShowsMyHomes =
+                                            navController.currentDestination?.route == PantopusRoute.Place.path &&
+                                                currentPlaceHost?.landing?.value == HomeLanding.Homes
+                                        if (!rootShowsMyHomes) navController.navigate(ChildRoutes.MY_HOMES)
+                                    }
                                 is WaitingRoomNav.ViewClaim ->
                                     navController.navigate(ChildRoutes.MY_CLAIMS)
                                 is WaitingRoomNav.UpdateEvidence ->

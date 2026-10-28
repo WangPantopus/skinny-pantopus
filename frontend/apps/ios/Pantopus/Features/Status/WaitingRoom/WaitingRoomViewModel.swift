@@ -22,6 +22,8 @@ public enum WaitingRoomState: String, Sendable, Hashable {
 public enum WaitingRoomNav: Sendable, Hashable {
     case notifications
     case backToHome(homeId: String)
+    /// "Back to My homes": the claim gives no way into this Home yet.
+    case myHomes(homeId: String)
     case viewClaim(claimId: String)
     case updateEvidence(homeId: String, claimId: String)
     case cancelClaim(homeId: String)
@@ -136,13 +138,15 @@ public final class WaitingRoomViewModel {
             let ref = String(claim.id.prefix(Self.claimRefLength)).uppercased()
 
             let home = await homeContext(claimed: claim.home)
+            let canOpenHome = await opensHomeScreen()
 
             content =
                 seedState == .moreInfoRequested
                     ? .moreInfoRequested(
                         address: home.address,
                         claimRef: ref,
-                        submittedOn: Self.dayCaption(claim.createdAt)
+                        submittedOn: Self.dayCaption(claim.createdAt),
+                        canOpenHome: canOpenHome
                     )
                     : .active(
                         address: home.address,
@@ -152,7 +156,8 @@ public final class WaitingRoomViewModel {
                         needsDocuments: claim.approval.map { $0.proof == "missing" } ?? (claim.hasEvidence == false),
                         addressVerified: home.addressVerified,
                         residency: claimIsResidency,
-                        approval: claim.approval
+                        approval: claim.approval,
+                        canOpenHome: canOpenHome
                     )
             phase = .loaded
         } catch {
@@ -175,6 +180,15 @@ public final class WaitingRoomViewModel {
                 offersLandlord: offersLandlord
             )
         )
+    }
+
+    /// Whether the Home's own screen has something for this person: shared
+    /// access, or their own verification step there (the server's answer for
+    /// that screen). A claim on a Home someone else added gives neither until
+    /// it's approved. An unreadable answer keeps "Back to home".
+    private func opensHomeScreen() async -> Bool {
+        guard let access = try? await authority.read() else { return true }
+        return access.access != nil || access.verificationKind != nil
     }
 
     /// The landlord card helps only when a verified landlord can answer, or
@@ -341,6 +355,8 @@ public final class WaitingRoomViewModel {
         switch cta.actionKey {
         case "back_to_home":
             pendingNav = .backToHome(homeId: homeId)
+        case "my_homes":
+            pendingNav = .myHomes(homeId: homeId)
         // A18.2 approved frame's ghost CTA ("View claim").
         case "view_claim":
             if let claimId {

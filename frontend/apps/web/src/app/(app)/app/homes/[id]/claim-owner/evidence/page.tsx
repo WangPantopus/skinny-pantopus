@@ -7,6 +7,7 @@ import { ChevronLeft, FileText, Upload, X } from 'lucide-react';
 import * as api from '@pantopus/api';
 import { useClaimUploadSession } from '@/components/home/useClaimUploadSession';
 import { toast } from '@/components/ui/toast-store';
+import { useHomeAccess } from '@/hooks/useHomeAccess';
 
 type EvidenceType = 'deed' | 'closing_disclosure' | 'tax_bill' | 'utility_bill' | 'lease';
 
@@ -43,6 +44,9 @@ export default function ClaimEvidencePage() {
   const searchParams = useSearchParams();
   const homeId = params.id as string;
   const uploadSession = useClaimUploadSession(homeId);
+  // A claim on a Home someone else added gives no way in until it's approved, so its dashboard
+  // can't open; My Homes lists the claim.
+  const { denied: noHomeAccess } = useHomeAccess(homeId);
   const uploadOperation = useRef<{ file: File; type: string; id: string } | null>(null);
   const submitInFlight = useRef(false);
   const savedClaim = useRef<string | undefined>(undefined);
@@ -183,11 +187,11 @@ export default function ClaimEvidencePage() {
     <div className="min-h-screen bg-app-surface-raised">
       <main className="max-w-xl mx-auto px-4 py-8">
         <Link
-          href={`/app/homes/${homeId}/dashboard`}
+          href={noHomeAccess ? '/app/homes' : `/app/homes/${homeId}/dashboard`}
           className="inline-flex items-center gap-1 text-sm text-app-text-secondary hover:text-app-text mb-6"
         >
           <ChevronLeft className="w-4 h-4" />
-          Back to dashboard
+          {noHomeAccess ? 'Back to My Homes' : 'Back to dashboard'}
         </Link>
 
         <h1 className="text-2xl font-bold text-app-text mb-2">Upload evidence</h1>

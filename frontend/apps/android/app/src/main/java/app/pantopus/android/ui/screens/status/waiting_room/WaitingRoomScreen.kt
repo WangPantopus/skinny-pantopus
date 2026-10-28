@@ -200,7 +200,8 @@ fun WaitingRoomScreen(
                     onPrimary = onPrimary,
                     onSecondary = { cta ->
                         onSecondary(cta)
-                        onBack()
+                        // "Back to My homes" leaves through the host, which also skips a Home screen under the room.
+                        if (cta.actionKey != "my_homes") onBack()
                     },
                 )
             }
