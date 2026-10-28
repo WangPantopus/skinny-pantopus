@@ -2506,7 +2506,7 @@ router.delete('/:id/public-data/:dataId', verifyToken, async (req, res) => {
  * origin_home_id, so only tasks posted by someone who can access this Home
  * are listed.
  */
-router.get('/:id/gigs', verifyToken, async (req, res) => {
+router.get('/:id/gigs', verifyToken, requireSharedHomeContent, async (req, res) => {
   if (Joi.string().uuid().validate(req.params.id).error) return res.status(400).json({ error: 'Invalid Home id' });
   try {
     const { id: homeId } = req.params;
@@ -2543,7 +2543,7 @@ router.get('/:id/gigs', verifyToken, async (req, res) => {
  * GET /api/homes/:id/nearby-gigs
  * Get gigs posted near this home address
  */
-router.get('/:id/nearby-gigs', verifyToken, async (req, res) => {
+router.get('/:id/nearby-gigs', verifyToken, requireSharedHomeContent, async (req, res) => {
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
@@ -3760,7 +3760,7 @@ router.put('/:id/vendors/:vendorId', verifyToken, requireSharedHomeContent, asyn
  * GET /api/homes/:id/businesses
  * List all businesses linked to this home
  */
-router.get('/:id/businesses', verifyToken, async (req, res) => {
+router.get('/:id/businesses', verifyToken, requireSharedHomeContent, async (req, res) => {
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
@@ -3829,7 +3829,7 @@ const linkBusinessSchema = Joi.object({
   notes: Joi.string().allow('', null).optional(),
 }).or('business_user_id', 'username');
 
-router.post('/:id/businesses', verifyToken, validate(linkBusinessSchema), async (req, res) => {
+router.post('/:id/businesses', verifyToken, requireSharedHomeContent, validate(linkBusinessSchema), async (req, res) => {
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
@@ -3898,7 +3898,7 @@ router.post('/:id/businesses', verifyToken, validate(linkBusinessSchema), async 
  * PATCH /api/homes/:id/businesses/:linkId
  * Update a home-business link (change kind or notes)
  */
-router.patch('/:id/businesses/:linkId', verifyToken, async (req, res) => {
+router.patch('/:id/businesses/:linkId', verifyToken, requireSharedHomeContent, async (req, res) => {
   try {
     const { id: homeId, linkId } = req.params;
     const userId = req.user.id;
@@ -3940,7 +3940,7 @@ router.patch('/:id/businesses/:linkId', verifyToken, async (req, res) => {
  * DELETE /api/homes/:id/businesses/:linkId
  * Remove a home-business link
  */
-router.delete('/:id/businesses/:linkId', verifyToken, async (req, res) => {
+router.delete('/:id/businesses/:linkId', verifyToken, requireSharedHomeContent, async (req, res) => {
   try {
     const { id: homeId, linkId } = req.params;
     const userId = req.user.id;
@@ -3970,7 +3970,7 @@ router.delete('/:id/businesses/:linkId', verifyToken, async (req, res) => {
  * GET /api/homes/:id/businesses/search
  * Search businesses to link (by name/username)
  */
-router.get('/:id/businesses/search', verifyToken, async (req, res) => {
+router.get('/:id/businesses/search', verifyToken, requireSharedHomeContent, async (req, res) => {
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
