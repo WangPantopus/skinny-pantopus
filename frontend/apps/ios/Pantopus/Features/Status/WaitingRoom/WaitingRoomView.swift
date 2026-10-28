@@ -35,7 +35,7 @@ public struct WaitingRoomView: View {
         VStack(spacing: Spacing.s0) {
             WaitingRoomTopBar(
                 title: topBarTitle,
-                onBack: onBack
+                onBack: leave
             ) {
                 viewModel.openNotifications()
             }
@@ -56,7 +56,7 @@ public struct WaitingRoomView: View {
                     if notice.isRetry {
                         Task { await viewModel.refresh() }
                     } else {
-                        onBack()
+                        leave()
                     }
                 }
             case let .approved(content):
@@ -90,6 +90,14 @@ public struct WaitingRoomView: View {
     }
 
     // MARK: - Body slots
+
+    private func leave() {
+        if viewModel.leavesToMyHomes {
+            viewModel.leaveToMyHomes()
+        } else {
+            onBack()
+        }
+    }
 
     /// The Verification Center frame retitles the bar; every other phase
     /// keeps the claim room's "Waiting for approval".
@@ -220,8 +228,6 @@ public struct WaitingRoomView: View {
 
                 Button {
                     viewModel.handleSecondary(viewModel.content.secondaryCta)
-                    // "Back to My homes" leaves through the host, which also skips a Home screen under the room.
-                    if viewModel.content.secondaryCta.actionKey != "my_homes" { onBack() }
                 } label: {
                     Text(viewModel.content.secondaryCta.label)
                         .font(.system(size: 13.5, weight: .semibold))

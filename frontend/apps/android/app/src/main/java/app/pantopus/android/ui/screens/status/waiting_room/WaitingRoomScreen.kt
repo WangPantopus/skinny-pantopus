@@ -3,6 +3,7 @@
 package app.pantopus.android.ui.screens.status.waiting_room
 
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -72,11 +73,15 @@ fun WaitingRoomRoute(
 ) {
     val content by viewModel.content.collectAsStateWithLifecycle()
     val phase by viewModel.phase.collectAsStateWithLifecycle()
+    val leavesToMyHomes by viewModel.leavesToMyHomes.collectAsStateWithLifecycle()
     val navEvent by viewModel.navEvent.collectAsStateWithLifecycle()
     val approvalBusyKey by viewModel.approvalBusyKey.collectAsStateWithLifecycle()
     val approvalNotice by viewModel.approvalNotice.collectAsStateWithLifecycle()
     val openUrl by viewModel.openUrl.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val leave = { if (leavesToMyHomes) viewModel.leaveToMyHomes() else onBack() }
+
+    BackHandler(enabled = leavesToMyHomes) { viewModel.leaveToMyHomes() }
 
     // Refetch on every resume, as iOS does on appear: returning from evidence
     // upload, the postcard, Stripe's identity check or the Home (or to the app)
@@ -104,7 +109,7 @@ fun WaitingRoomRoute(
         content = content,
         modifier = modifier,
         phase = phase,
-        onBack = onBack,
+        onBack = leave,
         onBell = viewModel::openNotifications,
         onInlineAction = viewModel::handleInlineAction,
         onPrimary = viewModel::handlePrimary,
@@ -198,11 +203,7 @@ fun WaitingRoomScreen(
                 StickyDock(
                     content = content,
                     onPrimary = onPrimary,
-                    onSecondary = { cta ->
-                        onSecondary(cta)
-                        // "Back to My homes" leaves through the host, which also skips a Home screen under the room.
-                        if (cta.actionKey != "my_homes") onBack()
-                    },
+                    onSecondary = onSecondary,
                 )
             }
         }

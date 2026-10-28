@@ -50,6 +50,7 @@ public final class WaitingRoomViewModel {
     public let homeId: String
     public private(set) var content: WaitingRoomContent
     public private(set) var phase: WaitingRoomPhase = .loading
+    public private(set) var leavesToMyHomes = false
     public private(set) var pendingNav: WaitingRoomNav?
     /// The approval checklist action in flight (its button reads "Opening…").
     public private(set) var approvalBusyKey: String?
@@ -118,6 +119,7 @@ public final class WaitingRoomViewModel {
             claimIsResidency = claim.claimType == "resident"
             guard claim.status == Self.underReviewStatus else {
                 if Self.approvedStatuses.contains(claim.status) {
+                    leavesToMyHomes = false
                     // A18.2 "You're the owner" (a verified resident for a
                     // residency document). Dates come straight off the
                     // claim row — never the design's sample dates.
@@ -132,13 +134,17 @@ public final class WaitingRoomViewModel {
                     phase = .approved(approvedContent)
                     return
                 }
-                phase = .notice(claimIsResidency ? .residencyClaimDecided : .claimDecided)
+                let canOpen = await opensHomeScreen()
+                leavesToMyHomes = !canOpen
+                let notice: WaitingRoomNotice = claimIsResidency ? .residencyClaimDecided : .claimDecided
+                phase = .notice(leavesToMyHomes ? notice.leavingToMyHomes() : notice)
                 return
             }
             let ref = String(claim.id.prefix(Self.claimRefLength)).uppercased()
 
             let home = await homeContext(claimed: claim.home)
             let canOpenHome = await opensHomeScreen()
+            leavesToMyHomes = !canOpenHome
 
             content =
                 seedState == .moreInfoRequested
@@ -162,6 +168,7 @@ public final class WaitingRoomViewModel {
             phase = .loaded
         } catch {
             logger.warning("waitingRoom.load failed: \(error.localizedDescription)")
+            leavesToMyHomes = false
             phase = .notice(.loadFailed)
         }
     }
@@ -170,9 +177,11 @@ public final class WaitingRoomViewModel {
     private func applyVerificationFallback() async throws {
         let access = try await authority.read()
         guard access.verificationKind != nil else {
-            phase = .notice(.noClaim)
+            leavesToMyHomes = access.access == nil
+            phase = .notice(leavesToMyHomes ? WaitingRoomNotice.noClaim.leavingToMyHomes() : .noClaim)
             return
         }
+        leavesToMyHomes = false
         let offersLandlord = await offersLandlordConfirmation()
         phase = .verification(
             HomeVerificationContent.make(
@@ -257,6 +266,10 @@ public final class WaitingRoomViewModel {
 
     public func openNotifications() {
         pendingNav = .notifications
+    }
+
+    public func leaveToMyHomes() {
+        pendingNav = .myHomes(homeId: homeId)
     }
 
     /// A checklist button: confirm identity (Stripe's page in an in-app browser) or upload a document.
