@@ -34,6 +34,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import org.json.JSONObject
 import timber.log.Timber
 import java.net.HttpURLConnection.HTTP_BAD_REQUEST
 import java.time.Instant
@@ -102,7 +103,7 @@ class ChatOutbox
                 socket.connectionState.collect { state ->
                     if (state == SocketManager.ConnectionState.Connected) {
                         lock.withLock {
-                            _entries.value = _entries.value.map { if (it.terminal) it else it.copy(retryAt = 0) }
+                            _entries.value = _entries.value.map { if (it.terminal || it.rateLimited) it else it.copy(retryAt = 0) }
                         }
                         wake.trySend(Unit)
                     }
@@ -297,7 +298,8 @@ class ChatOutbox
                 lock.withLock {
                     val entry = _entries.value.firstOrNull { it.clientId == clientId } ?: return@withLock
                     if (entry.refused) return@withLock
-                    replace(entry.copy(attempts = 0, retryAt = 0, error = null, terminal = false))
+                    if (entry.rateLimited && entry.retryAt > System.currentTimeMillis()) return@withLock
+                    replace(entry.copy(attempts = 0, retryAt = 0, rateLimited = false, error = null, terminal = false))
                 }
                 wake.trySend(Unit)
             }
@@ -522,17 +524,26 @@ class ChatOutbox
                 val attempts = held.attempts + 1
                 val limited = error is NetworkError.ClientError && error.body?.contains("PRE_BID_LIMIT") == true
                 val terminal = limited || error.code?.let { it in 400..499 && it != HTTP_TOO_MANY_REQUESTS } == true
+                val rateLimited = error.code == HTTP_TOO_MANY_REQUESTS && !limited
                 val backoff = (INITIAL_BACKOFF_MS * (1L shl attempts.coerceAtMost(MAX_EXPONENT))).coerceAtMost(MAX_BACKOFF_MS)
                 replace(
                     held.copy(
                         attempts = attempts,
-                        retryAt = System.currentTimeMillis() + backoff,
+                        retryAt = System.currentTimeMillis() + maxOf(backoff, serverRetryDelay(error)),
+                        rateLimited = rateLimited,
                         error = error.message,
                         terminal = terminal,
                         refused = error.code == 403,
                     ),
                 )
             }
+        }
+
+        private fun serverRetryDelay(error: NetworkError): Long {
+            if (error !is NetworkError.ClientError || error.code != HTTP_TOO_MANY_REQUESTS) return 0
+            val seconds = runCatching { JSONObject(error.body.orEmpty()).optDouble("retryAfter", 0.0) }.getOrDefault(0.0)
+            if (!seconds.isFinite() || seconds <= 0) return 0
+            return (kotlin.math.ceil(seconds).coerceAtMost(MAX_SERVER_RETRY_SECONDS) * INITIAL_BACKOFF_MS).toLong()
         }
 
         private fun replace(entry: ChatOutboxEntry): Boolean {
@@ -555,6 +566,7 @@ class ChatOutbox
             const val MAX_MESSAGES = 200
             const val INITIAL_BACKOFF_MS = 1000L
             const val MAX_BACKOFF_MS = 60_000L
+            const val MAX_SERVER_RETRY_SECONDS = 86_400.0
             const val MAX_EXPONENT = 6
             const val DELIVERY_JOB_ID = 63_109
             const val BACKGROUND_DELAY_MS = 5_000L

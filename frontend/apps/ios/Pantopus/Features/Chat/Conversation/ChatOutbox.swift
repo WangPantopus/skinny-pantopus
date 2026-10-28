@@ -71,7 +71,7 @@ final class ChatOutbox {
             for await state in SocketClient.shared.connectionStates() {
                 guard let self, lifetime == started else { return }
                 guard state == .connected else { continue }
-                for index in messages.indices where messages[index].status == .retrying {
+                for index in messages.indices where messages[index].status == .retrying && messages[index].rateLimited != true {
                     messages[index].retryAt = nil
                 }
                 pump()
@@ -135,8 +135,10 @@ final class ChatOutbox {
 
     func retry(_ id: String) async {
         guard let index = messages.firstIndex(where: { $0.id == id }), messages[index].status != .refused else { return }
+        if messages[index].rateLimited == true, let retryAt = messages[index].retryAt, retryAt > Date() { return }
         messages[index].status = .queued
         messages[index].retryAt = nil
+        messages[index].rateLimited = false
         messages[index].failure = nil
         try? await storage.updateOutbox(messages[index], scope: scope, version: version)
         publish(.changed)
@@ -277,9 +279,12 @@ final class ChatOutbox {
         guard lifetime == started, messages.contains(where: { $0.id == message.id }), !Task.isCancelled else { return }
         message.attempts += 1
         message.failure = error.localizedDescription
+        message.rateLimited = false
         if Self.isTransient(error) {
             message.status = .retrying
-            message.retryAt = Date().addingTimeInterval(min(60, pow(2, Double(min(message.attempts, 6)))))
+            let backoff = min(60, pow(2, Double(min(message.attempts, 6))))
+            if case let APIError.clientError(status, _) = error { message.rateLimited = status == 429 }
+            message.retryAt = Date().addingTimeInterval(max(backoff, Self.serverRetryDelay(error)))
         } else {
             message.status = Self.isRefused(error) ? .refused : .failed
             message.retryAt = nil
@@ -323,6 +328,19 @@ final class ChatOutbox {
 }
 
 private extension ChatOutbox {
+    struct RetryDelay: Decodable {
+        let retryAfter: TimeInterval?
+    }
+
+    static func serverRetryDelay(_ error: any Error) -> TimeInterval {
+        guard case let APIError.clientError(status, body) = error, status == 429,
+              let data = body?.data(using: .utf8),
+              let value = try? JSONDecoder().decode(RetryDelay.self, from: data).retryAfter,
+              value.isFinite, value > 0 else { return 0 }
+        // Bound malformed upstream delays; the chat limiter normally asks for seconds.
+        return min(value.rounded(.up), 86_400)
+    }
+
     func prepareReplyRoom(_ original: ChatOutboxMessage, lifetime started: Int) async throws -> ChatOutboxMessage {
         guard original.replyToId != nil else { return original }
         var message = original
