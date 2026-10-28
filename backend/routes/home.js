@@ -41,7 +41,6 @@ const { unpublishedBusinessIds, isUnpublishedBusiness } = require('../utils/visi
 const homeClaimMergeService = require('../services/homeClaimMergeService');
 const homeClaimRoutingService = require('../services/homeClaimRoutingService');
 const propertySuggestionsService = require('../services/ai/propertySuggestionsService');
-const { shouldBlockCoordinateOverwrite, stripCoordinateFields } = require('../utils/verifiedCoordinateGuard');
 const { encodeGeohash } = require('../utils/geohash');
 const { HOME_ISSUE_LIST, HOME_BILL_LIST, HOME_PACKAGE_LIST } = require('../utils/columns');
 const { excludeHiddenHomeActivity } = require('../utils/featureFlags');
@@ -1968,111 +1967,31 @@ router.get('/', verifyToken, async (req, res) => {
  * PATCH /api/homes/:id
  * Update home details (owner only)
  */
-router.patch('/:id', verifyToken, validate(updateHomeSchema), async (req, res) => {
+router.patch('/:id', verifyToken, requireSharedHomeContent, validate(updateHomeSchema), async (req, res) => {
   try {
-    const { id } = req.params;
-    const userId = req.user.id;
-
-    // Check ownership + fetch geocode_mode for verified coordinate guard
-    const { data: existingHome, error: fetchError } = await supabaseAdmin
-      .from('Home')
-      .select('owner_id, geocode_mode')
-      .eq('id', id)
-      .single();
-
-    if (fetchError || !existingHome) {
-      return res.status(404).json({ error: 'Home not found' });
-    }
-
-    const updateAccess = await checkHomePermission(id, userId, 'home.edit');
-    if (!updateAccess.hasAccess) {
-      return res.status(403).json({ error: 'You do not have permission to update this home' });
-    }
-
-    const updates = {};
-
-    if (req.body.address) updates.address = req.body.address;
-    if (req.body.city) updates.city = req.body.city;
-    if (req.body.state) updates.state = req.body.state;
-    if (req.body.zip_code) updates.zip_code = req.body.zip_code;
-    // A blank name clears it (null), as the Settings tab's PATCH /:id/settings
-    // does, so the Home shows its address instead of an empty name.
-    if (req.body.name !== undefined) {
-      updates.name = typeof req.body.name === 'string' && !req.body.name.trim() ? null : req.body.name;
-    }
-    if (req.body.home_type) updates.home_type = req.body.home_type;
-    if (req.body.description !== undefined) updates.description = req.body.description;
-    if (req.body.entry_instructions !== undefined) updates.entry_instructions = req.body.entry_instructions;
-    if (req.body.parking_instructions !== undefined) updates.parking_instructions = req.body.parking_instructions;
-    if (req.body.visibility) updates.visibility = req.body.visibility;
-    if (req.body.bedrooms !== undefined) updates.bedrooms = req.body.bedrooms;
-    if (req.body.bathrooms !== undefined) updates.bathrooms = req.body.bathrooms;
-    if (req.body.sq_ft !== undefined) updates.sq_ft = req.body.sq_ft;
-    if (req.body.lot_sq_ft !== undefined) updates.lot_sq_ft = req.body.lot_sq_ft;
-    if (req.body.year_built !== undefined) updates.year_built = req.body.year_built;
-    if (req.body.move_in_date !== undefined) updates.move_in_date = req.body.move_in_date;
-    if (req.body.is_owner !== undefined) updates.is_owner = req.body.is_owner;
-    if (req.body.amenities) updates.amenities = req.body.amenities;
-
-    if (req.body.location) {
-      // CRIT-05: provenance must never be self-asserted. This handler used to
-      // read geocode_mode straight from the request body and default it to
-      // 'verified' with 'rooftop' accuracy, so any member with home.edit could
-      // move a home to arbitrary coordinates and have that pin recorded as a
-      // verified rooftop fix. The overwrite guard then consulted the same
-      // field, so it protected the false value from every subsequent
-      // correction — inverting the guard's purpose.
-      //
-      // A coordinate that did not come from runValidationPipeline is
-      // user-asserted, full stop. 'verified' is reserved for writes originating
-      // in canonicalAddressService.
-      const block = shouldBlockCoordinateOverwrite(
-        existingHome,
-        { geocode_mode: 'user_asserted' },
-        'PATCH /api/homes/:id',
-      );
-      if (block.blocked) {
-        logger.warn('Home coordinate overwrite blocked', { homeId: id, userId, reason: block.reason });
-        // Allow the rest of the update to proceed, just strip coordinate fields
-      } else {
-        updates.location = formatLocationForDB(
-          req.body.location.latitude,
-          req.body.location.longitude
-        );
-        // Geocode provenance — recorded, not accepted.
-        updates.geocode_provider = 'client';
-        updates.geocode_mode = 'user_asserted';
-        updates.geocode_accuracy = 'unknown';
-        updates.geocode_place_id = null;
-        updates.geocode_source_flow = 'home_edit';
-        updates.geocode_created_at = new Date().toISOString();
-      }
-    }
-
-    updates.updated_at = new Date().toISOString();
-
-    const { data: home, error } = await supabaseAdmin
-      .from('Home')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) {
-      logger.error('Error updating home', { error: error.message, homeId: id });
-      return res.status(500).json({ error: 'Failed to update home' });
-    }
-
-    logger.info('Home updated', { homeId: id, userId });
-
-    res.json({
-      message: 'Home updated successfully',
-      home
+    const fields = { ...req.body };
+    if (typeof fields.name === 'string' && !fields.name.trim()) fields.name = null;
+    // The same transaction as Settings rechecks current authority after taking
+    // the Home lock, preserves address identity, and audits the whole edit.
+    const { data, error } = await supabaseAdmin.rpc('update_home_settings', {
+      p_home_id: req.params.id, p_actor_id: req.user.id, p_fields: fields, p_preferences: {},
     });
-
+    if (error || !data || typeof data.ok !== 'boolean') {
+      return res.status(503).json({ error: 'The home change could not be confirmed. Reload before trying again.' });
+    }
+    if (!data.ok) {
+      if (data.code === 'HOME_ADDRESS_CHANGE_REQUIRED') {
+        return res.status(409).json({ error: 'The address and unit identify this home. Add a new home for a different address.', code: data.code });
+      }
+      const status = { HOME_SETTINGS_INVALID: 400, HOME_NOT_FOUND: 404, HOME_SETTINGS_DENIED: 403 }[data.code] || 503;
+      return res.status(status).json({ error: status === 400 ? 'Invalid home details.' : 'Current permission to change this home could not be confirmed.', code: data.code });
+    }
+    // Use the same permission-filtered projection as GET; a successful edit
+    // must not expose private fields that the editor cannot normally read.
+    const { home } = await homeDetailService.detail(req.params.id, req.user.id);
+    res.json({ message: 'Home updated successfully', home });
   } catch (err) {
-    logger.error('Home update error', { error: err.message, homeId: req.params.id });
-    res.status(500).json({ error: 'Failed to update home' });
+    homeDetailService.sendError(res, err);
   }
 });
 
