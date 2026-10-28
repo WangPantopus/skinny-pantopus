@@ -135,7 +135,7 @@ public struct VacationHoldView: View {
 
     private var topBar: some View {
         ZStack {
-            Text("Vacation hold")
+            Text("Hold my mail")
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(Theme.Color.appText)
                 .accessibilityAddTraits(.isHeader)

@@ -2,6 +2,7 @@ package app.pantopus.android.ui.screens.place
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.data.api.models.homes.OwnershipClaimDto
 import app.pantopus.android.data.api.models.homes.showsCopyBeforeRecheck
 import app.pantopus.android.data.api.models.notifications.personalBellCount
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
@@ -65,6 +66,9 @@ class PlaceDashboardViewModel
         private var shortcutsJob: Job? = null
 
         private var homeId: String? = null
+
+        /** The person's claim in review on this Home, which isn't theirs yet: the server sends its public view. */
+        private var claim: OwnershipClaimDto? = null
         private var readJob: Job? = null
         private var active = true
         private var readVersion = 0L
@@ -201,6 +205,9 @@ class PlaceDashboardViewModel
             val home = homes.data?.homes?.firstOrNull { it.id == id }
             val keep = home?.showsCopyBeforeRecheck == true
             if (!keep) clearPrivateCopy(id)
+            // Not one of their Homes: a claim in review on it reads the Home's public view, never kept on the phone.
+            claim = if (home == null && homes.data != null) claimInReview(id, force) else null
+            if (claim != null) return repo.placeStored(id, force = true, persist = false)
             return when {
                 home == null -> Stored(failure = homes.failure ?: NetworkError.NotFound)
                 !keep && homes.failure != null -> Stored(failure = homes.failure)
@@ -208,12 +215,18 @@ class PlaceDashboardViewModel
             }
         }
 
+        /** My homes' claims (the kept copy unless [force]): the one in review on [id], if any. */
+        private suspend fun claimInReview(
+            id: String,
+            force: Boolean,
+        ): OwnershipClaimDto? = homesRepo.myClaimsStored(force).data?.claims?.firstOrNull { it.homeId == id && it.isInReview }
+
         private fun publish(stored: Stored<PlaceIntelligence>) {
             val data = stored.data
             val failure = stored.failure
             when {
                 // The move-in date (the movers card) rides on the intelligence.
-                data != null -> _state.value = PlaceDashboardUiState.Loaded(data, data.moveInDate)
+                data != null -> _state.value = PlaceDashboardUiState.Loaded(data, data.moveInDate, claim)
                 // Access ended (contract §3): the store dropped the copy, and the server's answer shows.
                 failure.refusesStoredCopy ->
                     _state.value =
@@ -241,6 +254,8 @@ sealed interface PlaceDashboardUiState {
         val intelligence: PlaceIntelligence,
         /** Wedge v2 D5: the movers card shows for ~60 days after this. */
         val moveInDate: String? = null,
+        /** A claim in review: [intelligence] is the Home's public view, the claim's status on top. */
+        val claim: OwnershipClaimDto? = null,
     ) : PlaceDashboardUiState
 
     /**
