@@ -124,7 +124,10 @@ class MailboxSearchViewModel
             search = viewModelScope.launch { run(text, loadMore = true) }
         }
 
-        private suspend fun run(text: String, loadMore: Boolean = false) {
+        private suspend fun run(
+            text: String,
+            loadMore: Boolean = false,
+        ) {
             val result = repo.search(text, limit = PAGE, offset = if (loadMore) nextOffset else 0)
             currentCoroutineContext().ensureActive()
             if (text != _query.value.trim()) return

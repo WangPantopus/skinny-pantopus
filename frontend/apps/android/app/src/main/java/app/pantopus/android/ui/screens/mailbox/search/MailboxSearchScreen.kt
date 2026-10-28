@@ -65,7 +65,13 @@ fun MailboxSearchScreen(
                         enabled = !isLoadingMore,
                         modifier = Modifier.testTag("mailboxSearchMore"),
                     ) {
-                        Text(if (isLoadingMore) "Loading…" else if (error == null) "Show more" else "Try again")
+                        Text(
+                            when {
+                                isLoadingMore -> "Loading…"
+                                error == null -> "Show more"
+                                else -> "Try again"
+                            },
+                        )
                     }
                 }
             }
