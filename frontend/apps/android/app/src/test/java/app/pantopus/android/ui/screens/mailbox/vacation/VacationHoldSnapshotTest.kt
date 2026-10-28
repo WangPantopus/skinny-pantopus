@@ -25,9 +25,9 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * A14.8 — Paparazzi snapshots for the Vacation Hold screen in both
- * variants plus the two feature-local primitives. Mirrors the iOS
- * `VacationHoldSnapshotTests`.
+ * A14.8 — Paparazzi snapshots for the hold screen's two feature-local
+ * primitives. The whole-screen frames went with the Mail tab's Hold my
+ * mail reskin (founder direction: end-to-end checks, no new baselines).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class VacationHoldSnapshotTest {
@@ -44,28 +44,6 @@ class VacationHoldSnapshotTest {
     @Before fun setup() = Dispatchers.setMain(UnconfinedTestDispatcher())
 
     @After fun tearDown() = Dispatchers.resetMain()
-
-    @Test
-    fun vacation_hold_scheduling_frame() {
-        paparazzi.snapshot {
-            VacationHoldScreen(
-                onBack = {},
-                viewModel = VacationHoldViewModel(VacationHoldSeed.Scheduling),
-                seed = VacationHoldSeed.Scheduling,
-            )
-        }
-    }
-
-    @Test
-    fun vacation_hold_active_frame() {
-        paparazzi.snapshot {
-            VacationHoldScreen(
-                onBack = {},
-                viewModel = VacationHoldViewModel(VacationHoldSeed.Active),
-                seed = VacationHoldSeed.Active,
-            )
-        }
-    }
 
     @Test
     fun hold_status_hero_primitive() {

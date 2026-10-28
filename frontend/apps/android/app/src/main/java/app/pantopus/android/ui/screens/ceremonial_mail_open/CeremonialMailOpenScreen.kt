@@ -24,13 +24,16 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -39,7 +42,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -66,6 +71,8 @@ import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
+import app.pantopus.android.ui.theme.rememberReduceMotion
+import kotlinx.coroutines.delay
 
 /**
  * T6.5d (P22) — Refreshed Ceremonial Mail Open. Four frames matching
@@ -304,6 +311,71 @@ private fun GeneralTopBar(onBack: () -> Unit) {
 
 // ─── Frame 1 + 2: porch arrival / opening ─────────────────
 
+/**
+ * The first day's porch (Mail tab drawings, `R12-Welcome`): Pantopus's sealed welcome letter waiting at the door the
+ * first time the Mail tab opens. Open envelope breaks the seal in under a second and hands over to the letter page
+ * ([onOpen]); Remove animations and "Skip the animation" go straight there. Close ([onClose]) leaves the letter sealed
+ * in Me. Drawn from what the Mailbox already read, so showing the porch doesn't open the letter.
+ */
+@Composable
+fun MailWelcomePorch(
+    mailId: String,
+    address: String?,
+    onOpen: () -> Unit,
+    onClose: () -> Unit,
+    reduceMotionOverride: Boolean? = null,
+) {
+    val reduceMotion = reduceMotionOverride ?: rememberReduceMotion()
+    var phase by remember { mutableStateOf(CeremonialMailPhase.Sealed) }
+    // Open envelope, then Skip the animation while the seal breaks, still opens the letter once.
+    var opened by remember { mutableStateOf(false) }
+    val openOnce = {
+        if (!opened) {
+            opened = true
+            onOpen()
+        }
+    }
+    val letter =
+        remember(mailId) {
+            CeremonialMailLetter(
+                mailId = mailId,
+                sender = CeremonialSenderCard(displayName = "Pantopus", handle = null, trustLabel = "Verified", avatarUrl = null),
+                category = "letter",
+                subject = "Welcome to your mailbox",
+                bodyParagraphs = emptyList(),
+                stationery = CeremonialMailStationeryTone.ClassicCream,
+                ink = CeremonialMailInkTone.Walnut,
+                seal = CeremonialMailSealTone.WaxRed,
+                voicePostscriptUri = null,
+                receivedAt = null,
+                outcomeCtas = emptyList(),
+            )
+        }
+    // The seal breaks, then the letter page takes over: 750 ms, well under the 2-second budget.
+    LaunchedEffect(phase) {
+        if (phase == CeremonialMailPhase.Breaking) {
+            delay(WELCOME_SEAL_MILLIS)
+            openOnce()
+        }
+    }
+    PorchFrame(
+        letter = letter,
+        phase = phase,
+        reduceMotion = reduceMotion,
+        onTapOpen = { if (reduceMotion) openOnce() else phase = CeremonialMailPhase.Breaking },
+        onSkip = openOnce,
+        onClose = onClose,
+        subline =
+            address?.takeIf { it.isNotBlank() }?.let { "Your first piece of mail at $it." }
+                ?: "Your first piece of mail on Pantopus.",
+        skipLabel = "Skip the animation",
+        edgeToEdge = true,
+    )
+}
+
+/** How long the welcome letter's seal takes to break before its page opens. */
+private const val WELCOME_SEAL_MILLIS = 750L
+
 @Composable
 private fun PorchFrame(
     letter: CeremonialMailLetter,
@@ -312,6 +384,11 @@ private fun PorchFrame(
     onTapOpen: () -> Unit,
     onSkip: () -> Unit,
     onClose: () -> Unit,
+    /** A line under the title ("Your first piece of mail at …"); the first day's porch only. */
+    subline: String? = null,
+    skipLabel: String = "Skip animation",
+    /** Drawn under the system bars (the first day's full-screen porch): the words and buttons stay clear of them. */
+    edgeToEdge: Boolean = false,
 ) {
     val infinite = rememberInfiniteTransition(label = "porchGlow")
     val glow by infinite.animateFloat(
@@ -357,6 +434,7 @@ private fun PorchFrame(
             modifier =
                 Modifier
                     .fillMaxSize()
+                    .then(if (edgeToEdge) Modifier.windowInsetsPadding(WindowInsets.systemBars) else Modifier)
                     .padding(horizontal = Spacing.s6),
         ) {
             Row(modifier = Modifier.fillMaxWidth().padding(top = Spacing.s4)) {
@@ -399,6 +477,17 @@ private fun PorchFrame(
                 textAlign = TextAlign.Center,
                 lineHeight = 34.sp,
             )
+            if (subline != null) {
+                Spacer(modifier = Modifier.height(Spacing.s2))
+                Text(
+                    text = subline,
+                    fontSize = 15.sp,
+                    lineHeight = 21.sp,
+                    color = Color.White.copy(alpha = 0.85f),
+                    modifier = Modifier.fillMaxWidth().testTag("ceremonialMail_subline"),
+                    textAlign = TextAlign.Center,
+                )
+            }
             Spacer(modifier = Modifier.height(Spacing.s8))
             Box(
                 modifier =
@@ -424,7 +513,7 @@ private fun PorchFrame(
             } else {
                 ProgressDots()
             }
-            SkipAnimationButton(onSkip = onSkip)
+            SkipAnimationButton(onSkip = onSkip, label = skipLabel)
             PantopusFooter()
         }
     }
@@ -656,7 +745,10 @@ private fun ProgressDots() {
 }
 
 @Composable
-private fun SkipAnimationButton(onSkip: () -> Unit) {
+private fun SkipAnimationButton(
+    onSkip: () -> Unit,
+    label: String = "Skip animation",
+) {
     Box(
         modifier =
             Modifier
@@ -664,11 +756,11 @@ private fun SkipAnimationButton(onSkip: () -> Unit) {
                 .padding(top = 6.dp)
                 .clickable(onClick = onSkip)
                 .testTag("ceremonialMail_skipAnimation")
-                .semantics { contentDescription = "Skip animation and open the letter" },
+                .semantics { contentDescription = "$label and open the letter" },
         contentAlignment = Alignment.Center,
     ) {
         Text(
-            text = "Skip animation",
+            text = label,
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,
             color = Color.White.copy(alpha = 0.65f),

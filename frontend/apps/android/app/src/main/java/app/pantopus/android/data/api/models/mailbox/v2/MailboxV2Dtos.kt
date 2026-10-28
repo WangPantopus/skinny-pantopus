@@ -15,7 +15,24 @@ data class DrawerListResponse(
     val delivery: MailDelivery? = null,
     /** One row per Home the person lives at, and whether its mail opens for them yet (SRV-8). */
     val homes: List<MailHome>? = null,
+    /** The hold in effect, or the next one; null when there's none (SRV-5). */
+    @Json(name = "vacation_hold") val vacationHold: MailVacationHold? = null,
 )
+
+/**
+ * `vacation_hold` on `GET /api/mailbox/v2/drawers` (SRV-5): `status` is `scheduled` or `active`; `held_count` is what it
+ * keeps now; `release_at` is when that comes back, 7 a.m. on `end_date` in the person's zone.
+ */
+@JsonClass(generateAdapter = true)
+data class MailVacationHold(
+    val status: String? = null,
+    @Json(name = "start_date") val startDate: String? = null,
+    @Json(name = "end_date") val endDate: String? = null,
+    @Json(name = "held_count") val heldCount: Int = 0,
+    @Json(name = "release_at") val releaseAt: String? = null,
+) {
+    val active: Boolean get() = status == "active"
+}
 
 /** The drawers the Mail badge counts: Me, Home and Biz. Earn stays out while Mail extras are off. */
 private val MAIL_BADGE_DRAWERS = setOf("personal", "home", "business")
@@ -175,6 +192,12 @@ data class DrawerMail(
     val invoice: MailInvoice? = null,
     /** `delivered`, `opened`, `filed` (in the Vault) … */
     val lifecycle: String? = null,
+    /** The Vault folder a filed piece is in. */
+    @Json(name = "vault_folder_id") val vaultFolderId: String? = null,
+    /** Certified mail, which reads as plain mail and asks to be acknowledged. */
+    val certified: Boolean = false,
+    /** When someone in the household acknowledged it; null while nobody has. */
+    @Json(name = "acknowledged_at") val acknowledgedAt: String? = null,
 ) {
     @JsonClass(generateAdapter = true)
     data class SenderRef(

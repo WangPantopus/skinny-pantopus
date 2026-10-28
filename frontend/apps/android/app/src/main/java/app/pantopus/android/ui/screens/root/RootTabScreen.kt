@@ -57,6 +57,7 @@ import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.core.perf.ScreenTiming
 import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.data.ai.AIScreenContext
+import app.pantopus.android.data.mailbox.MailboxRepository
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.InviteLinks
 import app.pantopus.android.ui.components.NavigationDrawer
@@ -2652,9 +2653,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 if (!showing) navController.openTabRoot(PantopusRoute.Mail, ChildRoutes.mailboxItemDetail(pending.mailId))
                 DeepLinkRouter.consume()
             }
-            // `/mailbox` ("Your mail is here", the morning summary) — the Mail tab at its Mailbox.
+            // `/mailbox` ("Your mail is here", the morning summary) — the Mail tab at its Mailbox, at the top of Incoming.
             DeepLinkRouter.Destination.Mailbox -> {
                 navController.openTabRoot(PantopusRoute.Mail)
+                MailboxRepository.announceMailboxTop(incoming = true)
                 DeepLinkRouter.consume()
             }
             is DeepLinkRouter.Destination.NeighborMessage -> {
@@ -2820,6 +2822,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         if (target == currentRoute) {
                             if (target == PantopusRoute.Place && navController.currentDestination?.route == PantopusRoute.Place.path) {
                                 placeReselects.tryEmit(Unit)
+                            }
+                            // The Mailbox goes back up to its hero when Mail is tapped again on it.
+                            if (target == PantopusRoute.Mail && navController.currentDestination?.route == PantopusRoute.Mail.path) {
+                                MailboxRepository.announceMailboxTop(incoming = false)
                             }
                             navController.popToTabRoot(target)
                             return@PantopusBottomBar
@@ -3012,6 +3018,11 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onOpenMailTasks = { navController.navigate(ChildRoutes.mailTaskList()) },
                         onBack = null,
                         onOpenMenu = openMenu,
+                        // The Counter's Pay opens the existing invoice screen; the closed Home drawer's Verify your home
+                        // opens the Place verify sheet's doors for that Home, as the letter page does.
+                        onPay = { invoiceId -> navController.navigate(ChildRoutes.invoiceDetail(invoiceId)) },
+                        onStartVerify = { homeId, method -> navController.openPlaceVerify(method, homeId) },
+                        onOpenVerificationStatus = { homeId -> navController.navigate(ChildRoutes.waitingRoom(homeId)) },
                     )
                 }
                 composable(PantopusRoute.Pulse.path) {

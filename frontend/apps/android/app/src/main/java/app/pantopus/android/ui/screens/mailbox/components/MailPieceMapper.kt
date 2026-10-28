@@ -186,8 +186,8 @@ object MailPieceMapper {
             "Special delivery".takeIf { row.specialDelivery },
             dueWords?.replaceFirstChar { it.uppercase() },
             "On the Counter".takeIf { row.onCounter && dueWords == null },
-            row.pageCount?.takeIf { kind == MailKind.Booklet && it > 0 }?.let { "$it pages" },
-            row.bundleItemCount?.takeIf { kind == MailKind.Bundle && it > 0 }?.let { "$it pieces" },
+            row.pageCount?.takeIf { kind == MailKind.Booklet && it > 0 }?.let { if (it == 1) "1 page" else "$it pages" },
+            row.bundleItemCount?.takeIf { kind == MailKind.Bundle && it > 0 }?.let { if (it == 1) "1 piece" else "$it pieces" },
         ).joinToString(" · ")
 
     /** One sentence for a screen reader: what it is, from whom, sealed or opened, special, due, and when it came. */

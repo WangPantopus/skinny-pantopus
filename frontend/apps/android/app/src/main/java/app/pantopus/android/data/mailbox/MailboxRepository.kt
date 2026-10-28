@@ -59,6 +59,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** One ask for the Mailbox's top ([MailboxRepository.mailboxTop]); [incoming] also opens the Incoming tab. */
+data class MailboxTop(
+    val id: Long,
+    val incoming: Boolean,
+)
+
 /**
  * Thin wrapper around [MailboxApi] + [MailboxV2Api] that returns the typed
  * [NetworkResult] taxonomy.
@@ -130,6 +136,16 @@ class MailboxRepository
             limit: Int,
             offset: Int,
         ): NetworkResult<DrawerItemsResponse> = safeApiCall { v2Api.drawer(drawer = drawer, tab = tab, limit = limit, offset = offset) }
+
+        /** [drawer]'s Vault tab narrowed to one folder ([folderId]; null lists everything filed in the drawer). */
+        suspend fun drawer(
+            drawer: String,
+            tab: String,
+            limit: Int,
+            offset: Int,
+            folderId: String?,
+        ): NetworkResult<DrawerItemsResponse> =
+            safeApiCall { v2Api.drawer(drawer = drawer, tab = tab, limit = limit, offset = offset, folderId = folderId) }
 
         /** `GET /api/mailbox/v2/search?q=` — searched on the server, over all the mail the person can read. */
         suspend fun search(
@@ -281,6 +297,18 @@ class MailboxRepository
 
             fun announceMailChanged(mailId: String) {
                 mailChangedFlow.tryEmit(mailId)
+            }
+
+            private val mailboxTopFlow = MutableStateFlow(MailboxTop(0, incoming = false))
+
+            /**
+             * Asks the Mailbox to show its top: "Your mail is here" (with Incoming), or a re-tap of the Mail tab. A
+             * counter, not an event, so a Mailbox restored after the ask (another tab was showing) still goes up.
+             */
+            val mailboxTop: StateFlow<MailboxTop> = mailboxTopFlow.asStateFlow()
+
+            fun announceMailboxTop(incoming: Boolean) {
+                mailboxTopFlow.value = MailboxTop(mailboxTopFlow.value.id + 1, incoming)
             }
 
             private val latestDrawersFlow = MutableStateFlow<DrawerListResponse?>(null)

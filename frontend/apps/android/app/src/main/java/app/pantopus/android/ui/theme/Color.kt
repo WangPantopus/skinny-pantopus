@@ -249,7 +249,6 @@ object PantopusColors {
     val mailStampRiverArt = Color(0xFFBBF7D0)
     val mailStampSun = Color(0xFFFDE68A)
 
-    /** The mailbox: its blue body `#0284C7`, the post `#8A6A4A`, the flag `#C2410C`, the dark inside `#0B2537`. */
     /** The letter itself, unfolded on its page, its rules, an enclosure's slip, and the clip holding Pantopus's note. */
     val mailSheet = Color(0xFFFFFEFA)
     val mailSheetEdge = Color(0xFFECE7DA)
@@ -257,10 +256,29 @@ object PantopusColors {
     val mailSlip = Color(0xFFF8F6F0)
     val mailClip = Color(0xFF64748B)
 
+    /** The mailbox: its blue body `#0284C7`, the post `#8A6A4A`, the flag `#C2410C`, the dark inside `#0B2537`. */
     val mailboxBody = Color(0xFF0284C7)
     val mailboxPost = Color(0xFF8A6A4A)
     val mailboxFlag = Color(0xFFC2410C)
     val mailboxInside = Color(0xFF0B2537)
+
+    /**
+     * The Counter's top — `#EEEAE3` — and the manila of its due tags and the Vault's folders: the paper `#F3E3B5`, a
+     * folder's tab `#E6CF92`, the edge `#D9C48C` and the ink `#5C4410` (Mail tab drawings `R9-Counter`, `R10-Vault`).
+     */
+    val mailCounter = Color(0xFFEEEAE3)
+    val mailManila = Color(0xFFF3E3B5)
+    val mailManilaTab = Color(0xFFE6CF92)
+    val mailManilaEdge = Color(0xFFD9C48C)
+    val mailManilaInk = Color(0xFF5C4410)
+
+    /**
+     * The Home mailbox closed until the address is proven (`R14-HomeLocked`): grey `#94A3B8`, its door `#64748B`, and
+     * its padlock `#F1F5F9`.
+     */
+    val mailboxLocked = Color(0xFF94A3B8)
+    val mailboxLockedDoor = Color(0xFF64748B)
+    val mailboxLockedPlate = Color(0xFFF1F5F9)
 
     // Ballot illustration — mirrors iOS `Ballot/*` in the asset catalog.
 

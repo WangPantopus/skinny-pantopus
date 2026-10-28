@@ -517,7 +517,11 @@ class MailDetailViewModel
         /** Done with it: off the counter and into the Vault. */
         fun doneWithIt() = letterAction("done", "Done. It's in the Vault.", "file this")
 
-        fun takeOutOfVault() = letterAction("unfile", "Back in Incoming.", "take this out of the Vault")
+        /** Take out of the Vault, or Back to Incoming for an archived piece: either way it's back in Incoming. */
+        fun takeOutOfVault() {
+            val archived = (_state.value as? MailDetailUiState.Loaded)?.content?.letter?.archived == true
+            letterAction("unfile", "Back in Incoming.", if (archived) "bring this back to Incoming" else "take this out of the Vault")
+        }
 
         /** Shred: gone for everyone who gets it, and back with Bring it back for 30 days. */
         fun shred() = letterAction("shred", "Shredded. You can bring it back for 30 days.", "shred this")
