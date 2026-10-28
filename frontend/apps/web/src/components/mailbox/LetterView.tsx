@@ -13,6 +13,7 @@ import type { MailItemV2 } from '@/types/mailbox';
 import { getEnclosureLink, MailboxApiError } from '@/lib/mailbox-api';
 import MailPiece, { pieceKind, pieceOutside, pieceTrust } from './MailPiece';
 import { mailLoadMessage } from './mailLoadMessage';
+import MailContentRenderer from '@/app/(app)/app/mailbox/_components/MailContentRenderer';
 
 const SERIF = "'Iowan Old Style', 'Hoefler Text', Charter, Georgia, serif";
 
@@ -176,7 +177,9 @@ export default function LetterView({
           </div>
           {title ? <h2 className="mt-4 text-lg font-semibold leading-6" style={{ fontFamily: SERIF }}>{title}</h2> : null}
           {body ? (
-            <div className="mt-2 whitespace-pre-line text-[15px] leading-[23px]" style={{ fontFamily: SERIF }}>{body}</div>
+            <div className="mt-2 break-words text-[15px] leading-[23px] [&_p+p]:mt-3 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_a]:underline [&_pre]:overflow-x-auto" style={{ fontFamily: SERIF }}>
+              <MailContentRenderer content={body} format={piece.content_format ?? 'plain_text'} />
+            </div>
           ) : (
             <p className="mt-3 text-sm italic text-[#5f6775]">This piece has no letter inside. What it says is on the outside.</p>
           )}

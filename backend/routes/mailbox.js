@@ -1024,38 +1024,7 @@ const insertMailWithCompatibility = async (stored) => {
   return fallbackInsert;
 };
 
-const getMailObjectPayload = async (objectId) => {
-  const { data: objectRow, error } = await supabaseAdmin
-    .from('MailObject')
-    .select('*')
-    .eq('id', objectId)
-    .single();
-
-  if (error || !objectRow) {
-    logger.warn('MailObject fetch failed', { objectId, error: error?.message });
-    return null;
-  }
-
-  // Responses carry the row without its storage location (mailObjectStorage.clientFields).
-  const metadata = mailObjects.clientFields(objectRow);
-  if (!objectRow.object_key) {
-    return { metadata, payload: null };
-  }
-
-  try {
-    const objectText = await mailObjects.readText(objectRow);
-    let payload = null;
-    try {
-      payload = JSON.parse(objectText);
-    } catch {
-      payload = { body: { content: objectText } };
-    }
-    return { metadata, payload };
-  } catch (err) {
-    logger.error('MailObject read failed', { objectId, error: err.message });
-    return { metadata, payload: null };
-  }
-};
+const getMailObjectPayload = (objectId) => mailObjects.readPayload(objectId);
 
 const getMailLinksSafely = async (mailId) => {
   const { data, error } = await supabaseAdmin
@@ -1817,6 +1786,7 @@ router.get('/:id', verifyToken, async (req, res) => {
     } else {
       mail.content_format = mail.content?.includes('<') ? 'html' : 'plain_text';
     }
+    mail.content_text = mailObjects.textContent(mail.content, mail.content_format);
 
     mail.links = await getMailLinksSafely(mail.id);
     // What the piece encloses, private ones included; each opens through GET /:id/enclosures/:enclosureId (SRV-4).

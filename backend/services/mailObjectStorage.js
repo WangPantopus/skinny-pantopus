@@ -3,6 +3,7 @@
 // the people who may open the letter, and clients never see where it is stored (clientFields). Older letters sit in
 // the public uploads bucket under mailbox-objects/ (storage_provider 's3') and are still read from there.
 const crypto = require('crypto');
+const { Parser } = require('htmlparser2');
 const db = require('../config/supabaseAdmin');
 const s3 = require('./s3Service');
 
@@ -67,4 +68,50 @@ function clientFields(row) {
   return { id, created_by_user_id, format, mime_type, size_bytes, status, created_at, uploaded_at };
 }
 
-module.exports = { PROVIDER, store, remove, readText, clientFields };
+// A stored letter is the source of its body; Mail.content is only a preview.
+// Fail visibly when storage cannot be read instead of presenting that preview as the whole letter.
+async function readPayload(objectId) {
+  const { data: row, error } = await db.from('MailObject').select('*').eq('id', objectId).single();
+  if (error || !row?.object_key) throw failure('The letter could not be read.');
+  const text = await readText(row);
+  let payload;
+  try { payload = JSON.parse(text); } catch (_) { payload = { body: { content: text } }; }
+  return { metadata: clientFields(row), payload };
+}
+
+async function hydrateMail(mail) {
+  if (!mail) return mail;
+  if (!mail.object_id) return { ...mail, content_text: textContent(mail.content, mail.content_format) };
+  const { metadata, payload } = await readPayload(mail.object_id);
+  const content = payload?.body?.content ?? payload?.content;
+  const attachments = payload?.envelope?.attachments ?? payload?.attachments;
+  const format = [payload?.body?.payload?.bodyFormat, payload?.objectFormat, metadata?.format]
+    .find((value) => ['plain_text', 'markdown', 'html'].includes(value)) || 'plain_text';
+  return { ...mail, object: metadata, object_payload: payload, content_format: format,
+    ...(typeof content === 'string' ? { content } : {}),
+    content_text: textContent(typeof content === 'string' ? content : mail.content, format),
+    ...(!mail.attachments?.length && Array.isArray(attachments) ? { attachments } : {}) };
+}
+
+// The native paper reader displays text, never a web page. Decode HTML without loading images, links or scripts.
+function textContent(content, format) {
+  if (typeof content !== 'string' || format !== 'html') return content;
+  const blocks = new Set(['p', 'div', 'section', 'article', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'blockquote', 'tr']);
+  const hidden = new Set(['script', 'style', 'head']);
+  let text = ''; let hiddenDepth = 0;
+  const parser = new Parser({
+    onopentag(name) {
+      if (hidden.has(name)) hiddenDepth += 1;
+      if (!hiddenDepth && (name === 'br' || blocks.has(name))) text += '\n';
+    },
+    ontext(value) { if (!hiddenDepth) text += value; },
+    onclosetag(name) {
+      if (hidden.has(name)) hiddenDepth = Math.max(0, hiddenDepth - 1);
+      if (!hiddenDepth && blocks.has(name)) text += '\n\n';
+    },
+  }, { decodeEntities: true });
+  parser.end(content);
+  return text.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+module.exports = { PROVIDER, store, remove, readText, clientFields, readPayload, hydrateMail, textContent };

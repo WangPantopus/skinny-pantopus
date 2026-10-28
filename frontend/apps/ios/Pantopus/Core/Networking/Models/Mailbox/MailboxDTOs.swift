@@ -346,6 +346,7 @@ public struct MailDetailResponse: Decodable, Sendable, Hashable {
         public let sender: Sender?
         public let object: JSONValue?
         public let contentFormat: String?
+        public let contentText: String?
         public let links: [JSONValue]
         /// `Mail.mail_extracted` (jsonb, `backend/database/schema.sql:7201`).
         /// Compose writes the ceremonial metadata here at send time —
@@ -383,6 +384,7 @@ public struct MailDetailResponse: Decodable, Sendable, Hashable {
             sender = try c.decodeIfPresent(Sender.self, forKey: .sender)
             object = try c.decodeIfPresent(JSONValue.self, forKey: .object)
             contentFormat = try c.decodeIfPresent(String.self, forKey: .contentFormat)
+            contentText = try c.decodeIfPresent(String.self, forKey: .contentText)
             links = try c.decodeIfPresent([JSONValue].self, forKey: .links) ?? []
             mailExtracted = try c.decodeIfPresent(JSONValue.self, forKey: .mailExtracted)
             removed = try c.decodeIfPresent(MailRemovedDTO.self, forKey: .removed)
@@ -402,6 +404,7 @@ public struct MailDetailResponse: Decodable, Sendable, Hashable {
         private enum Keys: String, CodingKey {
             case sender, object
             case contentFormat = "content_format"
+            case contentText = "content_text"
             case links
             case mailExtracted = "mail_extracted"
             case removed

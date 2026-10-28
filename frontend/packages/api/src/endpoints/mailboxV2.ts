@@ -57,6 +57,7 @@ export interface MailItemV2 {
   deleted_by?: string | null;
   subject?: string;
   content?: string;
+  content_format?: 'plain_text' | 'markdown' | 'html';
   preview_text?: string;
   display_title?: string;
   key_facts: KeyFact[] | string;

@@ -32,6 +32,7 @@ const renderSanitizedNode = (node: Node, key: string): ReactNode => {
 
   const element = node as Element;
   const tag = element.tagName.toLowerCase();
+  if (['script', 'style', 'head', 'template'].includes(tag)) return null;
   const childNodes = Array.from(element.childNodes)
     .map((child, index) => renderSanitizedNode(child, `${key}-${index}`));
 

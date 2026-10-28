@@ -614,43 +614,21 @@ router.get('/item/:id', verifyToken, async (req, res) => {
       }
     }
 
-    // Mark as opened if not already
+    // Read the full letter before marking it opened. A storage failure must leave it unread and retryable.
+    Object.assign(mail, await mailObjects.hydrateMail(mail));
+    const objectPayload = mail.object_payload || null;
     if (!mail.opened_at && !mail.removed) {
-      await supabaseAdmin
-        .from('Mail')
-        // A piece filed before anyone opened it (a receipt filed in Receipts) stays filed.
-        .update({ opened_at: new Date().toISOString(), ...(!mail.lifecycle || mail.lifecycle === 'delivered' ? { lifecycle: 'opened' } : {}),
-          viewed: true, viewed_at: new Date().toISOString() })
-        .eq('id', id);
-      await logMailEvent('mail_opened', id, userId, {
-        drawer: mail.drawer,
-        time_since_delivered_ms: Date.now() - new Date(mail.delivered_at || mail.created_at).getTime(),
-      });
-    }
-
-    // Fetch object payload (stationery metadata) if object_id is present
-    let objectPayload = null;
-    if (mail.object_id) {
-      try {
-        const { data: objectRow } = await supabaseAdmin
-          .from('MailObject')
-          .select('id, storage_provider, bucket_name, object_key, sha256')
-          .eq('id', mail.object_id)
-          .single();
-
-        if (objectRow?.object_key) {
-          const objectText = await mailObjects.readText(objectRow);
-          try {
-            objectPayload = JSON.parse(objectText);
-          } catch {
-            objectPayload = null;
-          }
-        }
-      } catch (err) {
-        logger.warn('Object payload fetch failed for item detail', {
-          mailId: id,
-          objectId: mail.object_id,
-          error: err.message,
+      const now = new Date().toISOString();
+      const opened = { opened_at: now, viewed: true, viewed_at: mail.viewed_at || now,
+        ...(!mail.lifecycle || mail.lifecycle === 'delivered' ? { lifecycle: 'opened' } : {}) };
+      const { data: written, error: openError } = await supabaseAdmin.from('Mail').update(opened)
+        .eq('id', id).is('opened_at', null).is('deleted_at', null).select('id');
+      if (openError) throw openError;
+      if (written?.length) {
+        Object.assign(mail, opened);
+        await logMailEvent('mail_opened', id, userId, {
+          drawer: mail.drawer,
+          time_since_delivered_ms: Date.now() - new Date(mail.delivered_at || mail.created_at).getTime(),
         });
       }
     }
@@ -713,6 +691,7 @@ router.post('/item/:id/action', verifyToken, async (req, res) => {
     if (readError || !mail || !(await canAccessMail(mail, userId))) {
       return sendMailUnavailable(res, readError ? null : mail, userId);
     }
+    Object.assign(mail, await mailObjects.hydrateMail(mail));
 
     const homeIds = await getAccessibleHomeIds(userId);
     let folderId;
@@ -762,12 +741,13 @@ router.post('/item/:id/action', verifyToken, async (req, res) => {
       .select('*, sender:sender_user_id(name, username)')
       .eq('id', id)
       .maybeSingle();
-    const named = after ? await nameMailSender(after, userId) : null;
+    const named = after ? await nameMailSender({ ...mail, ...after, content: mail.content, attachments: mail.attachments }, userId) : null;
     const timeZone = (await mailDelivery.personTimeZone(userId)) || mailDelivery.FALLBACK_TIME_ZONE;
     const piece = named ? mailPiece.present(presentMailSender({
       ...named,
       sender_display: resolveSenderDisplay(named),
       sender_trust: resolveSenderTrust(named),
+      enclosures: mailEnclosures.listFor(named, named.object_payload?.envelope?.attachments || named.object_payload?.attachments),
     }, userId), { timeZone }) : null;
     if (piece && action === 'shred') piece.removed = await removedMailInfo(after);
     return res.json({ mail: piece ? await attachInvoices(await mailPiece.withBundleLabels(piece)) : piece, message: `Action '${action}' recorded`, action });
