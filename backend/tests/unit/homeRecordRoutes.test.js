@@ -175,8 +175,8 @@ describe('both mail entry points require address trust', () => {
   const homeB = 'ddf31000-0000-4000-8000-000000000200';
   const target = 'ddf31000-0000-4000-8000-000000000300';
   const resident = source => ({ home_id: homeA, user_id: 'actor', is_active: true,
-    verification_status: 'verified', verification_source: source });
-  const owner = home_id => ({ home_id, subject_id: 'actor', owner_status: 'verified' });
+    verification_status: 'verified', verification_source: source, home: { home_status: 'active', security_state: 'normal' } });
+  const owner = home_id => ({ home_id, subject_id: 'actor', owner_status: 'verified', home: { home_status: 'active', security_state: 'normal' } });
   test.each([
     ['household', [resident('household')], [], false],
     ['household co-owner', [resident('household')], [owner(homeA)], false],
@@ -219,11 +219,11 @@ describe('both mail entry points require address trust', () => {
       const query = original(table);
       const select = query.select;
       query.select = (fields, options) => {
-        if (!['home_id,is_active,verification_status,verification_source', 'home_id,verification_source'].includes(fields)) {
+        if (!fields.includes('home:home_id(home_status, security_state)')) {
           return select.call(query, fields, options);
         }
         let selectedHome;
-        const scoped = { eq: (key, value) => { filters.push([key, value]); if (key === 'home_id') selectedHome = value; return scoped; },
+        const scoped = { in: () => scoped, eq: (key, value) => { filters.push([key, value]); if (key === 'home_id') selectedHome = value; return scoped; },
           then: (resolve, reject) => Promise.resolve({ data: [], error: null }).then(resolve, reject),
           maybeSingle: () => error instanceof Error ? Promise.reject(error)
             : Promise.resolve({ data: typeof exact === 'function' ? exact(selectedHome) : exact, error }) };

@@ -105,6 +105,7 @@ async function runMorningNotices({ now = new Date(), send }) {
   const people = await candidates(since, now);
   stats.candidates = people.length;
   for (const userId of people) {
+    let claimedDate = null;
     try {
       const timeZone = (await personTimeZone(userId)) || FALLBACK_TIME_ZONE;
       const hour = Number(new Intl.DateTimeFormat('en-US', { timeZone, hour: 'numeric', hourCycle: 'h23' }).format(now));
@@ -113,16 +114,21 @@ async function runMorningNotices({ now = new Date(), send }) {
       if (counts.total === 0) { stats.nothing_new += 1; continue; }
       const date = localDate(now, timeZone);
       if (!(await claimDay(userId, date))) { stats.already_sent += 1; continue; }
+      claimedDate = date;
       const { title, body } = noticeText(counts);
       const result = await send({ userId, title, body, reminderType: 'mail_summary',
         data: { route: '/app/mailbox', link: '/app/mailbox' } });
-      if (result?.status === 'sent') { stats.sent += 1; continue; }
+      if (result?.status === 'sent') { claimedDate = null; stats.sent += 1; continue; }
       // Not sent (quiet hours, no device, push off, a provider failure): release the day so a later run can try.
-      await releaseDay(userId, date);
       if (result?.status === 'skipped') stats.skipped += 1; else stats.failed += 1;
     } catch (error) {
       stats.failed += 1;
       logger.warn('Mail morning notice failed for one person', { error: error.message });
+    } finally {
+      // A thrown provider error must release the claim too, or today's notice can never retry.
+      if (claimedDate) await releaseDay(userId, claimedDate).catch((error) => {
+        logger.warn('Mail morning notice: claim not released', { error: error.message });
+      });
     }
   }
   return stats;

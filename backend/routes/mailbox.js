@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const homeRecordService = require('../services/homeRecordService');
 // canAccessMail: the per-item rule, shared with the v2 mailbox routes.
-const { getAccessibleHomeIds, trustedHomeIdsOrThrow, canAccessMail, readableMail, homeMailFilter, visibleMailFilter,
+const { getAccessibleHomeIds, trustedHomeIdsOrThrow, hasVerifiedSenderHome, canSendToMailHome, canAccessMail, readableMail, homeMailFilter, visibleMailFilter,
   restorableMail, removedMailInfo, sendHomeMailRemovedNotice, MAIL_RESTORE_DAYS,
   sendMailUnavailable, mailHomesOrThrow, MAIL_HOME_NEEDS_PROOF, onlyDelivered } = require('../utils/homeMailAccess');
 // Mail comes in the morning (SRV-1): the delivery rule every writer follows.
@@ -22,7 +22,6 @@ const validate = require('../middleware/validate');
 const Joi = require('joi');
 const logger = require('../utils/logger');
 const { checkHomePermission } = require('../utils/homePermissions');
-const { UNPROVEN_SOURCES } = require('../utils/homeAccessPolicy');
 const { getBusinessIdsWithPermissions } = require('../utils/businessPermissions');
 const { VERIFICATION_RANK } = require('../utils/businessConstants');
 const mailObjects = require('../services/mailObjectStorage');
@@ -743,11 +742,13 @@ const getHomeForRouting = async (homeId) => {
   if (!homeId) return null;
   const { data: home } = await supabaseAdmin
     .from('Home')
-    .select('id, owner_id')
+    .select('id, owner_id, home_status, security_state')
     .eq('id', homeId)
     .single();
 
-  return home || null;
+  if (!home || ['archived', 'merged'].includes(home.home_status)
+    || ['frozen', 'frozen_silent', 'disputed'].includes(home.security_state)) return null;
+  return home;
 };
 
 // Who may send a letter to a Home: anyone who can open the Home's mail (the
@@ -760,7 +761,8 @@ const hasHomeAccess = async (homeId, userId) => {
     return { allowed: false, home: null };
   }
 
-  return { allowed: await isUserLinkedToHome(home, userId), home };
+  return { allowed: await isUserLinkedToHome(home, userId)
+    || (areLaunchFeaturesEnabled('mail_extras') && await canSendToMailHome(homeId, userId)), home };
 };
 
 // "Lives at this home" for a letter addressed to a person at a Home: they can
@@ -774,46 +776,6 @@ const isUserLinkedToHome = async (home, userId) => {
   return access.hasAccess === true && access.isOwner === true;
 };
 
-const hasVerifiedSenderHome = async (userId) => {
-  const [occupancyRes, ownerRes] = await Promise.allSettled([
-    supabaseAdmin
-      .from('HomeOccupancy')
-      .select('home_id,is_active,verification_status,verification_source')
-      .eq('user_id', userId),
-    supabaseAdmin
-      .from('HomeOwner')
-      .select('home_id')
-      .eq('subject_id', userId)
-      .eq('owner_status', 'verified'),
-  ]);
-
-  // A consented co-owner can have household-only provenance too. Check that
-  // same Home before using the legacy owner fallback; another address-proven
-  // Home still qualifies. Failed provenance reads must not become "no row".
-  if (occupancyRes.status !== 'fulfilled' || occupancyRes.value?.error
-    || !Array.isArray(occupancyRes.value?.data)
-    || occupancyRes.value.data.some(row => !row || typeof row.home_id !== 'string')) return false;
-  const occupancies = occupancyRes.value.data;
-  const householdHomes = new Set(occupancies
-    .filter(row => UNPROVEN_SOURCES.has(row.verification_source)).map(row => row.home_id));
-  const verifiedOwnerRows = ownerRes.status === 'fulfilled' && !ownerRes.value?.error
-    && Array.isArray(ownerRes.value?.data) ? ownerRes.value.data : [];
-  if (occupancies.some(row => row.is_active === true && row.verification_status === 'verified'
-    && !UNPROVEN_SOURCES.has(row.verification_source))) return true;
-  for (const row of verifiedOwnerRows) {
-    if (!row || typeof row.home_id !== 'string' || householdHomes.has(row.home_id)) continue;
-    // The collection can be truncated by PostgREST's max_rows. Only an exact
-    // Home/user lookup can distinguish no occupancy from an omitted row.
-    try {
-      const result = await supabaseAdmin.from('HomeOccupancy').select('home_id,verification_source')
-        .eq('user_id', userId).eq('home_id', row.home_id).maybeSingle();
-      if (!result || result.error || (result.data !== null
-        && (!result.data || Array.isArray(result.data) || result.data.home_id !== row.home_id))) return false;
-      if (result.data === null || !UNPROVEN_SOURCES.has(result.data.verification_source)) return true;
-    } catch (_) { return false; }
-  }
-  return false;
-};
 
 const sendHomeVerificationRequired = (res) =>
   res.status(403).json({
