@@ -1118,57 +1118,53 @@ router.post('/vault/file', validate(fileToVaultSchema), async (req, res, next) =
 // POST /vault/auto-file — run auto-filing rules on delivered items
 router.post('/vault/auto-file', async (req, res, next) => {
   try {
-    const { data: folders } = await supabaseAdmin
-      .from('VaultFolder')
-      .select('*')
-      .eq('user_id', req.user.id);
+    const userId = req.user.id;
+    const homeIds = await getAccessibleHomeIds(userId);
+    // Use the same cabinet as manual filing: Home folders belong to the Home,
+    // not to the member who first created them.
+    const folders = await mailVault.readableFolders(userId, homeIds);
 
-    // Get unfiled delivered items
-    const { data: items } = await supabaseAdmin
-      .from('Mail')
-      .select('*')
-      .eq('recipient_user_id', req.user.id)
-      .is('vault_folder_id', null)
-      .is('deleted_at', null)
-      // Never files a piece that hasn't arrived yet (SRV-1).
-      .lte('delivered_at', new Date().toISOString())
-      .in('lifecycle', ['delivered', 'opened'])
-      .order('created_at', { ascending: false })
-      .limit(100);
+    let filed = 0, afterId = null;
+    // Scan past unmatched pages. A stable id cursor avoids skipping letters
+    // when earlier matches leave the unfiled set during this same run.
+    for (;;) {
+      let query = onlyDelivered(supabaseAdmin.from('Mail').select('*')
+        .or(visibleMailFilter(userId, homeIds)).is('vault_folder_id', null)
+        .is('deleted_at', null).in('lifecycle', ['delivered', 'opened']))
+        .order('id', { ascending: true }).limit(100);
+      if (afterId) query = query.gt('id', afterId);
+      const { data: items, error: itemsError } = await query;
+      if (itemsError) throw itemsError;
+      if (!items?.length) break;
+      afterId = items[items.length - 1].id;
 
-    // First pass: compute all matches in memory (no DB ops)
-    const matches = []; // { itemId, folderId }
-    const folderCountInc = {}; // folderId -> increment
-    for (const item of (items || [])) {
-      for (const folder of (folders || [])) {
-        if (folder.drawer !== item.drawer) continue;
-        const rules = Array.isArray(folder.auto_file_rules) ? folder.auto_file_rules : [];
-        if (rules.some(rule => evaluateAutoFileRule(rule, item))) {
-          matches.push({ itemId: item.id, folderId: folder.id });
-          folderCountInc[folder.id] = (folderCountInc[folder.id] || (folder.item_count || 0)) + 1;
-          break;
+      const matches = [];
+      for (const item of items) {
+        for (const folder of folders) {
+          if (!mailVault.folderFits({ folder }, item)) continue;
+          const rules = Array.isArray(folder.auto_file_rules) ? folder.auto_file_rules : [];
+          if (rules.some(rule => evaluateAutoFileRule(rule, item))) {
+            matches.push({ itemId: item.id, folderId: folder.id });
+            break;
+          }
         }
       }
-    }
 
-    // Batch execute all updates in parallel
-    if (matches.length > 0) {
-      await Promise.all([
-        // Update all matched mail items
-        ...matches.map(m =>
-          supabaseAdmin.from('Mail').update({ vault_folder_id: m.folderId, lifecycle: 'filed' }).eq('id', m.itemId)
-        ),
-        // Update folder item_counts
-        ...Object.entries(folderCountInc).map(([fId, count]) =>
-          supabaseAdmin.from('VaultFolder').update({ item_count: count }).eq('id', fId)
-        ),
-        // Log events
-        ...matches.map(m =>
-          logMailEvent(req.user.id, 'vault_auto_filed', m.itemId, { folder_id: m.folderId })
-        ),
-      ]);
+      // Do not overwrite a concurrent manual filing/removal or report a failed
+      // write as success. Folder counts are derived from readable filed mail.
+      const outcomes = await Promise.all(matches.map(async m => {
+        const { data, error } = await supabaseAdmin.from('Mail')
+          .update({ vault_folder_id: m.folderId, lifecycle: 'filed' }).eq('id', m.itemId)
+          .is('vault_folder_id', null).is('deleted_at', null)
+          .in('lifecycle', ['delivered', 'opened']).select('id');
+        if (error) throw error;
+        if (!data?.length) return 0;
+        await logMailEvent(userId, 'vault_auto_filed', m.itemId, { folder_id: m.folderId });
+        return 1;
+      }));
+      filed += outcomes.reduce((sum, count) => sum + count, 0);
+      if (items.length < 100) break;
     }
-    const filed = matches.length;
 
     res.json({ message: `Auto-filed ${filed} items`, filed });
   } catch (err) { next(err); }
