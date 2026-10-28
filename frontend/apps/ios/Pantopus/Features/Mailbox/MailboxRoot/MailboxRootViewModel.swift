@@ -195,6 +195,12 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
     /// The Vault tab: the drawer's folders, the one open now, the archived
     /// mail, and what to say when they couldn't load.
     private(set) var vaultFolders: [VaultFolderDTO] = []
+    /// The folders as cabinets: in Home, one per Home, titled with its name
+    /// when there are several (an owner of two Homes has two "Utilities").
+    var vaultCabinets: [MailVaultCabinet] {
+        MailVaultCabinet.cabinets(of: vaultFolders, homeMail: selectedDrawer == .home, homes: homes)
+    }
+
     private(set) var openFolder: VaultFolderDTO?
     private(set) var archivedPieces: [MailPieceModel] = []
     private(set) var vaultFailure: String?
@@ -976,6 +982,38 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
                 headline: "No mail yet",
                 subcopy: "When letters, bills or notices arrive, they show up here."
             )
+        }
+    }
+}
+
+/// One cabinet of Vault folders (board R10): the drawer's own, or one Home's,
+/// shared by everyone who reads that Home's mail.
+struct MailVaultCabinet: Identifiable, Equatable {
+    let id: String
+    /// The Home's name, shown when the Home drawer holds several Homes.
+    let title: String?
+    let folders: [VaultFolderDTO]
+
+    /// Me and Biz keep one cabinet. Home has one per Home in the order the
+    /// server lists them, titled only when there are several, as on the web
+    /// and Android; folders sort by their order, then name.
+    static func cabinets(
+        of folders: [VaultFolderDTO],
+        homeMail: Bool,
+        homes: [DrawerListResponse.MailboxHome]
+    ) -> [MailVaultCabinet] {
+        let sorted = folders.sorted { ($0.sortOrder ?? .max, $0.label) < ($1.sortOrder ?? .max, $1.label) }
+        guard homeMail else {
+            return sorted.isEmpty ? [] : [MailVaultCabinet(id: "own", title: nil, folders: sorted)]
+        }
+        var homeIds: [String] = []
+        for folder in folders where !homeIds.contains(folder.homeId ?? "") {
+            homeIds.append(folder.homeId ?? "")
+        }
+        return homeIds.map { homeId in
+            let home = homes.first { $0.homeId == homeId }
+            let title = homeIds.count > 1 ? MailPieceModel.firstText(home?.name, home?.addressLine) ?? "Your home" : nil
+            return MailVaultCabinet(id: homeId, title: title, folders: sorted.filter { ($0.homeId ?? "") == homeId })
         }
     }
 }
