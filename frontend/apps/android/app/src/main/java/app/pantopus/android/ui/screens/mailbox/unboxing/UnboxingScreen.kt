@@ -38,6 +38,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -50,6 +51,9 @@ import app.pantopus.android.ui.components.OcrFactsList
 import app.pantopus.android.ui.components.OcrFactsStatus
 import app.pantopus.android.ui.components.OcrFactsTone
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.Toast
+import app.pantopus.android.ui.components.ToastAppearance
+import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.mailbox.package_gig.PACKAGE_GIG_AVAILABLE
 import app.pantopus.android.ui.screens.mailbox.unboxing.components.CaptureFilmstrip
 import app.pantopus.android.ui.screens.mailbox.unboxing.components.DrawerSuggestionCard
@@ -136,21 +140,21 @@ fun UnboxingScreen(
         )
         toast?.let { message ->
             LaunchedEffect(message) {
-                delay(TOAST_MILLIS)
+                delay(toastDurationMillis(message, minimumMillis = TOAST_MILLIS))
                 viewModel.consumeToast()
             }
-            Text(
+            Toast(
                 text = message,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = PantopusColors.appTextInverse,
+                appearance =
+                    ToastAppearance(
+                        background = PantopusColors.appText,
+                        foreground = PantopusColors.appTextInverse,
+                        textStyle = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.SemiBold),
+                    ),
                 modifier =
                     Modifier
                         .align(Alignment.BottomCenter)
                         .padding(bottom = 160.dp)
-                        .clip(RoundedCornerShape(Radii.pill))
-                        .background(PantopusColors.appText)
-                        .padding(horizontal = Spacing.s4, vertical = Spacing.s2)
                         .testTag("unboxing_toast"),
             )
         }

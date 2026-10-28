@@ -136,8 +136,7 @@ public struct ExploreMapView: View {
             }
             if let toast = savedStore.toast {
                 ToastView(message: toast)
-                    .task(id: toast) {
-                        try? await Task.sleep(nanoseconds: 2_500_000_000)
+                    .dismissToast(after: toast, minimum: 2.5) {
                         savedStore.toast = nil
                     }
             }

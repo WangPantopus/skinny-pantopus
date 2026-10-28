@@ -152,8 +152,7 @@ struct PlanRequestsScreen: View {
             if let toast = viewModel.toast {
                 ToastView(message: ToastMessage(text: toast))
                     .padding(.bottom, Spacing.s8)
-                    .task(id: toast) {
-                        try? await Task.sleep(for: .seconds(2.5))
+                    .dismissToast(after: toast, minimum: 2.5) {
                         viewModel.toast = nil
                     }
             }

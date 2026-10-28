@@ -51,6 +51,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -63,6 +64,9 @@ import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.ui.components.KeyboardResizeEffect
 import app.pantopus.android.ui.components.RefreshFailedLine
 import app.pantopus.android.ui.components.RefreshOnStoreChange
+import app.pantopus.android.ui.components.Toast
+import app.pantopus.android.ui.components.ToastAppearance
+import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
 import app.pantopus.android.ui.screens.inbox.newmessage.NewMessageScreen
 import app.pantopus.android.ui.screens.support_trains.detail.SupportTrainViewerRole
@@ -136,7 +140,7 @@ fun ManageTrainScreen(
 
     LaunchedEffect(state.toast) {
         if (state.toast != null) {
-            delay(2_500)
+            delay(toastDurationMillis(state.toast.orEmpty(), minimumMillis = 2_500))
             viewModel.acknowledgeToast()
         }
     }
@@ -780,20 +784,17 @@ private fun ToastChip(text: String) {
                 .padding(bottom = Spacing.s12),
         contentAlignment = Alignment.BottomCenter,
     ) {
-        Box(
+        Toast(
+            text = text,
+            appearance =
+                ToastAppearance(
+                    background = PantopusColors.appText,
+                    foreground = PantopusColors.appTextInverse,
+                    textStyle = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.SemiBold),
+                ),
             modifier =
                 Modifier
-                    .clip(RoundedCornerShape(Radii.pill))
-                    .background(PantopusColors.appText)
-                    .padding(horizontal = Spacing.s4, vertical = Spacing.s2)
                     .testTag(MANAGE_TRAIN_TOAST_TAG),
-        ) {
-            Text(
-                text = text,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = PantopusColors.appTextInverse,
-            )
-        }
+        )
     }
 }

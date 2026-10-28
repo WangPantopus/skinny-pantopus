@@ -55,6 +55,8 @@ import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.components.StatusChip
 import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
+import app.pantopus.android.ui.screens.homes.waitingLabel
+import app.pantopus.android.ui.screens.place.PlaceVerifyBanner
 import app.pantopus.android.ui.screens.place.components.placeCard
 import app.pantopus.android.ui.screens.place.detail.LocalPlaceDetailRetry
 import app.pantopus.android.ui.screens.place.detail.PlaceTodayDetailContent
@@ -79,16 +81,17 @@ private val TodayTabUiState.showsContent: Boolean
 /**
  * The Today tab root (Wedge v2 D2). Four states: loading placeholders,
  * a claim prompt when there is no place yet, the Today group with the
- * address calendar, and an error with retry. [onOpenPlace] opens this
- * home's Place dashboard (the Ballot P0 card's "Open your ballot").
+ * address calendar (a claim in review's public view under its status),
+ * and an error with retry. [onOpenPlace] opens this home's Place
+ * dashboard (the Ballot P0 card's "Open your ballot").
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TodayTabScreen(
     onClaim: () -> Unit,
     onOpenPlace: ((homeId: String) -> Unit)? = null,
-    /** "Check status" on a claim in review: the Place tab, which shows it in My homes. */
-    onCheckClaim: () -> Unit = {},
+    /** "Check claim status" on a claim in review: the claim's Waiting Room, by its Home's id. */
+    onCheckClaim: (homeId: String) -> Unit = {},
     plans: PlansTodayActions? = null,
     onAsk: ((AIScreenContext) -> Unit)? = null,
     /** The side menu, on every tab (founder decision 2026-10-20); null hides the button. */
@@ -139,7 +142,7 @@ fun TodayTabScreen(
             when (val current = state) {
                 TodayTabUiState.Loading -> TodayPlaceholders()
                 TodayTabUiState.NoPlace -> NoPlaceCard(onClaim)
-                is TodayTabUiState.ClaimInReview -> ClaimInReviewCard(current.claim, onCheckClaim)
+                is TodayTabUiState.ClaimInReview -> ClaimInReviewCard(current.claim) { onCheckClaim(current.claim.homeId) }
                 is TodayTabUiState.Error -> ErrorState(message = current.message, onRetry = viewModel::refresh)
                 is TodayTabUiState.Loaded ->
                     Column(
@@ -152,7 +155,8 @@ fun TodayTabScreen(
                         if (current.savedAnchorMatches) {
                             StatusChip("Saved place · Only you", modifier = Modifier.padding(bottom = 12.dp))
                         }
-                        onAsk?.let { ask -> TodayAskBox(onAsk = { ask(AIScreenContext.today(viewModel.homeId)) }) }
+                        TodayClaimBanner(current.claim, onCheckClaim)
+                        onAsk?.let { ask -> TodayAskBox(onAsk = { ask(AIScreenContext.today(viewModel.shownHomeId)) }) }
                         // Nearby Plans (A1, A2, A5): today's plan and the day-after card, above the weather.
                         plans?.let { PlansTodayCards(actions = it, modifier = Modifier.padding(bottom = 16.dp)) }
                         CompositionLocalProvider(LocalPlaceDetailRetry provides viewModel::refresh) {
@@ -162,7 +166,7 @@ fun TodayTabScreen(
                                 radonFactory = viewModel.radonFactory.takeIf { current.calendarHomeId != null },
                                 pilotEvents = viewModel.pilotEvents,
                                 radonContext = viewModel.radonContext,
-                                onOpenBallot = onOpenPlace?.let { open -> { viewModel.homeId?.let(open) } },
+                                onOpenBallot = onOpenPlace?.let { open -> { viewModel.shownHomeId?.let(open) } },
                                 alertsCheck = alertsCheck(age, refreshing, current.refreshFailed),
                                 radonMemory = viewModel.radonMemory,
                             )
@@ -253,8 +257,8 @@ private fun NoPlaceCard(onClaim: () -> Unit) {
 }
 
 /**
- * No place yet, but a claim in review: the address claimed and when Today fills in, with the Place tab (My homes) for
- * its status. Words match iOS and web's Place pages.
+ * A claim in review whose Home's public view can't be read (an older server, or a closed Home): the address claimed
+ * and when Today fills in, with the claim's status. Words match iOS and web's Place pages.
  */
 @Composable
 private fun ClaimInReviewCard(
@@ -283,6 +287,25 @@ private fun ClaimInReviewCard(
         )
         PrimaryButton(title = "Check status", onClick = onCheckClaim, modifier = Modifier.fillMaxWidth())
     }
+}
+
+/**
+ * A claim in review (none: nothing): My homes' words for what it waits on; [onCheckClaim] opens its Waiting Room,
+ * with the steps.
+ */
+@Composable
+private fun TodayClaimBanner(
+    claim: OwnershipClaimDto?,
+    onCheckClaim: (homeId: String) -> Unit,
+) {
+    if (claim == null) return
+    PlaceVerifyBanner(
+        onTap = { onCheckClaim(claim.homeId) },
+        modifier = Modifier.padding(bottom = 12.dp).testTag("today.claimBanner"),
+        icon = PantopusIcon.Clock,
+        message = "Your claim is in review. ${claim.waitingLabel}.",
+        action = "Check claim status",
+    )
 }
 
 /** "You claimed 901 C Street, Vancouver, WA. Today fills in here once a Pantopus reviewer approves your claim." */

@@ -38,6 +38,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingPillar
 import app.pantopus.android.ui.screens.shared.form.FormShell
 import app.pantopus.android.ui.screens.shared.form.FormShellLeading
@@ -86,7 +87,7 @@ fun PackageEditorScreen(
                 modifier = Modifier.align(Alignment.TopCenter).padding(top = Spacing.s3),
             )
             LaunchedEffect(message) {
-                delay(TOAST_MS)
+                delay(toastDurationMillis(message, minimumMillis = TOAST_MS))
                 viewModel.toastConsumed()
             }
         }

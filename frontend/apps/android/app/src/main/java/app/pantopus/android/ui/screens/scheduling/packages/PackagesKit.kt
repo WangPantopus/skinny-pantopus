@@ -47,6 +47,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.pantopus.android.ui.components.Toast
+import app.pantopus.android.ui.components.ToastAppearance
 import app.pantopus.android.ui.screens.scheduling._shared.MoneyAndFlag
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingPillar
 import app.pantopus.android.ui.theme.PantopusColors
@@ -969,31 +971,28 @@ fun PkgToastCapsule(
     modifier: Modifier = Modifier,
     icon: PantopusIcon? = PantopusIcon.Check,
 ) {
-    Row(
-        modifier =
-            modifier
-                .clip(RoundedCornerShape(Radii.pill))
-                .background(PantopusColors.appText)
-                .padding(horizontal = Spacing.s4, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
-    ) {
-        if (icon != null) {
-            PantopusIconImage(
-                icon = icon,
-                contentDescription = null,
-                size = 15.dp,
-                strokeWidth = 3f,
-                tint = PantopusColors.success,
-            )
-        }
-        Text(
-            text = text,
-            color = PantopusColors.appTextInverse,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-        )
-    }
+    Toast(
+        text = text,
+        appearance =
+            ToastAppearance(
+                background = PantopusColors.appText,
+                foreground = PantopusColors.appTextInverse,
+                textStyle = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.SemiBold),
+                verticalPadding = 10.dp,
+            ),
+        modifier = modifier,
+        leading = {
+            if (icon != null) {
+                PantopusIconImage(
+                    icon = icon,
+                    contentDescription = null,
+                    size = 15.dp,
+                    strokeWidth = 3f,
+                    tint = PantopusColors.success,
+                )
+            }
+        },
+    )
 }
 
 // Shared monospace family for invoice references / receipt rows.
