@@ -2870,7 +2870,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     ) = ChildRoutes.chatConversationRoom(roomId, title, title.trim().take(1).uppercase(), verified = false)
                     TodayTabScreen(
                         onClaim = { navController.navigate(ChildRoutes.ADD_HOME) },
-                        onCheckClaim = { navController.navigateToRootTab(PantopusRoute.Place) },
+                        onCheckClaim = { homeId -> navController.navigate(ChildRoutes.waitingRoom(homeId)) },
                         onAsk = { context -> navController.navigate(ChildRoutes.askPantopus(context)) },
                         onOpenMenu = openMenu,
                         onOpenPlace = { homeId ->
@@ -6980,7 +6980,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 }
                                 // No way into this Home yet: back to My homes, where the claim is listed, or onto
                                 // it, past the Home's dashboard a waiting-room link puts under the room. While there
-                                // are only claims, the Place tab's root is My homes. Mirrors iOS `showMyHomes`.
+                                // are only claims, the Place tab's root is the claimed address. Mirrors iOS
+                                // `showMyHomes`.
                                 is WaitingRoomNav.MyHomes ->
                                     if (!navController.popBackStack(ChildRoutes.MY_HOMES, inclusive = false)) {
                                         navController.popBackStack(ChildRoutes.waitingRoom(nav.homeId), inclusive = true)
@@ -7396,6 +7397,21 @@ private fun PlaceTabRoot(
                         onBallotOpened = onBallotOpened,
                         // A new default changes where Place lands next time, not the Home on screen now.
                         onDefaultHomeChange = { host.switchHome(current.homeId) },
+                    )
+                }
+            // The same dashboard: the claimed Home's public view, its claim's status on top.
+            is HomeLanding.Claim ->
+                key(current.homeId) {
+                    PlaceRootViewed("claim")
+                    PlaceDashboardDestination(
+                        navController = navController,
+                        homeId = current.homeId,
+                        onOpenMenu = onOpenMenu,
+                        onSwitchHome = host::switchHome,
+                        onPlaceUnavailable = host::replaceUnavailable,
+                        scrollToTop = scrollToTop,
+                        scrollToBallot = ballotHomeId == current.homeId,
+                        onBallotOpened = onBallotOpened,
                     )
                 }
             HomeLanding.Homes -> {

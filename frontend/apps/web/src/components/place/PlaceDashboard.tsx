@@ -99,8 +99,11 @@ export default function PlaceDashboard() {
   const homeId = selectedHomeId ?? homeQuery.data?.home?.id ?? privateSetupId;
 
   // With no Home to open, your claims in review (a claim makes a Home yours only once it's approved).
+  // The first one's address shows its public view (the server's for an open claim), its status on top.
   const noHome = homeQuery.isSuccess && !homeId;
   const claimsQuery = useQuery({ ...myClaimsQuery(), enabled: authed && noHome && myHomesQuery.isFetched });
+  const claim = noHome ? claimsInReview(claimsQuery.data)[0] ?? null : null;
+  const shownHomeId = homeId ?? claim?.home_id ?? null;
   // Links carry the place only when it isn't the primary home.
   const linkHomeId = homeId !== homeQuery.data?.home?.id ? homeId : null;
 
@@ -125,11 +128,11 @@ export default function PlaceDashboard() {
 
   // 2) Fetch its PlaceIntelligence (dependent on the active home id).
   // Switching homes changes the key, which re-queries the contract.
-  const showsCopy = placeCopyGate(myHomesQuery.data?.homes.find((home) => home.id === homeId));
+  const showsCopy = placeCopyGate(myHomesQuery.data?.homes.find((home) => home.id === shownHomeId));
   const intelQuery = useQuery({
-    queryKey: homeId ? queryKeys.placeIntelligence(homeId) : ['place', 'intelligence', 'none'],
-    queryFn: async () => api.place.getPlaceIntelligence(homeId as string),
-    enabled: authed && !!homeId,
+    queryKey: shownHomeId ? queryKeys.placeIntelligence(shownHomeId) : ['place', 'intelligence', 'none'],
+    queryFn: async () => api.place.getPlaceIntelligence(shownHomeId as string),
+    enabled: authed && !!shownHomeId,
     staleTime: gatedStaleTime(PLACE_FRESH_MS, showsCopy),
   });
   // A guest's or service provider's copy shows only once the re-check answers (decision 3).
@@ -152,14 +155,17 @@ export default function PlaceDashboard() {
     );
   }
 
-  // No home yet: your claims in review, saved addresses, or a pointer to adding one (the funnel
-  // claims/verifies elsewhere). Wait for the Home list and your claims first, so a private setup or
-  // a claim doesn't flash the no-home view; if the claims can't be read, the page goes on without them.
-  if (noHome) {
+  // No home yet: a claim in review's address (below), else your claims, saved addresses, or a pointer
+  // to adding one (the funnel claims/verifies elsewhere). Wait for the Home list and your claims first,
+  // so a private setup or a claim doesn't flash the no-home view; if the claims can't be read, the page
+  // goes on without them. A claim whose address can't be read (an older server, a closed Home) keeps
+  // the claim card.
+  const claimWaiting = !!claim && !kept && (intelQuery.isPending || intelWaiting);
+  if (noHome && (!claim || !kept)) {
     const claims = claimsInReview(claimsQuery.data);
     return (
       <Shell>
-        {myHomesQuery.isPending || claimsQuery.isPending ? <PlaceDashboardSkeleton /> : (
+        {myHomesQuery.isPending || claimsQuery.isPending || claimWaiting ? <PlaceDashboardSkeleton /> : (
           <div className="space-y-4">
             {claims.length > 0 ? <ClaimsInReview claims={claims} /> : null}
             <SavedPlaceContext claimInReview={claims.length > 0} />
@@ -191,20 +197,23 @@ export default function PlaceDashboard() {
   return (
     <Shell hidden={placeSlugsNotForViewer(intelligence)}>
       {/* Hub absorption (Phase 1 follow-up): the setup checklist lives on the
-          place page now, in wedge order (claim → verify → profile). */}
-      {setupSteps.length > 0 && !setupSteps.every((s) => s.done) ? (
+          place page now, in wedge order (claim → verify → profile). A claim in
+          review has its own status instead. */}
+      {!claim && setupSteps.length > 0 && !setupSteps.every((s) => s.done) ? (
         <div className="px-4 pt-4"><SetupBanner steps={setupSteps} /></div>
       ) : null}
       <div className="mb-4"><button className="text-sm text-primary-700 dark:text-primary-300" onClick={() => router.push('/app/place?savedPlace=all')}>Saved address previews</button></div>
       <PlaceDashboardView
         intelligence={intelligence}
-        homeId={homeId as string}
+        homeId={shownHomeId as string}
+        claim={claim}
+        onOpenClaimStatus={() => router.push('/app/homes')}
         onOpenSection={(slug) => router.push(`/app/place/${slug}${placeHomeQuery(linkHomeId)}`)}
         onOpenPulse={() => router.push(`/app/place/pulse${placeHomeQuery(linkHomeId)}`)}
         onRetry={() => { void intelQuery.refetch(); }}
         retrying={intelQuery.isFetching}
         switchHomes={switchHomes}
-        activeHomeId={homeId}
+        activeHomeId={shownHomeId}
         moveInDate={intelligence.move_in_date ?? null}
         onSwitchHome={(id) => {
           setPickedHomeId(id);
