@@ -395,6 +395,18 @@ private fun LazyListScope.vaultItems(
     }
     val search = content.search
     if (search != null) return vaultSearchItems(search, content.zone, vault, viewModel)
+    // Offline or Pantopus unreachable: the folders and the filed list failed together. One message, and Try again
+    // reads both again.
+    val folders = content.folders
+    if (content.shelf == MailVaultShelf.All && folders is MailVaultFolders.Error && content.state is MailboxUiState.Error) {
+        item(key = "vaultError") {
+            MailVaultProblem(folders.message, "mailVaultError") {
+                vault.refresh()
+                viewModel.refresh()
+            }
+        }
+        return
+    }
     when (val shelf = content.shelf) {
         MailVaultShelf.All -> vaultCabinetItems(content.folders, vault, viewModel)
         is MailVaultShelf.Folder, MailVaultShelf.Archived -> {

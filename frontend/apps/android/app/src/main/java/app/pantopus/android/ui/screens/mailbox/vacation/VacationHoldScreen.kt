@@ -2,6 +2,7 @@
 
 package app.pantopus.android.ui.screens.mailbox.vacation
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -17,6 +18,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -38,11 +41,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -68,6 +75,13 @@ import java.util.Locale
 
 /** Toast dwell time — matches iOS `VacationHoldView`'s 1.8s banner. */
 private const val TOAST_MILLIS = 1_800L
+
+/** A longer toast (what went wrong and what to do) stays long enough to read, up to [TOAST_MAX_MILLIS]. */
+private const val TOAST_MILLIS_PER_CHAR = 60L
+private const val TOAST_MAX_MILLIS = 7_000L
+
+/** 1.8 s for "Your mail hold is saved.", longer for a sentence saying what went wrong. */
+private fun toastMillis(text: String): Long = (text.length * TOAST_MILLIS_PER_CHAR).coerceIn(TOAST_MILLIS, TOAST_MAX_MILLIS)
 
 /**
  * Hold my mail (Mail tab drawings, `R11-Vacation`; A14.8's screen reskinned). While the person is away their own mail
@@ -106,10 +120,9 @@ fun VacationHoldScreen(
     var pickingDate by remember { mutableStateOf<VacationDateField?>(null) }
 
     LaunchedEffect(toast) {
-        if (toast != null) {
-            kotlinx.coroutines.delay(TOAST_MILLIS)
-            viewModel.consumeToast()
-        }
+        val shown = toast ?: return@LaunchedEffect
+        kotlinx.coroutines.delay(toastMillis(shown))
+        viewModel.consumeToast()
     }
 
     LaunchedEffect(Unit) {
@@ -151,9 +164,11 @@ fun VacationHoldScreen(
                         CircularProgressIndicator()
                     }
                 } else if (loadError != null) {
+                    // Room under the intro, so the problem doesn't sit on its last line.
                     ErrorState(
                         headline = "Couldn't load your mail hold",
                         message = loadError.orEmpty(),
+                        modifier = Modifier.padding(top = Spacing.s6),
                         onRetry = { viewModel.load() },
                     )
                 } else {
@@ -206,22 +221,27 @@ fun VacationHoldScreen(
         }
 
         if (toast != null) {
+            // Clear of the screen's edges, and read out by TalkBack: a failure can take two or three lines.
             Box(
                 modifier =
                     Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = Spacing.s10),
+                        .padding(start = Spacing.s4, end = Spacing.s4, bottom = Spacing.s10),
             ) {
                 Text(
                     text = toast.orEmpty(),
                     fontSize = 13.sp,
+                    lineHeight = 18.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = PantopusColors.appTextInverse,
+                    textAlign = TextAlign.Center,
                     modifier =
                         Modifier
-                            .clip(RoundedCornerShape(Radii.pill))
+                            .clip(RoundedCornerShape(Radii.xl))
                             .background(PantopusColors.appText.copy(alpha = 0.9f))
-                            .padding(horizontal = Spacing.s4, vertical = Spacing.s2),
+                            .padding(horizontal = Spacing.s4, vertical = Spacing.s2)
+                            .semantics { liveRegion = LiveRegionMode.Polite }
+                            .testTag("vacationHoldToast"),
                 )
             }
         }
@@ -352,6 +372,7 @@ private fun TopBar(
 /** The date row a picker is open for. */
 private enum class VacationDateField { From, To }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SchedulingBody(
     viewModel: VacationHoldViewModel,
@@ -400,26 +421,31 @@ private fun SchedulingBody(
             }
         }
 
-        // The dates' problem, right under them, until they change.
+        // The dates' problem, right under them, until they change. With large text the button can sit a screen
+        // below the dates, so the problem scrolls into view, and TalkBack reads it.
         if (dateError != null) {
+            val errorInView = remember { BringIntoViewRequester() }
+            LaunchedEffect(dateError) { errorInView.bringIntoView() }
             Row(
                 modifier =
                     Modifier
                         .fillMaxWidth()
                         .padding(horizontal = Spacing.s4)
                         .padding(top = Spacing.s3)
-                        .semantics(mergeDescendants = true) {}
+                        .bringIntoViewRequester(errorInView)
+                        .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite }
                         .testTag("vacationHoldDateError"),
                 horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
             ) {
                 PantopusIconImage(icon = PantopusIcon.AlertCircle, contentDescription = null, size = 16.dp, tint = PantopusColors.error)
-                Text(text = dateError, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = PantopusColors.error)
+                Text(text = dateError, fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium, color = PantopusColors.error)
             }
         }
 
         Text(
             text = "Your held mail arrives the morning of ${formatWeekdayShort(draft.toDate)}, as one bundle with that day's mail.",
             fontSize = 14.sp,
+            lineHeight = 20.sp,
             color = PantopusColors.appTextStrong,
             modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s4).padding(top = Spacing.s3),
         )
@@ -447,9 +473,10 @@ private fun HoldIntro() {
     ) {
         Box(modifier = Modifier.size(72.dp).clearAndSetSemantics {}) {
             MailboxDrawing(modifier = Modifier.size(72.dp))
+            // Part of the drawing, so it keeps the drawing's size at any text size (the words beside it say it all).
             Text(
                 text = "HOLD",
-                fontSize = 9.sp,
+                fontSize = with(LocalDensity.current) { 9.dp.toSp() },
                 fontWeight = FontWeight.Bold,
                 fontFamily = FontFamily.Monospace,
                 color = PantopusColors.mailManilaInk,
@@ -518,7 +545,7 @@ private fun ActiveBody(
                 fontWeight = FontWeight.SemiBold,
                 color = PantopusColors.appText,
             )
-            Text(text = hold.resumeBlurb, fontSize = 14.sp, color = PantopusColors.appTextStrong)
+            Text(text = hold.resumeBlurb, fontSize = 14.sp, lineHeight = 20.sp, color = PantopusColors.appTextStrong)
             if (hold.isActive) {
                 Text(
                     text =
@@ -528,6 +555,7 @@ private fun ActiveBody(
                             else -> "${hold.heldCount} pieces held so far."
                         },
                     fontSize = 14.sp,
+                    lineHeight = 20.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = PantopusColors.appText,
                     modifier = Modifier.testTag("vacationHoldHeld"),
@@ -536,6 +564,7 @@ private fun ActiveBody(
         }
 
         VacationCardHelper("Special deliveries still come right away, and Home mail keeps coming for your household.")
+        Spacer(modifier = Modifier.height(Spacing.s3))
 
         VacationCard {
             VacationDestructiveRow(
@@ -593,6 +622,7 @@ private fun VacationCardHelper(text: String) {
     Text(
         text = text,
         fontSize = 11.5.sp,
+        lineHeight = 16.sp,
         color = PantopusColors.appTextSecondary,
         modifier =
             Modifier
@@ -607,6 +637,7 @@ private fun VacationMonoFooter(text: String) {
     Text(
         text = text,
         fontSize = 11.sp,
+        lineHeight = 16.sp,
         fontFamily = FontFamily.Monospace,
         color = PantopusColors.appTextMuted,
         modifier =
@@ -643,6 +674,7 @@ private fun VacationDestructiveRow(
         Text(
             text = sub,
             fontSize = 11.5.sp,
+            lineHeight = 16.sp,
             color = PantopusColors.appTextSecondary,
         )
     }
@@ -693,6 +725,7 @@ private fun VacationDateRow(
             Text(
                 text = sub,
                 fontSize = 11.5.sp,
+                lineHeight = 16.sp,
                 color = PantopusColors.appTextSecondary,
             )
         }
@@ -742,6 +775,7 @@ private fun VacationToggleRow(
             Text(
                 text = sub,
                 fontSize = 11.5.sp,
+                lineHeight = 16.sp,
                 color = PantopusColors.appTextSecondary,
             )
         }
@@ -837,6 +871,7 @@ private fun VacationChevronIconRow(
             Text(
                 text = sub,
                 fontSize = 11.5.sp,
+                lineHeight = 16.sp,
                 color = PantopusColors.appTextSecondary,
             )
         }
@@ -895,6 +930,7 @@ private fun VacationChevronAvatarRow(
             Text(
                 text = sub,
                 fontSize = 11.5.sp,
+                lineHeight = 16.sp,
                 color = PantopusColors.appTextSecondary,
             )
         }

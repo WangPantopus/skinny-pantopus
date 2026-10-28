@@ -105,6 +105,7 @@ fun MailClosedHomeDrawer(
                 append(".")
             },
             fontSize = 13.sp,
+            lineHeight = 18.sp,
             color = PantopusColors.appTextSecondary,
             textAlign = TextAlign.Center,
             modifier =

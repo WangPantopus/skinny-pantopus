@@ -21,13 +21,16 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -430,13 +433,7 @@ private fun PorchFrame(
                     .fillMaxSize()
                     .background(Color.Black.copy(alpha = 0.18f)),
         )
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .then(if (edgeToEdge) Modifier.windowInsetsPadding(WindowInsets.systemBars) else Modifier)
-                    .padding(horizontal = Spacing.s6),
-        ) {
+        val porch: @Composable ColumnScope.() -> Unit = {
             Row(modifier = Modifier.fillMaxWidth().padding(top = Spacing.s4)) {
                 Spacer(modifier = Modifier.weight(1f))
                 Box(
@@ -515,6 +512,23 @@ private fun PorchFrame(
             }
             SkipAnimationButton(onSkip = onSkip, label = skipLabel)
             PantopusFooter()
+        }
+        if (edgeToEdge) {
+            // The first day's porch, clear of the system bars. It scrolls when its words outgrow the screen (the
+            // largest text), so Open envelope and Skip the animation stay in reach; otherwise it fills the screen.
+            BoxWithConstraints(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars)) {
+                Column(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState())
+                            .heightIn(min = maxHeight)
+                            .padding(horizontal = Spacing.s6),
+                    content = porch,
+                )
+            }
+        } else {
+            Column(modifier = Modifier.fillMaxSize().padding(horizontal = Spacing.s6), content = porch)
         }
     }
 }
