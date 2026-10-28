@@ -79,9 +79,9 @@ fun WaitingRoomRoute(
     val approvalNotice by viewModel.approvalNotice.collectAsStateWithLifecycle()
     val openUrl by viewModel.openUrl.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    val leave = { if (leavesToMyHomes) viewModel.leaveToMyHomes() else onBack() }
+    val leave = { if (leavesToMyHomes) viewModel.leaveWithoutHome() else onBack() }
 
-    BackHandler(enabled = leavesToMyHomes) { viewModel.leaveToMyHomes() }
+    BackHandler(enabled = leavesToMyHomes) { viewModel.leaveWithoutHome() }
 
     // Refetch on every resume, as iOS does on appear: returning from evidence
     // upload, the postcard, Stripe's identity check or the Home (or to the app)

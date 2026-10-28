@@ -14,6 +14,7 @@ import {
   CloudLightning,
   CloudRain,
   CloudSnow,
+  Clock,
   CreditCard,
   Droplets,
   Leaf,
@@ -33,6 +34,10 @@ import { withoutLaunchCutTodayRows } from '@/lib/featureFlags';
 import type { HubToday } from '@pantopus/types';
 import BallotTodaySection, { useBallotToday } from '@/components/ballot/BallotTodaySection';
 import { claimInReviewNote, claimsInReview, myClaimsQuery } from '@/lib/myHomes';
+import { VerifyBanner } from '@/components/archetypes/place';
+import TodayDetail from '@/components/place/detail/TodayDetail';
+import { claimWaitingLabel } from '@/components/homes/ClaimApprovalChecklist';
+import { PLACE_FRESH_MS, gatedStaleTime, useAfterRecheck } from '@/lib/householdCopy';
 
 // ── Icon helpers ─────────────────────────────────────────────────
 
@@ -148,6 +153,16 @@ export default function HubTodayPage() {
   const claims = useQuery({ ...myClaimsQuery(), enabled: hasToken && noBriefing });
   const claim = claimsInReview(claims.data)[0] ?? null;
   const claimNote = claim ? claimInReviewNote(claim, 'Today') : null;
+  // The claimed address's public Today (the server's view for an open claim) under the claim's status;
+  // the Place page reads the same copy. A refusal (an older server, a closed Home) keeps the claim's note.
+  const claimTodayQuery = useQuery({
+    queryKey: claim ? queryKeys.placeIntelligence(claim.home_id) : ['place', 'intelligence', 'none'],
+    queryFn: () => api.place.getPlaceIntelligence(claim?.home_id as string),
+    enabled: hasToken && !!claim,
+    staleTime: gatedStaleTime(PLACE_FRESH_MS, () => false),
+  });
+  const { data: claimToday, waiting: claimTodayWaiting } = useAfterRecheck(claimTodayQuery, () => false);
+  const claimTodayPending = !!claim && claimToday === undefined && (claimTodayQuery.isPending || claimTodayWaiting);
   // The first frame shows what this tab already loaded; the skeleton only while nothing has been
   // (a fresh page load starts with an empty cache, like the server).
   const loading = query.data === undefined && (!mounted || (query.isPending && hasToken));
@@ -162,7 +177,7 @@ export default function HubTodayPage() {
   const [refreshing, setRefreshing] = useState(false);
   const refresh = async () => {
     setRefreshing(true);
-    try { await query.refetch(); } finally { setRefreshing(false); }
+    try { await Promise.all([query.refetch(), claim ? claimTodayQuery.refetch() : null]); } finally { setRefreshing(false); }
   };
 
   return (
@@ -235,12 +250,25 @@ export default function HubTodayPage() {
           </div>
         )}
 
+        {/* A claim in review: its address's Today, the claim's status on top */}
+        {!loading && !error && (!today || today.display_mode === 'hidden') && claim && claimToday ? (
+          <div className="space-y-4">
+            <VerifyBanner
+              icon={Clock}
+              title={`Your claim is in review. ${claimWaitingLabel(claim)}.`}
+              cta="Check claim status"
+              onClick={() => router.push('/app/homes')}
+            />
+            <TodayDetail intelligence={claimToday} embedded />
+          </div>
+        ) : null}
+
         {/* Empty */}
-        {!loading && !error && (!today || today.display_mode === 'hidden') && (
+        {!loading && !error && (!today || today.display_mode === 'hidden') && !(claim && claimToday) && (
           <div className="space-y-4">
             <div className="rounded-xl border border-app bg-surface dark:bg-surface-dark p-8 text-center">
               {/* Wait for the claims, so "No briefing" doesn't flash before a claim in review. */}
-              {claims.isPending ? (
+              {claims.isPending || claimTodayPending ? (
                 <p className="text-sm text-app-text-secondary" aria-hidden="true">&nbsp;</p>
               ) : claimNote ? (
                 <>

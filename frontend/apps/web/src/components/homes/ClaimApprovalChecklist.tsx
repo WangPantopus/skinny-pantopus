@@ -52,11 +52,15 @@ export function approvalSummary(approval: ClaimApprovalProgress): string {
   return approval.proof === 'pending' ? 'Document in review' : 'Document needed';
 }
 
+/** What a claim in review is waiting on, as the apps say it. */
+export function claimWaitingLabel(claim: { approval?: ClaimApprovalProgress | null; has_evidence?: boolean | null }): string {
+  return claim.approval ? approvalSummary(claim.approval)
+    : claim.has_evidence === false ? 'Document needed' : claim.has_evidence === true ? 'Under review' : 'Check document status';
+}
+
 /** A claim's chip on My Homes and Place: its kind, then what it is waiting on. */
 export function claimStatusLabel(claim: { claim_type: string; approval?: ClaimApprovalProgress | null; has_evidence?: boolean | null }): string {
-  const waiting = claim.approval ? approvalSummary(claim.approval)
-    : claim.has_evidence === false ? 'Document needed' : claim.has_evidence === true ? 'Under review' : 'Check document status';
-  return `${claim.claim_type === 'resident' ? 'Residency claim' : 'Ownership claim'} · ${waiting}`;
+  return `${claim.claim_type === 'resident' ? 'Residency claim' : 'Ownership claim'} · ${claimWaitingLabel(claim)}`;
 }
 
 function StepIcon({ tone }: { tone: Tone }) {

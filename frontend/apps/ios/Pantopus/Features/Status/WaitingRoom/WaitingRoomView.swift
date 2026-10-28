@@ -93,7 +93,7 @@ public struct WaitingRoomView: View {
 
     private func leave() {
         if viewModel.leavesToMyHomes {
-            viewModel.leaveToMyHomes()
+            viewModel.leaveWithoutHome()
         } else {
             onBack()
         }

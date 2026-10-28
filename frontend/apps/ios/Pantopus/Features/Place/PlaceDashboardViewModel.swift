@@ -40,6 +40,9 @@ final class PlaceDashboardViewModel {
     /// The household shortcuts under Home tools that the person's access at
     /// this Home allows (`refreshHomeShortcuts`).
     private(set) var homeShortcuts: [PlaceHomeShortcut] = []
+    /// The person's claim in review on a Home they can't open yet: the server
+    /// sends its public view, and its status leads the dashboard (`refreshClaim`).
+    private(set) var claim: OwnershipClaimDTO?
 
     private let api: APIClient
     private var reloadPending = false
@@ -120,8 +123,10 @@ final class PlaceDashboardViewModel {
         }
         let force = reloadPending
         reloadPending = false
+        async let claimRead: Void = refreshClaim()
         async let shortcuts: Void = refreshHomeShortcuts()
         await fetch(force: force)
+        await claimRead
         await shortcuts
     }
 
@@ -135,10 +140,25 @@ final class PlaceDashboardViewModel {
         isRefreshing = true
         defer { isRefreshing = false }
         async let unread: Void = refreshUnread()
+        async let claimRead: Void = refreshClaim(force: true)
         async let shortcuts: Void = refreshHomeShortcuts()
         await fetch(force: true)
         await unread
+        await claimRead
         await shortcuts
+    }
+
+    /// The claim in review on this Home while the person can't open it (My
+    /// homes' claims, from the store). A Home they can open has none here; a
+    /// failed read keeps what shows.
+    private func refreshClaim(force: Bool = false) async {
+        guard let homes = try? await HomesStoreReads.myHomes(force: force).value, !Task.isCancelled else { return }
+        guard !PlaceRootResolver.isOpenable(homeId, in: homes) else {
+            claim = nil
+            return
+        }
+        guard let claims = try? await HomesStoreReads.myClaims(force: force).value, !Task.isCancelled else { return }
+        claim = claims.claims.first { $0.homeId == homeId && $0.isInReview }
     }
 
     /// The shortcuts follow the person's access at this Home, read the way

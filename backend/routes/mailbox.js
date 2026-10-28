@@ -1746,7 +1746,7 @@ router.get('/:id', verifyToken, async (req, res) => {
         }
       }
     } else {
-      mail.content_format = mail.content?.includes('<') ? 'html' : 'plain_text';
+      mail.content_format = mailObjects.storedFormat(mail.content);
     }
     mail.content_text = mailObjects.textContent(mail.content, mail.content_format);
 
@@ -2780,12 +2780,12 @@ router.post('/:id/read/start', verifyToken, validate(startReadSessionSchema), as
     const userId = req.user.id;
     const { clientMeta = {} } = req.body;
 
-    // Use the same recipient, Home and delivery rule as the reader itself.
+    // Use the same recipient, Home and delivery rule as the reader itself, and read the letter before counting it read.
     const mail = await readableMail(id, userId);
     if (!mail) return res.status(404).json({ error: 'Mail not found' });
     await mailObjects.hydrateMail(mail);
 
-    const { data, error } = await supabaseAdmin.rpc('open_mail_read_session_by_reader', {
+    const { data, error } = await supabaseAdmin.rpc('open_mail_read_session', {
       p_mail_id: id,
       p_user_id: userId,
       p_client_meta: clientMeta
