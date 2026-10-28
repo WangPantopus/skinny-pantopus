@@ -428,8 +428,10 @@ public enum HubRoute: Hashable {
     /// Reached by redirect from the generic mail detail.
     case ceremonialMailOpen(mailId: String)
     /// The first day: Pantopus's sealed welcome letter on the porch, opened
-    /// with the ceremonial open (a Mailbox screen, not a Mail extra).
-    case mailWelcome(mailId: String)
+    /// with the ceremonial open (a Mailbox screen, not a Mail extra). It
+    /// carries the letter as the Mailbox listed it: fetching the letter
+    /// would mark it opened before its seal breaks.
+    case mailWelcome(DrawerItemsResponse.DrawerMail)
     /// Disambiguation queue behind the Mailbox root's
     /// "N items need routing" banner.
     case mailRoutingQueue
@@ -925,7 +927,7 @@ public struct HubTabRoot: View {
         // The Counter's Pay, the closed Home drawer, and the first day's porch.
         model.onOpenInvoice = { invoiceId in push(.invoiceDetail(invoiceId: invoiceId)) }
         model.onVerifyHome = { homeId in showVerifyHome(homeId) }
-        model.onOpenWelcome = { mailId in push(.mailWelcome(mailId: mailId)) }
+        model.onOpenWelcome = { mail in push(.mailWelcome(mail)) }
         return model
     }
 
@@ -3395,19 +3397,19 @@ public struct HubTabRoot: View {
                 onBack: { Task { @MainActor in pop() } },
                 onWriteBack: { _ in Task { @MainActor in push(.ceremonialMail) } }
             )
-        case let .mailWelcome(mailId):
+        case let .mailWelcome(mail):
             CeremonialMailOpenView(
-                viewModel: CeremonialMailOpenViewModel(mailId: mailId),
+                viewModel: CeremonialMailOpenViewModel(sealed: mail),
                 onBack: { Task { @MainActor in pop() } },
                 onWriteBack: { _ in },
                 onLetterOpened: {
                     // Once its seal breaks the welcome letter reads on the
                     // letter page, in place of the porch (Back returns to Mail).
-                    // The porch opened it, so the Mailbox draws it opened.
+                    // The letter page opens it, so the Mailbox draws it opened.
                     Task { @MainActor in
-                        NotificationCenter.default.post(name: .mailboxMailViewed, object: mailId)
+                        NotificationCenter.default.post(name: .mailboxMailViewed, object: mail.id)
                         if !path.isEmpty { path.removeLast() }
-                        push(.mailItemDetail(mailId: mailId))
+                        push(.mailItemDetail(mailId: mail.id))
                     }
                 }
             )
