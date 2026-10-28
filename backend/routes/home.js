@@ -2731,6 +2731,7 @@ router.post('/:id/tasks/:taskId/recurrence', verifyToken, async (req, res) => {
 // archived or merged (or the actor's ownership has been revoked).
 async function requireSharedHomeContent(req, res, next) {
   res.set('Cache-Control', 'private, no-store');
+  if (Joi.string().uuid().validate(req.params.id).error) return res.status(400).json({ error: 'Invalid Home id' });
   try {
     const current = await homeListService.readAccessState(req.params.id, req.user.id);
     if (current.mode !== 'shared') {
