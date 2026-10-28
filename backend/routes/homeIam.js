@@ -442,8 +442,21 @@ router.get('/:id/scoped-grants', verifyToken, async (req, res) => {
     return res.status(400).json({ error: 'Choose what to list share links for.', code: 'SHARE_INVALID' });
   }
   try {
-    const access = await checkHomePermission(homeId, req.user.id, 'home.edit');
-    if (!access.hasAccess) return res.status(403).json({ error: 'No permission to manage share links', code: 'SHARE_DENIED' });
+    // Listing links obeys the same current issuer policy as creating/reading
+    // them, including Home state, lockdown, age, and the access window.
+    const readAuthority = async () => {
+      const { data, error } = await supabaseAdmin.rpc('home_external_share_context', {
+        p_home_id: homeId, p_actor_id: req.user.id,
+      });
+      if (error || !Array.isArray(data?.permissions)) throw new Error('Share authority unavailable');
+      if (!data.permissions.includes('home.edit')) {
+        throw Object.assign(new Error('No permission to manage share links'), {
+          code: 'SHARE_DENIED', statusCode: 403,
+        });
+      }
+      return data;
+    };
+    const opening = await readAuthority();
     const now = new Date().toISOString();
     let query = supabaseAdmin.from('HomeScopedGrant')
       .select('id, home_id, resource_type, resource_id, can_view, can_edit, start_at, end_at, max_views, view_count, created_by, created_at')
@@ -453,10 +466,13 @@ router.get('/:id/scoped-grants', verifyToken, async (req, res) => {
     if (resourceId !== undefined) query = query.eq('resource_id', String(resourceId));
     const { data, error } = await query;
     if (error || !Array.isArray(data)) throw error || new Error('Share links could not be read');
+    if (JSON.stringify(await readAuthority()) !== JSON.stringify(opening)) {
+      throw new Error('Share authority changed while loading');
+    }
     return res.json({ grants: data.filter(g => g.max_views == null || (g.view_count || 0) < g.max_views) });
   } catch (err) {
     logger.error('Error listing share links', { error: err.message, homeId });
-    return res.status(503).json({ error: 'Share links could not be loaded. Retry.', code: 'SHARE_UNAVAILABLE' });
+    return shareFailure(res, err);
   }
 });
 router.get('/:id/guest-passes', verifyToken, async (req, res) => {
