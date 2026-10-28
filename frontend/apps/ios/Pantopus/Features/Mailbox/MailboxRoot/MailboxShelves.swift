@@ -218,10 +218,20 @@ struct MailVaultShelf: View {
                     .frame(minHeight: 44)
                     .accessibilityIdentifier("mailVaultRetry")
             }
-        } else if !viewModel.vaultFolders.isEmpty {
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: Spacing.s3), GridItem(.flexible(), spacing: Spacing.s3)], spacing: 14) {
-                ForEach(viewModel.vaultFolders) { folder in
-                    MailVaultFolder(folder: folder) { viewModel.openVaultFolder(folder) }
+        } else if !viewModel.vaultCabinets.isEmpty {
+            VStack(alignment: .leading, spacing: Spacing.s4) {
+                ForEach(viewModel.vaultCabinets) { cabinet in
+                    VStack(alignment: .leading, spacing: Spacing.s2) {
+                        if let title = cabinet.title { sectionTitle(title) }
+                        LazyVGrid(
+                            columns: [GridItem(.flexible(), spacing: Spacing.s3), GridItem(.flexible(), spacing: Spacing.s3)],
+                            spacing: 14
+                        ) {
+                            ForEach(cabinet.folders) { folder in
+                                MailVaultFolder(folder: folder) { viewModel.openVaultFolder(folder) }
+                            }
+                        }
+                    }
                 }
             }
         }

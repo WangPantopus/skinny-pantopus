@@ -195,6 +195,12 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
     /// The Vault tab: the drawer's folders, the one open now, the archived
     /// mail, and what to say when they couldn't load.
     private(set) var vaultFolders: [VaultFolderDTO] = []
+    /// The folders as cabinets: in Home, one per Home, titled with its name
+    /// when there are several (an owner of two Homes has two "Utilities").
+    var vaultCabinets: [MailVaultCabinet] {
+        MailVaultCabinet.cabinets(of: vaultFolders, homeMail: selectedDrawer == .home, homes: homes)
+    }
+
     private(set) var openFolder: VaultFolderDTO?
     private(set) var archivedPieces: [MailPieceModel] = []
     private(set) var vaultFailure: String?
@@ -208,7 +214,7 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
     /// closed Home drawer's Verify your home, and the first day's porch.
     var onOpenInvoice: (@MainActor (String) -> Void)?
     var onVerifyHome: (@MainActor (String) -> Void)?
-    var onOpenWelcome: (@MainActor (String) -> Void)?
+    var onOpenWelcome: (@MainActor (DrawerItemsResponse.DrawerMail) -> Void)?
 
     /// The Counter's pieces with their due tags, lines and buttons (board R9).
     var counterItems: [MailCounterItem] {
@@ -440,7 +446,7 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
     }
 
     /// A14.8 — invoked from `MailboxRootView`'s overflow menu when the
-    /// user taps "Vacation hold". Exposed publicly so the SwiftUI Menu
+    /// user taps "Hold my mail". Exposed publicly so the SwiftUI Menu
     /// in the view layer can call it directly.
     public func openVacationHold() {
         onOpenVacationHoldHandler()
@@ -880,7 +886,8 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
     // MARK: - The first day
 
     /// The sealed welcome letter from Pantopus opens on the porch once per
-    /// account; after that it's an ordinary letter in Me.
+    /// account; after that it's an ordinary letter in Me. The porch draws it
+    /// from this list, so closing the porch leaves it sealed.
     private func presentWelcomeIfNeeded() {
         guard sampleProvider == nil, selectedDrawer == .me, currentTab == .incoming, let onOpenWelcome,
               case let .signedIn(user) = AuthManager.shared.state else { return }
@@ -890,7 +897,7 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
         let key = "mail.welcome.porch.\(user.id)"
         guard UserDefaults.standard.string(forKey: key) == nil else { return }
         UserDefaults.standard.set(welcome.id, forKey: key)
-        onOpenWelcome(welcome.id)
+        onOpenWelcome(welcome)
     }
 
     /// Pantopus's welcome letter (made on the first open of Mail, SRV-6).
@@ -975,6 +982,38 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
                 headline: "No mail yet",
                 subcopy: "When letters, bills or notices arrive, they show up here."
             )
+        }
+    }
+}
+
+/// One cabinet of Vault folders (board R10): the drawer's own, or one Home's,
+/// shared by everyone who reads that Home's mail.
+struct MailVaultCabinet: Identifiable, Equatable {
+    let id: String
+    /// The Home's name, shown when the Home drawer holds several Homes.
+    let title: String?
+    let folders: [VaultFolderDTO]
+
+    /// Me and Biz keep one cabinet. Home has one per Home in the order the
+    /// server lists them, titled only when there are several, as on the web
+    /// and Android; folders sort by their order, then name.
+    static func cabinets(
+        of folders: [VaultFolderDTO],
+        homeMail: Bool,
+        homes: [DrawerListResponse.MailboxHome]
+    ) -> [MailVaultCabinet] {
+        let sorted = folders.sorted { ($0.sortOrder ?? .max, $0.label) < ($1.sortOrder ?? .max, $1.label) }
+        guard homeMail else {
+            return sorted.isEmpty ? [] : [MailVaultCabinet(id: "own", title: nil, folders: sorted)]
+        }
+        var homeIds: [String] = []
+        for folder in folders where !homeIds.contains(folder.homeId ?? "") {
+            homeIds.append(folder.homeId ?? "")
+        }
+        return homeIds.map { homeId in
+            let home = homes.first { $0.homeId == homeId }
+            let title = homeIds.count > 1 ? MailPieceModel.firstText(home?.name, home?.addressLine) ?? "Your home" : nil
+            return MailVaultCabinet(id: homeId, title: title, folders: sorted.filter { ($0.homeId ?? "") == homeId })
         }
     }
 }

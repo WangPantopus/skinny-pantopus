@@ -51,6 +51,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.data.ai.AIScreenContext
+import app.pantopus.android.data.api.models.homes.OwnershipClaimDto
 import app.pantopus.android.data.api.models.place.BallotGovernments
 import app.pantopus.android.data.api.models.place.PlaceGroupBlock
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
@@ -65,6 +66,7 @@ import app.pantopus.android.ui.screens.ballot.BallotGovernmentsSheet
 import app.pantopus.android.ui.screens.ballot.BallotPlacement
 import app.pantopus.android.ui.screens.ballot.BallotSeasonBlock
 import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
+import app.pantopus.android.ui.screens.homes.waitingLabel
 import app.pantopus.android.ui.screens.place.components.JustMovedCard
 import app.pantopus.android.ui.screens.place.components.PlaceChip
 import app.pantopus.android.ui.screens.place.components.PlaceChipModel
@@ -175,6 +177,8 @@ fun PlaceDashboardScreen(
                     intel = current.intelligence,
                     homeId = homeId,
                     moveInDate = current.moveInDate,
+                    claim = current.claim,
+                    onOpenClaimStatus = onOpenVerificationStatus,
                     onOpenMailDay = onOpenMailDay,
                     onOpenPrivacyMirror = onOpenPrivacyMirror,
                     onOpenHomeTools = {
@@ -245,7 +249,7 @@ fun PlaceDashboardScreen(
 
 /** The loaded dashboard. [onOpenSwitcher] opens the homes sheet, from the address under "Your Place". */
 @Composable
-@Suppress("LongParameterList", "LongMethod")
+@Suppress("LongParameterList", "LongMethod", "CyclomaticComplexMethod")
 internal fun PlaceDashboardContent(
     intel: PlaceIntelligence,
     onOpenSwitcher: () -> Unit,
@@ -272,6 +276,10 @@ internal fun PlaceDashboardContent(
     scrollToBallot: Boolean = false,
     onBallotOpened: () -> Unit = {},
     onAsk: (() -> Unit)? = null,
+    /** A claim in review: [intel] is the Home's public view, with no household tools or verify steps. */
+    claim: OwnershipClaimDto? = null,
+    /** The claim's Waiting Room: its checklist, documents and withdraw. */
+    onOpenClaimStatus: () -> Unit = {},
 ) {
     val isVerified = intel.tier == PlaceTier.T4
     // Verifying is the next step for a claimed resident and for a private setup (by mail). Guests and service
@@ -284,7 +292,8 @@ internal fun PlaceDashboardContent(
         if (scrollToBallot) {
             if (ballot != null) {
                 // Header, tools, moving checklist, Pulse, spacer and privacy row always precede the card.
-                val precedingItems = BALLOT_PRECEDING_FIXED_ITEMS + listOf(refreshNotice != null, showsVerify, isVerified).count { it }
+                val precedingItems =
+                    BALLOT_PRECEDING_FIXED_ITEMS + listOf(refreshNotice != null, showsVerify || claim != null, isVerified).count { it }
                 listState.scrollToItem(precedingItems)
             }
             onBallotOpened()
@@ -295,7 +304,7 @@ internal fun PlaceDashboardContent(
         item {
             PlaceDashboardHeader(
                 label = intel.place.label,
-                status = placeStatus(intel),
+                status = if (claim != null) CLAIM_STATUS else placeStatus(intel),
                 onOpenSwitcher = onOpenSwitcher,
                 onOpenMenu = onOpenMenu,
                 onOpenNotifications = onOpenNotifications,
@@ -308,7 +317,18 @@ internal fun PlaceDashboardContent(
         if (refreshNotice != null) {
             item { RefreshFailedLine(refreshNotice, Modifier.padding(horizontal = 16.dp)) }
         }
-        if (showsVerify) {
+        if (claim != null) {
+            item {
+                // My homes' words for what the claim waits on; its Waiting Room has the steps.
+                PlaceVerifyBanner(
+                    onTap = onOpenClaimStatus,
+                    modifier = Modifier.padding(horizontal = 16.dp).padding(top = 8.dp).testTag("place.claimBanner"),
+                    icon = PantopusIcon.Clock,
+                    message = "Your claim is in review. ${claim.waitingLabel}.",
+                    action = "Check claim status",
+                )
+            }
+        } else if (showsVerify) {
             item {
                 PlaceVerifyBanner(
                     onTap = onVerify,
@@ -317,12 +337,14 @@ internal fun PlaceDashboardContent(
             }
         }
         item {
-            PlaceHomeToolsCard(
-                shortcuts = homeShortcuts,
-                onOpen = onOpenHomeTools,
-                onShortcut = onOpenHomeShortcut,
-                modifier = Modifier.padding(horizontal = 16.dp).padding(top = 12.dp),
-            )
+            if (claim == null) {
+                PlaceHomeToolsCard(
+                    shortcuts = homeShortcuts,
+                    onOpen = onOpenHomeTools,
+                    onShortcut = onOpenHomeShortcut,
+                    modifier = Modifier.padding(horizontal = 16.dp).padding(top = 12.dp),
+                )
+            }
         }
         // Movers first (Wedge v2 D5): the first-week checklist for a recent move-in.
         item {
@@ -349,21 +371,24 @@ internal fun PlaceDashboardContent(
                 headline = pulse.title,
                 nudgeIcon = pulse.nudgeIcon,
                 nudgeText = pulse.nudgeText.orEmpty(),
-                onTap = onOpenPulse,
+                // Pulse is the household's: a claim's card opens the address's Today.
+                onTap = if (claim == null) onOpenPulse else ({ onOpenDetail(PlaceDetailGroup.TODAY) }),
                 modifier =
                     Modifier
                         .padding(horizontal = 16.dp)
-                        .padding(top = if (showsVerify) 12.dp else 14.dp),
+                        .padding(top = if (showsVerify || claim != null) 12.dp else 14.dp),
             )
         }
         item { Spacer(modifier = Modifier.height(20.dp)) }
         // The privacy mirror (Wedge v2 §2): one tap to see yourself as a neighbor does. It follows
         // Today's Pulse, as on iOS: verify, Home tools, movers, the Pulse, then this line.
         item {
-            PrivacyMirrorRow(
-                onOpen = onOpenPrivacyMirror,
-                modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp),
-            )
+            if (claim == null) {
+                PrivacyMirrorRow(
+                    onOpen = onOpenPrivacyMirror,
+                    modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp),
+                )
+            }
         }
         if (isVerified) {
             item {
@@ -390,17 +415,19 @@ internal fun PlaceDashboardContent(
             PlaceGroupBlockView(
                 group = group,
                 onOpenDetail = onOpenDetail,
-                onVerify = onVerify.takeUnless { intel.tier == PlaceTier.T3 && intel.verifyAvailable == false },
+                onVerify = onVerify.takeUnless { claim != null || (intel.tier == PlaceTier.T3 && intel.verifyAvailable == false) },
                 modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp),
                 onRetry = onRetry,
                 verifiesFirst = intel.verifiesFirst,
             )
         }
-        item {
-            PlaceIdentityEntry(
-                onOpen = { onOpenDetail(PlaceDetailGroup.IDENTITY) },
-                modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp),
-            )
+        if (claim == null) {
+            item {
+                PlaceIdentityEntry(
+                    onOpen = { onOpenDetail(PlaceDetailGroup.IDENTITY) },
+                    modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp),
+                )
+            }
         }
         if (showsVerify) {
             item {
@@ -612,6 +639,9 @@ internal fun PlaceDashboardHeader(
     }
 }
 
+/** A claim on the Home is in review. */
+private val CLAIM_STATUS = PlaceChipModel(PlaceChipTone.WARNING, "In review", PantopusIcon.Clock)
+
 /** Where the person stands at this Home. Guests and service providers aren't residents: no status. */
 internal fun placeStatus(intel: PlaceIntelligence): PlaceChipModel? {
     if (intel.viewer?.role == "nonresident") return null
@@ -754,6 +784,9 @@ internal fun PlaceRootBar(
 fun PlaceVerifyBanner(
     onTap: () -> Unit,
     modifier: Modifier = Modifier,
+    icon: PantopusIcon = PantopusIcon.ShieldCheck,
+    message: String = "Verify your address to message neighbors and get your badge.",
+    action: String = "Verify address",
 ) {
     Row(
         modifier =
@@ -777,7 +810,7 @@ fun PlaceVerifyBanner(
             contentAlignment = Alignment.Center,
         ) {
             PantopusIconImage(
-                icon = PantopusIcon.ShieldCheck,
+                icon = icon,
                 contentDescription = null,
                 size = 20.dp,
                 strokeWidth = 2f,
@@ -786,7 +819,7 @@ fun PlaceVerifyBanner(
         }
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
-                text = "Verify your address to message neighbors and get your badge.",
+                text = message,
                 fontSize = 14.5.sp,
                 fontWeight = FontWeight.SemiBold,
                 lineHeight = 20.sp,
@@ -795,7 +828,7 @@ fun PlaceVerifyBanner(
             )
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "Verify address",
+                    text = action,
                     fontSize = 13.5.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = PantopusColors.primary600,

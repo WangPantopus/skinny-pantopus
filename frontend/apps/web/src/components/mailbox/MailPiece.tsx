@@ -37,13 +37,18 @@ export function pieceOutside(kind: PieceKind): string {
 type Trust = { label: string; color: string; mark: string | null };
 
 // How Pantopus checked the sender: the printed postage line and the label.
-export function pieceTrust(item: Pick<MailItemV2, 'sender_trust' | 'from_pantopus'>): Trust {
+// A Pantopus account that sent as a business (a bill from its invoice) is a
+// business on Pantopus, not a neighbor, as on iOS and Android.
+export function pieceTrust(item: Pick<MailItemV2, 'sender_trust' | 'from_pantopus' | 'sender_business_name'>): Trust {
   if (item.from_pantopus) return { label: 'From Pantopus', color: '#0369a1', mark: 'PANTOPUS' };
   switch (item.sender_trust) {
     case 'verified_gov': return { label: 'Verified government', color: '#047857', mark: 'GOVERNMENT' };
     case 'verified_utility': return { label: 'Verified utility', color: '#047857', mark: 'UTILITY' };
     case 'verified_business': return { label: 'Verified business', color: '#047857', mark: 'BUSINESS' };
-    case 'pantopus_user': return { label: 'Pantopus neighbor', color: '#4e5563', mark: null };
+    case 'pantopus_user':
+      return item.sender_business_name?.trim()
+        ? { label: 'Business on Pantopus', color: '#4e5563', mark: null }
+        : { label: 'Pantopus neighbor', color: '#4e5563', mark: null };
     default: return { label: 'Unverified sender', color: '#a81a1a', mark: null };
   }
 }
