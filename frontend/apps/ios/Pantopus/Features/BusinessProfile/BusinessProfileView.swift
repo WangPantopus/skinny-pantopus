@@ -64,8 +64,7 @@ public struct BusinessProfileView: View {
                 ToastView(message: ToastMessage(text: toast, kind: .neutral))
                     .padding(.bottom, Spacing.s16)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .task(id: toast) {
-                        try? await Task.sleep(nanoseconds: 2_000_000_000)
+                    .dismissToast(after: toast, minimum: 2) {
                         viewModel.toastMessage = nil
                     }
             }
@@ -189,8 +188,7 @@ public struct BusinessProfileView: View {
             }
             if let toast = savedStore.toast {
                 ToastView(message: toast)
-                    .task(id: toast) {
-                        try? await Task.sleep(nanoseconds: 2_500_000_000)
+                    .dismissToast(after: toast, minimum: 2.5) {
                         savedStore.toast = nil
                     }
             }

@@ -43,8 +43,7 @@ public struct BlockedUsersView: View {
         if let toast = viewModel.toast {
             ToastView(message: toast)
                 .padding(.bottom, Spacing.s10)
-                .task(id: toast.id) {
-                    try? await Task.sleep(nanoseconds: 3_000_000_000)
+                .dismissToast(after: toast, minimum: 3) {
                     viewModel.toast = nil
                 }
                 .accessibilityIdentifier("blockedUsers.toast")

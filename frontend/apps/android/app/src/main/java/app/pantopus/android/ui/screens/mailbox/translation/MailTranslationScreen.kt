@@ -35,6 +35,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -42,6 +43,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.Toast
+import app.pantopus.android.ui.components.ToastAppearance
+import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.mailbox.translation.components.LanguageBadge
 import app.pantopus.android.ui.screens.mailbox.translation.components.SideBySideView
 import app.pantopus.android.ui.screens.mailbox.translation.components.TranslationConfirmBanner
@@ -88,7 +92,7 @@ fun MailTranslationScreen(
     LaunchedEffect(Unit) { viewModel.load() }
     LaunchedEffect(toast) {
         if (toast != null) {
-            kotlinx.coroutines.delay(1_800)
+            kotlinx.coroutines.delay(toastDurationMillis(toast.orEmpty(), minimumMillis = 1_800))
             viewModel.consumeToast()
         }
     }
@@ -162,16 +166,15 @@ internal fun MailTranslationScreenContent(
                         .align(Alignment.BottomCenter)
                         .padding(bottom = Spacing.s16),
             ) {
-                Text(
+                Toast(
                     text = toast,
-                    modifier =
-                        Modifier
-                            .clip(RoundedCornerShape(Radii.pill))
-                            .background(PantopusColors.appText.copy(alpha = 0.9f))
-                            .padding(horizontal = Spacing.s4, vertical = Spacing.s2),
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = PantopusColors.appTextInverse,
+                    appearance =
+                        ToastAppearance(
+                            background = PantopusColors.appText.copy(alpha = 0.9f),
+                            foreground = PantopusColors.appTextInverse,
+                            textStyle = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.SemiBold),
+                        ),
+                    modifier = Modifier,
                 )
             }
         }

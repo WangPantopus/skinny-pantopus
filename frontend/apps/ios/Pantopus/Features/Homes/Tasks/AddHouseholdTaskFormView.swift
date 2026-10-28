@@ -89,8 +89,7 @@ public struct AddHouseholdTaskFormView: View {
                 ToastView(message: toast)
                     .padding(.bottom, Spacing.s10)
                     .transition(.opacity)
-                    .task(id: toast) {
-                        try? await Task.sleep(nanoseconds: 2_000_000_000)
+                    .dismissToast(after: toast, minimum: 2) {
                         viewModel.toast = nil
                     }
                     .accessibilityIdentifier("addHouseholdTaskToast")

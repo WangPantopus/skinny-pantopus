@@ -84,7 +84,9 @@ async function state(homeId, actorId) {
   }
   // Include the actual occupancy, own ownership and both authority decisions:
   // a held list must not preserve obsolete metadata even if access still exists.
-  return { home, access, owners, context, mode };
+  // `blocked` (a frozen, disputed, archived or merged Home) also keeps an open
+  // claim from showing the Home's public view (placeIntelligenceService.readAccess).
+  return { home, access, owners, context, mode, blocked };
 }
 
 async function readClaims(homeId, actorId) {
@@ -236,4 +238,11 @@ function sendError(res, error) {
   });
   return res.status(safe.statusCode).json({ error: safe.message, code: safe.code });
 }
-module.exports = { read, readAccessState: state, sendError };
+// state() fails as unavailable when the Home row is gone. A per-Home route
+// denies a deleted Home with its usual 403, as it did before reading this
+// state, rather than a 503 asking for a retry that can never succeed.
+async function homeDeleted(error, homeId) {
+  if (error?.code !== 'HOME_LIST_UNAVAILABLE') return false;
+  try { return await checked(db.from('Home').select('id').eq('id', homeId).maybeSingle()) === null; } catch { return false; }
+}
+module.exports = { read, readAccessState: state, sendError, homeDeleted };

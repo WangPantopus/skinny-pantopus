@@ -58,8 +58,7 @@ public struct PasswordChangeView: View {
                     .padding(.bottom, Spacing.s10)
                     .accessibilityIdentifier("passwordChangeToast")
                     .transition(.opacity)
-                    .task {
-                        try? await Task.sleep(nanoseconds: 2_000_000_000)
+                    .dismissToast(after: toast, minimum: 2) {
                         viewModel.dismissToast()
                     }
             }

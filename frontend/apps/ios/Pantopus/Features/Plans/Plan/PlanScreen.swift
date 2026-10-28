@@ -308,8 +308,7 @@ struct PlanScreen: View {
         if let toast {
             ToastView(message: ToastMessage(text: toast))
                 .padding(.bottom, 96)
-                .task(id: toast) {
-                    try? await Task.sleep(for: .seconds(2.5))
+                .dismissToast(after: toast, minimum: 2.5) {
                     self.toast = nil
                 }
         }

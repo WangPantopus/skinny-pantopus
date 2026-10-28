@@ -47,6 +47,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -59,6 +60,9 @@ import app.pantopus.android.ui.components.IdentityPillar
 import app.pantopus.android.ui.components.MapPreview
 import app.pantopus.android.ui.components.RatingDistribution
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.Toast
+import app.pantopus.android.ui.components.ToastAppearance
+import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.business_profile.BusinessOpenState
 import app.pantopus.android.ui.screens.business_profile.BusinessProfileContent
 import app.pantopus.android.ui.screens.business_profile.BusinessProfileLoadedFrame
@@ -214,27 +218,26 @@ private fun BoxScope.OwnerToastOverlay(
 ) {
     if (message == null) return
     LaunchedEffect(message) {
-        delay(3_000)
+        delay(toastDurationMillis(message, minimumMillis = 3_000))
         onDismiss()
     }
-    Box(
+    Toast(
+        text = message,
+        appearance =
+            ToastAppearance(
+                background = PantopusColors.appText,
+                foreground = PantopusColors.appTextInverse,
+                textStyle = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Medium),
+                verticalPadding = Spacing.s3,
+                sideMargin = 0.dp,
+            ),
         modifier =
             Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
                 .padding(bottom = 140.dp, start = Spacing.s4, end = Spacing.s4)
-                .clip(RoundedCornerShape(Radii.pill))
-                .background(PantopusColors.appText)
-                .padding(horizontal = Spacing.s4, vertical = Spacing.s3)
                 .testTag("businessOwner.toast"),
-    ) {
-        Text(
-            text = message,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Medium,
-            color = PantopusColors.appTextInverse,
-        )
-    }
+    )
 }
 
 /** Which frame the owner dashboard is showing. */

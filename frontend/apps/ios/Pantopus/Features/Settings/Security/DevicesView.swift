@@ -22,7 +22,6 @@ import SwiftUI
 
 public struct DevicesView: View {
     @State private var viewModel: DevicesViewModel
-    @State private var toastDismissTask: Task<Void, Never>?
     private let onBack: @MainActor () -> Void
 
     init(viewModel: DevicesViewModel = DevicesViewModel(), onBack: @escaping @MainActor () -> Void) {
@@ -47,18 +46,10 @@ public struct DevicesView: View {
                     .padding(.bottom, Spacing.s6)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .accessibilityIdentifier("settings.devices.toast")
+                    .dismissToast(after: toast) { viewModel.toast = nil }
             }
         }
         .animation(.easeInOut(duration: 0.2), value: viewModel.toast)
-        .onChange(of: viewModel.toast) { _, toast in
-            toastDismissTask?.cancel()
-            guard toast != nil else { return }
-            toastDismissTask = Task { @MainActor in
-                try? await Task.sleep(for: .seconds(3))
-                guard !Task.isCancelled else { return }
-                viewModel.toast = nil
-            }
-        }
         .confirmationDialog(
             "Remove this device?",
             isPresented: Binding(

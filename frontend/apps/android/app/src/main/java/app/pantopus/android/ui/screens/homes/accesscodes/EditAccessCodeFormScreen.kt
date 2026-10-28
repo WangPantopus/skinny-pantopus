@@ -53,6 +53,8 @@ import app.pantopus.android.core.security.SecureScreenEffect
 import app.pantopus.android.core.security.SensitiveClipboard
 import app.pantopus.android.ui.components.PantopusFieldState
 import app.pantopus.android.ui.components.PantopusTextField
+import app.pantopus.android.ui.components.Toast
+import app.pantopus.android.ui.components.ToastAppearance
 import app.pantopus.android.ui.screens.shared.form.FormFieldGroup
 import app.pantopus.android.ui.screens.shared.form.FormShell
 import app.pantopus.android.ui.theme.MotionTokens
@@ -210,19 +212,16 @@ internal fun EditAccessCodeFormContent(
                     .testTag(EditAccessCodeA11y.TOAST),
         ) {
             state.toast?.let { toast ->
-                Box(
-                    modifier =
-                        Modifier
-                            .clip(RoundedCornerShape(Radii.pill))
-                            .background(if (toast.isError) PantopusColors.error else PantopusColors.success)
-                            .padding(horizontal = Spacing.s4, vertical = Spacing.s2),
-                ) {
-                    Text(
-                        text = toast.text,
-                        style = PantopusTextStyle.small,
-                        color = PantopusColors.appTextInverse,
-                    )
-                }
+                Toast(
+                    text = toast.text,
+                    appearance =
+                        ToastAppearance(
+                            background = if (toast.isError) PantopusColors.error else PantopusColors.success,
+                            foreground = PantopusColors.appTextInverse,
+                            textStyle = PantopusTextStyle.small,
+                        ),
+                    modifier = Modifier,
+                )
             }
         }
     }
