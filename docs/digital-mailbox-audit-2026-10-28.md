@@ -2,8 +2,8 @@
 
 This audit found and repaired defects in letter reading, private enclosures,
 household authorization, sending, claims, delivery notices, search and vacation
-holds. Changes are committed in an unmerged review stack. This is local
-verification evidence, not approval to enable the mailbox or deploy the stack.
+holds. Changes are committed in the review stack below. This is local
+verification evidence, not approval to enable the mailbox.
 
 ## Review stack
 
@@ -12,17 +12,34 @@ Review in order; each PR after the first targets the preceding audit branch.
 | PR | Repair |
 | --- | --- |
 | [2942](https://github.com/WangPantopus/skinny-pantopus/pull/2942) | Read the complete private letter, preserve enclosures after actions, and render formatted content safely. |
-| [2943](https://github.com/WangPantopus/skinny-pantopus/pull/2943) | Apply current Home state to mail access, authorize household read sessions, and require confirmed Auth contacts for claims. |
+| [2943](https://github.com/WangPantopus/skinny-pantopus/pull/2943) | Apply current Home state to mail access, check the reader rule before a read session, and require confirmed Auth contacts for claims. |
 | [2944](https://github.com/WangPantopus/skinny-pantopus/pull/2944) | Repair connected-home sending, sender eligibility, notice retries, withdrawal conflicts and native first-open timestamps. |
 | [2945](https://github.com/WangPantopus/skinny-pantopus/pull/2945) | Keep holds until local 07:00, process complete large bundles, converge concurrent hold syncs, and preserve filing counts. |
 | [2946](https://github.com/WangPantopus/skinny-pantopus/pull/2946) | Search full letter content and supply a dry-run repair command for older truncated rows. |
 | [2947](https://github.com/WangPantopus/skinny-pantopus/pull/2947) | Use decoded text in the current iOS paper-letter layout. |
 | [2948](https://github.com/WangPantopus/skinny-pantopus/pull/2948) | Keep mail and its bundle held through all connected hold windows, including the displayed final return date. |
-| `codex/digital-mailbox-native-compose` (stacked on 2948) | Confirm the actual recipient, remove inactive compose options and unsupported timing promises, and keep native send success visible until Done. |
+| [2949](https://github.com/WangPantopus/skinny-pantopus/pull/2949) | Confirm the actual recipient, remove inactive compose options and unsupported timing promises, and keep native send success visible until Done. |
 
-Three additive migrations must precede the backend changes. Existing migration
+One additive migration (`20261028090200_mail_vacation_local_morning.sql`, a new
+service-only function) must precede the backend changes. Existing migration
 history and tables are preserved. The search backfill is dry-run by default;
 the founder must separately review and run any hosted apply operation.
+
+## Review changes
+
+The review kept every repair and changed four things on top of them:
+
+- Filing, Counter and shred no longer read the stored letter first, so a storage
+  failure can't block them; the answer leaves the body out when it can't be read.
+  A letter stored without a separate copy is treated as HTML when it carries tags.
+- Read sessions use the existing service-only `open_mail_read_session` behind the
+  new reader check, instead of a second copy of that function. No current app
+  starts read sessions.
+- The phones' opened time is written by `PATCH /api/mailbox/:id/view` in the API,
+  instead of a replacement for `mark_mail_viewed_by_reader`.
+- A vacation hold that can't be read no longer fails delivery, which silently
+  dropped business bills and Pantopus letters. The piece goes out on its normal
+  round and the hourly hold job re-holds it, as before.
 
 ## Local verification
 
@@ -37,7 +54,7 @@ Web Chrome, an iOS simulator and an Android emulator used that backend.
 | Enclosures | Recipient can fetch/download the private fixture. Unauthorized accounts cannot. Counter, done and unfile responses retain enclosure descriptors. |
 | Storage failure | Missing/corrupt object fails visibly without marking unread mail read; restoring the object permits a successful retry. |
 | Household access | Owner/member access works in a normal Home. Five blocked Home states deny access; guests, providers and outsiders are rejected. Undelivered mail is not readable. |
-| Reading analytics | Household members can start/close their own read sessions. Direct client execution of the service-only RPC is forbidden. |
+| Reading analytics | Superseded by the review: read sessions go through the reader check and the existing service-only function. Direct client execution of the service-only RPC is forbidden. |
 | Compose and delivery | Browser-composed household letter reaches the other account's iOS reader. Ordinary delivery remained hidden before its scheduled time; the local fixture clock was advanced for the recipient UI check. |
 | Native compose | iOS and Android display the selected recipient at confirmation and the supported next-delivery choice. Both send through the local backend, stay on success, and return to Mail on Done. Recipient reads the persisted letter after local delivery; sender cannot read the recipient's copy. |
 | Connected recipients | Accepted connections can send; removed connections, blocked people/households and frozen destinations cannot. Compose context omits private address details and the member roster. |
@@ -75,9 +92,10 @@ the local backend; the web recipient opened letters created by both platforms.
 
 ## Before enabling
 
-- Review and merge the stack only through a separately authorized release step.
-- Recheck the combined release against current master; concurrent mailbox work
-  continued during this audit, including the separate iOS welcome-letter fix.
+- Merging the stack doesn't enable the mailbox; turning it on stays a separate
+  founder decision.
+- The stack was merged with master on October 28, including the separate iOS
+  welcome-letter and Home Vault fixes, before its final review.
 - Validate hosted private storage, provider email/SMS and push delivery, signed
   physical-device builds, and relevant deep links. Local SMTP capture is not
   proof of real-world delivery.

@@ -122,12 +122,15 @@ export default function PlaceSectionDetail({ section }: { section: string }) {
     enabled: authed && valid && noSharedHome && myHomesQuery.isFetched && !privateSetupId,
   });
   const claim = claimsInReview(claimsQuery.data)[0] ?? null;
+  // The claimed address's public view (the server's for an open claim); its household parts stay
+  // out (no `homeId` for the sections below).
+  const shownHomeId = homeId ?? claim?.home_id ?? null;
 
-  const showsCopy = placeCopyGate(myHomesQuery.data?.homes.find((home) => home.id === homeId));
+  const showsCopy = placeCopyGate(myHomesQuery.data?.homes.find((home) => home.id === shownHomeId));
   const intelQuery = useQuery({
-    queryKey: homeId ? queryKeys.placeIntelligence(homeId) : ['place', 'intelligence', 'none'],
-    queryFn: async () => api.place.getPlaceIntelligence(homeId as string),
-    enabled: authed && valid && !!homeId,
+    queryKey: shownHomeId ? queryKeys.placeIntelligence(shownHomeId) : ['place', 'intelligence', 'none'],
+    queryFn: async () => api.place.getPlaceIntelligence(shownHomeId as string),
+    enabled: authed && valid && !!shownHomeId,
     staleTime: gatedStaleTime(PLACE_FRESH_MS, showsCopy),
   });
   // A guest's or service provider's copy shows only once the re-check answers (decision 3).
@@ -178,7 +181,8 @@ export default function PlaceSectionDetail({ section }: { section: string }) {
     );
   }
 
-  if (homeQuery.isSuccess && !homeId) {
+  // A claim whose address can't be read (an older server, a closed Home) keeps the claim's note.
+  if (homeQuery.isSuccess && !homeId && !(claim && kept)) {
     if (myHomesQuery.isError || savedQuery.isError || claimsQuery.isError) {
       return (
         <DetailShell section={section}>
@@ -196,7 +200,7 @@ export default function PlaceSectionDetail({ section }: { section: string }) {
         </DetailShell>
       );
     }
-    if (myHomesQuery.isPending || savedQuery.isPending || claimsQuery.isPending) {
+    if (myHomesQuery.isPending || savedQuery.isPending || claimsQuery.isPending || (claim && (intelQuery.isPending || intelWaiting))) {
       return (
         <DetailShell section={section}>
           <DetailHeader title={meta.title} />
