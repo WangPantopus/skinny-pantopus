@@ -17,6 +17,7 @@ const MESSAGES = {
   MEMBERSHIP_RENEWAL_REQUIRED: 'This membership needs a new review before it can be restored.',
   CLAIM_ACCESS_NOT_STARTED: 'This claim can be approved when its existing access window starts.',
   OWNERSHIP_REVIEW_REQUIRED: 'This ownership history needs a separate ownership review.',
+  COMPETING_OWNER_CLAIM_OPEN: 'Another person\'s claim to own this home is still open. Approve or reject that claim first.',
   PROPOSED_ROLE_FORBIDDEN: 'The proposed role exceeds the current authority or age limit.',
   PERMISSION_DELEGATION_FORBIDDEN: 'You cannot grant permissions that you do not hold.',
   OWNERSHIP_MANAGE_REQUIRED: 'You do not have permission to resolve this claim.',
