@@ -19,7 +19,6 @@ public enum PantopusButtonKind: Sendable {
 /// Internal core button. Feature code uses the typed wrappers below.
 @MainActor
 public struct PantopusButton: View {
-    @ScaledMetric(relativeTo: .body) private var labelSize = PantopusTextStyle.body.size
     private let title: String
     private let kind: PantopusButtonKind
     private let isLoading: Bool
@@ -45,8 +44,9 @@ public struct PantopusButton: View {
             Task { await action() }
         } label: {
             ZStack {
+                // A label that wraps stays centred, with room above and below.
                 Text(title)
-                    .font(.system(size: labelSize))
+                    .pantopusTextStyle(.body)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
                     .opacity(isLoading ? 0 : 1)

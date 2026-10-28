@@ -33,11 +33,10 @@ public struct ToastMessage: Identifiable, Equatable, Sendable {
     }
 }
 
-/// Short messages keep the pill; wrapped messages have room around every line.
+/// Banner floated at the bottom of the screen, clear of its edges. A message
+/// that fits on one line is a pill; a longer one wraps, centred, in a rounded
+/// rectangle whose corners stay clear of the first and last lines.
 public struct ToastView: View {
-    @ScaledMetric(relativeTo: .subheadline) private var textSize = PantopusTextStyle.small.size
-    @ScaledMetric(relativeTo: .subheadline) private var lineSpacing =
-        PantopusTextStyle.small.lineHeight - PantopusTextStyle.small.size
     public let message: ToastMessage
 
     public init(message: ToastMessage) {
@@ -46,26 +45,26 @@ public struct ToastView: View {
 
     public var body: some View {
         ViewThatFits(in: .horizontal) {
-            label.fixedSize()
-                .background(background, in: Capsule())
-            label.fixedSize(horizontal: false, vertical: true)
-                .background(background, in: RoundedRectangle(cornerRadius: Radii.xl))
+            label
+                .fixedSize()
+                .clipShape(RoundedRectangle(cornerRadius: Radii.pill))
+            label
+                .fixedSize(horizontal: false, vertical: true)
+                .clipShape(RoundedRectangle(cornerRadius: Radii.xl))
         }
         .padding(.horizontal, Spacing.s4)
         .accessibilityLabel(message.text)
-        .task(id: message.text) {
-            AccessibilityNotification.Announcement(message.text).post()
-        }
     }
 
     private var label: some View {
         Text(message.text)
-            .font(.system(size: textSize))
-            .lineSpacing(lineSpacing)
+            .pantopusTextStyle(.small)
+            .pantopusLineHeight(.small)
             .multilineTextAlignment(.center)
             .foregroundStyle(Theme.Color.appTextInverse)
             .padding(.horizontal, Spacing.s4)
             .padding(.vertical, Spacing.s2)
+            .background(background)
     }
 
     private var background: Color {
