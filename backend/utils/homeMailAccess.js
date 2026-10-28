@@ -157,13 +157,19 @@ async function householdOccupancies(column, id) {
 async function mailReaderOccupancies(column, id) {
   const { data, error } = await supabaseAdmin
     .from('HomeOccupancy')
-    .select(OCCUPANCY_SELECT)
+    .select(`${OCCUPANCY_SELECT}, home:home_id(home_status, security_state)`)
     .eq(column, id)
     .eq('is_active', true)
     .eq('verification_status', 'verified')
     .in('verification_source', MAIL_PROVEN_SOURCES);
   if (error) throw new Error(error.message);
-  return (data || []).filter(currentResident);
+  return (data || []).filter((row) => availableMailHome(row.home) && currentResident(row));
+}
+
+// A proven occupancy cannot override a Home freeze, dispute, archive or merge.
+function availableMailHome(home) {
+  return Boolean(home) && !['archived', 'merged'].includes(home.home_status)
+    && !['frozen', 'frozen_silent', 'disputed'].includes(home.security_state);
 }
 
 // States in which someone lives at a Home but hasn't proven it yet: their Home drawer stays closed with
@@ -182,7 +188,7 @@ async function mailHomesOrThrow(userId) {
   if (!userId) return [];
   const { data, error } = await supabaseAdmin
     .from('HomeOccupancy')
-    .select(`${OCCUPANCY_SELECT}, home:home_id(id, address, address2, name, home_status)`)
+    .select(`${OCCUPANCY_SELECT}, home:home_id(id, address, address2, name, home_status, security_state)`)
     .eq('user_id', userId)
     .eq('is_active', true)
     .in('verification_status', MAIL_UNPROVEN_RESIDENT_STATUSES);
@@ -191,7 +197,7 @@ async function mailHomesOrThrow(userId) {
   const seen = new Set();
   const homes = [];
   for (const r of data || []) {
-    if (!r.home || seen.has(r.home_id) || ['merged', 'archived'].includes(r.home.home_status)) continue;
+    if (!availableMailHome(r.home) || seen.has(r.home_id)) continue;
     // A stale verification still lives there; it needs proof again, so it is listed as needs_proof.
     if (NON_RESIDENT_ROLES.has(resolveHomeRole(r)) || !currentOccupancy(r)) continue;
     seen.add(r.home_id);
@@ -425,7 +431,7 @@ async function readableMail(mailId, userId) {
   if (!mailId || !userId) return null;
   const { data: mail, error } = await supabaseAdmin
     .from('Mail')
-    .select('id, recipient_user_id, recipient_home_id, deleted_at, delivered_at, lifecycle')
+    .select('id, recipient_user_id, recipient_home_id, deleted_at, delivered_at, lifecycle, object_id')
     .eq('id', mailId)
     .maybeSingle();
   if (error || !mail) return null;

@@ -5,7 +5,7 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const homeRecordService = require('../services/homeRecordService');
 // canAccessMail: the per-item rule, shared with the v2 mailbox routes.
 const { getAccessibleHomeIds, trustedHomeIdsOrThrow, canAccessMail, readableMail, homeMailFilter, visibleMailFilter,
-  restorableMail, isDeletedMail, removedMailInfo, sendHomeMailRemovedNotice, MAIL_RESTORE_DAYS,
+  restorableMail, removedMailInfo, sendHomeMailRemovedNotice, MAIL_RESTORE_DAYS,
   sendMailUnavailable, mailHomesOrThrow, MAIL_HOME_NEEDS_PROOF, onlyDelivered } = require('../utils/homeMailAccess');
 // Mail comes in the morning (SRV-1): the delivery rule every writer follows.
 const mailDelivery = require('../services/mailDelivery');
@@ -2648,21 +2648,18 @@ router.post('/claim/:mailId', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'You sent this letter. It’s waiting for the person you wrote to.', code: 'MAIL_OWN_LETTER' });
     }
 
-    // Sign-in needs a confirmed email, so a matching email shows the claimer reads that inbox.
-    const { data: claimer, error: claimerError } = await supabaseAdmin
-      .from('User')
-      .select('email, phone_number')
-      .eq('id', claimerId)
-      .maybeSingle();
+    // Profile contact fields are editable without proof. Only Auth-confirmed contacts establish ownership.
+    const { data: authData, error: claimerError } = await supabaseAdmin.auth.admin.getUserById(claimerId);
+    const claimer = authData?.user;
     if (claimerError || !claimer) {
-      logger.error('Escrow claimer read failed', { error: claimerError?.message || 'no User row', mailId });
+      logger.error('Escrow claimer read failed', { error: claimerError?.message || 'no Auth user', mailId });
       return res.status(500).json({ error: 'Failed to claim mail' });
     }
 
     const escrowContact = normalizeEscrowContact(mail.escrow_recipient_contact);
     const contactMatches = Boolean(escrowContact) && (
-      (claimer.email && normalizeEscrowContact(claimer.email) === escrowContact) ||
-      (claimer.phone_number && normalizeEscrowContact(claimer.phone_number) === escrowContact));
+      (claimer.email_confirmed_at && claimer.email && normalizeEscrowContact(claimer.email) === escrowContact) ||
+      (claimer.phone_confirmed_at && claimer.phone && normalizeEscrowContact(claimer.phone) === escrowContact));
 
     if (!contactMatches) {
       return res.status(403).json({
@@ -2688,6 +2685,7 @@ router.post('/claim/:mailId', verifyToken, async (req, res) => {
         delivery_visibility: 'attn_only',
         drawer: 'personal',
         lifecycle: 'delivered',
+        delivered_at: new Date().toISOString(),
       })
       .eq('id', mailId)
       .eq('escrow_status', 'pending')
@@ -2820,10 +2818,12 @@ router.post('/:id/read/start', verifyToken, validate(startReadSessionSchema), as
     const userId = req.user.id;
     const { clientMeta = {} } = req.body;
 
-    // A deleted letter (recoverable) cannot be read or marked until restored.
-    if (await isDeletedMail({ id })) return res.status(404).json({ error: 'Mail not found' });
+    // Use the same recipient, Home and delivery rule as the reader itself.
+    const mail = await readableMail(id, userId);
+    if (!mail) return res.status(404).json({ error: 'Mail not found' });
+    await mailObjects.hydrateMail(mail);
 
-    const { data, error } = await supabaseAdmin.rpc('open_mail_read_session', {
+    const { data, error } = await supabaseAdmin.rpc('open_mail_read_session_by_reader', {
       p_mail_id: id,
       p_user_id: userId,
       p_client_meta: clientMeta
@@ -2831,8 +2831,8 @@ router.post('/:id/read/start', verifyToken, validate(startReadSessionSchema), as
 
     if (error) {
       if (error.code === 'PGRST202' || (error.message || '').includes('open_mail_read_session')) {
-        return res.status(501).json({
-          error: 'Read session function not available. Run mailbox_object_storage_migration.sql first.'
+        return res.status(503).json({
+          error: 'Reading is temporarily unavailable. Please try again shortly.'
         });
       }
 
@@ -2879,8 +2879,8 @@ router.post('/read/:sessionId/close', verifyToken, validate(closeReadSessionSche
 
     if (error) {
       if (error.code === 'PGRST202' || (error.message || '').includes('close_mail_read_session')) {
-        return res.status(501).json({
-          error: 'Read session function not available. Run mailbox_object_storage_migration.sql first.'
+        return res.status(503).json({
+          error: 'Reading is temporarily unavailable. Please try again shortly.'
         });
       }
 

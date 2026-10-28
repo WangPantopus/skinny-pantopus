@@ -41,6 +41,7 @@ function seedMembership(userId = USER, homeId = HOME_ID) {
       // active row — a pending_approval occupancy must not read household mail.
       verification_status: 'verified',
       verification_source: 'address',
+      home: { home_status: 'active', security_state: 'normal' },
       start_at: null,
       end_at: null,
     },
