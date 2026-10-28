@@ -39,8 +39,17 @@ List its key (comma-separated, or `all`) in each place, then redeploy / rebuild:
 | iOS | build setting `PANTOPUS_LAUNCH_FEATURES` (Config/*.xcconfig → Info.plist `PantopusLaunchFeatures`); Debug builds also read the env var | `Pantopus/Core/Environment/LaunchFeatures.swift` |
 | Android | `PANTOPUS_LAUNCH_FEATURES` in the build's `.env` or environment (→ BuildConfig) | `app/src/main/java/app/pantopus/android/core/LaunchFeatures.kt` |
 
+Store builds (`ios-beta.yml`, `android-beta.yml`) take the iOS and Android value from the GitHub Actions variable
+`PANTOPUS_LAUNCH_FEATURES` (on the repository, or on the `ios-release` and `android-release` environments) and write it
+into the build's `.env`. Unset, every cut feature stays hidden; a key the app doesn't know fails the build, and each
+build's log lists the keys it carries. Every store build cut while the variable is set carries those keys. Staging
+builds take the value from the `.env.staging` they are built from.
+
 Example: `LAUNCH_FEATURES=marketplace` on the backend plus the same key in the web, iOS and Android builds brings the
-Marketplace back everywhere. Switch the backend first so notifications and feeds return before the screens do.
+Marketplace back everywhere. Switch the backend first so notifications and feeds return before the screens do. The
+Mailbox is the exception: release its app builds first, because the backend switch also starts the morning mail notice,
+which reaches people on older builds that have no Mail tab ([NEXT_STEPS](../NEXT_STEPS.md#mail-added-october-28) has the
+order).
 
 Tests run with every feature on (`backend/jest.config.js`, `frontend/apps/web/tests/setup.ts`, and
 `LaunchFeatures.overrideForTesting` in the native unit tests), so the kept code stays covered.
