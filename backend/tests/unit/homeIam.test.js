@@ -317,8 +317,9 @@ describe.each([
 
 describe('GET /:id/me current verification return', () => {
   test.each([true, false])('denied access exposes only the current verificationRequired=%s decision', async verificationRequired => {
-    require('../../utils/homePermissions').getUserAccess.mockResolvedValueOnce({
-      hasAccess: false, verificationRequired, occupancy: { verification_status: 'pending_doc' },
+    jest.spyOn(require('../../services/homeListService'), 'readAccessState').mockResolvedValueOnce({
+      mode: verificationRequired ? 'verification' : 'denied',
+      access: { hasAccess: false, verificationRequired, occupancy: { verification_status: 'pending_doc' } },
     });
     const res = mockRes();
     await findHandler('GET', '/:id/me')(mockReq(), res);
