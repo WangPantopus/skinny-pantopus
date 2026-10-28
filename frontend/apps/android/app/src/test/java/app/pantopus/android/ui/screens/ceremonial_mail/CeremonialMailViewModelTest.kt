@@ -133,7 +133,7 @@ class CeremonialMailViewModelTest {
 
     // MARK: - Submit
 
-    @Test fun submit_fires_send_and_transitions_to_success_with_event() =
+    @Test fun submit_fires_send_and_stays_on_success_until_done() =
         runTest(dispatcher) {
             stubRecipients()
             stubHomeContext()
@@ -144,7 +144,9 @@ class CeremonialMailViewModelTest {
             vm.onPrimary()
             advanceUntilIdle()
             assertEquals(CeremonialMailStep.Success, vm.form.value.step)
-            assertEquals(CeremonialMailEvent.OpenMail("mail_demo"), vm.pendingEvent.value)
+            assertEquals(null, vm.pendingEvent.value)
+            vm.onPrimary()
+            assertEquals(CeremonialMailEvent.Dismiss, vm.pendingEvent.value)
             assertEquals("u_maya", captured.captured.recipientUserId)
             assertEquals("home_demo", captured.captured.recipientHomeId)
             assertEquals("midnight_blue", captured.captured.`object`.payload.stationeryTheme)

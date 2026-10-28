@@ -74,8 +74,8 @@ public struct CeremonialMailWizardView: View {
         VStack(alignment: .leading, spacing: Spacing.s4) {
             HeadlineBlock("Who are you writing to?")
             SubcopyBlock(
-                "Choose a verified neighbor, a saved correspondent, or paste a handle. Mail keeps your "
-                    + "name and address private — the recipient only sees what you choose to share."
+                "Choose a recipient for your digital letter. They will see your sender name. "
+                    + "Your home address is not included."
             )
             recipientSearchField
             if !viewModel.recipientResults.isEmpty {
@@ -236,23 +236,21 @@ public struct CeremonialMailWizardView: View {
     private var verifyStep: some View {
         VStack(alignment: .leading, spacing: Spacing.s4) {
             HeadlineBlock("Address it")
-            SubcopyBlock("Pantopus verifies physical addresses. By sending, you're confirming this exact recipient. There's no undo.")
+            SubcopyBlock("Your letter goes to this person's digital mailbox. Review the recipient before continuing.")
+            if let recipient = viewModel.selectedRecipient {
+                selectedRecipientCard(recipient)
+            }
             if let ctx = viewModel.homeContext {
                 addressCard(ctx)
             } else if let address = viewModel.selectedRecipient?.homeAddress {
                 addressCard(simpleAddress: address)
             }
             ackRow(
-                title: "Yes, ship to this address",
+                title: "Yes, send to this recipient",
                 isOn: viewModel.addressConfirmed,
                 identifier: "ceremonialAddressConfirmed"
             ) { viewModel.toggleAddressConfirmed($0) }
-            ackRow(
-                title: "Include my return address",
-                subtitle: "Off keeps your home address private from the recipient.",
-                isOn: viewModel.returnAddressShared,
-                identifier: "ceremonialReturnAddressShared"
-            ) { viewModel.toggleReturnAddressShared($0) }
+            SubcopyBlock("Your home address is not included.")
         }
     }
 
@@ -265,7 +263,7 @@ public struct CeremonialMailWizardView: View {
             Text(ctx.addressDisplay ?? "Home")
                 .font(.system(size: 14.5, weight: .semibold))
                 .foregroundStyle(Theme.Color.appText)
-            if let count = ctx.memberCount {
+            if let count = ctx.memberCount, count > 0 {
                 Text("\(count) household member\(count == 1 ? "" : "s")")
                     .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextSecondary)
@@ -338,7 +336,7 @@ public struct CeremonialMailWizardView: View {
     private var composeStep: some View {
         VStack(alignment: .leading, spacing: Spacing.s4) {
             HeadlineBlock("Write it")
-            SubcopyBlock("Pick a stationery + ink, write your note, optionally add a voice postscript.")
+            SubcopyBlock("Choose stationery and ink, then write your note.")
             pickerRow(
                 title: "Stationery",
                 identifier: "ceremonialStationeryPicker",
@@ -364,7 +362,10 @@ public struct CeremonialMailWizardView: View {
                 if let s = CeremonialMailSeal(rawValue: id) { viewModel.selectSeal(s) }
             }
             bodyTextField
-            voicePostscriptRow
+            // No recorder is connected here; manage only an already attached postscript.
+            if case .uploaded = viewModel.voiceStatus {
+                voicePostscriptRow
+            }
         }
     }
 
@@ -509,14 +510,16 @@ public struct CeremonialMailWizardView: View {
     private var commitStep: some View {
         VStack(alignment: .leading, spacing: Spacing.s4) {
             HeadlineBlock("Seal and send")
-            SubcopyBlock("Take one more look — you can't edit a letter after it's delivered. Pick a wax seal, then send.")
+            SubcopyBlock(
+                "Take one more look — you can't edit a letter after it's delivered. Your letter arrives with their next mail delivery."
+            )
             reviewCard
             Text("WHEN TO DELIVER")
                 .font(.system(size: 10, weight: .bold))
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .kerning(0.6)
             VStack(spacing: Spacing.s2) {
-                ForEach(CeremonialMailSendTiming.allCases) { timing in
+                ForEach([CeremonialMailSendTiming.now]) { timing in
                     sendTimingRow(timing)
                 }
             }
@@ -606,7 +609,7 @@ public struct CeremonialMailWizardView: View {
             Text("Letter sealed and on its way")
                 .font(.system(size: 18, weight: .bold))
                 .foregroundStyle(Theme.Color.appText)
-            Text("We'll let you know when it lands. Until then, the only person who sees your letter is the one you addressed it to.")
+            Text("Your letter is saved for their next mail delivery. You can return to your mailbox.")
                 .font(.system(size: 13))
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .multilineTextAlignment(.center)

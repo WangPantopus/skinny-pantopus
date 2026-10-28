@@ -18,6 +18,7 @@ Review in order; each PR after the first targets the preceding audit branch.
 | [2946](https://github.com/WangPantopus/skinny-pantopus/pull/2946) | Search full letter content and supply a dry-run repair command for older truncated rows. |
 | [2947](https://github.com/WangPantopus/skinny-pantopus/pull/2947) | Use decoded text in the current iOS paper-letter layout. |
 | [2948](https://github.com/WangPantopus/skinny-pantopus/pull/2948) | Keep mail and its bundle held through all connected hold windows, including the displayed final return date. |
+| `codex/digital-mailbox-native-compose` (stacked on 2948) | Confirm the actual recipient, remove inactive compose options and unsupported timing promises, and keep native send success visible until Done. |
 
 Three additive migrations must precede the backend changes. Existing migration
 history and tables are preserved. The search backfill is dry-run by default;
@@ -38,6 +39,7 @@ Web Chrome, an iOS simulator and an Android emulator used that backend.
 | Household access | Owner/member access works in a normal Home. Five blocked Home states deny access; guests, providers and outsiders are rejected. Undelivered mail is not readable. |
 | Reading analytics | Household members can start/close their own read sessions. Direct client execution of the service-only RPC is forbidden. |
 | Compose and delivery | Browser-composed household letter reaches the other account's iOS reader. Ordinary delivery remained hidden before its scheduled time; the local fixture clock was advanced for the recipient UI check. |
+| Native compose | iOS and Android display the selected recipient at confirmation and the supported next-delivery choice. Both send through the local backend, stay on success, and return to Mail on Done. Recipient reads the persisted letter after local delivery; sender cannot read the recipient's copy. |
 | Connected recipients | Accepted connections can send; removed connections, blocked people/households and frozen destinations cannot. Compose context omits private address details and the member roster. |
 | Claims and notices | Unverified profile contact cannot claim. Confirmed Auth contact claims immediately readable mail. SMTP notice was captured locally with a local claim link and no letter body. Wrong sender cannot withdraw; withdrawn claim returns gone. |
 | First-open and saved state | Native mark-viewed stores opened time. Counter placement survives iOS and Android relaunches. Web Counter/Vault state survives reload. |
@@ -58,6 +60,18 @@ migrations. Consult each PR for the current head's CI result.
 
 No new unit tests were added. Existing test fixtures were adjusted to represent
 current Home state and the shared access/storage behavior.
+
+The native compose replay exposed controls that did not match backend behavior:
+selecting tomorrow evening still scheduled today's normal morning delivery;
+voice recording and return-address controls had no working integration; personal
+recipient confirmation showed no recipient; and send success immediately emitted
+an event to open the recipient's private letter. The final native repair keeps
+the existing four steps and design while removing those unsupported options,
+correcting privacy/delivery copy, and preserving the success screen until Done.
+The existing compose view-model suites passed on both platforms (15 tests each),
+along with both native builds, Swift formatting/lint, Android ktlint and detekt.
+The final installed builds completed the four-step send and Done replay against
+the local backend; the web recipient opened letters created by both platforms.
 
 ## Before enabling
 

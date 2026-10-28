@@ -57,7 +57,6 @@ class CeremonialMailSnapshotTest {
                     selected = sampleRecipient(),
                     homeContext = sampleHomeContext(),
                     onAddressConfirmed = {},
-                    onReturnAddressShared = {},
                 )
             }
         }

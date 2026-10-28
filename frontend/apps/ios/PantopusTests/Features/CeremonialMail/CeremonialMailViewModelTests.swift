@@ -131,15 +131,12 @@ final class CeremonialMailViewModelTests: XCTestCase {
         vm.selectInk(.navy)
         vm.selectSeal(.waxRed)
         vm.primaryTapped() // → commit
-        vm.selectSendTiming(.morning)
         vm.primaryTapped() // submit
         await waitFor("submit success") { vm.step == .success }
         XCTAssertEqual(vm.step, .success)
-        if case let .openMail(mailId) = vm.pendingEvent {
-            XCTAssertEqual(mailId, "mail_demo")
-        } else {
-            XCTFail("Expected pendingEvent .openMail, got \(String(describing: vm.pendingEvent))")
-        }
+        XCTAssertNil(vm.pendingEvent)
+        vm.primaryTapped()
+        XCTAssertEqual(vm.pendingEvent, .dismiss)
     }
 
     func testSubmitFailureSurfacesError() async {
@@ -212,8 +209,6 @@ final class CeremonialMailViewModelTests: XCTestCase {
     func testSendTimingDefaultsToNow() {
         let vm = CeremonialMailViewModel(api: makeAPI())
         XCTAssertEqual(vm.sendTiming, .now)
-        vm.selectSendTiming(.morning)
-        XCTAssertEqual(vm.sendTiming, .morning)
     }
 
     func testChromeProgressFractionAdvancesPerStep() async {
