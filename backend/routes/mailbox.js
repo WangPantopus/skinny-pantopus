@@ -2048,7 +2048,9 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
         sender_address: senderReturnAddress,
         type,
         subject: subject || null,
-        content: objectResult ? contentExcerpt : content,
+        // Search uses this existing text column; the private object remains the
+        // authoritative formatted letter. Keep previews in their own columns.
+        content,
         attachments: attachments || [],
         payout_amount: payoutAmount || null,
         category: category || null,
@@ -2280,7 +2282,7 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
       sender_address: senderReturnAddress,
       type,
       subject: subject || null,
-      content: objectResult ? contentExcerpt : content,
+      content,
       attachments: attachments || [],
       payout_amount: payoutAmount || null,
       category: category || null,

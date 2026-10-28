@@ -68,7 +68,7 @@ function clientFields(row) {
   return { id, created_by_user_id, format, mime_type, size_bytes, status, created_at, uploaded_at };
 }
 
-// A stored letter is the source of its body; Mail.content is only a preview.
+// A stored letter is the source of its body; older Mail.content rows contain only a preview.
 // Fail visibly when storage cannot be read instead of presenting that preview as the whole letter.
 async function readPayload(objectId) {
   const { data: row, error } = await db.from('MailObject').select('*').eq('id', objectId).single();
