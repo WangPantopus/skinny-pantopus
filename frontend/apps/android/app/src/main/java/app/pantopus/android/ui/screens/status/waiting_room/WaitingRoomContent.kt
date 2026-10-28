@@ -167,6 +167,12 @@ data class WaitingRoomContent(
             StatusCta(label = "View claim", actionKey = "view_claim", icon = PantopusIcon.FileText)
         private val backToHome = StatusCta(label = "Back to home", actionKey = "back_to_home")
 
+        /**
+         * A claim on a Home someone else added gives no way in until it's approved, and that
+         * Home would only say "Home access unavailable": the claim is listed on My homes.
+         */
+        private val backToMyHomes = StatusCta(label = "Back to My homes", actionKey = "my_homes")
+
         private fun cancelClaimAction() =
             WaitingRoomInlineAction(
                 id = "cancelClaim",
@@ -265,6 +271,7 @@ data class WaitingRoomContent(
          * the person's address is verified. [residency] marks a renter's
          * residency document, which asks for a lease or utility bill instead.
          * [approval] (the server's checklist) adds the identity check approval needs.
+         * Without [canOpenHome] the dock leads back to My homes instead of the Home.
          */
         @Suppress("LongParameterList")
         fun active(
@@ -276,6 +283,7 @@ data class WaitingRoomContent(
             addressVerified: Boolean = false,
             residency: Boolean = false,
             approval: ClaimApprovalProgressDto? = null,
+            canOpenHome: Boolean = true,
         ): WaitingRoomContent {
             val needsIdentity = approval != null && approval.identity != "verified"
             val wait = waitCopy(needsDocuments = needsDocuments, needsIdentity = needsIdentity, residency = residency)
@@ -320,7 +328,7 @@ data class WaitingRoomContent(
                         cancelClaimAction(),
                     ),
                 primaryCta = viewClaim,
-                secondaryCta = backToHome,
+                secondaryCta = if (canOpenHome) backToHome else backToMyHomes,
                 approvalSteps = WaitingRoomApproval.steps(approval, residency),
             )
         }
@@ -330,12 +338,13 @@ data class WaitingRoomContent(
          * static warning halo, a reviewer-note card, the timeline paused on
          * "Under review" (current node shows `alert-circle`), the "Paused ·
          * respond within 7 days" ETA pill, and "Update evidence" promoted to
-         * primary.
+         * primary. The dock follows [canOpenHome] as in [active].
          */
         fun moreInfoRequested(
             address: String = SAMPLE_ADDRESS,
             claimRef: String = SAMPLE_CLAIM_REF,
             submittedOn: String? = "Oct 24",
+            canOpenHome: Boolean = true,
         ): WaitingRoomContent =
             WaitingRoomContent(
                 title = ROOM_TITLE,
@@ -379,7 +388,7 @@ data class WaitingRoomContent(
                         cancelClaimAction(),
                     ),
                 primaryCta = viewClaim,
-                secondaryCta = backToHome,
+                secondaryCta = if (canOpenHome) backToHome else backToMyHomes,
             )
     }
 }

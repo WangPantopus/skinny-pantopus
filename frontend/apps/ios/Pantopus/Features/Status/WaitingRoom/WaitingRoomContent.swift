@@ -222,6 +222,13 @@ public extension WaitingRoomContent {
         StatusCTA(label: "Back to home", actionKey: "back_to_home")
     }
 
+    /// A claim on a Home someone else added gives no way in until it's
+    /// approved, and that Home would only say "Home access unavailable":
+    /// the claim is listed on My homes.
+    private static var backToMyHomes: StatusCTA {
+        StatusCTA(label: "Back to My homes", actionKey: "my_homes")
+    }
+
     private static func cancelClaimAction() -> WaitingRoomInlineAction {
         WaitingRoomInlineAction(
             id: "cancelClaim",
@@ -252,7 +259,8 @@ public extension WaitingRoomContent {
     /// the person's address is verified. `residency` marks a renter's
     /// residency document, which asks for a lease or utility bill instead.
     /// `approval` (the server's checklist) adds the identity check approval
-    /// needs: until it's confirmed, the room asks for it.
+    /// needs: until it's confirmed, the room asks for it. Without
+    /// `canOpenHome` the dock leads back to My homes instead of the Home.
     static func active(
         address: String = sampleAddress,
         claimRef: String = sampleClaimRef,
@@ -261,7 +269,8 @@ public extension WaitingRoomContent {
         needsDocuments: Bool = false,
         addressVerified: Bool = false,
         residency: Bool = false,
-        approval: ClaimApprovalProgressDTO? = nil
+        approval: ClaimApprovalProgressDTO? = nil,
+        canOpenHome: Bool = true
     ) -> WaitingRoomContent {
         // A person reviews the documents (no county-records check), and no
         // review time is promised.
@@ -316,7 +325,7 @@ public extension WaitingRoomContent {
                 )
             ] + (addressVerified ? [] : [verifyByMailAction()]) + [cancelClaimAction()],
             primaryCta: viewClaim,
-            secondaryCta: backToHome,
+            secondaryCta: canOpenHome ? backToHome : backToMyHomes,
             approvalSteps: WaitingRoomApproval.steps(approval, residency: residency)
         )
     }
@@ -325,10 +334,12 @@ public extension WaitingRoomContent {
     /// warning halo, a reviewer-note card, the timeline paused on "Under
     /// review" (current node shows `alert-circle`), the "Paused · respond
     /// within 7 days" ETA pill, and "Update evidence" promoted to primary.
+    /// The dock follows `canOpenHome` as in `active`.
     static func moreInfoRequested(
         address: String = sampleAddress,
         claimRef: String = sampleClaimRef,
-        submittedOn: String? = "Oct 24"
+        submittedOn: String? = "Oct 24",
+        canOpenHome: Bool = true
     ) -> WaitingRoomContent {
         WaitingRoomContent(
             title: roomTitle,
@@ -366,7 +377,7 @@ public extension WaitingRoomContent {
                 cancelClaimAction()
             ],
             primaryCta: viewClaim,
-            secondaryCta: backToHome
+            secondaryCta: canOpenHome ? backToHome : backToMyHomes
         )
     }
 }

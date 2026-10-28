@@ -13,6 +13,7 @@ import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.tenant.TenantRepository
 import app.pantopus.android.ui.screens.homes.HomeDashboardAccessFactory
 import app.pantopus.android.ui.screens.homes.currentVerificationKind
+import app.pantopus.android.ui.screens.homes.sharedAccess
 import app.pantopus.android.ui.screens.status.StatusCta
 import app.pantopus.android.ui.screens.status.StatusWaitingContent
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -38,6 +39,9 @@ sealed interface WaitingRoomNav {
     data object Notifications : WaitingRoomNav
 
     data class BackToHome(val homeId: String) : WaitingRoomNav
+
+    /** "Back to My homes": the claim gives no way into this Home yet. */
+    data class MyHomes(val homeId: String) : WaitingRoomNav
 
     data class ViewClaim(val claimId: String) : WaitingRoomNav
 
@@ -251,12 +255,14 @@ class WaitingRoomViewModel
             }
             val ref = claim.id.take(CLAIM_REF_LENGTH).uppercase()
             val home = homeContext(claim.home)
+            val canOpenHome = opensHomeScreen()
             _content.value =
                 if (seedState == WaitingRoomState.MoreInfoRequested) {
                     WaitingRoomContent.moreInfoRequested(
                         address = home.address,
                         claimRef = ref,
                         submittedOn = dayCaption(claim.createdAt),
+                        canOpenHome = canOpenHome,
                     )
                 } else {
                     WaitingRoomContent.active(
@@ -268,9 +274,27 @@ class WaitingRoomViewModel
                         addressVerified = home.addressVerified,
                         residency = claimIsResidency,
                         approval = claim.approval,
+                        canOpenHome = canOpenHome,
                     )
                 }
             _phase.value = WaitingRoomPhase.Loaded
+        }
+
+        /**
+         * Whether the Home's own screen has something for this person: shared access, or their own
+         * verification step there (the server's answer for that screen). A claim on a Home someone
+         * else added gives neither until it's approved. An unreadable answer keeps "Back to home".
+         */
+        private suspend fun opensHomeScreen(): Boolean {
+            val access =
+                try {
+                    authority.read()
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    return true
+                }
+            return access.sharedAccess() != null || access.currentVerificationKind() != null
         }
 
         /** Pending residents have denied Home access with a safe verification context. */
@@ -394,6 +418,7 @@ class WaitingRoomViewModel
         fun handleSecondary(cta: StatusCta) {
             when (cta.actionKey) {
                 "back_to_home" -> _navEvent.value = WaitingRoomNav.BackToHome(homeId)
+                "my_homes" -> _navEvent.value = WaitingRoomNav.MyHomes(homeId)
                 // A18.2 approved frame's ghost CTA ("View claim").
                 "view_claim" -> claimId?.let { _navEvent.value = WaitingRoomNav.ViewClaim(it) }
                 else -> log("dock.${cta.actionKey}")

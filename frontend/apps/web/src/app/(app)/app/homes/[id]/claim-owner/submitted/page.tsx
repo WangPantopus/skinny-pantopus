@@ -3,6 +3,7 @@
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft, Hourglass, ShieldCheck, Upload, Users } from 'lucide-react';
+import { useHomeAccess } from '@/hooks/useHomeAccess';
 
 export default function ClaimSubmittedPage() {
   const params = useParams();
@@ -11,16 +12,19 @@ export default function ClaimSubmittedPage() {
   const homeId = params.id as string;
   const showParallelNotice = searchParams.get('parallel') === '1';
   const showChallengeNotice = searchParams.get('challenge') === '1';
+  // A claim on a Home someone else added gives no way in until it's approved, so its dashboard
+  // can't open; My Homes lists the claim ("Check current status").
+  const { denied: noHomeAccess } = useHomeAccess(homeId);
 
   return (
     <div className="min-h-screen bg-app-surface-raised">
       <main className="max-w-xl mx-auto px-4 py-12">
         <Link
-          href={`/app/homes/${homeId}/dashboard`}
+          href={noHomeAccess ? '/app/homes' : `/app/homes/${homeId}/dashboard`}
           className="inline-flex items-center gap-1 text-sm text-app-text-secondary hover:text-app-text mb-8"
         >
           <ChevronLeft className="w-4 h-4" />
-          Back to dashboard
+          {noHomeAccess ? 'Back to My Homes' : 'Back to dashboard'}
         </Link>
 
         <div className="flex flex-col items-center text-center">
@@ -64,12 +68,14 @@ export default function ClaimSubmittedPage() {
               <Upload className="w-4 h-4" />
               Review or upload documents
             </button>
-            <Link
-              href={`/app/homes/${homeId}/dashboard`}
-              className="flex items-center justify-center py-3 px-4 rounded-xl border border-app-border text-app-text font-medium hover:bg-app-surface-sunken"
-            >
-              Back to dashboard
-            </Link>
+            {noHomeAccess ? null : (
+              <Link
+                href={`/app/homes/${homeId}/dashboard`}
+                className="flex items-center justify-center py-3 px-4 rounded-xl border border-app-border text-app-text font-medium hover:bg-app-surface-sunken"
+              >
+                Back to dashboard
+              </Link>
+            )}
           </div>
         </div>
       </main>

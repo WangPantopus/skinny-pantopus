@@ -220,7 +220,8 @@ public struct WaitingRoomView: View {
 
                 Button {
                     viewModel.handleSecondary(viewModel.content.secondaryCta)
-                    onBack()
+                    // "Back to My homes" leaves through the host, which also skips a Home screen under the room.
+                    if viewModel.content.secondaryCta.actionKey != "my_homes" { onBack() }
                 } label: {
                     Text(viewModel.content.secondaryCta.label)
                         .font(.system(size: 13.5, weight: .semibold))

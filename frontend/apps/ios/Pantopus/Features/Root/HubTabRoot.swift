@@ -689,6 +689,8 @@ public struct HubTabRoot: View {
                 return false
             }
             path.append(.homeDashboard(homeId: id))
+        case let .myHomes(id):
+            showMyHomes(leavingClaimOn: id)
         case .viewClaim:
             path.append(.myClaims)
         case let .updateEvidence(id, _):
@@ -706,6 +708,31 @@ public struct HubTabRoot: View {
             path.append(.leaveHome(homeId: id))
         case .requestHelp:
             path.append(.helpCenter)
+        }
+    }
+
+    /// A claim in review that gives no way into its Home yet: back to My homes,
+    /// where the claim is listed, or onto it. The Home's own screens can't show
+    /// it (a waiting-room link puts its dashboard underneath). While there are
+    /// only claims, the Place tab's root is My homes.
+    @MainActor
+    private func showMyHomes(leavingClaimOn homeId: String) {
+        if path.contains(.myHomes) {
+            while let last = path.last, last != .myHomes {
+                path.removeLast()
+            }
+            return
+        }
+        path.removeAll { route in
+            switch route {
+            case let .waitingRoom(id), let .homeDashboard(id):
+                id == homeId
+            default:
+                false
+            }
+        }
+        if !path.isEmpty || mode != .hub || placeRoot != .homes {
+            path.append(.myHomes)
         }
     }
 
