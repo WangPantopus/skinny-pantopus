@@ -388,6 +388,8 @@ export default function YourHomeDetail({ intelligence, homeId }: { intelligence:
   // Set up but not verified (T1): the Home's records open once the address
   // is verified by mail.
   const setupStage = intelligence.tier === 'T1';
+  // Someone whose claim is in review can't verify here (server `verify_available`): the reason alone.
+  const canVerify = intelligence.verify_available !== false;
   // Older servers send no viewer and keep the value for everyone they serve.
   const viewer = intelligence.viewer;
   const valueAccess = !viewer || (viewer.role === 'owner' && viewer.ownership === 'confirmed')
@@ -405,7 +407,7 @@ export default function YourHomeDetail({ intelligence, homeId }: { intelligence:
               title={valueAccess === 'none' ? 'Home details' : 'Home details & value'}
               reason={home?.unavailable_reason ?? "Verify your address by mail to see your home's details."}
               cta={setupStage ? 'Verify address' : 'Claim home'}
-              onCta={setupStage ? verifyByMail : () => homeId && router.push(`/app/homes/${homeId}/dashboard`)}
+              onCta={!canVerify ? undefined : setupStage ? verifyByMail : () => homeId && router.push(`/app/homes/${homeId}/dashboard`)}
             />
             {systems?.access === 'locked' && systems.unavailable_reason ? (
               <LockedCard icon={Wrench} title="Systems" reason={systems.unavailable_reason} cta="Verify address" />

@@ -17,7 +17,7 @@
 
 import { Fragment, useState } from 'react';
 import Link from 'next/link';
-import { Compass, ChevronRight, ShieldCheck } from 'lucide-react';
+import { Clock, Compass, ChevronRight, ShieldCheck } from 'lucide-react';
 import type { PlaceIntelligence } from '@pantopus/types';
 import { Group, HeroCard, PlaceHeader, VerifyBanner, type PlaceSwitcherHome } from '@/components/archetypes/place';
 import JustMovedCard from './JustMovedCard';
@@ -28,6 +28,8 @@ import { derivePulse, isUnavailableSection, renderSection, renderVerifyLocked, s
 import { IdentityGroup } from './PlaceIdentitySection';
 import VerifyPromptSheet from './VerifyPromptSheet';
 import { GROUP_TO_SLUG } from './detail/sections';
+import { claimWaitingLabel } from '@/components/homes/ClaimApprovalChecklist';
+import type { MyClaim } from '@/lib/myHomes';
 
 export interface PlaceDashboardViewProps {
   intelligence: PlaceIntelligence;
@@ -56,6 +58,10 @@ export interface PlaceDashboardViewProps {
   onAddPlace?: () => void;
   /** Verify a Home that's set up but not verified (T1) by mail. */
   onVerifyByMail?: () => void;
+  /** A claim in review: `intelligence` is the Home's public view, with no household tools or verify steps. */
+  claim?: MyClaim | null;
+  /** The claim's status, checklist and Withdraw (My Homes). */
+  onOpenClaimStatus?: () => void;
 }
 
 export default function PlaceDashboardView({
@@ -72,6 +78,8 @@ export default function PlaceDashboardView({
   onSwitchHome,
   onAddPlace,
   onVerifyByMail,
+  claim = null,
+  onOpenClaimStatus,
 }: PlaceDashboardViewProps) {
   const [verifyOpen, setVerifyOpen] = useState(false);
   const openVerify = () => setVerifyOpen(true);
@@ -101,7 +109,7 @@ export default function PlaceDashboardView({
   // from the resolved tier. The verify nudge + locked cards open the B1
   // prompt sheet; skip the client identity group if a wave starts serving one.
   // Guests and service providers aren't residents, so they get no verify prompts.
-  const canVerify = !(tier === 'T3' && intelligence.verify_available === false);
+  const canVerify = !claim && !(tier === 'T3' && intelligence.verify_available === false);
   const showVerify = tier === 'T3' && canVerify;
   // A Home set up but not yet verified (T1) is verified by mail next, so
   // its locked cards go to the postcard rather than to another claim. At T3
@@ -123,31 +131,44 @@ export default function PlaceDashboardView({
         onAddPlace={onAddPlace}
       />
 
-      {showVerify ? (
+      {claim ? (
+        <div className="mt-4">
+          {/* The apps' words for what the claim waits on; My Homes has its checklist. */}
+          <VerifyBanner
+            icon={Clock}
+            title={`Your claim is in review. ${claimWaitingLabel(claim)}.`}
+            cta="Check claim status"
+            onClick={() => onOpenClaimStatus?.()}
+          />
+        </div>
+      ) : showVerify ? (
         <div className="mt-4">
           <VerifyBanner onClick={openVerify} />
         </div>
       ) : null}
 
-      <div className={showVerify ? 'mt-3' : 'mt-4'}>
+      <div className={showVerify || claim ? 'mt-3' : 'mt-4'}>
         {/* Movers first (Wedge v2 D5): the first-week checklist for a recent move-in. */}
         <JustMovedCard homeId={homeId} moveInDate={moveInDate} needsPickupDay={needsPickupDay} className="mb-4" />
         {/* The privacy mirror (Wedge v2 §2): one tap to see yourself as a neighbor does. */}
-        <Link
-          href={`/app/homes/${homeId}/privacy`}
-          className="mb-4 flex items-center gap-2 rounded-xl border border-app-border bg-app-surface-sunken px-3.5 py-2.5 text-[13px] text-app-text-secondary hover:text-app-text"
-        >
-          <ShieldCheck size={15} strokeWidth={2.25} className="shrink-0 text-app-home" />
-          <span className="flex-1">Private by default. See what neighbors see of this address.</span>
-          <ChevronRight size={15} strokeWidth={2.25} className="shrink-0 text-app-text-muted" />
-        </Link>
+        {claim ? null : (
+          <Link
+            href={`/app/homes/${homeId}/privacy`}
+            className="mb-4 flex items-center gap-2 rounded-xl border border-app-border bg-app-surface-sunken px-3.5 py-2.5 text-[13px] text-app-text-secondary hover:text-app-text"
+          >
+            <ShieldCheck size={15} strokeWidth={2.25} className="shrink-0 text-app-home" />
+            <span className="flex-1">Private by default. See what neighbors see of this address.</span>
+            <ChevronRight size={15} strokeWidth={2.25} className="shrink-0 text-app-text-muted" />
+          </Link>
+        )}
+        {/* Pulse is the household's; a claim's card opens the address's Today. */}
         <HeroCard
           variant={pulse.variant}
           title={pulse.title}
           chip={pulse.chip}
           mainIcon={pulse.mainIcon}
           nudge={pulse.nudge}
-          onOpen={onOpenPulse}
+          onOpen={claim ? (onOpenSection ? () => onOpenSection(GROUP_TO_SLUG.today ?? 'today') : undefined) : onOpenPulse}
         />
       </div>
 

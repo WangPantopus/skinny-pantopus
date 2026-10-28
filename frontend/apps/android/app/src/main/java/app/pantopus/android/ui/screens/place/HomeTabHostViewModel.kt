@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.routing.PlacePendingStore
 import app.pantopus.android.data.api.models.homes.MyHome
 import app.pantopus.android.data.api.models.homes.MyHomesResponse
+import app.pantopus.android.data.api.models.homes.OwnershipClaimDto
 import app.pantopus.android.data.api.models.homes.defaultHomeOf
 import app.pantopus.android.data.api.models.notifications.personalBellCount
 import app.pantopus.android.data.api.models.place.PlacePreview
@@ -30,7 +31,7 @@ import javax.inject.Inject
 /**
  * The Place tab's root (founder direction 2026-10-12): the tab is the person's place. Works out what the root shows
  * from My homes, the kept copy first and then the server, and, only when there are no Home entries at all, from the
- * person's claims (one in review opens My homes, which shows it) and then the saved places. Holds the session's
+ * person's claims (one in review opens the claimed address's public Place) and then the saved places. Holds the session's
  * current home, and the arrival step that keeps a looked-up address privately (a preview carried through sign-in opens
  * it over the root once). Saved places' "Save a place" runs the same arrival step on an instance of its own. An
  * unfinished preview requires explicit bookmark consent.
@@ -121,8 +122,8 @@ class HomeTabHostViewModel
                         _landing.value = root
                         return@launch
                     }
-                    // No Home entries at all: a claim in review opens My homes, which shows it (a claim makes its Home
-                    // theirs only once it's approved); without one, the address they saved decides.
+                    // No Home entries at all: a claim in review opens the claimed address's public Place (a claim makes
+                    // its Home theirs only once it's approved); without one, the address they saved decides.
                     val claims = homesRepository.myClaimsStored(forceHomes)
                     if (current != generation) return@launch
                     val claimsData = claims.data
@@ -130,8 +131,8 @@ class HomeTabHostViewModel
                         showFailure(claims.failure)
                         return@launch
                     }
-                    if (claimsData.claims.any { it.isInReview }) {
-                        _landing.value = HomeLanding.Homes
+                    claimLanding(claimsData.claims, unreadableHomeIds)?.let {
+                        _landing.value = it
                         return@launch
                     }
                     val saved = savedPlacesRepository.listStored()
@@ -145,14 +146,10 @@ class HomeTabHostViewModel
         private fun keptRoot(): HomeLanding? {
             val homes = homesRepository.myHomesCopy() ?: return null
             rootFor(homes)?.let { return it }
-            // No Home entries: a kept claim in review opens My homes; without one, the kept saved places decide.
+            // No Home entries: a kept claim in review opens its address; without one, the kept saved places decide.
             val claims = homesRepository.myClaimsCopy()?.claims ?: return null
             val saved = savedPlacesRepository.listCopy()
-            return when {
-                claims.any { it.isInReview } -> HomeLanding.Homes
-                saved == null -> null
-                else -> savedRootFor(saved.savedPlaces)
-            }
+            return claimLanding(claims, unreadableHomeIds) ?: saved?.let { savedRootFor(it.savedPlaces) }
         }
 
         private fun showFailure(failure: NetworkError?) {
@@ -336,6 +333,9 @@ sealed interface HomeLanding {
     /** Your Place for this Home. */
     data class Home(val homeId: String) : HomeLanding
 
+    /** No Home entries but a claim in review: the claimed address's public Place, with the claim's status on top. */
+    data class Claim(val homeId: String) : HomeLanding
+
     /** Entries that all still wait on verification (a claim or a residency request): My homes shows them. */
     data object Homes : HomeLanding
 
@@ -345,6 +345,18 @@ sealed interface HomeLanding {
     /** No Home entries and no saved address: the address-first screen. */
     data object FirstRun : HomeLanding
 }
+
+/**
+ * A claim in review lands on the claimed address. One whose Place stopped answering ([unreadable]: an older server, a
+ * closed Home) leaves My homes to show it.
+ */
+private fun claimLanding(
+    claims: List<OwnershipClaimDto>,
+    unreadable: Set<String>,
+): HomeLanding? =
+    claims.firstOrNull { it.isInReview }?.let { claim ->
+        if (claim.homeId in unreadable) HomeLanding.Homes else HomeLanding.Claim(claim.homeId)
+    }
 
 private fun NetworkError?.landingMessage(): String =
     this?.displayMessage("Couldn't load your place. Please try again.") ?: "Couldn't load your place. Please try again."

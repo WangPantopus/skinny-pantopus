@@ -43,6 +43,12 @@ sealed interface WaitingRoomNav {
     /** "Back to My homes": the claim gives no way into this Home yet. */
     data class MyHomes(val homeId: String) : WaitingRoomNav
 
+    /**
+     * Back (the arrow or the system gesture) while the claim gives no way into this Home yet: the screen the room was
+     * opened from, past that Home's own screen (a link puts it underneath, and they can't open it).
+     */
+    data class Leave(val homeId: String) : WaitingRoomNav
+
     data class ViewClaim(val claimId: String) : WaitingRoomNav
 
     data class UpdateEvidence(val homeId: String, val claimId: String) : WaitingRoomNav
@@ -142,6 +148,11 @@ class WaitingRoomViewModel
 
         fun leaveToMyHomes() {
             _navEvent.value = WaitingRoomNav.MyHomes(homeId)
+        }
+
+        /** Back while the claim gives no way into this Home: where the room was opened from, never the Home's screen. */
+        fun leaveWithoutHome() {
+            _navEvent.value = WaitingRoomNav.Leave(homeId)
         }
 
         fun refresh() {

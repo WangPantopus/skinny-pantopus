@@ -80,8 +80,8 @@ enum class EmergencyFormCategory(
         /**
          * Resolve the form category for a backend type string. Returns
          * `null` for legacy list-of-rows types (`shutoff_water`,
-         * `evac_plan`, etc.) — those rows render in the list view but
-         * are not editable through this form.
+         * `evac_plan`, etc.) — the draft projection retains those types
+         * under Other until the user explicitly changes the category.
          */
         fun fromType(type: String): EmergencyFormCategory? = entries.firstOrNull { it.id == type }
     }

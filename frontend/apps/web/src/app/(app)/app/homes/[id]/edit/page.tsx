@@ -164,7 +164,6 @@ function EditHomeForm({ homeId }: { homeId: string }) {
     try {
       const payload: Record<string, any> = {
         name: name.trim() || null,
-        unit_number: unit.trim() || null,
         home_type: homeType,
         description: description.trim() || null,
         ...(Object.hasOwn(home || {}, 'entry_instructions') && { entry_instructions: entryInstructions.trim() || null }),
@@ -312,7 +311,8 @@ function EditHomeForm({ homeId }: { homeId: string }) {
                 </div>
                 <div>
                   <label htmlFor="home-edit-unit-apt" className="block text-sm font-medium text-app-text-strong mb-1.5">Unit / Apt #</label>
-                  <input id="home-edit-unit-apt" value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="Apt 12B" className="w-full px-3 py-2 border border-app-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+                  <input id="home-edit-unit-apt" value={unit} readOnly placeholder="No unit" className="w-full px-3 py-2 border border-app-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+                  <p className="mt-1 text-xs text-app-text-secondary">The address and unit identify this home. Add a new home for a different address.</p>
                 </div>
               </div>
               <div className="grid sm:grid-cols-3 gap-4">
