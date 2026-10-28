@@ -2159,12 +2159,15 @@ router.get('/rooms/:roomId/messages', verifyToken, async (req, res) => {
     const [reactionMap, people, sendRefusal] = await Promise.all([
       buildReactionSummary(messageIds, userId),
       loadMessageSenders(visibleMessages),
-      // Whether the room takes messages from the identity reading it (the business's for its staff): a direct room
-      // with a draft or closed business doesn't, and the apps lock the composer with this sentence.
-      unpublishedRoomRefusal(roomId, participant.user_id).catch((refusalError) => {
-        logger.warn('chat.send_refusal_unavailable', { requestId: req.requestId, userId, roomId, error: refusalError.message });
-        return null; // sends are still checked when they arrive
-      }),
+      // Historical access after departure is read-only. All clients already use
+      // sendRefusal to replace the composer before someone writes an unsendable draft.
+      // Active identities keep the existing draft/closed-business refusal check.
+      participant.is_active === false
+        ? { code: 'ROOM_MEMBERSHIP_INACTIVE', error: 'You are no longer in this conversation. You can still read earlier messages.' }
+        : unpublishedRoomRefusal(roomId, participant.user_id).catch((refusalError) => {
+          logger.warn('chat.send_refusal_unavailable', { requestId: req.requestId, userId, roomId, error: refusalError.message });
+          return null; // sends are still checked when they arrive
+        }),
       applyDirectReadReceipts(visibleMessages, userId, { identityUserId: participant.user_id }),
     ]);
     const messagesWithReactions = visibleMessages.map((m) => ({

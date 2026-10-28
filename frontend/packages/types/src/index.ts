@@ -1004,6 +1004,7 @@ export interface AdCampaign {
 
 export interface ChatRoom {
   id: string;
+  is_active?: boolean;
   room_type: 'direct' | 'group' | 'gig' | 'home';
   type?: 'direct' | 'group' | 'gig' | 'home' | string;
   room_name?: string;
