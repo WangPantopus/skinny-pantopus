@@ -11,12 +11,14 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.util.Patterns
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.StartOffset
 import androidx.compose.animation.core.StartOffsetType
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -27,10 +29,12 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -40,6 +44,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imeNestedScroll
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -88,10 +93,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInWindow
@@ -180,7 +193,7 @@ import kotlin.math.roundToInt
  * gig rooms whose route carried a `gigId` (chat-list room rows); the
  * listing variant stays deferred — no listing id reaches the thread.
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun ChatConversationScreen(
     args: ChatConversationRouteArgs,
@@ -245,7 +258,7 @@ fun ChatConversationScreen(
     var showGigPicker by remember { mutableStateOf(false) }
     var showListingPicker by remember { mutableStateOf(false) }
     var showDetailsSheet by remember { mutableStateOf(false) }
-    var showEmojiSheet by remember { mutableStateOf(false) }
+    var showEmojiPanel by remember { mutableStateOf(false) }
     var showBlockConfirm by remember { mutableStateOf(false) }
     var showBlockFailed by remember { mutableStateOf(false) }
     var showReportSheet by remember { mutableStateOf(false) }
@@ -420,6 +433,33 @@ fun ChatConversationScreen(
     val keyboardPx = WindowInsets.ime.getBottom(density)
     var belowChatPx by remember { mutableIntStateOf(0) }
     val focusManager = LocalFocusManager.current
+    val composerFocusRequester = remember { FocusRequester() }
+    val emojiPanelHeight by animateDpAsState(
+        targetValue = if (showEmojiPanel && !isSelectionMode && composerClosedNote == null && !planChat.closed) 260.dp else 0.dp,
+        animationSpec = tween(220),
+        label = "chatEmojiPanelHeight",
+    )
+    val keyboardPadding = with(density) { (keyboardPx - belowChatPx).coerceAtLeast(0).toDp() }
+    val dismissInput = {
+        showEmojiPanel = false
+        focusManager.clearFocus()
+    }
+    BackHandler(enabled = showEmojiPanel) { dismissInput() }
+    LaunchedEffect(isSelectionMode, composerClosedNote, planChat.closed) {
+        if (isSelectionMode || composerClosedNote != null || planChat.closed) dismissInput()
+    }
+    val emojiDismissScroll =
+        remember {
+            object : NestedScrollConnection {
+                override fun onPreScroll(
+                    available: Offset,
+                    source: NestedScrollSource,
+                ): Offset {
+                    if (source == NestedScrollSource.UserInput && available.y > 0f) showEmojiPanel = false
+                    return Offset.Zero
+                }
+            }
+        }
     Box(
         modifier =
             Modifier
@@ -427,7 +467,9 @@ fun ChatConversationScreen(
                 .onGloballyPositioned { coords ->
                     belowChatPx = (rootView.height - coords.boundsInWindow().bottom.roundToInt()).coerceAtLeast(0)
                 }.background(PantopusColors.appSurface)
-                .padding(bottom = with(density) { (keyboardPx - belowChatPx).coerceAtLeast(0).toDp() })
+                // During keyboard/panel handoff reserve the larger height, never their sum.
+                .padding(bottom = (keyboardPadding - emojiPanelHeight).coerceAtLeast(0.dp))
+                .imeNestedScroll()
                 .testTag("chatConversation"),
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -502,7 +544,21 @@ fun ChatConversationScreen(
                     Modifier
                         .weight(1f)
                         .fillMaxWidth()
-                        .pointerInput(focusManager) { detectTapGestures(onTap = { focusManager.clearFocus() }) },
+                        .nestedScroll(emojiDismissScroll)
+                        .pointerInput(state is ChatConversationUiState.Loaded) {
+                            // An empty conversation has no scrolling list to dismiss its input.
+                            if (state !is ChatConversationUiState.Loaded) {
+                                var dragged = 0f
+                                detectVerticalDragGestures(
+                                    onDragStart = { dragged = 0f },
+                                    onVerticalDrag = { _, amount ->
+                                        dragged += amount
+                                        if (dragged > 36.dp.toPx()) dismissInput()
+                                    },
+                                )
+                            }
+                        }
+                        .pointerInput(focusManager) { detectTapGestures(onTap = { dismissInput() }) },
             ) {
                 when (val s = state) {
                     ChatConversationUiState.Loading -> LoadingFrame()
@@ -542,7 +598,7 @@ fun ChatConversationScreen(
                                 },
                                 selectedMessageIds = if (isSelectionMode) selectedMessageIds else emptySet(),
                                 // A message takes the tap itself, so it puts the keyboard away too.
-                                onBubbleTap = { if (isSelectionMode) viewModel.toggleSelection(it.id) else focusManager.clearFocus() },
+                                onBubbleTap = { if (isSelectionMode) viewModel.toggleSelection(it.id) else dismissInput() },
                                 // A pickup-days card saves here; once saved it opens Today. Other drafts open composers.
                                 onUseAIDraft = { draft ->
                                     when {
@@ -647,10 +703,32 @@ fun ChatConversationScreen(
                             viewModel.send()
                         }
                     },
-                    onAttach = { showAttachSheet = true },
-                    onEmoji = { showEmojiSheet = true },
+                    onAttach = {
+                        dismissInput()
+                        showAttachSheet = true
+                    },
+                    onEmoji = {
+                        if (showEmojiPanel) {
+                            showEmojiPanel = false
+                            composerFocusRequester.requestFocus()
+                        } else {
+                            focusManager.clearFocus()
+                            showEmojiPanel = true
+                        }
+                    },
+                    isEmojiPickerPresented = showEmojiPanel,
+                    focusRequester = composerFocusRequester,
+                    onFocused = { showEmojiPanel = false },
                     onStopAiStream = viewModel::cancelAiStream,
                 )
+                if (emojiPanelHeight > 0.dp) {
+                    Box(Modifier.height(emojiPanelHeight).clipToBounds()) {
+                        ChatEmojiPickerPanel(
+                            onDismiss = dismissInput,
+                            onPick = { emoji -> viewModel.setComposerText(viewModel.composerText.value + emoji) },
+                        )
+                    }
+                }
                 if (isCreatorQuotaLocked) {
                     CreatorQuotaLockRow(
                         tierName = resolvedCreatorContext.fanTierName,
@@ -794,14 +872,6 @@ fun ChatConversationScreen(
                         showDetailsSheet = false
                     }
                 },
-            )
-        }
-        if (showEmojiSheet) {
-            ChatEmojiPickerSheet(
-                onDismiss = { showEmojiSheet = false },
-                // Append and keep the sheet open so multiple emoji can be
-                // picked in one pass.
-                onPick = { emoji -> viewModel.setComposerText(viewModel.composerText.value + emoji) },
             )
         }
         if (showBlockConfirm) {
@@ -4459,26 +4529,44 @@ private val CHAT_COMPOSER_EMOJI =
 
 /**
  * Compact emoji grid for the composer's emoji button. Picking appends to
- * the composer text and keeps the sheet open for multi-pick.
+ * the visible composer text and keeps the panel open for multi-pick.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ChatEmojiPickerSheet(
+private fun ChatEmojiPickerPanel(
     onDismiss: () -> Unit,
     onPick: (String) -> Unit,
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = PantopusColors.appSurface,
-    ) {
+    Column(Modifier.fillMaxWidth().height(260.dp).background(PantopusColors.appSurface)) {
+        Row(
+            modifier =
+                Modifier.fillMaxWidth().padding(horizontal = Spacing.s3)
+                    .pointerInput(Unit) {
+                        var dragged = 0f
+                        detectVerticalDragGestures(
+                            onDragStart = { dragged = 0f },
+                            onVerticalDrag = { _, amount ->
+                                dragged += amount
+                                if (dragged > 36.dp.toPx()) onDismiss()
+                            },
+                        )
+                    },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Emoji", color = PantopusColors.appText, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            PantopusIconImage(
+                icon = PantopusIcon.ChevronDown,
+                contentDescription = "Hide emoji",
+                size = 20.dp,
+                tint = PantopusColors.appTextMuted,
+                modifier = Modifier.size(44.dp).clickable(onClick = onDismiss).testTag("chatEmojiDismiss"),
+            )
+        }
         LazyVerticalGrid(
             columns = GridCells.Fixed(8),
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .height(330.dp)
+                    .weight(1f)
                     .padding(horizontal = Spacing.s3)
                     .padding(bottom = Spacing.s4)
                     .testTag("chatEmojiPicker"),
@@ -4488,7 +4576,7 @@ private fun ChatEmojiPickerSheet(
                 Box(
                     modifier =
                         Modifier
-                            .height(38.dp)
+                            .height(44.dp)
                             .clip(RoundedCornerShape(Radii.md))
                             .clickable { onPick(emoji) },
                     contentAlignment = Alignment.Center,
@@ -5334,6 +5422,9 @@ internal fun Composer(
     onSend: () -> Unit,
     onAttach: () -> Unit = {},
     onEmoji: () -> Unit = {},
+    isEmojiPickerPresented: Boolean = false,
+    focusRequester: FocusRequester = remember { FocusRequester() },
+    onFocused: () -> Unit = {},
     onStopAiStream: () -> Unit = {},
 ) {
     Box(modifier = Modifier.fillMaxWidth().background(PantopusColors.appSurface)) {
@@ -5395,6 +5486,7 @@ internal fun Composer(
                     BasicTextField(
                         value = text,
                         onValueChange = onTextChange,
+                        maxLines = 4,
                         textStyle =
                             TextStyle(
                                 fontSize = 13.5.sp,
@@ -5406,12 +5498,14 @@ internal fun Composer(
                         modifier =
                             Modifier
                                 .fillMaxWidth()
+                                .focusRequester(focusRequester)
+                                .onFocusChanged { if (it.isFocused) onFocused() }
                                 .semantics { contentDescription = "Message" },
                     )
                 }
                 PantopusIconImage(
-                    icon = PantopusIcon.Smile,
-                    contentDescription = "Emoji",
+                    icon = if (isEmojiPickerPresented) PantopusIcon.Keyboard else PantopusIcon.Smile,
+                    contentDescription = if (isEmojiPickerPresented) "Keyboard" else "Emoji",
                     size = 17.dp,
                     tint = PantopusColors.appTextMuted,
                     modifier =
