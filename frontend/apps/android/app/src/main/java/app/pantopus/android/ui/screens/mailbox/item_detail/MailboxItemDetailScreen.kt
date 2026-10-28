@@ -9,8 +9,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -19,7 +17,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -27,6 +24,9 @@ import app.pantopus.android.data.api.models.mailbox.v2.MailboxCategoryPayload
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.Toast
+import app.pantopus.android.ui.components.ToastAppearance
+import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.mailbox.item_detail.bodies.BookletBody
 import app.pantopus.android.ui.screens.mailbox.item_detail.bodies.CertifiedBody
 import app.pantopus.android.ui.screens.mailbox.item_detail.bodies.CommunityBody
@@ -81,7 +81,7 @@ fun MailboxItemDetailScreen(
 
     LaunchedEffect(ctaFlags.errorToast) {
         if (ctaFlags.errorToast != null) {
-            delay(2_000)
+            delay(toastDurationMillis(ctaFlags.errorToast.orEmpty(), minimumMillis = 2_000))
             viewModel.dismissToast()
         }
     }
@@ -179,17 +179,19 @@ fun MailboxItemDetailScreen(
             }
         }
         ctaFlags.errorToast?.let { toast ->
-            Box(
+            Toast(
+                text = toast,
+                appearance =
+                    ToastAppearance(
+                        background = PantopusColors.error,
+                        foreground = PantopusColors.appTextInverse,
+                        textStyle = PantopusTextStyle.small,
+                    ),
                 modifier =
                     Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = 100.dp)
-                        .clip(RoundedCornerShape(Radii.pill))
-                        .background(PantopusColors.error)
-                        .padding(horizontal = Spacing.s4, vertical = Spacing.s2),
-            ) {
-                Text(toast, style = PantopusTextStyle.small, color = PantopusColors.appTextInverse)
-            }
+                        .padding(bottom = 100.dp),
+            )
         }
     }
 

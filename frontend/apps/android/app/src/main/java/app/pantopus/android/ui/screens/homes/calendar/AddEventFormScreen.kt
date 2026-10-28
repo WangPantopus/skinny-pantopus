@@ -65,6 +65,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.PantopusFieldState
 import app.pantopus.android.ui.components.PantopusTextField
+import app.pantopus.android.ui.components.Toast
+import app.pantopus.android.ui.components.ToastAppearance
+import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.shared.form.FormShell
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -120,7 +123,7 @@ fun AddEventFormScreen(
 
     LaunchedEffect(state.toast) {
         if (state.toast != null) {
-            delay(2_500)
+            delay(toastDurationMillis(state.toast?.text.orEmpty(), minimumMillis = 2_500))
             viewModel.dismissToast()
         }
     }
@@ -225,17 +228,19 @@ fun AddEventFormBody(
         }
 
         state.toast?.let { toast ->
-            Box(
+            Toast(
+                text = toast.text,
+                appearance =
+                    ToastAppearance(
+                        background = if (toast.isError) PantopusColors.error else PantopusColors.success,
+                        foreground = PantopusColors.appTextInverse,
+                        textStyle = PantopusTextStyle.small,
+                    ),
                 modifier =
                     Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = Spacing.s8)
-                        .clip(RoundedCornerShape(Radii.pill))
-                        .background(if (toast.isError) PantopusColors.error else PantopusColors.success)
-                        .padding(horizontal = Spacing.s4, vertical = Spacing.s2),
-            ) {
-                Text(text = toast.text, style = PantopusTextStyle.small, color = PantopusColors.appTextInverse)
-            }
+                        .padding(bottom = Spacing.s8),
+            )
         }
     }
 }

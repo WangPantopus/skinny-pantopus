@@ -57,8 +57,7 @@ public struct MeView: View {
                 if let toast = viewModel.toastMessage {
                     ToastView(message: ToastMessage(text: toast, kind: .neutral))
                         .padding(.bottom, Spacing.s10)
-                        .task(id: toast) {
-                            try? await Task.sleep(nanoseconds: 2_000_000_000)
+                        .dismissToast(after: toast, minimum: 2) {
                             viewModel.toastMessage = nil
                         }
                 }

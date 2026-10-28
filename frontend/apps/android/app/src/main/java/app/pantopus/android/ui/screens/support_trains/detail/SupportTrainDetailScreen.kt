@@ -50,6 +50,7 @@ import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -63,6 +64,9 @@ import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.components.SlotCalendar
 import app.pantopus.android.ui.components.SlotCalendarState
+import app.pantopus.android.ui.components.Toast
+import app.pantopus.android.ui.components.ToastAppearance
+import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
 import app.pantopus.android.ui.screens.support_trains.detail.components.RecipientCard
 import app.pantopus.android.ui.screens.support_trains.detail.components.SlotRow
@@ -104,7 +108,7 @@ fun SupportTrainDetailScreen(
     RefreshOnStoreChange(viewModel::refreshFromSignal)
     LaunchedEffect(action.toast) {
         if (action.toast != null) {
-            delay(TOAST_MILLIS)
+            delay(toastDurationMillis(action.toast.orEmpty(), minimumMillis = TOAST_MILLIS))
             viewModel.acknowledgeToast()
         }
     }
@@ -137,16 +141,16 @@ fun SupportTrainDetailScreen(
                 modifier = Modifier.fillMaxSize().padding(bottom = Spacing.s12),
                 contentAlignment = Alignment.BottomCenter,
             ) {
-                Text(
+                Toast(
                     text = toast,
-                    color = PantopusColors.appTextInverse,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    appearance =
+                        ToastAppearance(
+                            background = PantopusColors.appText,
+                            foreground = PantopusColors.appTextInverse,
+                            textStyle = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.SemiBold),
+                        ),
                     modifier =
                         Modifier
-                            .clip(RoundedCornerShape(Radii.pill))
-                            .background(PantopusColors.appText)
-                            .padding(horizontal = Spacing.s4, vertical = Spacing.s2)
                             .testTag("supportTrainDetailToast"),
                 )
             }

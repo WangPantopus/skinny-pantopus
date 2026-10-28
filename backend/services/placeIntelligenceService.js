@@ -27,6 +27,8 @@ const { encodeGeohash } = require('../utils/geohash');
 const { NON_RESIDENT_ROLES, UNPROVEN_SOURCES, resolveHomeRole } = require('../utils/homeAccessPolicy');
 const claimsConfig = require('../config/householdClaims');
 const claimsPolicy = require('./homeClaimRoutingService');
+const { checkHomePermission } = require('../utils/homePermissions');
+const homeListService = require('./homeListService');
 const {
   PLACE_SECTION_IDS,
   PLACE_SECTION_META,
@@ -85,8 +87,9 @@ function nonResidentViewer(access) {
 //   member       other household roles: public facts and the Home's facts
 //   nonresident  guests and service providers: public facts only
 // The stage decides what is locked: before verification (a private setup)
-// the household sections wait for verifying the address by mail, and while
-// ownership is pending the owner-only items wait for it to be confirmed.
+// the household sections wait for verifying the address by mail (for someone
+// whose claim is in review, for its approval), and while ownership is pending
+// the owner-only items wait for it to be confirmed.
 const OWNER_ONLY_SECTIONS = new Set(['exemption_check']);
 const RENTER_ONLY_SECTIONS = new Set(['rent_band', 'real_rent']);
 const MONEY_SECTIONS = new Set(['bill_benchmark', 'incentives', 'rent_band', 'real_rent', 'exemption_check']);
@@ -99,6 +102,7 @@ const VERIFY_BY_MAIL_REASONS = {
   real_rent: 'Verify your address by mail to see what your block actually pays.',
 };
 const OWNERSHIP_PENDING_REASON = 'Available once your ownership is confirmed.';
+const CLAIM_REVIEW_REASON = 'Available once your claim is approved.';
 const VALUE_FIELDS = ['estimated_value', 'value_low', 'value_high', 'assessed_value'];
 
 function resolveViewer(access, tier, ownershipPending) {
@@ -120,6 +124,10 @@ function sectionApplies(id, viewer) {
   return true;
 }
 
+// A claim still in progress: not decided, withdrawn or merged into another.
+const isOpenClaim = (claim) => (claimsConfig.flags.v2ReadPaths
+  ? claimsPolicy.isClaimActiveRecord(claim) : claimsPolicy.isLegacyStateActive(claim.state));
+
 // The viewer's own pending ownership of this Home (a pending owner row or an
 // ownership claim still in progress). A renter's residency document is not
 // one: it never makes them an owner. A failed read counts as none.
@@ -132,12 +140,37 @@ async function hasPendingOwnership(homeId, userId) {
         .eq('home_id', homeId).eq('claimant_user_id', userId).neq('claim_type', 'resident'),
     ]);
     if ((owners.data || []).length) return true;
-    return (claims.data || []).some((claim) => (claimsConfig.flags.v2ReadPaths
-      ? claimsPolicy.isClaimActiveRecord(claim) : claimsPolicy.isLegacyStateActive(claim.state)));
+    return (claims.data || []).some(isOpenClaim);
   } catch (err) {
     logger.warn('placeIntelligence: pending ownership read failed', { homeId, error: err.message });
     return false;
   }
+}
+
+// The viewer's own open claim on this Home, of either kind: an ownership claim
+// or a renter's residency document. Throws when the claims can't be read.
+async function hasOpenClaim(homeId, userId) {
+  const { data, error } = await supabaseAdmin.from('HomeOwnershipClaim')
+    .select('id, state, claim_phase_v2, merged_into_claim_id')
+    .eq('home_id', homeId).eq('claimant_user_id', userId);
+  if (error) throw new Error(error.message || 'Could not read claims');
+  return (data || []).some(isOpenClaim);
+}
+
+// Who may read a Home's Place sections (GET /api/homes/:id/intelligence and the
+// assistant's place read). The household reads them with its own access. The
+// person who set the Home up privately, and someone whose claim on it is still
+// open, get its public view (T1): public facts, the household's sections locked.
+// Null for anyone else, and for a claim on a closed Home (frozen, disputed,
+// archived or merged). `privateSetup` is the access state a private setup was
+// let in on, for the route's re-check.
+async function readAccess(homeId, userId) {
+  const access = await checkHomePermission(homeId, userId, 'home.view');
+  if (access.hasAccess) return { access, privateSetup: null, claimant: false };
+  const state = await homeListService.readAccessState(homeId, userId);
+  if (state.mode === 'private_setup') return { access, privateSetup: state, claimant: false };
+  if (!state.blocked && await hasOpenClaim(homeId, userId)) return { access, privateSetup: null, claimant: true };
+  return null;
 }
 
 // ── Band × tier → section access (§9.2) ──────────────────────
@@ -1171,7 +1204,8 @@ async function composeExemptionCheck(home, tier) {
 const COMPOSER_SECTIONS = [
   { ids: ['weather', 'air_quality', 'alerts', 'good_day_to'], run: async ({ home, userId, hubPromise }) => composeToday(userId, home, await hubPromise) },
   { ids: ['sunrise_sunset'], run: ({ home }) => placeSectionAdapters.composeSunriseSunset(home) },
-  { ids: ['address_calendar'], run: ({ home }) => composeAddressCalendar(home) },
+  // A claimant gets the public calendar: without the Home id, the household's own pickup day isn't loaded.
+  { ids: ['address_calendar'], run: ({ home, claimant }) => composeAddressCalendar(claimant ? { ...home, id: null } : home) },
   { ids: ['flood', 'census_context'], run: ({ home }) => composeNeighborhood(home) },
   { ids: ['heat_cold'], run: async ({ home, hubPromise }) => composeHeatCold(home, await hubPromise) },
   { ids: ['seismic'], run: ({ home }) => placeSectionAdapters.composeSeismic(home) },
@@ -1195,7 +1229,8 @@ const COMPOSER_SECTIONS = [
 // apply here by design: guest_approval / notification_previews /
 // doc_lock / photo_blur / vault_auto_lock govern other surfaces, and
 // member_name_visibility / activity_visibility / map_opt_out govern what
-// OUTSIDERS see (this payload reaches members only). The one toggle that
+// OUTSIDERS see (this payload reaches members, and the public view a private
+// setup or an open claim gets carries none of them). The one toggle that
 // shapes THIS payload is `address_precision` ("Street only · hide unit
 // number"): when ON, the unit (address2) is stripped from the ref.
 //
@@ -1227,6 +1262,9 @@ function buildPlaceRef(home, privacy) {
  *                                   is on for the user — decided once by the route, so the
  *                                   composers never read the flag (or the User row) themselves.
  *                                   Guests and service providers never get Ballot fields.
+ * @param {boolean} [params.claimant]  The viewer only has an open claim on this Home
+ *                                     (`readAccess`): the public view, about the address
+ *                                     and not the household's own entries.
  * @returns {Promise<object|null>} The PlaceIntelligence response, or null if the home is missing.
  */
 // The Home row this response is composed from. The route starts it alongside
@@ -1240,7 +1278,7 @@ function readHome(homeId) {
     .catch((error) => ({ data: null, error }));
 }
 
-async function composeHomeIntelligence({ homeId, userId, access, sectionIds, ballot = false, homeRead = null }) {
+async function composeHomeIntelligence({ homeId, userId, access, sectionIds, ballot = false, homeRead = null, claimant = false }) {
   // Owner-only sections depend on whether the viewer's ownership is still
   // pending; read it alongside the Home.
   const ownershipPending = access && access.isOwner ? Promise.resolve(false) : hasPendingOwnership(homeId, userId);
@@ -1280,7 +1318,8 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds, bal
   // is about wherever the viewer is (custom pin / primary home), which put
   // one city's freeze guidance on another city's dashboard. A home with no
   // coordinates gets no hub payload — its weather sections degrade to
-  // unavailable rather than borrowing the viewer's city.
+  // unavailable rather than borrowing the viewer's city. A claimant's payload
+  // is anchored to the point only, so the household's own records aren't read.
   const HUB_SECTIONS = ['weather', 'air_quality', 'alerts', 'good_day_to', 'heat_cold'];
   let hubPromise = Promise.resolve(null);
   if (HUB_SECTIONS.some((id) => requested.has(id))) {
@@ -1289,7 +1328,7 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds, bal
       hubPromise = providerOrchestrator
         .getHubToday(userId, {
           detail: true,
-          atLocation: { latitude: ll.lat, longitude: ll.lng, label: home.address || home.name, homeId: home.id },
+          atLocation: { latitude: ll.lat, longitude: ll.lng, label: home.address || home.name, homeId: claimant ? null : home.id },
         })
         .catch((err) => {
           logger.warn('placeIntelligence: getHubToday failed', { userId, error: err.message });
@@ -1301,18 +1340,22 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds, bal
   // An unreadable privacy row fails closed for the one toggle this payload
   // honors: the unit stays hidden, and the rest of Place still loads.
   // Ballot is the household's own card: "Your ballot", and "Moved this year?"
-  // from the move-in date the household entered. Guests and service providers
-  // see public facts only, so they keep the plain election row and districts.
+  // from the move-in date the household entered (a claimant's card leaves that
+  // date out). Guests and service providers see public facts only, so they
+  // keep the plain election row and districts.
   const ballotOn = Boolean(ballot) && viewer.role !== 'nonresident';
+  const subject = claimant ? { ...home, move_in_date: null } : home;
   const [privacy, ...groups] = await Promise.all([
     getHomePrivacy(homeId).catch(() => ({ address_precision: true })),
-    ...runs.map(({ run }) => run({ home, userId, tier, hubPromise, access, ballot: ballotOn })),
+    ...runs.map(({ run }) => run({ home: subject, userId, tier, hubPromise, access, ballot: ballotOn, claimant })),
   ]);
 
   const composed = {};
   for (const env of groups.flat()) composed[env.id] = env;
   for (const id of setupLocked) {
-    composed[id] = serializePlaceSection(id, { access: 'locked', unavailableReason: VERIFY_BY_MAIL_REASONS[id] });
+    composed[id] = serializePlaceSection(id, {
+      access: 'locked', unavailableReason: claimant ? CLAIM_REVIEW_REASON : VERIFY_BY_MAIL_REASONS[id],
+    });
   }
   if (viewer.ownership === 'pending' && composed.exemption_check && !setupLocked.includes('exemption_check')) {
     composed.exemption_check = serializePlaceSection('exemption_check', {
@@ -1340,8 +1383,9 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds, bal
     place: buildPlaceRef(home, privacy),
     tier,
     viewer,
-    // A private setup verifies by mail too; guests and service providers can't.
-    verifyAvailable: (tier === 'T3' || viewer.stage === 'setup') && viewer.role !== 'nonresident',
+    // A private setup verifies by mail too; guests and service providers can't,
+    // and a claimant's next step is their claim's own.
+    verifyAvailable: !claimant && (tier === 'T3' || viewer.stage === 'setup') && viewer.role !== 'nonresident',
     // Same gate as the Home detail it replaces for the movers card (home.view):
     // a private setup or another account's Home gets null.
     moveInDate: access && access.hasAccess ? home.move_in_date || null : null,
@@ -1381,6 +1425,7 @@ async function composeSavedPlaceToday(place) {
 module.exports = {
   composeSavedPlaceToday,
   composeHomeIntelligence,
+  readAccess,
   readHome,
   composeTodayForPoint,
   // Exported for unit testing.

@@ -67,17 +67,14 @@ router.get('/:id/intelligence', verifyToken, async (req, res) => {
 
     // The Home row is read alongside the access check and used only once access holds.
     const homeRead = placeIntelligenceService.readHome(id);
-    const access = await checkHomePermission(id, userId, 'home.view');
-    let privateSetup = null;
-    if (!access.hasAccess) {
-      privateSetup = await homeListService.readAccessState(id, userId);
-      if (privateSetup.mode !== 'private_setup') {
-        return res.status(403).json({ error: 'You do not have access to this place.' });
-      }
+    const reader = await placeIntelligenceService.readAccess(id, userId);
+    if (!reader) {
+      return res.status(403).json({ error: 'You do not have access to this place.' });
     }
+    const { access, privateSetup, claimant } = reader;
 
-    // Preserve the denied general access object: a private creator receives
-    // T1 public readings, never shared household/verification authority.
+    // Preserve the denied general access object: a private creator and a
+    // claimant receive T1 public readings, never shared household/verification authority.
     const intelligence = await placeIntelligenceService.composeHomeIntelligence({
       homeId: id,
       userId,
@@ -85,6 +82,7 @@ router.get('/:id/intelligence', verifyToken, async (req, res) => {
       sectionIds,
       ballot: await ballotOptIn(req),
       homeRead,
+      claimant,
     });
     if (privateSetup && JSON.stringify(await homeListService.readAccessState(id, userId)) !== JSON.stringify(privateSetup)) {
       throw Object.assign(new Error('Home access changed while loading. Please retry.'), { code: 'HOME_LIST_ACCESS_CHANGED', statusCode: 503 });
