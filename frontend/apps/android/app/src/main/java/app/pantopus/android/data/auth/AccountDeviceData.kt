@@ -8,6 +8,8 @@ import app.pantopus.android.data.chats.ChatConversationPreferences
 import app.pantopus.android.data.chats.ChatOutbox
 import app.pantopus.android.data.gigs.GigCameraPhotos
 import app.pantopus.android.data.gigs.GigDraftQueue
+import app.pantopus.android.data.mailbox.MailEnclosureFiles
+import app.pantopus.android.data.mailbox.MailboxRepository
 import app.pantopus.android.data.posts.PostCameraPhotos
 import app.pantopus.android.data.store.ScreenStore
 import app.pantopus.android.data.support_trains.SupportTrainReservationsStore
@@ -54,6 +56,7 @@ class AccountDeviceData
             // First, so a reply still in flight can't write the last account's data back (generation number).
             chatOutbox.clear()
             screenStore.wipe()
+            MailboxRepository.forgetAccount()
             chatBadges.reset()
             reservations.reset()
             broadcastSeeds.clear()
@@ -79,6 +82,9 @@ class AccountDeviceData
                     .onFailure { Timber.w(it, "Sign-out could not remove the task camera photos") }
                 runCatching { PostCameraPhotos.remove(context.cacheDir) }
                     .onFailure { Timber.w(it, "Sign-out could not remove the post camera photos") }
+                // And the mail enclosures it opened.
+                runCatching { MailEnclosureFiles.remove(context.cacheDir) }
+                    .onFailure { Timber.w(it, "Sign-out could not remove the opened mail enclosures") }
                 // And its exported Home documents, emergency card and residency letters.
                 runCatching { HomeDocumentTemporaryFiles.clearPreviousLaunch(context.cacheDir) }
                     .onFailure { Timber.w(it, "Sign-out could not remove the exported documents") }

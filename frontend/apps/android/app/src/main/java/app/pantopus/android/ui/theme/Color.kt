@@ -250,6 +250,13 @@ object PantopusColors {
     val mailStampSun = Color(0xFFFDE68A)
 
     /** The mailbox: its blue body `#0284C7`, the post `#8A6A4A`, the flag `#C2410C`, the dark inside `#0B2537`. */
+    /** The letter itself, unfolded on its page, its rules, an enclosure's slip, and the clip holding Pantopus's note. */
+    val mailSheet = Color(0xFFFFFEFA)
+    val mailSheetEdge = Color(0xFFECE7DA)
+    val mailSheetRule = Color(0xFFE7E1D2)
+    val mailSlip = Color(0xFFF8F6F0)
+    val mailClip = Color(0xFF64748B)
+
     val mailboxBody = Color(0xFF0284C7)
     val mailboxPost = Color(0xFF8A6A4A)
     val mailboxFlag = Color(0xFFC2410C)

@@ -2,6 +2,10 @@ package app.pantopus.android.data.api.models.mailbox
 
 import app.pantopus.android.data.api.models.common.JsonArrayValue
 import app.pantopus.android.data.api.models.common.JsonValue
+import app.pantopus.android.data.api.models.mailbox.v2.MailEnclosure
+import app.pantopus.android.data.api.models.mailbox.v2.MailInvoice
+import app.pantopus.android.data.api.models.mailbox.v2.MailPostmark
+import app.pantopus.android.data.api.models.mailbox.v2.MailSummary
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
@@ -132,6 +136,34 @@ data class MailDetail(
     val removed: MailRemovedDto? = null,
     /** `Mail.key_facts`: facts read off the item, such as a bill's amount due (`[{field, value}]`). */
     @Json(name = "key_facts") val keyFacts: Any? = null,
+    // ── The Mail tab (contract v1), all optional so an older server still decodes. ──
+    val kind: String? = null,
+    @Json(name = "delivered_at") val deliveredAt: String? = null,
+    @Json(name = "special_delivery") val specialDelivery: Boolean = false,
+    @Json(name = "from_pantopus") val fromPantopus: Boolean = false,
+    val postmark: MailPostmark? = null,
+    /** Due, or put on the counter, and not done yet. */
+    @Json(name = "on_counter") val onCounter: Boolean = false,
+    /** `delivered`, `opened`, `filed` (in the Vault), `shredded` … */
+    val lifecycle: String? = null,
+    /** `personal` (Me), `home` or `business` (Biz). */
+    val drawer: String? = null,
+    @Json(name = "vault_folder_id") val vaultFolderId: String? = null,
+    @Json(name = "recipient_home_id") val recipientHomeId: String? = null,
+    @Json(name = "recipient_name") val recipientName: String? = null,
+    @Json(name = "bundle_id") val bundleId: String? = null,
+    @Json(name = "bundle_label") val bundleLabel: String? = null,
+    @Json(name = "bundle_item_count") val bundleItemCount: Int? = null,
+    @Json(name = "page_count") val pageCount: Int? = null,
+    @Json(name = "due_date") val dueDate: String? = null,
+    /** "Pantopus read this for you" (SRV-2). */
+    val summary: MailSummary? = null,
+    /** The business invoice a bill came from (SRV-7); Pay goes by its id. */
+    val invoice: MailInvoice? = null,
+    /** What came inside (SRV-4). */
+    val enclosures: List<MailEnclosure>? = null,
+    /** When anyone in the household first opened it. */
+    @Json(name = "first_opened_at") val firstOpenedAt: String? = null,
 ) {
     /** [senderDisplay] when it says something. */
     val printedSender: String?

@@ -19,6 +19,7 @@ import app.pantopus.android.data.api.models.mailbox.v2.DeleteMapPinResponse
 import app.pantopus.android.data.api.models.mailbox.v2.DrawerItemsResponse
 import app.pantopus.android.data.api.models.mailbox.v2.DrawerListResponse
 import app.pantopus.android.data.api.models.mailbox.v2.EarnBalanceResponse
+import app.pantopus.android.data.api.models.mailbox.v2.EnclosureLinkResponse
 import app.pantopus.android.data.api.models.mailbox.v2.LogEventRequest
 import app.pantopus.android.data.api.models.mailbox.v2.LogEventResponse
 import app.pantopus.android.data.api.models.mailbox.v2.MailSearchResponse
@@ -114,7 +115,12 @@ class MailboxRepository
 
         /** `GET /api/mailbox/v2/drawers`. */
         suspend fun drawers(): NetworkResult<DrawerListResponse> =
-            safeApiCall { v2Api.drawers() }.also { if (it is NetworkResult.Success) _unopened.value = it.data.unopenedTotal() }
+            safeApiCall { v2Api.drawers() }.also {
+                if (it is NetworkResult.Success) {
+                    _unopened.value = it.data.unopenedTotal()
+                    latestDrawersFlow.value = it.data
+                }
+            }
 
         /** `GET /api/mailbox/v2/drawer/:drawer?tab=…` — the (drawer, tab)
          *  mail window backing the B.1 Mailbox root. */
@@ -138,11 +144,18 @@ class MailboxRepository
         /** `GET /api/mailbox/v2/package/:mailId`. */
         suspend fun packageDetail(mailId: String): NetworkResult<PackageDetailResponse> = safeApiCall { v2Api.packageDetail(mailId) }
 
-        /** `POST /api/mailbox/v2/item/:id/action`. */
+        /** `POST /api/mailbox/v2/item/:id/action`; [folderId] picks the Vault folder for `file` and `done`. */
         suspend fun itemAction(
             mailId: String,
             action: String,
-        ): NetworkResult<MailboxItemActionResponse> = safeApiCall { v2Api.itemAction(mailId, MailboxItemActionRequest(action)) }
+            folderId: String? = null,
+        ): NetworkResult<MailboxItemActionResponse> = safeApiCall { v2Api.itemAction(mailId, MailboxItemActionRequest(action, folderId)) }
+
+        /** `GET /api/mailbox/:id/enclosures/:enclosureId` — a fresh five-minute link to one enclosure. */
+        suspend fun enclosureLink(
+            mailId: String,
+            enclosureId: String,
+        ): NetworkResult<EnclosureLinkResponse> = safeApiCall { mailboxApi.enclosureLink(mailId, enclosureId) }
 
         /** `PATCH /api/mailbox/v2/package/:mailId/status`. */
         suspend fun packageStatusUpdate(
@@ -259,6 +272,28 @@ class MailboxRepository
 
             fun announceMailArrived() {
                 mailArrivedFlow.tryEmit(Unit)
+            }
+
+            private val mailChangedFlow = MutableSharedFlow<String>(extraBufferCapacity = 8)
+
+            /** Ids of letters an action changed in place (put on the counter, brought back): open lists read again. */
+            val mailChanged: SharedFlow<String> = mailChangedFlow.asSharedFlow()
+
+            fun announceMailChanged(mailId: String) {
+                mailChangedFlow.tryEmit(mailId)
+            }
+
+            private val latestDrawersFlow = MutableStateFlow<DrawerListResponse?>(null)
+
+            /**
+             * The latest drawers answer (the person's Homes, the delivery's zone), so a letter page draws addresses
+             * without asking again. Cleared at sign-out ([forgetAccount]).
+             */
+            val latestDrawers: StateFlow<DrawerListResponse?> = latestDrawersFlow.asStateFlow()
+
+            /** Sign-out: nothing of this account's mailbox stays for the next one. */
+            fun forgetAccount() {
+                latestDrawersFlow.value = null
             }
         }
     }

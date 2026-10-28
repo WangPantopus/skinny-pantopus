@@ -2,6 +2,9 @@
 
 package app.pantopus.android.ui.screens.mailbox.mail_detail
 
+import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -19,14 +22,21 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.mailbox.MailRemovedDto
@@ -37,6 +47,10 @@ import app.pantopus.android.ui.components.PauseBanner
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.screens.gigs.checkout.GigBidCheckoutHost
 import app.pantopus.android.ui.screens.mailbox.item_detail.MailItemCategory
+import app.pantopus.android.ui.screens.mailbox.mail_detail.letter.LetterActions
+import app.pantopus.android.ui.screens.mailbox.mail_detail.letter.LetterLayout
+import app.pantopus.android.ui.screens.mailbox.mail_detail.letter.LetterSheets
+import app.pantopus.android.ui.screens.mailbox.mail_detail.letter.MailCantOpen
 import app.pantopus.android.ui.screens.mailbox.mail_detail.variants.BookletDetailLayout
 import app.pantopus.android.ui.screens.mailbox.mail_detail.variants.CertifiedDetailLayout
 import app.pantopus.android.ui.screens.mailbox.mail_detail.variants.CommunityDetailLayout
@@ -47,6 +61,8 @@ import app.pantopus.android.ui.screens.mailbox.mail_detail.variants.MemoryDetail
 import app.pantopus.android.ui.screens.mailbox.mail_detail.variants.PackageDetailLayout
 import app.pantopus.android.ui.screens.mailbox.mail_detail.variants.PartyDetailLayout
 import app.pantopus.android.ui.screens.mailbox.mail_detail.variants.RecordsDetailLayout
+import app.pantopus.android.ui.screens.place.verify.PlaceVerifyMethod
+import app.pantopus.android.ui.screens.place.verify.PlaceVerifySheet
 import app.pantopus.android.ui.screens.shared.mail_item_detail.MailItemDetailTopBar
 import app.pantopus.android.ui.screens.shared.mail_item_detail.MailTopBarConfig
 import app.pantopus.android.ui.theme.PantopusColors
@@ -90,6 +106,12 @@ fun MailDetailScreen(
     // the flag mirrors RN's `?mode=pre|post`
     // (`src/app/mailbox/package.tsx:196-204`).
     onAskNeighbor: ((String, Boolean) -> Unit)? = null,
+    // The Mail tab's letter page: Pay opens the invoice screen by its id, a bundle's piece opens its own page, and a
+    // Home letter waiting for proof offers Verify your home (the Place verify sheet's doors).
+    onPay: (String) -> Unit = {},
+    onOpenPiece: (String) -> Unit = {},
+    onStartVerify: ((homeId: String, method: PlaceVerifyMethod) -> Unit)? = null,
+    onOpenVerificationStatus: ((homeId: String) -> Unit)? = null,
     viewModel: MailDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -113,6 +135,46 @@ fun MailDetailScreen(
     val didLeaveMailbox by viewModel.didLeaveMailbox.collectAsStateWithLifecycle()
     val removed by viewModel.removed.collectAsStateWithLifecycle()
     val restoreInFlight by viewModel.restoreInFlight.collectAsStateWithLifecycle()
+    val letterActionInFlight by viewModel.letterActionInFlight.collectAsStateWithLifecycle()
+    val letterFolders by viewModel.letterFolders.collectAsStateWithLifecycle()
+    val openedEnclosure by viewModel.openedEnclosure.collectAsStateWithLifecycle()
+    val enclosureInFlight by viewModel.enclosureInFlight.collectAsStateWithLifecycle()
+    val bundle by viewModel.bundle.collectAsStateWithLifecycle()
+    val cantOpen by viewModel.cantOpen.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    var showEnvelope by remember { mutableStateOf(false) }
+    var confirmShred by remember { mutableStateOf(false) }
+    var confirmDone by remember { mutableStateOf(false) }
+    var verifyHome by remember { mutableStateOf<MailCantOpen.NeedsProof?>(null) }
+    val letterActions =
+        LetterActions(
+            onEnvelope = { showEnvelope = true },
+            onPay = onPay,
+            onAcknowledge = viewModel::acknowledge,
+            onPutOnCounter = viewModel::putOnCounter,
+            onDone = { confirmDone = true },
+            onFile = viewModel::openFolderPicker,
+            onUnfile = viewModel::takeOutOfVault,
+            onShred = { confirmShred = true },
+            onOpenEnclosure = { enclosure -> viewModel.openEnclosure(enclosure, context.cacheDir) },
+            onOpenPiece = onOpenPiece,
+            onRetryBundle = viewModel::loadBundle,
+        )
+    // Back on the page (from paying, say): read the piece again so it shows where it stands.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.onLetterResume() }
+    // An enclosure saved on the phone opens in the app that reads its type.
+    LaunchedEffect(openedEnclosure) {
+        val opened = openedEnclosure ?: return@LaunchedEffect
+        viewModel.enclosureOpened()
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", opened.file)
+        val intent = Intent(Intent.ACTION_VIEW).setDataAndType(uri, opened.mimeType).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        intent.clipData = ClipData.newRawUri(opened.name, uri)
+        try {
+            context.startActivity(intent)
+        } catch (_: ActivityNotFoundException) {
+            viewModel.say("No app on this phone can open this file.")
+        }
+    }
     GigBidCheckoutHost(viewModel.bidCheckout)
 
     LaunchedEffect(Unit) { viewModel.load() }
@@ -137,8 +199,12 @@ fun MailDetailScreen(
             MailDetailUiState.Loading -> LoadingLayout(onBack = onBack)
             is MailDetailUiState.Loaded ->
                 Column(modifier = Modifier.fillMaxSize()) {
-                    // A deleted or household-dismissed letter opens from its notice with Restore.
-                    removed?.let { RemovedBanner(removed = it, restoring = restoreInFlight, onRestore = viewModel::restore) }
+                    // A deleted or household-dismissed letter opens from its notice with Restore: above the layout,
+                    // or under the Mail tab's letter page's top bar.
+                    val removedBanner: (@Composable () -> Unit)? =
+                        removed?.let { gone ->
+                            { RemovedBanner(removed = gone, restoring = restoreInFlight, onRestore = viewModel::restore) }
+                        }
                     LoadedLayout(
                         content = current.content,
                         ackInFlight = ackInFlight,
@@ -188,10 +254,101 @@ fun MailDetailScreen(
                         onDownloadCertifiedProof = viewModel::downloadCertifiedProof,
                         certifiedProofSaved = certifiedProofSaved,
                         certifiedProofInFlight = certifiedProofInFlight,
+                        letterPage =
+                            current.content.letter?.takeIf { LaunchFeatures.mailbox }?.let { letter ->
+                                {
+                                    LetterLayout(
+                                        content = current.content,
+                                        letter = letter,
+                                        bundle = bundle,
+                                        actionInFlight = letterActionInFlight,
+                                        ackInFlight = ackInFlight,
+                                        enclosureInFlight = enclosureInFlight,
+                                        removed = removed != null,
+                                        onBack = onBack,
+                                        actions = letterActions,
+                                        banner = removedBanner,
+                                    )
+                                }
+                            },
+                        banner = removedBanner,
                     )
                 }
             is MailDetailUiState.Error ->
-                ErrorLayout(message = current.message, onBack = onBack, onRetry = viewModel::refresh)
+                when (val reason = cantOpen) {
+                    // Home mail waiting for proof of the address: Verify your home, when the mailbox names it.
+                    is MailCantOpen.NeedsProof -> {
+                        val canVerify = reason.homeId != null && onStartVerify != null
+                        ErrorLayout(
+                            message = current.message,
+                            onBack = onBack,
+                            headline = "This is your home's mail",
+                            ctaTitle = if (canVerify) "Verify your home" else "Try again",
+                            onCta = { if (canVerify) verifyHome = reason else viewModel.refresh() },
+                        )
+                    }
+                    MailCantOpen.NotFound ->
+                        ErrorLayout(
+                            message = current.message,
+                            onBack = onBack,
+                            headline = "Couldn't open this mail",
+                            ctaTitle = "Back to Mail",
+                            onCta = onBack,
+                        )
+                    null ->
+                        ErrorLayout(
+                            message = current.message,
+                            onBack = onBack,
+                            headline = if (LaunchFeatures.mailbox) "Couldn't open this mail" else "Couldn't load this item",
+                            ctaTitle = "Try again",
+                            onCta = viewModel::refresh,
+                        )
+                }
+        }
+        LetterSheets(
+            content = (state as? MailDetailUiState.Loaded)?.content,
+            showEnvelope = showEnvelope,
+            confirmShred = confirmShred,
+            confirmDone = confirmDone,
+            folders = letterFolders,
+            onCloseEnvelope = { showEnvelope = false },
+            onOpenSenderPage = { content ->
+                showEnvelope = false
+                content.senderUserId?.let { id -> if (content.senderIsBusiness) onOpenSenderBusiness(id) else onOpenSenderProfile(id) }
+            },
+            onShred = {
+                confirmShred = false
+                viewModel.shred()
+            },
+            onKeep = { confirmShred = false },
+            onDone = {
+                confirmDone = false
+                viewModel.doneWithIt()
+            },
+            onNotYet = { confirmDone = false },
+            onFileIn = viewModel::fileInVault,
+            onCloseFolders = viewModel::closeFolderPicker,
+        )
+        verifyHome?.let { proof ->
+            val homeId = proof.homeId
+            if (homeId != null && onStartVerify != null) {
+                PlaceVerifySheet(
+                    address = proof.address.orEmpty(),
+                    homeId = homeId,
+                    onStart = { method ->
+                        verifyHome = null
+                        onStartVerify(homeId, method)
+                    },
+                    onDismiss = { verifyHome = null },
+                    onOpenDocumentStatus =
+                        onOpenVerificationStatus?.let { open ->
+                            {
+                                verifyHome = null
+                                open(homeId)
+                            }
+                        },
+                )
+            }
         }
         if (showsSaveToVault) {
             AlertDialog(
@@ -322,6 +479,10 @@ private fun LoadedLayout(
     onDownloadCertifiedProof: () -> Unit = {},
     certifiedProofSaved: Boolean = false,
     certifiedProofInFlight: Boolean = false,
+    // The Mail tab's letter page, in place of the generic layout (it places [banner] itself).
+    letterPage: (@Composable () -> Unit)? = null,
+    // Shredded or dismissed: Restore, above every other layout.
+    banner: (@Composable () -> Unit)? = null,
 ) {
     // Dispatch to ceremonial variant layouts when the projected content
     // carries decoded payloads. Every variant composes the shared
@@ -340,6 +501,24 @@ private fun LoadedLayout(
     val pkg = content.packageDetail?.takeIf { LaunchFeatures.householdExtras }
     val party = content.partyDetail?.takeIf { LaunchFeatures.mailExtras }
     val records = content.recordsDetail
+    // The layouts below with a payload of their own; everything else is the generic letter.
+    val hasVariant =
+        listOf(
+            MailItemCategory.Booklet to booklet,
+            MailItemCategory.Certified to certified,
+            MailItemCategory.Community to community,
+            MailItemCategory.Coupon to coupon,
+            MailItemCategory.Gig to gig,
+            MailItemCategory.Memory to memory,
+            MailItemCategory.Package to pkg,
+            MailItemCategory.Party to party,
+            MailItemCategory.Records to records,
+        ).any { (category, detail) -> content.category == category && detail != null }
+    if (letterPage != null && !hasVariant) {
+        letterPage()
+        return
+    }
+    banner?.invoke()
     when {
         content.category == MailItemCategory.Booklet && booklet != null ->
             BookletDetailLayout(
@@ -502,7 +681,9 @@ private fun LoadingLayout(onBack: () -> Unit) {
 private fun ErrorLayout(
     message: String,
     onBack: () -> Unit,
-    onRetry: () -> Unit,
+    headline: String,
+    ctaTitle: String,
+    onCta: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize().testTag("mailDetail_error")) {
         MailItemDetailTopBar(
@@ -515,10 +696,10 @@ private fun ErrorLayout(
         )
         EmptyState(
             icon = PantopusIcon.AlertCircle,
-            headline = "Couldn't load this item",
+            headline = headline,
             subcopy = message,
-            ctaTitle = "Try again",
-            onCta = onRetry,
+            ctaTitle = ctaTitle,
+            onCta = onCta,
             modifier = Modifier.weight(1f),
         )
     }
@@ -544,7 +725,12 @@ private fun RemovedBanner(
             icon = PantopusIcon.Trash,
             title = title,
             subtitle = subtitle,
-            actionLabel = if (restoring) "Restoring…" else "Restore",
+            actionLabel =
+                when {
+                    restoring -> if (LaunchFeatures.mailbox) "Bringing it back…" else "Restoring…"
+                    LaunchFeatures.mailbox -> "Bring it back"
+                    else -> "Restore"
+                },
             onAction = onRestore,
         )
     }
@@ -552,13 +738,17 @@ private fun RemovedBanner(
 
 /** Who deleted it and until when it can be restored, or that it was dismissed. */
 private fun removedBannerText(removed: MailRemovedDto): Pair<String, String> {
-    if (!removed.isDeleted) return "Dismissed for the household" to "You can restore it"
-    val title = removed.byName?.let { "Deleted by $it" } ?: "Deleted"
+    // The Mail tab says it in mail words: shredded, and brought back.
+    val mailWords = LaunchFeatures.mailbox
+    if (!removed.isDeleted) return "Dismissed for the household" to if (mailWords) "You can bring it back" else "You can restore it"
+    val gone = if (mailWords) "Shredded" else "Deleted"
+    val title = removed.byName?.let { "$gone by $it" } ?: gone
     val until =
         removed.restorableUntil?.let {
             runCatching {
                 DateTimeFormatter.ofPattern("MMM d", Locale.US).withZone(ZoneId.systemDefault()).format(Instant.parse(it))
             }.getOrNull()
         }
-    return title to (until?.let { "You can restore it until $it" } ?: "You can restore it for 30 days")
+    val back = if (mailWords) "You can bring it back" else "You can restore it"
+    return title to (until?.let { "$back until $it" } ?: "$back for 30 days")
 }

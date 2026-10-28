@@ -4900,6 +4900,12 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                     ChildRoutes.packageGig(mailId = sourceMailId, isPreDelivery = isPreDelivery),
                                 )
                             }.takeIf { PACKAGE_GIG_AVAILABLE },
+                        // The Mail tab's letter page: Pay opens the existing invoice screen; a bundle's piece opens its
+                        // own page over this one; Verify your home opens the Place verify sheet's doors for that Home.
+                        onPay = { invoiceId -> navController.navigate(ChildRoutes.invoiceDetail(invoiceId)) },
+                        onOpenPiece = { pieceId -> navController.navigate(ChildRoutes.mailboxItemDetail(pieceId)) },
+                        onStartVerify = { homeId, method -> navController.openPlaceVerify(method, homeId) },
+                        onOpenVerificationStatus = { homeId -> navController.navigate(ChildRoutes.waitingRoom(homeId)) },
                     )
                 }
                 composable(

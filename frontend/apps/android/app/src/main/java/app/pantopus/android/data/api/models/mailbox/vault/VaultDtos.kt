@@ -27,6 +27,8 @@ data class VaultFolderDto(
     @Json(name = "item_count") val itemCount: Int?,
     @Json(name = "sort_order") val sortOrder: Int?,
     @Json(name = "created_at") val createdAt: String?,
+    /** A Home's shared cabinet (SRV-2): the same folders for every reader of that Home's mail; null for the person's own. */
+    @Json(name = "home_id") val homeId: String? = null,
 )
 
 /** `POST /api/mailbox/v2/p2/vault/folder` — `{ folder: ... }`. */
