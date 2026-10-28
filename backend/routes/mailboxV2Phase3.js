@@ -36,7 +36,7 @@ const validate = require('../middleware/validate');
 const Joi = require('joi');
 const logger = require('../utils/logger');
 const { isLaunchFeatureEnabled } = require('../utils/featureFlags');
-const { AWARDED_STAMP_TYPES, STAMP_GOALS } = require('../jobs/stampAwarder');
+const { AWARDED_STAMP_TYPES, STAMP_GOALS, countStampMetric: readStampMetric } = require('../jobs/stampAwarder');
 
 // ============ VALIDATION SCHEMAS ============
 
@@ -1359,23 +1359,12 @@ router.patch('/mailday/settings', verifyToken, validate(updateMailDaySchema), as
 // The count a stamp goal measures, read the way the stamp awarder reads it. null when the read fails,
 // so the gallery shows the stamp without a progress bar rather than failing or showing a wrong number.
 async function countStampMetric(userId, metric) {
-  let query;
-  if (metric === 'totalMail' || metric === 'vaultFiled') {
-    query = onlyDelivered(supabaseAdmin.from('Mail').select('*', { count: 'exact', head: true })
-      .eq('recipient_user_id', userId).is('deleted_at', null));
-    if (metric === 'vaultFiled') query = query.not('vault_folder_id', 'is', null);
-  } else if (metric === 'packages') {
-    query = supabaseAdmin.from('MailPackage').select('id, mail:Mail!inner(recipient_user_id)', { count: 'exact', head: true })
-      .eq('mail.recipient_user_id', userId);
-  } else {
-    return null;
-  }
-  const { count, error } = await query;
-  if (error) {
+  try {
+    return await readStampMetric(userId, metric);
+  } catch (error) {
     logger.warn('[P3] stamp progress count failed', { metric, error: error.message });
     return null;
   }
-  return count || 0;
 }
 
 // GET /stamps — user's stamp gallery
@@ -1383,11 +1372,12 @@ router.get('/stamps', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
 
-    const { data: earned } = await supabaseAdmin
+    const { data: earned, error: earnedError } = await supabaseAdmin
       .from('Stamp')
       .select('*')
       .eq('user_id', userId)
       .order('earned_at', { ascending: false });
+    if (earnedError) throw earnedError;
 
     // Define all available stamps
     const ALL_STAMPS = [
@@ -1428,7 +1418,9 @@ router.get('/stamps', verifyToken, async (req, res) => {
       earned: earned || [],
       locked,
       total_earned: (earned || []).length,
-      total_available: available.length,
+      // Retained awards from a currently disabled feature still appear in the
+      // collection, so the denominator must include them too.
+      total_available: (earned || []).length + locked.length,
     });
   } catch (err) {
     logger.error('[P3] GET /stamps failed', { error: err.message });
