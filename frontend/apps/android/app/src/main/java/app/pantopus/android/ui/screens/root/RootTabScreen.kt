@@ -6996,6 +6996,18 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                                 currentPlaceHost?.landing?.value == HomeLanding.Homes
                                         if (!rootShowsMyHomes) navController.navigate(ChildRoutes.MY_HOMES)
                                     }
+                                // Back while the claim gives no way into this Home: the screen the room was opened
+                                // from (the claimed address, Today, My homes), past the Home's dashboard a
+                                // waiting-room link puts under the room. Mirrors iOS `leaveRoom(withoutHome:)`.
+                                is WaitingRoomNav.Leave -> {
+                                    navController.popBackStack(ChildRoutes.waitingRoom(nav.homeId), inclusive = true)
+                                    val under = navController.currentBackStackEntry
+                                    if (under?.destination?.route == ChildRoutes.HOME_DASHBOARD &&
+                                        under.arguments?.getString(HOME_DASHBOARD_HOME_ID_KEY) == nav.homeId
+                                    ) {
+                                        navController.popBackStack()
+                                    }
+                                }
                                 is WaitingRoomNav.ViewClaim ->
                                     navController.navigate(ChildRoutes.MY_CLAIMS)
                                 is WaitingRoomNav.UpdateEvidence ->
