@@ -8,26 +8,40 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalAccessibilityManager
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.isSpecified
+import androidx.compose.ui.unit.isUnspecified
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusTextStyle
@@ -61,8 +75,7 @@ data class ToastMessage(
 /**
  * StateFlow holder for the current toast. Inject a single instance at the
  * app graph root and call [show] / [success] / [error] from view-models.
- * The matching [ToastHost] consumes [current] and dismisses after
- * [autoDismissMillis].
+ * The matching [ToastHost] consumes [current] and allows time to read it.
  */
 class ToastController {
     private val _current = MutableStateFlow<ToastMessage?>(null)
@@ -93,9 +106,12 @@ class ToastController {
 }
 
 /**
- * Pill-shaped transient banner — mirrors iOS `ToastView`. The host
- * floats this at the bottom of the screen; auto-dismiss happens at the
- * [ToastHost] layer so callers can leave the controller value set.
+ * Transient banner — mirrors iOS `ToastView`. A message that fits on one
+ * line is a pill; a longer one wraps, centred, under corners that stay
+ * clear of its first and last lines, and keeps 16 dp from each side of
+ * the screen. The host floats this at the bottom of the screen;
+ * auto-dismiss happens at the [ToastHost] layer so callers can leave the
+ * controller value set.
  */
 @Composable
 fun Toast(
@@ -103,30 +119,99 @@ fun Toast(
     modifier: Modifier = Modifier,
 ) {
     val (background, foreground) = toastPalette(message.kind)
-    Box(
+    Toast(text = message.text, appearance = ToastAppearance(background, foreground), modifier = modifier)
+}
+
+/**
+ * A screen's own toast drawn on the shared surface: its colours, type and
+ * spacing stay as they were, and it gets the side clearance, the corners for
+ * wrapped lines, the centred text and the TalkBack live region of [Toast].
+ * [textStyle] is the style the screen gave its text: a full style, or just
+ * a size and weight for text drawn on the theme's style. [sideMargin] is 0
+ * where the screen already keeps its toast off the edges; [textWidth] keeps
+ * a fixed text width a screen had.
+ */
+data class ToastAppearance(
+    val background: Color,
+    val foreground: Color = PantopusColors.appTextInverse,
+    val textStyle: TextStyle = PantopusTextStyle.small,
+    val verticalPadding: Dp = Spacing.s2,
+    val sideMargin: Dp = Spacing.s4,
+    val iconSpacing: Dp = Spacing.s2,
+    val textWidth: Dp = Dp.Unspecified,
+)
+
+/** [Toast] with a screen's own [appearance] and an optional [leading] icon. */
+@Composable
+fun Toast(
+    text: String,
+    appearance: ToastAppearance,
+    modifier: Modifier = Modifier,
+    leading: (@Composable () -> Unit)? = null,
+) {
+    var wraps by remember(text) { mutableStateOf(false) }
+    // A full style (one with its own line height, such as PantopusTextStyle.small) is drawn as given. A size and
+    // weight alone are drawn on the theme's text, as `Text(fontSize = …)` did, and so take its 24-sp line height:
+    // one line keeps it, as the screen drew it; wrapped lines get one in step with their size (20 sp for 14 sp).
+    val textStyle =
+        if (appearance.textStyle.lineHeight.isUnspecified) {
+            val themed = LocalTextStyle.current.merge(appearance.textStyle)
+            if (wraps) themed.copy(lineHeight = themed.fontSize * WRAPPED_LINE_HEIGHT_RATIO) else themed
+        } else {
+            appearance.textStyle
+        }
+    Row(
         modifier =
             modifier
-                .clip(RoundedCornerShape(Radii.pill))
-                .background(background)
-                .padding(horizontal = Spacing.s4, vertical = Spacing.s2)
+                .clearOfSides(appearance.sideMargin)
+                .clip(RoundedCornerShape(if (wraps) Radii.xl else Radii.pill))
+                .background(appearance.background)
+                .padding(horizontal = Spacing.s4, vertical = appearance.verticalPadding)
                 .semantics {
-                    contentDescription = message.text
+                    contentDescription = text
                     liveRegion = LiveRegionMode.Polite
                 },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(appearance.iconSpacing),
     ) {
+        leading?.invoke()
         Text(
-            text = message.text,
-            style = PantopusTextStyle.small,
-            color = foreground,
+            text = text,
+            modifier =
+                Modifier
+                    .weight(1f, fill = false)
+                    .then(if (appearance.textWidth.isSpecified) Modifier.width(appearance.textWidth) else Modifier),
+            style = textStyle,
+            color = appearance.foreground,
+            textAlign = TextAlign.Center,
+            onTextLayout = { wraps = it.lineCount > 1 },
         )
     }
 }
 
 /**
+ * Narrows the widest the toast may grow by [margin] on each side, so a long
+ * message wraps clear of the screen's edges while a short one keeps its
+ * size and place.
+ */
+private fun Modifier.clearOfSides(margin: Dp): Modifier =
+    layout { measurable, constraints ->
+        val maxWidth =
+            if (constraints.hasBoundedWidth) {
+                (constraints.maxWidth - (margin * 2).roundToPx()).coerceAtLeast(constraints.minWidth)
+            } else {
+                constraints.maxWidth
+            }
+        val placeable = measurable.measure(constraints.copy(maxWidth = maxWidth))
+        layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+    }
+
+/**
  * Top-level host. Wrap inside [PantopusTheme] at the root so every screen
  * shares the same toast surface. Listens to [controller], renders the
- * current toast as an animated bottom-anchored pill, and dismisses after
- * [autoDismissMillis] (default 3 s).
+ * current toast as an animated bottom-anchored banner. The default dwell
+ * grows with the message (3–7 s), then respects the accessibility timeout.
+ * [autoDismissMillis] can override the base dwell for a specific host.
  *
  * Posts a TalkBack announcement on first frame so the user is notified
  * even when the toast is off-screen (live region only fires when the node
@@ -136,18 +221,25 @@ fun Toast(
 fun ToastHost(
     controller: ToastController,
     modifier: Modifier = Modifier,
-    autoDismissMillis: Long = AUTO_DISMISS_MILLIS,
+    autoDismissMillis: Long? = null,
 ) {
     val current by controller.current.collectAsStateWithLifecycle()
     val view = LocalView.current
+    val accessibilityManager = LocalAccessibilityManager.current
 
-    LaunchedEffect(current?.id) {
+    LaunchedEffect(current?.id, autoDismissMillis, accessibilityManager) {
         val message = current ?: return@LaunchedEffect
         // Belt-and-braces — Compose's `liveRegion` covers the on-attach
         // read; `announceForAccessibility` covers TalkBack users who
         // toggle the reader mid-toast.
         view.announceForAccessibility(message.text)
-        delay(autoDismissMillis)
+        val duration = autoDismissMillis ?: toastDurationMillis(message.text)
+        delay(
+            accessibilityManager?.calculateRecommendedTimeoutMillis(
+                originalTimeoutMillis = duration,
+                containsText = true,
+            ) ?: duration,
+        )
         if (controller.current.value?.id == message.id) {
             controller.dismiss()
         }
@@ -192,6 +284,15 @@ private const val SEMANTIC_ALPHA = 0.95f
 private const val NEUTRAL_ALPHA = 0.9f
 
 private const val AUTO_DISMISS_MILLIS = 3_000L
+private const val MAX_DISMISS_MILLIS = 7_000L
+private const val MILLIS_PER_CHARACTER = 60L
+private const val WRAPPED_LINE_HEIGHT_RATIO = 20f / 14f
+
+/** Keep brief confirmations familiar while giving explanatory errors time to be read. */
+fun toastDurationMillis(
+    text: String,
+    minimumMillis: Long = AUTO_DISMISS_MILLIS,
+): Long = (text.length * MILLIS_PER_CHARACTER).coerceIn(minimumMillis, MAX_DISMISS_MILLIS)
 
 @Preview(showBackground = true, widthDp = 360, heightDp = 240)
 @Composable

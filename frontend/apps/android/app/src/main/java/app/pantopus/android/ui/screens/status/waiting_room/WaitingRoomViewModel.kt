@@ -43,6 +43,12 @@ sealed interface WaitingRoomNav {
     /** "Back to My homes": the claim gives no way into this Home yet. */
     data class MyHomes(val homeId: String) : WaitingRoomNav
 
+    /**
+     * Back (the arrow or the system gesture) while the claim gives no way into this Home yet: the screen the room was
+     * opened from, past that Home's own screen (a link puts it underneath, and they can't open it).
+     */
+    data class Leave(val homeId: String) : WaitingRoomNav
+
     data class ViewClaim(val claimId: String) : WaitingRoomNav
 
     data class UpdateEvidence(val homeId: String, val claimId: String) : WaitingRoomNav
@@ -80,6 +86,7 @@ sealed interface WaitingRoomNav {
  * via [navEvent].
  */
 @HiltViewModel
+@Suppress("TooManyFunctions") // Each way out of the room is its own small action that the host navigates.
 class WaitingRoomViewModel
     @Inject
     constructor(
@@ -107,6 +114,9 @@ class WaitingRoomViewModel
 
         private val _phase = MutableStateFlow<WaitingRoomPhase>(WaitingRoomPhase.Loading)
         val phase: StateFlow<WaitingRoomPhase> = _phase.asStateFlow()
+
+        private val _leavesToMyHomes = MutableStateFlow(false)
+        val leavesToMyHomes: StateFlow<Boolean> = _leavesToMyHomes.asStateFlow()
 
         private val _navEvent = MutableStateFlow<WaitingRoomNav?>(null)
         val navEvent: StateFlow<WaitingRoomNav?> = _navEvent.asStateFlow()
@@ -136,6 +146,15 @@ class WaitingRoomViewModel
             _navEvent.value = null
         }
 
+        fun leaveToMyHomes() {
+            _navEvent.value = WaitingRoomNav.MyHomes(homeId)
+        }
+
+        /** Back while the claim gives no way into this Home: where the room was opened from, never the Home's screen. */
+        fun leaveWithoutHome() {
+            _navEvent.value = WaitingRoomNav.Leave(homeId)
+        }
+
         fun refresh() {
             viewModelScope.launch { load() }
         }
@@ -145,6 +164,7 @@ class WaitingRoomViewModel
                 is NetworkResult.Success -> applyClaims(result.data.claims.firstOrNull { it.homeId == homeId })
                 is NetworkResult.Failure -> {
                     Log.w(TAG, "waitingRoom.load failed: ${result.error.message}")
+                    _leavesToMyHomes.value = false
                     _phase.value = WaitingRoomPhase.Notice(WaitingRoomNotice.LoadFailed)
                 }
             }
@@ -232,6 +252,7 @@ class WaitingRoomViewModel
             claimIsResidency = claim.claimType == "resident"
             if (claim.status != UNDER_REVIEW_STATUS) {
                 if (claim.status in APPROVED_STATUSES) {
+                    _leavesToMyHomes.value = false
                     // A18.2 "You're the owner" (a verified resident for a
                     // residency document). Dates come straight off the
                     // claim row — never the design's sample dates.
@@ -247,15 +268,16 @@ class WaitingRoomViewModel
                         )
                     return
                 }
+                _leavesToMyHomes.value = !opensHomeScreen()
+                val notice = if (claimIsResidency) WaitingRoomNotice.ResidencyClaimDecided else WaitingRoomNotice.ClaimDecided
                 _phase.value =
-                    WaitingRoomPhase.Notice(
-                        if (claimIsResidency) WaitingRoomNotice.ResidencyClaimDecided else WaitingRoomNotice.ClaimDecided,
-                    )
+                    WaitingRoomPhase.Notice(if (_leavesToMyHomes.value) notice.leavingToMyHomes() else notice)
                 return
             }
             val ref = claim.id.take(CLAIM_REF_LENGTH).uppercase()
             val home = homeContext(claim.home)
             val canOpenHome = opensHomeScreen()
+            _leavesToMyHomes.value = !canOpenHome
             _content.value =
                 if (seedState == WaitingRoomState.MoreInfoRequested) {
                     WaitingRoomContent.moreInfoRequested(
@@ -305,13 +327,19 @@ class WaitingRoomViewModel
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (_: Exception) {
+                    _leavesToMyHomes.value = false
                     _phase.value = WaitingRoomPhase.Notice(WaitingRoomNotice.LoadFailed)
                     return
                 }
             if (access.currentVerificationKind() == null) {
-                _phase.value = WaitingRoomPhase.Notice(WaitingRoomNotice.NoClaim)
+                _leavesToMyHomes.value = access.sharedAccess() == null
+                _phase.value =
+                    WaitingRoomPhase.Notice(
+                        if (_leavesToMyHomes.value) WaitingRoomNotice.NoClaim.leavingToMyHomes() else WaitingRoomNotice.NoClaim,
+                    )
                 return
             }
+            _leavesToMyHomes.value = false
             val offersLandlord = offersLandlordConfirmation()
             _phase.value =
                 WaitingRoomPhase.Verification(

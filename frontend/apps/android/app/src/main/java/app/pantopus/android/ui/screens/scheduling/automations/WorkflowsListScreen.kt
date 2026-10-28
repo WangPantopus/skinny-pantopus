@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.api.models.scheduling.WorkflowDto
+import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingPillStatus
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingStatusPill
 import app.pantopus.android.ui.theme.PantopusColors
@@ -76,7 +77,7 @@ fun WorkflowsListScreen(
     LaunchedEffect(Unit) { viewModel.load() }
     LaunchedEffect(actionError) {
         if (actionError != null) {
-            delay(ACTION_TOAST_MS)
+            delay(toastDurationMillis(actionError.orEmpty(), minimumMillis = ACTION_TOAST_MS))
             viewModel.clearActionError()
         }
     }

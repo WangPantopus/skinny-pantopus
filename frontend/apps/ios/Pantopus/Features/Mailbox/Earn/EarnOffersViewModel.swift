@@ -301,7 +301,7 @@ public final class EarnOffersViewModel {
         toast = ToastMessage(text: text, kind: kind)
         toastTask?.cancel()
         toastTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 2_500_000_000)
+            try? await Task.sleep(for: ToastMessage.duration(for: text, minimum: 2.5))
             guard !Task.isCancelled else { return }
             self?.toast = nil
         }

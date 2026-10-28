@@ -35,6 +35,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -43,7 +44,10 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.Toast
+import app.pantopus.android.ui.components.ToastAppearance
 import app.pantopus.android.ui.components.VerifiedBadge
+import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -84,7 +88,7 @@ fun FollowingScreen(
     LaunchedEffect(Unit) { viewModel.load() }
     LaunchedEffect(toast) {
         if (toast != null) {
-            delay(TOAST_DISMISS_DELAY_MS)
+            delay(toastDurationMillis(toast?.text.orEmpty(), minimumMillis = TOAST_DISMISS_DELAY_MS))
             viewModel.dismissToast()
         }
     }
@@ -853,17 +857,20 @@ private fun FollowingError(
 @Composable
 private fun FollowingToastOverlay(toast: FollowingToast) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
-        Box(
+        Toast(
+            text = toast.text,
+            appearance =
+                ToastAppearance(
+                    background = if (toast.isError) PantopusColors.error else PantopusColors.success,
+                    foreground = PantopusColors.appTextInverse,
+                    textStyle = TextStyle(fontSize = 14.sp),
+                    sideMargin = 0.dp,
+                ),
             modifier =
                 Modifier
                     .padding(bottom = Spacing.s10, start = Spacing.s4, end = Spacing.s4)
-                    .clip(RoundedCornerShape(Radii.pill))
-                    .background(if (toast.isError) PantopusColors.error else PantopusColors.success)
-                    .padding(horizontal = Spacing.s4, vertical = Spacing.s2)
                     .testTag("followingToast"),
-        ) {
-            Text(text = toast.text, fontSize = 14.sp, color = PantopusColors.appTextInverse)
-        }
+        )
     }
 }
 

@@ -35,6 +35,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.api.models.offers.BidDto
 import app.pantopus.android.data.api.models.offers.WithdrawBidReason
+import app.pantopus.android.ui.components.Toast
+import app.pantopus.android.ui.components.ToastAppearance
+import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.shared.activity_filter_sheet.ActivityFilterSheet
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsScreen
 import app.pantopus.android.ui.theme.PantopusColors
@@ -90,7 +93,7 @@ fun MyBidsScreen(
 
     LaunchedEffect(toast) {
         if (toast != null) {
-            kotlinx.coroutines.delay(TOAST_DISMISS_DELAY_MS)
+            kotlinx.coroutines.delay(toastDurationMillis(toast?.text.orEmpty(), minimumMillis = TOAST_DISMISS_DELAY_MS))
             viewModel.dismissToast()
         }
     }
@@ -149,23 +152,20 @@ private fun MyBidsToastOverlay(payload: MyBidsToast) {
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.BottomCenter,
     ) {
-        Box(
+        Toast(
+            text = payload.text,
+            appearance =
+                ToastAppearance(
+                    background = if (payload.isError) PantopusColors.error else PantopusColors.success,
+                    foreground = PantopusColors.appTextInverse,
+                    textStyle = PantopusTextStyle.small,
+                    sideMargin = 0.dp,
+                ),
             modifier =
                 Modifier
                     .padding(bottom = Spacing.s10, start = Spacing.s4, end = Spacing.s4)
-                    .clip(RoundedCornerShape(Radii.pill))
-                    .background(
-                        if (payload.isError) PantopusColors.error else PantopusColors.success,
-                    )
-                    .padding(horizontal = Spacing.s4, vertical = Spacing.s2)
                     .testTag("my-bids-toast"),
-        ) {
-            Text(
-                text = payload.text,
-                style = PantopusTextStyle.small,
-                color = PantopusColors.appTextInverse,
-            )
-        }
+        )
     }
 }
 

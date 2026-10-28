@@ -52,8 +52,7 @@ public struct EditBusinessPageView: View {
                 ToastView(message: ToastMessage(text: toast, kind: .neutral))
                     .padding(.bottom, Spacing.s16)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .task(id: toast) {
-                        try? await Task.sleep(nanoseconds: 2_000_000_000)
+                    .dismissToast(after: toast, minimum: 2) {
                         viewModel.toastMessage = nil
                     }
             }

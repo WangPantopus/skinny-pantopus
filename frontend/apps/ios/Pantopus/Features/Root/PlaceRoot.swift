@@ -3,10 +3,10 @@
 //  Pantopus
 //
 //  What the Place tab shows at its root. The tab is the person's place:
-//  Your Place for a Home they can open, the address they saved, or the
-//  address-first screen. My homes roots the tab only while every entry
-//  still waits on verification, or while the person has no Home entries
-//  but a claim in review. Nothing sits under Your Place.
+//  Your Place for a Home they can open, the address they claimed while the
+//  claim is in review, the address they saved, or the address-first screen.
+//  My homes roots the tab only while every entry still waits on
+//  verification. Nothing sits under Your Place.
 //
 
 import Foundation
@@ -16,12 +16,14 @@ enum PlaceRoot: Equatable {
     case resolving
     /// Your Place for this Home.
     case home(String)
+    /// No Home entries but a claim in review: the claimed address's public
+    /// Place, with the claim's status on top.
+    case claim(String)
     /// No Home entries; the address they saved privately.
     case savedPlace(SavedPlaceDTO)
     /// No Home entries and no saved address: the address-first screen.
     case firstRun
-    /// Entries that all still wait on verification, or none but a claim in
-    /// review: My homes shows them.
+    /// Entries that all still wait on verification: My homes shows them.
     case homes
     /// The first read failed and there was no kept copy.
     case error(String)
@@ -54,10 +56,11 @@ enum PlaceRootResolver {
         return nil
     }
 
-    /// With no Home entries, a claim in review roots the tab at My homes, which
-    /// shows it (a claim makes its Home the person's only once it's approved).
+    /// With no Home entries, a claim in review roots the tab at the claimed
+    /// address: its public Place until the claim is approved (a claim makes its
+    /// Home the person's only then).
     static func root(forClaims response: MyOwnershipClaimsResponse) -> PlaceRoot? {
-        response.claims.contains(where: \.isInReview) ? .homes : nil
+        response.claims.first(where: \.isInReview).map { .claim($0.homeId) }
     }
 
     /// The saved address the Place tab shows: the newest one saved as a home,

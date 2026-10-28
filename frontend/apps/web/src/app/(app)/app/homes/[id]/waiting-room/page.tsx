@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useCallback, useEffect } from 'react';
+import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft, Mail, ShieldHalf, Hourglass, FileText, Clock,
@@ -72,7 +73,12 @@ function WaitingRoomContent() {
     return (
       <div className="max-w-lg mx-auto px-4 py-6">
         {denied
-          ? <ErrorState title="No access" message="You don't have access to this home's verification status." />
+          ? <>
+            <ErrorState title="No access" message="You don't have access to this home's verification status." />
+            <Link href="/app/homes" className="block text-center text-sm font-semibold text-emerald-600 hover:text-emerald-700">
+              Back to My Homes
+            </Link>
+          </>
           : <ErrorState message={error} onRetry={reload} />}
       </div>
     );
