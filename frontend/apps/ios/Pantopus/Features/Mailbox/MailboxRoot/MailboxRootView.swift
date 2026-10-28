@@ -49,6 +49,11 @@ public struct MailboxRootView: View {
                             .padding(.horizontal, Spacing.s4)
                             .padding(.top, 6)
                             .id(Self.heroAnchor)
+                        if let hold = viewModel.vacationHold {
+                            MailHoldBanner(hold: hold) { viewModel.openVacationHold() }
+                                .padding(.horizontal, Spacing.s4)
+                                .padding(.top, Spacing.s3)
+                        }
                         MailboxRootHeader(viewModel: viewModel)
                         MailboxPieceList(viewModel: viewModel)
                             .padding(.bottom, Spacing.s6)
@@ -188,11 +193,34 @@ public struct MailboxRootView: View {
     }
 }
 
-/// The mail of the selected drawer and tab, or what to say instead.
+/// The mail of the selected drawer and tab, or what to say instead: the
+/// closed Home box, the Counter's tags and the Vault's folders.
 private struct MailboxPieceList: View {
     let viewModel: MailboxRootViewModel
 
     var body: some View {
+        if viewModel.isLive, viewModel.showsClosedHome, let home = viewModel.homesWaitingForProof.first {
+            MailClosedHomeDrawer(
+                home: home,
+                onVerify: { viewModel.onVerifyHome?(home.homeId) },
+                onGoToMe: { viewModel.selectDrawer(.me) }
+            )
+            .padding(.horizontal, Spacing.s4)
+            .padding(.top, Spacing.s5)
+        } else {
+            VStack(alignment: .leading, spacing: Spacing.s0) {
+                if viewModel.isLive, viewModel.selectedDrawer == .home, let waiting = viewModel.homesWaitingForProof.first {
+                    MailHomeWaitingBanner(home: waiting) { viewModel.onVerifyHome?(waiting.homeId) }
+                        .padding(.horizontal, Spacing.s4)
+                        .padding(.top, Spacing.s4)
+                }
+                content
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
         switch viewModel.state {
         case .loading:
             VStack(spacing: Spacing.s4) {
@@ -203,6 +231,9 @@ private struct MailboxPieceList: View {
             .padding(.horizontal, Spacing.s4)
             .padding(.top, 18)
             .accessibilityLabel("Loading your mail")
+        case .empty where viewModel.isLive && viewModel.currentTab == .vault:
+            // The folders and the archive still show when nothing is filed here.
+            MailVaultShelf(viewModel: viewModel, filedEmpty: true, hasMore: false)
         case let .empty(content):
             EmptyState(
                 icon: content.icon,
@@ -233,6 +264,10 @@ private struct MailboxPieceList: View {
                     }
                 }
                 .padding(Spacing.s4)
+            } else if viewModel.currentTab == .counter {
+                MailCounterShelf(viewModel: viewModel, hasMore: hasMore)
+            } else if viewModel.currentTab == .vault {
+                MailVaultShelf(viewModel: viewModel, filedEmpty: false, hasMore: hasMore)
             } else {
                 pieces(hasMore: hasMore)
             }
@@ -258,31 +293,41 @@ private struct MailboxPieceList: View {
                         }
                 }
             }
-            if let error = viewModel.loadMoreError {
-                VStack(spacing: Spacing.s2) {
-                    Text(error)
-                        .font(.system(size: 13))
-                        .foregroundStyle(Theme.Color.appTextSecondary)
-                        .multilineTextAlignment(.center)
-                    Button("Try again") { Task { await viewModel.retryLoadMore() } }
-                        .font(.system(size: 14, weight: .semibold))
-                        .frame(minHeight: 44)
-                        .accessibilityIdentifier("mailboxRootLoadMoreRetry")
-                }
-                .frame(maxWidth: .infinity)
-            } else if hasMore {
-                ProgressView()
-                    .frame(maxWidth: .infinity, minHeight: 44)
-                    .accessibilityLabel("Loading more mail")
-            }
+            MailLoadMoreFooter(viewModel: viewModel, hasMore: hasMore)
         }
         .padding(.horizontal, Spacing.s4)
         .padding(.top, 18)
     }
 }
 
+/// Under a list of mail: the next page's spinner, or why it didn't come.
+struct MailLoadMoreFooter: View {
+    let viewModel: MailboxRootViewModel
+    let hasMore: Bool
+
+    var body: some View {
+        if let error = viewModel.loadMoreError {
+            VStack(spacing: Spacing.s2) {
+                Text(error)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .multilineTextAlignment(.center)
+                Button("Try again") { Task { await viewModel.retryLoadMore() } }
+                    .font(.system(size: 14, weight: .semibold))
+                    .frame(minHeight: 44)
+                    .accessibilityIdentifier("mailboxRootLoadMoreRetry")
+            }
+            .frame(maxWidth: .infinity)
+        } else if hasMore {
+            ProgressView()
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .accessibilityLabel("Loading more mail")
+        }
+    }
+}
+
 /// A piece and the line under it, opening the piece.
-private struct MailPieceRow: View {
+struct MailPieceRow: View {
     let piece: MailPieceModel
     let onOpen: () -> Void
 
@@ -313,7 +358,7 @@ private struct MailPieceRow: View {
 }
 
 /// Pressing a piece lifts it a little, like picking up an envelope.
-private struct MailPieceButtonStyle: ButtonStyle {
+struct MailPieceButtonStyle: ButtonStyle {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func makeBody(configuration: Configuration) -> some View {

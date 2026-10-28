@@ -109,6 +109,20 @@ public struct VacationHoldDTO: Decodable, Sendable, Hashable, Identifiable {
 public struct VacationStatusResponse: Decodable, Sendable, Hashable {
     public let active: VacationHoldDTO?
     public let upcoming: VacationHoldDTO?
+    /// Pieces the hold keeps now (Mail build contract, SRV-5); absent on older servers.
+    public let heldCount: Int?
+
+    private enum CodingKeys: String, CodingKey {
+        case active, upcoming
+        case heldCount = "held_count"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        active = try c.decodeIfPresent(VacationHoldDTO.self, forKey: .active)
+        upcoming = try c.decodeIfPresent(VacationHoldDTO.self, forKey: .upcoming)
+        heldCount = try? c.decodeIfPresent(Int.self, forKey: .heldCount)
+    }
 }
 
 /// Body for `POST /api/mailbox/v2/p3/vacation/start` — route
@@ -144,6 +158,19 @@ public struct StartVacationRequest: Encodable, Sendable, Hashable {
 /// `POST /api/mailbox/v2/p3/vacation/start` envelope — `{ hold }`.
 public struct StartVacationResponse: Decodable, Sendable, Hashable {
     public let hold: VacationHoldDTO
+    /// Pieces this hold keeps now (Mail build contract, SRV-5); absent on older servers.
+    public let heldCount: Int?
+
+    private enum CodingKeys: String, CodingKey {
+        case hold
+        case heldCount = "held_count"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        hold = try c.decode(VacationHoldDTO.self, forKey: .hold)
+        heldCount = try? c.decodeIfPresent(Int.self, forKey: .heldCount)
+    }
 }
 
 /// Body for `POST /api/mailbox/v2/p3/vacation/cancel` — route

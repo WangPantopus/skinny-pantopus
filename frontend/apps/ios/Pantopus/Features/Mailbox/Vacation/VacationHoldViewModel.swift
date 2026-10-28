@@ -42,6 +42,9 @@ public final class VacationHoldViewModel {
     public private(set) var mutationInFlight: Bool = false
     /// Transient banner; the view clears it after display.
     public var toast: String?
+    /// The server refused the dates ("Choose a day from today on…"): shown
+    /// under them until they change.
+    public private(set) var dateError: String?
     public private(set) var isLoading = false
     public private(set) var loadError: String?
 
@@ -124,7 +127,7 @@ public final class VacationHoldViewModel {
                 activeHoldId = active.id
                 activeHoldDTO = active
                 editingHoldId = nil
-                mode = .active(Self.activeHold(from: active))
+                mode = .active(Self.activeHold(from: active, heldCount: response.heldCount))
             } else {
                 activeHoldId = nil
                 activeHoldDTO = nil
@@ -257,6 +260,7 @@ public final class VacationHoldViewModel {
     /// Clamps `toDate` so the span stays at least 1 day.
     public func setFromDate(_ newValue: Date) {
         guard case var .scheduling(draft) = mode else { return }
+        dateError = nil
         draft.fromDate = newValue
         if draft.toDate < newValue {
             draft.toDate = newValue
@@ -268,6 +272,7 @@ public final class VacationHoldViewModel {
     /// earlier than the start.
     public func setToDate(_ newValue: Date) {
         guard case var .scheduling(draft) = mode else { return }
+        dateError = nil
         draft.toDate = max(newValue, draft.fromDate)
         mode = .scheduling(draft)
     }
@@ -303,16 +308,17 @@ public final class VacationHoldViewModel {
             )
             activeHoldId = response.hold.id
             activeHoldDTO = response.hold
-            mode = .active(Self.activeHold(from: response.hold))
+            mode = .active(Self.activeHold(from: response.hold, heldCount: response.heldCount))
             editingHoldId = nil
-            toast = "Travel dates saved"
+            dateError = nil
+            toast = "Your mail hold is saved."
         } catch {
             // Keep the composer; the CTA can be retried.
             let message = (error as? APIError)?.errorDescription ?? "Couldn't save your travel dates."
-            if let apiError = error as? APIError, case .clientError(status: 409, message: _) = apiError {
-                loadError = message
-            } else {
-                toast = message
+            switch error as? APIError {
+            case .clientError(status: 409, message: _): loadError = message
+            case .clientError(status: 400, message: _): dateError = message
+            default: toast = message
             }
         }
     }
@@ -329,7 +335,7 @@ public final class VacationHoldViewModel {
             activeHoldDTO = nil
             editingHoldId = nil
             mode = .scheduling(VacationScheduleDraft.liveDefault())
-            toast = "Travel dates cancelled"
+            toast = "Your hold has ended."
             await load()
         } catch {
             // Keep the active hold visible.
@@ -383,6 +389,7 @@ public final class VacationHoldViewModel {
     /// render simpler than the design fixture, which is expected.
     static func activeHold(
         from hold: VacationHoldDTO,
+        heldCount: Int? = nil,
         today: Date = Date()
     ) -> VacationActiveHold {
         let end = parseDay(hold.endDate)
@@ -394,14 +401,25 @@ public final class VacationHoldViewModel {
         return VacationActiveHold(
             daysLeft: daysLeft,
             untilLabel: untilLabel,
-            resumeBlurb: "Saving dates does not arrange mail holds, package handling or forwarding. Contact your carriers directly.",
+            resumeBlurb: resumeLine(end: end, held: heldCount ?? hold.itemsHeldCount ?? 0),
             stats: [],
             heldItems: [],
             forwarding: nil,
             emergency: nil,
-            activeSinceLabel: "\(fromLabel) – \(untilLabel) · Status changes at midnight UTC.",
+            activeSinceLabel: "\(fromLabel) – \(untilLabel)",
             statusLabel: statusLabel
         )
+    }
+
+    /// "Ordinary mail waits until you're back; special deliveries still come.
+    /// Your mail comes back Mon, Nov 30 at 7 a.m. · 4 pieces held."
+    static func resumeLine(end: Date?, held: Int) -> String {
+        var line = "Ordinary mail waits until you're back; special deliveries still come."
+        if let end {
+            line += " Your mail comes back \(VacationHoldFormatter.weekdayShort(end)) at 7 a.m."
+        }
+        line += held == 1 ? " · 1 piece held." : " · \(held) pieces held."
+        return line
     }
 
     // MARK: - Date helpers

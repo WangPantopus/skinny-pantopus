@@ -290,7 +290,7 @@ struct MailboxDrawing: View {
 }
 
 /// The mailbox's arched front.
-private struct MailboxArch: Shape {
+struct MailboxArch: Shape {
     let inset: CGFloat
 
     func path(in rect: CGRect) -> Path {

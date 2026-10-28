@@ -225,7 +225,7 @@ public struct VacationScheduleDraft: Sendable, Hashable {
             forwardingEnabled: false,
             forwarding: nil,
             emergency: nil,
-            footerBlurb: "Dates are saved to your home. Status changes at midnight UTC."
+            footerBlurb: "Only your own mail waits. Your home's mail keeps coming to the Home drawer."
         )
     }
 }

@@ -45,11 +45,13 @@ public struct VacationHoldView: View {
                         ErrorState(headline: "Couldn't load travel dates", message: message) {
                             await viewModel.refresh()
                         }
+                        .padding(.top, Spacing.s8)
                     } else {
                         switch viewModel.mode {
                         case let .scheduling(draft):
                             VacationSchedulingBody(
                                 draft: draft,
+                                dateError: viewModel.dateError,
                                 onPickFromDate: {
                                     viewModel.tapFromDate()
                                     pickingDate = .from
@@ -99,17 +101,17 @@ public struct VacationHoldView: View {
             }
         }
         .confirmationDialog(
-            "Cancel your travel dates?",
+            "End the hold?",
             isPresented: $showsEndHoldConfirm,
             titleVisibility: .visible
         ) {
-            Button("Cancel dates", role: .destructive) {
+            Button("End the hold", role: .destructive) {
                 Task { await viewModel.endHoldEarly() }
             }
             .accessibilityIdentifier("vacationHoldEndConfirm")
-            Button("Keep dates", role: .cancel) {}
+            Button("Keep it", role: .cancel) {}
         } message: {
-            Text("This removes the saved date range. Contact carriers separately about any delivery arrangements.")
+            Text("Your mail comes again, and what the hold kept arrives together with the next morning's mail.")
         }
         .overlay(alignment: .bottom) {
             if let toast = viewModel.toast {
@@ -176,6 +178,7 @@ public struct VacationHoldView: View {
 
 private struct VacationSchedulingBody: View {
     let draft: VacationScheduleDraft
+    let dateError: String?
     let onPickFromDate: () -> Void
     let onPickToDate: () -> Void
     let onToggleScope: (VacationHoldScope.Kind, Bool) -> Void
@@ -188,7 +191,27 @@ private struct VacationSchedulingBody: View {
             VacationOverline("When")
             whenCard
 
-            VacationCardHelper("Saving dates does not arrange mail holds, package handling or forwarding. Contact your carriers directly.")
+            // The server refused these dates: why, until they change.
+            if let dateError {
+                HStack(alignment: .top, spacing: Spacing.s2) {
+                    Icon(.alertCircle, size: 16, color: Theme.Color.error)
+                    Text(dateError)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(Theme.Color.error)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.horizontal, Spacing.s4)
+                .padding(.top, Spacing.s3)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("vacationHoldDateError")
+            }
+
+            // What a hold does (Mail build contract, SRV-5).
+            VacationCardHelper(
+                "Ordinary mail waits until you're back. Special deliveries still come. "
+                    + "What's held arrives as one bundle the morning you're back."
+            )
 
             VacationMonoFooter(draft.footerBlurb)
         }
@@ -317,8 +340,8 @@ private struct VacationActiveBody: View {
 
             VacationCard {
                 VacationDestructiveRow(
-                    label: "Cancel travel dates",
-                    sub: "Remove this saved date range",
+                    label: "End the hold",
+                    sub: "What it kept comes with the next morning's mail",
                     onTap: onEndHold,
                     identifier: "vacationHoldEndEarly"
                 )

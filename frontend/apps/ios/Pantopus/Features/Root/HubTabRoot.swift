@@ -427,6 +427,9 @@ public enum HubRoute: Hashable {
     /// Ceremonial open experience for stationery-carrying letters.
     /// Reached by redirect from the generic mail detail.
     case ceremonialMailOpen(mailId: String)
+    /// The first day: Pantopus's sealed welcome letter on the porch, opened
+    /// with the ceremonial open (a Mailbox screen, not a Mail extra).
+    case mailWelcome(mailId: String)
     /// Disambiguation queue behind the Mailbox root's
     /// "N items need routing" banner.
     case mailRoutingQueue
@@ -853,7 +856,7 @@ public struct HubTabRoot: View {
     private func makeMailboxRootModel(
         push: @escaping @MainActor @Sendable (HubRoute) -> Void
     ) -> MailboxRootViewModel {
-        MailboxRootViewModel(
+        let model = MailboxRootViewModel(
             onOpenMail: { mailId in
                 Task { @MainActor in push(.mailItemDetail(mailId: mailId)) }
             },
@@ -872,6 +875,21 @@ public struct HubTabRoot: View {
             onOpenMailTasks: {
                 push(.mailTaskList(mailId: nil, mailSubject: nil, mailSender: nil))
             }
+        )
+        // The Counter's Pay, the closed Home drawer, and the first day's porch.
+        model.onOpenInvoice = { invoiceId in push(.invoiceDetail(invoiceId: invoiceId)) }
+        model.onVerifyHome = { homeId in showVerifyHome(homeId) }
+        model.onOpenWelcome = { mailId in push(.mailWelcome(mailId: mailId)) }
+        return model
+    }
+
+    /// "Verify your home" from the Mail tab: the verify sheet for that Home.
+    @MainActor
+    private func showVerifyHome(_ homeId: String) {
+        let home = MailBadgeStore.shared.homes.first { $0.homeId == homeId }
+        mailVerifyHome = MailVerifyHome(
+            homeId: homeId,
+            address: home.flatMap { MailPieceModel.firstText($0.addressLine, $0.name) } ?? "Your home"
         )
     }
 
@@ -898,7 +916,7 @@ public struct HubTabRoot: View {
              .gigDetail, .listingDetail, .invoiceDetail, .businessProfile, .businessProfilePage,
              .editBusinessPage, .pulseFeed, .gigsFeed, .marketplace, .beaconInsights,
              .supportTrainDetail, .manageTrain, .discoverHub, .chatConversation, .todayDetail,
-             .explore, .ceremonialMailOpen, .mailboxMap, .vacationHold, .wallet,
+             .explore, .ceremonialMailOpen, .mailWelcome, .mailboxMap, .vacationHold, .wallet,
              .walletActivityList, .stamps, .mailTask, .mailTaskList, .mailTranslation,
              .packageGig, .earn, .businessOwner, .viewAs, .cancelClaim, .propertyCorrection,
              .quickPostGig, .editGig, .transferOwnership, .mailRoutingQueue, .mailDay,
@@ -2309,13 +2327,7 @@ public struct HubTabRoot: View {
                 },
                 onPay: { invoiceId in Task { @MainActor in push(.invoiceDetail(invoiceId: invoiceId)) } },
                 onOpenMail: { pieceId in Task { @MainActor in push(.mailItemDetail(mailId: pieceId)) } },
-                onVerifyHome: { homeId in
-                    let home = MailBadgeStore.shared.homes.first { $0.homeId == homeId }
-                    mailVerifyHome = MailVerifyHome(
-                        homeId: homeId,
-                        address: home.flatMap { MailPieceModel.firstText($0.addressLine, $0.name) } ?? "Your home"
-                    )
-                }
+                onVerifyHome: { homeId in showVerifyHome(homeId) }
             )
             // A link that swaps one open letter for another gets a fresh page,
             // not the first letter's view model.
@@ -3328,6 +3340,22 @@ public struct HubTabRoot: View {
                 onBack: { Task { @MainActor in pop() } },
                 onWriteBack: { _ in Task { @MainActor in push(.ceremonialMail) } }
             )
+        case let .mailWelcome(mailId):
+            CeremonialMailOpenView(
+                viewModel: CeremonialMailOpenViewModel(mailId: mailId),
+                onBack: { Task { @MainActor in pop() } },
+                onWriteBack: { _ in },
+                onLetterOpened: {
+                    // Once its seal breaks the welcome letter reads on the
+                    // letter page, in place of the porch (Back returns to Mail).
+                    // The porch opened it, so the Mailbox draws it opened.
+                    Task { @MainActor in
+                        NotificationCenter.default.post(name: .mailboxMailViewed, object: mailId)
+                        if !path.isEmpty { path.removeLast() }
+                        push(.mailItemDetail(mailId: mailId))
+                    }
+                }
+            )
         case .mailRoutingQueue:
             MailRoutingQueueView { Task { @MainActor in pop() } }
         case .mailParty:
@@ -3971,7 +3999,7 @@ extension HubRoute {
         // Launch cut #10 (Mailbox): received mail, the drawers, the vault and
         // records, My mail day, vacation hold, stamps, mail tasks and search.
         // Postcard address verification (`.postcardVerification`) stays.
-        case .mailboxRoot, .mailboxMap, .mailboxSearch, .mailboxVault, .mailItemDetail, .vacationHold,
+        case .mailboxRoot, .mailboxMap, .mailboxSearch, .mailboxVault, .mailItemDetail, .mailWelcome, .vacationHold,
              .mailRoutingQueue, .mailDay, .stamps, .mailTask, .mailTaskList, .homeRecords:
             LaunchFeatures.mailbox
         default:

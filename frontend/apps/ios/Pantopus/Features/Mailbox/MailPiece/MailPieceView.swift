@@ -105,8 +105,10 @@ private struct WindowEnvelopePiece: View {
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .topLeading) {
+                // Clear of the postmark and postage on a narrow piece (the
+                // Counter on an iPhone SE).
                 MailSenderBlock(model: model)
-                    .frame(maxWidth: geo.size.width * 0.55, alignment: .leading)
+                    .frame(maxWidth: min(geo.size.width * 0.55, geo.size.width - 150), alignment: .leading)
                     .padding(.leading, Spacing.s4)
                     .padding(.top, 15)
 
@@ -173,7 +175,9 @@ private struct SpecialDeliveryPiece: View {
                     .padding(.leading, Spacing.s3)
                     .padding(.top, 10)
 
-                MailSenderBlock(model: model)
+                // One line for the name: two would run into the address on
+                // a narrow piece (the Counter).
+                MailSenderBlock(model: model, nameLines: 1)
                     .frame(maxWidth: geo.size.width * 0.58, alignment: .leading)
                     .padding(.leading, Spacing.s3)
                     .padding(.top, 28)

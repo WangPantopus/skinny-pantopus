@@ -123,7 +123,7 @@ public final class CeremonialMailOpenViewModel {
             avatarUrl: nil
         )
         let category = "letter"
-        return CeremonialMailLetter(
+        var letter = CeremonialMailLetter(
             mailId: mailId,
             sender: sender,
             category: category,
@@ -136,6 +136,8 @@ public final class CeremonialMailOpenViewModel {
             receivedAt: item.base.createdAt,
             outcomeCtas: CeremonialMailLetter.defaultOutcomeCtas()
         )
+        letter.isFromPantopus = item.base.fromPantopus
+        return letter
     }
 
     /// Locate the compose metadata inside `object_payload`.
