@@ -39,8 +39,7 @@ struct StorageDataView: View {
             if let message = viewModel.toastMessage {
                 ToastView(message: ToastMessage(text: message, kind: .success))
                     .padding(.bottom, Spacing.s10)
-                    .task(id: message) {
-                        try? await Task.sleep(nanoseconds: 2_500_000_000)
+                    .dismissToast(after: message, minimum: 2.5) {
                         viewModel.toastMessage = nil
                     }
             }

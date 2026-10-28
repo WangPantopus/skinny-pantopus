@@ -30,6 +30,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -46,6 +47,9 @@ import app.pantopus.android.ui.components.SectionHeader
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.components.StatusChip
 import app.pantopus.android.ui.components.StatusChipVariant
+import app.pantopus.android.ui.components.Toast
+import app.pantopus.android.ui.components.ToastAppearance
+import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.shared.list_of_rows.CompactButtonVariant
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -86,7 +90,7 @@ fun MailPartyScreen(
     LaunchedEffect(Unit) { viewModel.load() }
     LaunchedEffect(toast) {
         if (toast != null) {
-            delay(TOAST_MS)
+            delay(toastDurationMillis(toast?.text.orEmpty(), minimumMillis = TOAST_MS))
             viewModel.dismissToast()
         }
     }
@@ -136,18 +140,18 @@ fun MailPartyScreen(
             }
         }
         toast?.let { payload ->
-            Text(
+            Toast(
                 text = payload.text,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = PantopusColors.appTextInverse,
+                appearance =
+                    ToastAppearance(
+                        background = if (payload.isError) PantopusColors.error else PantopusColors.appTextStrong,
+                        foreground = PantopusColors.appTextInverse,
+                        textStyle = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.SemiBold),
+                    ),
                 modifier =
                     Modifier
                         .align(Alignment.BottomCenter)
                         .padding(bottom = Spacing.s10)
-                        .clip(RoundedCornerShape(Radii.pill))
-                        .background(if (payload.isError) PantopusColors.error else PantopusColors.appTextStrong)
-                        .padding(horizontal = Spacing.s4, vertical = Spacing.s2)
                         .testTag("mailParty_toast"),
             )
         }

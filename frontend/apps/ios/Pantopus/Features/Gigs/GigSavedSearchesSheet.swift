@@ -203,8 +203,7 @@ public struct GigSavedSearchesSheet: View {
             ToastView(message: toast)
                 .padding(.bottom, Spacing.s8)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
-                .task(id: toast) {
-                    try? await Task.sleep(nanoseconds: 2_500_000_000)
+                .dismissToast(after: toast, minimum: 2.5) {
                     viewModel.toast = nil
                 }
                 .accessibilityIdentifier("savedSearches.toast")

@@ -30,6 +30,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -40,6 +41,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.Toast
+import app.pantopus.android.ui.components.ToastAppearance
+import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.shared.form.FormShell
 import app.pantopus.android.ui.screens.shared.form.FormShellLeading
 import app.pantopus.android.ui.theme.PantopusColors
@@ -68,7 +72,7 @@ fun MailRoutingQueueScreen(
     LaunchedEffect(Unit) { viewModel.load() }
     LaunchedEffect(toast) {
         if (toast != null) {
-            delay(TOAST_MS)
+            delay(toastDurationMillis(toast?.text.orEmpty(), minimumMillis = TOAST_MS))
             viewModel.dismissToast()
         }
     }
@@ -148,17 +152,20 @@ internal fun MailRoutingQueueContent(
             }
         }
         toastText?.let {
-            Text(
+            Toast(
                 text = it,
-                fontSize = 13.sp,
-                color = PantopusColors.appTextInverse,
+                appearance =
+                    ToastAppearance(
+                        background = PantopusColors.appTextStrong,
+                        foreground = PantopusColors.appTextInverse,
+                        textStyle = TextStyle(fontSize = 13.sp),
+                        verticalPadding = Spacing.s3,
+                        sideMargin = 0.dp,
+                    ),
                 modifier =
                     Modifier
                         .align(Alignment.BottomCenter)
                         .padding(Spacing.s5)
-                        .clip(RoundedCornerShape(Radii.pill))
-                        .background(PantopusColors.appTextStrong)
-                        .padding(horizontal = Spacing.s4, vertical = Spacing.s3)
                         .testTag("mailRoutingQueueToast"),
             )
         }

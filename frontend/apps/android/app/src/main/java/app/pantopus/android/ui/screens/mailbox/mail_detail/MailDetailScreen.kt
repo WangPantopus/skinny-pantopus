@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -27,9 +26,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -45,6 +44,9 @@ import app.pantopus.android.data.api.models.mailbox.v2.PartyRsvpStatus
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.PauseBanner
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.Toast
+import app.pantopus.android.ui.components.ToastAppearance
+import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.gigs.checkout.GigBidCheckoutHost
 import app.pantopus.android.ui.screens.mailbox.item_detail.MailItemCategory
 import app.pantopus.android.ui.screens.mailbox.mail_detail.letter.LetterActions
@@ -189,7 +191,7 @@ fun MailDetailScreen(
     LaunchedEffect(didLeaveMailbox) { if (didLeaveMailbox) onBack() }
     LaunchedEffect(toast) {
         if (toast != null) {
-            kotlinx.coroutines.delay(1_800)
+            kotlinx.coroutines.delay(toastDurationMillis(toast.orEmpty(), minimumMillis = 1_800))
             viewModel.consumeToast()
         }
     }
@@ -425,16 +427,15 @@ fun MailDetailScreen(
                         .align(Alignment.BottomCenter)
                         .padding(bottom = 110.dp),
             ) {
-                Text(
+                Toast(
                     text = toast.orEmpty(),
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = PantopusColors.appTextInverse,
-                    modifier =
-                        Modifier
-                            .clip(RoundedCornerShape(Radii.pill))
-                            .background(PantopusColors.appText.copy(alpha = 0.9f))
-                            .padding(horizontal = Spacing.s4, vertical = Spacing.s2),
+                    appearance =
+                        ToastAppearance(
+                            background = PantopusColors.appText.copy(alpha = 0.9f),
+                            foreground = PantopusColors.appTextInverse,
+                            textStyle = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.SemiBold),
+                        ),
+                    modifier = Modifier,
                 )
             }
         }

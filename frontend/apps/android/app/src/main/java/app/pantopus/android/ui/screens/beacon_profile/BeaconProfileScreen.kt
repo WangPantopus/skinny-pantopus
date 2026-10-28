@@ -9,8 +9,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -19,7 +17,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -31,6 +28,9 @@ import app.pantopus.android.core.routing.ExternalLinks
 import app.pantopus.android.ui.components.BeaconIdentity
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.Toast
+import app.pantopus.android.ui.components.ToastAppearance
+import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.profile.BeaconHeaderGhostButton
 import app.pantopus.android.ui.screens.profile.BeaconHeaderPrimaryButton
 import app.pantopus.android.ui.screens.profile.BeaconIdentityBlock
@@ -78,7 +78,7 @@ fun BeaconProfileScreen(
     LaunchedEffect(Unit) { viewModel.load() }
     LaunchedEffect(toast) {
         if (toast != null) {
-            delay(2_000)
+            delay(toastDurationMillis(toast.orEmpty(), minimumMillis = 2_000))
             viewModel.dismissToast()
         }
     }
@@ -127,17 +127,19 @@ fun BeaconProfileScreen(
                 )
         }
         toast?.let { message ->
-            Box(
+            Toast(
+                text = message,
+                appearance =
+                    ToastAppearance(
+                        background = PantopusColors.appText.copy(alpha = 0.9f),
+                        foreground = PantopusColors.appTextInverse,
+                        textStyle = PantopusTextStyle.small,
+                    ),
                 modifier =
                     Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = 100.dp)
-                        .clip(RoundedCornerShape(Radii.pill))
-                        .background(PantopusColors.appText.copy(alpha = 0.9f))
-                        .padding(horizontal = Spacing.s4, vertical = Spacing.s2),
-            ) {
-                Text(message, style = PantopusTextStyle.small, color = PantopusColors.appTextInverse)
-            }
+                        .padding(bottom = 100.dp),
+            )
         }
     }
 }

@@ -52,6 +52,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -63,6 +64,9 @@ import app.pantopus.android.ui.components.BalanceHero
 import app.pantopus.android.ui.components.BalanceHeroSplitCell
 import app.pantopus.android.ui.components.BalanceHeroTone
 import app.pantopus.android.ui.components.ErrorState
+import app.pantopus.android.ui.components.Toast
+import app.pantopus.android.ui.components.ToastAppearance
+import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingLoadingSkeleton
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingPillar
 import app.pantopus.android.ui.screens.scheduling.payments.PaymentsComingSoon
@@ -147,7 +151,7 @@ fun PayoutsEarningsScreen(
             }
             toast?.let { message ->
                 LaunchedEffect(message) {
-                    delay(TOAST_MS)
+                    delay(toastDurationMillis(message, minimumMillis = TOAST_MS))
                     viewModel.clearToast()
                 }
                 EarningsToast(message = message, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 84.dp))
@@ -660,26 +664,26 @@ private fun EarningsToast(
     message: String,
     modifier: Modifier = Modifier,
 ) {
-    Row(
+    Toast(
+        text = message,
+        appearance =
+            ToastAppearance(
+                background = PantopusColors.appText,
+                foreground = PantopusColors.appTextInverse,
+                textStyle = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.SemiBold),
+                verticalPadding = 10.dp,
+                textWidth = 240.dp,
+                sideMargin = 0.dp,
+                iconSpacing = Spacing.s1,
+            ),
         modifier =
             modifier
                 .padding(Spacing.s4)
-                .clip(RoundedCornerShape(Radii.pill))
-                .background(PantopusColors.appText)
-                .padding(horizontal = 16.dp, vertical = 10.dp)
                 .testTag("scheduling.payoutsEarnings.toast"),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
-    ) {
-        PantopusIconImage(PantopusIcon.Check, null, size = 15.dp, tint = PantopusColors.success)
-        Text(
-            message,
-            color = PantopusColors.appTextInverse,
-            fontWeight = FontWeight.SemiBold,
-            fontSize = 13.sp,
-            modifier = Modifier.width(240.dp),
-        )
-    }
+        leading = {
+            PantopusIconImage(PantopusIcon.Check, null, size = 15.dp, tint = PantopusColors.success)
+        },
+    )
 }
 
 /** Rounded dashed outline (1dp) — placeholder/drop-zone stroke (spec: `1px dashed borderStrong`). */
