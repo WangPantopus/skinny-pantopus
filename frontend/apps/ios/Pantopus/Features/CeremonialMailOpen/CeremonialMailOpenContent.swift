@@ -224,6 +224,9 @@ public struct CeremonialMailLetter: Sendable, Hashable {
     public let voicePostscriptUri: String?
     public let receivedAt: String?
     public let outcomeCtas: [CeremonialOutcomeCTA]
+    /// Pantopus's own letter (the welcome letter): after its seal breaks it
+    /// reads on the Mail tab's letter page, not this reader.
+    public var isFromPantopus = false
 
     public init(
         mailId: String,

@@ -42,17 +42,22 @@ public struct CeremonialMailOpenView: View {
     private let onBack: @MainActor () -> Void
     private let onWriteBack: @MainActor (String) -> Void
     private let onOutcome: @MainActor (CeremonialOutcomeCTA) -> Void
+    /// Pantopus's letters leave this reader once the seal breaks: the host
+    /// shows them on the Mail tab's letter page (the first day's welcome).
+    private let onLetterOpened: (@MainActor () -> Void)?
 
     public init(
         viewModel: CeremonialMailOpenViewModel,
         onBack: @escaping @MainActor () -> Void = {},
         onWriteBack: @escaping @MainActor (String) -> Void = { _ in },
-        onOutcome: @escaping @MainActor (CeremonialOutcomeCTA) -> Void = { _ in }
+        onOutcome: @escaping @MainActor (CeremonialOutcomeCTA) -> Void = { _ in },
+        onLetterOpened: (@MainActor () -> Void)? = nil
     ) {
         _viewModel = State(initialValue: viewModel)
         self.onBack = onBack
         self.onWriteBack = onWriteBack
         self.onOutcome = onOutcome
+        self.onLetterOpened = onLetterOpened
     }
 
     public var body: some View {
@@ -152,6 +157,10 @@ public struct CeremonialMailOpenView: View {
                 onClose: { onBack() }
             )
             .accessibilityIdentifier("ceremonialMail_frame_\(phase.rawValue)")
+        case .open where letter.isFromPantopus && onLetterOpened != nil:
+            // The seal is broken: the letter page takes it from here.
+            Theme.Color.appBg
+                .onAppear { onLetterOpened?() }
         case .open:
             ReadingFrame(
                 letter: letter,

@@ -124,7 +124,7 @@ final class MailboxP3ParityTests: XCTestCase {
         XCTAssertTrue(active.stats.isEmpty)
         XCTAssertTrue(active.heldItems.isEmpty)
         XCTAssertNil(active.forwarding, "Stored preferences do not establish a forwarding service")
-        XCTAssertEqual(active.activeSinceLabel, "Dec 2 – Dec 12 · Status changes at midnight UTC.")
+        XCTAssertEqual(active.activeSinceLabel, "Dec 2 – Dec 12")
     }
 
     func test_vacationHoldProjection_noForwardingWhenHeldInVault() throws {
