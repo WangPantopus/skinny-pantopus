@@ -1724,6 +1724,8 @@ router.put('/rooms/:roomId', verifyToken, validate(updateRoomSchema), async (req
       .select('role')
       .eq('room_id', roomId)
       .eq('user_id', userId)
+      .eq('is_active', true)
+      .is('left_at', null)
       .single();
     
     if (!participant || !['owner', 'admin'].includes(participant.role)) {
@@ -2917,6 +2919,8 @@ router.post('/rooms/:roomId/participants', verifyToken, participantLimiter, asyn
       .select('role')
       .eq('room_id', roomId)
       .eq('user_id', userId)
+      .eq('is_active', true)
+      .is('left_at', null)
       .single();
     
     if (!participant || !['owner', 'admin'].includes(participant.role)) {
@@ -3000,6 +3004,8 @@ router.delete('/rooms/:roomId/participants/:participantUserId', verifyToken, par
         .select('role')
         .eq('room_id', roomId)
         .eq('user_id', userId)
+        .eq('is_active', true)
+        .is('left_at', null)
         .single();
       
       if (!participant || !['owner', 'admin'].includes(participant.role)) {
