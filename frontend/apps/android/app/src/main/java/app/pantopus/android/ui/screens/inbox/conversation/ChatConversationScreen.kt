@@ -434,8 +434,9 @@ fun ChatConversationScreen(
     var belowChatPx by remember { mutableIntStateOf(0) }
     val focusManager = LocalFocusManager.current
     val composerFocusRequester = remember { FocusRequester() }
+    val canShowComposer = !isSelectionMode && composerClosedNote == null && !planChat.closed
     val emojiPanelHeight by animateDpAsState(
-        targetValue = if (showEmojiPanel && !isSelectionMode && composerClosedNote == null && !planChat.closed) 260.dp else 0.dp,
+        targetValue = if (showEmojiPanel && canShowComposer) 260.dp else 0.dp,
         animationSpec = tween(220),
         label = "chatEmojiPanelHeight",
     )
