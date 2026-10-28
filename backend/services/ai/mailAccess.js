@@ -1,5 +1,6 @@
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const { canAccessMail } = require('../../utils/homeMailAccess');
+const { hydrateMail } = require('../mailObjectStorage');
 
 /**
  * Fetch a mail row and enforce viewer authorization before returning it.
@@ -11,11 +12,13 @@ const { canAccessMail } = require('../../utils/homeMailAccess');
  */
 async function getAuthorizedMail({ mailItemId, userId, select }) {
   if (!userId) return null;
+  const readsContent = (select || '').split(',').some((field) => field.trim() === 'content');
   const projection = [
     'id',
     'recipient_user_id',
     'recipient_home_id',
     'deleted_at',
+    ...(readsContent ? ['object_id'] : []),
     ...(select ? [select] : []),
   ].join(', ');
 
@@ -31,7 +34,7 @@ async function getAuthorizedMail({ mailItemId, userId, select }) {
   }
 
   if (!(await canAccessMail(row, userId))) return null;
-  return row;
+  return readsContent ? hydrateMail(row) : row;
 }
 
 module.exports = {

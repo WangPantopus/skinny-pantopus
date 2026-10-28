@@ -108,6 +108,9 @@ async function deliveryFor(piece, { now = new Date(), immediate = false } = {}) 
   }
   if (isSpecialDelivery(piece, timeZone, now)) return { delivered_at: now.toISOString(), special_delivery: true };
   const natural = nextRound(timeZone, now);
+  // A hold that can't be read must not stop the piece: a business's bill and a Pantopus letter are delivered by writers
+  // that log a failure and move on, so it would never arrive. It goes out on the next round instead, and the hourly
+  // vacationHoldExpiry job re-holds waiting mail for everyone with a hold (mailVacation.syncHeldMail).
   let held = null;
   try {
     held = await heldUntil(piece, natural);

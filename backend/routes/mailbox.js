@@ -4,8 +4,8 @@ const crypto = require('crypto');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const homeRecordService = require('../services/homeRecordService');
 // canAccessMail: the per-item rule, shared with the v2 mailbox routes.
-const { getAccessibleHomeIds, trustedHomeIdsOrThrow, canAccessMail, readableMail, homeMailFilter, visibleMailFilter,
-  restorableMail, isDeletedMail, removedMailInfo, sendHomeMailRemovedNotice, MAIL_RESTORE_DAYS,
+const { getAccessibleHomeIds, trustedHomeIdsOrThrow, hasVerifiedSenderHome, canSendToMailHome, canAccessMail, readableMail, homeMailFilter, visibleMailFilter,
+  restorableMail, removedMailInfo, sendHomeMailRemovedNotice, MAIL_RESTORE_DAYS,
   sendMailUnavailable, mailHomesOrThrow, MAIL_HOME_NEEDS_PROOF, onlyDelivered } = require('../utils/homeMailAccess');
 // Mail comes in the morning (SRV-1): the delivery rule every writer follows.
 const mailDelivery = require('../services/mailDelivery');
@@ -22,7 +22,6 @@ const validate = require('../middleware/validate');
 const Joi = require('joi');
 const logger = require('../utils/logger');
 const { checkHomePermission } = require('../utils/homePermissions');
-const { UNPROVEN_SOURCES } = require('../utils/homeAccessPolicy');
 const { getBusinessIdsWithPermissions } = require('../utils/businessPermissions');
 const { VERIFICATION_RANK } = require('../utils/businessConstants');
 const mailObjects = require('../services/mailObjectStorage');
@@ -743,11 +742,13 @@ const getHomeForRouting = async (homeId) => {
   if (!homeId) return null;
   const { data: home } = await supabaseAdmin
     .from('Home')
-    .select('id, owner_id')
+    .select('id, owner_id, home_status, security_state')
     .eq('id', homeId)
     .single();
 
-  return home || null;
+  if (!home || ['archived', 'merged'].includes(home.home_status)
+    || ['frozen', 'frozen_silent', 'disputed'].includes(home.security_state)) return null;
+  return home;
 };
 
 // Who may send a letter to a Home: anyone who can open the Home's mail (the
@@ -760,7 +761,8 @@ const hasHomeAccess = async (homeId, userId) => {
     return { allowed: false, home: null };
   }
 
-  return { allowed: await isUserLinkedToHome(home, userId), home };
+  return { allowed: await isUserLinkedToHome(home, userId)
+    || (areLaunchFeaturesEnabled('mail_extras') && await canSendToMailHome(homeId, userId)), home };
 };
 
 // "Lives at this home" for a letter addressed to a person at a Home: they can
@@ -774,46 +776,6 @@ const isUserLinkedToHome = async (home, userId) => {
   return access.hasAccess === true && access.isOwner === true;
 };
 
-const hasVerifiedSenderHome = async (userId) => {
-  const [occupancyRes, ownerRes] = await Promise.allSettled([
-    supabaseAdmin
-      .from('HomeOccupancy')
-      .select('home_id,is_active,verification_status,verification_source')
-      .eq('user_id', userId),
-    supabaseAdmin
-      .from('HomeOwner')
-      .select('home_id')
-      .eq('subject_id', userId)
-      .eq('owner_status', 'verified'),
-  ]);
-
-  // A consented co-owner can have household-only provenance too. Check that
-  // same Home before using the legacy owner fallback; another address-proven
-  // Home still qualifies. Failed provenance reads must not become "no row".
-  if (occupancyRes.status !== 'fulfilled' || occupancyRes.value?.error
-    || !Array.isArray(occupancyRes.value?.data)
-    || occupancyRes.value.data.some(row => !row || typeof row.home_id !== 'string')) return false;
-  const occupancies = occupancyRes.value.data;
-  const householdHomes = new Set(occupancies
-    .filter(row => UNPROVEN_SOURCES.has(row.verification_source)).map(row => row.home_id));
-  const verifiedOwnerRows = ownerRes.status === 'fulfilled' && !ownerRes.value?.error
-    && Array.isArray(ownerRes.value?.data) ? ownerRes.value.data : [];
-  if (occupancies.some(row => row.is_active === true && row.verification_status === 'verified'
-    && !UNPROVEN_SOURCES.has(row.verification_source))) return true;
-  for (const row of verifiedOwnerRows) {
-    if (!row || typeof row.home_id !== 'string' || householdHomes.has(row.home_id)) continue;
-    // The collection can be truncated by PostgREST's max_rows. Only an exact
-    // Home/user lookup can distinguish no occupancy from an omitted row.
-    try {
-      const result = await supabaseAdmin.from('HomeOccupancy').select('home_id,verification_source')
-        .eq('user_id', userId).eq('home_id', row.home_id).maybeSingle();
-      if (!result || result.error || (result.data !== null
-        && (!result.data || Array.isArray(result.data) || result.data.home_id !== row.home_id))) return false;
-      if (result.data === null || !UNPROVEN_SOURCES.has(result.data.verification_source)) return true;
-    } catch (_) { return false; }
-  }
-  return false;
-};
 
 const sendHomeVerificationRequired = (res) =>
   res.status(403).json({
@@ -1024,38 +986,7 @@ const insertMailWithCompatibility = async (stored) => {
   return fallbackInsert;
 };
 
-const getMailObjectPayload = async (objectId) => {
-  const { data: objectRow, error } = await supabaseAdmin
-    .from('MailObject')
-    .select('*')
-    .eq('id', objectId)
-    .single();
-
-  if (error || !objectRow) {
-    logger.warn('MailObject fetch failed', { objectId, error: error?.message });
-    return null;
-  }
-
-  // Responses carry the row without its storage location (mailObjectStorage.clientFields).
-  const metadata = mailObjects.clientFields(objectRow);
-  if (!objectRow.object_key) {
-    return { metadata, payload: null };
-  }
-
-  try {
-    const objectText = await mailObjects.readText(objectRow);
-    let payload = null;
-    try {
-      payload = JSON.parse(objectText);
-    } catch {
-      payload = { body: { content: objectText } };
-    }
-    return { metadata, payload };
-  } catch (err) {
-    logger.error('MailObject read failed', { objectId, error: err.message });
-    return { metadata, payload: null };
-  }
-};
+const getMailObjectPayload = (objectId) => mailObjects.readPayload(objectId);
 
 const getMailLinksSafely = async (mailId) => {
   const { data, error } = await supabaseAdmin
@@ -1815,8 +1746,9 @@ router.get('/:id', verifyToken, async (req, res) => {
         }
       }
     } else {
-      mail.content_format = mail.content?.includes('<') ? 'html' : 'plain_text';
+      mail.content_format = mailObjects.storedFormat(mail.content);
     }
+    mail.content_text = mailObjects.textContent(mail.content, mail.content_format);
 
     mail.links = await getMailLinksSafely(mail.id);
     // What the piece encloses, private ones included; each opens through GET /:id/enclosures/:enclosureId (SRV-4).
@@ -2116,7 +2048,9 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
         sender_address: senderReturnAddress,
         type,
         subject: subject || null,
-        content: objectResult ? contentExcerpt : content,
+        // Search uses this existing text column; the private object remains the
+        // authoritative formatted letter. Keep previews in their own columns.
+        content,
         attachments: attachments || [],
         payout_amount: payoutAmount || null,
         category: category || null,
@@ -2348,7 +2282,7 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
       sender_address: senderReturnAddress,
       type,
       subject: subject || null,
-      content: objectResult ? contentExcerpt : content,
+      content,
       attachments: attachments || [],
       payout_amount: payoutAmount || null,
       category: category || null,
@@ -2678,21 +2612,18 @@ router.post('/claim/:mailId', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'You sent this letter. It’s waiting for the person you wrote to.', code: 'MAIL_OWN_LETTER' });
     }
 
-    // Sign-in needs a confirmed email, so a matching email shows the claimer reads that inbox.
-    const { data: claimer, error: claimerError } = await supabaseAdmin
-      .from('User')
-      .select('email, phone_number')
-      .eq('id', claimerId)
-      .maybeSingle();
+    // Profile contact fields are editable without proof. Only Auth-confirmed contacts establish ownership.
+    const { data: authData, error: claimerError } = await supabaseAdmin.auth.admin.getUserById(claimerId);
+    const claimer = authData?.user;
     if (claimerError || !claimer) {
-      logger.error('Escrow claimer read failed', { error: claimerError?.message || 'no User row', mailId });
+      logger.error('Escrow claimer read failed', { error: claimerError?.message || 'no Auth user', mailId });
       return res.status(500).json({ error: 'Failed to claim mail' });
     }
 
     const escrowContact = normalizeEscrowContact(mail.escrow_recipient_contact);
     const contactMatches = Boolean(escrowContact) && (
-      (claimer.email && normalizeEscrowContact(claimer.email) === escrowContact) ||
-      (claimer.phone_number && normalizeEscrowContact(claimer.phone_number) === escrowContact));
+      (claimer.email_confirmed_at && claimer.email && normalizeEscrowContact(claimer.email) === escrowContact) ||
+      (claimer.phone_confirmed_at && claimer.phone && normalizeEscrowContact(claimer.phone) === escrowContact));
 
     if (!contactMatches) {
       return res.status(403).json({
@@ -2718,6 +2649,7 @@ router.post('/claim/:mailId', verifyToken, async (req, res) => {
         delivery_visibility: 'attn_only',
         drawer: 'personal',
         lifecycle: 'delivered',
+        delivered_at: new Date().toISOString(),
       })
       .eq('id', mailId)
       .eq('escrow_status', 'pending')
@@ -2850,8 +2782,10 @@ router.post('/:id/read/start', verifyToken, validate(startReadSessionSchema), as
     const userId = req.user.id;
     const { clientMeta = {} } = req.body;
 
-    // A deleted letter (recoverable) cannot be read or marked until restored.
-    if (await isDeletedMail({ id })) return res.status(404).json({ error: 'Mail not found' });
+    // Use the same recipient, Home and delivery rule as the reader itself, and read the letter before counting it read.
+    const mail = await readableMail(id, userId);
+    if (!mail) return res.status(404).json({ error: 'Mail not found' });
+    await mailObjects.hydrateMail(mail);
 
     const { data, error } = await supabaseAdmin.rpc('open_mail_read_session', {
       p_mail_id: id,
@@ -2861,8 +2795,8 @@ router.post('/:id/read/start', verifyToken, validate(startReadSessionSchema), as
 
     if (error) {
       if (error.code === 'PGRST202' || (error.message || '').includes('open_mail_read_session')) {
-        return res.status(501).json({
-          error: 'Read session function not available. Run mailbox_object_storage_migration.sql first.'
+        return res.status(503).json({
+          error: 'Reading is temporarily unavailable. Please try again shortly.'
         });
       }
 
@@ -2909,8 +2843,8 @@ router.post('/read/:sessionId/close', verifyToken, validate(closeReadSessionSche
 
     if (error) {
       if (error.code === 'PGRST202' || (error.message || '').includes('close_mail_read_session')) {
-        return res.status(501).json({
-          error: 'Read session function not available. Run mailbox_object_storage_migration.sql first.'
+        return res.status(503).json({
+          error: 'Reading is temporarily unavailable. Please try again shortly.'
         });
       }
 
@@ -2960,6 +2894,18 @@ router.patch('/:id/view', verifyToken, async (req, res) => {
 
     if (!data.success) {
       return res.status(400).json({ error: data.error });
+    }
+
+    // The phones open a letter through GET /:id and mark it read here. Record the opened time and state the web reader
+    // writes (GET /v2/item/:id), so a letter read on a phone shows when it was opened; a piece filed first stays filed.
+    // The letter is read either way, so a failed write is only logged.
+    const openedAt = data.viewedAt || new Date().toISOString();
+    const { error: openedError } = await supabaseAdmin.from('Mail').update({ opened_at: openedAt })
+      .eq('id', id).is('opened_at', null).is('deleted_at', null);
+    const { error: lifecycleError } = await supabaseAdmin.from('Mail').update({ lifecycle: 'opened' })
+      .eq('id', id).is('deleted_at', null).or('lifecycle.is.null,lifecycle.eq.delivered');
+    if (openedError || lifecycleError) {
+      logger.warn('Mail viewed: opened time not recorded', { mailId: id, error: (openedError || lifecycleError).message });
     }
 
     logger.info('Mail viewed', { mailId: id, userId, payout: data.payout });

@@ -193,11 +193,11 @@ class CeremonialMailViewModel
                     expiresAt = null,
                 )
             viewModelScope.launch {
-                when (val result = repository.send(body)) {
+                when (repository.send(body)) {
                     is NetworkResult.Success -> {
                         _isSubmitting.value = false
                         _form.value = form.copy(step = CeremonialMailStep.Success)
-                        result.data.mail?.id?.let { _pendingEvent.value = CeremonialMailEvent.OpenMail(it) }
+                        // Stay on confirmation; the recipient owns the sent letter.
                     }
                     is NetworkResult.Failure -> {
                         _isSubmitting.value = false

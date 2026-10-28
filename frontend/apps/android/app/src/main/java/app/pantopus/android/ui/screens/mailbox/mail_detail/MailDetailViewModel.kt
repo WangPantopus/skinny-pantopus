@@ -1289,7 +1289,7 @@ class MailDetailViewModel
                 val excerpt = detail.previewText
                 val createdAtLabel = formatLongDate(detail.createdAt)
                 val expiresAtLabel = formatLongDate(detail.expiresAt)
-                val bodyParagraphs = bodyParagraphs(detail.content)
+                val bodyParagraphs = bodyParagraphs(detail.contentText ?: detail.content)
                 val ackRequired = detail.ackRequired == true
                 val ackStatus = detail.ackStatus?.lowercase() == "acknowledged" || detail.acknowledgedAt != null
                 val variants = decodeVariantDetails(category = category, payload = detail.`object`)

@@ -857,11 +857,11 @@ export async function getVacationHold(): Promise<VacationHold | null> {
       active: VacationHold | null;
       upcoming: VacationHold | null;
       held_count?: number;
-      hold?: { held_count?: number; release_at?: string } | null;
+      hold?: { held_count?: number; release_at?: string; end_date?: string } | null;
     }>('/api/mailbox/v2/p3/vacation/status');
     const hold = res.active ?? res.upcoming;
-    // The live count and the release time come with the reply's hold line (SRV-5).
-    return hold ? { ...hold, held_count: res.hold?.held_count ?? res.held_count ?? hold.items_held_count, release_at: res.hold?.release_at ?? null } : null;
+    // The live line includes the final return date across connected holds.
+    return hold ? { ...hold, end_date: res.hold?.end_date ?? hold.end_date, held_count: res.hold?.held_count ?? res.held_count ?? hold.items_held_count, release_at: res.hold?.release_at ?? null } : null;
   });
 }
 

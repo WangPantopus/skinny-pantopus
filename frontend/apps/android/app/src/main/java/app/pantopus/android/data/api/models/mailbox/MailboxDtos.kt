@@ -82,6 +82,7 @@ data class MailDetail(
     @Json(name = "preview_text") val previewText: String? = null,
     val subject: String? = null,
     val content: String? = null,
+    @Json(name = "content_text") val contentText: String? = null,
     @Json(name = "sender_business_name") val senderBusinessName: String? = null,
     @Json(name = "sender_address") val senderAddress: String? = null,
     /** Who it's from as printed on the item. The server names the sender from it first (`resolveSenderDisplay`). */

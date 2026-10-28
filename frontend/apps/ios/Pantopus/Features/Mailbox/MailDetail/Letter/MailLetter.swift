@@ -115,7 +115,7 @@ extension MailLetter {
             recipient: recipient,
             dateLine: longDate(posted, calendar: clock.calendar),
             reference: reference(in: detail.object),
-            paragraphs: paragraphs(item.content ?? item.previewText),
+            paragraphs: paragraphs(detail.contentText ?? item.content ?? item.previewText),
             enclosures: item.enclosures,
             onCounter: item.onCounter,
             isFiled: isFiled(item),

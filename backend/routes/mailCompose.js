@@ -13,8 +13,7 @@ const notificationService = require('../services/notificationService');
 const { escapeIlike } = require('../utils/escapeIlike');
 // Who lives in a Home, for compose, is the household mail rule's: an active occupancy in a trusted
 // verification state. A pending claim (anyone can file one on any Home) is not a household member.
-const { getAccessibleHomeIds, MAIL_TRUSTED_VERIFICATION_STATUSES } = require('../utils/homeMailAccess');
-const { UNPROVEN_SOURCES } = require('../utils/homeAccessPolicy');
+const { getAccessibleHomeIds, mailReaderIdsOrThrow, hasVerifiedSenderHome, canSendToMailHome, MAIL_TRUSTED_VERIFICATION_STATUSES } = require('../utils/homeMailAccess');
 const { unpublishedBusinessIds, isSearchable, isScopedBlocked, isConnected } = require('../utils/visibilityPolicy');
 const { localProfileVisibilityFor, localDisplayNames } = require('../utils/identityProfiles');
 const { hasBlocked } = require('../services/blockService');
@@ -28,46 +27,6 @@ const HOME_ADDRESS_VERIFICATION_REQUIRED_CODE = 'HOME_ADDRESS_VERIFICATION_REQUI
 const HOME_ADDRESS_VERIFICATION_REQUIRED_MESSAGE =
   'Verify your home address before sending mail. Open Homes and finish address verification, then try sending again.';
 
-async function hasVerifiedSenderHome(userId) {
-  const [occupancyRes, ownerRes] = await Promise.allSettled([
-    supabaseAdmin
-      .from('HomeOccupancy')
-      .select('home_id,is_active,verification_status,verification_source')
-      .eq('user_id', userId),
-    supabaseAdmin
-      .from('HomeOwner')
-      .select('home_id')
-      .eq('subject_id', userId)
-      .eq('owner_status', 'verified'),
-  ]);
-
-  // A consented co-owner can have household-only provenance too. Check that
-  // same Home before using the legacy owner fallback; another address-proven
-  // Home still qualifies. Failed provenance reads must not become "no row".
-  if (occupancyRes.status !== 'fulfilled' || occupancyRes.value?.error
-    || !Array.isArray(occupancyRes.value?.data)
-    || occupancyRes.value.data.some(row => !row || typeof row.home_id !== 'string')) return false;
-  const occupancies = occupancyRes.value.data;
-  const householdHomes = new Set(occupancies
-    .filter(row => UNPROVEN_SOURCES.has(row.verification_source)).map(row => row.home_id));
-  const verifiedOwnerRows = ownerRes.status === 'fulfilled' && !ownerRes.value?.error
-    && Array.isArray(ownerRes.value?.data) ? ownerRes.value.data : [];
-  if (occupancies.some(row => row.is_active === true && row.verification_status === 'verified'
-    && !UNPROVEN_SOURCES.has(row.verification_source))) return true;
-  for (const row of verifiedOwnerRows) {
-    if (!row || typeof row.home_id !== 'string' || householdHomes.has(row.home_id)) continue;
-    // The collection can be truncated by PostgREST's max_rows. Only an exact
-    // Home/user lookup can distinguish no occupancy from an omitted row.
-    try {
-      const result = await supabaseAdmin.from('HomeOccupancy').select('home_id,verification_source')
-        .eq('user_id', userId).eq('home_id', row.home_id).maybeSingle();
-      if (!result || result.error || (result.data !== null
-        && (!result.data || Array.isArray(result.data) || result.data.home_id !== row.home_id))) return false;
-      if (result.data === null || !UNPROVEN_SOURCES.has(result.data.verification_source)) return true;
-    } catch (_) { return false; }
-  }
-  return false;
-}
 
 /**
  * Get the primary home media URL for a home.
@@ -246,7 +205,8 @@ router.get('/recipients', verifyToken, async (req, res) => {
           .single(),
       ]);
 
-      const householdRows = householdRes.data;
+      const readers = new Set(await mailReaderIdsOrThrow(homeId));
+      const householdRows = (householdRes.data || []).filter((row) => readers.has(row.user_id));
       const home = homeRes.data;
       let homeMediaUrl = null;
 
@@ -292,25 +252,14 @@ router.get('/recipients', verifyToken, async (req, res) => {
           .filter((u) => !seenUserIds.has(u.id))
           .map((u) => u.id);
 
-        let homesByUserId = {};
-        if (connUserIds.length > 0) {
-          // A connection is outside the household: City/State only, no street or photo
-          // (docs/location-privacy-matrix.md, Homes). The homeId addresses the mail.
-          const { data: occupancies } = await supabaseAdmin
-            .from('HomeOccupancy')
-            .select('user_id, home_id, Home!inner(id, city, state)')
-            .in('user_id', connUserIds)
-            .eq('is_active', true)
-            .in('verification_status', MAIL_TRUSTED_VERIFICATION_STATUSES);
-
-          if (occupancies) {
-            for (const occ of occupancies) {
-              // Take the first home per user
-              if (!homesByUserId[occ.user_id]) {
-                homesByUserId[occ.user_id] = occ.Home;
-              }
-            }
-          }
+        const homesByUserId = {};
+        for (const userId of connUserIds) {
+          const homes = await getAccessibleHomeIds(userId);
+          if (!homes.length) continue;
+          const { data: home, error: homeError } = await supabaseAdmin.from('Home')
+            .select('id, city, state').eq('id', homes[0]).maybeSingle();
+          if (homeError) throw homeError;
+          if (home) homesByUserId[userId] = home;
         }
 
         for (const user of connectedUsers) {
@@ -420,28 +369,7 @@ router.get('/home-context/:homeId', verifyToken, async (req, res) => {
     // claim is not membership), or connected to a resident
     const isOccupantOrOwner = (await getAccessibleHomeIds(senderId)).includes(homeId.toLowerCase());
 
-    let hasAccess = isOccupantOrOwner;
-
-    if (!hasAccess) {
-      // Check if sender is connected to any resident of this home
-      const connectionIds = await getConnectionUserIds(senderId);
-
-      const { data: residents } = await supabaseAdmin
-        .from('HomeOccupancy')
-        .select('user_id')
-        .eq('home_id', homeId)
-        .eq('is_active', true)
-        .in('verification_status', MAIL_TRUSTED_VERIFICATION_STATUSES);
-
-      if (residents) {
-        for (const r of residents) {
-          if (connectionIds.has(r.user_id)) {
-            hasAccess = true;
-            break;
-          }
-        }
-      }
-    }
+    const hasAccess = isOccupantOrOwner || await canSendToMailHome(homeId, senderId);
 
     if (!hasAccess) {
       return res.status(403).json({
@@ -462,7 +390,8 @@ router.get('/home-context/:homeId', verifyToken, async (req, res) => {
     // Members by the name they show their household (their Local Profile's); no name, or a failed read, reads
     // "Household member", as on the Home page (services/homeDetailService.js).
     const names = await localDisplayNames((occupants || []).map((o) => o.User.id)).catch(() => new Map());
-    const members = (occupants || []).map((o) => ({
+    const readers = new Set(await mailReaderIdsOrThrow(homeId));
+    const members = (occupants || []).filter((o) => readers.has(o.user_id)).map((o) => ({
       userId: o.User.id,
       name: names.get(String(o.User.id)) || 'Household member',
       role: o.role || 'member',
@@ -479,9 +408,9 @@ router.get('/home-context/:homeId', verifyToken, async (req, res) => {
     res.json({
       homeId: home.id,
       addressDisplay,
-      memberCount,
+      memberCount: isOccupantOrOwner ? memberCount : 0,
       homeMediaUrl,
-      privateDeliveryAvailable: memberCount > 1,
+      privateDeliveryAvailable: isOccupantOrOwner && memberCount > 1,
       members: isOccupantOrOwner ? members : [],
     });
   } catch (err) {
@@ -545,17 +474,19 @@ router.post('/withdraw/:mailId', verifyToken, async (req, res) => {
       return res.status(404).json({ error: 'Mail not found' });
     }
 
-    const { error: updateError } = await supabaseAdmin
+    const { data: withdrawn, error: updateError } = await supabaseAdmin
       .from('Mail')
       .update({ escrow_status: 'withdrawn' })
       .eq('id', mailId)
       .eq('sender_user_id', senderId)
-      .eq('escrow_status', 'pending');
+      .eq('escrow_status', 'pending').select('id');
 
     if (updateError) {
       logger.error('Escrow withdraw update failed', { error: updateError.message, mailId, senderId });
       return res.status(500).json({ error: 'Failed to withdraw mail' });
     }
+
+    if (!withdrawn?.length) return res.status(409).json({ error: 'This letter is no longer waiting to be claimed.' });
 
     logger.info('Escrowed mail withdrawn', { mailId, senderId });
 

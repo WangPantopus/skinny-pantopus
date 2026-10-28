@@ -1808,8 +1808,9 @@ router.post('/memory/year/:year/share', verifyToken, async (req, res) => {
 // GET /vacation/status — reconcile only this user's normal date lifecycle.
 router.get('/vacation/status', verifyToken, async (req, res) => {
   try {
-    const { data, error } = await supabaseAdmin.rpc('vacation_hold_transition', {
+    const { data, error } = await supabaseAdmin.rpc('vacation_hold_transition_in_zone', {
       p_user_id: req.user.id, p_action: 'status',
+      p_time_zone: (await mailDelivery.personTimeZone(req.user.id)) || mailDelivery.FALLBACK_TIME_ZONE,
     });
     if (error) throw error;
     // held_count: the pieces the hold in effect (or the next one) keeps now (Mail tab, SRV-5).
@@ -1850,8 +1851,8 @@ router.post('/vacation/start', verifyToken, validate(startVacationSchema), async
     if (!homeIds.includes(String(homeId).toLowerCase())) {
       return res.status(403).json({ error: 'Choose a home you live at for this hold.', code: 'VACATION_HOME_INVALID' });
     }
-    const { data, error } = await supabaseAdmin.rpc('vacation_hold_transition', {
-      p_user_id: userId, p_action: 'start', p_hold_id: holdId || null, p_home_id: homeId,
+    const { data, error } = await supabaseAdmin.rpc('vacation_hold_transition_in_zone', {
+      p_user_id: userId, p_action: 'start', p_time_zone: timeZone, p_hold_id: holdId || null, p_home_id: homeId,
       p_start_date: startDate, p_end_date: endDate,
       p_hold_action: holdAction, p_package_action: packageAction,
       p_auto_neighbor_request: autoNeighborRequest || false,
@@ -1872,20 +1873,23 @@ router.post('/vacation/start', verifyToken, validate(startVacationSchema), async
       });
     }
     // The hold holds: waiting mail moves to the morning they're back (and back out of a shortened hold).
-    await mailVacation.syncHeldMailSafe(userId);
+    if (await mailVacation.syncHeldMailSafe(userId) === null) {
+      return res.status(503).json({ error: 'Your dates were saved, but waiting mail could not be updated. Please retry.', code: 'MAIL_UNAVAILABLE' });
+    }
     const line = await mailVacation.vacationLine(userId).catch(() => null);
     res.json({ hold: data.hold, held_count: line?.hold_id === data.hold.id ? line.held_count : 0 });
   } catch (err) {
     logger.error('[P3] POST /vacation/start failed', { error: err.message });
-    res.status(500).json({ error: "Couldn't save your vacation hold. Your dates are as they were. Try again in a moment.", code: 'MAIL_UNAVAILABLE' });
+    res.status(500).json({ error: "Couldn't finish saving your vacation hold. Reload your dates and try again.", code: 'MAIL_UNAVAILABLE' });
   }
 });
 
 // POST /vacation/cancel — leave any other surviving hold's summary intact.
 router.post('/vacation/cancel', verifyToken, validate(cancelVacationSchema), async (req, res) => {
   try {
-    const { data, error } = await supabaseAdmin.rpc('vacation_hold_transition', {
+    const { data, error } = await supabaseAdmin.rpc('vacation_hold_transition_in_zone', {
       p_user_id: req.user.id, p_action: 'cancel', p_hold_id: req.body.holdId,
+      p_time_zone: (await mailDelivery.personTimeZone(req.user.id)) || mailDelivery.FALLBACK_TIME_ZONE,
     });
     if (error?.message === 'VACATION_HOLD_NOT_OWNED') {
       return res.status(403).json({ error: "This vacation hold isn't yours.", code: 'VACATION_HOLD_NOT_OWNED' });
@@ -1893,7 +1897,9 @@ router.post('/vacation/cancel', verifyToken, validate(cancelVacationSchema), asy
     if (error) throw error;
     if (!data.reused) logMailEvent(req.user.id, 'vacation_cancelled', null, { holdId: req.body.holdId });
     // What the hold kept comes at the next round (or its own, if that's still ahead).
-    await mailVacation.syncHeldMailSafe(req.user.id);
+    if (await mailVacation.syncHeldMailSafe(req.user.id) === null) {
+      return res.status(503).json({ error: 'Your hold was cancelled, but waiting mail could not be updated. Please retry.', code: 'MAIL_UNAVAILABLE' });
+    }
     res.json({ message: 'Vacation hold cancelled' });
   } catch (err) {
     logger.error('[P3] POST /vacation/cancel failed', { error: err.message });

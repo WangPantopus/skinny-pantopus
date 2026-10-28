@@ -92,7 +92,6 @@ fun CeremonialMailWizardScreen(
                     selected = selectedRecipient,
                     homeContext = homeContext,
                     onAddressConfirmed = viewModel::toggleAddressConfirmed,
-                    onReturnAddressShared = viewModel::toggleReturnAddressShared,
                 )
             CeremonialMailStep.Compose ->
                 ComposeStep(
@@ -157,9 +156,8 @@ internal fun DecideStep(
         Text(text = "Who are you writing to?", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = PantopusColors.appText)
         Text(
             text =
-                "Choose a verified neighbor, a saved correspondent, or paste a handle. " +
-                    "Mail keeps your name and address private — the recipient only sees what you " +
-                    "choose to share.",
+                "Choose a recipient for your digital letter. They will see your sender name. " +
+                    "Your home address is not included.",
             fontSize = 13.sp,
             color = PantopusColors.appTextSecondary,
         )
@@ -357,15 +355,15 @@ internal fun VerifyStep(
     selected: MailRecipientDto?,
     homeContext: MailHomeContextResponse?,
     onAddressConfirmed: (Boolean) -> Unit,
-    onReturnAddressShared: (Boolean) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
         Text(text = "Address it", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = PantopusColors.appText)
         Text(
-            text = "Pantopus verifies physical addresses. By sending, you're confirming this exact recipient. There's no undo.",
+            text = "Your letter goes to this person's digital mailbox. Review the recipient before continuing.",
             fontSize = 13.sp,
             color = PantopusColors.appTextSecondary,
         )
+        selected?.let { SelectedRecipientCard(it) }
         val display = homeContext?.addressDisplay ?: selected?.homeAddress
         if (display != null) {
             Column(
@@ -381,7 +379,7 @@ internal fun VerifyStep(
             ) {
                 Overline("DESTINATION")
                 Text(text = display, fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
-                homeContext?.memberCount?.let {
+                homeContext?.memberCount?.takeIf { it > 0 }?.let {
                     Text(
                         text = "$it household member${if (it == 1) "" else "s"}",
                         fontSize = 12.sp,
@@ -391,19 +389,13 @@ internal fun VerifyStep(
             }
         }
         AckRow(
-            title = "Yes, ship to this address",
+            title = "Yes, send to this recipient",
             subtitle = null,
             isOn = form.addressConfirmed,
             testTag = "ceremonialAddressConfirmed",
             onChange = onAddressConfirmed,
         )
-        AckRow(
-            title = "Include my return address",
-            subtitle = "Off keeps your home address private from the recipient.",
-            isOn = form.returnAddressShared,
-            testTag = "ceremonialReturnAddressShared",
-            onChange = onReturnAddressShared,
-        )
+        Text(text = "Your home address is not included.", fontSize = 13.sp, color = PantopusColors.appTextSecondary)
     }
 }
 
@@ -461,7 +453,7 @@ internal fun ComposeStep(
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
         Text(text = "Write it", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = PantopusColors.appText)
         Text(
-            text = "Pick a stationery + ink, write your note, optionally add a voice postscript.",
+            text = "Choose stationery and ink, then write your note.",
             fontSize = 13.sp,
             color = PantopusColors.appTextSecondary,
         )
@@ -506,12 +498,10 @@ internal fun ComposeStep(
                     unfocusedBorderColor = PantopusColors.appBorder,
                 ),
         )
-        Overline("VOICE POSTSCRIPT (OPTIONAL)")
-        VoicePostscriptControl(
-            status = voiceStatus,
-            onRecord = onRecordVoice,
-            onClear = onClearVoice,
-        )
+        // No recorder is connected here; only an already attached postscript can be managed.
+        if (voiceStatus is VoicePostscriptStatus.Uploaded) {
+            VoicePostscriptControl(status = voiceStatus, onRecord = onRecordVoice, onClear = onClearVoice)
+        }
     }
 }
 
@@ -666,7 +656,7 @@ internal fun CommitStep(
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
         Text(text = "Seal and send", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = PantopusColors.appText)
         Text(
-            text = "Take one more look — you can't edit a letter after it's delivered. Pick a wax seal, then send.",
+            text = "Take one more look — you can't edit a letter after it's delivered. Your letter arrives with their next mail delivery.",
             fontSize = 13.sp,
             color = PantopusColors.appTextSecondary,
         )
@@ -690,7 +680,7 @@ internal fun CommitStep(
         }
         Overline("WHEN TO DELIVER")
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-            CeremonialMailSendTiming.values().forEach { timing ->
+            listOf(CeremonialMailSendTiming.Now).forEach { timing ->
                 TimingRow(timing = timing, isActive = form.sendTiming == timing, onSelect = onSelectTiming)
             }
         }
@@ -786,7 +776,7 @@ private fun SuccessStep() {
             color = PantopusColors.appText,
         )
         Text(
-            text = "We'll let you know when it lands. Until then, the only person who sees your letter is the one you addressed it to.",
+            text = "Your letter is saved for their next mail delivery. You can return to your mailbox.",
             fontSize = 13.sp,
             color = PantopusColors.appTextSecondary,
         )
