@@ -1529,35 +1529,58 @@ router.post('/themes/apply', verifyToken, validate(applyThemeSchema), async (req
 //                      MEMORY ENDPOINTS
 // ====================================================================
 
+// Memories use the same delivery clock as the mailbox, not when a row was
+// queued. Keep the existing personal-recipient scope and omit removed mail
+// and bundle containers, which are not additional letters.
+async function memoryMail(userId, start, end, columns, { positiveOnly = false } = {}) {
+  const rows = [];
+  let afterId = null;
+  const now = new Date();
+  for (;;) {
+    let query = onlyDelivered(supabaseAdmin.from('Mail').select(columns), now)
+      .eq('recipient_user_id', userId).is('deleted_at', null)
+      .or('lifecycle.is.null,lifecycle.neq.shredded')
+      .or('mail_object_type.is.null,mail_object_type.neq.bundle')
+      .gte('delivered_at', start.toUTC().toISO()).lt('delivered_at', end.toUTC().toISO())
+      .order('id').limit(500);
+    if (positiveOnly) query = query.in('category', ['postcard', 'package', 'personal', 'greeting', 'gift']);
+    if (afterId) query = query.gt('id', afterId);
+    const { data, error } = await query;
+    if (error) throw error;
+    rows.push(...(data || []));
+    if (!data || data.length < 500) return rows;
+    afterId = data[data.length - 1].id;
+  }
+}
+
+async function memoryNow(userId) {
+  return DateTime.now().setZone((await mailDelivery.personTimeZone(userId)) || mailDelivery.FALLBACK_TIME_ZONE);
+}
+
+function memoryAnniversary(today, year) {
+  // A February 29 anniversary has no February 29 in a non-leap year.
+  return DateTime.fromObject({ year, month: today.month, day: today.day }, { zone: today.zoneName });
+}
+
 // GET /memory/on-this-day — memories from this date in previous years
 router.get('/memory/on-this-day', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
-    const today = new Date();
+    const today = await memoryNow(userId);
     const memories = [];
 
-    // Check last 5 years
     for (let yearsBack = 1; yearsBack <= 5; yearsBack++) {
-      const targetDate = new Date(today.getFullYear() - yearsBack, today.getMonth(), today.getDate());
-      const nextDay = new Date(targetDate);
-      nextDay.setDate(nextDay.getDate() + 1);
-
-      const { data: items, error: itemsErr } = await supabaseAdmin
-        .from('Mail')
-        .select(`id, subject, sender_name:sender_display, category, delivered_at:created_at, ${MAIL_SENDER_FIELDS}`)
-        .eq('recipient_user_id', userId)
-        .is('deleted_at', null)
-        .gte('created_at', targetDate.toISOString())
-        .lt('created_at', nextDay.toISOString())
-        // Positive items only
-        .in('category', ['postcard', 'package', 'personal', 'greeting', 'gift']);
-      if (itemsErr) throw itemsErr;
-
-      if (items && items.length > 0) {
+      const targetDate = memoryAnniversary(today, today.year - yearsBack);
+      if (!targetDate.isValid) continue;
+      const items = await memoryMail(userId, targetDate, targetDate.plus({ days: 1 }),
+        `id, subject, sender_name:sender_display, category, delivered_at, ${MAIL_SENDER_FIELDS}`, { positiveOnly: true });
+      items.sort((a, b) => Date.parse(a.delivered_at) - Date.parse(b.delivered_at) || a.id.localeCompare(b.id));
+      if (items.length) {
         memories.push({
-          id: `otd-${targetDate.getFullYear()}-${today.getMonth() + 1}-${today.getDate()}`,
+          id: `otd-${targetDate.year}-${today.month}-${today.day}`,
           memory_type: 'on_this_day',
-          reference_date: targetDate.toISOString(),
+          // A calendar label, independent of the UTC offset used to select mail.
+          reference_date: `${targetDate.toISODate()}T00:00:00.000Z`,
           headline: `${yearsBack} year${yearsBack > 1 ? 's' : ''} ago today`,
           body: `You received ${items.length} item${items.length > 1 ? 's' : ''}`,
           mail_items: await withSenderNames(items, userId),
@@ -1567,22 +1590,14 @@ router.get('/memory/on-this-day', verifyToken, async (req, res) => {
       }
     }
 
-    // Check for dismissed
     const { data: dismissed, error: dismissedErr } = await supabaseAdmin
-      .from('MailMemory')
-      .select('reference_date')
-      .eq('user_id', userId)
-      .eq('memory_type', 'on_this_day')
-      .eq('dismissed', true);
+      .from('MailMemory').select('reference_date').eq('user_id', userId)
+      .eq('memory_type', 'on_this_day').eq('dismissed', true);
     if (dismissedErr) throw dismissedErr;
-
     const dismissedDates = new Set((dismissed || []).map(d => d.reference_date));
-    const filtered = memories.map(m => ({
-      ...m,
-      dismissed: dismissedDates.has(m.reference_date.slice(0, 10)),
-    }));
-
-    res.json({ memories: filtered });
+    res.json({ memories: memories.map(m => ({
+      ...m, dismissed: dismissedDates.has(m.reference_date.slice(0, 10)),
+    })) });
   } catch (err) {
     logger.error('[P3] GET /memory/on-this-day failed', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch memories' });
@@ -1592,111 +1607,40 @@ router.get('/memory/on-this-day', verifyToken, async (req, res) => {
 // GET /memory/year/:year — Year In Mail summary
 router.get('/memory/year/:year', verifyToken, async (req, res) => {
   try {
+    if (!/^[1-9]\d{3}$/.test(req.params.year) || Number(req.params.year) > 9998) {
+      return res.status(400).json({ error: 'Choose a valid four-digit year.', code: 'MAIL_YEAR_INVALID' });
+    }
     const userId = req.user.id;
-    const year = parseInt(req.params.year);
-    const yearStart = new Date(year, 0, 1).toISOString();
-    const yearEnd = new Date(year + 1, 0, 1).toISOString();
-
-    // Total items (Mail's delivery time is created_at; a failed read must not
-    // become an empty year).
-    const { count: totalItems, error: totalErr } = await supabaseAdmin
-      .from('Mail')
-      .select('*', { count: 'exact', head: true })
-      .eq('recipient_user_id', userId)
-      .is('deleted_at', null)
-      .gte('created_at', yearStart)
-      .lt('created_at', yearEnd);
-    if (totalErr) throw totalErr;
-
-    // By drawer
-    const { data: byDrawer, error: drawerErr } = await supabaseAdmin
-      .from('Mail')
-      .select('drawer')
-      .eq('recipient_user_id', userId)
-      .is('deleted_at', null)
-      .gte('created_at', yearStart)
-      .lt('created_at', yearEnd);
-    if (drawerErr) throw drawerErr;
-
-    const drawerCounts = {};
-    (byDrawer || []).forEach(m => {
-      drawerCounts[m.drawer || 'personal'] = (drawerCounts[m.drawer || 'personal'] || 0) + 1;
-    });
-
-    // By type
-    const { data: byType, error: typeErr } = await supabaseAdmin
-      .from('Mail')
-      .select('category')
-      .eq('recipient_user_id', userId)
-      .is('deleted_at', null)
-      .gte('created_at', yearStart)
-      .lt('created_at', yearEnd);
-    if (typeErr) throw typeErr;
-
-    const typeCounts = {};
-    (byType || []).forEach(m => {
-      typeCounts[m.category || 'other'] = (typeCounts[m.category || 'other'] || 0) + 1;
-    });
-
-    // Top senders
-    const { data: senders, error: sendersErr } = await supabaseAdmin
-      .from('Mail')
-      .select('sender_name:sender_display, sender_business_name, sender_trust, category, sender_user_id, sender_entity_id')
-      .eq('recipient_user_id', userId)
-      .is('deleted_at', null)
-      .gte('created_at', yearStart)
-      .lt('created_at', yearEnd);
-    if (sendersErr) throw sendersErr;
-
-    const senderMap = {};
-    (await nameMailSenders(senders || [], userId, { field: 'sender_name' })).forEach(m => {
-      const key = m.sender_name || m.sender_business_name || 'Unknown';
-      if (!senderMap[key]) senderMap[key] = { count: 0, trust: m.sender_trust, category: m.category };
-      senderMap[key].count++;
-    });
-    const topSenders = Object.entries(senderMap)
-      .sort(([, a], [, b]) => b.count - a.count)
-      .slice(0, 5)
-      .map(([name, info]) => ({
-        sender_display: name,
-        sender_trust: info.trust || 'unknown',
-        item_count: info.count,
-        category: info.category || 'other',
-      }));
-
-    // Packages
-    const { count: totalPackages } = await supabaseAdmin
-      .from('MailPackage')
-      .select('*', { count: 'exact', head: true })
-      .eq('recipient_user_id', userId)
-      .gte('created_at', yearStart)
-      .lt('created_at', yearEnd);
-
-    // First mail date
-    const { data: firstMail, error: firstErr } = await supabaseAdmin
-      .from('Mail')
-      .select('delivered_at:created_at')
-      .eq('recipient_user_id', userId)
-      .is('deleted_at', null)
-      .gte('created_at', yearStart)
-      .lt('created_at', yearEnd)
-      .order('created_at')
-      .limit(1);
-    if (firstErr) throw firstErr;
+    const year = Number(req.params.year);
+    const today = await memoryNow(userId);
+    const start = DateTime.fromObject({ year, month: 1, day: 1 }, { zone: today.zoneName });
+    // Read every page once so totals, breakdowns and senders describe one set.
+    // MailPackage is linked by mail_id; it has no recipient_user_id column.
+    const items = await memoryMail(userId, start, start.plus({ years: 1 }),
+      `id, drawer, category, delivered_at, sender_name:sender_display, sender_trust, ${MAIL_SENDER_FIELDS}, package:MailPackage(id)`);
+    const drawers = new Map(), types = new Map(), senders = new Map();
+    let totalPackages = 0, firstMailDate = null;
+    for (const mail of await nameMailSenders(items, userId, { field: 'sender_name' })) {
+      const drawer = mail.drawer || 'personal', type = mail.category || 'other';
+      drawers.set(drawer, (drawers.get(drawer) || 0) + 1);
+      types.set(type, (types.get(type) || 0) + 1);
+      if (mail.package) totalPackages++;
+      if (!firstMailDate || Date.parse(mail.delivered_at) < Date.parse(firstMailDate)) firstMailDate = mail.delivered_at;
+      const name = mail.sender_name || mail.sender_business_name || 'Unknown';
+      const sender = senders.get(name) || { count: 0, trust: mail.sender_trust, category: type };
+      sender.count++;
+      senders.set(name, sender);
+    }
+    const topSenders = [...senders.entries()]
+      .sort(([, a], [, b]) => b.count - a.count).slice(0, 5)
+      .map(([name, info]) => ({ sender_display: name, sender_trust: info.trust || 'unknown',
+        item_count: info.count, category: info.category }));
 
     logMailEvent(userId, 'year_in_mail_viewed', null, { year });
     res.json({
-      year,
-      total_items: totalItems || 0,
-      by_drawer: drawerCounts,
-      by_type: typeCounts,
-      top_senders: topSenders,
-      total_packages: totalPackages || 0,
-      total_earned: 0,
-      total_saved: 0,
-      first_mail_date: firstMail?.[0]?.delivered_at || null,
-      most_active_month: null,
-      share_card_url: null,
+      year, total_items: items.length, by_drawer: Object.fromEntries(drawers), by_type: Object.fromEntries(types),
+      top_senders: topSenders, total_packages: totalPackages, total_earned: 0, total_saved: 0,
+      first_mail_date: firstMailDate, most_active_month: null, share_card_url: null,
     });
   } catch (err) {
     logger.error('[P3] GET /memory/year/:year failed', { error: err.message });
@@ -1723,28 +1667,19 @@ router.post('/memory/dismiss', verifyToken, validate(dismissMemorySchema), async
       return res.json({ message: 'Memory dismissed' });
     }
 
-    const today = new Date();
-    const yearsBack = today.getFullYear() - Number(memoryId.split('-')[1]);
-    const targetDate = new Date(today.getFullYear() - yearsBack, today.getMonth(), today.getDate());
-    const expectedId = `otd-${targetDate.getFullYear()}-${today.getMonth() + 1}-${today.getDate()}`;
-    if (yearsBack < 1 || yearsBack > 5 || memoryId !== expectedId) {
+    const today = await memoryNow(userId);
+    const year = Number(memoryId.split('-')[1]);
+    const yearsBack = today.year - year;
+    const targetDate = memoryAnniversary(today, year);
+    const expectedId = `otd-${year}-${today.month}-${today.day}`;
+    if (!targetDate.isValid || yearsBack < 1 || yearsBack > 5 || memoryId !== expectedId) {
       return res.status(404).json({ error: 'Memory not found' });
     }
-    const nextDay = new Date(targetDate);
-    nextDay.setDate(nextDay.getDate() + 1);
-    // Match the read's exact owned, non-deleted anniversary selection.
-    const { data: items, error: itemsErr } = await supabaseAdmin
-      .from('Mail')
-      .select('id')
-      .eq('recipient_user_id', userId)
-      .is('deleted_at', null)
-      .gte('created_at', targetDate.toISOString())
-      .lt('created_at', nextDay.toISOString())
-      .in('category', ['postcard', 'package', 'personal', 'greeting', 'gift']);
-    if (itemsErr) throw itemsErr;
-    if (!items?.length) return res.status(404).json({ error: 'Memory not found' });
+    // Dismiss precisely the same delivered anniversary shown by the read.
+    const items = await memoryMail(userId, targetDate, targetDate.plus({ days: 1 }), 'id', { positiveOnly: true });
+    if (!items.length) return res.status(404).json({ error: 'Memory not found' });
 
-    const referenceDate = targetDate.toISOString().slice(0, 10);
+    const referenceDate = targetDate.toISODate();
     const { data: existing, error: existingErr } = await supabaseAdmin
       .from('MailMemory')
       .select('id')
