@@ -39,6 +39,8 @@ data class VacationHoldDto(
 data class VacationStatusResponse(
     val active: VacationHoldDto? = null,
     val upcoming: VacationHoldDto? = null,
+    /** Pieces the hold in effect (or the next one) keeps now (SRV-5); absent on older servers. */
+    @Json(name = "held_count") val heldCount: Int? = null,
 )
 
 /**
@@ -57,10 +59,12 @@ data class StartVacationRequest(
     val holdId: String? = null,
 )
 
-/** Envelope for `POST /api/mailbox/v2/p3/vacation/start` — `{ hold }`. */
+/** Envelope for `POST /api/mailbox/v2/p3/vacation/start` — `{ hold, held_count }`. */
 @JsonClass(generateAdapter = true)
 data class StartVacationResponse(
     val hold: VacationHoldDto,
+    /** Pieces this hold keeps now (SRV-5); absent on older servers. */
+    @Json(name = "held_count") val heldCount: Int? = null,
 )
 
 /**

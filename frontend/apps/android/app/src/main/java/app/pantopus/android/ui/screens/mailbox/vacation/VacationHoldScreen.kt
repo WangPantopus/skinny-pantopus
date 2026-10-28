@@ -2,6 +2,7 @@
 
 package app.pantopus.android.ui.screens.mailbox.vacation
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -17,6 +18,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -36,10 +39,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -51,7 +61,8 @@ import app.pantopus.android.ui.components.DateSpan
 import app.pantopus.android.ui.components.DateSpanTone
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.FutureDatePickerDialog
-import app.pantopus.android.ui.screens.mailbox.vacation.components.HeldList
+import app.pantopus.android.ui.components.PrimaryButton
+import app.pantopus.android.ui.screens.mailbox.components.MailboxDrawing
 import app.pantopus.android.ui.screens.mailbox.vacation.components.HoldStatusHero
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -65,21 +76,22 @@ import java.util.Locale
 /** Toast dwell time — matches iOS `VacationHoldView`'s 1.8s banner. */
 private const val TOAST_MILLIS = 1_800L
 
+/** A longer toast (what went wrong and what to do) stays long enough to read, up to [TOAST_MAX_MILLIS]. */
+private const val TOAST_MILLIS_PER_CHAR = 60L
+private const val TOAST_MAX_MILLIS = 7_000L
+
+/** 1.8 s for "Your mail hold is saved.", longer for a sentence saying what went wrong. */
+private fun toastMillis(text: String): Long = (text.length * TOAST_MILLIS_PER_CHAR).coerceIn(TOAST_MILLIS, TOAST_MAX_MILLIS)
+
 /**
- * A14.8 — Vacation Hold screen. Mirrors
- * `Features/Mailbox/Vacation/VacationHoldView.swift`. Two variants:
+ * Hold my mail (Mail tab drawings, `R11-Vacation`; A14.8's screen reskinned). While the person is away their own mail
+ * waits and comes back as one bundle the morning they're back (SRV-5). Two variants:
  *
- * - scheduling — From / To date pickers wrapped around a 13-day
- *   [DateSpan] strip, a 4-row scope-toggle card (mail · packages ·
- *   magic task · civic notices locked), an optional forwarding chevron
- *   row, and an emergency-contact chevron row. Top bar trailing slot
- *   renders `Save` in `primary600` (disabled until the draft is valid).
+ * - scheduling — Starts / Back home date rows around the [DateSpan] strip, what happens in plain words, the dates' error
+ *   right under them, and "Hold my mail, Nov 20 to Nov 29".
  *
- * - active — sky-gradient [HoldStatusHero] with pulsing pill + days-
- *   left + 3-cell stats grid, a "Currently held" ledger via [HeldList],
- *   read-only forwarding + emergency cards, a destructive "End hold
- *   early" row at the bottom, and the trailing slot in the top bar
- *   swaps `Save` for a muted `Edit` text button.
+ * - active (or set for later) — the [HoldStatusHero] with the days left, what the hold has kept so far and when it
+ *   comes back, End the hold early (or Cancel the hold) after a question, and `Edit` in the top bar.
  */
 @Composable
 fun VacationHoldScreen(
@@ -96,6 +108,7 @@ fun VacationHoldScreen(
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val loadError by viewModel.loadError.collectAsStateWithLifecycle()
     val mutationInFlight by viewModel.mutationInFlight.collectAsStateWithLifecycle()
+    val dateError by viewModel.dateError.collectAsStateWithLifecycle()
 
     /**
      * A14.8 — "End hold early" is destructive (the backend marks the hold
@@ -107,10 +120,9 @@ fun VacationHoldScreen(
     var pickingDate by remember { mutableStateOf<VacationDateField?>(null) }
 
     LaunchedEffect(toast) {
-        if (toast != null) {
-            kotlinx.coroutines.delay(TOAST_MILLIS)
-            viewModel.consumeToast()
-        }
+        val shown = toast ?: return@LaunchedEffect
+        kotlinx.coroutines.delay(toastMillis(shown))
+        viewModel.consumeToast()
     }
 
     LaunchedEffect(Unit) {
@@ -146,20 +158,29 @@ fun VacationHoldScreen(
                         .verticalScroll(rememberScrollState())
                         .padding(bottom = Spacing.s6),
             ) {
+                HoldIntro()
                 if (isLoading) {
                     Box(modifier = Modifier.fillMaxWidth().height(160.dp), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator()
                     }
                 } else if (loadError != null) {
+                    // Room under the intro, so the problem doesn't sit on its last line.
                     ErrorState(
-                        headline = "Couldn't load travel dates",
+                        headline = "Couldn't load your mail hold",
                         message = loadError.orEmpty(),
+                        modifier = Modifier.padding(top = Spacing.s6),
                         onRetry = { viewModel.load() },
                     )
                 } else {
                     when (val m = mode) {
                         is VacationHoldMode.Scheduling ->
-                            SchedulingBody(viewModel = viewModel, draft = m.draft, onPickDate = { pickingDate = it })
+                            SchedulingBody(
+                                viewModel = viewModel,
+                                draft = m.draft,
+                                dateError = dateError,
+                                saving = mutationInFlight,
+                                onPickDate = { pickingDate = it },
+                            )
                         is VacationHoldMode.Active ->
                             ActiveBody(
                                 hold = m.hold,
@@ -188,56 +209,78 @@ fun VacationHoldScreen(
         }
 
         if (showEndHoldConfirm) {
-            AlertDialog(
-                onDismissRequest = { showEndHoldConfirm = false },
-                title = { Text(text = "Cancel your travel dates?") },
-                text = {
-                    Text(
-                        text = "This removes the saved date range. Contact carriers separately about any delivery arrangements.",
-                        fontSize = 13.sp,
-                        color = PantopusColors.appTextSecondary,
-                    )
+            EndHoldDialog(
+                // A hold in effect ends early; one set for later is cancelled.
+                active = (mode as? VacationHoldMode.Active)?.hold?.isActive != false,
+                onEnd = {
+                    showEndHoldConfirm = false
+                    viewModel.endHoldEarly()
                 },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            showEndHoldConfirm = false
-                            viewModel.endHoldEarly()
-                        },
-                        modifier = Modifier.testTag("vacationHoldEndConfirm"),
-                    ) {
-                        Text(text = "Cancel dates", color = PantopusColors.error)
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showEndHoldConfirm = false }) {
-                        Text(text = "Keep dates", color = PantopusColors.appTextSecondary)
-                    }
-                },
+                onKeep = { showEndHoldConfirm = false },
             )
         }
 
         if (toast != null) {
+            // Clear of the screen's edges, and read out by TalkBack: a failure can take two or three lines.
             Box(
                 modifier =
                     Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = Spacing.s10),
+                        .padding(start = Spacing.s4, end = Spacing.s4, bottom = Spacing.s10),
             ) {
                 Text(
                     text = toast.orEmpty(),
                     fontSize = 13.sp,
+                    lineHeight = 18.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = PantopusColors.appTextInverse,
+                    textAlign = TextAlign.Center,
                     modifier =
                         Modifier
-                            .clip(RoundedCornerShape(Radii.pill))
+                            .clip(RoundedCornerShape(Radii.xl))
                             .background(PantopusColors.appText.copy(alpha = 0.9f))
-                            .padding(horizontal = Spacing.s4, vertical = Spacing.s2),
+                            .padding(horizontal = Spacing.s4, vertical = Spacing.s2)
+                            .semantics { liveRegion = LiveRegionMode.Polite }
+                            .testTag("vacationHoldToast"),
                 )
             }
         }
     }
+}
+
+/** Ending (or cancelling) a hold asks first, and says what happens to the mail it kept. */
+@Composable
+private fun EndHoldDialog(
+    active: Boolean,
+    onEnd: () -> Unit,
+    onKeep: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onKeep,
+        title = { Text(text = if (active) "End your hold now?" else "Cancel this hold?") },
+        text = {
+            Text(
+                text =
+                    if (active) {
+                        "What it kept comes with the next morning's mail, and your mail comes as usual after that."
+                    } else {
+                        "Your mail keeps coming every morning as usual."
+                    },
+                fontSize = 13.sp,
+                color = PantopusColors.appTextSecondary,
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onEnd, modifier = Modifier.testTag("vacationHoldEndConfirm")) {
+                Text(text = if (active) "End the hold" else "Cancel the hold", color = PantopusColors.error)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onKeep, modifier = Modifier.testTag("vacationHoldKeep")) {
+                Text(text = if (active) "Keep holding" else "Keep it", color = PantopusColors.appTextSecondary)
+            }
+        },
+    )
 }
 
 // MARK: - Top bar
@@ -265,7 +308,7 @@ private fun TopBar(
         contentAlignment = Alignment.Center,
     ) {
         Text(
-            text = "Vacation hold",
+            text = "Hold my mail",
             fontSize = 16.sp,
             fontWeight = FontWeight.SemiBold,
             color = PantopusColors.appText,
@@ -294,21 +337,23 @@ private fun TopBar(
                     tint = PantopusColors.appText,
                 )
             }
-            Box(
-                modifier =
-                    Modifier
-                        .heightIn(min = 44.dp)
-                        .padding(horizontal = 8.dp)
-                        .clickable(enabled = trailingEnabled) { viewModel.tapTrailingAction() }
-                        .testTag("vacationHoldTrailingAction"),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = trailingLabel,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = trailingColor,
-                )
+            if (mode is VacationHoldMode.Active) {
+                Box(
+                    modifier =
+                        Modifier
+                            .heightIn(min = 48.dp)
+                            .padding(horizontal = 8.dp)
+                            .clickable(enabled = trailingEnabled) { viewModel.tapTrailingAction() }
+                            .testTag("vacationHoldTrailingAction"),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = trailingLabel,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = trailingColor,
+                    )
+                }
             }
         }
         Box(
@@ -327,18 +372,21 @@ private fun TopBar(
 /** The date row a picker is open for. */
 private enum class VacationDateField { From, To }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SchedulingBody(
     viewModel: VacationHoldViewModel,
     draft: VacationScheduleDraft,
+    dateError: String?,
+    saving: Boolean,
     onPickDate: (VacationDateField) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         VacationOverline("When")
         VacationCard {
             VacationDateRow(
-                label = "From",
-                sub = "Departure date",
+                label = "Starts",
+                sub = "The first day your mail waits",
                 value = formatWeekdayShort(draft.fromDate),
                 onTap = {
                     viewModel.tapFromDate()
@@ -348,8 +396,8 @@ private fun SchedulingBody(
             )
             VacationHairline()
             VacationDateRow(
-                label = "To",
-                sub = "Return date",
+                label = "Back home",
+                sub = "Your held mail comes that morning",
                 value = formatWeekdayShort(draft.toDate),
                 onTap = {
                     viewModel.tapToDate()
@@ -373,9 +421,83 @@ private fun SchedulingBody(
             }
         }
 
-        VacationCardHelper("Saving dates does not arrange mail holds, package handling or forwarding. Contact your carriers directly.")
+        // The dates' problem, right under them, until they change. With large text the button can sit a screen
+        // below the dates, so the problem scrolls into view, and TalkBack reads it.
+        if (dateError != null) {
+            val errorInView = remember { BringIntoViewRequester() }
+            LaunchedEffect(dateError) { errorInView.bringIntoView() }
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = Spacing.s4)
+                        .padding(top = Spacing.s3)
+                        .bringIntoViewRequester(errorInView)
+                        .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite }
+                        .testTag("vacationHoldDateError"),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+            ) {
+                PantopusIconImage(icon = PantopusIcon.AlertCircle, contentDescription = null, size = 16.dp, tint = PantopusColors.error)
+                Text(text = dateError, fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium, color = PantopusColors.error)
+            }
+        }
+
+        Text(
+            text = "Your held mail arrives the morning of ${formatWeekdayShort(draft.toDate)}, as one bundle with that day's mail.",
+            fontSize = 14.sp,
+            lineHeight = 20.sp,
+            color = PantopusColors.appTextStrong,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s4).padding(top = Spacing.s3),
+        )
+        VacationCardHelper("Special deliveries still come right away, and Home mail keeps coming for your household.")
+
+        PrimaryButton(
+            title = "Hold my mail, ${formatMonthDay(draft.fromDate)} to ${formatMonthDay(draft.toDate)}",
+            onClick = viewModel::tapTrailingAction,
+            isLoading = saving,
+            isEnabled = !saving,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s4).padding(top = Spacing.s5).testTag("vacationHoldSave"),
+        )
 
         VacationMonoFooter(draft.footerBlurb)
+    }
+}
+
+/** What a hold does, in a line under the title, beside the mailbox with its HOLD tag (`R11-Vacation`). */
+@Composable
+private fun HoldIntro() {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s4).padding(top = Spacing.s4),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
+    ) {
+        Box(modifier = Modifier.size(72.dp).clearAndSetSemantics {}) {
+            MailboxDrawing(modifier = Modifier.size(72.dp))
+            // Part of the drawing, so it keeps the drawing's size at any text size (the words beside it say it all).
+            Text(
+                text = "HOLD",
+                fontSize = with(LocalDensity.current) { 9.dp.toSp() },
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                color = PantopusColors.mailManilaInk,
+                modifier =
+                    Modifier
+                        .align(Alignment.Center)
+                        .rotate(-6f)
+                        .background(PantopusColors.mailManila, RoundedCornerShape(3.dp))
+                        .border(1.dp, PantopusColors.mailManilaEdge, RoundedCornerShape(3.dp))
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
+            )
+        }
+        Text(
+            text =
+                "Deliveries pause while you're away. Everything that comes waits for you and arrives as one bundle the " +
+                    "morning you're back.",
+            fontSize = 14.sp,
+            lineHeight = 20.sp,
+            color = PantopusColors.appTextSecondary,
+            modifier = Modifier.weight(1f),
+        )
     }
 }
 
@@ -398,16 +520,61 @@ private fun ActiveBody(
                 untilLabel = hold.untilLabel,
                 stats = emptyList(),
                 statusLabel = hold.statusLabel,
-                daysLabel = "days until return",
+                daysLabel = "days until you're back",
             )
         }
 
-        VacationCardHelper(hold.resumeBlurb)
+        // Where it stands: on hold now (and what it has kept), or set for later.
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = Spacing.s3)
+                    .padding(top = Spacing.s3)
+                    .clip(RoundedCornerShape(Radii.lg))
+                    .background(if (hold.isActive) PantopusColors.warningBg else PantopusColors.appSurface)
+                    .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.lg))
+                    .padding(horizontal = Spacing.s4, vertical = 14.dp)
+                    .semantics(mergeDescendants = true) {}
+                    .testTag("vacationHoldStatus"),
+            verticalArrangement = Arrangement.spacedBy(Spacing.s1),
+        ) {
+            Text(
+                text = if (hold.isActive) "Your mail is on hold" else "Your mail hold starts ${hold.startsLabel ?: hold.activeSinceLabel}",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = PantopusColors.appText,
+            )
+            Text(text = hold.resumeBlurb, fontSize = 14.sp, lineHeight = 20.sp, color = PantopusColors.appTextStrong)
+            if (hold.isActive) {
+                Text(
+                    text =
+                        when (hold.heldCount) {
+                            0 -> "Nothing held yet."
+                            1 -> "1 piece held so far."
+                            else -> "${hold.heldCount} pieces held so far."
+                        },
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = PantopusColors.appText,
+                    modifier = Modifier.testTag("vacationHoldHeld"),
+                )
+            }
+        }
+
+        VacationCardHelper("Special deliveries still come right away, and Home mail keeps coming for your household.")
+        Spacer(modifier = Modifier.height(Spacing.s3))
 
         VacationCard {
             VacationDestructiveRow(
-                label = "Cancel travel dates",
-                sub = "Remove this saved date range",
+                label = if (hold.isActive) "End the hold early" else "Cancel the hold",
+                sub =
+                    if (hold.isActive) {
+                        "What it kept comes with the next morning's mail"
+                    } else {
+                        "Your mail keeps coming every morning as usual"
+                    },
                 onTap = onEndHold,
                 tag = "vacationHoldEndEarly",
             )
@@ -455,6 +622,7 @@ private fun VacationCardHelper(text: String) {
     Text(
         text = text,
         fontSize = 11.5.sp,
+        lineHeight = 16.sp,
         color = PantopusColors.appTextSecondary,
         modifier =
             Modifier
@@ -469,6 +637,7 @@ private fun VacationMonoFooter(text: String) {
     Text(
         text = text,
         fontSize = 11.sp,
+        lineHeight = 16.sp,
         fontFamily = FontFamily.Monospace,
         color = PantopusColors.appTextMuted,
         modifier =
@@ -505,6 +674,7 @@ private fun VacationDestructiveRow(
         Text(
             text = sub,
             fontSize = 11.5.sp,
+            lineHeight = 16.sp,
             color = PantopusColors.appTextSecondary,
         )
     }
@@ -555,6 +725,7 @@ private fun VacationDateRow(
             Text(
                 text = sub,
                 fontSize = 11.5.sp,
+                lineHeight = 16.sp,
                 color = PantopusColors.appTextSecondary,
             )
         }
@@ -604,6 +775,7 @@ private fun VacationToggleRow(
             Text(
                 text = sub,
                 fontSize = 11.5.sp,
+                lineHeight = 16.sp,
                 color = PantopusColors.appTextSecondary,
             )
         }
@@ -699,6 +871,7 @@ private fun VacationChevronIconRow(
             Text(
                 text = sub,
                 fontSize = 11.5.sp,
+                lineHeight = 16.sp,
                 color = PantopusColors.appTextSecondary,
             )
         }
@@ -757,6 +930,7 @@ private fun VacationChevronAvatarRow(
             Text(
                 text = sub,
                 fontSize = 11.5.sp,
+                lineHeight = 16.sp,
                 color = PantopusColors.appTextSecondary,
             )
         }
@@ -770,6 +944,9 @@ private fun VacationChevronAvatarRow(
 }
 
 // MARK: - Formatting helpers
+
+/** "Nov 20" — the Hold my mail button's dates. */
+private fun formatMonthDay(date: LocalDate): String = date.format(DateTimeFormatter.ofPattern("MMM d", Locale.US))
 
 /** "Tue, May 28" — date-row value. */
 private fun formatWeekdayShort(date: LocalDate): String {

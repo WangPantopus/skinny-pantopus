@@ -94,6 +94,7 @@ class VacationHoldNetworkTest {
         runTest {
             val home = mockk<MyHome>()
             every { home.id } returns "home_1"
+            every { home.roleBase } returns "owner"
             val homesResponse = mockk<MyHomesResponse>()
             every { homesResponse.homes } returns listOf(home)
             coEvery { homesRepository.myHomes() } returns NetworkResult.Success(homesResponse)
@@ -164,6 +165,7 @@ class VacationHoldNetworkTest {
         runTest {
             val home = mockk<MyHome>()
             every { home.id } returns "home_1"
+            every { home.roleBase } returns "owner"
             val homesResponse = mockk<MyHomesResponse>()
             every { homesResponse.homes } returns listOf(home)
             coEvery { homesRepository.myHomes() } returns NetworkResult.Success(homesResponse)
@@ -189,6 +191,7 @@ class VacationHoldNetworkTest {
         runTest {
             val home = mockk<MyHome>()
             every { home.id } returns "home_1"
+            every { home.roleBase } returns "owner"
             val homesResponse = mockk<MyHomesResponse>()
             every { homesResponse.homes } returns listOf(home)
             coEvery { homesRepository.myHomes() } returns NetworkResult.Success(homesResponse)

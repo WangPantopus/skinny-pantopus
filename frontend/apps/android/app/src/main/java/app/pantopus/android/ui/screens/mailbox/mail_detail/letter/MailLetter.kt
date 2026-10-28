@@ -61,6 +61,8 @@ data class MailLetter(
     val paid: Boolean,
     val onCounter: Boolean,
     val filed: Boolean,
+    /** Archived, not filed: it comes back to Incoming with Back to Incoming. */
+    val archived: Boolean,
     /** `personal`, `home` or `business`: which Vault folders fit it. */
     val drawer: String?,
     val homeId: String?,
@@ -91,6 +93,7 @@ data class MailLetter(
             val posted =
                 detail.postmark?.date?.let { runCatching { LocalDate.parse(it.take(10)) }.getOrNull() } ?: delivered?.toLocalDate()
             val acknowledged = detail.acknowledgedAt != null || detail.ackStatus.equals("acknowledged", ignoreCase = true)
+            val filed = detail.lifecycle == "filed" || detail.vaultFolderId != null
             return MailLetter(
                 envelope = envelope,
                 kind = kind,
@@ -107,7 +110,8 @@ data class MailLetter(
                 invoiceId = owed?.id,
                 paid = invoice?.status == "paid",
                 onCounter = detail.onCounter,
-                filed = detail.lifecycle == "filed" || detail.vaultFolderId != null,
+                filed = filed,
+                archived = detail.archived && !filed,
                 drawer = detail.drawer,
                 homeId = detail.recipientHomeId,
                 asksAcknowledge = (detail.ackRequired == true || detail.certified) && !acknowledged,

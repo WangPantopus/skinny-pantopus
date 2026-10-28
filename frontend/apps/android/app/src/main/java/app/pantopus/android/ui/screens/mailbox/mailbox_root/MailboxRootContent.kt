@@ -143,8 +143,9 @@ fun MailboxDrawerRow(
                 horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
             ) {
                 PantopusIconImage(icon = drawer.icon, contentDescription = null, size = 16.dp, tint = foreground)
-                Text(drawer.label, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = foreground)
+                Text(drawer.label, fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold, color = foreground)
                 if (count > 0) {
+                    // The drawing's 20-dp count; its own line height keeps it inside the chip at the largest text.
                     Box(
                         modifier =
                             Modifier
@@ -157,6 +158,7 @@ fun MailboxDrawerRow(
                         Text(
                             if (count > 99) "99+" else "$count",
                             fontSize = 11.sp,
+                            lineHeight = 14.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (active) drawer.accent else PantopusColors.info,
                         )

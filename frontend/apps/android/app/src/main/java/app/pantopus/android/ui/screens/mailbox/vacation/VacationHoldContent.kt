@@ -83,6 +83,12 @@ data class VacationActiveHold(
     val emergency: VacationEmergencyContact?,
     val activeSinceLabel: String,
     val statusLabel: String = "Current",
+    /** Pieces the hold keeps now (the server's live count). */
+    val heldCount: Int = 0,
+    /** In effect now; false while it waits for its first day. */
+    val isActive: Boolean = true,
+    /** "Fri, Nov 20": the first day of a hold that hasn't begun. */
+    val startsLabel: String? = null,
 )
 
 /** Mutable scheduling state. */
@@ -129,7 +135,7 @@ data class VacationScheduleDraft(
                 forwardingEnabled = false,
                 forwarding = null,
                 emergency = null,
-                footerBlurb = "Dates are saved to your home. Status changes at midnight UTC.",
+                footerBlurb = "Only your own mail waits. Your home's mail keeps coming to the Home drawer.",
             )
 
         private const val DEFAULT_HOLD_DAYS = 7L

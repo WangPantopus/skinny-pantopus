@@ -7,6 +7,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.mailbox.v2.DrawerListResponse
+import app.pantopus.android.data.api.models.mailbox.v2.DrawerMail
+import app.pantopus.android.data.api.models.mailbox.v2.MailHome
+import app.pantopus.android.data.api.models.mailbox.v2.MailVacationHold
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.businesses.BusinessesRepository
@@ -14,6 +17,7 @@ import app.pantopus.android.data.mailbox.MailDeliverySeen
 import app.pantopus.android.data.mailbox.MailboxRepository
 import app.pantopus.android.data.network.NetworkMonitor
 import app.pantopus.android.ui.screens.mailbox.components.MailAddressBook
+import app.pantopus.android.ui.screens.mailbox.components.MailKind
 import app.pantopus.android.ui.screens.mailbox.components.MailPieceMapper
 import app.pantopus.android.ui.screens.mailbox.components.MailSection
 import app.pantopus.android.ui.screens.mailbox.components.MailboxHeroState
@@ -30,6 +34,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.Instant
+import java.time.ZoneId
+import java.util.Locale
 import javax.inject.Inject
 
 /**
@@ -68,6 +74,13 @@ data class MailDeliveryMoment(
     val cameWhen: String,
 )
 
+/** Pantopus's sealed welcome letter, waiting on the first day's porch (board `R12-Welcome`). */
+data class MailWelcome(
+    val mailId: String,
+    /** The person's verified address, for "Your first piece of mail at …". */
+    val address: String?,
+)
+
 /** What the Mailbox's list shows for the open drawer and tab. */
 sealed interface MailboxUiState {
     data object Loading : MailboxUiState
@@ -77,6 +90,12 @@ sealed interface MailboxUiState {
         val hasMore: Boolean,
         /** Why the next page failed; the pieces stay and the end of the list offers Try again. */
         val loadMoreError: String? = null,
+        /** The Counter's pieces with their due tags, lines and buttons (board `R9-Counter`). */
+        val counter: List<MailCounterItem> = emptyList(),
+        /** The Vault's filed or archived rows, drawn as a filing list (board `R10-Vault`). */
+        val filed: List<DrawerMail> = emptyList(),
+        /** How many the server has in this tab, all pages together. */
+        val total: Int? = null,
     ) : MailboxUiState
 
     data class Empty(
@@ -150,6 +169,31 @@ class MailboxRootViewModel
          */
         val deliveryMoment: StateFlow<MailDeliveryMoment?> = _deliveryMoment.asStateFlow()
 
+        private val _homes = MutableStateFlow<List<MailHome>>(emptyList())
+
+        /** The Homes the person lives at, and whether each one's mail opens for them yet (the closed Home drawer). */
+        val homes: StateFlow<List<MailHome>> = _homes.asStateFlow()
+
+        private val _vacationHold = MutableStateFlow<MailVacationHold?>(null)
+
+        /** The hold in effect, or the next one: the banner at the top of the Mailbox. */
+        val vacationHold: StateFlow<MailVacationHold?> = _vacationHold.asStateFlow()
+
+        private val _vaultShelf = MutableStateFlow<MailVaultShelf>(MailVaultShelf.All)
+
+        /** What the Vault tab lists: everything filed, one folder, or what's archived. */
+        val vaultShelf: StateFlow<MailVaultShelf> = _vaultShelf.asStateFlow()
+
+        private val _welcome = MutableStateFlow<MailWelcome?>(null)
+
+        /** The first day's porch, once per person on this phone, until they open the letter or close the porch. */
+        val welcome: StateFlow<MailWelcome?> = _welcome.asStateFlow()
+
+        private val _mailZone = MutableStateFlow<ZoneId>(ZoneId.systemDefault())
+
+        /** The mailbox's own time zone, which "today" and the rounds follow. */
+        val mailZone: StateFlow<ZoneId> = _mailZone.asStateFlow()
+
         private var onOpenMail: (String) -> Unit = {}
 
         private var book = MailAddressBook(personName = null)
@@ -170,6 +214,13 @@ class MailboxRootViewModel
         /** The pieces read so far, each drawn once when its page came. */
         private var loadedMail: MutableList<MappedMail> = mutableListOf()
         private var loading = false
+        private var serverTotal: Int? = null
+
+        /** Pay opened the invoice screen from the Counter: the Mailbox reads again when it shows next. */
+        private var payOpened = false
+
+        /** Today's round, not played yet: it plays once the open tab's first page is read. */
+        private var pendingMoment: MailDeliveryMoment? = null
 
         /** Bumped on every reload so a late page from an earlier drawer or tab can't replace the current one. */
         private var generation = 0
@@ -220,6 +271,11 @@ class MailboxRootViewModel
         fun refreshIfStale() {
             val read = lastReadAt ?: return
             if (_state.value is MailboxUiState.Loading) return
+            if (payOpened) {
+                // Back from paying a bill on the Counter: it's paid and filed in Receipts now, or still waiting.
+                payOpened = false
+                return refreshQuietly()
+            }
             val now = Instant.now()
             val newDay = read.atZone(zone).toLocalDate() != now.atZone(zone).toLocalDate()
             if (newDay || java.time.Duration.between(read, now) > STALE_AFTER) refreshQuietly()
@@ -239,6 +295,12 @@ class MailboxRootViewModel
             owner.await()
             updateDrawers()
             reloadActiveTab(limit)
+            // The round's moment plays once its pieces are there; on the first day the porch with the welcome letter
+            // takes its place, so the day opens with one moment, not two.
+            pendingMoment?.let { moment ->
+                pendingMoment = null
+                if (_welcome.value == null) _deliveryMoment.value = moment else deliveryMomentShown()
+            }
         }
 
         /** Near the end of the list: the next page, unless the last one failed (then only [retryLoadMore] asks). */
@@ -257,13 +319,34 @@ class MailboxRootViewModel
         fun selectDrawer(drawer: MailboxDrawer) {
             if (_selectedDrawer.value == drawer) return
             _selectedDrawer.value = drawer
+            _vaultShelf.value = MailVaultShelf.All
             switchList()
         }
 
         fun selectTab(tab: MailboxTab) {
             if (_selectedTab.value == tab) return
             _selectedTab.value = tab
+            _vaultShelf.value = MailVaultShelf.All
             switchList()
+        }
+
+        /** The Vault lists one folder, what's archived, or everything filed again. */
+        fun openVaultShelf(shelf: MailVaultShelf) {
+            if (_vaultShelf.value == shelf) return
+            _vaultShelf.value = shelf
+            switchList()
+        }
+
+        /** Pay on the Counter opened the invoice screen. */
+        fun payOpened() {
+            payOpened = true
+        }
+
+        /** The porch was answered (the letter opened, or the porch closed): it doesn't come back on this phone. */
+        fun welcomeDone() {
+            val welcome = _welcome.value ?: return
+            _welcome.value = null
+            signedInUserId()?.let { deliverySeen.markWelcomeShown(it, welcome.mailId) }
         }
 
         /** The delivery moment played, or was skipped: it won't play again for this round. */
@@ -300,7 +383,10 @@ class MailboxRootViewModel
             _drawerUnread.value = response.drawers.associate { it.drawer to it.unreadCount }
             book = MailAddressBook(personName = signedInName(), homes = response.homes.orEmpty())
             homesKnown = response.homes != null
+            _homes.value = response.homes.orEmpty()
+            _vacationHold.value = response.vacationHold
             zone = MailPieceMapper.zoneOf(response.delivery)
+            _mailZone.value = zone
             _hero.value = MailboxHeroState.from(response.delivery, book)
             val last = response.delivery?.lastAt
             deliveredAt = last
@@ -312,7 +398,7 @@ class MailboxRootViewModel
             val round = last?.takeIf { lastTime?.toLocalDate() == today && count > 0 }
             if (round != null && user != null && !deliverySeen.shown(user, round)) {
                 val morning = (lastTime?.hour ?: 0) < NOON
-                _deliveryMoment.value = MailDeliveryMoment(count, cameWhen = if (morning) "this morning" else "today")
+                pendingMoment = MailDeliveryMoment(count, cameWhen = if (morning) "this morning" else "today")
             }
         }
 
@@ -350,6 +436,7 @@ class MailboxRootViewModel
             loadedMail = mutableListOf()
             loadMoreError = null
             hasMore = false
+            serverTotal = null
             fetchPage(gen, limit)
         }
 
@@ -360,7 +447,14 @@ class MailboxRootViewModel
             loading = true
             val drawer = _selectedDrawer.value
             val tab = _selectedTab.value
-            val result = repo.drawer(drawer.backendKey, tab.id, limit, offset)
+            val shelf = _vaultShelf.value
+            val result =
+                when {
+                    tab != MailboxTab.Vault -> repo.drawer(drawer.backendKey, tab.id, limit, offset)
+                    shelf is MailVaultShelf.Archived -> repo.drawer(drawer.backendKey, ARCHIVED_TAB, limit, offset)
+                    shelf is MailVaultShelf.Folder -> repo.drawer(drawer.backendKey, tab.id, limit, offset, shelf.id)
+                    else -> repo.drawer(drawer.backendKey, tab.id, limit, offset)
+                }
             // A late page from an earlier drawer or tab must not touch the current one or its loading guard.
             if (gen != generation) return
             // Each new piece is drawn once, off the main thread (dates and words), so a long list stays smooth.
@@ -374,10 +468,13 @@ class MailboxRootViewModel
             loading = false
             when (result) {
                 is NetworkResult.Success -> {
+                    val first = offset == 0
                     loadedMail.addAll(page.orEmpty())
                     offset = loadedMail.size
                     hasMore = result.data.mail.size >= limit
+                    serverTotal = result.data.total
                     publish()
+                    if (first && drawer == MailboxDrawer.Me && tab == MailboxTab.Incoming) findWelcome()
                 }
                 is NetworkResult.Failure -> {
                     val message = result.error.mailMessage(online = network.isOnline.value)
@@ -392,17 +489,37 @@ class MailboxRootViewModel
         }
 
         private fun publish() {
+            val tab = _selectedTab.value
             _state.value =
                 if (loadedMail.isEmpty()) {
-                    emptyState(_selectedDrawer.value, _selectedTab.value)
+                    emptyState(_selectedDrawer.value, tab)
                 } else {
                     MailboxUiState.Loaded(
                         // Incoming by the day it came; the Counter keeps the server's soonest-due order, the Vault its own.
-                        sections = MailPieceMapper.sections(loadedMail, zone, byDay = _selectedTab.value == MailboxTab.Incoming),
+                        sections = MailPieceMapper.sections(loadedMail, zone, byDay = tab == MailboxTab.Incoming),
                         hasMore = hasMore,
                         loadMoreError = loadMoreError,
+                        counter = if (tab == MailboxTab.Counter) loadedMail.map { MailCounterItem.from(it, zone) } else emptyList(),
+                        filed = if (tab == MailboxTab.Vault) loadedMail.map { it.row } else emptyList(),
+                        total = serverTotal,
                     )
                 }
+        }
+
+        /**
+         * The first day (`R12-Welcome`): Pantopus's welcome letter, still sealed in Me, came today or yesterday (it's made
+         * the first time Mail opens), and the porch hasn't been shown to this person on this phone. A long-time reader
+         * signing in on a new phone isn't greeted as if it were their first day.
+         */
+        private fun findWelcome() {
+            val user = signedInUserId()
+            if (_welcome.value != null || user == null || deliverySeen.welcomeShown(user)) return
+            val firstDay = Instant.now().atZone(zone).toLocalDate().minusDays(1)
+            val letter =
+                loadedMail.firstOrNull { mail ->
+                    !mail.row.viewed && isWelcomeLetter(mail.row) && mail.day?.isBefore(firstDay) == false
+                } ?: return
+            _welcome.value = MailWelcome(letter.row.id, book.ownAddress)
         }
 
         private fun markLoadedMailViewed(mailId: String) {
@@ -454,8 +571,17 @@ class MailboxRootViewModel
         ): MailboxUiState.Empty =
             when (tab) {
                 MailboxTab.Counter ->
-                    MailboxUiState.Empty("Nothing waiting on you", "Bills to pay and letters to answer wait here, soonest due first.")
-                MailboxTab.Vault -> MailboxUiState.Empty("Nothing filed yet", "Mail you file in the Vault waits here, in its folders.")
+                    MailboxUiState.Empty("Nothing waiting on you.", "Bills and letters that need you wait here until they're done.")
+                MailboxTab.Vault ->
+                    when (_vaultShelf.value) {
+                        is MailVaultShelf.Folder -> MailboxUiState.Empty("Nothing in this folder yet", "Nothing in this folder yet.")
+                        MailVaultShelf.Archived -> MailboxUiState.Empty("Nothing archived", "Nothing archived.")
+                        MailVaultShelf.All ->
+                            MailboxUiState.Empty(
+                                "Nothing filed yet",
+                                "Nothing filed in ${drawer.label} yet. Open a piece and choose File in the Vault.",
+                            )
+                    }
                 MailboxTab.Incoming ->
                     when (drawer) {
                         MailboxDrawer.Home -> homeEmptyState()
@@ -467,6 +593,16 @@ class MailboxRootViewModel
 
         private companion object {
             const val NOON = 12
+
+            /** The Vault's Archived shelf is the server's `archived` tab. */
+            const val ARCHIVED_TAB = "archived"
+
+            /** Pantopus's welcome letter (SRV-6): its own letter in Me, "Welcome to your mailbox". */
+            fun isWelcomeLetter(row: DrawerMail): Boolean {
+                if (!row.fromPantopus || row.recipientHomeId != null) return false
+                val title = (row.displayTitle ?: row.subject).orEmpty().lowercase(Locale.US)
+                return MailKind.fromWire(row.kind) == MailKind.Letter && title.startsWith("welcome to your mailbox")
+            }
 
             /** The Mailbox reads again when it shows after this long. */
             val STALE_AFTER: java.time.Duration = java.time.Duration.ofMinutes(5)

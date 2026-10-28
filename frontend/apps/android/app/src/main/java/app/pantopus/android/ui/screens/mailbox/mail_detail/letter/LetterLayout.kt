@@ -400,9 +400,10 @@ private fun LetterButtons(
             StatusLine("Acknowledged", PantopusIcon.CheckCircle, PantopusColors.success, "mailLetterAcknowledged")
         }
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2), modifier = Modifier.fillMaxWidth()) {
-            if (letter.filed) {
+            if (letter.filed || letter.archived) {
+                // Filed or archived mail isn't on the counter; it comes back to Incoming first.
                 ActionTile(
-                    "Take out of the Vault",
+                    if (letter.filed) "Take out of the Vault" else "Back to Incoming",
                     PantopusIcon.Undo2,
                     busy,
                     actionInFlight == "unfile",

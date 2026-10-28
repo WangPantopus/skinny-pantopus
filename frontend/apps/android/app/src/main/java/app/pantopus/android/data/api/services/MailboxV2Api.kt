@@ -57,6 +57,8 @@ interface MailboxV2Api {
         @Query("limit") limit: Int = 50,
         @Query("offset") offset: Int = 0,
         @Query("homeId") homeId: String? = null,
+        /** The Vault tab narrowed to one folder (the person's own, or a readable Home's shared one). */
+        @Query("folder_id") folderId: String? = null,
     ): DrawerItemsResponse
 
     /**
