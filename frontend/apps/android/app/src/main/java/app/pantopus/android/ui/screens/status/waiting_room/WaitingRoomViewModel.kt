@@ -80,6 +80,7 @@ sealed interface WaitingRoomNav {
  * via [navEvent].
  */
 @HiltViewModel
+@Suppress("TooManyFunctions") // Each way out of the room is its own small action that the host navigates.
 class WaitingRoomViewModel
     @Inject
     constructor(
