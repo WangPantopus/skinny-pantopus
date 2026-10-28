@@ -25,7 +25,7 @@ function delivery() {
 async function holdWindows(userId) {
   if (!userId) return [];
   const { data, error } = await supabaseAdmin.from('VacationHold').select('*').eq('user_id', userId).in('status', ACTIVE)
-    .order('start_date');
+    .order('start_date').order('id');
   if (error) throw new Error(error.message);
   if (!data?.length) return [];
   const timeZone = (await delivery().personTimeZone(userId)) || delivery().FALLBACK_TIME_ZONE;
@@ -35,7 +35,20 @@ async function holdWindows(userId) {
     .filter((w) => w.release > w.from);
 }
 
-const holding = (windows, when) => windows.find((w) => when >= w.from && when < w.release) || null;
+// A release inside another hold is still held. Follow the entire connected
+// window, including a later hold that starts at the previous return round.
+// Keep the first hold's identity so its waiting pieces share one bundle.
+function holding(windows, when) {
+  let held = null;
+  for (const w of windows) {
+    if (!held) {
+      if (when >= w.from && when < w.release) held = w;
+    } else if (w.from <= held.release && w.release > held.release) {
+      held = { ...held, release: w.release, hold: { ...held.hold, end_date: w.hold.end_date } };
+    }
+  }
+  return held;
+}
 
 /**
  * The delivery rule's hook (services/mailDelivery): when one of this person's holds keeps an ordinary piece of their
@@ -93,6 +106,7 @@ async function syncHeldMail(userId, now = new Date()) {
     if (!holdId) continue;
     if (!groups.has(holdId)) groups.set(holdId, { release: round, pieces: [] });
     const group = groups.get(holdId);
+    if (w && w.release > group.release) group.release = w.release;
     group.pieces.push(piece);
     const at = w ? w.release : group.release;
     const next = { delivered_at: at.toISOString(),
@@ -175,7 +189,8 @@ async function syncHeldMailSafe(userId) {
  */
 async function vacationLine(userId, now = new Date()) {
   const windows = await holdWindows(userId);
-  const w = windows.find((x) => now >= x.from && now < x.release) || windows.find((x) => x.from > now);
+  const upcoming = windows.find((x) => x.from > now);
+  const w = holding(windows, now) || (upcoming ? holding(windows, upcoming.from) : null);
   if (!w) return null;
   const { count, error } = await supabaseAdmin.from('Mail').select('id', { count: 'exact', head: true })
     .eq('recipient_user_id', userId).eq('mail_extracted->>vacation_hold_id', w.hold.id).is('deleted_at', null)
