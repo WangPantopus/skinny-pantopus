@@ -150,6 +150,8 @@ public struct CeremonialMailWizardView: View {
                     }
                     .padding(.horizontal, Spacing.s3)
                     .padding(.vertical, 10)
+                    // The whole row picks the recipient, not only its name and chevron.
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("ceremonialRecipient_\(recipient.userId)")
