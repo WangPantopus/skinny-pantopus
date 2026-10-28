@@ -2,6 +2,9 @@
 
 package app.pantopus.android.ui.screens.mailbox.search
 
+import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -31,6 +34,8 @@ fun MailboxSearchScreen(
     val query by viewModel.query.collectAsStateWithLifecycle()
     val results by viewModel.results.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val isLoadingMore by viewModel.isLoadingMore.collectAsStateWithLifecycle()
+    val hasMore by viewModel.hasMore.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
@@ -50,10 +55,24 @@ fun MailboxSearchScreen(
                 headline = "No mail matches",
                 subcopy = "Try a sender's name or a word from the letter. Search covers all your mail, filed and archived too.",
             ),
-        row = { piece -> MailPieceRow(piece, onOpen = { viewModel.openMail(piece.id) }) },
+        row = { piece ->
+            Column {
+                MailPieceRow(piece, onOpen = { viewModel.openMail(piece.id) })
+                if (piece.id == results.lastOrNull()?.id && hasMore) {
+                    error?.let { Text(it) }
+                    TextButton(
+                        onClick = viewModel::loadMore,
+                        enabled = !isLoadingMore,
+                        modifier = Modifier.testTag("mailboxSearchMore"),
+                    ) {
+                        Text(if (isLoadingMore) "Loading…" else if (error == null) "Show more" else "Try again")
+                    }
+                }
+            }
+        },
         onCancel = onCancel,
         errorContent =
-            error?.let { message ->
+            error?.takeIf { results.isEmpty() }?.let { message ->
                 {
                     ErrorState(
                         headline = "Search didn't work",

@@ -14,7 +14,9 @@ import app.pantopus.android.ui.screens.mailbox.components.MailPieceModel
 import app.pantopus.android.ui.screens.mailbox.components.mailMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -43,6 +45,11 @@ class MailboxSearchViewModel
 
         private val _isLoading = MutableStateFlow(false)
         val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+        private val _isLoadingMore = MutableStateFlow(false)
+        val isLoadingMore: StateFlow<Boolean> = _isLoadingMore.asStateFlow()
+        private val _hasMore = MutableStateFlow(false)
+        val hasMore: StateFlow<Boolean> = _hasMore.asStateFlow()
+        private var nextOffset = 0
 
         private val _error = MutableStateFlow<String?>(null)
 
@@ -78,6 +85,10 @@ class MailboxSearchViewModel
             _query.value = value
             search?.cancel()
             _error.value = null
+            _results.value = emptyList()
+            _isLoadingMore.value = false
+            _hasMore.value = false
+            nextOffset = 0
             if (value.isBlank()) {
                 _results.value = emptyList()
                 _isLoading.value = false
@@ -92,6 +103,10 @@ class MailboxSearchViewModel
         }
 
         fun retry() {
+            if (_results.value.isNotEmpty()) {
+                loadMore()
+                return
+            }
             val text = _query.value.trim()
             if (text.isEmpty()) return
             search?.cancel()
@@ -100,10 +115,22 @@ class MailboxSearchViewModel
             search = viewModelScope.launch { run(text) }
         }
 
-        private suspend fun run(text: String) {
-            when (val result = repo.search(text, limit = PAGE, offset = 0)) {
-                is NetworkResult.Success ->
-                    _results.value =
+        fun loadMore() {
+            if (!_hasMore.value || _isLoading.value || _isLoadingMore.value) return
+            val text = _query.value.trim()
+            if (text.isEmpty()) return
+            _isLoadingMore.value = true
+            _error.value = null
+            search = viewModelScope.launch { run(text, loadMore = true) }
+        }
+
+        private suspend fun run(text: String, loadMore: Boolean = false) {
+            val result = repo.search(text, limit = PAGE, offset = if (loadMore) nextOffset else 0)
+            currentCoroutineContext().ensureActive()
+            if (text != _query.value.trim()) return
+            when (result) {
+                is NetworkResult.Success -> {
+                    val rows =
                         result.data.mail.map { row ->
                             val piece = MailPieceMapper.piece(row, book, zone)
                             // A sealed letter shows only who sent it, so its subject goes in the line under it; other
@@ -113,12 +140,17 @@ class MailboxSearchViewModel
                                     .takeIf { piece.note == null }
                             piece.copy(meta = listOfNotNull(subject, piece.meta.takeIf { it.isNotBlank() }).joinToString(" · "))
                         }
+                    _results.value = ((if (loadMore) _results.value else emptyList()) + rows).distinctBy { it.id }
+                    nextOffset = (if (loadMore) nextOffset else 0) + result.data.mail.size
+                    _hasMore.value = result.data.mail.isNotEmpty() && nextOffset < result.data.total
+                }
                 is NetworkResult.Failure -> {
-                    _results.value = emptyList()
+                    if (!loadMore) _results.value = emptyList()
                     _error.value = result.error.mailMessage(online = network.isOnline.value, doing = "search your mail")
                 }
             }
             _isLoading.value = false
+            _isLoadingMore.value = false
         }
 
         private companion object {

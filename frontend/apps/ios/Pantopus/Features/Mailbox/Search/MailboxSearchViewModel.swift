@@ -30,6 +30,9 @@ final class MailboxSearchViewModel {
     /// True while a search is on its way, so the shell shows its typing
     /// shimmer instead of a false "no matches".
     private(set) var isLoading = false
+    private(set) var isLoadingMore = false
+    private(set) var hasMore = false
+    private var nextOffset = 0
 
     /// Why the last search came back with nothing, when it failed.
     private(set) var failureMessage: String?
@@ -56,7 +59,7 @@ final class MailboxSearchViewModel {
     /// The server's page size limit.
     private let pageSize = 50
     /// Longer text is refused by the server (`MAIL_SEARCH_INVALID`).
-    private let maxQueryLength = 200
+    private let maxQueryLength = 100
 
     init(
         api: APIClient = .shared,
@@ -94,6 +97,10 @@ final class MailboxSearchViewModel {
         searchTask?.cancel()
         let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
         failureMessage = nil
+        results = []
+        isLoadingMore = false
+        hasMore = false
+        nextOffset = 0
         guard !text.isEmpty else {
             results = []
             isLoading = false
@@ -113,20 +120,34 @@ final class MailboxSearchViewModel {
         }
     }
 
-    private func search(_ text: String) async {
+    func loadMore() {
+        guard hasMore, !isLoading, !isLoadingMore else { return }
+        let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        isLoadingMore = true
+        failureMessage = nil
+        searchTask = Task { [weak self] in await self?.search(text, loadMore: true) }
+    }
+
+    private func search(_ text: String, loadMore: Bool = false) async {
         do {
             let response: MailSearchResponse = try await api.request(
-                MailboxV2Endpoints.search(query: text, limit: pageSize)
+                MailboxV2Endpoints.search(query: text, limit: pageSize, offset: loadMore ? nextOffset : 0)
             )
             guard !Task.isCancelled, text == query.trimmingCharacters(in: .whitespacesAndNewlines) else { return }
-            results = response.mail
+            let existing = loadMore ? results : []
+            let seen = Set(existing.map(\.id))
+            results = existing + response.mail.filter { !seen.contains($0.id) }
+            nextOffset = (loadMore ? nextOffset : 0) + response.mail.count
+            hasMore = !response.mail.isEmpty && (response.total.map { nextOffset < $0 } ?? (response.mail.count == pageSize))
             failureMessage = nil
         } catch {
-            guard !Task.isCancelled else { return }
-            results = []
+            guard !Task.isCancelled, text == query.trimmingCharacters(in: .whitespacesAndNewlines) else { return }
+            if !loadMore { results = [] }
             failureMessage = Self.message(for: error)
         }
         isLoading = false
+        isLoadingMore = false
     }
 
     /// Offline, server trouble or the server's own sentence, told apart.
@@ -147,4 +168,5 @@ final class MailboxSearchViewModel {
 /// `GET /api/mailbox/v2/search` — the drawer list's row shape.
 struct MailSearchResponse: Decodable {
     let mail: [DrawerItemsResponse.DrawerMail]
+    let total: Int?
 }

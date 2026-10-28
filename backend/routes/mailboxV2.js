@@ -490,6 +490,9 @@ router.get('/search', verifyToken, async (req, res) => {
     const text = typeof req.query.q === 'string' ? req.query.q.normalize('NFKC').replace(/[\u0000-\u001f]/g, ' ').trim() : '';
     if (!text) return res.status(400).json({ error: 'Type a word to search your mail.', code: 'MAIL_SEARCH_INVALID' });
     if (text.length > 100) return res.status(400).json({ error: 'Search for 100 characters or fewer.', code: 'MAIL_SEARCH_INVALID' });
+    if (req.query.scope !== undefined && req.query.scope !== 'vault') {
+      return res.status(400).json({ error: 'Choose a valid mail search scope.', code: 'MAIL_SEARCH_INVALID' });
+    }
     // Words of letters, digits and a few signs ($84.00, a@b): nothing PostgREST would read as syntax.
     const terms = [...new Set(text.toLowerCase().split(/\s+/)
       .map((t) => t.replace(/[^\p{L}\p{N}$.@'&-]/gu, '').replace(/^[.'&-]+|[.'&-]+$/g, ''))
@@ -509,6 +512,8 @@ router.get('/search', verifyToken, async (req, res) => {
       // Search finds pieces, a bundle's pieces on their own (with the bundle's label); the bundle itself isn't one.
       .or('mail_object_type.is.null,mail_object_type.neq.bundle')
       .is('deleted_at', null));
+    // Filter before paging: newer Incoming matches must not hide older saved letters.
+    if (req.query.scope === 'vault') query = query.or('lifecycle.eq.filed,archived.eq.true');
     for (const term of terms) {
       query = query.or([...SEARCH_FIELDS.map((field) => `${field}.ilike.*${term}*`), `content.wfts(english).${term}`].join(','));
     }
