@@ -108,12 +108,9 @@ async function deliveryFor(piece, { now = new Date(), immediate = false } = {}) 
   }
   if (isSpecialDelivery(piece, timeZone, now)) return { delivered_at: now.toISOString(), special_delivery: true };
   const natural = nextRound(timeZone, now);
-  let held = null;
-  try {
-    held = await heldUntil(piece, natural);
-  } catch (error) {
-    logger.warn('mailDelivery: vacation hold unavailable, delivering normally', { error: error.message });
-  }
+  // If the hold cannot be read, fail the write so a retry can honor it. A
+  // transient database error must not silently bypass someone's saved dates.
+  const held = await heldUntil(piece, natural);
   if (!held) return { delivered_at: natural.toISOString(), special_delivery: false };
   // Held: it waits for the release round and remembers its own, so a changed hold can move it (mailVacation).
   return { delivered_at: held.until.toISOString(), special_delivery: false, mail_extracted: {

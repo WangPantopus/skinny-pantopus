@@ -553,17 +553,18 @@ function matchesStem(item, term) {
 // A bundle's pieces this person may read (SRV-5): delivered, newest first, as the lists show them.
 async function bundlePieces(bundleId, userId, timeZone) {
   const homeIds = await getAccessibleHomeIds(userId);
-  const { data, error } = await onlyDelivered(supabaseAdmin
-    .from('Mail')
-    .select('*, sender:sender_user_id(name, username)')
-    .eq('bundle_id', bundleId)
-    .or(visibleMailFilter(userId, homeIds))
-    .or('lifecycle.is.null,lifecycle.neq.shredded')
-    .is('deleted_at', null), new Date())
-    .order('delivered_at', { ascending: false })
-    .order('id', { ascending: false })
-    .limit(100);
-  if (error) throw new Error(error.message);
+  const data = [];
+  for (let offset = 0; ; offset += 500) {
+    const page = await onlyDelivered(supabaseAdmin.from('Mail')
+      .select('*, sender:sender_user_id(name, username)').eq('bundle_id', bundleId)
+      .or(visibleMailFilter(userId, homeIds)).or('lifecycle.is.null,lifecycle.neq.shredded')
+      .is('deleted_at', null), new Date())
+      .order('delivered_at', { ascending: false }).order('id', { ascending: false })
+      .range(offset, offset + 499);
+    if (page.error) throw new Error(page.error.message);
+    data.push(...(page.data || []));
+    if ((page.data || []).length < 500) break;
+  }
   const named = await nameMailSenders(data || [], userId);
   return attachInvoices(await mailPiece.withBundleLabels(named.map((m) => mailPiece.present(presentMailSender({
     ...m,
