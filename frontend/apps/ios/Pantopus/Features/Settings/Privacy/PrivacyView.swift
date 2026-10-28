@@ -50,8 +50,7 @@ public struct PrivacyView: View {
                         .padding(.bottom, Spacing.s10)
                         .accessibilityIdentifier("privacySettingsToast")
                         .transition(.opacity)
-                        .task(id: toast.text) {
-                            try? await Task.sleep(nanoseconds: 2_000_000_000)
+                        .dismissToast(after: toast, minimum: 2) {
                             viewModel.toast = nil
                         }
                 }

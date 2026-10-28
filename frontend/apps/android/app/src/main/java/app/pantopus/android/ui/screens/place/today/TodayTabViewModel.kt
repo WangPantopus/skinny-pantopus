@@ -100,6 +100,9 @@ class TodayTabViewModel
             private set
         override val calendarHomeId: String? get() = homeId
 
+        /** The Home on screen: the person's, or the claimed one (the assistant and the ballot card open its public view). */
+        val shownHomeId: String? get() = homeId ?: (_state.value as? TodayTabUiState.Loaded)?.claim?.homeId
+
         /**
          * The radon card's guard: Today still shows this home to this session, with the app and phone unlocked. It
          * binds to the home, not to one read of it: Today keeps its content while it reads again (pull to refresh,
@@ -229,6 +232,8 @@ class TodayTabViewModel
             loadJob?.cancel()
             _refreshing.value = false
             homeId?.takeUnless(::mayKeepHome)?.let(::clearHomeCopy)
+            // A claim's public view is read again on return, like any Home Today this account can't keep.
+            (_state.value as? TodayTabUiState.Loaded)?.claim?.let { clearHomeCopy(it.homeId) }
         }
 
         private fun clearHomeCopy(id: String) {
@@ -368,6 +373,49 @@ class TodayTabViewModel
             return calendar
         }
 
+        /**
+         * No place yet: a claim in review shows the claimed address's public Today under the claim's status (a claim
+         * makes its Home theirs only once it's approved); without one, the claim prompt.
+         */
+        private suspend fun loadClaims(
+            version: Long,
+            force: Boolean,
+        ) {
+            val claims = homesRepository.myClaimsStored(force)
+            if (!current(version)) return
+            val claimsData = claims.data
+            val claim = claimsData?.claims?.firstOrNull { it.isInReview }
+            when {
+                claimsData == null -> _state.value = _state.value.afterFailedRead(claims.failure.sentence("Couldn't load your place."))
+                claim == null -> _state.value = TodayTabUiState.NoPlace
+                else -> loadClaimToday(claim, version)
+            }
+        }
+
+        /**
+         * The claimed address's public Today (the server's view for an open claim), never kept on the phone. Its
+         * household calendar and radon stay out (no [homeId]). A refusal (an older server, a closed Home) shows the
+         * claim's card instead.
+         */
+        private suspend fun loadClaimToday(
+            claim: OwnershipClaimDto,
+            version: Long,
+        ) {
+            val today = repo.todayStored(claim.homeId, force = true, persist = false)
+            if (!current(version)) return
+            val data = today.data
+            _state.value =
+                when {
+                    data != null ->
+                        TodayTabUiState.Loaded(data, claim = claim, fetchedAt = today.fetchedAt, refreshFailed = today.failure != null)
+                    today.failure.refusesStoredCopy -> TodayTabUiState.ClaimInReview(claim)
+                    else ->
+                        _state.value
+                            .takeIf { (it as? TodayTabUiState.Loaded)?.claim?.homeId == claim.homeId }
+                            .afterFailedRead(today.failure.sentence("Couldn't load today."))
+                }
+        }
+
         private suspend fun current(version: Long): Boolean {
             currentCoroutineContext().ensureActive()
             val allowed = sessionScope.confirmCurrent()
@@ -402,18 +450,7 @@ class TodayTabViewModel
             }
             val place = places.savedPlaces.firstOrNull()
             if (place == null) {
-                // No place yet: a claim in review says so instead of "Claim your address" (a claim makes its Home
-                // theirs only once it's approved).
-                val claims = homesRepository.myClaimsStored(force)
-                if (current(version)) {
-                    val claimsData = claims.data
-                    _state.value =
-                        if (claimsData == null) {
-                            _state.value.afterFailedRead(claims.failure.sentence("Couldn't load your place."))
-                        } else {
-                            claimsData.claims.firstOrNull { it.isInReview }?.let(TodayTabUiState::ClaimInReview) ?: TodayTabUiState.NoPlace
-                        }
-                }
+                loadClaims(version, force)
                 return
             }
             val copy = savedPlacesRepository.todayCopy(place.id)
@@ -580,10 +617,11 @@ sealed interface TodayTabUiState {
     /** No primary home yet — the tab is a claim prompt. */
     data object NoPlace : TodayTabUiState
 
-    /** No place yet, but [claim] is in review: the tab says so and when Today fills in. */
+    /** No place yet and [claim]'s address can't be read: the tab says it's in review and when Today fills in. */
     data class ClaimInReview(val claim: OwnershipClaimDto) : TodayTabUiState
 
     /**
+     * @property claim a claim in review: [intelligence] is the claimed address's public view, its status on top.
      * @property fetchedAt when this copy arrived (wall clock), for Today's freshness windows.
      * @property refreshFailed the last read failed while this copy stayed on screen.
      */
@@ -594,6 +632,7 @@ sealed interface TodayTabUiState {
         val savedAnchorMatches: Boolean = false,
         val fetchedAt: Long = 0L,
         val refreshFailed: Boolean = false,
+        val claim: OwnershipClaimDto? = null,
     ) : TodayTabUiState {
         /** Still the day this copy was read on, at the home: Today turns over at the home's midnight. */
         fun isSameDay(now: Long = System.currentTimeMillis()): Boolean {

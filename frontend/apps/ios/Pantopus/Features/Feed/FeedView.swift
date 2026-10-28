@@ -512,8 +512,7 @@ public struct FeedView: View {
                 .padding(.bottom, Spacing.s16)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .accessibilityIdentifier("pulseFeedToast")
-                .task(id: toast) {
-                    try? await Task.sleep(nanoseconds: 2_500_000_000)
+                .dismissToast(after: toast, minimum: 2.5) {
                     viewModel.toastMessage = nil
                 }
         }

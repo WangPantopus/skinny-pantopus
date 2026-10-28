@@ -73,8 +73,7 @@ public struct ListingOffersView: View {
             ToastView(message: ToastMessage(text: message, kind: .error))
                 .padding(.bottom, Spacing.s8)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
-                .task(id: message) {
-                    try? await Task.sleep(nanoseconds: 3_000_000_000)
+                .dismissToast(after: message, minimum: 3) {
                     viewModel.actionError = nil
                 }
                 .accessibilityIdentifier("listing-offers-error-toast")

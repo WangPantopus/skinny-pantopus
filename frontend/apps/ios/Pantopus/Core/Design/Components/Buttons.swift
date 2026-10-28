@@ -44,16 +44,20 @@ public struct PantopusButton: View {
             Task { await action() }
         } label: {
             ZStack {
+                // A label that wraps stays centred, with room above and below.
                 Text(title)
                     .pantopusTextStyle(.body)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
                     .opacity(isLoading ? 0 : 1)
                 if isLoading {
                     ProgressView().tint(foreground)
                 }
             }
             .foregroundStyle(foreground)
-            .frame(maxWidth: .infinity, minHeight: 44)
             .padding(.horizontal, Spacing.s4)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, minHeight: 44)
             .background(background)
             .overlay(border)
             .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))

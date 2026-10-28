@@ -208,7 +208,7 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
     /// closed Home drawer's Verify your home, and the first day's porch.
     var onOpenInvoice: (@MainActor (String) -> Void)?
     var onVerifyHome: (@MainActor (String) -> Void)?
-    var onOpenWelcome: (@MainActor (String) -> Void)?
+    var onOpenWelcome: (@MainActor (DrawerItemsResponse.DrawerMail) -> Void)?
 
     /// The Counter's pieces with their due tags, lines and buttons (board R9).
     var counterItems: [MailCounterItem] {
@@ -440,7 +440,7 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
     }
 
     /// A14.8 — invoked from `MailboxRootView`'s overflow menu when the
-    /// user taps "Vacation hold". Exposed publicly so the SwiftUI Menu
+    /// user taps "Hold my mail". Exposed publicly so the SwiftUI Menu
     /// in the view layer can call it directly.
     public func openVacationHold() {
         onOpenVacationHoldHandler()
@@ -880,7 +880,8 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
     // MARK: - The first day
 
     /// The sealed welcome letter from Pantopus opens on the porch once per
-    /// account; after that it's an ordinary letter in Me.
+    /// account; after that it's an ordinary letter in Me. The porch draws it
+    /// from this list, so closing the porch leaves it sealed.
     private func presentWelcomeIfNeeded() {
         guard sampleProvider == nil, selectedDrawer == .me, currentTab == .incoming, let onOpenWelcome,
               case let .signedIn(user) = AuthManager.shared.state else { return }
@@ -890,7 +891,7 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
         let key = "mail.welcome.porch.\(user.id)"
         guard UserDefaults.standard.string(forKey: key) == nil else { return }
         UserDefaults.standard.set(welcome.id, forKey: key)
-        onOpenWelcome(welcome.id)
+        onOpenWelcome(welcome)
     }
 
     /// Pantopus's welcome letter (made on the first open of Mail, SRV-6).

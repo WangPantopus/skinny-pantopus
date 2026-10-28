@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -44,6 +43,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -53,6 +53,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.ErrorState
+import app.pantopus.android.ui.components.Toast
+import app.pantopus.android.ui.components.ToastAppearance
+import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingLoadingSkeleton
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingMiniToggle
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingPillar
@@ -139,7 +142,7 @@ fun PaymentsSetupScreen(
             }
             actionMessage?.let { message ->
                 LaunchedEffect(message) {
-                    delay(TOAST_MS)
+                    delay(toastDurationMillis(message, minimumMillis = TOAST_MS))
                     viewModel.clearActionMessage()
                 }
                 PaymentsActionToast(message = message, modifier = Modifier.align(Alignment.BottomCenter))
@@ -596,26 +599,26 @@ private fun PaymentsActionToast(
     message: String,
     modifier: Modifier = Modifier,
 ) {
-    Row(
+    Toast(
+        text = message,
+        appearance =
+            ToastAppearance(
+                background = PantopusColors.appText,
+                foreground = PantopusColors.appTextInverse,
+                textStyle = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.SemiBold),
+                verticalPadding = 10.dp,
+                textWidth = 240.dp,
+                sideMargin = 0.dp,
+                iconSpacing = Spacing.s1,
+            ),
         modifier =
             modifier
                 .padding(Spacing.s4)
-                .clip(RoundedCornerShape(Radii.pill))
-                .background(PantopusColors.appText)
-                .padding(horizontal = 16.dp, vertical = 10.dp)
                 .testTag("scheduling.paymentsSetup.actionToast"),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
-    ) {
-        PantopusIconImage(PantopusIcon.AlertCircle, null, size = 15.dp, tint = PantopusColors.appTextInverse)
-        Text(
-            message,
-            color = PantopusColors.appTextInverse,
-            fontWeight = FontWeight.SemiBold,
-            fontSize = 13.sp,
-            modifier = Modifier.width(240.dp),
-        )
-    }
+        leading = {
+            PantopusIconImage(PantopusIcon.AlertCircle, null, size = 15.dp, tint = PantopusColors.appTextInverse)
+        },
+    )
 }
 
 // ─── Setup-dependent copy ───────────────────────────────────────────────────

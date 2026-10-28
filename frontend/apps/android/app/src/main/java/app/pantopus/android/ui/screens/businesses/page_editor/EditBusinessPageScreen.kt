@@ -67,6 +67,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.PantopusTextField
+import app.pantopus.android.ui.components.Toast
+import app.pantopus.android.ui.components.ToastAppearance
+import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.businesses.catalog.BusinessCatalogScreen
 import app.pantopus.android.ui.screens.businesses.page_editor.components.EditBusinessBannerLogoEditor
 import app.pantopus.android.ui.screens.businesses.page_editor.components.EditBusinessCompletionStrip
@@ -143,7 +146,7 @@ fun EditBusinessPageScreen(
 
     LaunchedEffect(toast) {
         if (toast != null) {
-            delay(2_000)
+            delay(toastDurationMillis(toast.orEmpty(), minimumMillis = 2_000))
             viewModel.dismissToast()
         }
     }
@@ -201,21 +204,19 @@ fun EditBusinessPageScreen(
         }
 
         toast?.let { message ->
-            Box(
+            Toast(
+                text = message,
+                appearance =
+                    ToastAppearance(
+                        background = PantopusColors.appText.copy(alpha = 0.9f),
+                        foreground = PantopusColors.appTextInverse,
+                        textStyle = TextStyle(fontSize = 14.sp),
+                    ),
                 modifier =
                     Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = 100.dp)
-                        .clip(RoundedCornerShape(Radii.pill))
-                        .background(PantopusColors.appText.copy(alpha = 0.9f))
-                        .padding(horizontal = Spacing.s4, vertical = Spacing.s2),
-            ) {
-                Text(
-                    text = message,
-                    style = TextStyle(fontSize = 14.sp),
-                    color = PantopusColors.appTextInverse,
-                )
-            }
+                        .padding(bottom = 100.dp),
+            )
         }
 
         if (showsDiscard) {
