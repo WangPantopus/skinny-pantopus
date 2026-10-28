@@ -338,7 +338,7 @@ private extension ChatOutbox {
               let value = try? JSONDecoder().decode(RetryDelay.self, from: data).retryAfter,
               value.isFinite, value > 0 else { return 0 }
         // Bound malformed upstream delays; the chat limiter normally asks for seconds.
-        return min(value.rounded(.up), 86_400)
+        return min(value.rounded(.up), 86400)
     }
 
     func prepareReplyRoom(_ original: ChatOutboxMessage, lifetime started: Int) async throws -> ChatOutboxMessage {
