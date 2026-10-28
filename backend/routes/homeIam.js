@@ -46,11 +46,20 @@ const {
 } = require('../utils/homePermissions');
 
 
+// A deleted Home has no access state to read. It reads as null (no access),
+// the 403 these routes gave before reading this state, rather than a retry.
+async function readIamState(homeId, actorId) {
+  try { return await homeListService.readAccessState(homeId, actorId); } catch (error) {
+    if (await homeListService.homeDeleted(error, homeId)) return null;
+    throw error;
+  }
+}
+
 // Reuse the Home list/detail decision: effective membership alone does not
 // authorize shared reads from a blocked Home. Recheck after loading payloads.
 async function requireCurrentIamAccess(homeId, actorId, permission, opening) {
-  const current = await homeListService.readAccessState(homeId, actorId);
-  if (current.mode !== 'shared' || (permission && !current.access.permissions.includes(permission))) {
+  const current = await readIamState(homeId, actorId);
+  if (current?.mode !== 'shared' || (permission && !current.access.permissions.includes(permission))) {
     throw Object.assign(new Error('No access to this home'), { statusCode: 403 });
   }
   if (opening && JSON.stringify(current) !== JSON.stringify(opening)) {
@@ -71,10 +80,10 @@ router.get('/:id/me', verifyToken, async (req, res) => {
     const { id: homeId } = req.params;
     const userId = req.user.id;
 
-    const opening = await homeListService.readAccessState(homeId, userId);
-    const access = opening.access;
+    const opening = await readIamState(homeId, userId);
+    const access = opening?.access || {};
 
-    if (opening.mode !== 'shared') {
+    if (opening?.mode !== 'shared') {
       return res.status(403).json({
         hasAccess: false,
         role_base: null,
