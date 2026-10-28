@@ -26,9 +26,16 @@ public struct ToastMessage: Identifiable, Equatable, Sendable {
         self.text = text
         self.kind = kind
     }
+
+    /// Brief confirmations keep their existing dwell; explanatory messages get up to seven seconds.
+    public static func duration(for text: String, minimum: Double = 3) -> Duration {
+        .seconds(max(minimum, min(Double(text.count) * 0.06, 7)))
+    }
 }
 
-/// Pill-shaped banner, intended to be floated at the bottom of the screen.
+/// Banner floated at the bottom of the screen, clear of its edges. A message
+/// that fits on one line is a pill; a longer one wraps, centred, in a rounded
+/// rectangle whose corners stay clear of the first and last lines.
 public struct ToastView: View {
     public let message: ToastMessage
 
@@ -37,14 +44,27 @@ public struct ToastView: View {
     }
 
     public var body: some View {
+        ViewThatFits(in: .horizontal) {
+            label
+                .fixedSize()
+                .clipShape(RoundedRectangle(cornerRadius: Radii.pill))
+            label
+                .fixedSize(horizontal: false, vertical: true)
+                .clipShape(RoundedRectangle(cornerRadius: Radii.xl))
+        }
+        .padding(.horizontal, Spacing.s4)
+        .accessibilityLabel(message.text)
+    }
+
+    private var label: some View {
         Text(message.text)
             .pantopusTextStyle(.small)
+            .pantopusLineHeight(.small)
+            .multilineTextAlignment(.center)
             .foregroundStyle(Theme.Color.appTextInverse)
             .padding(.horizontal, Spacing.s4)
             .padding(.vertical, Spacing.s2)
             .background(background)
-            .clipShape(RoundedRectangle(cornerRadius: Radii.pill))
-            .accessibilityLabel(message.text)
     }
 
     private var background: Color {
@@ -66,10 +86,51 @@ public extension View {
                 ToastView(message: ToastMessage(text: text, kind: .error))
                     .padding(.bottom, Spacing.s10)
                     .task(id: text) {
-                        try? await Task.sleep(nanoseconds: 3_000_000_000)
+                        do {
+                            try await Task.sleep(for: ToastMessage.duration(for: text))
+                        } catch {
+                            return
+                        }
+                        guard message.wrappedValue == text else { return }
                         message.wrappedValue = nil
                     }
             }
+        }
+    }
+
+    /// Runs `action` once `message` has been up long enough to read
+    /// (`ToastMessage.duration`, never less than `minimum` seconds). A new
+    /// message restarts the wait, and a wait cut short — the toast replaced
+    /// or the screen gone — clears nothing.
+    func dismissToast(
+        after message: ToastMessage,
+        minimum: Double = 3,
+        action: @escaping @MainActor () -> Void
+    ) -> some View {
+        task(id: message.id) { @MainActor in
+            do {
+                try await Task.sleep(for: ToastMessage.duration(for: message.text, minimum: minimum))
+            } catch {
+                return
+            }
+            action()
+        }
+    }
+
+    /// `dismissToast(after:minimum:action:)` for a screen that holds its
+    /// message as plain text.
+    func dismissToast(
+        after text: String,
+        minimum: Double = 3,
+        action: @escaping @MainActor () -> Void
+    ) -> some View {
+        task(id: text) { @MainActor in
+            do {
+                try await Task.sleep(for: ToastMessage.duration(for: text, minimum: minimum))
+            } catch {
+                return
+            }
+            action()
         }
     }
 }

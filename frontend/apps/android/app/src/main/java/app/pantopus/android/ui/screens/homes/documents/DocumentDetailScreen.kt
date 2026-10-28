@@ -69,6 +69,9 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.api.models.homes.HomeDocumentDto
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.Toast
+import app.pantopus.android.ui.components.ToastAppearance
+import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailShell
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -141,7 +144,7 @@ fun DocumentDetailScreen(
 
     LaunchedEffect(toast) {
         if (toast != null) {
-            delay(2_500)
+            delay(toastDurationMillis(toast?.text.orEmpty(), minimumMillis = 2_500))
             viewModel.dismissToast()
         }
     }
@@ -182,21 +185,19 @@ fun DocumentDetailScreen(
             }
         }
         toast?.let { value ->
-            Box(
+            Toast(
+                text = value.text,
+                appearance =
+                    ToastAppearance(
+                        background = if (value.isError) PantopusColors.error else PantopusColors.success,
+                        foreground = PantopusColors.appTextInverse,
+                        textStyle = PantopusTextStyle.small,
+                    ),
                 modifier =
                     Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = Spacing.s12)
-                        .clip(RoundedCornerShape(Radii.pill))
-                        .background(if (value.isError) PantopusColors.error else PantopusColors.success)
-                        .padding(horizontal = Spacing.s4, vertical = Spacing.s2),
-            ) {
-                Text(
-                    text = value.text,
-                    style = PantopusTextStyle.small,
-                    color = PantopusColors.appTextInverse,
-                )
-            }
+                        .padding(bottom = Spacing.s12),
+            )
         }
     }
 

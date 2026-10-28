@@ -217,8 +217,7 @@ public struct UploadDocumentFormView: View {
             ToastView(message: toast)
                 .padding(.bottom, Spacing.s12)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
-                .task(id: toast) {
-                    try? await Task.sleep(nanoseconds: 2_500_000_000)
+                .dismissToast(after: toast, minimum: 2.5) {
                     viewModel.toast = nil
                 }
         }

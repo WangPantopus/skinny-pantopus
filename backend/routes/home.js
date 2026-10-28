@@ -2738,6 +2738,9 @@ async function requireSharedHomeContent(req, res, next) {
     }
     return next();
   } catch (error) {
+    if (await homeListService.homeDeleted(error, req.params.id)) {
+      return res.status(403).json({ error: 'No access to this home' });
+    }
     return homeListService.sendError(res, error);
   }
 }

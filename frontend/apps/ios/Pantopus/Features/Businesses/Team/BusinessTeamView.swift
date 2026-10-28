@@ -69,8 +69,7 @@ public struct BusinessTeamView: View {
                     .padding(.bottom, Spacing.s16)
                     .accessibilityIdentifier("businessTeam.toast")
                     .transition(.opacity)
-                    .task {
-                        try? await Task.sleep(nanoseconds: 3_000_000_000)
+                    .dismissToast(after: toast, minimum: 3) {
                         self.toast = nil
                     }
             }

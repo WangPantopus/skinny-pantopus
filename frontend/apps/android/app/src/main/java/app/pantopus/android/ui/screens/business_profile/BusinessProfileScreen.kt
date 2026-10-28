@@ -66,7 +66,10 @@ import app.pantopus.android.ui.components.InviteLinks
 import app.pantopus.android.ui.components.MapPreview
 import app.pantopus.android.ui.components.RatingDistribution
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.Toast
+import app.pantopus.android.ui.components.ToastAppearance
 import app.pantopus.android.ui.components.VerifiedBadge
+import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.business_profile.components.ActionBar
 import app.pantopus.android.ui.screens.business_profile.components.BizStarGlyph
 import app.pantopus.android.ui.screens.business_profile.components.CategoryRow
@@ -135,7 +138,7 @@ fun BusinessProfileScreen(
     }
     LaunchedEffect(toast) {
         if (toast != null) {
-            delay(2_000)
+            delay(toastDurationMillis(toast.orEmpty(), minimumMillis = 2_000))
             viewModel.dismissToast()
         }
     }
@@ -147,7 +150,7 @@ fun BusinessProfileScreen(
     }
     LaunchedEffect(savedPlacesToast) {
         if (savedPlacesToast != null) {
-            delay(2_500)
+            delay(toastDurationMillis(savedPlacesToast?.text.orEmpty(), minimumMillis = 2_500))
             savedPlacesStore.dismissToast()
         }
     }
@@ -185,17 +188,19 @@ fun BusinessProfileScreen(
         }
 
         toast?.let { message ->
-            Box(
+            Toast(
+                text = message,
+                appearance =
+                    ToastAppearance(
+                        background = PantopusColors.appText.copy(alpha = 0.9f),
+                        foreground = PantopusColors.appTextInverse,
+                        textStyle = PantopusTextStyle.small,
+                    ),
                 modifier =
                     Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = 100.dp)
-                        .clip(RoundedCornerShape(Radii.pill))
-                        .background(PantopusColors.appText.copy(alpha = 0.9f))
-                        .padding(horizontal = Spacing.s4, vertical = Spacing.s2),
-            ) {
-                Text(text = message, style = PantopusTextStyle.small, color = PantopusColors.appTextInverse)
-            }
+                        .padding(bottom = 100.dp),
+            )
         }
         undo?.let { snapshot ->
             BusinessProfileSaveUndoSnackbar(
@@ -946,16 +951,18 @@ private fun BusinessProfileSaveToast(
     toast: SavedPlacesToast,
     modifier: Modifier = Modifier,
 ) {
-    Box(
+    Toast(
+        text = toast.text,
+        appearance =
+            ToastAppearance(
+                background = if (toast.isError) PantopusColors.error else PantopusColors.appText.copy(alpha = 0.9f),
+                foreground = PantopusColors.appTextInverse,
+                textStyle = PantopusTextStyle.small,
+            ),
         modifier =
             modifier
-                .clip(RoundedCornerShape(Radii.pill))
-                .background(if (toast.isError) PantopusColors.error else PantopusColors.appText.copy(alpha = 0.9f))
-                .padding(horizontal = Spacing.s4, vertical = Spacing.s2)
                 .testTag("savedPlaces.toast"),
-    ) {
-        Text(text = toast.text, style = PantopusTextStyle.small, color = PantopusColors.appTextInverse)
-    }
+    )
 }
 
 private fun List<SavedPlaceDto>.isSaved(pending: PendingSavePlace): Boolean =

@@ -79,6 +79,9 @@ import app.pantopus.android.data.api.models.admin.AdminClaimRecordDto
 import app.pantopus.android.data.api.models.admin.AdminClaimReviewAction
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.Toast
+import app.pantopus.android.ui.components.ToastAppearance
+import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.homes.claim_evidence.HomePrivateEvidenceDialog
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailShell
 import app.pantopus.android.ui.theme.PantopusColors
@@ -155,7 +158,7 @@ fun ReviewClaimDetailScreen(
 
     LaunchedEffect(toast) {
         if (toast != null) {
-            delay(TOAST_DURATION_MS)
+            delay(toastDurationMillis(toast?.text.orEmpty(), minimumMillis = TOAST_DURATION_MS))
             viewModel.dismissToast()
         }
     }
@@ -184,21 +187,19 @@ fun ReviewClaimDetailScreen(
         }
 
         toast?.let {
-            Box(
+            Toast(
+                text = it.text,
+                appearance =
+                    ToastAppearance(
+                        background = if (it.isError) PantopusColors.error else PantopusColors.success,
+                        foreground = PantopusColors.appTextInverse,
+                        textStyle = PantopusTextStyle.small,
+                    ),
                 modifier =
                     Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = Spacing.s10)
-                        .clip(RoundedCornerShape(Radii.pill))
-                        .background(if (it.isError) PantopusColors.error else PantopusColors.success)
-                        .padding(horizontal = Spacing.s4, vertical = Spacing.s2),
-            ) {
-                Text(
-                    text = it.text,
-                    style = PantopusTextStyle.small,
-                    color = PantopusColors.appTextInverse,
-                )
-            }
+                        .padding(bottom = Spacing.s10),
+            )
         }
     }
 

@@ -13,6 +13,7 @@ import app.pantopus.android.data.scheduling.SchedulingErrorDecoder
 import app.pantopus.android.data.scheduling.SchedulingFeatureFlags
 import app.pantopus.android.data.scheduling.SchedulingOwner
 import app.pantopus.android.data.scheduling.SchedulingRepository
+import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingPillar
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingRoutes
 import app.pantopus.android.ui.screens.scheduling._shared.pillar
@@ -192,8 +193,8 @@ class SchedulingSettingsRootViewModel
         private fun flashToast(message: String) {
             viewModelScope.launch {
                 _toast.value = message
-                delay(SAVED_TOAST_MS)
-                _toast.value = null
+                delay(toastDurationMillis(message, minimumMillis = SAVED_TOAST_MS))
+                if (_toast.value == message) _toast.value = null
             }
         }
 

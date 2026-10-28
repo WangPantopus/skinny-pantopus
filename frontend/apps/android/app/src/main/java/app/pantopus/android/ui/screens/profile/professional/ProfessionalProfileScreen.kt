@@ -54,6 +54,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.Toast
+import app.pantopus.android.ui.components.ToastAppearance
+import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.profile.PillarStrip
 import app.pantopus.android.ui.screens.shared.form.FormShell
 import app.pantopus.android.ui.screens.shared.form.FormShellLeading
@@ -79,7 +82,7 @@ fun ProfessionalProfileScreen(
 
     LaunchedEffect(toast) {
         if (toast != null) {
-            delay(2_000)
+            delay(toastDurationMillis(toast?.text.orEmpty(), minimumMillis = 2_000))
             viewModel.dismissToast()
         }
     }
@@ -1456,16 +1459,18 @@ private fun ProfessionalProfileToastView(
     toast: ProfessionalProfileToast,
     modifier: Modifier = Modifier,
 ) {
-    Box(
+    Toast(
+        text = toast.text,
+        appearance =
+            ToastAppearance(
+                background = if (toast.isError) PantopusColors.error else PantopusColors.success,
+                foreground = PantopusColors.appTextInverse,
+                textStyle = PantopusTextStyle.small,
+            ),
         modifier =
             modifier
-                .clip(RoundedCornerShape(Radii.pill))
-                .background(if (toast.isError) PantopusColors.error else PantopusColors.success)
-                .padding(horizontal = Spacing.s4, vertical = Spacing.s2)
                 .testTag("professionalProfileToast"),
-    ) {
-        Text(text = toast.text, style = PantopusTextStyle.small, color = PantopusColors.appTextInverse)
-    }
+    )
 }
 
 @Composable
