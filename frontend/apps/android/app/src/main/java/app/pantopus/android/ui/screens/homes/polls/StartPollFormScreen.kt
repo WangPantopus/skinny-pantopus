@@ -43,6 +43,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.PantopusFieldState
 import app.pantopus.android.ui.components.PantopusTextField
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.Toast
+import app.pantopus.android.ui.components.ToastAppearance
+import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.homes.invite_owner.ToastPayload
 import app.pantopus.android.ui.screens.shared.form.FormFieldGroup
 import app.pantopus.android.ui.screens.shared.form.FormShell
@@ -81,7 +84,7 @@ fun StartPollFormScreen(
 
     LaunchedEffect(state.toast) {
         if (state.toast != null) {
-            delay(2_500)
+            delay(toastDurationMillis(state.toast?.text.orEmpty(), minimumMillis = 2_500))
             viewModel.dismissToast()
         }
     }
@@ -732,18 +735,16 @@ private fun ToastBanner(
     payload: ToastPayload,
     modifier: Modifier = Modifier,
 ) {
-    Box(
+    Toast(
+        text = payload.text,
+        appearance =
+            ToastAppearance(
+                background = if (payload.isError) PantopusColors.error else PantopusColors.success,
+                foreground = PantopusColors.appTextInverse,
+                textStyle = PantopusTextStyle.small,
+            ),
         modifier =
             modifier
-                .padding(bottom = Spacing.s10)
-                .clip(RoundedCornerShape(Radii.pill))
-                .background(if (payload.isError) PantopusColors.error else PantopusColors.success)
-                .padding(horizontal = Spacing.s4, vertical = Spacing.s2),
-    ) {
-        Text(
-            text = payload.text,
-            style = PantopusTextStyle.small,
-            color = PantopusColors.appTextInverse,
-        )
-    }
+                .padding(bottom = Spacing.s10),
+    )
 }

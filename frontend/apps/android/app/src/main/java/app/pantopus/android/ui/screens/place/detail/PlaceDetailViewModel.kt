@@ -1247,12 +1247,20 @@ private class PlaceDetailCopy(
             repo.forgetPlace(homeId)
             state.value = PlaceDetailUiState.Loading
         }
+        // Not one of their Homes: a claim in review on it reads the Home's public view, never kept on the phone.
+        if (access.data?.homes?.none { it.id == homeId } == true && claimInReview(force)) {
+            return repo.placeStored(homeId, force = true, persist = false)
+        }
         return when {
             access.data?.homes?.none { it.id == homeId } != false -> Stored(failure = access.failure ?: NetworkError.NotFound)
             !keep && access.failure != null -> Stored(failure = access.failure)
             else -> repo.placeStored(homeId, force || !keep || sensitive, persist = keep)
         }
     }
+
+    /** My homes' claims (the kept copy unless [force]) have one in review on this Home. */
+    private suspend fun claimInReview(force: Boolean): Boolean =
+        homes.myClaimsStored(force).data?.claims?.any { it.homeId == homeId && it.isInReview } == true
 
     private fun publish(stored: Stored<PlaceIntelligence>) {
         val data = stored.data.takeUnless { (sensitive || !allowsCopy()) && stored.failure != null }

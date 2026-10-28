@@ -77,8 +77,7 @@ public struct InviteOwnerFormView: View {
             ToastView(message: toast)
                 .padding(.bottom, Spacing.s8)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
-                .task(id: toast) {
-                    try? await Task.sleep(nanoseconds: 2_000_000_000)
+                .dismissToast(after: toast, minimum: 2) {
                     viewModel.toast = nil
                 }
                 .accessibilityIdentifier("inviteOwnerToast")

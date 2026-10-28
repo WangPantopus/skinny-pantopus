@@ -6,7 +6,9 @@
 //  with it, the address calendar, then air, alerts and sun, for the
 //  person's primary place. The hub briefing (`TodayDetailView`) is still
 //  reachable from a morning-push deep link; this is what the tab shows
-//  on its own. Parity twin of Android's `TodayTabScreen`.
+//  on its own. With no place but a claim in review, it is the claimed
+//  address's public Today under the claim's status. Parity twin of
+//  Android's `TodayTabScreen`.
 //
 
 import SwiftUI
@@ -19,7 +21,7 @@ struct AddressTodayTabView: View {
     @State private var loadFailed = false
     @State private var detail: PlaceDetailViewModel?
     @State private var savedPlace: SavedPlaceDTO?
-    /// No place yet, but a claim in review: Today says so instead of "Claim your address".
+    /// No place yet, but a claim in review: Today shows the claimed address under its status.
     @State private var claimInReview: OwnershipClaimDTO?
     @State private var resolveID = UUID()
     /// The account the shown place was resolved for. Another account starts blank.
@@ -126,6 +128,7 @@ struct AddressTodayTabView: View {
             AddressTodayLoaded(
                 viewModel: detail,
                 savedPlace: savedPlace,
+                claim: claimInReview,
                 onAddHome: onAddHome,
                 onResolvePlace: resolveHome
             ) { openBallot() }
@@ -138,7 +141,7 @@ struct AddressTodayTabView: View {
         } else {
             VStack(spacing: 0) {
                 if PlansFlags.shared.plans { PlansTodayCards().padding(.horizontal, Spacing.s4) }
-                if let claimInReview { claimPending(claimInReview) } else { noPlace }
+                noPlace
             }
         }
     }
@@ -230,7 +233,7 @@ struct AddressTodayTabView: View {
             guard resolveID == requestID else { return }
             // The default Home, as Place lands on it (`MyHomesResponse.defaultHomeId`).
             if let id = response.defaultHomeId {
-                if detail?.homeId != id || detail?.savedPlaceId != nil {
+                if detail?.homeId != id || detail?.savedPlaceId != nil || detail?.claimInReview == true {
                     detail = PlaceDetailViewModel(homeId: id, group: .today)
                 }
                 savedPlace = nil
@@ -247,14 +250,11 @@ struct AddressTodayTabView: View {
                         detail = PlaceDetailViewModel(homeId: "", group: .today, savedPlaceId: place.id)
                     }
                 } else {
-                    // A claim makes its Home theirs only once it's approved; until then Today names it.
                     let claims = try await HomesStoreReads.myClaims().value
                     try Task.checkCancellation()
                     try scope.requireCurrent()
                     guard resolveID == requestID else { return }
-                    detail = nil
-                    savedPlace = nil
-                    claimInReview = claims.claims.first(where: \.isInReview)
+                    showClaim(in: claims)
                 }
             }
         } catch is CancellationError {
@@ -268,12 +268,27 @@ struct AddressTodayTabView: View {
         resolved = true
     }
 
+    /// No place yet. A claim makes its Home theirs only once it's approved;
+    /// until then Today is the claimed address's public view (the server's
+    /// T1) under the claim's status.
+    private func showClaim(in claims: MyOwnershipClaimsResponse) {
+        savedPlace = nil
+        claimInReview = claims.claims.first(where: \.isInReview)
+        guard let claim = claimInReview else {
+            detail = nil
+            return
+        }
+        if detail?.homeId != claim.homeId || detail?.claimInReview != true {
+            detail = PlaceDetailViewModel(homeId: claim.homeId, group: .today, claimInReview: true)
+        }
+    }
+
     /// The ballot card is on this home's Place dashboard. Selecting the
     /// Place tab alone can land on its hub or a detail page, so open the
     /// dashboard through the place link, as the tab's own stack does.
     private func openBallot() {
-        // Master's Today also opens for a saved place with no home
-        // (`calendarHomeId` is nil); there is no home dashboard to open then.
+        // Master's Today also opens for a saved place with no home, and for a
+        // claim in review (`calendarHomeId` is nil); the Place tab shows that address.
         guard let homeId = detail?.calendarHomeId else {
             rootTabs.selected = .place
             return
@@ -282,11 +297,19 @@ struct AddressTodayTabView: View {
     }
 }
 
-extension AddressTodayTabView {
-    /// No place yet, but a claim in review: the address claimed and when
-    /// Today fills in, with My homes (the Place tab) for its status. Words
-    /// match web's Place pages and Android.
-    func claimPending(_ claim: OwnershipClaimDTO) -> some View {
+/// The claim's Waiting Room: its checklist, documents and withdraw.
+@MainActor
+private func openClaimStatus(_ claim: OwnershipClaimDTO) {
+    DeepLinkRouter.shared.handle(path: "/homes/\(claim.homeId)/waiting-room")
+}
+
+/// A claim in review whose Home's public view can't be read (an older server,
+/// or a closed Home): the address claimed and when Today fills in, with the
+/// claim's status. Words match web's Place pages and Android.
+private struct TodayClaimInReviewCard: View {
+    let claim: OwnershipClaimDTO
+
+    var body: some View {
         VStack(spacing: 10) {
             ZStack {
                 RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.Color.homeBg)
@@ -301,7 +324,7 @@ extension AddressTodayTabView {
                 .lineSpacing(3)
                 .multilineTextAlignment(.center)
                 .foregroundStyle(Theme.Color.appTextSecondary)
-            PrimaryButton(title: "Check status") { rootTabs.selected = .place }
+            PrimaryButton(title: "Check status") { openClaimStatus(claim) }
         }
         .padding(24)
         .frame(maxWidth: .infinity)
@@ -329,6 +352,8 @@ private struct AddressTodayLoaded: View {
     @Environment(RootTabModel.self) private var rootTabs
     @State var viewModel: PlaceDetailViewModel
     let savedPlace: SavedPlaceDTO?
+    /// A claim in review: this is the claimed address's public view, its status on top.
+    let claim: OwnershipClaimDTO?
     let onAddHome: () -> Void
     let onResolvePlace: () async -> Void
     let onOpenPlace: () -> Void
@@ -349,7 +374,18 @@ private struct AddressTodayLoaded: View {
                 case let .loaded(intel):
                     ScrollView {
                         VStack(alignment: .leading, spacing: 0) {
-                            AskPantopusBox { askTopic = .today(homeId: viewModel.calendarHomeId) }
+                            if let claim {
+                                // My homes' words for what the claim waits on; its Waiting Room has the steps.
+                                PlaceVerifyBanner(
+                                    icon: .clock,
+                                    message: "Your claim is in review. \(claim.waitingLabel).",
+                                    action: "Check claim status",
+                                    identifier: "today.claimBanner"
+                                ) { openClaimStatus(claim) }
+                                    .padding(.bottom, 12)
+                            }
+                            // The assistant reads a claimed Home's public view, as this screen shows it.
+                            AskPantopusBox { askTopic = .today(homeId: viewModel.savedPlaceId == nil ? viewModel.homeId : nil) }
                                 .padding(.bottom, 12)
                             // Nearby Plans on the day (A1, A2): nothing unless the `plans` flag is on.
                             if PlansFlags.shared.plans { PlansTodayCards() }
@@ -360,7 +396,7 @@ private struct AddressTodayLoaded: View {
                             PlaceTodayDetailContent(
                                 intel: intel,
                                 vm: viewModel,
-                                showHomeRadon: savedPlace == nil,
+                                showHomeRadon: savedPlace == nil && claim == nil,
                                 onOpenBallot: onOpenPlace
                             )
                             if savedPlace != nil {
@@ -390,7 +426,9 @@ private struct AddressTodayLoaded: View {
                         await loadSavedAnchor()
                     }
                 case let .error(message):
-                    if viewModel.accessDenied {
+                    if viewModel.accessDenied, let claim {
+                        TodayClaimInReviewCard(claim: claim)
+                    } else if viewModel.accessDenied {
                         PlaceDeniedState()
                     } else {
                         ErrorState(message: message) { await viewModel.refresh() }

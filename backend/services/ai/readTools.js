@@ -21,10 +21,8 @@ const feedService = require('../feedService');
 const { canReadPost, onlyShownReplies } = require('../pulse/readAccess');
 const placeIntelligenceService = require('../placeIntelligenceService');
 const { PLACE_SECTION_IDS } = require('../../serializers/placeIntelligenceSerializer');
-const homeListService = require('../homeListService');
 const homeRecordService = require('../homeRecordService');
 const homeDetailService = require('../homeDetailService');
-const { checkHomePermission } = require('../../utils/homePermissions');
 const { localDisplayNames } = require('../../utils/identityProfiles');
 const {
   OTHERS_WORDS, isUuid, clip, chosenHome, homesOf, zoneOr, whenLabel, dayLabel, todayIn, firstNameOf, distanceWords,
@@ -433,15 +431,13 @@ async function getPost(args, ctx) {
 async function readSections(homeId, userId, sectionIds, user = null) {
   const homeRead = placeIntelligenceService.readHome(homeId);
   const civic = !sectionIds || sectionIds.some((id) => id.startsWith('civic_'));
-  const [access, ballot] = await Promise.all([
-    checkHomePermission(homeId, userId, 'home.view'),
+  const [reader, ballot] = await Promise.all([
+    placeIntelligenceService.readAccess(homeId, userId),
     civic ? isFeatureEnabled('ballot_p0', user || { id: userId }).catch(() => false) : false,
   ]);
-  if (!access.hasAccess) {
-    const privateSetup = await homeListService.readAccessState(homeId, userId);
-    if (privateSetup.mode !== 'private_setup') return null;
-  }
-  return placeIntelligenceService.composeHomeIntelligence({ homeId, userId, access, sectionIds, ballot, homeRead });
+  if (!reader) return null;
+  const { access, claimant } = reader;
+  return placeIntelligenceService.composeHomeIntelligence({ homeId, userId, access, sectionIds, ballot, homeRead, claimant });
 }
 
 /** The composed payload's sections in screen order; serializePlaceIntelligence nests them under groups. */

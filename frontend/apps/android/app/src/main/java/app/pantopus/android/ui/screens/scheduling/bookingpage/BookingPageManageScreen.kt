@@ -41,6 +41,7 @@ import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.MailDraft
 import app.pantopus.android.ui.components.composeMail
 import app.pantopus.android.ui.components.shareText
+import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingLoadingSkeleton
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingPillar
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingRoutes
@@ -75,7 +76,7 @@ fun BookingPageManageScreen(
     LaunchedEffect(Unit) { viewModel.load() }
     LaunchedEffect(toast) {
         if (toast != null) {
-            kotlinx.coroutines.delay(TOAST_MS)
+            kotlinx.coroutines.delay(toastDurationMillis(toast.orEmpty(), minimumMillis = TOAST_MS))
             viewModel.consumeToast()
         }
     }

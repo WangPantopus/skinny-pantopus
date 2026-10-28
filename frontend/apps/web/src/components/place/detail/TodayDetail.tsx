@@ -430,7 +430,15 @@ function GoodDayRow({ data }: { data: PlaceGoodDayData }) {
 }
 
 
-export default function TodayDetail({ intelligence, homeId = null }: { intelligence: PlaceIntelligence; homeId?: string | null }) {
+/**
+ * [embedded]: inside the Today tab (a claim in review's address), which has its own title: the address line
+ * replaces the page header.
+ */
+export default function TodayDetail({
+  intelligence,
+  homeId = null,
+  embedded = false,
+}: { intelligence: PlaceIntelligence; homeId?: string | null; embedded?: boolean }) {
   const calendar = findPlaceSection(intelligence, 'address_calendar');
   const calendarReady = calendar && (calendar.status === 'ready' || calendar.status === 'stale' || calendar.status === 'partial') && calendar.data;
   // A municipality without defaults still has an editable household calendar.
@@ -456,8 +464,12 @@ export default function TodayDetail({ intelligence, homeId = null }: { intellige
 
   return (
     <>
-      <DetailHeader title="Today" address={detailAddress(intelligence.place)} />
-      <div className="px-4 sm:px-5 pt-1 pb-16">
+      {embedded ? (
+        <p className="text-[12.5px] font-medium text-app-text-muted truncate">{detailAddress(intelligence.place)}</p>
+      ) : (
+        <DetailHeader title="Today" address={detailAddress(intelligence.place)} />
+      )}
+      <div className={embedded ? 'pt-1' : 'px-4 sm:px-5 pt-1 pb-16'}>
 
         <DetailSectionLabel>Weather</DetailSectionLabel>
         {weatherReady ? (

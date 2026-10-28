@@ -84,8 +84,7 @@ public struct InvoiceDetailView: View {
                 .padding(.bottom, Spacing.s8)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .accessibilityIdentifier(identifier(for: toast.kind))
-                .task(id: toast) {
-                    try? await Task.sleep(nanoseconds: 2_500_000_000)
+                .dismissToast(after: toast, minimum: 2.5) {
                     self.toast = nil
                 }
         }
