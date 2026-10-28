@@ -716,7 +716,7 @@ public struct HubTabRoot: View {
     /// A claim in review that gives no way into its Home yet: back to My homes,
     /// where the claim is listed, or onto it. The Home's own screens can't show
     /// it (a waiting-room link puts its dashboard underneath). While there are
-    /// only claims, the Place tab's root is My homes.
+    /// only claims, the Place tab's root is the claimed address (`PlaceRoot.claim`).
     @MainActor
     private func showMyHomes(leavingClaimOn homeId: String) {
         if path.contains(.myHomes) {
@@ -1355,7 +1355,11 @@ public struct HubTabRoot: View {
         case let .waitingRoom(homeId):
             // Drop the home dashboard underneath so a back-tap from the
             // waiting room lands on the home, mirroring `.homeOwnersTransfer`.
-            path.append(.homeDashboard(homeId: homeId))
+            // A Home the person can't open yet (a claim in review) has no
+            // dashboard to show: Back lands on the tab's root, its address.
+            if HomesStoreReads.peekMyHomes().map({ PlaceRootResolver.isOpenable(homeId, in: $0.value) }) ?? true {
+                path.append(.homeDashboard(homeId: homeId))
+            }
             path.append(.waitingRoom(homeId: homeId))
             _ = router.consume()
         case .mailbox:
@@ -1421,6 +1425,11 @@ public struct HubTabRoot: View {
                 // Another Home is another dashboard, with its own state.
                 .id(homeId)
                 .onAppear { Self.placeRootViewed("home") }
+        case let .claim(homeId):
+            // The same dashboard: the claimed Home's public view, its claim's status on top.
+            placeDashboard(homeId: homeId, isActive: path.isEmpty && rootTabs.selected == owningTab, isRoot: true)
+                .id(homeId)
+                .onAppear { Self.placeRootViewed("claim") }
         case let .savedPlace(place):
             SavedPlaceRootView(
                 viewModel: SavedPlaceRootViewModel(place: place),

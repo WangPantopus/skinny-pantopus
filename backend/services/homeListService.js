@@ -84,7 +84,9 @@ async function state(homeId, actorId) {
   }
   // Include the actual occupancy, own ownership and both authority decisions:
   // a held list must not preserve obsolete metadata even if access still exists.
-  return { home, access, owners, context, mode };
+  // `blocked` (a frozen, disputed, archived or merged Home) also keeps an open
+  // claim from showing the Home's public view (placeIntelligenceService.readAccess).
+  return { home, access, owners, context, mode, blocked };
 }
 
 async function readClaims(homeId, actorId) {
