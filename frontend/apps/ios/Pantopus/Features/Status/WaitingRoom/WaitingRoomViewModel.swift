@@ -24,6 +24,10 @@ public enum WaitingRoomNav: Sendable, Hashable {
     case backToHome(homeId: String)
     /// "Back to My homes": the claim gives no way into this Home yet.
     case myHomes(homeId: String)
+    /// The back arrow while the claim gives no way into this Home yet: the
+    /// screen the room was opened from, past that Home's own screen (a link
+    /// puts it underneath, and they can't open it).
+    case leave(homeId: String)
     case viewClaim(claimId: String)
     case updateEvidence(homeId: String, claimId: String)
     case cancelClaim(homeId: String)
@@ -270,6 +274,12 @@ public final class WaitingRoomViewModel {
 
     public func leaveToMyHomes() {
         pendingNav = .myHomes(homeId: homeId)
+    }
+
+    /// The back arrow while the claim gives no way into this Home: back to
+    /// where the room was opened from, never onto the Home's own screen.
+    public func leaveWithoutHome() {
+        pendingNav = .leave(homeId: homeId)
     }
 
     /// A checklist button: confirm identity (Stripe's page in an in-app browser) or upload a document.

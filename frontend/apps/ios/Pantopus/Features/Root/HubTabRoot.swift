@@ -693,6 +693,8 @@ public struct HubTabRoot: View {
             }
         case let .myHomes(id):
             showMyHomes(leavingClaimOn: id)
+        case let .leave(id):
+            leaveRoom(withoutHome: id)
         case .viewClaim:
             path.append(.myClaims)
         case let .updateEvidence(id, _):
@@ -735,6 +737,21 @@ public struct HubTabRoot: View {
         }
         if !path.isEmpty || mode != .hub || placeRoot != .homes {
             path.append(.myHomes)
+        }
+    }
+
+    /// Back from a claim's room that gives no way into its Home: the screen it
+    /// was opened from (the claimed address, My homes), past that Home's own
+    /// screen a link puts underneath.
+    @MainActor
+    private func leaveRoom(withoutHome homeId: String) {
+        path.removeAll { route in
+            switch route {
+            case let .waitingRoom(id), let .homeDashboard(id):
+                id == homeId
+            default:
+                false
+            }
         }
     }
 
