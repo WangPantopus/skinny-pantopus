@@ -1417,9 +1417,14 @@ class PulseComposeViewModel
         /** Seed every field + selector from the saved post + rebaseline. */
         @Suppress("CyclomaticComplexMethod", "LongMethod")
         private fun applyPrefill(post: PostDetailDto) {
-            val intent = PulseComposeIntent.fromFeedIntent(PulseIntent.fromPostType(post.postType))
+            val intent =
+                if (post.postType == "general") {
+                    PulseComposeIntent.Announce
+                } else {
+                    PulseComposeIntent.fromFeedIntent(PulseIntent.fromPostType(post.postType))
+                }
             _activeIntent.value = intent
-            // Web's default "general" posts have no title and open on the Announcement form.
+            // Older general posts can have no title; preserve that valid state when editing.
             titleOptional = post.title.isNullOrBlank()
             savedAudienceLabel =
                 PulseComposeVisibility.entries.firstOrNull { it.key == post.visibility }?.label

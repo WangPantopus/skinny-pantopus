@@ -231,6 +231,7 @@ class PulseFeedViewModel
         /** Which surface this feed renders (Nearby / Connections / Beacons). */
         private val _surface = MutableStateFlow(FeedSurface.Pulse)
         val surface: StateFlow<FeedSurface> = _surface.asStateFlow()
+        private var surfaceConfigured = false
 
         /**
          * True when the Nearby / Connections toggle row should render. The
@@ -366,6 +367,10 @@ class PulseFeedViewModel
 
         /** Select the surface (Pulse vs Connections vs Beacons) before the first load. */
         fun configureSurface(surface: FeedSurface) {
+            // The screen enters composition again after a post, composer, or tab visit. Its route default must
+            // not replace the person's selected surface while the retained VM still holds that surface's rows.
+            if (surfaceConfigured) return
+            surfaceConfigured = true
             _surface.value = surface
             _showsSurfaceToggle.value = surface in FeedSurface.toggleSurfaces
         }
