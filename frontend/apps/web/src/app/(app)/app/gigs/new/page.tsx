@@ -339,6 +339,9 @@ function PostTaskPageContent() {
       for (const key of ['category', 'deadline', 'estimated_duration', 'beneficiary_user_id']) {
         if (payload[key] == null) delete payload[key];
       }
+    } else {
+      // This form never shows a task's saved photos, so an edit must not send a list that replaces them.
+      delete payload.attachments;
     }
 
     setSubmitting(true);
