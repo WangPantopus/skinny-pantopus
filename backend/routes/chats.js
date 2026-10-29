@@ -2202,6 +2202,7 @@ router.post('/messages', verifyToken, messageSendLimiter, messageBurstLimiter, v
     }
     logger.info('message_send_start', { requestId, roomId, userId, messageType });
     let senderUserId = userId;
+    let committedRetryMessage = null;
 
     // These reads don't depend on one another, so they start together; their answers are
     // still applied in the order below, so each refusal is the one the sequential checks gave.
@@ -2332,12 +2333,17 @@ router.post('/messages', verifyToken, messageSendLimiter, messageBurstLimiter, v
             .eq('user_id', userId);
 
           if ((count || 0) >= PRE_BID_MESSAGE_LIMIT) {
-            return res.status(429).json({
-              error: `You can send up to ${PRE_BID_MESSAGE_LIMIT} messages before placing a bid. Place a bid to continue chatting.`,
-              code: 'PRE_BID_LIMIT',
-              messages_sent: count || 0,
-              messages_limit: PRE_BID_MESSAGE_LIMIT,
-            });
+            // The accepted last message can be retried after its response was lost.
+            // Re-read here: a concurrent attempt may have committed after ownRetryRead.
+            committedRetryMessage = clientMessageId ? await retryMessage(clientMessageId, roomId, senderUserId, userId) : null;
+            if (!committedRetryMessage) {
+              return res.status(429).json({
+                error: `You can send up to ${PRE_BID_MESSAGE_LIMIT} messages before placing a bid. Place a bid to continue chatting.`,
+                code: 'PRE_BID_LIMIT',
+                messages_sent: count || 0,
+                messages_limit: PRE_BID_MESSAGE_LIMIT,
+              });
+            }
           }
         }
       }
@@ -2466,7 +2472,7 @@ router.post('/messages', verifyToken, messageSendLimiter, messageBurstLimiter, v
     const senderPeople = ownSender && ownPeopleRead ? ownPeopleRead.then(settled) : loadChatPeople([senderUserId]);
     senderPeople.catch(() => {}); // awaited below; a failure surfaces there
     if (clientMessageId) {
-      const existingMsg = ownSender && ownRetryRead ? settled(await ownRetryRead) : await findRetryMessage();
+      const existingMsg = committedRetryMessage || (ownSender && ownRetryRead ? settled(await ownRetryRead) : await findRetryMessage());
       if (existingMsg) return res.json({ message: serializeChatMessageForViewer(existingMsg, { people: await senderPeople, viewerId: userId }) });
     }
 

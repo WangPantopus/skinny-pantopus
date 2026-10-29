@@ -296,12 +296,15 @@ async function drain(): Promise<void> {
         publish(result.message);
       } catch (error) {
         if (!current(saved)) return;
-        const failure = error as { statusCode?: number; message?: string; data?: { retryAfter?: number } };
-        const retryable = !failure.statusCode || failure.statusCode >= 500 || failure.statusCode === 408 || failure.statusCode === 429;
+        const failure = error as { statusCode?: number; message?: string; data?: { code?: string; retryAfter?: number } };
+        // The pre-bid allowance is a permanent send refusal, not a timed rate limit.
+        const preBidLimited = failure.statusCode === 429 && failure.data?.code === 'PRE_BID_LIMIT';
+        const rateLimited = failure.statusCode === 429 && !preBidLimited;
+        const retryable = !failure.statusCode || failure.statusCode >= 500 || failure.statusCode === 408 || rateLimited;
         const attempts = message.attempts + 1;
         const delay = Math.max(Number(failure.data?.retryAfter || 0) * 1000, Math.min(60_000, 1000 * 2 ** Math.min(attempts, 6))) + Math.random() * 500;
         message = { ...message, attempts, state: retryable ? 'queued' : (failure.statusCode === 403 || failure.statusCode === 404 ? 'refused' : 'failed'),
-          nextAttemptAt: Date.now() + delay, error: failure.message || 'Waiting for a connection.', lastStatus: failure.statusCode };
+          nextAttemptAt: Date.now() + delay, error: preBidLimited ? 'Message limit reached.' : failure.message || 'Waiting for a connection.', lastStatus: failure.statusCode };
         await save(saved, message);
         if (current(saved)) { pending = pending.map((entry) => entry.clientMessageId === message.clientMessageId ? message : entry); publish(); }
       }

@@ -73,6 +73,7 @@ data class ChatOutboxEntry(
     val attachments: List<ChatOutboxAttachment> = emptyList(),
     val attempts: Int = 0,
     val retryAt: Long = 0,
+    val rateLimited: Boolean = false,
     val error: String? = null,
     val terminal: Boolean = false,
     val refused: Boolean = false,
