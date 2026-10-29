@@ -672,6 +672,47 @@ function emitGigUpdate(req, gigId, eventType) {
 
 // ============ VALIDATION SCHEMAS ============
 
+// Gig amounts are dollars; Stripe accepts at most eight digits in cents.
+// Do not silently round sub-cent offers or parse a numeric prefix ("12oops").
+const gigAmountSchema = Joi.any().custom((value, helpers) => {
+  if (!['number', 'string'].includes(typeof value)
+    || !/^\d+(?:\.\d{1,2})?$/.test(String(value).trim())) return helpers.error('any.invalid');
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount < 0 || amount > 999999.99 || (amount > 0 && amount < 0.50)) {
+    return helpers.error('any.invalid');
+  }
+  return amount;
+}).messages({ 'any.invalid': '{{#label}} must be zero or between $0.50 and $999,999.99, with at most two decimal places.' });
+const bidAmountSchema = gigAmountSchema.custom((value, helpers) => value > 0 ? value : helpers.error('any.invalid'))
+  .messages({ 'any.invalid': '{{#label}} must be between $0.50 and $999,999.99, with at most two decimal places.' });
+const bidFields = {
+  bid_amount: bidAmountSchema,
+  amount: bidAmountSchema,
+  message: Joi.string().trim().max(2000).allow('', null),
+  // This is a human-readable availability note, not an ISO timestamp.
+  proposed_time: Joi.string().trim().max(500).allow('', null),
+};
+const createBidSchema = Joi.object(bidFields).xor('bid_amount', 'amount');
+const editBidSchema = Joi.object(bidFields).oxor('bid_amount', 'amount').min(1);
+const counterBidSchema = Joi.object({ amount: bidAmountSchema.required(), message: bidFields.message });
+
+function gigScheduleError(schedule, changed = schedule) {
+  for (const field of ['scheduled_start', 'time_window_start', 'time_window_end']) {
+    if (changed[field] != null && new Date(changed[field]).getTime() <= Date.now()) {
+      return `${field.replaceAll('_', ' ')} must be in the future.`;
+    }
+  }
+  if (schedule.time_window_start && schedule.time_window_end
+    && new Date(schedule.time_window_end) <= new Date(schedule.time_window_start)) {
+    return 'The time window must end after it starts.';
+  }
+  return null;
+}
+
+function gigBiddingClosed(gig) {
+  return gig.status !== 'open' || (gig.deadline && Date.parse(gig.deadline) <= Date.now());
+}
+
 const createGigSchema = Joi.object({
   home_task_source: Joi.object({
     home_id: Joi.string().uuid().required(), task_id: Joi.string().uuid().required(),
@@ -680,7 +721,7 @@ const createGigSchema = Joi.object({
   }).optional(),
   title: Joi.string().min(5).max(255).required(),
   description: Joi.string().min(10).required(),
-  price: Joi.number().min(0).when('home_task_source', { is: Joi.exist(), then: Joi.number().precision(2).max(99999999.99).strict() }).required(),
+  price: gigAmountSchema.when('home_task_source', { is: Joi.exist(), then: Joi.number().precision(2).max(999999.99).strict() }).required(),
   // Clients send an optional field they left empty as null; treat it as not provided.
   category: Joi.string().max(100).allow(null).optional(),
   deadline: Joi.date().iso().allow(null).when('home_task_source', { is: Joi.exist(), then: Joi.optional(), otherwise: Joi.date().min('now').allow(null).optional() }),
@@ -897,7 +938,7 @@ function computeCancellationInfo(gig, cancellingUserId) {
 const updateGigSchema = Joi.object({
   title: Joi.string().min(5).max(255),
   description: Joi.string().min(10),
-  price: Joi.number().min(0),
+  price: gigAmountSchema,
   // null clears an optional field the editor emptied.
   category: Joi.string().max(100).allow(null),
   deadline: Joi.date().iso().min('now').allow(null),
@@ -1110,6 +1151,10 @@ router.get('/cancellation-policies', (req, res) => {
  * Create a new gig
  */
 router.post('/', verifyToken, validate(createGigSchema), async (req, res) => {
+  // Home-task publication has its own frozen command and replay validation;
+  // an original retry must not start failing merely because time has passed.
+  const scheduleError = !req.body.home_task_source && gigScheduleError(req.body);
+  if (scheduleError) return res.status(400).json({ error: scheduleError, code: 'INVALID_SCHEDULE' });
   const {
     title,
     description,
@@ -3914,7 +3959,7 @@ router.patch('/:id', verifyToken, validate(updateGigSchema), async (req, res) =>
     // Use admin client for existence lookup so RLS visibility does not cause false 404s.
     const { data: existingGig, error: fetchError } = await supabaseAdmin
       .from('Gig')
-      .select('id, user_id, created_by, beneficiary_user_id, status')
+      .select('id, user_id, created_by, beneficiary_user_id, status, updated_at, scheduled_start, time_window_start, time_window_end')
       .eq('id', id)
       .single();
 
@@ -3932,6 +3977,8 @@ router.patch('/:id', verifyToken, validate(updateGigSchema), async (req, res) =>
     }
 
     const updateData = { ...req.body };
+    const scheduleError = gigScheduleError({ ...existingGig, ...updateData }, updateData);
+    if (scheduleError) return res.status(400).json({ error: scheduleError, code: 'INVALID_SCHEDULE' });
     if (typeof updateData.category === 'string') updateData.category = canonicalGigCategory(updateData.category);
 
     // Handle location
@@ -3972,13 +4019,19 @@ router.patch('/:id', verifyToken, validate(updateGigSchema), async (req, res) =>
       .from('Gig')
       .update(updateData)
       .eq('id', id)
+      .eq('status', 'open')
+      .eq('updated_at', existingGig.updated_at)
       .select()
-      .single();
+      .maybeSingle();
 
     if (error) {
       logger.error('Error updating gig', { error: error.message, gigId: id });
       return res.status(500).json({ error: 'Failed to update gig' });
     }
+    if (!updatedGig) return res.status(409).json({ error: 'This task changed. Refresh before editing again.' });
+
+    browseCache.clear();
+    emitGigUpdate(req, id, 'status-change');
 
     res.json({ gig: savedGigReply(updatedGig, true) });
   } catch (err) {
@@ -4019,13 +4072,13 @@ router.delete('/:id', verifyToken, stopCommand('close'));
  * POST /api/gigs/:gigId/bids
  * Place a bid on a gig
  */
-router.post('/:gigId/bids', verifyToken, async (req, res) => {
+router.post('/:gigId/bids', verifyToken, validate(createBidSchema), async (req, res) => {
   try {
     const { gigId } = req.params;
     const userId = req.user.id;
 
     const bidAmountRaw = req.body.bid_amount ?? req.body.amount;
-    const bidAmount = typeof bidAmountRaw === 'string' ? parseFloat(bidAmountRaw) : bidAmountRaw;
+    const bidAmount = bidAmountRaw;
 
     const { message, proposed_time } = req.body;
 
@@ -4046,7 +4099,7 @@ router.post('/:gigId/bids', verifyToken, async (req, res) => {
       return res.status(404).json({ error: 'Gig not found' });
     }
 
-    if (gig.status !== 'open') {
+    if (gigBiddingClosed(gig)) {
       return res.status(400).json({ error: 'This gig is no longer accepting bids' });
     }
 
@@ -4092,7 +4145,7 @@ router.post('/:gigId/bids', verifyToken, async (req, res) => {
     }
 
     const activeBid = (existingBids || []).find(
-      (b) => b.status === 'pending' || b.status === 'accepted'
+      (b) => ['pending', 'countered', 'pending_payment', 'accepted'].includes(b.status)
     );
     if (activeBid) {
       return res.status(400).json({ error: 'You already have an active bid on this gig' });
@@ -4385,12 +4438,12 @@ router.get('/:gigId/bids', verifyToken, async (req, res) => {
  * PUT /api/gigs/:gigId/bids/:bidId
  * Update own active bid (pending/countered).
  */
-router.put('/:gigId/bids/:bidId', verifyToken, async (req, res) => {
+router.put('/:gigId/bids/:bidId', verifyToken, validate(createBidSchema), async (req, res) => {
   try {
     const { gigId, bidId } = req.params;
     const userId = req.user.id;
     const bidAmountRaw = req.body.bid_amount ?? req.body.amount;
-    const bidAmount = typeof bidAmountRaw === 'string' ? parseFloat(bidAmountRaw) : bidAmountRaw;
+    const bidAmount = bidAmountRaw;
     const { message, proposed_time } = req.body;
 
     if (!bidAmount || Number.isNaN(bidAmount) || bidAmount <= 0) {
@@ -4399,7 +4452,7 @@ router.put('/:gigId/bids/:bidId', verifyToken, async (req, res) => {
 
     const { data: bid, error: bidErr } = await supabaseAdmin
       .from('GigBid')
-      .select('id, gig_id, user_id, status')
+      .select('id, gig_id, user_id, status, expires_at, updated_at')
       .eq('id', bidId)
       .eq('gig_id', gigId)
       .single();
@@ -4411,13 +4464,17 @@ router.put('/:gigId/bids/:bidId', verifyToken, async (req, res) => {
     if (!['pending', 'countered'].includes(String(bid.status || ''))) {
       return res.status(400).json({ error: 'Only pending or countered bids can be updated' });
     }
+    if (bid.expires_at && Date.parse(bid.expires_at) <= Date.now()) {
+      return res.status(409).json({ error: 'This bid expired. Refresh before bidding again.' });
+    }
 
     const { data: gig, error: gigErr } = await supabaseAdmin
       .from('Gig')
-      .select('user_id')
+      .select('user_id, status, deadline')
       .eq('id', gigId)
       .single();
     if (gigErr || !gig) return res.status(404).json({ error: 'Gig not found' });
+    if (gigBiddingClosed(gig)) return res.status(409).json({ error: 'This gig is no longer accepting bids' });
     if (await canActAsBusiness(gig.user_id, userId)) {
       return res.status(400).json({ error: 'You cannot bid on your own gig' });
     }
@@ -4432,13 +4489,16 @@ router.put('/:gigId/bids/:bidId', verifyToken, async (req, res) => {
       })
       .eq('id', bidId)
       .eq('gig_id', gigId)
+      .eq('status', bid.status)
+      .eq('updated_at', bid.updated_at)
       .select('*')
-      .single();
+      .maybeSingle();
 
     if (updErr) {
       logger.error('Update bid error', { error: updErr.message, gigId, bidId, userId });
       return res.status(500).json({ error: 'Failed to update bid' });
     }
+    if (!updatedBid) return res.status(409).json({ error: 'This bid changed. Refresh before editing again.' });
 
     emitGigUpdate(req, req.params.gigId, 'bid-update');
     return res.json({ bid: updatedBid });
@@ -4912,7 +4972,7 @@ router.post('/:gigId/bids/:bidId/reject', verifyToken, async (req, res) => {
  * POST /api/gigs/:gigId/bids/:bidId/counter
  * Requester sends a counter-offer to a bidder (one counter per bid)
  */
-router.post('/:gigId/bids/:bidId/counter', verifyToken, async (req, res) => {
+router.post('/:gigId/bids/:bidId/counter', verifyToken, validate(counterBidSchema), async (req, res) => {
   try {
     const { gigId, bidId } = req.params;
     const userId = req.user.id;
@@ -4925,7 +4985,7 @@ router.post('/:gigId/bids/:bidId/counter', verifyToken, async (req, res) => {
     // Verify gig ownership
     const { data: gig, error: gigErr } = await supabaseAdmin
       .from('Gig')
-      .select('id, user_id, status, title')
+      .select('id, user_id, status, title, deadline')
       .eq('id', gigId)
       .single();
 
@@ -4934,14 +4994,14 @@ router.post('/:gigId/bids/:bidId/counter', verifyToken, async (req, res) => {
     if (!ownerAccess.allowed) {
       return res.status(403).json({ error: 'Only the gig poster can send counter-offers' });
     }
-    if (gig.status !== 'open') {
+    if (gigBiddingClosed(gig)) {
       return res.status(400).json({ error: 'Gig is no longer open for bidding' });
     }
 
     // Verify bid is pending and belongs to this gig
     const { data: bid, error: bidErr } = await supabaseAdmin
       .from('GigBid')
-      .select('id, gig_id, user_id, status, counter_status, bid_amount')
+      .select('id, gig_id, user_id, status, counter_status, bid_amount, expires_at')
       .eq('id', bidId)
       .single();
 
@@ -4951,6 +5011,9 @@ router.post('/:gigId/bids/:bidId/counter', verifyToken, async (req, res) => {
     }
     if (bid.status !== 'pending') {
       return res.status(400).json({ error: 'Can only counter pending bids' });
+    }
+    if (bid.expires_at && Date.parse(bid.expires_at) <= Date.now()) {
+      return res.status(409).json({ error: 'This bid expired. Refresh before countering again.' });
     }
     if (bid.counter_status === 'pending') {
       return res.status(400).json({ error: 'A counter-offer is already pending on this bid' });
@@ -7610,18 +7673,22 @@ router.get('/:id/my-bid', verifyToken, async (req, res) => {
 // PATCH /api/gigs/:id/my-bid
 // body: { bid_amount?, message?, proposed_time? }
 // ================================
-router.patch('/:id/my-bid', verifyToken, async (req, res) => {
+router.patch('/:id/my-bid', verifyToken, validate(editBidSchema), async (req, res) => {
   const gigId = req.params.id;
   const userId = req.user.id;
-  const { bid_amount, message, proposed_time } = req.body || {};
+  const { message, proposed_time } = req.body;
+  const bid_amount = req.body.bid_amount ?? req.body.amount;
 
   try {
     // Only allow editing while pending
     const { data: existing, error: exErr } = await supabaseAdmin
       .from('GigBid')
-      .select('id, status')
+      .select('id, status, expires_at, updated_at')
       .eq('gig_id', gigId)
       .eq('user_id', userId)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     if (exErr) {
@@ -7632,13 +7699,17 @@ router.patch('/:id/my-bid', verifyToken, async (req, res) => {
     if (!existing) return res.status(404).json({ error: 'Bid not found' });
     if (existing.status !== 'pending')
       return res.status(400).json({ error: 'Only pending bids can be edited' });
+    if (existing.expires_at && Date.parse(existing.expires_at) <= Date.now()) {
+      return res.status(409).json({ error: 'This bid expired. Refresh before bidding again.' });
+    }
 
     const { data: gig, error: gigErr } = await supabaseAdmin
       .from('Gig')
-      .select('user_id')
+      .select('user_id, status, deadline')
       .eq('id', gigId)
       .single();
     if (gigErr || !gig) return res.status(404).json({ error: 'Gig not found' });
+    if (gigBiddingClosed(gig)) return res.status(409).json({ error: 'This gig is no longer accepting bids' });
     if (await canActAsBusiness(gig.user_id, userId)) {
       return res.status(400).json({ error: 'You cannot bid on your own gig' });
     }
@@ -7654,14 +7725,17 @@ router.patch('/:id/my-bid', verifyToken, async (req, res) => {
       .update(patch)
       .eq('id', existing.id)
       .eq('status', 'pending')
+      .eq('updated_at', existing.updated_at)
       .select('*')
-      .single();
+      .maybeSingle();
 
-    if (error || !data) {
+    if (error) {
       logger.error('Error updating bid', { error: error?.message || 'Bid changed', gigId, userId });
       return res.status(500).json({ error: 'Failed to update bid' });
     }
+    if (!data) return res.status(409).json({ error: 'This bid changed. Refresh before editing again.' });
 
+    emitGigUpdate(req, gigId, 'bid-update');
     return res.json({ bid: data });
   } catch (err) {
     logger.error('Bid update error', { error: err.message, gigId, userId });
