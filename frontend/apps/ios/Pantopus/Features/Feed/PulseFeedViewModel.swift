@@ -1107,7 +1107,7 @@ public final class PulseFeedViewModel {
             avatarTint: isBusiness ? .violet : .sky,
             meta: Self.metaString(post: post, intent: intent),
             intent: intent,
-            title: intent == .event ? post.title : nil,
+            title: post.title,
             body: post.content,
             event: PulseEventDetails(
                 postType: post.postType,
