@@ -1029,7 +1029,13 @@ class PulseFeedViewModel
             val visible = visiblePosts()
             if (visible.isEmpty()) {
                 if (loadedPosts.isEmpty()) return
-                _state.value = topicEmptyState() ?: PulseFeedUiState.Empty(content = _surface.value.emptyContent(scopeLabel = scopeLabel))
+                _state.value = topicEmptyState() ?: PulseFeedUiState.Empty(
+                    content =
+                        _surface.value.emptyContent(
+                            scopeLabel = scopeLabel,
+                            hasActiveFilter = _activeIntent.value != PulseIntent.All,
+                        ),
+                )
                 return
             }
             val query = _searchText.value.trim().lowercase()
@@ -1260,7 +1266,13 @@ class PulseFeedViewModel
          */
         private fun emptyState(noAreaSearched: Boolean): PulseFeedUiState.Empty {
             if (!noAreaSearched) {
-                return topicEmptyState() ?: PulseFeedUiState.Empty(content = _surface.value.emptyContent(scopeLabel = scopeLabel))
+                return topicEmptyState() ?: PulseFeedUiState.Empty(
+                    content =
+                        _surface.value.emptyContent(
+                            scopeLabel = scopeLabel,
+                            hasActiveFilter = _activeIntent.value != PulseIntent.All,
+                        ),
+                )
             }
             _radiusSuggestion.value = null
             return PulseFeedUiState.Empty(content = FeedSurface.noAreaContent(), needsArea = true)

@@ -87,8 +87,24 @@ enum class FeedSurface(
      * @param scopeLabel Active neighborhood (Pulse footer). `null` hides the
      *   Pulse footer chip.
      */
-    fun emptyContent(scopeLabel: String?): FeedEmptyContent =
-        when (this) {
+    fun emptyContent(
+        scopeLabel: String?,
+        hasActiveFilter: Boolean = false,
+    ): FeedEmptyContent {
+        if (hasActiveFilter) {
+            return FeedEmptyContent(
+                icon = PantopusIcon.Filter,
+                headline = "No posts match this filter",
+                body = "Choose All to see other posts, or create one in this category.",
+                ctaLabel = "Create post",
+                ctaIcon = PantopusIcon.Pencil,
+                footerIcon = PantopusIcon.MapPin,
+                footerLead = "",
+                footerEmphasis = null,
+                footerTrail = "",
+            )
+        }
+        return when (this) {
             Pulse ->
                 FeedEmptyContent(
                     icon = PantopusIcon.Radio,
@@ -131,6 +147,7 @@ enum class FeedSurface(
                     footerTrail = " · find more by name or handle",
                 )
         }
+    }
 
     companion object {
         /** Pulse with no area chosen, no device location and no home or saved place to fall back on. */

@@ -983,7 +983,7 @@ public final class PulseFeedViewModel {
             } else if surface == .pulse, let activeTopic, activeTopic != .sports {
                 state = .empty(FeedSurface.quietTopicContent(activeTopic))
             } else {
-                state = .empty(surface.emptyContent(scopeLabel: scopeLabel, followCount: 0))
+                state = .empty(surface.emptyContent(scopeLabel: scopeLabel, followCount: 0, hasActiveFilter: activeIntent != .all))
             }
             return
         }
