@@ -180,8 +180,10 @@ public struct FormShell<Content: View>: View {
         }
         .background(Theme.Color.appBg)
         .accessibilityIdentifier("formShell")
-        // A swipe-down would close the sheet this form sits in without the "Discard changes?" the X button asks.
+        // A swipe-down would close the sheet this form sits in without the "Discard changes?" the X button asks;
+        // a swipe from the left edge would do the same to a pushed form.
         .interactiveDismissDisabled(isDirty && asksBeforeDiscarding)
+        .swipeBackDisabled(isDirty && asksBeforeDiscarding)
         .confirmationDialog(
             "Discard changes?",
             isPresented: $showsDiscardConfirm,

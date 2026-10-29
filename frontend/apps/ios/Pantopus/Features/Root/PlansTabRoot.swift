@@ -29,6 +29,7 @@ public struct PlansTabRoot: View {
         NavigationStack(path: $plansPath) {
             PlansMapView(actions: plansActions)
                 .toolbar(.hidden, for: .navigationBar)
+                .swipesBackFromEdge()
                 .navigationDestination(for: PlansRoute.self) { route in
                     PlansDestination(route: route, path: $plansPath) { hostRequest = PlansHostRequest(start: $0) }
                 }

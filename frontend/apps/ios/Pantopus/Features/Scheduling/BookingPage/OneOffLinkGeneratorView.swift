@@ -37,6 +37,8 @@ public struct OneOffLinkGeneratorView: View {
         }
         .background(Theme.Color.appBg)
         .toolbar(.hidden, for: .navigationBar)
+        // The design has no Back here, so a swipe from the edge doesn't leave either.
+        .swipeBackDisabled()
         .task { await viewModel.load() }
         .overlay(alignment: .top) {
             if showCopied { OneOffCopiedToast().padding(.top, Spacing.s12) }

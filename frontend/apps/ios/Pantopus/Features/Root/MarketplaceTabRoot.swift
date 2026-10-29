@@ -57,6 +57,7 @@ public struct MarketplaceTabRoot: View {
                 onBack: onClose
             )
             .toolbar(.hidden, for: .navigationBar)
+            .swipesBackFromEdge()
             .navigationDestination(for: MarketplaceRoute.self) { route in
                 destination(for: route)
                     .modifier(OwnHeaderBar(drawsOwnHeader: !Self.usesSystemBar(route)))

@@ -256,6 +256,7 @@ struct LoginView: View {
             .modifier(LoginKeyboardReveal(isEditing: focusedField != nil))
             .background(Theme.Color.appSurface)
             .navigationBarHidden(true)
+            .swipesBackFromEdge()
             .navigationDestination(for: AuthRoute.self) { route in
                 switch route {
                 case .login:

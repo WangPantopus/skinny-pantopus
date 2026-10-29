@@ -156,6 +156,7 @@ private struct AskPantopusThread: View {
                 onBack: { dismiss() }
             )
             .toolbar(.hidden, for: .navigationBar)
+            .swipesBackFromEdge()
             .navigationDestination(for: AskPantopusRoute.self) { route in
                 destination(route)
                     .toolbar(.hidden, for: .navigationBar)

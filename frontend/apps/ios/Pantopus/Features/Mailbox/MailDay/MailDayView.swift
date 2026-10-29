@@ -68,6 +68,9 @@ public struct MailDayView: View {
         }
         .accessibilityIdentifier("mailDay")
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
+        // Settings draw over the day, and their Back returns to it; a swipe from
+        // the edge would close Mail Day too.
+        .swipeBackDisabled(viewModel.isShowingSettings)
     }
 
     @ViewBuilder
