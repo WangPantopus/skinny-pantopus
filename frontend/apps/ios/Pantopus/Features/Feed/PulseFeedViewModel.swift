@@ -435,7 +435,27 @@ public final class PulseFeedViewModel {
 
     /// Public web URL handed to the system share sheet.
     public func shareURL(postId: String) -> URL? {
-        URL(string: "https://www.pantopus.com/posts/\(postId)")
+        guard loadedItems.first(where: { $0.id == postId })?.canShareExternally == true else { return nil }
+        return URL(string: "https://www.pantopus.com/posts/\(postId)")
+    }
+
+    private var preparingShares: Set<String> = []
+
+    /// A saved feed card may predate an audience change. Check before exposing its URL to another app.
+    public func authorizeShare(postId: String) async -> URL? {
+        guard shareURL(postId: postId) != nil, let actor = viewerId,
+              preparingShares.insert(postId).inserted else { return nil }
+        let sessionId = AuthManager.shared.sessionId
+        defer { preparingShares.remove(postId) }
+        do {
+            let response: PostShareResponse = try await api.request(PostsEndpoints.share(id: postId, checkOnly: true))
+            guard response.canShare == true, !Task.isCancelled, viewerId == actor,
+                  sessionId == AuthManager.shared.sessionId else { return nil }
+            return shareURL(postId: postId)
+        } catch {
+            toastMessage = "Couldn't share this post. Try again."
+            return nil
+        }
     }
 
     /// `POST /api/posts/:id/save` — optimistic bookmark toggle with
@@ -494,7 +514,8 @@ public final class PulseFeedViewModel {
 
     /// Records the external share once the system sheet was used —
     /// count bump only, never surfaced (RN `useFeedData.ts:173`).
-    public func recordShare(postId: String) async {
+    public func recordShare(postId: String, sessionId: String?) async {
+        guard sessionId == AuthManager.shared.sessionId, viewerId != nil else { return }
         do {
             _ = try await api.request(
                 PostsEndpoints.share(id: postId, shareType: "external"),
