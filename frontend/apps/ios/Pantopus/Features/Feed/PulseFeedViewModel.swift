@@ -248,9 +248,6 @@ public final class PulseFeedViewModel {
     /// App-wide mute / hide layer shared by every feed surface, mirroring
     /// RN's `PantopusProvider` (`mutedEntities` + `hiddenPostIds`).
     private let moderation: FeedModerationStore
-    /// Muted topics stay local: `POST /api/posts/mute/topic` is scoped to a
-    /// surface, so a topic muted on Nearby is not muted on Beacons.
-    private var mutedPostTypes: Set<String> = []
 
     init(
         api: APIClient = .shared,
@@ -602,16 +599,17 @@ public final class PulseFeedViewModel {
         guard let item = loadedItems.first(where: { $0.id == postId }),
               let postType = item.postType, !postType.isEmpty, PulseIntent.knows(postType: postType) else { return }
         let label = PulseIntent.from(postType: postType).cardChipLabel
-        mutedPostTypes.insert(postType)
+        let targetSurface = surface
+        moderation.addPostTypeMute(postType, surface: targetSurface.backendSurface)
         rebuildLoadedState()
         do {
             _ = try await api.request(
-                FeedActionsEndpoints.muteTopic(postType: postType, surface: surface.backendSurface),
+                FeedActionsEndpoints.muteTopic(postType: postType, surface: targetSurface.backendSurface),
                 as: PostActionAckResponse.self
             )
-            toastMessage = "Muted \(label) on \(surface.toggleLabel)."
+            toastMessage = "Muted \(label) on \(targetSurface.toggleLabel)."
         } catch {
-            mutedPostTypes.remove(postType)
+            moderation.removePostTypeMute(postType, surface: targetSurface.backendSurface)
             toastMessage = "Couldn't mute \(label)."
             rebuildLoadedState()
         }
@@ -1008,7 +1006,7 @@ public final class PulseFeedViewModel {
             // As on the server, a topic mute never hides the viewer's own posts.
             topic: Self.isOwner(post: post, viewerId: viewerId) ? nil : post.topic
         ) else { return false }
-        if let postType = post.postType, mutedPostTypes.contains(postType) { return false }
+        if moderation.isPostTypeMuted(post.postType, surface: surface.backendSurface) { return false }
         return true
     }
 

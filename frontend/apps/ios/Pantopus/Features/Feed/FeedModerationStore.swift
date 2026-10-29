@@ -55,6 +55,8 @@ public final class FeedModerationStore {
     public private(set) var mutedTopics: Set<String> = []
     /// Pulse topics muted in one area this session, as `[topic, area id]`.
     public private(set) var mutedTopicAreas: Set<[String]> = []
+    /// Shipping post categories are muted on one feed surface.
+    public private(set) var mutedPostTypes: [String: Set<String>] = [:]
 
     public init() {}
 
@@ -112,6 +114,21 @@ public final class FeedModerationStore {
         mutedTopics.insert(topic)
     }
 
+    public func isPostTypeMuted(_ postType: String?, surface: String) -> Bool {
+        guard let postType else { return false }
+        return mutedPostTypes[surface]?.contains(postType) == true
+    }
+
+    public func addPostTypeMute(_ postType: String, surface: String) {
+        mutedPostTypes[surface, default: []].insert(postType)
+    }
+
+    public func removePostTypeMute(_ postType: String, surface: String? = nil) {
+        for key in surface.map({ [$0] }) ?? Array(mutedPostTypes.keys) {
+            mutedPostTypes[key]?.remove(postType)
+        }
+    }
+
     public func addTopicMute(_ topic: String, areaId: String) {
         mutedTopicAreas.insert([topic, areaId])
     }
@@ -134,5 +151,6 @@ public final class FeedModerationStore {
         hiddenPostIds = []
         mutedTopics = []
         mutedTopicAreas = []
+        mutedPostTypes = [:]
     }
 }

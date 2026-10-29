@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { FeedSurface, Post, PostType } from '@pantopus/api';
+import { getPostTypeConfig } from '@pantopus/ui-utils';
 import {
   PostComposer, EditPostDialog, PostCard, PostDetailPanel, FeedFilters, NearbyProvidersCard,
   NeighborhoodPulse, EmptyFeed, SparseFeedSummary, PostSkeleton,
@@ -808,7 +809,7 @@ export default function FeedPage() {
           phone tab bar and the floating chat and + buttons stayed on top of it and covered its close button and checkboxes. */}
       {prefs.showPrefs && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 bg-black/40 z-[60] flex items-end sm:items-center justify-center p-4">
-          <div className="bg-surface rounded-2xl border border-app shadow-2xl p-6 w-full max-w-sm space-y-4">
+          <div className="bg-surface rounded-2xl border border-app shadow-2xl p-6 w-full max-w-sm max-h-[85dvh] overflow-y-auto space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-semibold text-app">Pulse Preferences</h3>
               <button onClick={() => prefs.setShowPrefs(false)} aria-label="Close Pulse preferences" className="text-app-muted hover:text-app transition">
@@ -866,7 +867,37 @@ export default function FeedPage() {
                 </div>
               </div>
             )}
-            {!prefs.prefs && (
+            <div className="pt-2 border-t border-app space-y-2">
+              {prefs.actionError && <p role="alert" className="text-sm text-red-600">{prefs.actionError}</p>}
+              <h4 className="text-xs font-semibold text-app-muted uppercase tracking-wider">Muted categories</h4>
+              {prefs.mutesLoading ? <p className="text-sm text-app-muted">Loading muted categories…</p> : prefs.mutesError ? (
+                <div className="text-sm text-app-muted">
+                  <p>Couldn’t load muted categories.</p>
+                  <button onClick={() => void prefs.retryMutes()} className="py-2 text-primary-600">Try again</button>
+                </div>
+              ) : prefs.mutedCategories.length === 0 ? <p className="text-sm text-app-muted">No muted categories.</p> : (
+                <>
+                  <p className="text-xs text-app-muted">Unmute a category in all feeds.</p>
+                  {prefs.mutedCategories.map((mute) => (
+                    <div key={mute.topic} className="flex items-center justify-between gap-3">
+                      <span className="text-sm text-app">{getPostTypeConfig(mute.topic).label}</span>
+                      <button
+                        disabled={!!prefs.unmutingCategory}
+                        aria-label={`Unmute ${getPostTypeConfig(mute.topic).label}`}
+                        onClick={() => void prefs.unmuteCategory(mute.topic)}
+                        className="py-2 text-sm text-primary-600 disabled:opacity-50"
+                      >{prefs.unmutingCategory === mute.topic ? 'Unmuting…' : 'Unmute'}</button>
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+            {!prefs.prefs && prefs.prefsError ? (
+              <div className="text-center py-4 text-sm text-app-muted">
+                <p>Couldn’t load preferences.</p>
+                <button onClick={() => void prefs.retryPrefs()} className="py-2 text-primary-600">Try again</button>
+              </div>
+            ) : !prefs.prefs && (
               <div className="text-center py-4">
                 <div className="w-5 h-5 border-2 border-app border-t-primary-500 rounded-full animate-spin mx-auto" />
               </div>

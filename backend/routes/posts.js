@@ -2328,10 +2328,14 @@ router.get('/mute', verifyToken, async (req, res) => {
     // A topic muted once per surface by older apps is one topic mute to undo.
     const topicMutes = new Map();
     for (const row of rows || []) {
-      if (row.muted_entity_type !== 'topic' || !isPulseTopic(row.muted_entity_id)) continue;
-      const key = `${row.muted_entity_id}|${row.area_id || ''}`;
+      // The shipping feed mutes post categories through this same endpoint.
+      // Include them so preferences can undo those mutes with the redesign off.
+      if (row.muted_entity_type !== 'topic'
+        || (!isPulseTopic(row.muted_entity_id) && !POST_TYPES.includes(row.muted_entity_id))) continue;
+      const areaId = isPulseTopic(row.muted_entity_id) ? row.area_id || null : null;
+      const key = `${row.muted_entity_id}|${areaId || ''}`;
       if (!topicMutes.has(key)) {
-        topicMutes.set(key, { topic: row.muted_entity_id, area_id: row.area_id || null, muted_at: row.created_at });
+        topicMutes.set(key, { topic: row.muted_entity_id, area_id: areaId, muted_at: row.created_at });
       }
     }
     const mutes = (rows || []).filter((m) => m.muted_entity_type !== 'topic');

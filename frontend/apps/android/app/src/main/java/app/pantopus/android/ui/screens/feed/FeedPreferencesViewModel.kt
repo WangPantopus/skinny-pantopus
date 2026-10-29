@@ -11,6 +11,7 @@ import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.feed.FeedActionsRepository
+import app.pantopus.android.data.feed.FeedModerationStore
 import app.pantopus.android.data.store.StoreKind
 import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.screens.feed.pulse.PulseTopic
@@ -39,10 +40,13 @@ sealed interface FeedPreferencesUiState {
 
 /** One Pulse topic the person muted, as the "Muted topics" section lists it (Pulse build S4). */
 data class MutedTopicUi(
-    val topic: PulseTopic,
+    val topic: PulseTopic?,
     /** Null: muted everywhere (areas arrive with S5). */
     val areaId: String?,
-)
+    val key: String = topic?.key.orEmpty(),
+) {
+    val label: String get() = topic?.label ?: key.split('_').joinToString(" ") { it.replaceFirstChar(Char::titlecase) }
+}
 
 /** The "Muted topics" section: nothing read yet, the list, or a read that failed. */
 sealed interface MutedTopicsUiState {
@@ -64,6 +68,7 @@ class FeedPreferencesViewModel
     @Inject
     constructor(
         private val repo: FeedActionsRepository,
+        private val moderation: FeedModerationStore,
     ) : ViewModel() {
         private val _state = MutableStateFlow<FeedPreferencesUiState>(FeedPreferencesUiState.Loading)
         val state: StateFlow<FeedPreferencesUiState> = _state.asStateFlow()
@@ -101,15 +106,18 @@ class FeedPreferencesViewModel
         }
 
         private fun readMutedTopics() {
-            // Topic mutes came with the Pulse redesign (S4): the October 13 sheet has no "Muted topics".
-            if (!LaunchFeatures.pulseRedesign) return
             viewModelScope.launch {
                 when (val result = repo.mutedEntities()) {
                     is NetworkResult.Success ->
                         _mutedTopics.value =
                             MutedTopicsUiState.Loaded(
                                 result.data.topicMutes.mapNotNull { mute ->
-                                    PulseTopic.fromKey(mute.topic)?.let { MutedTopicUi(topic = it, areaId = mute.areaId) }
+                                    val topic = PulseTopic.fromKey(mute.topic)
+                                    if (topic != null && !LaunchFeatures.pulseRedesign) {
+                                        null
+                                    } else {
+                                        MutedTopicUi(topic = topic, areaId = mute.areaId, key = mute.topic)
+                                    }
                                 },
                             )
                     is NetworkResult.Failure ->
@@ -120,15 +128,24 @@ class FeedPreferencesViewModel
 
         /** "Unmute" on a muted topic: `DELETE /api/posts/mute` for that one mute; the row leaves at once. */
         fun unmuteTopic(item: MutedTopicUi) {
+            if (_isSaving.value) return
             val before = (_mutedTopics.value as? MutedTopicsUiState.Loaded)?.items ?: return
+            _isSaving.value = true
             _mutedTopics.value = MutedTopicsUiState.Loaded(before - item)
             viewModelScope.launch {
-                when (repo.unmutePulseTopic(item.topic.key, item.areaId)) {
-                    is NetworkResult.Success -> _unmutedTopics.tryEmit(item.topic.key)
-                    is NetworkResult.Failure -> {
-                        _mutedTopics.value = MutedTopicsUiState.Loaded(before)
-                        _toastMessage.value = "Couldn't unmute ${item.topic.label}."
+                try {
+                    when (repo.unmutePulseTopic(item.key, item.areaId)) {
+                        is NetworkResult.Success -> {
+                            moderation.removePostTypeMute(item.key)
+                            _unmutedTopics.tryEmit(item.key)
+                        }
+                        is NetworkResult.Failure -> {
+                            _mutedTopics.value = MutedTopicsUiState.Loaded(before)
+                            _toastMessage.value = "Couldn't unmute ${item.label}."
+                        }
                     }
+                } finally {
+                    _isSaving.value = false
                 }
             }
         }
