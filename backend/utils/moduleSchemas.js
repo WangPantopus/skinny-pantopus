@@ -73,15 +73,16 @@ const gigAmountSchema = Joi.any().custom((value, helpers) => {
 
 const GIG_SCHEDULE_FIELDS = { scheduled_start: 'start time', time_window_start: 'start time', time_window_end: 'end time' };
 
-function gigScheduleError(schedule, changed = schedule) {
-  for (const [field, name] of Object.entries(GIG_SCHEDULE_FIELDS)) {
+// `names` says what the composer calls each field; magic-post's window end is the task's deadline.
+function gigScheduleError(schedule, changed = schedule, names = GIG_SCHEDULE_FIELDS) {
+  for (const [field, name] of Object.entries(names)) {
     if (changed[field] != null && new Date(changed[field]).getTime() <= Date.now()) {
       return `The ${name} must be in the future.`;
     }
   }
   if (schedule.time_window_start && schedule.time_window_end
     && new Date(schedule.time_window_end) <= new Date(schedule.time_window_start)) {
-    return 'The time window must end after it starts.';
+    return `The ${names.time_window_end} must be after the ${names.time_window_start}.`;
   }
   return null;
 }
@@ -94,4 +95,5 @@ module.exports = {
   eventDetailsSchema,
   gigAmountSchema,
   gigScheduleError,
+  GIG_SCHEDULE_FIELDS,
 };

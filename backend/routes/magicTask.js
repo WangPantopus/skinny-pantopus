@@ -34,6 +34,7 @@ const {
   eventDetailsSchema,
   gigAmountSchema,
   gigScheduleError,
+  GIG_SCHEDULE_FIELDS,
 } = require('../utils/moduleSchemas');
 const { fanoutUrgentTask } = require('../services/urgentFanoutService');
 const { alertMatchingSavedSearches } = require('../services/savedSearchAlertService');
@@ -412,7 +413,7 @@ router.post('/magic-post', verifyToken, validate(magicPostSchema), async (req, r
   logger.info('Magic post', { userId, title: draft.title, source_flow });
 
   // As on POST /api/gigs: a chosen start or deadline must still be ahead, and the window must end after it starts.
-  const scheduleError = gigScheduleError(draft);
+  const scheduleError = gigScheduleError(draft, draft, { ...GIG_SCHEDULE_FIELDS, time_window_end: 'deadline' });
   if (scheduleError) return res.status(400).json({ error: scheduleError, code: 'INVALID_SCHEDULE' });
 
   try {
