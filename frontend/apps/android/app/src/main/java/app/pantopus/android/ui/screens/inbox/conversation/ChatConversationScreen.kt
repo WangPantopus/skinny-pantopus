@@ -1312,7 +1312,8 @@ internal fun ChatHeader(
                             HeaderIcon(PantopusIcon.MoreHorizontal)
                         }
                     }
-                    is ChatCounterparty.Group -> HeaderIcon(PantopusIcon.MoreVertical)
+                    // Group actions live in the inbox; no inactive overflow control in the header.
+                    is ChatCounterparty.Group -> Unit
                 }
         }
     }
