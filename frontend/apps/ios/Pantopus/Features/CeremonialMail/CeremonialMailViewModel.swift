@@ -333,11 +333,10 @@ public final class CeremonialMailViewModel: WizardModel {
             expiresAt: nil
         )
         do {
-            let response: SendMailResponse = try await api.request(MailComposeEndpoints.send(body: body))
+            let _: SendMailResponse = try await api.request(MailComposeEndpoints.send(body: body))
             step = .success
-            if let mailId = response.mail?.id {
-                pendingEvent = .openMail(mailId: mailId)
-            }
+            // The sent letter belongs to the recipient. Stay on confirmation;
+            // opening it as the sender would lead to an inaccessible reader.
         } catch {
             submitError = (error as? APIError)?.errorDescription ?? "Couldn't send your letter. Try again."
         }

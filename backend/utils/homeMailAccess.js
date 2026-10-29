@@ -18,7 +18,7 @@
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('./logger');
 const { localDisplayNames } = require('./identityProfiles');
-const { currentOccupancy, resolveHomeRole, NON_RESIDENT_ROLES } = require('./homeAccessPolicy');
+const { currentOccupancy, resolveHomeRole, NON_RESIDENT_ROLES, UNPROVEN_SOURCES } = require('./homeAccessPolicy');
 
 // The member who deleted or dismissed a Home letter, by the name they show their household (their Local Profile's),
 // or null when they have none or it can't be read.
@@ -157,13 +157,19 @@ async function householdOccupancies(column, id) {
 async function mailReaderOccupancies(column, id) {
   const { data, error } = await supabaseAdmin
     .from('HomeOccupancy')
-    .select(OCCUPANCY_SELECT)
+    .select(`${OCCUPANCY_SELECT}, home:home_id(home_status, security_state)`)
     .eq(column, id)
     .eq('is_active', true)
     .eq('verification_status', 'verified')
     .in('verification_source', MAIL_PROVEN_SOURCES);
   if (error) throw new Error(error.message);
-  return (data || []).filter(currentResident);
+  return (data || []).filter((row) => availableMailHome(row.home) && currentResident(row));
+}
+
+// A proven occupancy cannot override a Home freeze, dispute, archive or merge.
+function availableMailHome(home) {
+  return Boolean(home) && !['archived', 'merged'].includes(home.home_status)
+    && !['frozen', 'frozen_silent', 'disputed'].includes(home.security_state);
 }
 
 // States in which someone lives at a Home but hasn't proven it yet: their Home drawer stays closed with
@@ -182,7 +188,7 @@ async function mailHomesOrThrow(userId) {
   if (!userId) return [];
   const { data, error } = await supabaseAdmin
     .from('HomeOccupancy')
-    .select(`${OCCUPANCY_SELECT}, home:home_id(id, address, address2, name, home_status)`)
+    .select(`${OCCUPANCY_SELECT}, home:home_id(id, address, address2, name, home_status, security_state)`)
     .eq('user_id', userId)
     .eq('is_active', true)
     .in('verification_status', MAIL_UNPROVEN_RESIDENT_STATUSES);
@@ -191,7 +197,7 @@ async function mailHomesOrThrow(userId) {
   const seen = new Set();
   const homes = [];
   for (const r of data || []) {
-    if (!r.home || seen.has(r.home_id) || ['merged', 'archived'].includes(r.home.home_status)) continue;
+    if (!availableMailHome(r.home) || seen.has(r.home_id)) continue;
     // A stale verification still lives there; it needs proof again, so it is listed as needs_proof.
     if (NON_RESIDENT_ROLES.has(resolveHomeRole(r)) || !currentOccupancy(r)) continue;
     seen.add(r.home_id);
@@ -425,7 +431,7 @@ async function readableMail(mailId, userId) {
   if (!mailId || !userId) return null;
   const { data: mail, error } = await supabaseAdmin
     .from('Mail')
-    .select('id, recipient_user_id, recipient_home_id, deleted_at, delivered_at, lifecycle')
+    .select('id, recipient_user_id, recipient_home_id, deleted_at, delivered_at, lifecycle, object_id')
     .eq('id', mailId)
     .maybeSingle();
   if (error || !mail) return null;
@@ -523,7 +529,67 @@ async function sendHomeMailRemovedNotice(mail, actorId, action) {
   }
 }
 
-module.exports = { MAIL_TRUSTED_VERIFICATION_STATUSES, MAIL_PROVEN_SOURCES, getAccessibleHomeIds, trustedHomeIdsOrThrow,
+// Sending requires current address proof, not a guest pass, household invitation or ended occupancy.
+const hasVerifiedSenderHome = async (userId) => {
+  const [occupancyRes, ownerRes] = await Promise.allSettled([
+    supabaseAdmin
+      .from('HomeOccupancy')
+      .select(`${OCCUPANCY_SELECT}, home:home_id(home_status, security_state)`)
+      .eq('user_id', userId),
+    supabaseAdmin
+      .from('HomeOwner')
+      .select('home_id, home:home_id(home_status, security_state)')
+      .eq('subject_id', userId)
+      .eq('owner_status', 'verified'),
+  ]);
+
+  // A consented co-owner can have household-only provenance too. Check that
+  // same Home before using the legacy owner fallback; another address-proven
+  // Home still qualifies. Failed provenance reads must not become "no row".
+  if (occupancyRes.status !== 'fulfilled' || occupancyRes.value?.error
+    || !Array.isArray(occupancyRes.value?.data)
+    || occupancyRes.value.data.some(row => !row || typeof row.home_id !== 'string')) return false;
+  const occupancies = occupancyRes.value.data;
+  const householdHomes = new Set(occupancies
+    .filter(row => UNPROVEN_SOURCES.has(row.verification_source)).map(row => row.home_id));
+  const verifiedOwnerRows = ownerRes.status === 'fulfilled' && !ownerRes.value?.error
+    && Array.isArray(ownerRes.value?.data) ? ownerRes.value.data : [];
+  const proven = (row) => row.verification_status === 'verified' && currentResident(row)
+    && availableMailHome(row.home) && MAIL_PROVEN_SOURCES.includes(row.verification_source)
+    && !UNPROVEN_SOURCES.has(row.verification_source);
+  if (occupancies.some(proven)) return true;
+  for (const row of verifiedOwnerRows) {
+    if (!row || typeof row.home_id !== 'string' || !availableMailHome(row.home) || householdHomes.has(row.home_id)) continue;
+    // The collection can be truncated by PostgREST's max_rows. Only an exact
+    // Home/user lookup can distinguish no occupancy from an omitted row.
+    try {
+      const result = await supabaseAdmin.from('HomeOccupancy').select(`${OCCUPANCY_SELECT}, home:home_id(home_status, security_state)`)
+        .eq('user_id', userId).eq('home_id', row.home_id).maybeSingle();
+      if (!result || result.error || (result.data !== null
+        && (!result.data || Array.isArray(result.data) || result.data.home_id !== row.home_id))) return false;
+      if (result.data === null || proven(result.data)) return true;
+    } catch (_) { return false; }
+  }
+  return false;
+};
+
+
+// A connection can address a letter to a proven resident's Home without learning its street or membership.
+async function canSendToMailHome(homeId, userId) {
+  const readers = await mailReaderIdsOrThrow(homeId);
+  if (readers.includes(userId)) return true;
+  if (!readers.length) return false;
+  const { data, error } = await supabaseAdmin.from('Relationship').select('requester_id, addressee_id')
+    .eq('status', 'accepted').or(`requester_id.eq.${userId},addressee_id.eq.${userId}`);
+  if (error) throw error;
+  const connected = new Set((data || []).map((r) => r.requester_id === userId ? r.addressee_id : r.requester_id));
+  if (!readers.some((id) => connected.has(id))) return false;
+  const { isBlocked } = require('../services/blockService');
+  for (const reader of readers) if (await isBlocked(userId, reader)) return false;
+  return true;
+}
+
+module.exports = { hasVerifiedSenderHome, canSendToMailHome, MAIL_TRUSTED_VERIFICATION_STATUSES, MAIL_PROVEN_SOURCES, getAccessibleHomeIds, trustedHomeIdsOrThrow,
   mailReaderIdsOrThrow, householdHomeIds, mailHomesOrThrow, homeMailNeedsProof, sendMailUnavailable, onlyDelivered,
   isDeliveredMail,
   MAIL_HOME_NEEDS_PROOF, MAIL_NOT_FOUND, canAccessMail, readableMail, restorableMail,

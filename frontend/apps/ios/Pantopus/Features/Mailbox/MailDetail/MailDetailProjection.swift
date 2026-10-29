@@ -75,7 +75,7 @@ extension MailDetailViewModel {
             createdAtLabel: createdAtLabel,
             expiresAtLabel: expiresAtLabel,
             readStatusLabel: item.viewed || item.openedAt != nil || resolvedAck ? "Read" : "Unread",
-            bodyParagraphs: bodyParagraphs(from: item.content),
+            bodyParagraphs: bodyParagraphs(from: detail.contentText ?? item.content),
             attachments: item.attachments ?? [],
             // "Pantopus read this for you" (Mail build contract, SRV-2).
             aiSummary: item.summary?.text,

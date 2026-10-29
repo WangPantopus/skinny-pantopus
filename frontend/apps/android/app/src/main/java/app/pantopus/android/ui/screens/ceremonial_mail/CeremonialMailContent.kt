@@ -59,7 +59,7 @@ enum class CeremonialMailSeal(val wire: String, val title: String) {
 }
 
 enum class CeremonialMailSendTiming(val wire: String, val title: String, val subtitle: String) {
-    Now("now", "Send now", "Deliver as soon as the recipient opens Pantopus."),
+    Now("now", "Next mail delivery", "Mail holds may delay its arrival."),
     Morning("morning", "Tomorrow morning", "Land in their inbox at 8 a.m. local time."),
     Tomorrow("tomorrow", "Tomorrow evening", "Land in their inbox at 6 p.m. local time."),
 }

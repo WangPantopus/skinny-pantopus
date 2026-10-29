@@ -37,7 +37,7 @@ function seedScannedMail(userId, kinds) {
   // Mail is a trusted-occupancy surface (utils/homeMailAccess): the fixture
   // occupancy must be verified, by proof of the address, for the push to be owed.
   getTable('HomeOccupancy').push({ user_id: userId, home_id: homeId, is_active: true, verification_status: 'verified',
-    verification_source: 'address' });
+    verification_source: 'address', home: { home_status: 'active', security_state: 'normal' } });
   kinds.forEach((kind, i) => {
     const mailId = `${userId}-mail-${i}`;
     getTable('Mail').push({

@@ -149,7 +149,7 @@ public enum CeremonialMailSendTiming: String, CaseIterable, Sendable, Identifiab
 
     public var title: String {
         switch self {
-        case .now: "Send now"
+        case .now: "Next mail delivery"
         case .morning: "Tomorrow morning"
         case .tomorrow: "Tomorrow evening"
         }
@@ -157,7 +157,7 @@ public enum CeremonialMailSendTiming: String, CaseIterable, Sendable, Identifiab
 
     public var subtitle: String {
         switch self {
-        case .now: "Deliver as soon as the recipient opens Pantopus."
+        case .now: "Mail holds may delay its arrival."
         case .morning: "Land in their inbox at 8 a.m. local time."
         case .tomorrow: "Land in their inbox at 6 p.m. local time."
         }

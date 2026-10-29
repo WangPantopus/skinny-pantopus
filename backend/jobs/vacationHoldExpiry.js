@@ -4,10 +4,13 @@
 // Stored delivery preferences do not execute postal/carrier handling.
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
+const { personTimeZone, FALLBACK_TIME_ZONE } = require('../services/mailDelivery');
 const { syncHeldMailSafe } = require('../services/mailVacation');
 
 async function vacationHoldExpiry() {
-  const today = new Date().toISOString().slice(0, 10);
+  // Include tomorrow in UTC: it may already be the local day east of the date line.
+  // The per-person transaction decides whether a transition is actually due.
+  const today = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
   try {
     const userIds = new Set();
     // Read every due row before transitions change the result set. Explicit
@@ -24,8 +27,8 @@ async function vacationHoldExpiry() {
     let failedUsers = 0;
     for (const userId of [...userIds].sort()) {
       try {
-        const { error } = await supabaseAdmin.rpc('vacation_hold_transition', {
-          p_user_id: userId, p_action: 'status',
+        const { error } = await supabaseAdmin.rpc('vacation_hold_transition_in_zone', {
+          p_user_id: userId, p_action: 'status', p_time_zone: (await personTimeZone(userId)) || FALLBACK_TIME_ZONE,
         });
         if (error) throw error;
       } catch (error) {
@@ -42,7 +45,7 @@ async function vacationHoldExpiry() {
       for (const hold of data || []) holders.add(hold.user_id);
       if ((data || []).length < 500) break;
     }
-    for (const userId of [...holders, ...userIds]) await syncHeldMailSafe(userId);
+    for (const userId of [...new Set([...holders, ...userIds])]) await syncHeldMailSafe(userId);
     if (failedUsers > 0) throw new Error(`Vacation reconciliation failed for ${failedUsers} user(s)`);
     logger.info('[VacationHold] Complete', { users: userIds.size, holders: holders.size });
   } catch (error) {

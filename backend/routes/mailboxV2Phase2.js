@@ -370,6 +370,22 @@ router.post('/booklet/:mailId/download', async (req, res, next) => {
 
 // ── BUNDLE ────────────────────────────────────────────────
 
+// A bundle may contain more than PostgREST's response cap. Read a stable set
+// before bulk changes and keep ID filters small enough for the HTTP gateway.
+async function readableBundleItems(bundleId, userId, homeIds, select = '*') {
+  const items = [];
+  for (let offset = 0; ; offset += 500) {
+    const { data, error } = await onlyDelivered(supabaseAdmin.from('Mail').select(select)
+      .eq('bundle_id', bundleId).or(visibleMailFilter(userId, homeIds)))
+      .is('deleted_at', null).or('lifecycle.is.null,lifecycle.neq.shredded')
+      .order('urgency', { ascending: true }).order('created_at', { ascending: false }).order('id')
+      .range(offset, offset + 499);
+    if (error) throw error;
+    items.push(...(data || []));
+    if ((data || []).length < 500) return items;
+  }
+}
+
 // GET /bundle/:bundleId/items — get items in a bundle
 router.get('/bundle/:bundleId/items', async (req, res, next) => {
   try {
@@ -385,14 +401,7 @@ router.get('/bundle/:bundleId/items', async (req, res, next) => {
 
     // Each item passes the per-item rule too: a bundle can hold letters the
     // caller may not read.
-    const { data: items } = await onlyDelivered(supabaseAdmin
-      .from('Mail')
-      .select('*')
-      .eq('bundle_id', bundleId)
-      .or(visibleMailFilter(req.user.id, await getAccessibleHomeIds(req.user.id))))
-      .is('deleted_at', null)
-      .order('urgency', { ascending: true })
-      .order('created_at', { ascending: false });
+    const items = await readableBundleItems(bundleId, req.user.id, await getAccessibleHomeIds(req.user.id));
 
     await logMailEvent(req.user.id, 'bundle_expanded', bundleId, {
       item_count: (items || []).length,
@@ -419,43 +428,25 @@ router.post('/bundle/action', validate(bundleActionSchema), async (req, res, nex
     if (!bundleMail || !(await canAccessMail(bundleMail, req.user.id))) return res.status(404).json({ error: 'Bundle not found' });
     // Bulk actions touch only the items the caller may read (the per-item rule).
     const homeIds = await getAccessibleHomeIds(req.user.id);
-    const visibleItems = () => supabaseAdmin
-      .from('Mail')
-      .select('id')
-      .eq('bundle_id', bundleId)
-      .or(visibleMailFilter(req.user.id, homeIds))
-      .lte('delivered_at', new Date().toISOString())
-      .is('deleted_at', null);
+    const visibleItems = () => readableBundleItems(bundleId, req.user.id, homeIds);
 
     if (action === 'file_all') {
       if (!folderId) return res.status(400).json({ error: 'folderId required for file_all' });
       // The caller's own folder, or a folder of a Home whose mail they may read (services/mailVault).
       const ownFolder = await mailVault.resolveFolder(folderId, req.user.id, homeIds);
       if (!ownFolder) return res.status(404).json({ error: "This folder isn't in your Vault.", code: 'MAIL_FOLDER_NOT_FOUND' });
-      const { data: items, error: itemsError } = await visibleItems();
-      if (itemsError) throw itemsError;
-
-      const ids = (items || []).map(i => i.id);
-      const { error: fileError } = await supabaseAdmin
-        .from('Mail')
-        .update({ lifecycle: 'filed', vault_folder_id: folderId })
-        .in('id', ids);
-      if (fileError) {
-        logger.error('Bundle file_all failed', { bundleId, error: fileError.message });
-        return res.status(500).json({ error: "Couldn't file this bundle. Please try again." });
+      const items = await visibleItems();
+      if (items.some((item) => !mailVault.folderFits(ownFolder, item))) {
+        return res.status(400).json({ error: 'Choose a Vault folder for the same mailbox as these letters.' });
       }
-
-      // Update folder count
-      const { data: folderData } = await supabaseAdmin
-        .from('VaultFolder')
-        .select('item_count')
-        .eq('id', folderId)
-        .single();
-      if (folderData) {
-        await supabaseAdmin.from('VaultFolder').update({
-          item_count: (folderData.item_count || 0) + ids.length,
-        }).eq('id', folderId);
+      const ids = items.map((item) => item.id);
+      for (let offset = 0; offset < ids.length; offset += 100) {
+        const { error } = await supabaseAdmin.from('Mail')
+          .update({ lifecycle: 'filed', vault_folder_id: ownFolder.folder.id }).in('id', ids.slice(offset, offset + 100));
+        if (error) throw error;
       }
+      // Folder counts are derived from filed mail by mailVault, so retrying this
+      // action cannot increment a stale counter a second time.
 
       await logMailEvent(req.user.id, 'bundle_filed_all', bundleId, {
         folder_id: folderId, count: ids.length,
@@ -465,24 +456,20 @@ router.post('/bundle/action', validate(bundleActionSchema), async (req, res, nex
     }
 
     if (action === 'open_all') {
-      const { data: items, error: itemsError } = await visibleItems();
-      if (itemsError) throw itemsError;
-
-      const ids = (items || []).map(i => i.id);
-      // Opened, and out of "delivered"; a filed piece stays filed.
-      const opened = await supabaseAdmin
-        .from('Mail')
-        .update({ opened_at: new Date().toISOString() })
-        .in('id', ids)
-        .is('opened_at', null);
-      const { error: openError } = opened.error ? opened : await supabaseAdmin
-        .from('Mail')
-        .update({ lifecycle: 'opened' })
-        .in('id', ids)
-        .eq('lifecycle', 'delivered');
-      if (openError) {
-        logger.error('Bundle open_all failed', { bundleId, error: openError.message });
-        return res.status(500).json({ error: "Couldn't open this bundle. Please try again." });
+      const items = await visibleItems();
+      const ids = items.map((item) => item.id);
+      const openedAt = new Date().toISOString();
+      for (let offset = 0; offset < ids.length; offset += 100) {
+        const batch = ids.slice(offset, offset + 100);
+        const opened = await supabaseAdmin.from('Mail').update({ opened_at: openedAt })
+          .in('id', batch).is('opened_at', null);
+        if (opened.error) throw opened.error;
+        const viewed = await supabaseAdmin.from('Mail').update({ viewed: true, viewed_at: openedAt })
+          .in('id', batch).eq('viewed', false);
+        if (viewed.error) throw viewed.error;
+        const lifecycle = await supabaseAdmin.from('Mail').update({ lifecycle: 'opened' })
+          .in('id', batch).eq('lifecycle', 'delivered');
+        if (lifecycle.error) throw lifecycle.error;
       }
 
       return res.json({ message: `Opened ${ids.length} items`, count: ids.length });
@@ -502,10 +489,7 @@ router.post('/bundle/action', validate(bundleActionSchema), async (req, res, nex
       }
 
       // Update bundle item count
-      const { data: remaining } = await supabaseAdmin
-        .from('Mail')
-        .select('id')
-        .eq('bundle_id', bundleId);
+      const remaining = await visibleItems();
 
       await supabaseAdmin
         .from('Mail')

@@ -48,6 +48,7 @@ describe('AI mail access guards', () => {
         is_active: true,
         verification_status: 'verified',
         verification_source: 'address',
+      home: { home_status: 'active', security_state: 'normal' },
       },
     ]);
 

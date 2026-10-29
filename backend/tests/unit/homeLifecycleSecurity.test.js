@@ -157,6 +157,7 @@ describe('CRIT-03 — the shared helper fails closed', () => {
       is_active: true,
       verification_status: 'verified',
       verification_source: 'address',
+      home: { home_status: 'active', security_state: 'normal' },
     }]);
     await expect(getAccessibleHomeIds('resident')).resolves.toEqual(['home-9']);
   });

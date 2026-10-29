@@ -146,13 +146,16 @@ async function filedCounts(groups, userId, homeIds) {
   for (const g of groups) for (const id of g.ids) owner.set(id, g.folder.id);
   const counts = new Map();
   if (!owner.size) return counts;
-  const { data, error } = await onlyDelivered(supabaseAdmin.from('Mail').select('vault_folder_id')
-    .in('vault_folder_id', [...owner.keys()]).eq('lifecycle', 'filed').is('deleted_at', null)
-    .or(visibleMailFilter(userId, homeIds)));
-  if (error) throw new Error(error.message);
-  for (const row of data || []) {
-    const shown = owner.get(row.vault_folder_id);
-    counts.set(shown, (counts.get(shown) || 0) + 1);
+  for (let offset = 0; ; offset += 500) {
+    const { data, error } = await onlyDelivered(supabaseAdmin.from('Mail').select('vault_folder_id')
+      .in('vault_folder_id', [...owner.keys()]).eq('lifecycle', 'filed').is('deleted_at', null)
+      .or(visibleMailFilter(userId, homeIds))).order('id').range(offset, offset + 499);
+    if (error) throw new Error(error.message);
+    for (const row of data || []) {
+      const shown = owner.get(row.vault_folder_id);
+      counts.set(shown, (counts.get(shown) || 0) + 1);
+    }
+    if ((data || []).length < 500) break;
   }
   return counts;
 }
