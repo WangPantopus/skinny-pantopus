@@ -715,7 +715,7 @@ fun FeedScreen(
         AlertDialog(
             onDismissRequest = { viewModel.cancelMuteAuthor() },
             title = { Text("Mute $name?") },
-            text = { Text("You won't see their posts in any feed. You can undo this from their profile.") },
+            text = { Text("You won't see their posts in any feed. You can undo this in Settings → Blocked users.") },
             confirmButton = {
                 TextButton(
                     onClick = { viewModel.muteAuthor(id) },
