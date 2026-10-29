@@ -2639,6 +2639,14 @@ router.put('/messages/:messageId', verifyToken, messageEditLimiter, async (req, 
     if (!writerIdentities) {
       return res.status(403).json({ error: 'Not authorized' });
     }
+    // Someone who left or was removed can no longer rewrite what they said there (a delete still goes through).
+    // A business's message already needs the business's active membership (messageWriterIdentities).
+    if (writerIdentities.length === 0) {
+      const { data: membership, error: membershipError } = await supabaseAdmin.from('ChatParticipant')
+        .select('id').eq('room_id', message.room_id).eq('user_id', userId).eq('is_active', true).maybeSingle();
+      if (membershipError) throw chatAccessUnavailable();
+      if (!membership) return res.status(403).json({ error: 'Not authorized' });
+    }
     if (await isGigRoomClosedTo(message.room_id, userId, writerIdentities)) {
       return res.status(403).json({ error: 'Not authorized' });
     }
@@ -2681,6 +2689,7 @@ router.put('/messages/:messageId', verifyToken, messageEditLimiter, async (req, 
     res.json({ message: serializeChatMessageForViewer(updated, { people, viewerId: userId }) });
     
   } catch (err) {
+    if (err.code === 'CHAT_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
     logger.error('Message edit error', { requestId: req.requestId, userId: req.user?.id, messageId: req.params.messageId, error: err.message });
     res.status(500).json({ error: 'Failed to edit message' });
   }
