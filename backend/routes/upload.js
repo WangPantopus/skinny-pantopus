@@ -27,6 +27,13 @@ const { ensureLocalProfile, ownLocalProfileView, syncLocalProfileFromAccount } =
 const { actingBusinessInRoom, canActAsBusiness } = require('../services/chatBusinessAccess');
 const { isGigRoomClosedTo, isRoomClosedForWrites } = require('../services/chatGigRoomAccess');
 const blockService = require('../services/blockService');
+const gigBrowseCache = require('../services/gig/browseCacheService');
+
+function publishGigMediaChange(req, gigId) {
+  gigBrowseCache.clear();
+  req.app.get('io')?.to(`gig:${gigId}`).emit('gig:status-change', { gigId, eventType: 'status-change', timestamp: Date.now() });
+}
+
 
 // Rate limit: 30 uploads per 15 minutes per IP
 const uploadLimiter = rateLimit({
@@ -526,114 +533,59 @@ router.post('/persona-media/:personaId', requirePersonaEnabled, uploadLimiter, v
  * Upload media files for a gig (up to 10)
  */
 router.post('/gig-media/:gigId', uploadLimiter, verifyToken, upload.array('files', 10), enforceFileSizeLimits, validateAndStripUploads, async (req, res) => {
+  const stagedKeys = [];
+  let keepStagedFiles = false;
   try {
     const userId = req.user.id;
     const { gigId } = req.params;
     const files = req.files;
+    if (!files?.length) return res.status(400).json({ error: 'No files provided' });
+    const { data: gig, error: gigErr } = await supabaseAdmin.from('Gig')
+      .select('id, user_id').eq('id', gigId).maybeSingle();
+    if (gigErr) return res.status(503).json({ error: 'Task could not be checked. Please retry.' });
+    if (!gig) return res.status(404).json({ error: 'Gig not found' });
+    if (gig.user_id !== userId) return res.status(403).json({ error: 'Only the gig owner can upload media' });
 
-    if (!files || files.length === 0) {
-      return res.status(400).json({ error: 'No files provided' });
-    }
-
-    // Verify gig ownership
-    const { data: gig, error: gigErr } = await supabaseAdmin
-      .from('Gig')
-      .select('id, user_id')
-      .eq('id', gigId)
-      .single();
-
-    if (gigErr || !gig) {
-      return res.status(404).json({ error: 'Gig not found' });
-    }
-    if (gig.user_id !== userId) {
-      return res.status(403).json({ error: 'Only the gig owner can upload media' });
-    }
-
-    // Check current media count
-    const { count } = await supabaseAdmin
-      .from('GigMedia')
-      .select('id', { count: 'exact', head: true })
-      .eq('gig_id', gigId);
-
-    if ((count || 0) + files.length > 10) {
-      return res.status(400).json({ error: `Maximum 10 media files per gig. Currently: ${count || 0}` });
-    }
-
-    const uploadedMedia = [];
-
+    const prepared = [];
     for (const file of files) {
-      const { url, key } = await s3.uploadGigMedia(
-        file.buffer,
-        file.originalname,
-        userId,
-        gigId,
-        file.mimetype
-      );
-      const category = s3.categorizeFile(file.mimetype) || 'document';
-
-      // Generate thumbnail for images
+      const { url, key } = await s3.uploadGigMedia(file.buffer, file.originalname, userId, gigId, file.mimetype);
+      stagedKeys.push(key);
       let thumbnailUrl = null;
       const thumbBuffer = await generateThumbnail(file.buffer, file.mimetype);
       if (thumbBuffer) {
         const thumbKey = key.replace(/(\.[^.]+)$/, '_thumb.webp');
-        const thumbResult = await s3.uploadToS3(thumbBuffer, thumbKey, 'image/webp');
-        thumbnailUrl = thumbResult.url;
+        stagedKeys.push(thumbKey);
+        thumbnailUrl = (await s3.uploadToS3(thumbBuffer, thumbKey, 'image/webp')).url;
       }
-
-      // Save to database
-      const { data: mediaRecord, error: insertErr } = await supabaseAdmin
-        .from('GigMedia')
-        .insert({
-          gig_id: gigId,
-          uploaded_by: userId,
-          file_url: url,
-          file_key: key,
-          file_name: file.originalname,
-          file_type: category,
-          mime_type: file.mimetype,
-          file_size: file.size,
-          thumbnail_url: thumbnailUrl,
-          display_order: (count || 0) + uploadedMedia.length,
-        })
-        .select()
-        .single();
-
-      if (insertErr) {
-        logger.error('GigMedia insert error', { error: insertErr.message });
-        // Clean up S3
-        await s3.deleteFromS3(key);
-        continue;
-      }
-
-      uploadedMedia.push(mediaRecord);
+      prepared.push({ file_url: url, file_key: key, file_name: file.originalname,
+        file_type: s3.categorizeFile(file.mimetype) || 'document', mime_type: file.mimetype,
+        file_size: file.size, thumbnail_url: thumbnailUrl });
     }
-
-    // Also update the Gig.attachments text[] with the new URLs
-    const newUrls = uploadedMedia.map(m => m.file_url);
-    const { data: currentGig } = await supabaseAdmin
-      .from('Gig')
-      .select('attachments')
-      .eq('id', gigId)
-      .single();
-
-    const existingAttachments = currentGig?.attachments || [];
-    await supabaseAdmin
-      .from('Gig')
-      .update({
-        attachments: [...existingAttachments, ...newUrls],
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', gigId);
-
-    logger.info('Gig media uploaded', { gigId, count: uploadedMedia.length });
-
-    res.json({
-      message: `${uploadedMedia.length} file(s) uploaded successfully`,
-      media: uploadedMedia,
+    keepStagedFiles = true; // A lost RPC acknowledgement may still have committed.
+    const { data: result, error } = await supabaseAdmin.rpc('attach_gig_media', {
+      p_gig_id: gigId, p_actor_id: userId, p_media: prepared,
     });
+    // An unknown database acknowledgement must not delete potentially committed files.
+    if (error || !result) {
+      return res.status(503).json({ error: 'Upload could not be confirmed. Refresh the task before retrying.' });
+    }
+    if (result.error) {
+      keepStagedFiles = false;
+      const errors = { NOT_FOUND: [404, 'Gig not found'], FORBIDDEN: [403, 'Only the gig owner can upload media'],
+        GIG_MEDIA_LIMIT: [400, 'Maximum 10 media files per gig. Remove a file before uploading more.'] };
+      const refusal = errors[result.error] || [503, 'Upload could not be saved. Please retry.'];
+      return res.status(refusal[0]).json({ code: result.error, error: refusal[1] });
+    }
+    if (!Array.isArray(result.media) || result.media.length !== files.length) {
+      return res.status(503).json({ error: 'Upload could not be confirmed. Refresh the task before retrying.' });
+    }
+    publishGigMediaChange(req, gigId);
+    return res.json({ message: `${result.media.length} file(s) uploaded successfully`, media: result.media });
   } catch (err) {
     logger.error('Gig media upload error', { error: err.message });
-    res.status(500).json({ error: err.message || 'Failed to upload gig media' });
+    return res.status(503).json({ error: 'Task photos could not be saved. Please retry.' });
+  } finally {
+    if (!keepStagedFiles) await Promise.all(stagedKeys.map(key => s3.deleteFromS3(key)));
   }
 });
 
@@ -698,19 +650,15 @@ router.delete('/gig-media/:gigId/:mediaId', verifyToken, async (req, res) => {
       }
     }
 
-    // Delete from S3
-    await s3.deleteFromS3(media.file_key);
-
-    // Delete from DB
-    await supabaseAdmin.from('GigMedia').delete().eq('id', mediaId);
-
-    // Update Gig.attachments array
-    const { data: currentGig } = await supabaseAdmin.from('Gig').select('attachments').eq('id', gigId).single();
-    if (currentGig?.attachments) {
-      const updated = currentGig.attachments.filter(u => u !== media.file_url);
-      await supabaseAdmin.from('Gig').update({ attachments: updated }).eq('id', gigId);
+    if (!await s3.deleteFromS3(media.file_key)) return res.status(503).json({ error: 'Media could not be deleted. Please retry.' });
+    if (media.thumbnail_url && !await s3.deleteFromS3(media.file_key.replace(/(\.[^.]+)$/, '_thumb.webp'))) {
+      return res.status(503).json({ error: 'Media could not be deleted. Please retry.' });
     }
+    // The existing media row and its attachment reference are removed together.
+    const { error: deleteError } = await supabaseAdmin.from('GigMedia').delete().eq('id', mediaId).eq('file_key', media.file_key);
+    if (deleteError) return res.status(503).json({ error: 'Media deletion could not be confirmed. Please retry.' });
 
+    publishGigMediaChange(req, gigId);
     res.json({ message: 'Media deleted successfully' });
   } catch (err) {
     logger.error('Gig media delete error', { error: err.message });
@@ -1581,31 +1529,33 @@ router.delete('/file', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const { key, table, recordId } = req.body;
-    if (!key) return res.status(400).json({ error: 'S3 key is required' });
-
-    // Ownership check: S3 keys are generated with the userId in the path.
-    // Verify the key contains the authenticated user's ID to prevent deleting
-    // other users' files.
-    if (!key.includes(`/${userId}/`)) {
-      return res.status(403).json({ error: 'Not authorized to delete this file' });
+    if (typeof key !== 'string' || !key) return res.status(400).json({ error: 'S3 key is required' });
+    if (!key.includes(`/${userId}/`)) return res.status(403).json({ error: 'Not authorized to delete this file' });
+    const allowedTables = ['GigMedia', 'ListingMedia', 'ReviewMedia', 'PostMedia', 'ChatAttachment'];
+    if (Boolean(table) !== Boolean(recordId) || (table && !allowedTables.includes(table))) {
+      return res.status(400).json({ error: 'A supported media table and record are required together' });
     }
-
-    await s3.deleteFromS3(key);
-
-    // If a table + recordId is provided, also delete the DB record
-    // Only allow deletion from known media/file tables to prevent arbitrary data deletion
-    const ALLOWED_TABLES = ['GigMedia', 'ListingMedia', 'ReviewMedia', 'PostMedia', 'ChatAttachment'];
-    if (table && recordId) {
-      if (!ALLOWED_TABLES.includes(table)) {
-        return res.status(400).json({ error: `Table '${table}' is not allowed for file deletion` });
-      }
-      await supabaseAdmin.from(table).delete().eq('id', recordId);
+    let thumbnailKey = null;
+    let mediaGigId = null;
+    if (table) {
+      const { data: media, error } = await supabaseAdmin.from(table).select(table === 'GigMedia' ? 'file_key, thumbnail_url, gig_id' : 'file_key').eq('id', recordId).maybeSingle();
+      if (error) return res.status(503).json({ error: 'File ownership could not be checked. Please retry.' });
+      if (!media) return res.status(404).json({ error: 'Media not found' });
+      if (media.file_key !== key) return res.status(403).json({ error: 'Not authorized to delete this media record' });
+      if (table === 'GigMedia') mediaGigId = media.gig_id;
+      if (table === 'GigMedia' && media.thumbnail_url) thumbnailKey = key.replace(/(\.[^.]+)$/, '_thumb.webp');
     }
-
-    res.json({ message: 'File deleted' });
+    if (!await s3.deleteFromS3(key)) return res.status(503).json({ error: 'File could not be deleted. Please retry.' });
+    if (thumbnailKey && !await s3.deleteFromS3(thumbnailKey)) return res.status(503).json({ error: 'File could not be deleted. Please retry.' });
+    if (table) {
+      const { error } = await supabaseAdmin.from(table).delete().eq('id', recordId).eq('file_key', key);
+      if (error) return res.status(503).json({ error: 'File deletion could not be confirmed. Please retry.' });
+    }
+    if (mediaGigId) publishGigMediaChange(req, mediaGigId);
+    return res.json({ message: 'File deleted' });
   } catch (err) {
     logger.error('File delete error', { error: err.message });
-    res.status(500).json({ error: 'Failed to delete file' });
+    return res.status(503).json({ error: 'File deletion could not be confirmed. Please retry.' });
   }
 });
 
