@@ -21,6 +21,7 @@ import app.pantopus.android.data.api.models.chats.ChatMessagesResponse
 import app.pantopus.android.data.api.models.chats.ChatReactionSummary
 import app.pantopus.android.data.api.models.chats.ChatReadReceipt
 import app.pantopus.android.data.api.models.chats.ChatRoomDetail
+import app.pantopus.android.data.api.models.chats.ChatSendRefusal
 import app.pantopus.android.data.api.models.chats.ChatTopic
 import app.pantopus.android.data.api.models.chats.FindOrCreateTopicBody
 import app.pantopus.android.data.api.models.chats.SendChatMessageBody
@@ -2643,6 +2644,7 @@ class ChatConversationViewModel
                         return@launch
                     }
                     publishHistoryPage(response, keepMessages, initial, firstPage = before == null)
+                    refreshComposerAvailability(context, before, response)
                     recoverRetainedHistory(response, initial, keepMessages)
                 } finally {
                     historyReadsInFlight.remove(requestKey)
@@ -2656,6 +2658,39 @@ class ChatConversationViewModel
             retained: Boolean,
         ) {
             if (initial && retained && response is NetworkResult.Success) catchUpMessages()
+        }
+
+        /** A departed member can retain history, including delta updates, without permission to send. */
+        private suspend fun refreshComposerAvailability(
+            context: HistoryReadContext,
+            before: String?,
+            response: NetworkResult<ChatMessagesResponse>,
+        ) {
+            if (before != null || response !is NetworkResult.Success) return
+            _composerClosedNote.value = response.data.sendRefusal?.error
+            refreshRoomAvailability(context)
+        }
+
+        private suspend fun refreshRoomAvailability(context: HistoryReadContext) {
+            val target = context.mode as? ChatThreadMode.Room ?: return
+            val result = repo.room(target.id, target.asBusinessUserId)
+            if (context != historyContext() || result !is NetworkResult.Success) return
+            val room = result.data.room
+            val membership = room.participants?.firstOrNull { it.userId == messageIdentityId }
+            val refusal =
+                when {
+                    room.isActive == false ->
+                        ChatSendRefusal("This chat has closed. Message them directly to keep talking.", "ROOM_CLOSED")
+                    room.type == "group" && (membership?.isActive == false || !membership?.leftAt.isNullOrEmpty()) ->
+                        ChatSendRefusal("You are no longer a member of this chat.", "ROOM_MEMBERSHIP_INACTIVE")
+                    else -> null
+                }
+            // Preserve unrelated server refusals, and clear our saved refusal after rejoining.
+            if (refusal != null || historyPage?.sendRefusal?.code in setOf("ROOM_CLOSED", "ROOM_MEMBERSHIP_INACTIVE")) {
+                historyPage = historyPage?.copy(sendRefusal = refusal)
+                _composerClosedNote.value = refusal?.error
+                rebuild()
+            }
         }
 
         /** A first-page read (or a new thread or topic): the copy writer follows the read's context. */
@@ -2687,7 +2722,6 @@ class ChatConversationViewModel
                         historyPage = response.data.copy(syncCursors = anchor ?: response.data.syncCursors)
                     }
                     if (firstPage && contextMessageId != null) contextHasNewer = response.data.hasMoreAfter
-                    _composerClosedNote.value = response.data.sendRefusal?.error
                     val keptOlder = placePage(response.data.messages, keepMessages)
                     retireConfirmedSends(response.data.messages)
                     refreshUnknownTopics(response.data.messages)
@@ -3198,6 +3232,7 @@ class ChatConversationViewModel
                     }
                     retireConfirmedSends(authoritative.values.toList())
                     rebuild()
+                    refreshRoomAvailability(context)
                     joinActiveRoomsIfPossible()
                     scheduleMarkRead()
                 }
@@ -3247,6 +3282,7 @@ class ChatConversationViewModel
                             removedRoomIds = (page.removedRoomIds + removedRooms).distinct(),
                         )
                     applyChanges(admitted, changes.values, receipts.values, messageReceipts.values, receiptVersion == receiptRevision)
+                    refreshRoomAvailability(context)
                     return true
                 }
                 if (page.syncCursors == cursor) return false

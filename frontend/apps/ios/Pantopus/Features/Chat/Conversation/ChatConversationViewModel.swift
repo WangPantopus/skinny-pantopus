@@ -3268,16 +3268,22 @@ public final class ChatConversationViewModel {
         }
     }
 
-    /// Messages can be opened without a Plan route (Inbox, Search, or a link).
-    /// Read the room's current status so those entry points also become read-only.
+    /// Delta history still includes a departed member's readable history. Refresh
+    /// membership as well as room status so cached conversations become read-only.
     private func refreshRoomAvailability(roomId: String) async {
         do {
             let response: ChatRoomDetailResponse = try await api.request(
                 ChatEndpoints.room(roomId: roomId, asBusinessUserId: asBusinessUserId)
             )
-            inactiveRoomNote = response.room.isActive == false
-                ? "This chat has closed. Message them directly to keep talking."
-                : nil
+            let membership = response.room.participants?.first { $0.userId == sendingIdentityId }
+            if response.room.isActive == false {
+                inactiveRoomNote = "This chat has closed. Message them directly to keep talking."
+            } else if response.room.type == "group",
+                      membership?.isActive == false || membership?.leftAt?.isEmpty == false {
+                inactiveRoomNote = "You are no longer a member of this chat."
+            } else {
+                inactiveRoomNote = nil
+            }
         } catch {
             // Keep already loaded history and any previously confirmed closure.
             // The server still checks availability on every send.
