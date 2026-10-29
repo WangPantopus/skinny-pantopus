@@ -100,9 +100,23 @@ private final class SwipeBackGesture: NSObject, UIGestureRecognizerDelegate {
     }
 
     func gestureRecognizerShouldBegin(_: UIGestureRecognizer) -> Bool {
-        guard let navigation, navigation.viewControllers.count > 1, navigation.transitionCoordinator == nil,
-              let screen = navigation.topViewController?.viewIfLoaded else { return false }
+        guard let navigation, navigation.transitionCoordinator == nil, let screen = screenWithOneBehind else { return false }
         return !SwipeBackScreenView.isSwipeOff(in: screen)
+    }
+
+    /// The top screen's own gestures wait for the swipe to fail. Otherwise a
+    /// drag the screen listens for, like a chat thread's, starts first and the
+    /// swipe never does. A touch away from the edge fails the swipe at once,
+    /// so they start as before.
+    func gestureRecognizer(_: UIGestureRecognizer, shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
+        guard let screen = screenWithOneBehind, let view = other.view else { return false }
+        return view.isDescendant(of: screen)
+    }
+
+    /// The top screen while there is one behind it to go back to.
+    private var screenWithOneBehind: UIView? {
+        guard let navigation, navigation.viewControllers.count > 1 else { return nil }
+        return navigation.topViewController?.viewIfLoaded
     }
 }
 
