@@ -64,13 +64,14 @@ interface MailboxV2Api {
     /**
      * `GET /api/mailbox/v2/search` — every piece the person can read (Me, Home after proof, Biz), filed and archived
      * included, newest first; `limit` at most 50 (SRV-3, route `backend/routes/mailboxV2.js`). Empty or over-long
-     * text is a 400 `MAIL_SEARCH_INVALID`.
+     * text is a 400 `MAIL_SEARCH_INVALID`. `scope=vault` keeps it to filed and archived pieces before paging.
      */
     @GET("api/mailbox/v2/search")
     suspend fun search(
         @Query("q") query: String,
         @Query("limit") limit: Int,
         @Query("offset") offset: Int,
+        @Query("scope") scope: String? = null,
     ): MailSearchResponse
 
     /** `GET /api/mailbox/v2/item/:id` — route `backend/routes/mailboxV2.js:366`. */
