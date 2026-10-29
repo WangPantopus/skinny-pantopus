@@ -29,6 +29,8 @@ const {
   remoteDetailsSchema,
   urgentDetailsSchema,
   eventDetailsSchema,
+  gigAmountSchema,
+  gigScheduleError,
 } = require('../utils/moduleSchemas');
 const stripeService = require('../stripe/stripeService');
 const blockService = require('../services/blockService');
@@ -672,17 +674,6 @@ function emitGigUpdate(req, gigId, eventType) {
 
 // ============ VALIDATION SCHEMAS ============
 
-// Gig amounts are dollars; Stripe accepts at most eight digits in cents.
-// Do not silently round sub-cent offers or parse a numeric prefix ("12oops").
-const gigAmountSchema = Joi.any().custom((value, helpers) => {
-  if (!['number', 'string'].includes(typeof value)
-    || !/^\d+(?:\.\d{1,2})?$/.test(String(value).trim())) return helpers.error('any.invalid');
-  const amount = Number(value);
-  if (!Number.isFinite(amount) || amount < 0 || amount > 999999.99 || (amount > 0 && amount < 0.50)) {
-    return helpers.error('any.invalid');
-  }
-  return amount;
-}).messages({ 'any.invalid': '{{#label}} must be zero or between $0.50 and $999,999.99, with at most two decimal places.' });
 const bidAmountSchema = gigAmountSchema.custom((value, helpers) => value > 0 ? value : helpers.error('any.invalid'))
   .messages({ 'any.invalid': '{{#label}} must be between $0.50 and $999,999.99, with at most two decimal places.' });
 const bidFields = {
@@ -695,19 +686,6 @@ const bidFields = {
 const createBidSchema = Joi.object(bidFields).xor('bid_amount', 'amount');
 const editBidSchema = Joi.object(bidFields).oxor('bid_amount', 'amount').min(1);
 const counterBidSchema = Joi.object({ amount: bidAmountSchema.required(), message: bidFields.message });
-
-function gigScheduleError(schedule, changed = schedule) {
-  for (const field of ['scheduled_start', 'time_window_start', 'time_window_end']) {
-    if (changed[field] != null && new Date(changed[field]).getTime() <= Date.now()) {
-      return `${field.replaceAll('_', ' ')} must be in the future.`;
-    }
-  }
-  if (schedule.time_window_start && schedule.time_window_end
-    && new Date(schedule.time_window_end) <= new Date(schedule.time_window_start)) {
-    return 'The time window must end after it starts.';
-  }
-  return null;
-}
 
 function gigBiddingClosed(gig) {
   return gig.status !== 'open' || (gig.deadline && Date.parse(gig.deadline) <= Date.now());
@@ -4014,6 +3992,10 @@ router.patch('/:id', verifyToken, validate(updateGigSchema), async (req, res) =>
 
       delete updateData.location;
     }
+
+    // Nothing else moves updated_at on an edit, so stamp it here: a second edit
+    // that read the same version then fails the comparison below instead of saving over this one.
+    updateData.updated_at = new Date().toISOString();
 
     const { data: updatedGig, error } = await supabaseAdmin
       .from('Gig')

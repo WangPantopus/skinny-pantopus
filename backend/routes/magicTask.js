@@ -32,6 +32,8 @@ const {
   remoteDetailsSchema,
   urgentDetailsSchema,
   eventDetailsSchema,
+  gigAmountSchema,
+  gigScheduleError,
 } = require('../utils/moduleSchemas');
 const { fanoutUrgentTask } = require('../services/urgentFanoutService');
 const { alertMatchingSavedSearches } = require('../services/savedSearchAlertService');
@@ -64,8 +66,13 @@ const magicPostSchema = Joi.object({
     category: Joi.string().max(100).optional(),
     tags: Joi.array().items(Joi.string().max(50)).max(5).optional(),
     pay_type: Joi.string().valid('fixed', 'hourly', 'offers').default('offers'),
-    budget_fixed: Joi.number().min(0).max(10000).allow(null).optional(),
-    hourly_rate: Joi.number().min(0).max(500).allow(null).optional(),
+    // The same dollar rule as POST /api/gigs, within this composer's own caps.
+    budget_fixed: gigAmountSchema.custom((value, helpers) => (value <= 10000 ? value : helpers.error('any.invalid')))
+      .messages({ 'any.invalid': '{{#label}} must be zero or between $0.50 and $10,000, with at most two decimal places.' })
+      .label('Budget').allow(null).optional(),
+    hourly_rate: gigAmountSchema.custom((value, helpers) => (value <= 500 ? value : helpers.error('any.invalid')))
+      .messages({ 'any.invalid': '{{#label}} must be zero or between $0.50 and $500, with at most two decimal places.' })
+      .label('Hourly rate').allow(null).optional(),
     estimated_hours: Joi.number().min(0).max(100).allow(null).optional(),
     schedule_type: Joi.string().valid('asap', 'today', 'scheduled', 'flexible').default('asap'),
     time_window_start: Joi.date().iso().allow(null).optional(),
@@ -403,6 +410,10 @@ router.post('/magic-post', verifyToken, validate(magicPostSchema), async (req, r
   const userId = req.user.id;
 
   logger.info('Magic post', { userId, title: draft.title, source_flow });
+
+  // As on POST /api/gigs: a chosen start or deadline must still be ahead, and the window must end after it starts.
+  const scheduleError = gigScheduleError(draft);
+  if (scheduleError) return res.status(400).json({ error: scheduleError, code: 'INVALID_SCHEDULE' });
 
   try {
     // ── Proxy posting check ──
