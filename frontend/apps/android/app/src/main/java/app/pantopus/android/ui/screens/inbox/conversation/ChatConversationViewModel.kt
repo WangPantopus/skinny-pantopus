@@ -2667,9 +2667,18 @@ class ChatConversationViewModel
             response: NetworkResult<ChatMessagesResponse>,
         ) {
             if (before != null || response !is NetworkResult.Success) return
-            // A room's line waits for the room read, which decides with the page: setting the page's first would
-            // open a closed composer for a moment.
-            if (!refreshRoomAvailability(context)) _composerClosedNote.value = response.data.sendRefusal?.error
+            refreshComposerNote(context, response.data)
+        }
+
+        /**
+         * The line in place of the composer after a first page. A room's waits for the room read, which decides with the
+         * page: setting the page's refusal first would open a closed composer for a moment.
+         */
+        private suspend fun refreshComposerNote(
+            context: HistoryReadContext,
+            page: ChatMessagesResponse?,
+        ) {
+            if (!refreshRoomAvailability(context) && page != null) _composerClosedNote.value = page.sendRefusal?.error
         }
 
         /** False when there's no room to read or it couldn't be read; the page's own refusal then stands. */
@@ -3243,8 +3252,7 @@ class ChatConversationViewModel
                     }
                     retireConfirmedSends(authoritative.values.toList())
                     rebuild()
-                    // As for a first page: the room read decides the line with the page, without a flash.
-                    if (!refreshRoomAvailability(context)) firstPage?.let { _composerClosedNote.value = it.sendRefusal?.error }
+                    refreshComposerNote(context, firstPage)
                     joinActiveRoomsIfPossible()
                     scheduleMarkRead()
                 }
