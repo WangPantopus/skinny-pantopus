@@ -14,6 +14,9 @@ const { escapeIlike } = require('../utils/escapeIlike');
 // A letter sent as a business names the business to everyone it reaches, never the person who sent it.
 const { presentMailSender, presentMailSenders, nameMailSender, nameMailSenders } = require('../utils/mailSenderView');
 
+// A letter id as the database stores it; anything else names no letter.
+const MAIL_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // ============ VALIDATION SCHEMAS ============
 
 const acknowledgeSchema = Joi.object({
@@ -528,17 +531,19 @@ router.post('/bundle/auto-group', async (req, res, next) => {
 
 // A certified receipt is available only once the letter reaches the box.
 // Keep the named-recipient check in each route; household access alone never
-// grants permission to sign for somebody else.
-function deliveredCertifiedMail(mailId) {
+// grants permission to sign for somebody else. An id that isn't one is no
+// letter (not found), rather than a query the database refuses.
+async function deliveredCertifiedMail(mailId) {
+  if (!MAIL_ID.test(String(mailId))) return { data: null, error: null };
   return onlyDelivered(supabaseAdmin.from('Mail').select('*').eq('id', mailId).eq('certified', true))
-    .is('deleted_at', null).or('lifecycle.is.null,lifecycle.neq.shredded');
+    .is('deleted_at', null).or('lifecycle.is.null,lifecycle.neq.shredded').maybeSingle();
 }
 
 // GET /certified/:mailId — get certified mail detail
 router.get('/certified/:mailId', async (req, res, next) => {
   try {
     const { mailId } = req.params;
-    const { data: mail, error } = await deliveredCertifiedMail(mailId).maybeSingle();
+    const { data: mail, error } = await deliveredCertifiedMail(mailId);
     if (error) throw error;
 
     if (!mail) return res.status(404).json({ error: 'Certified mail not found' });
@@ -560,7 +565,7 @@ router.get('/certified/:mailId', async (req, res, next) => {
 router.post('/certified/acknowledge', validate(acknowledgeSchema), async (req, res, next) => {
   try {
     const { mailId } = req.body;
-    const { data: mail, error } = await deliveredCertifiedMail(mailId).maybeSingle();
+    const { data: mail, error } = await deliveredCertifiedMail(mailId);
     if (error) throw error;
 
     if (!mail) return res.status(404).json({ error: 'Certified mail not found' });
@@ -616,7 +621,7 @@ router.post('/certified/acknowledge', validate(acknowledgeSchema), async (req, r
 router.post('/certified/:mailId/reject', async (req, res, next) => {
   try {
     const { mailId } = req.params;
-    const { data: mail, error } = await deliveredCertifiedMail(mailId).maybeSingle();
+    const { data: mail, error } = await deliveredCertifiedMail(mailId);
     if (error) throw error;
 
     if (!mail) return res.status(404).json({ error: 'Certified mail not found' });
@@ -647,7 +652,7 @@ router.post('/certified/:mailId/reject', async (req, res, next) => {
 router.get('/certified/:mailId/proof', async (req, res, next) => {
   try {
     const { mailId } = req.params;
-    const { data: stored, error } = await deliveredCertifiedMail(mailId).maybeSingle();
+    const { data: stored, error } = await deliveredCertifiedMail(mailId);
     if (error) throw error;
 
     // The proof names a person who sent it as neighbors see them (their Local Profile).
@@ -1103,19 +1108,25 @@ router.post('/vault/file', validate(fileToVaultSchema), async (req, res, next) =
   } catch (err) { next(err); }
 });
 
-// POST /vault/auto-file — run auto-filing rules on delivered items
+// POST /vault/auto-file — run auto-filing rules on delivered items. One call reads at most AUTO_FILE_MAX_PAGES pages of
+// unfiled mail; when it stops there, nextAfter is the `after` a following call passes to go on.
+const AUTO_FILE_MAX_PAGES = 10;
 router.post('/vault/auto-file', async (req, res, next) => {
   try {
     const userId = req.user.id;
+    const after = req.body?.after;
+    if (after !== undefined && !MAIL_ID.test(String(after))) {
+      return res.status(400).json({ error: 'Go on auto-filing from the nextAfter of the last run.', code: 'MAIL_AUTO_FILE_INVALID' });
+    }
     const homeIds = await getAccessibleHomeIds(userId);
     // Use the same cabinet as manual filing: Home folders belong to the Home,
     // not to the member who first created them.
     const folders = await mailVault.readableFolders(userId, homeIds);
 
-    let filed = 0, afterId = null;
+    let filed = 0, afterId = after || null, nextAfter = null;
     // Scan past unmatched pages. A stable id cursor avoids skipping letters
     // when earlier matches leave the unfiled set during this same run.
-    for (;;) {
+    for (let page = 0; ; page += 1) {
       let query = onlyDelivered(supabaseAdmin.from('Mail').select('*')
         .or(visibleMailFilter(userId, homeIds)).is('vault_folder_id', null)
         .is('deleted_at', null).in('lifecycle', ['delivered', 'opened']))
@@ -1152,9 +1163,14 @@ router.post('/vault/auto-file', async (req, res, next) => {
       }));
       filed += outcomes.reduce((sum, count) => sum + count, 0);
       if (items.length < 100) break;
+      // A mailbox with a lot left unfiled: stop here and say where the next call goes on.
+      if (page === AUTO_FILE_MAX_PAGES - 1) {
+        nextAfter = afterId;
+        break;
+      }
     }
 
-    res.json({ message: `Auto-filed ${filed} items`, filed });
+    res.json({ message: `Auto-filed ${filed} items`, filed, nextAfter });
   } catch (err) { next(err); }
 });
 
