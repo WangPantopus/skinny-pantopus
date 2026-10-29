@@ -91,6 +91,10 @@ export default function PostDetailPage() {
     ? getErrorMessage(postQuery.error, "We couldn't load this post. Please try again.")
     : null;
 
+  useEffect(() => {
+    if (unavailable) removePostFromFeedCaches(queryClient, postId);
+  }, [unavailable, queryClient, postId]);
+
   const refetchComments = commentsQuery.refetch;
   const retryComments = useCallback(async () => {
     const result = await refetchComments();
@@ -210,6 +214,7 @@ export default function PostDetailPage() {
       if (!alreadyAdded) {
         setPost((p: Post | null) => (p ? { ...p, comment_count: (p.comment_count || 0) + 1 } : p));
       }
+      void postQuery.refetch();
       showToast(uploadFailed ? 'Comment posted; images not confirmed. Send to retry or Clear to discard draft.' : 'Comment posted');
       return !uploadFailed;
     } catch {
@@ -226,6 +231,9 @@ export default function PostDetailPage() {
       await api.posts.deleteComment(postId, commentId);
       setComments((prev) => prev.filter((c) => !deletedIds.has(c.id)));
       setPost((p: Post | null) => (p ? { ...p, comment_count: Math.max(0, (p.comment_count || deletedIds.size) - deletedIds.size) } : p));
+      // Cascading replies may include comments this viewer cannot see.
+      void postQuery.refetch();
+      void commentsQuery.refetch();
       showToast('Comment deleted');
     } catch {
       showToast('Failed to delete comment');
