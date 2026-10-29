@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -275,7 +276,7 @@ fun PulsePostDetailScreen(
                         text = message,
                         kind = if (message in POST_DETAIL_SUCCESS_TOASTS) ToastKind.Success else ToastKind.Error,
                     ),
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 100.dp),
+                modifier = Modifier.align(Alignment.BottomCenter).imePadding().padding(bottom = 100.dp),
             )
         }
     }
