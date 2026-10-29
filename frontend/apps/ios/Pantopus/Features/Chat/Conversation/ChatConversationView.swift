@@ -626,6 +626,10 @@ public struct ChatConversationView: View {
         .onChange(of: isSelecting) { _, selecting in
             if selecting { dismissComposerInput() }
         }
+        // A chat that closes while the emoji panel is open puts it away, so it doesn't come back with the composer.
+        .onChange(of: planContext?.closedNote ?? viewModel.roomClosedNote) { _, closed in
+            if closed != nil { dismissComposerInput() }
+        }
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         // Action cards' taps and "Not now" (`AIActionCardView`). The handlers
         // hold the view-model weakly: UIKit keeps the composer's text view, and

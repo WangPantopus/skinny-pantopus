@@ -3300,7 +3300,12 @@ public final class ChatConversationViewModel {
             switch apiError {
             case .forbidden, .notFound, .unauthorized:
                 discardSavedThread()
-                sendRefusalNote = friendlyMessage(error)
+                // A plain line in place of the composer (the web's words); the panel above keeps the server's answer.
+                sendRefusalNote = switch apiError {
+                case .notFound: "This conversation isn't available."
+                case .unauthorized: friendlyMessage(error)
+                default: "You don't have access to this conversation."
+                }
                 state = .error(message: friendlyMessage(error))
                 return
             default: break

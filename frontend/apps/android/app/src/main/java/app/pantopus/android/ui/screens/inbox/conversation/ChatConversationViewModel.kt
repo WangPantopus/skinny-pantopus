@@ -2768,7 +2768,13 @@ class ChatConversationViewModel
 
         private fun refuseHistory(error: NetworkError) {
             _olderPageFailed.value = false
-            _composerClosedNote.value = error.message
+            // A plain line in place of the composer (the web's words); the error panel keeps the server's answer.
+            _composerClosedNote.value =
+                when (error) {
+                    NetworkError.NotFound -> "This conversation isn't available."
+                    NetworkError.Unauthorized -> error.message
+                    else -> "You don't have access to this conversation."
+                }
             historyGeneration++
             historyRefusal = error.message
             historyPage = null
