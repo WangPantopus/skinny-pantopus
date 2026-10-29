@@ -258,7 +258,7 @@ export default function QASection({ gigId, isMyGig, currentUserId, canAsk }: QAS
       {loading && questions.length === 0 ? (
         <p className="text-sm text-app-text-secondary text-center py-4">Loading questions...</p>
       ) : loadError && questions.length === 0 ? null : otherQuestions.length === 0 && pinnedQuestions.length === 0 ? (
-        <p className="text-sm text-app-text-secondary text-center py-4">No questions yet. Be the first to ask!</p>
+        <p className="text-sm text-app-text-secondary text-center py-4">No questions yet.</p>
       ) : (
         <div className="space-y-3">
 	          {otherQuestions.map((q) => {

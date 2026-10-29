@@ -180,7 +180,7 @@ struct GigQuestionsSection: View {
             .padding(.vertical, Spacing.s4)
             .accessibilityIdentifier("gigQuestionsFailed")
         } else if viewModel.questions.isEmpty {
-            Text("No questions yet. Be the first to ask!")
+            Text("No questions yet.")
                 .font(.system(size: 13))
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .multilineTextAlignment(.center)
