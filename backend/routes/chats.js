@@ -956,7 +956,8 @@ async function personChatRoomIds(userId, otherUserId, asBusinessUserId) {
   return (await personChatRooms(userId, otherUserId, asBusinessUserId)).map((room) => room.id);
 }
 
-async function respondWithChatChanges(req, res, roomIds, identityUserId, snapshot) {
+// `holdCursor` answers with no changes and the reader's own cursor: see roomChatChanges.
+async function respondWithChatChanges(req, res, roomIds, identityUserId, snapshot, { holdCursor = false } = {}) {
   const params = req.method === 'POST' ? (req.body || {}) : req.query;
   let receiptIds = params.readMessageIds;
   if (receiptIds !== undefined) {
@@ -973,7 +974,7 @@ async function respondWithChatChanges(req, res, roomIds, identityUserId, snapsho
   const until = parseSyncCursor(params.until, { optional: true });
   const limit = Math.min(Math.max(parseInt(params.limit, 10) || 200, 1), 200);
   const { changedRoomIds, ...changes } = await chatChanges({ roomIds, identityUserId, cursor,
-    until: until && Object.keys(until).length ? until : null, limit, snapshot });
+    until: holdCursor ? cursor : (until && Object.keys(until).length ? until : null), limit, snapshot });
   const visible = changes.messages.filter((message) => !message.deleted);
   // Read boundaries come with the rooms that changed since the cursor. A read alone moves no room revision:
   // the apps recover reads of their own unconfirmed messages through readMessageIds (messageReadReceipts).
@@ -1925,7 +1926,10 @@ async function roomChatChanges(req, res) {
       || await gigRoomClosed(roomId, req.user.id, asBusinessUserId)) {
       return res.status(403).json({ error: 'Access denied' });
     }
-    return await respondWithChatChanges(req, res, [roomId], participant.user_id);
+    // Someone who left gets nothing posted after they left. Moving their cursor past it anyway would make their apps
+    // skip what was said while they were away if they're added back, so it stays where it was.
+    return await respondWithChatChanges(req, res, [roomId], participant.user_id, undefined,
+      { holdCursor: participant.is_active === false });
   } catch (error) {
     return chatChangesFailure(req, res, error);
   }
@@ -2111,7 +2115,9 @@ router.get('/rooms/:roomId/messages', verifyToken, async (req, res) => {
 
     const lim = Math.min(Math.max(parseInt(limit) || 50, 1), 200);
 
-    const sync = req.query.sync === 'true' ? await chatSyncSnapshot([roomId]) : null;
+    // No sync cursor for someone who left: one at the room's current revision would make their apps skip what was
+    // said while they were away if they're added back (they re-read pages instead).
+    const sync = req.query.sync === 'true' && !leftAt ? await chatSyncSnapshot([roomId]) : null;
 
     const runQuery = async ({ senderKey }) => {
       let q = supabaseAdmin
