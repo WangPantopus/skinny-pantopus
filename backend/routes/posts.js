@@ -405,6 +405,7 @@ const reportPostSchema = Joi.object({
 
 const sharePostSchema = Joi.object({
   shareType: Joi.string().valid('repost', 'external').default('external'),
+  checkOnly: Joi.boolean().when('shareType', { is: 'repost', then: Joi.forbidden() }),
   // The repost state the client wants; without it, a repost request toggles (older installs).
   reposted: Joi.boolean().allow(null),
 });
@@ -3377,11 +3378,17 @@ router.post('/:id/share', verifyToken, validate(sharePostSchema), async (req, re
 
     // Only a public post has a link that works outside the app. Reposting stays open to anyone who can
     // see the post, but an external share never lets everyone else read it.
-    if (shareType === 'external' && !isPubliclyShareable(post)) {
+    if (shareType === 'external' && (!isPubliclyShareable(post) || !(await canViewPost(post, null)))) {
       return res.status(403).json({
         error: "This post isn't public, so it can't be shared outside Pantopus.",
         code: 'SHARE_NOT_ALLOWED',
       });
+    }
+
+    // Check current access before opening an external share sheet. A cancelled sheet
+    // must not increment the count, so the client records the share separately.
+    if (shareType === 'external' && req.body.checkOnly) {
+      return res.json({ canShare: true });
     }
 
     if (shareType === 'repost' && typeof req.body.reposted === 'boolean') {

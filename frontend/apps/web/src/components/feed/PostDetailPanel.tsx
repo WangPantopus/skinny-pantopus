@@ -18,7 +18,7 @@ import PostMediaLightbox from './PostMediaLightbox';
 import { PostLinkContent } from './LinkPreviewCard';
 import LinkPreviewCard from './LinkPreviewCard';
 import PostMetadata from './PostMetadata';
-import { sharePostLink } from './sharePostLink';
+import { canSharePost, sharePostLink } from './sharePostLink';
 import { formatTimeAgo as timeAgo, getPostTypeConfig, POST_TYPE_ICONS_LUCIDE } from '@pantopus/ui-utils';
 import { chosenUsername } from '@pantopus/utils';
 import { patchPostInFeedCaches, removePostFromFeedCaches } from '@/hooks/useFeedData';
@@ -35,11 +35,6 @@ function typeIcon(type: string): ReactNode {
   const name = POST_TYPE_ICONS_LUCIDE[type] || 'Pencil';
   const Icon = LUCIDE_MAP[name] || PenLine;
   return <Icon className="w-4 h-4" />;
-}
-
-function statusOf(err: unknown): number | undefined {
-  const status = (err as { statusCode?: unknown } | null)?.statusCode;
-  return typeof status === 'number' ? status : undefined;
 }
 
 interface PostDetailPanelProps {
@@ -71,7 +66,7 @@ export default function PostDetailPanel({
   const detail = usePostDetail(postId, { enabled: open, seed: initialPost });
   const post: Post | null = open ? detail.post : null;
   const comments: PostCommentType[] = open ? detail.comments : [];
-  const { setPost, setComments, postQuery, commentsQuery } = detail;
+  const { setPost, setComments, postQuery, commentsQuery, unavailable } = detail;
   const loading = open && postQuery.isFetching;
   const [commentPosting, setCommentPosting] = useState(false);
   const [toast, setToast] = useState('');
@@ -106,13 +101,12 @@ export default function PostDetailPanel({
 
   // Deleted, or no longer visible to you: say so rather than showing the card's
   // copy as a live post, and stop the feed listing it.
-  const postStatus = statusOf(postQuery.error);
   useEffect(() => {
-    if (open && postId && (postStatus === 404 || postStatus === 403)) removePostFromFeedCaches(queryClient, postId);
-  }, [open, postId, postStatus, queryClient]);
+    if (open && postId && unavailable) removePostFromFeedCaches(queryClient, postId);
+  }, [open, postId, unavailable, queryClient]);
 
   // A refresh of the comments that failed keeps the ones shown and says so.
-  const commentsRefreshFailed = open && commentsQuery.isError && commentsQuery.data !== undefined;
+  const commentsRefreshFailed = open && !unavailable && commentsQuery.isError && commentsQuery.data !== undefined;
   useEffect(() => {
     if (commentsRefreshFailed) showToast('Could not refresh comments. Close and reopen this post to retry.');
   }, [commentsRefreshFailed, commentsQuery.errorUpdatedAt]);
@@ -509,7 +503,7 @@ export default function PostDetailPanel({
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-2 border-y border-app px-5 py-3 sm:grid-cols-5">
+              <div className={`grid grid-cols-2 gap-2 border-y border-app px-5 py-3 ${canSharePost(post) ? 'sm:grid-cols-5' : 'sm:grid-cols-4'}`}>
                 <button
                   type="button"
                   aria-label={post.userHasLiked ? 'Unlike post' : 'Like post'}
@@ -544,15 +538,17 @@ export default function PostDetailPanel({
                   <Repeat2 className="h-4 w-4" />
                   <span>{post.userHasReposted ? 'Reposted' : 'Repost'}</span>
                 </button>
-                <button
-                  type="button"
-                  aria-label="Share post"
-                  onClick={handleShare}
-                  className="flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium text-app-muted transition hover-bg-app"
-                >
-                  <Share2 className="h-4 w-4" />
-                  <span>{post.share_count || 0}</span>
-                </button>
+                {canSharePost(post) && (
+                  <button
+                    type="button"
+                    aria-label="Share post"
+                    onClick={handleShare}
+                    className="flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium text-app-muted transition hover-bg-app"
+                  >
+                    <Share2 className="h-4 w-4" />
+                    <span>{post.share_count || 0}</span>
+                  </button>
+                )}
               </div>
 
               <div className="px-2">

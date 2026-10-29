@@ -86,7 +86,7 @@ async function getGlobalPins(scopeAccess) {
   // cache post rows across viewers or paginate pins before checking their scope.
   const { data, error } = await scopeAccess.query(onlyShownPosts(supabaseAdmin
     .from('Post')
-    .select(`${FEED_POST_SELECT}, allow_external_share, radius_miles, moderation_state`)
+    .select(`${FEED_POST_SELECT}, radius_miles`)
     .eq('is_global_pin', true)
     .is('archived_at', null)))
     .order('created_at', { ascending: false })
@@ -108,7 +108,7 @@ async function getGlobalPins(scopeAccess) {
 const FEED_POST_SELECT = `
   id, user_id, author_user_id, identity_context_type, identity_context_id,
   title, content, media_urls, media_types, media_thumbnails, media_live_urls, post_type, post_format,
-  visibility, visibility_scope, location_precision, tags, read_scope, area_id,
+  visibility, visibility_scope, location_precision, tags, read_scope, area_id, allow_external_share, moderation_state,
   like_count, comment_count, share_count, save_count, is_pinned, is_global_pin, is_edited, created_at, updated_at,
   home_id, latitude, longitude, effective_latitude, effective_longitude, location_name, location_address,
   post_as, audience, business_id, business_author_id, target_place_id,
@@ -176,6 +176,9 @@ function normalizeFeedPostRow(row, likedPostIds = new Set(), savedPostIds = new 
     post_type: row.post_type || 'general',
     post_format: row.post_format || 'standard',
     visibility: row.visibility || 'neighborhood',
+    read_scope: row.read_scope ?? null,
+    allow_external_share: row.allow_external_share ?? null,
+    moderation_state: row.moderation_state ?? null,
     visibility_scope: row.visibility_scope || 'neighborhood',
     location_precision: row.location_precision || 'approx_area',
     tags: row.tags || [],

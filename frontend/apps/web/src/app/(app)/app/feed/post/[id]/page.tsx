@@ -25,7 +25,7 @@ import { confirmStore } from '@/components/ui/confirm-store';
 import ReportModal from '@/components/ui/ReportModal';
 import ErrorState from '@/components/ui/ErrorState';
 import PostMetadata from '@/components/feed/PostMetadata';
-import { sharePostLink } from '@/components/feed/sharePostLink';
+import { canSharePost, sharePostLink } from '@/components/feed/sharePostLink';
 import { patchPostInFeedCaches, removePostFromFeedCaches } from '@/hooks/useFeedData';
 import { launchFeatures } from '@/lib/featureFlags';
 import { fetchMe } from '@/lib/me';
@@ -719,7 +719,7 @@ export default function PostDetailPage() {
             <div className="flex-1" />
 
             {/* Share */}
-            {!isRemovedByModerator && (
+            {!isRemovedByModerator && canSharePost(post) && (
               <button
                 onClick={handleShare}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-app-muted hover-bg-app transition"

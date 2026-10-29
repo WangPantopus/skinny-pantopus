@@ -60,9 +60,11 @@ export function usePostDetail(postId: string | null, options: { enabled?: boolea
   });
 
   const status = (postQuery.error as { statusCode?: number } | null)?.statusCode;
-  const unavailable = status === 404 || status === 403;
+  const commentStatus = (commentsQuery.error as { statusCode?: number } | null)?.statusCode;
+  const unavailable = status === 404 || status === 403 || commentStatus === 404 || commentStatus === 403;
   // A failed refresh retains data in React Query. Once access is refused,
   // neither the old post nor its cached conversation may remain on screen.
+  // The comments endpoint checks the same post access and may refuse first.
   const post = unavailable ? null : postQuery.data?.post ?? null;
   const comments = unavailable ? [] : commentsQuery.data ?? post?.comments ?? [];
 
