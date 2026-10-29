@@ -375,6 +375,8 @@ public struct ChatConversationView: View {
     @State private var upgradeCardDismissed = false
     @State private var detailsPresented = false
     @State private var emojiPickerPresented = false
+    @State private var emojiDragOffset: CGFloat = 0
+    @FocusState private var composerFocused: Bool
     @State private var isSelecting = false
     @State private var selectedMessageIds: Set<String> = []
     @State private var bulkDeleteConfirmPresented = false
@@ -585,11 +587,26 @@ public struct ChatConversationView: View {
                         showsSendCost: mode == .fanThread && viewModel.fanEntitlement != nil && !isFanReplyLocked,
                         isLockedAction: isFanReplyLocked || isCreatorQuotaLocked,
                         isStreaming: viewModel.isAIStreaming,
-                        onAttach: { attachmentsPresented = true },
-                        onEmoji: { emojiPickerPresented = true },
+                        onAttach: {
+                            dismissComposerInput()
+                            attachmentsPresented = true
+                        },
+                        onEmoji: toggleEmojiPicker,
+                        isEmojiPickerPresented: emojiPickerPresented,
+                        composerFocused: $composerFocused,
                         onSend: { sendOrPromptForUpgrade() },
                         onStop: { viewModel.cancelAIStream() }
                     )
+                }
+                if emojiPickerPresented {
+                    ChatEmojiPickerSheet(
+                        onPick: { viewModel.updateComposerFromField(viewModel.composerText + $0) },
+                        onDismiss: dismissComposerInput,
+                        dismissGesture: emojiDismissGesture
+                    )
+                    .frame(height: max(0, 260 - emojiDragOffset), alignment: .top)
+                    .clipped()
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
                 if isCreatorQuotaLocked {
                     CreatorQuotaLockRow(
@@ -600,6 +617,15 @@ public struct ChatConversationView: View {
             }
         }
         .background(Theme.Color.appSurface)
+        // The emoji panel replaces the keyboard's space instead of stacking above it.
+        .ignoresSafeArea(.keyboard, edges: emojiPickerPresented ? .bottom : [])
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.22), value: emojiPickerPresented)
+        .onChange(of: composerFocused) { _, focused in
+            if focused { emojiPickerPresented = false }
+        }
+        .onChange(of: isSelecting) { _, selecting in
+            if selecting { dismissComposerInput() }
+        }
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         // Action cards' taps and "Not now" (`AIActionCardView`). The handlers
         // hold the view-model weakly: UIKit keeps the composer's text view, and
@@ -714,13 +740,6 @@ public struct ChatConversationView: View {
                 onBack()
             }
             .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
-        }
-        .sheet(isPresented: $emojiPickerPresented) {
-            ChatEmojiPickerSheet { emoji in
-                viewModel.composerText += emoji
-            }
-            .presentationDetents([.height(340)])
             .presentationDragIndicator(.visible)
         }
         .alert(
@@ -1036,9 +1055,49 @@ public struct ChatConversationView: View {
         }
         .scrollDismissesKeyboard(.interactively)
         .contentShape(Rectangle())
-        .onTapGesture {
-            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        .onTapGesture(perform: dismissComposerInput)
+        .simultaneousGesture(emojiDismissGesture)
+    }
+
+    private func toggleEmojiPicker() {
+        if emojiPickerPresented {
+            emojiPickerPresented = false
+            composerFocused = true
+        } else {
+            composerFocused = false
+            emojiDragOffset = 0
+            emojiPickerPresented = true
         }
+    }
+
+    private func dismissComposerInput() {
+        composerFocused = false
+        emojiPickerPresented = false
+        emojiDragOffset = 0
+    }
+
+    private var emojiDismissGesture: some Gesture {
+        DragGesture(minimumDistance: 12)
+            .onChanged { value in
+                guard emojiPickerPresented, value.translation.height > abs(value.translation.width) else { return }
+                emojiDragOffset = max(0, value.translation.height)
+            }
+            .onEnded { value in
+                guard emojiPickerPresented else {
+                    // Empty conversations have no scroll view to dismiss the keyboard.
+                    if value.translation.height > 50, value.translation.height > abs(value.translation.width) {
+                        composerFocused = false
+                    }
+                    return
+                }
+                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.22)) {
+                    if value.translation.height > abs(value.translation.width),
+                       value.translation.height > 50 || value.predictedEndTranslation.height > 100 {
+                        dismissComposerInput()
+                    }
+                    emojiDragOffset = 0
+                }
+            }
     }
 
     // MARK: - Frames
@@ -4456,6 +4515,8 @@ private struct ChatComposer: View {
     var isStreaming = false
     let onAttach: @MainActor () -> Void
     let onEmoji: @MainActor () -> Void
+    var isEmojiPickerPresented = false
+    var composerFocused: FocusState<Bool>.Binding
     let onSend: @MainActor () -> Void
     var onStop: @MainActor () -> Void = {}
     /// The keyboard's Send, held only weakly by the field's `.onSubmit`.
@@ -4479,6 +4540,7 @@ private struct ChatComposer: View {
             // Input pill — smile lives INSIDE the pill on the right.
             HStack(alignment: .bottom, spacing: Spacing.s2) {
                 TextField(placeholder, text: $text, axis: .vertical)
+                    .focused(composerFocused)
                     .font(.system(size: 13.5))
                     .foregroundStyle(Theme.Color.appText)
                     .lineLimit(1...4)
@@ -4491,12 +4553,12 @@ private struct ChatComposer: View {
                     // read just "text field".
                     .accessibilityLabel("Message")
                 Button(action: onEmoji) {
-                    Icon(.smile, size: 17, color: Theme.Color.appTextMuted)
+                    Icon(isEmojiPickerPresented ? .keyboard : .smile, size: 17, color: Theme.Color.appTextMuted)
                         .frame(width: 24, height: 20)
                         .hitArea(horizontal: 10, vertical: 12)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Emoji")
+                .accessibilityLabel(isEmojiPickerPresented ? "Keyboard" : "Emoji")
                 .accessibilityIdentifier("chatComposerEmoji")
             }
             .padding(.horizontal, 12)

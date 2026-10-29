@@ -61,6 +61,23 @@ jobs:
             printf '%s=%s\n' "$name" "${!name}"
           done > .env
 
+      # Launch-cut features this build switches back on (docs/launch-scope-flags-2026-10-01.md), from
+      # the PANTOPUS_LAUNCH_FEATURES variable (repository or ios-release environment). Unset, every cut
+      # feature stays hidden. `make bootstrap` copies the .env line into Config/Secrets.xcconfig.
+      - name: Add launch keys
+        env:
+          PANTOPUS_LAUNCH_FEATURES: ${{ vars.PANTOPUS_LAUNCH_FEATURES }}
+        run: |
+          keys=$(tr -d '[:space:]' <<<"$PANTOPUS_LAUNCH_FEATURES" | tr '[:upper:]' '[:lower:]')
+          [[ -n "$keys" ]] || { echo "No launch keys: every launch-cut feature stays hidden."; exit 0; }
+          [[ "$keys" =~ ^[a-z_]+(,[a-z_]+)*$ ]] || { echo "::error::PANTOPUS_LAUNCH_FEATURES must be comma-separated launch keys, like mailbox"; exit 1; }
+          known=$(sed -nE 's/^ *case ([A-Za-z]+) = "([a-z_]+)"$/\2/p; s/^ *case ([a-z]+)$/\1/p' Pantopus/Core/Environment/LaunchFeatures.swift)
+          for key in ${keys//,/ }; do
+            [[ "$key" == all ]] || grep -qx "$key" <<<"$known" || { echo "::error::Unknown launch key '$key' in PANTOPUS_LAUNCH_FEATURES"; exit 1; }
+          done
+          echo "PANTOPUS_LAUNCH_FEATURES=$keys" >> .env
+          echo "Launch keys in this build: $keys"
+
       - name: Fastlane beta
         env:
           MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}

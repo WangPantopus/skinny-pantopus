@@ -96,7 +96,7 @@ class CeremonialMailSnapshotTest {
                             stationery = CeremonialMailStationery.MidnightBlue,
                             ink = CeremonialMailInk.Navy,
                             seal = CeremonialMailSeal.WaxRed,
-                            sendTiming = CeremonialMailSendTiming.Morning,
+                            sendTiming = CeremonialMailSendTiming.Now,
                         ),
                     selected = sampleRecipient(),
                     voiceUploaded = true,
