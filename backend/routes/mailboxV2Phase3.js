@@ -723,7 +723,7 @@ router.get('/map/pins', verifyToken, async (req, res) => {
 
     // The list supplies the apps' "View full notice" links. A shared pin
     // must not offer a link to another person's private or removed letter.
-    const mail = await readablePinMail((pins || []).map(pin => pin.mail_id), userId, homeIds);
+    const mail = await readablePinMail((pins || []).map(pin => pin.mail_id), userId, accessible);
     const readableIds = new Set(mail.map(row => row.id));
     const visiblePins = (pins || []).map(pin => ({
       ...pin, mail_id: readableIds.has(pin.mail_id) ? pin.mail_id : null,
