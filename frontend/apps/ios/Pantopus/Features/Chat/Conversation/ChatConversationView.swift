@@ -566,7 +566,7 @@ public struct ChatConversationView: View {
                 ChatSelectionDeleteBar(selectedCount: selectedMessageIds.count) {
                     bulkDeleteConfirmPresented = true
                 }
-            } else if let closed = viewModel.roomClosedNote ?? planContext?.closedNote {
+            } else if let closed = planContext?.closedNote ?? viewModel.roomClosedNote {
                 PlanChatClosedLine(text: closed)
             } else {
                 actionBanner
@@ -2551,9 +2551,8 @@ private struct ChatConversationHeader: View {
                     .accessibilityIdentifier("chatAIMore")
                 }
             case .group:
-                Icon(.moreVertical, size: 18, color: Theme.Color.appText)
-                    .frame(width: 34, height: 34)
-                    .accessibilityHidden(true)
+                // Group actions live in the inbox; no inactive overflow control in the header.
+                EmptyView()
             }
         }
     }

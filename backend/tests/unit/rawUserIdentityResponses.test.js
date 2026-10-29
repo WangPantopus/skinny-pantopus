@@ -546,6 +546,14 @@ describe('raw User response audit', () => {
 
   test('chat message edits strip internal actor ids from REST responses', async () => {
     const app = createApp('/api/chat', require('../../routes/chats'));
+    // Editing needs the writer to still be in the room.
+    seedTable('ChatParticipant', [{
+      id: 'participant-1',
+      room_id: 'room-1',
+      user_id: 'viewer-user',
+      is_active: true,
+      role: 'member',
+    }]);
     seedTable('ChatMessage', [{
       id: 'message-1',
       room_id: 'room-1',
