@@ -40,7 +40,7 @@ public struct MediaViewerView: View {
         ZStack(alignment: .top) {
             // Fades as the media is pulled down, so the screen behind shows.
             Color.black
-                .opacity(1 - pullProgress * 0.7)
+                .opacity(Double(1 - pullProgress * 0.7))
                 .ignoresSafeArea()
 
             TabView(selection: $selection) {
@@ -56,7 +56,7 @@ public struct MediaViewerView: View {
             .simultaneousGesture(pullToClose)
 
             topBar
-                .opacity(1 - pullProgress)
+                .opacity(Double(1 - pullProgress))
         }
         .presentationBackground(.clear)
         .statusBarHidden()
