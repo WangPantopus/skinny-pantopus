@@ -4124,16 +4124,16 @@ router.post('/:gigId/bids', verifyToken, validate(createBidSchema), async (req, 
       return res.status(403).json({ error: 'Cannot bid on this task' });
     }
 
-    // For paid gigs, bidder must have started payout onboarding (Stripe account created).
+    // A paid proposal needs payout onboarding even when the advertised budget is zero.
     // They don't need to be fully verified — just need to have begun the process.
-    const gigPrice = parseFloat(gig.price || 0);
-    if (gigPrice > 0) {
-      const { data: stripeAccount } = await supabaseAdmin
+    if (bidAmount > 0) {
+      const { data: stripeAccount, error: stripeAccountError } = await supabaseAdmin
         .from('StripeAccount')
         .select('stripe_account_id, details_submitted')
         .eq('user_id', userId)
         .maybeSingle();
 
+      if (stripeAccountError) return res.status(503).json({ error: 'Payout setup could not be checked. Please retry.' });
       if (!stripeAccount || !stripeAccount.stripe_account_id) {
         return res.status(400).json({
           error:
@@ -4159,7 +4159,7 @@ router.post('/:gigId/bids', verifyToken, validate(createBidSchema), async (req, 
       (b) => ['pending', 'countered', 'pending_payment', 'accepted'].includes(b.status)
     );
     if (activeBid) {
-      return res.status(400).json({ error: 'You already have an active bid on this gig' });
+      return res.status(409).json({ code: 'GIG_BID_EXISTS', error: 'You already have an active bid on this gig' });
     }
 
     // Re-bid cooldown: 5 minutes after withdrawal
@@ -4202,8 +4202,15 @@ router.post('/:gigId/bids', verifyToken, validate(createBidSchema), async (req, 
       .single();
 
     if (bidError) {
+      const refusals = {
+        GIG_BID_EXISTS: [409, 'You already have an active bid on this gig'],
+        GIG_BID_CLOSED: [409, 'This gig is no longer accepting bids'],
+        GIG_BID_BLOCKED: [403, 'Cannot bid on this task'],
+      };
+      const refusal = refusals[bidError.message];
+      if (refusal) return res.status(refusal[0]).json({ code: bidError.message, error: refusal[1] });
       logger.error('Error creating bid', { bidError });
-      return res.status(500).json({ error: 'Failed to place bid' });
+      return res.status(503).json({ error: 'Your bid could not be saved. Please retry.' });
     }
 
     logger.info('Bid placed successfully', { bidId: bid.id, gigId, userId });
@@ -5012,7 +5019,7 @@ router.post('/:gigId/bids/:bidId/counter', verifyToken, validate(counterBidSchem
     // Verify bid is pending and belongs to this gig
     const { data: bid, error: bidErr } = await supabaseAdmin
       .from('GigBid')
-      .select('id, gig_id, user_id, status, counter_status, bid_amount, expires_at')
+      .select('id, gig_id, user_id, status, counter_status, bid_amount, expires_at, updated_at')
       .eq('id', bidId)
       .single();
 
@@ -5046,9 +5053,11 @@ router.post('/:gigId/bids/:bidId/counter', verifyToken, validate(counterBidSchem
       .eq('id', bidId)
       .in('status', ['pending', 'countered'])
       .eq('status', bid.status)
+      .eq('updated_at', bid.updated_at)
       .select()
-      .single();
+      .maybeSingle();
 
+    if (!updateErr && !updatedBid) return res.status(409).json({ error: 'This counter-offer changed. Refresh before responding.' });
     if (updateErr || !updatedBid) {
       logger.error('Counter-offer failed', { error: updateErr?.message || 'Bid changed' });
       return res.status(500).json({ error: 'Failed to send counter-offer' });
@@ -5099,11 +5108,15 @@ router.post('/:gigId/bids/:bidId/counter/accept', verifyToken, async (req, res) 
 
     const { data: gig, error: gigErr } = await supabaseAdmin
       .from('Gig')
-      .select('user_id, title')
+      .select('user_id, title, status, deadline')
       .eq('id', gigId)
       .single();
 
     if (gigErr || !gig) return res.status(404).json({ error: 'Gig not found' });
+    if (gigBiddingClosed(gig) || (bid.expires_at && Date.parse(bid.expires_at) <= Date.now())) {
+      return res.status(409).json({ error: 'This counter-offer is no longer available. Refresh the task.' });
+    }
+    if (await blockService.isBlocked(gig.user_id, userId)) return res.status(403).json({ error: 'Cannot respond to this task' });
     if (await canActAsBusiness(gig.user_id, userId)) {
       return res.status(400).json({ error: 'You cannot bid on your own gig' });
     }
@@ -5120,9 +5133,11 @@ router.post('/:gigId/bids/:bidId/counter/accept', verifyToken, async (req, res) 
       .eq('id', bidId)
       .in('status', ['pending', 'countered'])
       .eq('status', bid.status)
+      .eq('updated_at', bid.updated_at)
       .select()
-      .single();
+      .maybeSingle();
 
+    if (!updateErr && !updatedBid) return res.status(409).json({ error: 'This counter-offer changed. Refresh before responding.' });
     if (updateErr || !updatedBid) {
       logger.error('Accept counter failed', { error: updateErr?.message || 'Bid changed' });
       return res.status(500).json({ error: 'Failed to accept counter-offer' });
@@ -5146,6 +5161,7 @@ router.post('/:gigId/bids/:bidId/counter/accept', verifyToken, async (req, res) 
     emitGigUpdate(req, gigId, 'bid-update');
     res.json({ bid: updatedBid });
   } catch (err) {
+    if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
     logger.error('Accept counter error', { error: err.message });
     res.status(500).json({ error: 'Failed to accept counter-offer' });
   }
@@ -5197,9 +5213,11 @@ router.post('/:gigId/bids/:bidId/counter/decline', verifyToken, async (req, res)
       .eq('id', bidId)
       .in('status', ['pending', 'countered'])
       .eq('status', bid.status)
+      .eq('updated_at', bid.updated_at)
       .select()
-      .single();
+      .maybeSingle();
 
+    if (!updateErr && !updatedBid) return res.status(409).json({ error: 'This counter-offer changed. Refresh before responding.' });
     if (updateErr || !updatedBid) {
       logger.error('Decline counter failed', { error: updateErr?.message || 'Bid changed' });
       return res.status(500).json({ error: 'Failed to decline counter-offer' });
@@ -5277,9 +5295,11 @@ router.post('/:gigId/bids/:bidId/counter/withdraw', verifyToken, async (req, res
       .eq('id', bidId)
       .in('status', ['pending', 'countered'])
       .eq('status', bid.status)
+      .eq('updated_at', bid.updated_at)
       .select()
-      .single();
+      .maybeSingle();
 
+    if (!updateErr && !updatedBid) return res.status(409).json({ error: 'This counter-offer changed. Refresh before responding.' });
     if (updateErr || !updatedBid) {
       logger.error('Withdraw counter failed', { error: updateErr?.message || 'Bid changed' });
       return res.status(500).json({ error: 'Failed to withdraw counter-offer' });

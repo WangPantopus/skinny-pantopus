@@ -568,9 +568,12 @@ INSERT INTO public."MailPreferences"(user_id,push_notifications)
  VALUES('aaf40000-0000-4000-8000-000000000001',false),('aaf40000-0000-4000-8000-000000000002',true);
 INSERT INTO public."Gig"(id,user_id,created_by,title,description,price,status,accepted_by,accepted_at,started_at)
  VALUES('aaf40000-0000-4000-8000-000000000100','aaf40000-0000-4000-8000-000000000001','aaf40000-0000-4000-8000-000000000001',
- 'Delivery fixture','Synthetic',0,'in_progress','aaf40000-0000-4000-8000-000000000002',clock_timestamp(),clock_timestamp());
+ 'Delivery fixture','Synthetic',0,'open',NULL,NULL,NULL);
 INSERT INTO public."GigBid"(id,gig_id,user_id,bid_amount,status)
  VALUES('aaf40000-0000-4000-8000-000000000200','aaf40000-0000-4000-8000-000000000100','aaf40000-0000-4000-8000-000000000003',0,'pending');
+-- Standby bids are placed before assignment, while admission is open.
+UPDATE public."Gig" SET status='in_progress',accepted_by='aaf40000-0000-4000-8000-000000000002',
+ accepted_at=clock_timestamp(),started_at=clock_timestamp() WHERE id='aaf40000-0000-4000-8000-000000000100';
 DO $$
 DECLARE g public."Gig"; owner_id uuid:='aaf40000-0000-4000-8000-000000000001'; worker uuid:='aaf40000-0000-4000-8000-000000000002';
  r jsonb; terms jsonb; proof jsonb:='{"completion_note":"private completion note","completion_photos":[],"completion_checklist":[]}';
