@@ -240,11 +240,9 @@ class MailDetailVariantsTest {
         }
 
     @Test
-    fun certified_collapses_to_verified_detailTrust() =
+    fun certified_preserves_sender_detailTrust() =
         runTest {
-            // Even without an explicit trust signal, the detail trust
-            // for a certified item should be `.verified` because the
-            // V1 detail endpoint doesn't yet surface `sender_trust`.
+            // Certification alone must not verify a sender with no trust signal.
             coEvery { repo.detail("m1") } returns
                 NetworkResult.Success(
                     MailDetailResponse(
@@ -258,9 +256,7 @@ class MailDetailVariantsTest {
             val vm = makeVm()
             vm.load()
             val content = (vm.state.value as MailDetailUiState.Loaded).content
-            // V1 list doesn't surface sender_trust → MailTrust.fromRaw(null) = Unverified
-            // → detailTrust = Neutral. The Certified layout enforces a
-            // `.Verified` eyebrow regardless when it sets its own top bar.
+            // Missing sender_trust → Unverified → Neutral in the detail and its top bar.
             assertEquals(MailDetailTrust.Neutral, content.detailTrust)
         }
 

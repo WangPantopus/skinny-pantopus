@@ -648,6 +648,7 @@ export interface MailboxPaginatedResponse<T> {
   total: number;
   page: number;
   has_more: boolean;
+  next_offset?: number;
 }
 
 export interface MailboxApiResponse<T> {

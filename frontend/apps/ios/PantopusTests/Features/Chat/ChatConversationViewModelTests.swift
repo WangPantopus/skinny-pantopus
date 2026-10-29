@@ -376,8 +376,9 @@ final class ChatConversationViewModelTests: XCTestCase {
     }
 
     func testSendFailureMarksClientIdAsFailed() async {
-        URLProtocolStub.stub(path: "/api/chat/rooms/r1/messages", response: .json(Self.messagesJSON()))
-        URLProtocolStub.stub(path: "/api/chat/rooms/r1/read", response: .json("{}"))
+        // A person thread reads (and marks read) by person: a refused history read now closes the composer.
+        URLProtocolStub.stub(path: "/api/chat/conversations/u_other/messages", response: .json(Self.messagesJSON()))
+        URLProtocolStub.stub(path: "/api/chat/conversations/u_other/read", response: .json("{}"))
         URLProtocolStub.stub(path: "/api/chat/direct", response: .json("{\"roomId\":\"r1\"}"))
         URLProtocolStub.stub(path: "/api/chat/messages", response: .json("{}", status: 500))
         let vm = ChatConversationViewModel(

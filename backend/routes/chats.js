@@ -1724,6 +1724,8 @@ router.put('/rooms/:roomId', verifyToken, validate(updateRoomSchema), async (req
       .select('role')
       .eq('room_id', roomId)
       .eq('user_id', userId)
+      .eq('is_active', true)
+      .is('left_at', null)
       .single();
     
     if (!participant || !['owner', 'admin'].includes(participant.role)) {
@@ -2157,12 +2159,15 @@ router.get('/rooms/:roomId/messages', verifyToken, async (req, res) => {
     const [reactionMap, people, sendRefusal] = await Promise.all([
       buildReactionSummary(messageIds, userId),
       loadMessageSenders(visibleMessages),
-      // Whether the room takes messages from the identity reading it (the business's for its staff): a direct room
-      // with a draft or closed business doesn't, and the apps lock the composer with this sentence.
-      unpublishedRoomRefusal(roomId, participant.user_id).catch((refusalError) => {
-        logger.warn('chat.send_refusal_unavailable', { requestId: req.requestId, userId, roomId, error: refusalError.message });
-        return null; // sends are still checked when they arrive
-      }),
+      // Historical access after departure is read-only. All clients already use
+      // sendRefusal to replace the composer before someone writes an unsendable draft.
+      // Active identities keep the existing draft/closed-business refusal check.
+      participant.is_active === false
+        ? { code: 'ROOM_MEMBERSHIP_INACTIVE', error: 'You are no longer in this conversation. You can still read earlier messages.' }
+        : unpublishedRoomRefusal(roomId, participant.user_id).catch((refusalError) => {
+          logger.warn('chat.send_refusal_unavailable', { requestId: req.requestId, userId, roomId, error: refusalError.message });
+          return null; // sends are still checked when they arrive
+        }),
       applyDirectReadReceipts(visibleMessages, userId, { identityUserId: participant.user_id }),
     ]);
     const messagesWithReactions = visibleMessages.map((m) => ({
@@ -2202,6 +2207,7 @@ router.post('/messages', verifyToken, messageSendLimiter, messageBurstLimiter, v
     }
     logger.info('message_send_start', { requestId, roomId, userId, messageType });
     let senderUserId = userId;
+    let committedRetryMessage = null;
 
     // These reads don't depend on one another, so they start together; their answers are
     // still applied in the order below, so each refusal is the one the sequential checks gave.
@@ -2332,12 +2338,17 @@ router.post('/messages', verifyToken, messageSendLimiter, messageBurstLimiter, v
             .eq('user_id', userId);
 
           if ((count || 0) >= PRE_BID_MESSAGE_LIMIT) {
-            return res.status(429).json({
-              error: `You can send up to ${PRE_BID_MESSAGE_LIMIT} messages before placing a bid. Place a bid to continue chatting.`,
-              code: 'PRE_BID_LIMIT',
-              messages_sent: count || 0,
-              messages_limit: PRE_BID_MESSAGE_LIMIT,
-            });
+            // The accepted last message can be retried after its response was lost.
+            // Re-read here: a concurrent attempt may have committed after ownRetryRead.
+            committedRetryMessage = clientMessageId ? await retryMessage(clientMessageId, roomId, senderUserId, userId) : null;
+            if (!committedRetryMessage) {
+              return res.status(429).json({
+                error: `You can send up to ${PRE_BID_MESSAGE_LIMIT} messages before placing a bid. Place a bid to continue chatting.`,
+                code: 'PRE_BID_LIMIT',
+                messages_sent: count || 0,
+                messages_limit: PRE_BID_MESSAGE_LIMIT,
+              });
+            }
           }
         }
       }
@@ -2466,7 +2477,7 @@ router.post('/messages', verifyToken, messageSendLimiter, messageBurstLimiter, v
     const senderPeople = ownSender && ownPeopleRead ? ownPeopleRead.then(settled) : loadChatPeople([senderUserId]);
     senderPeople.catch(() => {}); // awaited below; a failure surfaces there
     if (clientMessageId) {
-      const existingMsg = ownSender && ownRetryRead ? settled(await ownRetryRead) : await findRetryMessage();
+      const existingMsg = committedRetryMessage || (ownSender && ownRetryRead ? settled(await ownRetryRead) : await findRetryMessage());
       if (existingMsg) return res.json({ message: serializeChatMessageForViewer(existingMsg, { people: await senderPeople, viewerId: userId }) });
     }
 
@@ -2628,6 +2639,14 @@ router.put('/messages/:messageId', verifyToken, messageEditLimiter, async (req, 
     if (!writerIdentities) {
       return res.status(403).json({ error: 'Not authorized' });
     }
+    // Someone who left or was removed can no longer rewrite what they said there (a delete still goes through).
+    // A business's message already needs the business's active membership (messageWriterIdentities).
+    if (writerIdentities.length === 0) {
+      const { data: membership, error: membershipError } = await supabaseAdmin.from('ChatParticipant')
+        .select('id').eq('room_id', message.room_id).eq('user_id', userId).eq('is_active', true).maybeSingle();
+      if (membershipError) throw chatAccessUnavailable();
+      if (!membership) return res.status(403).json({ error: 'Not authorized' });
+    }
     if (await isGigRoomClosedTo(message.room_id, userId, writerIdentities)) {
       return res.status(403).json({ error: 'Not authorized' });
     }
@@ -2670,6 +2689,7 @@ router.put('/messages/:messageId', verifyToken, messageEditLimiter, async (req, 
     res.json({ message: serializeChatMessageForViewer(updated, { people, viewerId: userId }) });
     
   } catch (err) {
+    if (err.code === 'CHAT_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
     logger.error('Message edit error', { requestId: req.requestId, userId: req.user?.id, messageId: req.params.messageId, error: err.message });
     res.status(500).json({ error: 'Failed to edit message' });
   }
@@ -2917,30 +2937,43 @@ router.post('/rooms/:roomId/participants', verifyToken, participantLimiter, asyn
       .select('role')
       .eq('room_id', roomId)
       .eq('user_id', userId)
+      .eq('is_active', true)
+      .is('left_at', null)
       .single();
     
     if (!participant || !['owner', 'admin'].includes(participant.role)) {
       return res.status(403).json({ error: 'Not authorized to add participants' });
     }
     
-    // Add new participant
-    const { data: newParticipant, error } = await supabaseAdmin
+    const participantSelection = `*, user:user_id(id, username, name, profile_picture_url)`;
+    // Keep the existing membership row when an owner adds a departed group member again.
+    // Active duplicates still fail, and rejoining never restores an old admin role.
+    let { data: newParticipant, error } = await supabaseAdmin
       .from('ChatParticipant')
       .insert({
         room_id: roomId,
         user_id: newUserId,
         role: 'member'
       })
-      .select(`
-        *,
-        user:user_id(
-          id,
-          username,
-          name,
-          profile_picture_url
-        )
-      `)
+      .select(participantSelection)
       .single();
+
+    if (error?.code === '23505') {
+      const { data: room, error: roomError } = await supabaseAdmin
+        .from('ChatRoom').select('type').eq('id', roomId).maybeSingle();
+      if (roomError) throw roomError;
+      if (room?.type === 'group') {
+        ({ data: newParticipant, error } = await supabaseAdmin
+          .from('ChatParticipant')
+          .update({ is_active: true, left_at: null, role: 'member' })
+          .eq('room_id', roomId).eq('user_id', newUserId)
+          .eq('is_active', false).not('left_at', 'is', null)
+          .select(participantSelection).maybeSingle());
+        if (!error && !newParticipant) {
+          return res.status(400).json({ error: 'User is already a participant' });
+        }
+      }
+    }
     
     if (error) {
       if (error.code === '23505') { // Unique constraint violation
@@ -3000,6 +3033,8 @@ router.delete('/rooms/:roomId/participants/:participantUserId', verifyToken, par
         .select('role')
         .eq('room_id', roomId)
         .eq('user_id', userId)
+        .eq('is_active', true)
+        .is('left_at', null)
         .single();
       
       if (!participant || !['owner', 'admin'].includes(participant.role)) {

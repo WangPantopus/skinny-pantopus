@@ -133,7 +133,7 @@ export default function VaultPage() {
           ) : (
             <>
               <p className="px-1 pb-2 text-xs text-app-text-muted">
-                {search.data?.pages[0]?.total ?? results.length} {(search.data?.pages[0]?.total ?? results.length) === 1 ? 'piece matches' : 'pieces match'} &ldquo;{query}&rdquo;
+                {results.length} {results.length === 1 ? 'piece shown' : 'pieces shown'} for &ldquo;{query}&rdquo;
               </p>
               <div role="list" aria-label="Search results" className="space-y-4">
                 {results.map((item) => {

@@ -137,6 +137,7 @@ class ChatConversationViewModelTest {
         every { repo.roomMessagesCopy(any()) } returns null
         every { repo.conversationMessagesCopy(any(), any()) } returns null
         every { repo.roomHistoryUpdater(any()) } returns {}
+        coEvery { repo.room(any(), any()) } returns NetworkResult.Success(ChatRoomDetailResponse(ChatRoomDetail()))
         every { repo.conversationHistoryUpdater(any(), any()) } returns {}
         // No saved topic list on the phone in these tests (a person thread restores its topics from it first).
         every { repo.conversationTopicsCopy(any()) } returns null

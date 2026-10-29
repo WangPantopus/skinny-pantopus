@@ -566,7 +566,7 @@ public struct ChatConversationView: View {
                 ChatSelectionDeleteBar(selectedCount: selectedMessageIds.count) {
                     bulkDeleteConfirmPresented = true
                 }
-            } else if let closed = viewModel.roomClosedNote ?? planContext?.closedNote {
+            } else if let closed = planContext?.closedNote ?? viewModel.roomClosedNote {
                 PlanChatClosedLine(text: closed)
             } else {
                 actionBanner
@@ -625,6 +625,10 @@ public struct ChatConversationView: View {
         }
         .onChange(of: isSelecting) { _, selecting in
             if selecting { dismissComposerInput() }
+        }
+        // A chat that closes while the emoji panel is open puts it away, so it doesn't come back with the composer.
+        .onChange(of: planContext?.closedNote ?? viewModel.roomClosedNote) { _, closed in
+            if closed != nil { dismissComposerInput() }
         }
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         // Action cards' taps and "Not now" (`AIActionCardView`). The handlers
@@ -2551,9 +2555,8 @@ private struct ChatConversationHeader: View {
                     .accessibilityIdentifier("chatAIMore")
                 }
             case .group:
-                Icon(.moreVertical, size: 18, color: Theme.Color.appText)
-                    .frame(width: 34, height: 34)
-                    .accessibilityHidden(true)
+                // Group actions live in the inbox; no inactive overflow control in the header.
+                EmptyView()
             }
         }
     }

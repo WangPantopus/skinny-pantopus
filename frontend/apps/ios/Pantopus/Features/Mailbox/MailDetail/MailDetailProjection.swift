@@ -36,20 +36,20 @@ extension MailDetailViewModel {
         )
         let carrierLine = "via \(carrierLabel(from: detail.object))"
         let referenceLabel = referenceLabel(from: detail.object, itemId: item.id)
-        let createdAtLabel = formatLongDate(item.createdAt)
+        let createdAtLabel = formatLongDate(item.deliveredAt ?? item.createdAt)
         let expiresAtLabel = formatLongDate(item.expiresAt)
         let ackRequired = item.ackRequired ?? false
         let isAcknowledged = (item.ackStatus ?? "").lowercased() == "acknowledged" || item.acknowledgedAt != nil
         let variants = decodeVariantDetails(category: category, object: detail.object)
         let certifiedDetail = variants.certified ?? (item.certified ? CertifiedDetailDTO.pantopus(
             reference: "Ref \(item.id.prefix(8).uppercased())",
-            receivedAt: item.createdAt,
+            receivedAt: item.deliveredAt ?? item.createdAt,
             readAt: item.openedAt ?? item.viewedAt,
             signedAt: item.acknowledgedAt
         ) : nil)
         let resolvedAck = isAcknowledged || (certifiedDetail?.isAcknowledged ?? false)
         let detailTrust: MailDetailTrust = switch category {
-        case .certified, .community, .legal, .tax, .records: .verified
+        case .community, .legal, .tax, .records: .verified
         case .party: .celebration
         default: trust.detailTrust
         }

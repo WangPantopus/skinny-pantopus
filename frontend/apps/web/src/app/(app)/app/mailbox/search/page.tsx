@@ -39,7 +39,6 @@ export default function MailSearchPage() {
   const search = useMailSearch(query);
   const { addressee, timeZone } = useMailAddressee();
   const results = search.data?.pages.flatMap((page) => page.items) ?? [];
-  const total = search.data?.pages[0]?.total ?? 0;
   const tooShort = query.length > 0 && query.length < MIN_LENGTH;
 
   const open = (item: MailItemV2) => router.push(`/app/mailbox/${item.drawer}/${item.id}`);
@@ -100,7 +99,7 @@ export default function MailSearchPage() {
         ) : (
           <>
             <p className="px-1 pb-2 pt-3 text-xs text-app-text-muted">
-              {total} {total === 1 ? 'piece matches' : 'pieces match'} &ldquo;{query}&rdquo;
+              {results.length} {results.length === 1 ? 'piece shown' : 'pieces shown'} for &ldquo;{query}&rdquo;
             </p>
             <div role="list" aria-label="Search results" className="space-y-4">
               {results.map((item) => {

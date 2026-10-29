@@ -63,7 +63,7 @@ async function captureAndShare(_element: HTMLElement, year: number): Promise<Sha
 // ── Year in Mail Card ────────────────────────────────────────
 
 function YearInMailCard({ year: yearNum }: { year: number }) {
-  const { data: yearData, isLoading } = useYearInMail(yearNum);
+  const { data: yearData, isLoading, isError, isFetching, refetch } = useYearInMail(yearNum);
   const cardRef = useRef<HTMLDivElement>(null);
   const [shareStatus, setShareStatus] = useState<'idle' | 'sharing' | 'shared' | 'copied' | 'failed'>('idle');
 
@@ -84,6 +84,22 @@ function YearInMailCard({ year: yearNum }: { year: number }) {
           <div className="h-8 w-16 bg-app-surface-sunken rounded animate-pulse" />
           <div className="h-4 w-32 bg-app-surface-sunken rounded animate-pulse" />
         </div>
+      </div>
+    );
+  }
+
+  if (!yearData && isError) {
+    return (
+      <div role="alert" className="rounded-xl border border-app-border p-6">
+        <p className="text-sm text-app-text-secondary">Could not load your {yearNum} mail summary.</p>
+        <button
+          type="button"
+          onClick={() => void refetch()}
+          disabled={isFetching}
+          className="mt-2 text-sm font-semibold text-primary-600 disabled:opacity-50"
+        >
+          {isFetching ? 'Trying again…' : 'Try again'}
+        </button>
       </div>
     );
   }
@@ -117,7 +133,7 @@ function YearInMailCard({ year: yearNum }: { year: number }) {
             <StatPill value={yearData.by_type.postcard.toString()} label="postcards" />
           )}
           {yearData.by_type?.bill && (
-            <StatPill value={yearData.by_type.bill.toString()} label="bills paid" />
+            <StatPill value={yearData.by_type.bill.toString()} label="bills" />
           )}
         </div>
       </div>
