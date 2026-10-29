@@ -166,8 +166,8 @@ private class KeyboardRulesNode :
     }
 
     private fun draggedOff() {
-        if (textBox == null || startedInTextBox || keepsOnDrag || focusedTextBox() == null) return
-        closeKeyboard()
+        val fromOutside = textBox != null && !startedInTextBox
+        if (fromOutside && !keepsOnDrag && focusedTextBox() != null) closeKeyboard()
     }
 
     private fun focusedTextBox(): Rect? = currentValueOf(LocalView).focusedTextBox()
@@ -227,11 +227,14 @@ private class FirstTapClosesKeyboardNode :
         // and the window's rules put the keyboard away when the finger lifts or drags.
         if (pass != PointerEventPass.Initial) return
         val press = pointerEvent.changes.singleOrNull()?.takeIf { it.changedToDown() } ?: return
-        if (findNearestAncestor(KeyboardRulesKey) == null) return
+        if (findNearestAncestor(KeyboardRulesKey) != null && onlyClosesKeyboard(press)) press.consume()
+    }
+
+    /** The keyboard is up for a text box elsewhere: this press is for putting it away. */
+    private fun onlyClosesKeyboard(press: PointerInputChange): Boolean {
         val view = currentValueOf(LocalView)
-        val textBox = view.focusedTextBox() ?: return
-        if (!view.keyboardIsUp() || textBox.contains(requireLayoutCoordinates().localToRoot(press.position))) return
-        press.consume()
+        val textBox = view.focusedTextBox() ?: return false
+        return view.keyboardIsUp() && !textBox.contains(requireLayoutCoordinates().localToRoot(press.position))
     }
 
     override fun onCancelPointerInput() = Unit
