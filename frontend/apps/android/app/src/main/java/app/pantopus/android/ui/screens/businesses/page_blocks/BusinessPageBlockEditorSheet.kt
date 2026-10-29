@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import app.pantopus.android.ui.components.PantopusTextField
+import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailTopBar
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailTopBarAction
 import app.pantopus.android.ui.theme.PantopusColors
@@ -141,6 +142,7 @@ fun BusinessPageBlockEditorSheet(
         Column(
             modifier =
                 Modifier
+                    .closesKeyboardOnTapOrScroll()
                     .fillMaxSize()
                     .background(PantopusColors.appBg)
                     .testTag("businessPageBlocks.editor"),

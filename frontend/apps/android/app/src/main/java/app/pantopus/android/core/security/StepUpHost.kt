@@ -30,6 +30,7 @@ import app.pantopus.android.ui.components.GhostButton
 import app.pantopus.android.ui.components.PantopusFieldState
 import app.pantopus.android.ui.components.PantopusTextField
 import app.pantopus.android.ui.components.PrimaryButton
+import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -105,6 +106,7 @@ fun StepUpPasswordSheet(
     }
 
     ModalBottomSheet(
+        modifier = Modifier.closesKeyboardOnTapOrScroll(),
         onDismissRequest = { if (!request.isSubmitting) onCancel() },
         sheetState = sheetState,
         containerColor = PantopusColors.appSurface,

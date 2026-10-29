@@ -35,6 +35,7 @@ import app.pantopus.android.data.api.models.homes.HomeTaskRecurrenceConfiguratio
 import app.pantopus.android.data.api.models.homes.RECURRENCE_FREQUENCIES
 import app.pantopus.android.data.api.models.homes.recurrenceDate
 import app.pantopus.android.data.api.models.homes.recurrencePeriod
+import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
 import app.pantopus.android.ui.screens.scheduling._shared.TimezonePickerSheet
 import app.pantopus.android.ui.screens.scheduling._shared.defaultTimezoneOptions
 import app.pantopus.android.ui.theme.PantopusColors
@@ -68,7 +69,7 @@ fun HomeTaskRecurrenceDialog(
         properties = DialogProperties(usePlatformDefaultWidth = false, securePolicy = SecureFlagPolicy.SecureOn),
     ) {
         Surface(
-            Modifier.fillMaxWidth().fillMaxHeight(RECURRENCE_DIALOG_FRACTION).testTag("homeTaskRecurrence"),
+            Modifier.closesKeyboardOnTapOrScroll().fillMaxWidth().fillMaxHeight(RECURRENCE_DIALOG_FRACTION).testTag("homeTaskRecurrence"),
             color = PantopusColors.appSurface,
         ) {
             Column(

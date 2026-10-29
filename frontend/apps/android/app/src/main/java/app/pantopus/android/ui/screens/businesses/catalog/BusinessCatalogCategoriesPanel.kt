@@ -38,6 +38,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.ui.components.PantopusTextField
+import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailTopBar
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -191,7 +192,7 @@ internal fun BusinessCatalogCategoriesPanel(
             dismissButton = {
                 TextButton(enabled = !isSaving, onClick = { renameTarget = null }) { Text(text = "Cancel") }
             },
-            modifier = Modifier.testTag("businessCatalog.renameCategoryDialog"),
+            modifier = Modifier.closesKeyboardOnTapOrScroll().testTag("businessCatalog.renameCategoryDialog"),
         )
     }
 

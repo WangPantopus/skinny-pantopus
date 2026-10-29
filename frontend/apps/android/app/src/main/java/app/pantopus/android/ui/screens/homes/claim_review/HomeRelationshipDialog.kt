@@ -39,6 +39,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.SecureFlagPolicy
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.api.models.homes.HomeRelationshipAction
+import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
 import app.pantopus.android.ui.screens.homes.tasks.HomeTaskResumeEffect
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.Spacing
@@ -58,7 +59,7 @@ fun HomeRelationshipDialog(
         properties = DialogProperties(usePlatformDefaultWidth = false, securePolicy = SecureFlagPolicy.SecureOn),
     ) {
         Surface(
-            Modifier.fillMaxWidth().fillMaxHeight(RELATIONSHIP_DIALOG_HEIGHT).testTag("homeRelationship"),
+            Modifier.closesKeyboardOnTapOrScroll().fillMaxWidth().fillMaxHeight(RELATIONSHIP_DIALOG_HEIGHT).testTag("homeRelationship"),
             color = PantopusColors.appSurface,
         ) {
             Column(Modifier.padding(Spacing.s4).imePadding(), verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {

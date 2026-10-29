@@ -41,6 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -96,7 +97,11 @@ fun SavePlaceSheet(
     var name by rememberSaveable(pending) { mutableStateOf(pending.label) }
     var choice by remember(pending) { mutableStateOf(SavePlaceTypeChoice.Other) }
 
-    ModalBottomSheet(onDismissRequest = onClose, sheetState = sheetState) {
+    ModalBottomSheet(
+        onDismissRequest = onClose,
+        sheetState = sheetState,
+        modifier = Modifier.closesKeyboardOnTapOrScroll(),
+    ) {
         Column(
             modifier =
                 Modifier

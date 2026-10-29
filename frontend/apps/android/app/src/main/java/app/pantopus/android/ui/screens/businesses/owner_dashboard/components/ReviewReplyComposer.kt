@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.ui.components.AvatarWithIdentityRing
 import app.pantopus.android.ui.components.IdentityPillar
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.screens.business_profile.components.BizStarGlyph
 import app.pantopus.android.ui.screens.businesses.owner_dashboard.OwnerReviewItem
 import app.pantopus.android.ui.theme.PantopusColors
@@ -234,6 +235,7 @@ private fun Composer(
         Box(
             modifier =
                 Modifier
+                    .keepsKeyboard()
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(Radii.md))
                     .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.md))

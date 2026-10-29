@@ -33,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import app.pantopus.android.data.api.net.NetworkError
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Radii
@@ -306,6 +307,7 @@ private fun AmountField(
         Row(
             modifier =
                 Modifier
+                    .keepsKeyboard()
                     .heightIn(min = 44.dp)
                     .clip(RoundedCornerShape(Radii.md))
                     .background(PantopusColors.appSurface)
@@ -359,6 +361,7 @@ private fun SingleLineField(
         Box(
             modifier =
                 Modifier
+                    .keepsKeyboard()
                     .fillMaxWidth()
                     .heightIn(min = 44.dp)
                     .clip(RoundedCornerShape(Radii.md))
@@ -407,6 +410,7 @@ private fun TextAreaField(
         Box(
             modifier =
                 Modifier
+                    .keepsKeyboard()
                     .fillMaxWidth()
                     .heightIn(min = (minLines * 24).dp + 16.dp)
                     .clip(RoundedCornerShape(Radii.md))

@@ -60,6 +60,8 @@ import app.pantopus.android.data.api.models.gigs.GigPaymentResponse
 import app.pantopus.android.data.api.models.gigs.GigReportReason
 import app.pantopus.android.ui.components.FutureDateTimePickerDialogs
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -279,7 +281,11 @@ fun GigLifecycleSections(viewModel: GigDetailViewModel) {
     if (runningLateSheetVisible) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         val submit = remember { SheetSubmit() }
-        ModalBottomSheet(onDismissRequest = { runningLateSheetVisible = false }, sheetState = sheetState) {
+        ModalBottomSheet(
+            onDismissRequest = { runningLateSheetVisible = false },
+            sheetState = sheetState,
+            modifier = Modifier.closesKeyboardOnTapOrScroll(),
+        ) {
             GigRunningLateSheetContent(
                 onSubmit = { etaMinutes, note ->
                     if (submit.begin()) {
@@ -298,7 +304,11 @@ fun GigLifecycleSections(viewModel: GigDetailViewModel) {
     if (proposeChangeSheetVisible) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         val submit = remember { SheetSubmit() }
-        ModalBottomSheet(onDismissRequest = { proposeChangeSheetVisible = false }, sheetState = sheetState) {
+        ModalBottomSheet(
+            onDismissRequest = { proposeChangeSheetVisible = false },
+            sheetState = sheetState,
+            modifier = Modifier.closesKeyboardOnTapOrScroll(),
+        ) {
             GigProposeChangeSheetContent(
                 onSubmit = { type, description, amountChange, timeChangeMinutes ->
                     if (submit.begin()) {
@@ -324,7 +334,11 @@ fun GigLifecycleSections(viewModel: GigDetailViewModel) {
     counterTarget?.let { target ->
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         val submit = remember(target.id) { SheetSubmit() }
-        ModalBottomSheet(onDismissRequest = { counterTarget = null }, sheetState = sheetState) {
+        ModalBottomSheet(
+            onDismissRequest = { counterTarget = null },
+            sheetState = sheetState,
+            modifier = Modifier.closesKeyboardOnTapOrScroll(),
+        ) {
             GigCounterSheetContent(
                 bid = target,
                 onSubmit = { amount, message ->
@@ -358,7 +372,11 @@ fun GigLifecycleSections(viewModel: GigDetailViewModel) {
     if (noShowSheetVisible) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         val submit = remember { SheetSubmit() }
-        ModalBottomSheet(onDismissRequest = { noShowSheetVisible = false }, sheetState = sheetState) {
+        ModalBottomSheet(
+            onDismissRequest = { noShowSheetVisible = false },
+            sheetState = sheetState,
+            modifier = Modifier.closesKeyboardOnTapOrScroll(),
+        ) {
             GigNoShowSheetContent(
                 onSubmit = { description ->
                     if (submit.begin()) {
@@ -725,6 +743,7 @@ fun GigCounterSheetContent(
         Row(
             modifier =
                 Modifier
+                    .keepsKeyboard()
                     .fillMaxWidth()
                     .heightIn(min = 48.dp)
                     .clip(RoundedCornerShape(Radii.md))
@@ -757,6 +776,7 @@ fun GigCounterSheetContent(
         Box(
             modifier =
                 Modifier
+                    .keepsKeyboard()
                     .fillMaxWidth()
                     .heightIn(min = 72.dp)
                     .clip(RoundedCornerShape(Radii.md))
@@ -1172,6 +1192,7 @@ private fun GigNoShowSheetContent(
         Box(
             modifier =
                 Modifier
+                    .keepsKeyboard()
                     .fillMaxWidth()
                     .heightIn(min = 88.dp)
                     .clip(RoundedCornerShape(Radii.md))
@@ -1268,6 +1289,7 @@ fun GigRunningLateSheetContent(
         Box(
             modifier =
                 Modifier
+                    .keepsKeyboard()
                     .fillMaxWidth()
                     .heightIn(min = 64.dp)
                     .clip(RoundedCornerShape(Radii.md))
@@ -1562,6 +1584,7 @@ fun GigProposeChangeSheetContent(
         Box(
             modifier =
                 Modifier
+                    .keepsKeyboard()
                     .fillMaxWidth()
                     .heightIn(min = 64.dp)
                     .clip(RoundedCornerShape(Radii.md))
@@ -1593,6 +1616,7 @@ fun GigProposeChangeSheetContent(
                 Row(
                     modifier =
                         Modifier
+                            .keepsKeyboard()
                             .weight(1f)
                             .heightIn(min = 48.dp)
                             .clip(RoundedCornerShape(Radii.md))
@@ -1622,6 +1646,7 @@ fun GigProposeChangeSheetContent(
             Row(
                 modifier =
                     Modifier
+                        .keepsKeyboard()
                         .weight(1f)
                         .heightIn(min = 48.dp)
                         .clip(RoundedCornerShape(Radii.md))
@@ -1887,7 +1912,11 @@ private fun GigReviewSection(
     if (sheetVisible && state is GigReviewState.Available) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         val submit = remember { SheetSubmit() }
-        ModalBottomSheet(onDismissRequest = { sheetVisible = false }, sheetState = sheetState) {
+        ModalBottomSheet(
+            onDismissRequest = { sheetVisible = false },
+            sheetState = sheetState,
+            modifier = Modifier.closesKeyboardOnTapOrScroll(),
+        ) {
             GigReviewSheetContent(
                 initialRating = presetRating,
                 revieweeName = state.revieweeName,
@@ -1954,6 +1983,7 @@ private fun GigReviewSheetContent(
         Box(
             modifier =
                 Modifier
+                    .keepsKeyboard()
                     .fillMaxWidth()
                     .heightIn(min = 88.dp)
                     .clip(RoundedCornerShape(Radii.md))
@@ -2041,6 +2071,7 @@ fun GigReportSheetContent(
         Box(
             modifier =
                 Modifier
+                    .keepsKeyboard()
                     .fillMaxWidth()
                     .heightIn(min = 64.dp)
                     .clip(RoundedCornerShape(Radii.md))
@@ -2264,6 +2295,7 @@ fun GigRescheduleSheetContent(
         Box(
             modifier =
                 Modifier
+                    .keepsKeyboard()
                     .fillMaxWidth()
                     .heightIn(min = 64.dp)
                     .clip(RoundedCornerShape(Radii.md))

@@ -50,6 +50,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.screens.auth.AuthTrustFooter
 import app.pantopus.android.ui.screens.auth.sign_up.ErrorBanner
 import app.pantopus.android.ui.theme.MarkVariant
@@ -272,6 +273,7 @@ private fun SecurePasswordField(
         Row(
             modifier =
                 Modifier
+                    .keepsKeyboard()
                     .fillMaxWidth()
                     .height(44.dp)
                     .clip(RoundedCornerShape(Radii.md))

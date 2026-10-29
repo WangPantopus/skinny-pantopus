@@ -34,7 +34,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -56,6 +59,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -188,10 +192,15 @@ private fun Header(
     onBack: () -> Unit,
 ) {
     val focusRequester = remember { FocusRequester() }
+    // Saved, so coming back from a result doesn't bring the keyboard back by itself.
+    var focusedOnOpen by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         // Mirror iOS's on-appear focus so the keyboard pops the moment
         // the surface opens.
-        runCatching { focusRequester.requestFocus() }
+        if (!focusedOnOpen) {
+            focusedOnOpen = true
+            runCatching { focusRequester.requestFocus() }
+        }
     }
     Column(
         modifier =
@@ -252,9 +261,11 @@ private fun SearchField(
     focusRequester: FocusRequester,
     modifier: Modifier = Modifier,
 ) {
+    // The whole rounded box counts as the text box: its clear button keeps the keyboard up.
     Row(
         modifier =
             modifier
+                .keepsKeyboard()
                 .clip(RoundedCornerShape(Radii.md))
                 .background(PantopusColors.appSurfaceSunken)
                 .padding(horizontal = Spacing.s3, vertical = Spacing.s2),

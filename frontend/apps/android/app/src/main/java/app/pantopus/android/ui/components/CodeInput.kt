@@ -102,9 +102,11 @@ fun CodeInput(
     var isFocused by remember { mutableStateOf(false) }
     val interactionSource = remember { MutableInteractionSource() }
 
+    // The six boxes are the text box: a tap on them keeps the keyboard up.
     Box(
         modifier =
             modifier
+                .keepsKeyboard()
                 .semantics {
                     contentDescription = "Verification code"
                     stateDescription =

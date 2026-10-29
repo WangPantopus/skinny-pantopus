@@ -108,6 +108,7 @@ import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.components.StatusChip
 import app.pantopus.android.ui.components.VerifiedBadge
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -383,10 +384,12 @@ private fun SearchBarRow(config: SearchBarConfig) {
                 .padding(horizontal = Spacing.s4, vertical = Spacing.s2),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // The whole rounded box counts as the text box.
         Row(
             modifier =
                 Modifier
                     .fillMaxWidth()
+                    .keepsKeyboard()
                     .clip(RoundedCornerShape(Radii.md))
                     .background(PantopusColors.appSurfaceSunken)
                     .padding(horizontal = Spacing.s3, vertical = Spacing.s2)

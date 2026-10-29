@@ -106,6 +106,15 @@ Every fetchable surface ships four states:
 Compose the screen body with the `OfflineBanner` (`ui/components/OfflineBanner.kt`)
 in the chrome stack so the strip auto-appears when offline.
 
+## Keyboard
+
+`ui/components/KeyboardRules.kt` holds the app's keyboard rules. The activity root uses
+`Modifier.closesKeyboardOnTapOrScroll()`: a tap or a drag outside the focused text box puts the keyboard away,
+and the tap still does its job. Each sheet or dialog that has a text field runs in its own window, so it passes
+the same modifier as its `modifier` (or on its content root). A text box drawn by a container around a
+`BasicTextField` marks that container `keepsKeyboard()`. Composer controls (Send) are marked the same way. The
+results under a search box are marked `firstTapClosesKeyboard()`.
+
 ## Navigation
 
 - Single-activity Compose host with a `NavHostController` rooted in

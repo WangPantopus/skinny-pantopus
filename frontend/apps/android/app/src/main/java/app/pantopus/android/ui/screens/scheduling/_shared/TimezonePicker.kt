@@ -29,6 +29,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -80,7 +82,7 @@ fun TimezonePickerSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         containerColor = PantopusColors.appSurface,
-        modifier = modifier.testTag(TIMEZONE_PICKER_TAG),
+        modifier = modifier.closesKeyboardOnTapOrScroll().testTag(TIMEZONE_PICKER_TAG),
     ) {
         Header(accent = accent, onDone = onDismiss)
         SearchBox(query = query, onQueryChange = onQueryChange)
@@ -148,6 +150,7 @@ private fun SearchBox(
     Row(
         modifier =
             Modifier
+                .keepsKeyboard()
                 .fillMaxWidth()
                 .padding(horizontal = Spacing.s4, vertical = Spacing.s2)
                 .clip(RoundedCornerShape(Radii.md))

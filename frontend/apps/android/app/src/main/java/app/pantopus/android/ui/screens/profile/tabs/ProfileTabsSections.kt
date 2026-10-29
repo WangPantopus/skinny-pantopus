@@ -63,6 +63,7 @@ import app.pantopus.android.ui.components.PantopusTextField
 import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.components.RatingDistribution
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -181,6 +182,7 @@ fun ProfilePortfolioSection(
 
     if (showAddSheet) {
         ModalBottomSheet(
+            modifier = Modifier.closesKeyboardOnTapOrScroll(),
             onDismissRequest = { viewModel.setShowAddSheet(false) },
             sheetState = addSheetState,
         ) {

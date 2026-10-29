@@ -60,6 +60,7 @@ import app.pantopus.android.data.api.models.place.PlacePreviewSectionStatus
 import app.pantopus.android.data.api.models.place.PlaceSectionEnvelope
 import app.pantopus.android.data.api.models.place.PlaceSectionId
 import app.pantopus.android.ui.components.PrimaryButton
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.screens.ballot.BallotGovernmentsSheet
 import app.pantopus.android.ui.screens.ballot.BallotPlacement
 import app.pantopus.android.ui.screens.ballot.BallotSeasonBlock
@@ -404,7 +405,7 @@ private fun AddressField(
 ) {
     Row(
         modifier =
-            Modifier.fillMaxWidth().clip(
+            Modifier.keepsKeyboard().fillMaxWidth().clip(
                 RoundedCornerShape(14.dp),
             ).background(
                 PantopusColors.appSurface,
