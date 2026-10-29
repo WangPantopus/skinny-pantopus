@@ -3268,16 +3268,26 @@ public final class ChatConversationViewModel {
         }
     }
 
-    /// Messages can be opened without a Plan route (Inbox, Search, or a link).
-    /// Read the room's current status so those entry points also become read-only.
+    /// Delta history still includes a departed member's readable history. Refresh
+    /// membership as well as room status so cached conversations become read-only.
     private func refreshRoomAvailability(roomId: String) async {
         do {
             let response: ChatRoomDetailResponse = try await api.request(
                 ChatEndpoints.room(roomId: roomId, asBusinessUserId: asBusinessUserId)
             )
-            inactiveRoomNote = response.room.isActive == false
-                ? "This chat has closed. Message them directly to keep talking."
-                : nil
+            let membership = response.room.participants?.first { $0.userId == sendingIdentityId }
+            if response.room.isActive == false {
+                // A Plan's chat has no one person to message instead; the server says only that it closed.
+                inactiveRoomNote = response.room.type == "plan"
+                    ? "This chat has closed."
+                    : "This chat has closed. Message them directly to keep talking."
+            } else if response.room.type == "group",
+                      membership?.isActive == false || membership?.leftAt?.isEmpty == false {
+                // The server's own sentence for a member who left (`sendRefusal`), so the line never changes.
+                inactiveRoomNote = "You are no longer in this conversation. You can still read earlier messages."
+            } else {
+                inactiveRoomNote = nil
+            }
         } catch {
             // Keep already loaded history and any previously confirmed closure.
             // The server still checks availability on every send.
@@ -3290,6 +3300,12 @@ public final class ChatConversationViewModel {
             switch apiError {
             case .forbidden, .notFound, .unauthorized:
                 discardSavedThread()
+                // A plain line in place of the composer (the web's words); the panel above keeps the server's answer.
+                sendRefusalNote = switch apiError {
+                case .notFound: "This conversation isn't available."
+                case .unauthorized: friendlyMessage(error)
+                default: "You don't have access to this conversation."
+                }
                 state = .error(message: friendlyMessage(error))
                 return
             default: break
@@ -3524,7 +3540,28 @@ public final class ChatConversationViewModel {
 
     // MARK: - Realtime
 
+    private func subscribeToCanonicalChanges() {
+        socketTasks.append(Task { [weak self] in
+            guard let stream = self?.socket.events(named: "sync:changed", as: SyncChangedEvent.self) else { return }
+            for await event in stream {
+                guard let self else { return }
+                let relevant = switch mode {
+                case let .room(roomId):
+                    event.topics.contains(ScreenTopic.chat(roomId))
+                case .person:
+                    event.topics.contains(ScreenTopic.chats)
+                case .ai:
+                    false
+                }
+                // Membership changes and DB-only edits have no message event.
+                // Reuse the coalesced delta refresh to reconcile an open thread.
+                if relevant { scheduleFallbackRefresh() }
+            }
+        })
+    }
+
     private func subscribeToSockets() {
+        subscribeToCanonicalChanges()
         // Each loop holds the view model weakly between events, so one that
         // is dropped without `teardown()` stops handling events and can be
         // freed, instead of staying alive (and polling) inside the loop.

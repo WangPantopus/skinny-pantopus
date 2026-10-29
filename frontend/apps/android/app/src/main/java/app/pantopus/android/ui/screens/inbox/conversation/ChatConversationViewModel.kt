@@ -21,6 +21,7 @@ import app.pantopus.android.data.api.models.chats.ChatMessagesResponse
 import app.pantopus.android.data.api.models.chats.ChatReactionSummary
 import app.pantopus.android.data.api.models.chats.ChatReadReceipt
 import app.pantopus.android.data.api.models.chats.ChatRoomDetail
+import app.pantopus.android.data.api.models.chats.ChatSendRefusal
 import app.pantopus.android.data.api.models.chats.ChatTopic
 import app.pantopus.android.data.api.models.chats.FindOrCreateTopicBody
 import app.pantopus.android.data.api.models.chats.SendChatMessageBody
@@ -64,6 +65,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -2643,6 +2646,7 @@ class ChatConversationViewModel
                         return@launch
                     }
                     publishHistoryPage(response, keepMessages, initial, firstPage = before == null)
+                    refreshComposerAvailability(context, before, response)
                     recoverRetainedHistory(response, initial, keepMessages)
                 } finally {
                     historyReadsInFlight.remove(requestKey)
@@ -2656,6 +2660,60 @@ class ChatConversationViewModel
             retained: Boolean,
         ) {
             if (initial && retained && response is NetworkResult.Success) catchUpMessages()
+        }
+
+        /** A departed member can retain history, including delta updates, without permission to send. */
+        private suspend fun refreshComposerAvailability(
+            context: HistoryReadContext,
+            before: String?,
+            response: NetworkResult<ChatMessagesResponse>,
+        ) {
+            if (before != null || response !is NetworkResult.Success) return
+            refreshComposerNote(context, response.data)
+        }
+
+        /**
+         * The line in place of the composer after a first page. A room's waits for the room read, which decides with the
+         * page: setting the page's refusal first would open a closed composer for a moment.
+         */
+        private suspend fun refreshComposerNote(
+            context: HistoryReadContext,
+            page: ChatMessagesResponse?,
+        ) {
+            if (!refreshRoomAvailability(context) && page != null) _composerClosedNote.value = page.sendRefusal?.error
+        }
+
+        /** False when there's no room to read or it couldn't be read; the page's own refusal then stands. */
+        private suspend fun refreshRoomAvailability(context: HistoryReadContext): Boolean {
+            val target = context.mode as? ChatThreadMode.Room ?: return false
+            val result = repo.room(target.id, target.asBusinessUserId)
+            if (context != historyContext()) return true
+            if (result !is NetworkResult.Success) return false
+            val room = result.data.room
+            val membership = room.participants?.firstOrNull { it.userId == messageIdentityId }
+            val refusal =
+                when {
+                    // A Plan's chat has no one person to message instead; the server says only that it closed.
+                    room.isActive == false && room.type == "plan" -> ChatSendRefusal("This chat has closed.", "ROOM_CLOSED")
+                    room.isActive == false ->
+                        ChatSendRefusal("This chat has closed. Message them directly to keep talking.", "ROOM_CLOSED")
+                    // The server's own sentence for a member who left (`sendRefusal`), so the line never changes.
+                    room.type == "group" && (membership?.isActive == false || !membership?.leftAt.isNullOrEmpty()) ->
+                        ChatSendRefusal(
+                            "You are no longer in this conversation. You can still read earlier messages.",
+                            "ROOM_MEMBERSHIP_INACTIVE",
+                        )
+                    else -> null
+                }
+            // An unrelated server refusal (a draft or closed business) stands; the room decides the rest, including
+            // after rejoining.
+            val shown = refusal ?: historyPage?.sendRefusal?.takeUnless { it.code in setOf("ROOM_CLOSED", "ROOM_MEMBERSHIP_INACTIVE") }
+            if (historyPage != null && historyPage?.sendRefusal != shown) {
+                historyPage = historyPage?.copy(sendRefusal = shown)
+                rebuild()
+            }
+            _composerClosedNote.value = shown?.error
+            return true
         }
 
         /** A first-page read (or a new thread or topic): the copy writer follows the read's context. */
@@ -2687,7 +2745,6 @@ class ChatConversationViewModel
                         historyPage = response.data.copy(syncCursors = anchor ?: response.data.syncCursors)
                     }
                     if (firstPage && contextMessageId != null) contextHasNewer = response.data.hasMoreAfter
-                    _composerClosedNote.value = response.data.sendRefusal?.error
                     val keptOlder = placePage(response.data.messages, keepMessages)
                     retireConfirmedSends(response.data.messages)
                     refreshUnknownTopics(response.data.messages)
@@ -2720,6 +2777,13 @@ class ChatConversationViewModel
 
         private fun refuseHistory(error: NetworkError) {
             _olderPageFailed.value = false
+            // A plain line in place of the composer (the web's words); the error panel keeps the server's answer.
+            _composerClosedNote.value =
+                when (error) {
+                    NetworkError.NotFound -> "This conversation isn't available."
+                    NetworkError.Unauthorized -> error.message
+                    else -> "You don't have access to this conversation."
+                }
             historyGeneration++
             historyRefusal = error.message
             historyPage = null
@@ -2972,6 +3036,28 @@ class ChatConversationViewModel
 
         // MARK: - Realtime
 
+        private suspend fun observeCanonicalChanges() {
+            socket.eventsOf("sync:changed")
+                .filter { payload ->
+                    val topics = payload.optJSONArray("topics") ?: return@filter false
+                    (0 until topics.length()).any { index ->
+                        when (val thread = mode) {
+                            is ChatThreadMode.Room -> topics.optString(index) == "chat:${thread.id.lowercase()}"
+                            is ChatThreadMode.Person -> topics.optString(index) == "chats"
+                            is ChatThreadMode.Ai -> false
+                        }
+                    }
+                }
+                .collectLatest {
+                    // Unrelated account changes must not cancel a pending room refresh.
+                    // Membership changes and DB-only edits have no message event.
+                    if (isForeground) {
+                        delay(500)
+                        if (isForeground) catchUpMessages()
+                    }
+                }
+        }
+
         private fun subscribeToSockets() {
             if (connectionJob == null) {
                 connectionJob =
@@ -2995,7 +3081,8 @@ class ChatConversationViewModel
             if (messageJob == null) {
                 messageJob =
                     viewModelScope.launch {
-                        socket.eventsOf("message:new").collect { handleIncoming(it) }
+                        launch { socket.eventsOf("message:new").collect { handleIncoming(it) } }
+                        launch { observeCanonicalChanges() }
                     }
             }
             if (updateJob == null) {
@@ -3193,11 +3280,11 @@ class ChatConversationViewModel
                     } while (before != null)
                     firstPage?.let { page ->
                         if (contextMessageId == null) historyPage = page else contextHasNewer = page.hasMoreAfter
-                        _composerClosedNote.value = page.sendRefusal?.error
                         updateActiveRooms(page)
                     }
                     retireConfirmedSends(authoritative.values.toList())
                     rebuild()
+                    refreshComposerNote(context, firstPage)
                     joinActiveRoomsIfPossible()
                     scheduleMarkRead()
                 }
@@ -3247,6 +3334,7 @@ class ChatConversationViewModel
                             removedRoomIds = (page.removedRoomIds + removedRooms).distinct(),
                         )
                     applyChanges(admitted, changes.values, receipts.values, messageReceipts.values, receiptVersion == receiptRevision)
+                    refreshRoomAvailability(context)
                     return true
                 }
                 if (page.syncCursors == cursor) return false

@@ -342,7 +342,9 @@ export default function MailMapPage() {
                   {selectedPin.pin_type.replace(/_/g, ' ')}
                 </span>
                 <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-app-surface-sunken text-app-text-secondary dark:text-app-text-muted">
-                  {selectedPin.visible_to === 'household' ? 'Household' : 'Neighborhood'}
+                  {/* Map reads currently stay within the pin's Home, including
+                      legacy neighborhood/public pins. Name the actual audience. */}
+                  {selectedPin.visible_to === 'personal' ? 'Only you' : 'Household'}
                 </span>
               </div>
 

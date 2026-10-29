@@ -209,6 +209,10 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
     private(set) var vaultResults: [MailPieceModel]?
     private(set) var vaultSearching = false
     private(set) var vaultSearchFailure: String?
+    private(set) var vaultHasMore = false
+    private var vaultSearchOffset = 0
+    private var vaultSubmittedQuery = ""
+    private var vaultSearchRequest = UUID()
 
     /// Set by the Mail tab after it makes the model: Pay on the Counter, the
     /// closed Home drawer's Verify your home, and the first day's porch.
@@ -837,34 +841,55 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
 
     /// Search inside the Vault: the server's search, kept to filed and
     /// archived mail (the server refuses more than 100 characters).
-    func searchVault() async {
+    func searchVault(loadMore: Bool = false) async {
         let text = vaultQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else {
             clearVaultSearch()
             return
         }
+        if loadMore {
+            guard !vaultSearching, vaultHasMore, text == vaultSubmittedQuery else { return }
+        } else {
+            vaultSearchOffset = 0
+            vaultResults = []
+            vaultHasMore = false
+            vaultSubmittedQuery = text
+        }
+        let request = UUID()
+        vaultSearchRequest = request
         vaultSearching = true
-        defer { vaultSearching = false }
+        vaultSearchFailure = nil
+        defer { if vaultSearchRequest == request { vaultSearching = false } }
         do {
             let response: MailSearchResponse = try await api.request(
-                MailboxV2Endpoints.search(query: String(text.prefix(100)), limit: 50)
+                MailboxV2Endpoints.search(query: String(text.prefix(100)), limit: 50, offset: vaultSearchOffset, vaultOnly: true)
             )
-            guard text == vaultQuery.trimmingCharacters(in: .whitespacesAndNewlines) else { return }
+            guard vaultSearchRequest == request, text == vaultQuery.trimmingCharacters(in: .whitespacesAndNewlines) else { return }
             let drawer = selectedDrawer
-            vaultResults = response.mail
+            let rows = response.mail
                 .filter { MailLetter.isFiled($0.item) }
                 .map { piece(for: $0, drawer: drawer) }
-            vaultSearchFailure = nil
+            let existing = loadMore ? (vaultResults ?? []) : []
+            let seen = Set(existing.map(\.id))
+            vaultResults = existing + rows.filter { !seen.contains($0.id) }
+            vaultSearchOffset = response.nextOffset ?? (vaultSearchOffset + response.mail.count)
+            vaultHasMore = response
+                .hasMore ?? (!response.mail.isEmpty && (response.total.map { vaultSearchOffset < $0 } ?? (response.mail.count == 50)))
         } catch {
-            vaultResults = []
+            guard vaultSearchRequest == request, text == vaultQuery.trimmingCharacters(in: .whitespacesAndNewlines) else { return }
             vaultSearchFailure = Self.vaultMessage(error, what: "search results")
         }
     }
 
     func clearVaultSearch() {
+        vaultSearchRequest = UUID()
         vaultQuery = ""
         vaultResults = nil
         vaultSearchFailure = nil
+        vaultSearching = false
+        vaultHasMore = false
+        vaultSearchOffset = 0
+        vaultSubmittedQuery = ""
     }
 
     private func piece(for mail: DrawerItemsResponse.DrawerMail, drawer: MailboxDrawer) -> MailPieceModel {

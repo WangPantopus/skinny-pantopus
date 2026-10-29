@@ -44,6 +44,16 @@ struct MailboxSearchView: View {
                 .accessibilityIdentifier("mailboxSearchResult.\(mail.id)")
                 .padding(.horizontal, Spacing.s4)
                 .padding(.vertical, Spacing.s2)
+                if mail.id == viewModel.results.last?.id, viewModel.hasMore {
+                    MailSearchPageControls(
+                        isLoading: viewModel.isLoadingMore,
+                        hasMore: viewModel.hasMore,
+                        failure: viewModel.failureMessage,
+                        action: viewModel.loadMore
+                    )
+                    .accessibilityIdentifier("mailboxSearchMore")
+                    .padding(.horizontal, Spacing.s4)
+                }
             },
             onCancel: { viewModel.onCancel() }
         )
@@ -52,6 +62,31 @@ struct MailboxSearchView: View {
         .toolbar(.hidden, for: .navigationBar)
         .accessibilityIdentifier("mailboxSearch")
         .task { await viewModel.load() }
+    }
+}
+
+/// The next search page, with a retry that keeps the matches already on screen.
+struct MailSearchPageControls: View {
+    let isLoading: Bool
+    let hasMore: Bool
+    let failure: String?
+    let action: () -> Void
+
+    var body: some View {
+        if hasMore || failure != nil {
+            VStack(alignment: .leading, spacing: Spacing.s2) {
+                if let failure {
+                    Text(failure)
+                        .font(.system(size: 14))
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Button(isLoading ? "Loading…" : failure == nil ? "Show more" : "Try again", action: action)
+                    .font(.system(size: 14, weight: .semibold))
+                    .frame(minHeight: 44)
+                    .disabled(isLoading)
+            }
+        }
     }
 }
 

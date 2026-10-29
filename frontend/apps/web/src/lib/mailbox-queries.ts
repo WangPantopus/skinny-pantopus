@@ -256,9 +256,9 @@ export function useMailSearch(query: string) {
   const q = query.trim();
   return useInfiniteQuery<MailboxPaginatedResponse<MailItemV2>, MailboxApiError>({
     queryKey: [...mailboxKeys.all, 'search', q],
-    queryFn: ({ pageParam }) => api.searchMail(q, { page: pageParam as number, limit: 30 }),
-    initialPageParam: 1,
-    getNextPageParam: (last) => (last.has_more ? last.page + 1 : undefined),
+    queryFn: ({ pageParam }) => api.searchMail(q, { offset: pageParam as number, limit: 30 }),
+    initialPageParam: 0,
+    getNextPageParam: (last) => (last.has_more ? last.next_offset : undefined),
     enabled: q.length >= 2,
     staleTime: STALE_30S,
   });

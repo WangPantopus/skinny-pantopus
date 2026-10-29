@@ -123,6 +123,8 @@ data class EnclosureLinkResponse(
 data class MailSearchResponse(
     val mail: List<DrawerMail>,
     val total: Int = 0,
+    val nextOffset: Int? = null,
+    val hasMore: Boolean? = null,
 )
 
 @JsonClass(generateAdapter = true)

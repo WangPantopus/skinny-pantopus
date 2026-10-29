@@ -104,7 +104,7 @@ struct CertifiedDetailLayout: View {
     private func makeTopBar() -> MailTopBarConfig {
         MailTopBarConfig(
             eyebrow: "Certified mail",
-            trust: .verified,
+            trust: content.detailTrust,
             onBack: { @Sendable in Task { @MainActor in onBack() } },
             trailingAction: MailTopBarTrailingAction(
                 icon: .bookmark,
@@ -537,7 +537,7 @@ private struct HeroCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             HStack(alignment: .center, spacing: Spacing.s1) {
-                TrustBadge()
+                TrustBadge(trust: content.trust)
                 CategoryBadge(category: content.category)
                 Spacer()
                 if let received = content.createdAtLabel {
@@ -682,19 +682,21 @@ private struct ExtractedTaskCard: View {
 }
 
 private struct TrustBadge: View {
+    let trust: MailTrust
+
     var body: some View {
         HStack(spacing: Spacing.s1) {
-            Icon(.shieldCheck, size: 11, color: Theme.Color.success)
-            Text("Verified")
+            Icon(trust.icon, size: 11, color: trust.foreground)
+            Text(trust.label)
                 .font(.system(size: 10, weight: .bold))
                 .tracking(0.3)
-                .foregroundStyle(Theme.Color.success)
+                .foregroundStyle(trust.foreground)
         }
         .padding(.horizontal, Spacing.s2)
         .padding(.vertical, 3)
-        .background(Theme.Color.successBg)
+        .background(trust.background)
         .clipShape(RoundedRectangle(cornerRadius: Radii.pill))
-        .accessibilityLabel("Verified sender")
+        .accessibilityLabel("\(trust.label) sender")
     }
 }
 
