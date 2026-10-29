@@ -59,6 +59,8 @@ public struct MailboxRootView: View {
                             .padding(.bottom, Spacing.s6)
                     }
                 }
+                // Scrolling puts the Vault search's keyboard away.
+                .scrollDismissesKeyboard(.immediately)
                 .refreshable { await viewModel.refresh() }
                 // A new round: back to the top, where the mailbox opens and
                 // today's mail lies, wherever the list was left.
@@ -344,6 +346,8 @@ struct MailPieceRow: View {
         .accessibilityLabel(piece.spokenWithArrival)
         .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("mailPiece.\(piece.id)")
+        // The letter opens out of this piece and goes back into it.
+        .itemZoomSource(.mailPiece, id: piece.id)
     }
 
     private var metaLine: some View {

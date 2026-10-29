@@ -617,6 +617,9 @@ public struct ChatConversationView: View {
             }
         }
         .background(Theme.Color.appSurface)
+        // Send, attach and the suggestion chips keep typing: the app-wide tap
+        // that closes the keyboard (`KeyboardDismissal`) leaves this bar alone.
+        .keepsKeyboardOnTap()
         // The emoji panel replaces the keyboard's space instead of stacking above it.
         .ignoresSafeArea(.keyboard, edges: emojiPickerPresented ? .bottom : [])
         .animation(reduceMotion ? nil : .easeOut(duration: 0.22), value: emojiPickerPresented)
@@ -1061,6 +1064,9 @@ public struct ChatConversationView: View {
         .contentShape(Rectangle())
         .onTapGesture(perform: dismissComposerInput)
         .simultaneousGesture(emojiDismissGesture)
+        // The thread handles the keyboard itself (above), so the app-wide
+        // closing tap leaves its buttons as they were.
+        .keepsKeyboardOnTap()
     }
 
     private func toggleEmojiPicker() {

@@ -42,6 +42,8 @@ public struct ContentDetailShell<HeaderView: View, BodyView: View, CTAView: View
     private let headerContent: HeaderView
     private let bodyContent: BodyView
     private let ctaContent: CTAView
+    /// Opened out of a card: a drag down closes the screen, so it doesn't pull to refresh.
+    @Environment(\.opensWithItemZoom) private var opensWithItemZoom
 
     public init(
         title: String? = nil,
@@ -90,7 +92,7 @@ public struct ContentDetailShell<HeaderView: View, BodyView: View, CTAView: View
     }
 
     @ViewBuilder private var scroll: some View {
-        if let onRefresh {
+        if let onRefresh, !opensWithItemZoom {
             scrollContent.refreshable { await onRefresh() }
         } else {
             scrollContent
@@ -100,7 +102,9 @@ public struct ContentDetailShell<HeaderView: View, BodyView: View, CTAView: View
     private var scrollContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.s4) {
+                // A tap on the header while a reply is typed only closes the keyboard.
                 headerContent
+                    .closesKeyboardFirst()
                 bodyContent
                 Spacer(minLength: Spacing.s10)
             }

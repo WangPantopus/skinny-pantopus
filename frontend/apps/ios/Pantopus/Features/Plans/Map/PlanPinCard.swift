@@ -28,6 +28,8 @@ struct PlanPinCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("planPinCard")
+        // The plan opens out of this card and closes back into it.
+        .itemZoomSource(.plan, id: planId)
     }
 
     private func content(_ card: PlanCardDTO) -> some View {

@@ -25,6 +25,8 @@ struct PantopusApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
+                // A tap outside the text being typed closes the keyboard, on every screen.
+                .dismissesKeyboardOnTapOutside()
                 .environment(environment)
                 .environment(authManager)
                 .environment(apiClient)
@@ -140,6 +142,9 @@ struct RootView: View {
     @Environment(AppLockManager.self) private var appLock
     @State private var capturePrivacy = CapturePrivacyManager.shared
     @State private var showsSessionLogin = false
+    /// Cards and item screens match their zoom here while the system tab bar
+    /// is up; the drawn tabs each set their own (`RootTabHostedRoot`).
+    @Namespace private var itemZoom
 
     var body: some View {
         ZStack {
@@ -180,6 +185,7 @@ struct RootView: View {
         }
         .animation(.easeInOut(duration: 0.25), value: auth.state)
         .transition(.opacity)
+        .environment(\.itemZoomNamespace, itemZoom)
         // The seal is hosted in its own window rather than in the ZStack above:
         // a `.sheet` / `.fullScreenCover` is presented by UIKit outside this
         // view tree and would otherwise stay visible and interactive while
