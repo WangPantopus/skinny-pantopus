@@ -318,7 +318,6 @@ final class APIClient: @unchecked Sendable {
         // never for unauthenticated calls.
         try checkSession()
         if endpoint.authenticated, sessionOwner.isAccessTokenExpiringSoon {
-            didAttemptRefresh = true
             let outcome = await sessionOwner.refreshIfPossible()
             try checkSession()
             if outcome == .authRejected {
@@ -327,6 +326,11 @@ final class APIClient: @unchecked Sendable {
                 await sessionOwner.handleUnauthorized()
                 throw APIError.unauthorized
             }
+            // Only a new token uses up the silent refresh. After a blip
+            // (offline, auth busy) the old token goes out; if it has lapsed,
+            // its 401 refreshes once more below and keeps the session when
+            // auth is still busy, instead of signing out.
+            didAttemptRefresh = outcome == .rotated
         }
         while true {
             try checkSession()
