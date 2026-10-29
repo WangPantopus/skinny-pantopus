@@ -97,27 +97,36 @@ private struct KeyboardTapInstaller: UIViewRepresentable {
     }
 }
 
-/// Ends editing on a tap outside any text box. It never cancels or delays the
-/// tap, and it only listens while text is being typed in its window.
+/// Ends editing on a tap outside any text box, and when a scroll starts on a
+/// list or page that didn't choose its own keyboard behavior (chat and forms
+/// let the keyboard follow the finger instead). Neither cancels or delays
+/// the touch, and both only listen while text is being typed in the window.
 @MainActor
 final class KeyboardTapDismissal: NSObject, UIGestureRecognizerDelegate {
     static let shared = KeyboardTapDismissal()
 
     private final class ClosingTap: UITapGestureRecognizer {}
+    private final class ClosingScroll: UIPanGestureRecognizer {}
 
     func install(in window: UIWindow) {
         _ = TextEditingState.shared
         guard !(window.gestureRecognizers ?? []).contains(where: { $0 is ClosingTap }) else { return }
-        let tap = ClosingTap(target: self, action: #selector(tapped(_:)))
+        let tap = ClosingTap(target: self, action: #selector(closeKeyboard(_:)))
         tap.cancelsTouchesInView = false
         tap.delaysTouchesEnded = false
         tap.delegate = self
         window.addGestureRecognizer(tap)
+        let scroll = ClosingScroll(target: self, action: #selector(closeKeyboard(_:)))
+        scroll.cancelsTouchesInView = false
+        scroll.delaysTouchesEnded = false
+        scroll.delegate = self
+        window.addGestureRecognizer(scroll)
     }
 
-    @objc private func tapped(_ tap: UITapGestureRecognizer) {
-        guard tap.state == .ended else { return }
-        tap.view?.endEditing(true)
+    @objc private func closeKeyboard(_ recognizer: UIGestureRecognizer) {
+        let done: UIGestureRecognizer.State = recognizer is ClosingScroll ? .began : .ended
+        guard recognizer.state == done else { return }
+        recognizer.view?.endEditing(true)
     }
 
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
@@ -125,11 +134,17 @@ final class KeyboardTapDismissal: NSObject, UIGestureRecognizerDelegate {
               let editing = FirstResponder.current as? UIView,
               editing is UITextInput,
               editing.window === window else { return false }
-        // A tap in a text box places the cursor there or moves typing to it.
+        // A touch in a text box places the cursor, moves typing to it or
+        // scrolls the text.
         var view = touch.view
+        var scrollView: UIScrollView?
         while let current = view, current !== window {
             if current is UITextInput { return false }
+            if scrollView == nil { scrollView = current as? UIScrollView }
             view = current.superview
+        }
+        if gestureRecognizer is ClosingScroll, scrollView?.keyboardDismissMode != UIScrollView.KeyboardDismissMode.none {
+            return false
         }
         return !KeepsKeyboardRegion.contains(touch, in: window)
     }
