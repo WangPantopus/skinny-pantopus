@@ -85,7 +85,10 @@ final class GigAssignedAuthorizationViewModel: Identifiable {
             return progress?.canRetry == true
                 ? "The previous authorization ended. Continue to authorize the same task amount."
                 : "This payment needs review before another authorization can be started."
-        case .pending: return "Authorization is pending. Check its status before continuing."
+        case .pending:
+            return progress?.canRetry == true && progress?.paymentIntentId == nil
+                ? "You can authorize payment now. Complete it before the worker starts."
+                : "Authorization is pending. Check its status before continuing."
         default: return "Complete the card authorization before the worker starts."
         }
     }
