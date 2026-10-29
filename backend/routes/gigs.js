@@ -5837,8 +5837,16 @@ router.post('/:gigId/mark-completed', verifyToken, async (req, res) => {
       if (matchesWorkerCompletion(gig, userId, proof)) return res.json({ gig: savedGigReply(gig, true), reused: true });
       return res.status(409).json({ code: 'COMPLETION_CHANGED', error: 'This task already has different completion details. Refresh its details.' });
     }
+    let hasProofPhoto = false;
     for (let i = 0; i < safePhotos.length; i++) {
-      safePhotos[i] = await storage.verifyGigCompletionFile(safePhotos[i], userId, gig.id);
+      const verified = await storage.verifyGigCompletionFile(safePhotos[i], userId, gig.id, gig.delivery_proof_required === true);
+      if (gig.delivery_proof_required === true) {
+        safePhotos[i] = verified.url;
+        hasProofPhoto ||= verified.mimeType.startsWith('image/');
+      } else safePhotos[i] = verified;
+    }
+    if (gig.delivery_proof_required && !hasProofPhoto) {
+      return res.status(400).json({ code: 'COMPLETION_PHOTO_REQUIRED', error: 'Add at least one proof photo before marking this task complete.' });
     }
 
     const { data: result, error: updateError } = await supabaseAdmin.rpc('mark_gig_completed', {
@@ -5847,6 +5855,9 @@ router.post('/:gigId/mark-completed', verifyToken, async (req, res) => {
         .map(field => [field, gig[field] ?? null])),
       p_proof: proof,
     });
+    if (updateError?.message === 'GIG_COMPLETION_PHOTO_REQUIRED') {
+      return res.status(400).json({ code: 'COMPLETION_PHOTO_REQUIRED', error: 'Add at least one proof photo before marking this task complete.' });
+    }
     if (updateError || !result) {
       logger.error('Error marking gig completed', { error: updateError?.message, gigId, userId });
       return res.status(503).json({ error: 'Completion could not be confirmed. Please retry.' });

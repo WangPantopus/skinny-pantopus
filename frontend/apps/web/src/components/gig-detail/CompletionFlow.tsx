@@ -29,6 +29,7 @@ interface CompletionGigData {
   acceptedBy?: { displayName?: string | null } | null;
   payment_status?: string;
   completion_photos?: string[];
+  delivery_proof_required?: boolean;
   completion_review?: string | null;
   completion_note?: string;
   completion_checklist?: Array<{ item: string; done: boolean }>;
@@ -287,6 +288,9 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
   const submitCompletion = async () => {
     const scope = completionScope.current;
     if (completionAttempt.current || !completionScopeIsCurrent(scope)) return;
+    if (gig.delivery_proof_required && !completionFiles.some(file => file.type.startsWith('image/'))) {
+      toast.error('Add at least one proof photo before marking this task complete.'); return;
+    }
     const attempt = {}; completionAttempt.current = attempt;
     const current = () => completionAttempt.current === attempt && completionScopeIsCurrent(scope);
     const files = [...completionFiles];
@@ -342,6 +346,9 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
   const submitConfirmation = async () => {
     const scope = completionScope.current;
     if (completionAttempt.current || !isOwner || !isCompleted || !completionScopeIsCurrent(scope)) return;
+    if (gig.delivery_proof_required && !completionFiles.some(file => file.type.startsWith('image/'))) {
+      toast.error('Add at least one proof photo before marking this task complete.'); return;
+    }
     const attempt = {}; completionAttempt.current = attempt;
     const current = () => completionAttempt.current === attempt && completionScopeIsCurrent(scope);
     setSubmittingConfirm(true);
@@ -593,13 +600,13 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
               </div>
 
               <FileUpload
-                label="Completion Attachments (optional)"
+                label={gig.delivery_proof_required ? 'Completion Attachments (photo required)' : 'Completion Attachments (optional)'}
                 accept={['image', 'video', 'document']}
                 maxFiles={10}
                 maxSize={100 * 1024 * 1024}
                 files={completionFiles}
                 onFilesSelected={setCompletionFiles}
-                helperText="Upload photos, videos, or documents as proof. Up to 10 files."
+                helperText={gig.delivery_proof_required ? 'Add at least one photo. You can also include videos or documents, up to 10 files.' : 'Upload photos, videos, or documents as proof. Up to 10 files.'}
               />
 
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
@@ -621,7 +628,7 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
               </button>
               <button
                 onClick={submitCompletion}
-                disabled={submittingCompletion}
+                disabled={submittingCompletion || (gig.delivery_proof_required === true && !completionFiles.some(file => file.type.startsWith('image/')))}
                 className="px-5 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 font-medium text-sm disabled:opacity-50"
               >
                 {submittingCompletion ? 'Submitting…' : 'Mark Complete'}
