@@ -12,6 +12,9 @@ jest.mock('../stripe/stripeService', () => ({
     paymentIntentId: 'pi_123',
     payment: { payment_status: 'authorize_pending' },
   })),
+  getOrCreateCustomer: jest.fn(async () => 'cus_fixture'),
+  getEffectiveFeeRate: jest.fn(async () => 15),
+  calculateFees: jest.fn(() => ({ platformFee: 750 })),
   createSetupIntent: jest.fn(async () => ({
     clientSecret: 'seti_client_secret',
     paymentId: 'payment-si-1',
@@ -20,7 +23,7 @@ jest.mock('../stripe/stripeService', () => ({
   })),
 }));
 
-const { resetTables, seedTable, getTable } = require('./__mocks__/supabaseAdmin');
+const { resetTables, seedTable, getTable, setRpcMock } = require('./__mocks__/supabaseAdmin');
 const { createNotification } = require('../services/notificationService');
 const stripeService = require('../stripe/stripeService');
 
@@ -64,6 +67,15 @@ function mockRes() {
 
 beforeEach(() => {
   resetTables();
+  setRpcMock(async (name, args) => {
+    if (name !== 'reserve_instant_gig') return { data: null, error: { message: 'Unexpected RPC' } };
+    const gig = getTable('Gig').find(row => row.id === args.p_gig_id);
+    Object.assign(gig, { status: 'assigned', accepted_by: args.p_helper_id,
+      accepted_at: new Date().toISOString(),
+      payment_id: gig.price > 0 ? 'payment-reserved-1' : null,
+      payment_status: gig.price > 0 ? 'ready_to_authorize' : null });
+    return { data: { gig, reused: false }, error: null };
+  });
   createNotification.mockClear();
   stripeService.createPaymentIntentForGig.mockClear();
   stripeService.createSetupIntent.mockClear();
@@ -112,13 +124,14 @@ describe('POST /:gigId/instant-accept', () => {
     expect(res._json.gig.status).toBe('assigned');
     expect(res._json.gig.accepted_by).toBe(helperId);
     expect(res._json.assignment.helper_id).toBe(helperId);
-    expect(res._json.gig.payment_id).toBe('payment-pi-1');
-    expect(res._json.gig.payment_status).toBe('authorize_pending');
-    expect(stripeService.createPaymentIntentForGig).toHaveBeenCalledTimes(1);
+    expect(res._json.gig.payment_id).toBe('payment-reserved-1');
+    expect(res._json.gig.payment_status).toBe('ready_to_authorize');
+    expect(stripeService.createPaymentIntentForGig).not.toHaveBeenCalled();
+    expect(res._json.payment).toBeNull();
     expect(stripeService.createSetupIntent).not.toHaveBeenCalled();
   });
 
-  test('should use setup intent path for gigs scheduled beyond 5 days', async () => {
+  test('should reserve future tasks without starting a provider attempt', async () => {
     const eightDaysFromNow = new Date(Date.now() + 8 * 24 * 60 * 60 * 1000).toISOString();
     seedOpenInstantGig({ scheduled_start: eightDaysFromNow });
     seedHelperStripe();
@@ -128,24 +141,25 @@ describe('POST /:gigId/instant-accept', () => {
     await handler(req, res);
 
     expect(res._status).toBe(200);
-    expect(res._json.gig.payment_id).toBe('payment-si-1');
-    expect(res._json.gig.payment_status).toBe('setup_pending');
-    expect(stripeService.createSetupIntent).toHaveBeenCalledTimes(1);
+    expect(res._json.gig.payment_id).toBe('payment-reserved-1');
+    expect(res._json.gig.payment_status).toBe('ready_to_authorize');
+    expect(stripeService.createSetupIntent).not.toHaveBeenCalled();
+    expect(res._json.requiresPaymentSetup).toBe(true);
     expect(stripeService.createPaymentIntentForGig).not.toHaveBeenCalled();
   });
 
   test('should block assignment when payment setup fails', async () => {
     seedOpenInstantGig();
     seedHelperStripe();
-    stripeService.createPaymentIntentForGig.mockRejectedValueOnce(new Error('mock PI failure'));
+    stripeService.getOrCreateCustomer.mockRejectedValueOnce(new Error('mock customer failure'));
 
     const req = mockReq({ params: { gigId }, user: { id: helperId } });
     const res = mockRes();
     await handler(req, res);
 
-    expect(res._status).toBe(400);
+    expect(res._status).toBe(503);
     expect(res._json.code).toBe('payer_payment_required');
-    expect(res._json.error).toMatch(/payment setup failed/i);
+    expect(res._json.error).toMatch(/payment setup is unavailable/i);
     const gigs = getTable('Gig');
     const unchanged = gigs.find(g => g.id === gigId);
     expect(unchanged.status).toBe('open');
