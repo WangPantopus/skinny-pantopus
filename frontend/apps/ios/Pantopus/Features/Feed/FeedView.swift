@@ -183,6 +183,9 @@ public struct FeedView: View {
         .onChange(of: viewModel.activeTopic) { _, _ in showHeader() }
         .onChange(of: isSearchVisible) { _, _ in showHeader() }
         .onAppear { showHeader() }
+        // Back from a post or another tab, the search box isn't still typing:
+        // the keyboard came back by itself (founder report 2026-10-29).
+        .onDisappear { searchFieldFocused = false }
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .askPantopus($askTopic)
         .task {
@@ -739,6 +742,8 @@ public struct FeedView: View {
                 .stroke(Theme.Color.appBorder, lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: Radii.pill, style: .continuous))
+        // Clearing the box keeps typing.
+        .keepsKeyboardOnTap()
         .padding(.horizontal, Spacing.s4)
         .padding(.bottom, Spacing.s2)
         .background(Theme.Color.appBg)
@@ -802,7 +807,9 @@ public struct FeedView: View {
                     emptyStack(content)
                 }
                 .padding(Spacing.s5)
+                .closesKeyboardFirst(searchFieldFocused)
             }
+            .scrollDismissesKeyboard(.immediately)
             .accessibilityIdentifier("pulseFeedEmpty")
         } else {
             VStack(spacing: Spacing.s3) {
@@ -812,6 +819,7 @@ public struct FeedView: View {
             }
             .padding(Spacing.s5)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .closesKeyboardFirst(searchFieldFocused)
             .accessibilityIdentifier("pulseFeedEmpty")
         }
     }
@@ -899,8 +907,12 @@ public struct FeedView: View {
     private func populatedFrame(_ rows: [PulsePostCardContent]) -> some View {
         ScrollViewReader { proxy in
             ScrollView(.vertical, showsIndicators: true) {
+                // While Search posts has the keyboard, a tap on the posts
+                // only closes it (founder request 2026-10-29).
                 postList(rows)
+                    .closesKeyboardFirst(searchFieldFocused)
             }
+            .scrollDismissesKeyboard(.immediately)
             .refreshable { await refreshFeedAndCard() }
             .onPulseListScroll { offset in listScrolled(to: offset) }
             .onChange(of: scrollToTopRequest) { _, _ in
@@ -1039,6 +1051,8 @@ public struct FeedView: View {
             onToggleSave: onToggleSave,
             onToggleRepost: onToggleRepost
         )
+        // The post opens out of this card and closes back into it.
+        .itemZoomSource(.post, id: row.id)
     }
 
     private func errorFrame(message: String) -> some View {

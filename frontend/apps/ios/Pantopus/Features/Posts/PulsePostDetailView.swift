@@ -183,6 +183,8 @@ public struct PulsePostDetailView: View {
                     _ = await viewModel.refreshConversationAfterMutation(reportFailure: false)
                 }
             }
+            // Opens out of its card in the feed; drag it down to close it back in.
+            .itemZoomDestination(.post, id: viewModel.postId)
     }
 
     private var baseContent: some View {

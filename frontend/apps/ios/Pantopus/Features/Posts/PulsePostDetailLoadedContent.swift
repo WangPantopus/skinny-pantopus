@@ -156,6 +156,7 @@ public struct PulsePostDetailLoadedContent: View {
                     postedRecently: detail.postedWithinHour,
                     hiddenReplyCount: detail.hiddenReplyCount,
                     onShowMoreReplies: onShowMoreReplies,
+                    onRetryComments: onRefresh.map { refresh in { Task { await refresh() } } },
                     replyingToName: replyingToName,
                     onCancelReply: onCancelReply,
                     onCommentReply: detail.post.isRemovedByModerator ? nil : onCommentReply,

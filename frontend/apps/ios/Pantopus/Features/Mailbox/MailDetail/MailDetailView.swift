@@ -103,6 +103,8 @@ public struct MailDetailView: View {
         // A container, so the page's buttons keep their own identifiers.
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("mailDetail")
+        // Opens out of its piece in the mailbox; drag it down to put it back.
+        .itemZoomDestination(.mailPiece, id: mailId)
         .task { await viewModel.load() }
         // A dismissed or archived letter has left the mailbox; the list has dropped it.
         .onChange(of: viewModel.didLeaveMailbox) { _, left in

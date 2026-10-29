@@ -33,6 +33,8 @@ struct RootTabEnvironment: Equatable {
 struct RootTabHostedRoot: View {
     let root: AnyView
     let environment: RootTabEnvironment
+    /// The tab's cards and item screens match their zoom here (`ItemZoomTransition`).
+    @Namespace private var itemZoom
 
     var body: some View {
         root
@@ -40,6 +42,7 @@ struct RootTabHostedRoot: View {
             .environment(environment.tabs)
             .environment(AppLockManager.shared)
             .environment(\.scenePhase, environment.scenePhase)
+            .environment(\.itemZoomNamespace, itemZoom)
             // The app-wide tint, as `RootTabView` sets it on the system tab view.
             .tint(Theme.Color.primaryTint)
     }
