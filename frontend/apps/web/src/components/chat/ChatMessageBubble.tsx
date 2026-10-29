@@ -178,14 +178,15 @@ function ChatMessageBubble({ msg, currentUserId, isMine, showSender = false, rep
     else if (key === 'copy') void navigator.clipboard?.writeText(msgText).catch(() => {});
     else if (key === 'emoji_picker') setShowFullPicker(true);
   };
-  const actionsTrigger = !isOptimistic && !isFailed && onReact && menuActions.length > 0 && (
+  // A chat that takes no reactions still offers Copy and Delete here, in the reaction button's place.
+  const actionsTrigger = !isOptimistic && !isFailed && menuActions.length > 0 && (
     <button
       type="button"
       onClick={openMenu}
       aria-label="Message actions"
       aria-haspopup="menu"
       aria-expanded={menuAt !== null}
-      className={`absolute ${isMine ? '-left-16' : '-right-16'} top-0 w-7 h-7 flex items-center justify-center rounded-full bg-surface border border-app shadow-sm hover:bg-surface-muted transition-all focus-visible:opacity-100 focus-visible:scale-100 ${
+      className={`absolute ${isMine ? (onReact ? '-left-16' : '-left-8') : (onReact ? '-right-16' : '-right-8')} top-0 w-7 h-7 flex items-center justify-center rounded-full bg-surface border border-app shadow-sm hover:bg-surface-muted transition-all focus-visible:opacity-100 focus-visible:scale-100 ${
         hovered || menuAt ? 'opacity-100 scale-100' : 'opacity-0 scale-90'
       }`}
     >
@@ -197,7 +198,7 @@ function ChatMessageBubble({ msg, currentUserId, isMine, showSender = false, rep
       open={menuAt !== null}
       onClose={() => setMenuAt(null)}
       onAction={handleMenuAction}
-      onReact={(emoji) => onReact?.(msg.id, emoji)}
+      onReact={onReact ? (emoji) => onReact(msg.id, emoji) : undefined}
       actions={menuActions}
       anchorPosition={menuAt ?? undefined}
     />
@@ -221,7 +222,7 @@ function ChatMessageBubble({ msg, currentUserId, isMine, showSender = false, rep
 
   const reactionBar = msg.reactions && msg.reactions.length > 0 && (
     <div className={`${isMine ? 'flex justify-end' : ''}`}>
-      <MessageReactionBar reactions={msg.reactions} onReact={handleReactionBarClick} />
+      <MessageReactionBar reactions={msg.reactions} onReact={onReact ? handleReactionBarClick : undefined} />
     </div>
   );
 

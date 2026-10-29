@@ -406,8 +406,11 @@ export default function ChatRoomView({
 
   const inputDisabled = preBidStatus?.is_pre_bid && (preBidStatus.messages_remaining || 0) <= 0;
 
-  const lockedNote = roomInfo?.is_active === false
-    ? 'This chat has closed. Message them directly to keep talking.'
+  // A closed room keeps its history but takes no messages or reactions; one's own messages can still be deleted.
+  // A Plan's chat has no one person to message instead, so it says only that it closed, as the server does.
+  const roomClosed = roomInfo?.is_active === false;
+  const lockedNote = roomClosed
+    ? (roomInfo?.type === 'plan' ? 'This chat has closed.' : 'This chat has closed. Message them directly to keep talking.')
     : chat.sendRefusal;
 
   // The conversation could not be opened: say why, and offer no composer.
@@ -490,7 +493,7 @@ export default function ChatRoomView({
           isOwnMessage={isOwnMessage}
           headerContent={historicalHeader}
           onImageClick={handleImageClick}
-          onReact={handleReact}
+          onReact={roomClosed ? undefined : handleReact}
           onRetry={chat.retryMessage}
           onRemovePending={chat.removePendingMessage}
           onEdit={lockedNote ? undefined : chat.beginEdit}
