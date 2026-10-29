@@ -174,9 +174,9 @@ fun <Result : Any> SearchListShell(
         )
         HorizontalDivider(color = PantopusColors.appBorderSubtle, thickness = 1.dp)
         filters()
-        // While typing, the first tap on the results only puts the keyboard away. Recent searches stay one tap: they
-        // are there to be picked while typing.
-        val resultsShown = errorContent != null || phase != SearchListPhase.Recent
+        // While typing, the first tap on the results only puts the keyboard away, as on iOS. Recent searches stay one
+        // tap (they are there to be picked while typing), and so does Try again.
+        val resultsShown = errorContent == null && phase == SearchListPhase.Results
         Box(modifier = Modifier.fillMaxSize().then(if (resultsShown) Modifier.firstTapClosesKeyboard() else Modifier)) {
             if (errorContent != null) {
                 errorContent()
