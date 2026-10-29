@@ -118,6 +118,8 @@ fun MediaViewerDialog(
                             modifier = Modifier.fillMaxSize(),
                             // Originals are never written to the disk cache (Instant Screens §6).
                             cacheOnDisk = false,
+                            // On the black canvas, so only the photo moves when it's pulled down.
+                            background = Color.Transparent,
                         )
                     PostMediaKind.Document -> PostPdfSlide(url = item.url, localFile = localPdfFile)
                     PostMediaKind.Video ->
