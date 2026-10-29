@@ -2930,24 +2930,35 @@ router.post('/rooms/:roomId/participants', verifyToken, participantLimiter, asyn
       return res.status(403).json({ error: 'Not authorized to add participants' });
     }
     
-    // Add new participant
-    const { data: newParticipant, error } = await supabaseAdmin
+    const participantSelection = `*, user:user_id(id, username, name, profile_picture_url)`;
+    // Keep the existing membership row when an owner adds a departed group member again.
+    // Active duplicates still fail, and rejoining never restores an old admin role.
+    let { data: newParticipant, error } = await supabaseAdmin
       .from('ChatParticipant')
       .insert({
         room_id: roomId,
         user_id: newUserId,
         role: 'member'
       })
-      .select(`
-        *,
-        user:user_id(
-          id,
-          username,
-          name,
-          profile_picture_url
-        )
-      `)
+      .select(participantSelection)
       .single();
+
+    if (error?.code === '23505') {
+      const { data: room, error: roomError } = await supabaseAdmin
+        .from('ChatRoom').select('type').eq('id', roomId).maybeSingle();
+      if (roomError) throw roomError;
+      if (room?.type === 'group') {
+        ({ data: newParticipant, error } = await supabaseAdmin
+          .from('ChatParticipant')
+          .update({ is_active: true, left_at: null, role: 'member' })
+          .eq('room_id', roomId).eq('user_id', newUserId)
+          .eq('is_active', false).not('left_at', 'is', null)
+          .select(participantSelection).maybeSingle());
+        if (!error && !newParticipant) {
+          return res.status(400).json({ error: 'User is already a participant' });
+        }
+      }
+    }
     
     if (error) {
       if (error.code === '23505') { // Unique constraint violation
