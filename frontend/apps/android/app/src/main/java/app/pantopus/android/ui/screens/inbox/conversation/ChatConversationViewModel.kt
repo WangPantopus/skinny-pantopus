@@ -65,6 +65,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -2754,6 +2756,7 @@ class ChatConversationViewModel
 
         private fun refuseHistory(error: NetworkError) {
             _olderPageFailed.value = false
+            _composerClosedNote.value = error.message
             historyGeneration++
             historyRefusal = error.message
             historyPage = null
@@ -3006,6 +3009,28 @@ class ChatConversationViewModel
 
         // MARK: - Realtime
 
+        private suspend fun observeCanonicalChanges() {
+            socket.eventsOf("sync:changed")
+                .filter { payload ->
+                    val topics = payload.optJSONArray("topics") ?: return@filter false
+                    (0 until topics.length()).any { index ->
+                        when (val thread = mode) {
+                            is ChatThreadMode.Room -> topics.optString(index) == "chat:${thread.id.lowercase()}"
+                            is ChatThreadMode.Person -> topics.optString(index) == "chats"
+                            is ChatThreadMode.Ai -> false
+                        }
+                    }
+                }
+                .collectLatest {
+                    // Unrelated account changes must not cancel a pending room refresh.
+                    // Membership changes and DB-only edits have no message event.
+                    if (isForeground) {
+                        delay(500)
+                        if (isForeground) catchUpMessages()
+                    }
+                }
+        }
+
         private fun subscribeToSockets() {
             if (connectionJob == null) {
                 connectionJob =
@@ -3029,7 +3054,8 @@ class ChatConversationViewModel
             if (messageJob == null) {
                 messageJob =
                     viewModelScope.launch {
-                        socket.eventsOf("message:new").collect { handleIncoming(it) }
+                        launch { socket.eventsOf("message:new").collect { handleIncoming(it) } }
+                        launch { observeCanonicalChanges() }
                     }
             }
             if (updateJob == null) {

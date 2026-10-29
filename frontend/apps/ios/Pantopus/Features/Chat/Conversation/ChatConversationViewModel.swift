@@ -3296,6 +3296,7 @@ public final class ChatConversationViewModel {
             switch apiError {
             case .forbidden, .notFound, .unauthorized:
                 discardSavedThread()
+                sendRefusalNote = friendlyMessage(error)
                 state = .error(message: friendlyMessage(error))
                 return
             default: break
@@ -3530,7 +3531,28 @@ public final class ChatConversationViewModel {
 
     // MARK: - Realtime
 
+    private func subscribeToCanonicalChanges() {
+        socketTasks.append(Task { [weak self] in
+            guard let stream = self?.socket.events(named: "sync:changed", as: SyncChangedEvent.self) else { return }
+            for await event in stream {
+                guard let self else { return }
+                let relevant = switch mode {
+                case let .room(roomId):
+                    event.topics.contains(ScreenTopic.chat(roomId))
+                case .person:
+                    event.topics.contains(ScreenTopic.chats)
+                case .ai:
+                    false
+                }
+                // Membership changes and DB-only edits have no message event.
+                // Reuse the coalesced delta refresh to reconcile an open thread.
+                if relevant { scheduleFallbackRefresh() }
+            }
+        })
+    }
+
     private func subscribeToSockets() {
+        subscribeToCanonicalChanges()
         // Each loop holds the view model weakly between events, so one that
         // is dropped without `teardown()` stops handling events and can be
         // freed, instead of staying alive (and polling) inside the loop.
