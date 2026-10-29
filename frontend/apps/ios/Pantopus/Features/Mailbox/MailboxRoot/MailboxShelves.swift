@@ -7,6 +7,7 @@
 //  closed Home box while the address waits for proof (R14), and the banner
 //  for a vacation hold (R11).
 //
+// swiftlint:disable file_length
 
 import SwiftUI
 
@@ -66,6 +67,8 @@ private struct MailCounterRow: View {
             .accessibilityLabel(item.spokenLabel)
             .accessibilityAddTraits(.isButton)
             .accessibilityIdentifier("mailCounterPiece.\(item.id)")
+            // The letter opens out of this piece and goes back into it.
+            .itemZoomSource(.mailPiece, id: item.id)
             HStack(alignment: .center, spacing: Spacing.s2) {
                 (Text(item.lineTitle).fontWeight(.semibold)
                     + Text(item.lineDetail.map { " · \($0)" } ?? "")
@@ -133,46 +136,51 @@ struct MailVaultShelf: View {
     @Bindable var viewModel: MailboxRootViewModel
     let filedEmpty: Bool
     let hasMore: Bool
+    /// The search box has the keyboard: a tap on the shelf below only closes it.
+    @FocusState private var searchFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s4) {
             searchField
-            if let results = viewModel.vaultResults {
-                searchResults(results)
-            } else {
-                if viewModel.openFolder == nil {
-                    folders
-                } else if let folder = viewModel.openFolder {
-                    Button { viewModel.openVaultFolder(nil) } label: {
-                        HStack(spacing: Spacing.s1) {
-                            Icon(.chevronLeft, size: 16, strokeWidth: 2.25, color: Theme.Color.primaryInk)
-                            Text("All folders")
-                        }
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Theme.Color.primaryInk)
-                        .frame(minHeight: 44)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("mailVaultAllFolders")
-                    sectionTitle(folder.label)
-                }
-                if viewModel.openFolder == nil { sectionTitle("Recently filed") }
-                if filedEmpty {
-                    Text(viewModel.openFolder == nil
-                        ? "Nothing filed yet. File a letter from its page and it waits here."
-                        : "Nothing in this folder yet.")
-                        .font(.system(size: 14))
-                        .foregroundStyle(Theme.Color.appTextSecondary)
-                        .accessibilityIdentifier("mailVaultEmpty")
+            Group {
+                if let results = viewModel.vaultResults {
+                    searchResults(results)
                 } else {
-                    pieceRows(viewModel.pieceSections.flatMap(\.pieces), pagesMore: true)
-                    MailLoadMoreFooter(viewModel: viewModel, hasMore: hasMore)
-                }
-                if viewModel.openFolder == nil, !viewModel.archivedPieces.isEmpty {
-                    sectionTitle("Archived")
-                    pieceRows(viewModel.archivedPieces)
+                    if viewModel.openFolder == nil {
+                        folders
+                    } else if let folder = viewModel.openFolder {
+                        Button { viewModel.openVaultFolder(nil) } label: {
+                            HStack(spacing: Spacing.s1) {
+                                Icon(.chevronLeft, size: 16, strokeWidth: 2.25, color: Theme.Color.primaryInk)
+                                Text("All folders")
+                            }
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Theme.Color.primaryInk)
+                            .frame(minHeight: 44)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("mailVaultAllFolders")
+                        sectionTitle(folder.label)
+                    }
+                    if viewModel.openFolder == nil { sectionTitle("Recently filed") }
+                    if filedEmpty {
+                        Text(viewModel.openFolder == nil
+                            ? "Nothing filed yet. File a letter from its page and it waits here."
+                            : "Nothing in this folder yet.")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Theme.Color.appTextSecondary)
+                            .accessibilityIdentifier("mailVaultEmpty")
+                    } else {
+                        pieceRows(viewModel.pieceSections.flatMap(\.pieces), pagesMore: true)
+                        MailLoadMoreFooter(viewModel: viewModel, hasMore: hasMore)
+                    }
+                    if viewModel.openFolder == nil, !viewModel.archivedPieces.isEmpty {
+                        sectionTitle("Archived")
+                        pieceRows(viewModel.archivedPieces)
+                    }
                 }
             }
+            .closesKeyboardFirst(searchFocused)
         }
         .padding(.horizontal, Spacing.s4)
         .padding(.top, 14)
@@ -185,6 +193,7 @@ struct MailVaultShelf: View {
             Icon(.search, size: 18, color: Theme.Color.appTextSecondary)
             TextField("Search everything you have filed", text: $viewModel.vaultQuery)
                 .font(.system(size: 15))
+                .focused($searchFocused)
                 .submitLabel(.search)
                 .onSubmit { Task { await viewModel.searchVault() } }
                 .accessibilityIdentifier("mailVaultSearch")
@@ -203,6 +212,8 @@ struct MailVaultShelf: View {
         .frame(minHeight: 44)
         .background(Theme.Color.appSurface, in: RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous).strokeBorder(Theme.Color.appBorder, lineWidth: 1))
+        // Clearing the box keeps typing.
+        .keepsKeyboardOnTap()
     }
 
     @ViewBuilder

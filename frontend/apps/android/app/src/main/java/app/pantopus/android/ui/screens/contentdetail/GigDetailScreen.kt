@@ -49,6 +49,8 @@ import app.pantopus.android.core.security.SensitiveClipboard
 import app.pantopus.android.data.api.models.offers.BidDto
 import app.pantopus.android.ui.components.Toast
 import app.pantopus.android.ui.components.ToastAppearance
+import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.gigs.checkout.GigBidCheckoutHost
 import app.pantopus.android.ui.screens.my_bids.EditBidFailure
@@ -382,6 +384,7 @@ fun GigDetailScreen(
     if (showReportSheet) {
         val submit = remember { SheetSubmit() }
         ModalBottomSheet(
+            modifier = Modifier.closesKeyboardOnTapOrScroll(),
             onDismissRequest = { showReportSheet = false },
             sheetState = reportSheetState,
         ) {
@@ -405,6 +408,7 @@ fun GigDetailScreen(
     if (showRescheduleSheet) {
         val submit = remember { SheetSubmit() }
         ModalBottomSheet(
+            modifier = Modifier.closesKeyboardOnTapOrScroll(),
             onDismissRequest = { showRescheduleSheet = false },
             sheetState = rescheduleSheetState,
         ) {
@@ -444,6 +448,7 @@ fun GigDetailScreen(
     if (target != null) {
         val bidFailure = remember(target.id) { EditBidFailure() }
         ModalBottomSheet(
+            modifier = Modifier.closesKeyboardOnTapOrScroll(),
             onDismissRequest = { sheetTarget = null },
             sheetState = sheetState,
         ) {
@@ -489,6 +494,7 @@ fun GigDetailScreen(
     val delivery = deliveryTarget
     if (delivery != null) {
         ModalBottomSheet(
+            modifier = Modifier.closesKeyboardOnTapOrScroll(),
             onDismissRequest = {
                 viewModel.retireDeliveryProof()
                 deliveryTarget = null
@@ -513,6 +519,7 @@ fun GigDetailScreen(
 
     if (showTipSheet) {
         ModalBottomSheet(
+            modifier = Modifier.closesKeyboardOnTapOrScroll(),
             onDismissRequest = { showTipSheet = false },
             sheetState = tipSheetState,
         ) {
@@ -683,6 +690,7 @@ internal fun TipAmountSheet(
             Row(
                 modifier =
                     Modifier
+                        .keepsKeyboard()
                         .fillMaxWidth()
                         .heightIn(min = 48.dp)
                         .clip(RoundedCornerShape(Radii.md))

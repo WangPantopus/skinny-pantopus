@@ -37,6 +37,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.screens.auth.sign_up.ErrorBanner
 import app.pantopus.android.ui.screens.status.StatusWaitingContent
 import app.pantopus.android.ui.screens.status.StatusWaitingScreen
@@ -200,6 +201,7 @@ private fun EmailField(
         Row(
             modifier =
                 Modifier
+                    .keepsKeyboard()
                     .fillMaxWidth()
                     .height(44.dp)
                     .clip(RoundedCornerShape(Radii.md))

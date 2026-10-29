@@ -24,6 +24,7 @@ import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.profile.ProfileRepository
 import app.pantopus.android.ui.components.PantopusFieldState
 import app.pantopus.android.ui.components.PantopusTextField
+import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
 import app.pantopus.android.ui.screens.auth.AuthValidation
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusTextStyle
@@ -158,7 +159,7 @@ fun NamePromptHost(
     AlertDialog(
         onDismissRequest = viewModel::dismiss,
         properties = DialogProperties(dismissOnClickOutside = false),
-        modifier = Modifier.testTag(NamePromptTags.DIALOG),
+        modifier = Modifier.closesKeyboardOnTapOrScroll().testTag(NamePromptTags.DIALOG),
         title = { Text("What should we call you?", style = PantopusTextStyle.h3) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {

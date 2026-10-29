@@ -35,6 +35,8 @@ function query(sql) {
 const payer = 'aae20000-0000-4000-8000-000000000001';
 const worker = 'aae20000-0000-4000-8000-000000000002';
 const other = 'aae20000-0000-4000-8000-000000000003';
+// A person has one active bid per task, so the free bid comes from a fourth person.
+const neighbor = 'aae20000-0000-4000-8000-000000000004';
 const gig = 'aae20000-0000-4000-8000-000000000101';
 const bid = 'aae20000-0000-4000-8000-000000000201';
 const otherBid = 'aae20000-0000-4000-8000-000000000202';
@@ -54,15 +56,16 @@ const json = async (sql) => JSON.parse(await query(sql).done);
   try {
     await query(`BEGIN;
       INSERT INTO auth.users(id,email) VALUES('${payer}','paid-concurrency-payer@example.invalid'),
-        ('${worker}','paid-concurrency-worker@example.invalid'),('${other}','paid-concurrency-other@example.invalid');
+        ('${worker}','paid-concurrency-worker@example.invalid'),('${other}','paid-concurrency-other@example.invalid'),
+        ('${neighbor}','paid-concurrency-neighbor@example.invalid');
       INSERT INTO public."User"(id,email,username,name,stripe_customer_id)
       SELECT id,email,'paid_concurrency_'||right(id::text,1),'Paid concurrency','cus_concurrency'||right(id::text,1)
-      FROM auth.users WHERE id IN ('${payer}','${worker}','${other}');
+      FROM auth.users WHERE id IN ('${payer}','${worker}','${other}','${neighbor}');
       INSERT INTO public."Gig"(id,user_id,created_by,title,description,price)
       VALUES('${gig}','${payer}','${payer}','Paid concurrency','Synthetic contract',20);
       INSERT INTO public."GigBid"(id,gig_id,user_id,bid_amount)
       VALUES('${bid}','${gig}','${worker}',12.50),('${otherBid}','${gig}','${other}',13.50),
-        ('${freeBid}','${gig}','${other}',0); COMMIT;`).done;
+        ('${freeBid}','${gig}','${neighbor}',0); COMMIT;`).done;
     created = true;
     await assert.rejects(query(`BEGIN; ${begin()} SELECT 1/0; COMMIT;`).done);
     assert.equal(await query(`SELECT count(*) FROM public."GigPaymentAcceptance" WHERE gig_id='${gig}';`).done, '0');
@@ -109,11 +112,12 @@ const json = async (sql) => JSON.parse(await query(sql).done);
     assert.equal(JSON.parse(assigned[1]).reused, true); assert.equal(JSON.parse(assigned[2]).reused, true);
     assert.equal(JSON.parse(assigned[3]).error, 'CONFLICT');
     assert.equal(await query(`SELECT count(*) FROM public."GigBid" WHERE gig_id='${gig}' AND status='accepted';`).done, '1');
+    // The worker's acceptance and payout-setup nudge, plus one standby notice for each of the two other bidders.
     const eventCount = await query(`SELECT count(*) FROM public."GigAcceptanceDelivery" WHERE acceptance_id='${attempt.id}';`).done;
-    assert.equal(eventCount, '3');
+    assert.equal(eventCount, '4');
     const claims = (await Promise.all(Array.from({ length: 6 }, () => query('SELECT public.claim_gig_acceptance_delivery();').done)))
       .filter(Boolean).map(JSON.parse);
-    assert.equal(claims.length, 3); assert.equal(new Set(claims.map((e) => e.id)).size, 3);
+    assert.equal(claims.length, 4); assert.equal(new Set(claims.map((e) => e.id)).size, 4);
     const first = claims[0];
     await query(`UPDATE public."GigAcceptanceDelivery" SET lease_until=now()-interval '1 minute' WHERE id='${first.id}';`).done;
     const reclaimed = await json('SELECT public.claim_gig_acceptance_delivery();');
@@ -130,17 +134,24 @@ const json = async (sql) => JSON.parse(await query(sql).done);
     assert.equal(eligibility.eligible, false);
     assert.equal(await query(`SELECT public.finish_gig_acceptance_delivery('${first.id}','${reclaimed.lease_id}','suppressed');`).done, 't');
     await query(`UPDATE public."Gig" SET status='completed',worker_completed_at=now() WHERE id='${gig}';`).done;
+    const original = await json(`SELECT public.prepare_gig_completion_original('${gig}','${payer}',
+      (SELECT to_jsonb(g) FROM public."Gig" g WHERE id='${gig}'),repeat('a',64),5,'Synthetic review');`);
+    assert.equal(original.payment.gig_completion_original.state, 'pending');
     const prepare = `SELECT public.prepare_paid_gig_capture('${payment}');`;
-    await overlap(prepare, [prepare, prepare, prepare]);
-    assert.equal(await query(`SELECT capture_attempts FROM public."Payment" WHERE id='${payment}';`).done, '4');
+    const captureClaims = await overlap(prepare, [prepare, prepare, prepare]);
+    assert.equal(JSON.parse(captureClaims[0].split('\n')[0]).payment.capture_attempts, 1);
+    for (const competing of captureClaims.slice(1)) assert.equal(JSON.parse(competing).error, 'CAPTURE_IN_PROGRESS');
+    assert.equal(await query(`SELECT capture_attempts FROM public."Payment" WHERE id='${payment}';`).done, '1');
     const record = `SELECT public.record_paid_gig_capture('${payment}','pi_concurrency1','ch_concurrency1',1250,'cus_concurrency1','usd');`;
     const captured = await overlap(record, [record, record]);
     const receipt = JSON.parse(captured[0].split('\n')[0]).payment;
     assert.equal(JSON.parse(captured[1]).reused, true); assert.equal(JSON.parse(captured[2]).reused, true);
     assert.equal(JSON.parse(captured[1]).payment.captured_at, receipt.captured_at);
     assert.equal(JSON.parse(captured[2]).payment.cooling_off_ends_at, receipt.cooling_off_ends_at);
+    const confirmedAt = await query(`SELECT owner_confirmed_at FROM public."Gig" WHERE id='${gig}';`).done;
+    assert.ok(confirmedAt, 'The captured original must confirm completion atomically');
     await assert.rejects(query(`BEGIN; UPDATE public."Gig" SET owner_confirmed_at=now() WHERE id='${gig}'; SELECT 1/0; COMMIT;`).done);
-    assert.equal(await query(`SELECT owner_confirmed_at IS NULL FROM public."Gig" WHERE id='${gig}';`).done, 't');
+    assert.equal(await query(`SELECT owner_confirmed_at FROM public."Gig" WHERE id='${gig}';`).done, confirmedAt);
     console.log(`Paid-gig acceptance/capture concurrency passed (${connections} local PostgreSQL connections).`);
   } finally {
     if (created) await query(`BEGIN;
@@ -151,7 +162,7 @@ const json = async (sql) => JSON.parse(await query(sql).done);
       UPDATE public."Gig" SET payment_id=NULL WHERE id='${gig}';
       DELETE FROM public."Payment" WHERE id='${payment}';
       DELETE FROM public."Gig" WHERE id='${gig}';
-      DELETE FROM public."User" WHERE id IN ('${payer}','${worker}','${other}');
-      DELETE FROM auth.users WHERE id IN ('${payer}','${worker}','${other}'); COMMIT;`).done;
+      DELETE FROM public."User" WHERE id IN ('${payer}','${worker}','${other}','${neighbor}');
+      DELETE FROM auth.users WHERE id IN ('${payer}','${worker}','${other}','${neighbor}'); COMMIT;`).done;
   }
-})().catch((error) => { console.error(error.message); process.exitCode = 1; });
+})().catch((error) => { console.error(error.stack || error.message); process.exitCode = 1; });

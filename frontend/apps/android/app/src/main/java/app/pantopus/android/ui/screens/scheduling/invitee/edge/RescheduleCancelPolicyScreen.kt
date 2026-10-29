@@ -41,6 +41,8 @@ import app.pantopus.android.ui.components.DestructiveButton
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.GhostButton
 import app.pantopus.android.ui.components.PrimaryButton
+import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingLoadingSkeleton
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingPillar
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingStatusPill
@@ -457,7 +459,12 @@ private fun RescheduleSheet(
     onDismiss: () -> Unit,
 ) {
     val sheet = rememberModalBottomSheetState()
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, containerColor = PantopusColors.appSurface) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheet,
+        containerColor = PantopusColors.appSurface,
+        modifier = Modifier.closesKeyboardOnTapOrScroll(),
+    ) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s4).padding(bottom = Spacing.s6),
             verticalArrangement = Arrangement.spacedBy(Spacing.s3),
@@ -505,7 +512,12 @@ private fun CancelSheet(
 ) {
     val sheet = rememberModalBottomSheetState()
     var reason by remember { mutableStateOf("") }
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, containerColor = PantopusColors.appSurface) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheet,
+        containerColor = PantopusColors.appSurface,
+        modifier = Modifier.closesKeyboardOnTapOrScroll(),
+    ) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s4).padding(bottom = Spacing.s6),
             verticalArrangement = Arrangement.spacedBy(Spacing.s3),
@@ -522,6 +534,7 @@ private fun CancelSheet(
             Box(
                 modifier =
                     Modifier
+                        .keepsKeyboard()
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(Radii.md))
                         .background(PantopusColors.appSurfaceSunken)

@@ -18,6 +18,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import app.pantopus.android.core.routing.DeepLinkRouter
+import app.pantopus.android.ui.components.ClosesKeyboardOnNavigation
 import app.pantopus.android.ui.screens.auth.auth_error.AuthErrorScreen
 import app.pantopus.android.ui.screens.auth.forgot_password.ForgotPasswordScreen
 import app.pantopus.android.ui.screens.auth.set_password.SetNewPasswordScreen
@@ -44,6 +45,7 @@ import app.pantopus.android.ui.theme.PantopusColors
 @Composable
 fun AuthNavHost() {
     val navController = rememberNavController()
+    ClosesKeyboardOnNavigation(navController)
     val pendingDeepLink by DeepLinkRouter.pending.collectAsStateWithLifecycle()
 
     // Pull auth deep links (reset / verify / join-invite) off DeepLinkRouter

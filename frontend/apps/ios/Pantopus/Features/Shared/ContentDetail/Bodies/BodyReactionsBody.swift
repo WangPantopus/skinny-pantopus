@@ -142,6 +142,9 @@ public struct BodyReactionsBody: View {
     private let postedRecently: Bool
     private let hiddenReplyCount: Int
     private let onShowMoreReplies: (@MainActor () -> Void)?
+    /// Asks for the comments again when they failed to load. A post that zooms
+    /// open has no pull to refresh, so the failure line carries the button.
+    private let onRetryComments: (@MainActor () -> Void)?
     private let onCommentAvatarTap: @MainActor (String) -> Void
     /// Author name the composer is replying to (nil = top-level).
     private let replyingToName: String?
@@ -189,6 +192,7 @@ public struct BodyReactionsBody: View {
         postedRecently: Bool = false,
         hiddenReplyCount: Int = 0,
         onShowMoreReplies: (@MainActor () -> Void)? = nil,
+        onRetryComments: (@MainActor () -> Void)? = nil,
         replyingToName: String? = nil,
         onCancelReply: (@MainActor () -> Void)? = nil,
         onCommentReply: (@MainActor (PostCommentRow) -> Void)? = nil,
@@ -220,6 +224,7 @@ public struct BodyReactionsBody: View {
         self.postedRecently = postedRecently
         self.hiddenReplyCount = hiddenReplyCount
         self.onShowMoreReplies = onShowMoreReplies
+        self.onRetryComments = onRetryComments
         self.replyingToName = replyingToName
         self.onCancelReply = onCancelReply
         self.onCommentReply = onCommentReply
@@ -230,66 +235,71 @@ public struct BodyReactionsBody: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s4) {
-            if !bodyText.isEmpty {
-                PostLinkText(bodyText)
-                    .font(.system(size: 15, weight: .regular))
-                    .foregroundStyle(Theme.Color.appText)
-                    .lineSpacing(7) // 15 + 7 ≈ 22pt line height
-                    .padding(.horizontal, Spacing.s4)
-                    .accessibilityLabel(bodyText)
-            }
+            // While the reply is typed, a tap on the post only closes the
+            // keyboard (founder request 2026-10-29); the reply box is below.
+            Group {
+                if !bodyText.isEmpty {
+                    PostLinkText(bodyText)
+                        .font(.system(size: 15, weight: .regular))
+                        .foregroundStyle(Theme.Color.appText)
+                        .lineSpacing(7) // 15 + 7 ≈ 22pt line height
+                        .padding(.horizontal, Spacing.s4)
+                        .accessibilityLabel(bodyText)
+                }
 
-            if let eventDetails {
-                PulseEventDetailRows(
-                    details: eventDetails,
-                    style: .page,
-                    whenIdentifier: "pulsePostDetail-eventWhen",
-                    placeIdentifier: "pulsePostDetail-eventPlace"
+                if let eventDetails {
+                    PulseEventDetailRows(
+                        details: eventDetails,
+                        style: .page,
+                        whenIdentifier: "pulsePostDetail-eventWhen",
+                        placeIdentifier: "pulsePostDetail-eventPlace"
+                    )
+                    .padding(.horizontal, Spacing.s4)
+                }
+
+                if let detailLine {
+                    // Selectable, so a phone number can be copied.
+                    Text(detailLine)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                        .textSelection(.enabled)
+                        .padding(.horizontal, Spacing.s4)
+                        .accessibilityIdentifier("pulsePostDetail-detailLine")
+                }
+
+                if !media.isEmpty {
+                    PostMediaGridView(
+                        items: media,
+                        style: .regular,
+                        accessibilityID: "pulsePostDetail-media",
+                        locationBadge: mediaLocationBadge,
+                        usesSharpPreviews: true,
+                        edgeToEdge: true
+                    )
+                }
+
+                ReactionsBar(
+                    counts: reactions,
+                    commentCount: visibleCommentCount,
+                    commentsAreFresh: threadIsEmpty,
+                    postedRecently: postedRecently,
+                    selectedEmoji: selectedReactionEmoji,
+                    onEmojiSelected: onEmojiSelected,
+                    onTap: onReactionTap
                 )
                 .padding(.horizontal, Spacing.s4)
-            }
 
-            if let detailLine {
-                // Selectable, so a phone number can be copied.
-                Text(detailLine)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Theme.Color.appTextSecondary)
-                    .textSelection(.enabled)
+                Rectangle()
+                    .fill(Theme.Color.appBorder)
+                    .frame(height: 1)
                     .padding(.horizontal, Spacing.s4)
-                    .accessibilityIdentifier("pulsePostDetail-detailLine")
+
+                if let belowReactions {
+                    belowReactions
+                        .padding(.horizontal, Spacing.s4)
+                }
             }
-
-            if !media.isEmpty {
-                PostMediaGridView(
-                    items: media,
-                    style: .regular,
-                    accessibilityID: "pulsePostDetail-media",
-                    locationBadge: mediaLocationBadge,
-                    usesSharpPreviews: true,
-                    edgeToEdge: true
-                )
-            }
-
-            ReactionsBar(
-                counts: reactions,
-                commentCount: visibleCommentCount,
-                commentsAreFresh: threadIsEmpty,
-                postedRecently: postedRecently,
-                selectedEmoji: selectedReactionEmoji,
-                onEmojiSelected: onEmojiSelected,
-                onTap: onReactionTap
-            )
-            .padding(.horizontal, Spacing.s4)
-
-            Rectangle()
-                .fill(Theme.Color.appBorder)
-                .frame(height: 1)
-                .padding(.horizontal, Spacing.s4)
-
-            if let belowReactions {
-                belowReactions
-                    .padding(.horizontal, Spacing.s4)
-            }
+            .closesKeyboardFirst()
 
             if repliesClosedNote == nil, let replyingToName {
                 HStack(spacing: Spacing.s2) {
@@ -367,6 +377,7 @@ public struct BodyReactionsBody: View {
                     }
                 }
                 .padding(.horizontal, Spacing.s4)
+                .closesKeyboardFirst()
             } else if !threadIsEmpty {
                 pendingThread
             } else if repliesClosedNote == nil {
@@ -411,11 +422,27 @@ public struct BodyReactionsBody: View {
             .accessibilityLabel("Loading comments")
             .accessibilityIdentifier("pulsePostDetail-commentsLoading")
         case let .failed(count) where count > 0:
-            Text("Couldn't load the comments. Pull down to try again.")
-                .font(.system(size: PantopusTextStyle.small.size))
-                .foregroundStyle(Theme.Color.appTextSecondary)
+            if let onRetryComments {
+                HStack(spacing: Spacing.s2) {
+                    Text("Couldn't load the comments.")
+                        .font(.system(size: PantopusTextStyle.small.size))
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                    Button("Try again", action: onRetryComments)
+                        .font(.system(size: PantopusTextStyle.small.size, weight: .semibold))
+                        .foregroundStyle(Theme.Color.primaryInk)
+                        .frame(minHeight: 44)
+                        .accessibilityIdentifier("pulsePostDetail-commentsRetry")
+                }
                 .padding(.horizontal, Spacing.s4)
+                .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("pulsePostDetail-commentsFailed")
+            } else {
+                Text("Couldn't load the comments. Pull down to try again.")
+                    .font(.system(size: PantopusTextStyle.small.size))
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .padding(.horizontal, Spacing.s4)
+                    .accessibilityIdentifier("pulsePostDetail-commentsFailed")
+            }
         default:
             EmptyView()
         }

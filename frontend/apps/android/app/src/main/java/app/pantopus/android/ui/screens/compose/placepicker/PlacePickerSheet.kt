@@ -46,6 +46,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.api.models.geo.GeoPlace
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
+import app.pantopus.android.ui.components.firstTapClosesKeyboard
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -147,7 +150,7 @@ fun PlacePickerSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = PantopusColors.appSurface,
-        modifier = modifier.testTag(PLACE_PICKER_TAG),
+        modifier = modifier.closesKeyboardOnTapOrScroll().testTag(PLACE_PICKER_TAG),
     ) {
         Header(onDone = onDismiss)
         SearchBox(query = query, onQueryChange = viewModel::onQueryChange)
@@ -191,10 +194,12 @@ private fun ColumnScope.ListArea(
     onSelect: (PostPlaceTag) -> Unit,
     onRetry: () -> Unit,
 ) {
+    // While typing in the search box, the first tap on a place only puts the keyboard away.
     Column(
         modifier =
             Modifier
                 .weight(1f, fill = false)
+                .firstTapClosesKeyboard()
                 .verticalScroll(rememberScrollState()),
     ) {
         when (val current = state) {
@@ -262,6 +267,7 @@ private fun SearchBox(
     Row(
         modifier =
             Modifier
+                .keepsKeyboard()
                 .fillMaxWidth()
                 .padding(horizontal = Spacing.s4, vertical = Spacing.s2)
                 .clip(RoundedCornerShape(Radii.md))

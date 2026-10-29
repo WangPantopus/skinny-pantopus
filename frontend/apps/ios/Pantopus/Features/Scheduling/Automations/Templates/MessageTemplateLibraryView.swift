@@ -14,6 +14,9 @@ import SwiftUI
 
 struct MessageTemplateLibraryView: View {
     @State private var model: MessageTemplateLibraryViewModel
+    /// The search box has the keyboard: a tap on the templates only closes
+    /// it (founder request 2026-10-29).
+    @FocusState private var searchFocused: Bool
     @Environment(\.dismiss) private var dismiss
 
     init(
@@ -67,7 +70,10 @@ struct MessageTemplateLibraryView: View {
         HStack(spacing: Spacing.s2) {
             Icon(.search, size: 15, color: Theme.Color.appTextMuted)
             TextField("Search templates", text: $model.query)
-                .font(Theme.Font.small).foregroundStyle(Theme.Color.appText).autocorrectionDisabled()
+                .font(Theme.Font.small)
+                .foregroundStyle(Theme.Color.appText)
+                .autocorrectionDisabled()
+                .focused($searchFocused)
         }
         .padding(.horizontal, 12)
         .frame(height: 40)
@@ -99,7 +105,9 @@ struct MessageTemplateLibraryView: View {
             }
             .padding(.horizontal, Spacing.s3)
             .padding(.top, Spacing.s3)
+            .closesKeyboardFirst(searchFocused)
         }
+        .scrollDismissesKeyboard(.immediately)
     }
 
     private var starterGroup: some View {

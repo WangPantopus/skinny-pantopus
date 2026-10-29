@@ -78,6 +78,7 @@ import app.pantopus.android.data.api.models.place.WeatherAlertSeverity
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.homes.HomeTaskEditPatch
 import app.pantopus.android.ui.components.GhostButton
+import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
 import app.pantopus.android.ui.screens.ballot.BallotPlacement
 import app.pantopus.android.ui.screens.ballot.BallotTodayCard
 import app.pantopus.android.ui.screens.homes.tasks.HomeTaskCreationFactory
@@ -1099,7 +1100,11 @@ private fun RadonTaskSheet(state: RadonTodayState) {
         } else {
             !state.selectedDate.isBefore(LocalDate.now())
         }
-    ModalBottomSheet(onDismissRequest = { if (!state.busy) state.sheet = null }, containerColor = PantopusColors.appSurface) {
+    ModalBottomSheet(
+        onDismissRequest = { if (!state.busy) state.sheet = null },
+        containerColor = PantopusColors.appSurface,
+        modifier = Modifier.closesKeyboardOnTapOrScroll(),
+    ) {
         Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text(
                 if (tested) "When was it tested?" else "Add a radon test to your list",

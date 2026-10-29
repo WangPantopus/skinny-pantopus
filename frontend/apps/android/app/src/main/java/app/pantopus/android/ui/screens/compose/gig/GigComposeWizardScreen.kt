@@ -60,6 +60,7 @@ import app.pantopus.android.data.analytics.AnalyticsEvent
 import app.pantopus.android.data.gigs.GigCameraPhotos
 import app.pantopus.android.ui.components.FutureDateTimePickerDialogs
 import app.pantopus.android.ui.components.PantopusTextField
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.screens.shared.wizard.WizardShell
 import app.pantopus.android.ui.screens.shared.wizard.blocks.FormFieldsBlock
 import app.pantopus.android.ui.screens.shared.wizard.blocks.HeadlineBlock
@@ -472,6 +473,7 @@ private fun DescriptionField(
         Box(
             modifier =
                 Modifier
+                    .keepsKeyboard()
                     .fillMaxWidth()
                     .heightIn(min = 120.dp)
                     .clip(RoundedCornerShape(Radii.md))

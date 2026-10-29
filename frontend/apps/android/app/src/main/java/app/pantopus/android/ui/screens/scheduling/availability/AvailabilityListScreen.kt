@@ -41,6 +41,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.ErrorState
+import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingRoutes
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -357,6 +358,7 @@ private fun RenameDialog(
 ) {
     var value by remember { mutableStateOf(current) }
     AlertDialog(
+        modifier = Modifier.closesKeyboardOnTapOrScroll(),
         onDismissRequest = onDismiss,
         title = { Text("Rename schedule") },
         text = {

@@ -34,6 +34,7 @@ import app.pantopus.android.data.plans.planKind
 import app.pantopus.android.data.plans.standing
 import app.pantopus.android.ui.components.PantopusCheckbox
 import app.pantopus.android.ui.components.PrimaryButton
+import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
 import app.pantopus.android.ui.screens.plans.components.PlanChoice
 import app.pantopus.android.ui.screens.plans.components.PlanChoiceGroup
 import app.pantopus.android.ui.screens.plans.components.PlanOverline
@@ -72,7 +73,12 @@ internal fun PlanAskSheet(
 ) {
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val host = plan.hostFirst
-    ModalBottomSheet(onDismissRequest = onClose, sheetState = sheet, containerColor = PantopusColors.appSurface) {
+    ModalBottomSheet(
+        onDismissRequest = onClose,
+        sheetState = sheet,
+        containerColor = PantopusColors.appSurface,
+        modifier = Modifier.closesKeyboardOnTapOrScroll(),
+    ) {
         Column(
             modifier =
                 Modifier

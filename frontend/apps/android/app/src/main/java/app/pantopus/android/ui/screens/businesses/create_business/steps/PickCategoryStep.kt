@@ -35,6 +35,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.screens.businesses.create_business.BusinessCategory
 import app.pantopus.android.ui.screens.businesses.create_business.CreateBusinessUiState
 import app.pantopus.android.ui.screens.businesses.create_business.WhatYouGetItem
@@ -376,6 +377,7 @@ internal fun BusinessSearchField(
     Row(
         modifier =
             Modifier
+                .keepsKeyboard()
                 .fillMaxWidth()
                 .heightIn(min = 44.dp)
                 .clip(shape)

@@ -68,9 +68,13 @@ const original=Module._load;
 Module._load=function(request,parent,isMain){const resolved=Module._resolveFilename(request,parent,isMain);return replacements.has(resolved)?replacements.get(resolved):original.apply(this,arguments);};
 const stop=require(path.join(root,'backend/services/gigStopService.js'));
 Module._load=original;
-const erase=`DELETE FROM public."Notification" WHERE metadata->>'stop_request_id'='${operation}';
+// Fixture cleanup only: this script refuses anything except a disposable local contract DB.
+// Keep retention enabled for every service call; disable it only inside the cleanup transaction.
+const erase=`ALTER TABLE public."GigStopRequest" DISABLE TRIGGER keep_paid_gig_stop_request;
+ DELETE FROM public."Notification" WHERE metadata->>'stop_request_id'='${operation}';
  DELETE FROM public."GigStopDelivery" WHERE request_id='${operation}';
  DELETE FROM public."GigStopRequest" WHERE gig_id='${gig}';
+ ALTER TABLE public."GigStopRequest" ENABLE TRIGGER keep_paid_gig_stop_request;
  DELETE FROM public."Refund" WHERE payment_id='${payment}'; DELETE FROM public."PaymentRefundReceipt" WHERE payment_id='${payment}';
  DELETE FROM public."PaymentRefundRequest" WHERE payment_id='${payment}'; DELETE FROM public."PaymentRefundRecovery" WHERE payment_id='${payment}';
  DELETE FROM public."WalletTransaction" WHERE payment_id='${payment}'; DELETE FROM public."Wallet" WHERE user_id='${worker}';`;

@@ -40,6 +40,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.api.models.mail_compose.MailHomeContextResponse
 import app.pantopus.android.data.api.models.mail_compose.MailRecipientDto
+import app.pantopus.android.ui.components.firstTapClosesKeyboard
 import app.pantopus.android.ui.screens.shared.wizard.WizardShell
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -182,10 +183,12 @@ internal fun DecideStep(
                 ),
         )
         if (results.isNotEmpty()) {
+            // While typing, the first tap on a result only puts the keyboard away.
             Column(
                 modifier =
                     Modifier
                         .fillMaxWidth()
+                        .firstTapClosesKeyboard()
                         .clip(RoundedCornerShape(10.dp))
                         .background(PantopusColors.appSurface)
                         .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(10.dp)),

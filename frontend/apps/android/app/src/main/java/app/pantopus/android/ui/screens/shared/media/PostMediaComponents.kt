@@ -365,7 +365,8 @@ fun PostMediaTile(
 /**
  * Still image tile (Coil) with shimmer-free loading + error states. [cacheOnDisk] false (the full-screen viewer's
  * originals): read from the disk cache when a tile saved the image, never written (contract §6: original-size photos
- * are never cached automatically).
+ * are never cached automatically). [background] shows while it loads and around a fitted image; the full-screen
+ * viewer passes transparent, so its photos sit on its black canvas, as on iOS.
  */
 @Composable
 fun MediaStillTile(
@@ -375,6 +376,7 @@ fun MediaStillTile(
     onTap: (() -> Unit)? = null,
     cacheOnDisk: Boolean = true,
     fallbackUrl: String? = null,
+    background: Color = PantopusColors.appSurfaceSunken,
 ) {
     val context = LocalContext.current
     val model =
@@ -394,7 +396,7 @@ fun MediaStillTile(
         model = model,
         contentDescription = null,
         contentScale = contentScale,
-        modifier = base.background(PantopusColors.appSurfaceSunken),
+        modifier = base.background(background),
         loading = {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
@@ -406,6 +408,7 @@ fun MediaStillTile(
                     url = fallbackUrl,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = contentScale,
+                    background = background,
                 )
             } else {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -588,6 +591,8 @@ fun LivePhotoTile(
                 modifier = Modifier.fillMaxSize(),
                 cacheOnDisk = !showsReplayButton && !usesSharpPreview && item.thumbnailUrl != null,
                 fallbackUrl = item.thumbnailUrl,
+                // The viewer's black canvas shows around the photo.
+                background = if (showsReplayButton) Color.Transparent else PantopusColors.appSurfaceSunken,
             )
             if (clipAlpha > 0f) {
                 AndroidView(

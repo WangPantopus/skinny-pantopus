@@ -43,6 +43,8 @@ import app.pantopus.android.data.analytics.AnalyticsEvent
 import app.pantopus.android.data.api.models.homes.PetDto
 import app.pantopus.android.data.homes.HomePetsRepository
 import app.pantopus.android.ui.components.PantopusTextField
+import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.screens.shared.wizard.WizardShell
 import app.pantopus.android.ui.screens.shared.wizard.blocks.FormFieldsBlock
 import app.pantopus.android.ui.screens.shared.wizard.blocks.HeadlineBlock
@@ -138,6 +140,7 @@ fun AddPetWizardSheet(
         Box(
             modifier =
                 Modifier
+                    .closesKeyboardOnTapOrScroll()
                     .fillMaxSize()
                     .background(PantopusColors.appBg)
                     .testTag(ADD_PET_WIZARD_TAG),
@@ -315,6 +318,7 @@ private fun DetailsStep(
             Box(
                 modifier =
                     Modifier
+                        .keepsKeyboard()
                         .fillMaxWidth()
                         .heightIn(min = 96.dp)
                         .clip(RoundedCornerShape(Radii.md))

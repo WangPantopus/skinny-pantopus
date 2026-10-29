@@ -20,6 +20,7 @@ const { canActAsBusiness } = require('../services/chatBusinessAccess');
 const logger = require('../utils/logger');
 const { createNotification } = require('../services/notificationService');
 const stripeService = require('../stripe/stripeService');
+const blockService = require('../services/blockService');
 const { PAYMENT_STATES } = require('../stripe/paymentStateMachine');
 const { emitPrivateGigUpdate } = require('../socket/chatSocketio');
 const parsePostGISPoint = require('../utils/parsePostGISPoint');
@@ -69,11 +70,12 @@ router.post('/:gigId/instant-accept', verifyToken, async (req, res) => {
     // 1. Fetch gig
     const { data: gig, error: gigErr } = await supabaseAdmin
       .from('Gig')
-      .select('id, user_id, status, engagement_mode, price, title, scheduled_start, origin_home_id')
+      .select('id, user_id, status, engagement_mode, price, title, scheduled_start, origin_home_id, accepted_by, updated_at, deadline')
       .eq('id', gigId)
-      .single();
+      .maybeSingle();
 
-    if (gigErr || !gig) {
+    if (gigErr) return res.status(503).json({ error: 'Task acceptance is temporarily unavailable' });
+    if (!gig) {
       return res.status(404).json({ error: 'Gig not found' });
     }
 
@@ -85,7 +87,8 @@ router.post('/:gigId/instant-accept', verifyToken, async (req, res) => {
     }
 
     // 3. Validate not already assigned
-    if (gig.status !== 'open') {
+    const replay = gig.status === 'assigned' && gig.accepted_by === helperId;
+    if (gig.status !== 'open' && !replay) {
       return res.status(409).json({
         error: 'This task has already been assigned',
       });
@@ -98,91 +101,66 @@ router.post('/:gigId/instant-accept', verifyToken, async (req, res) => {
       });
     }
 
-    // 5. Validate payout setup (if paid gig)
-    const gigPrice = parseFloat(gig.price || 0);
-    let paymentResult = null;
-    if (gigPrice > 0) {
-      const { data: stripeAcct } = await supabaseAdmin
-        .from('StripeAccount')
-        .select('id, details_submitted, payouts_enabled')
-        .eq('user_id', helperId)
-        .single();
-
-      if (!stripeAcct || !stripeAcct.details_submitted) {
-        return res.status(403).json({
-          error: 'Please complete payout onboarding before accepting paid tasks',
-        });
-      }
-
-      // Initialize payment before assignment to avoid paid gigs getting stuck
-      // with no payment_id (which blocks worker start).
-      try {
-        const amountCents = Math.round(gigPrice * 100);
-        const scheduledStart = gig?.scheduled_start ? new Date(gig.scheduled_start) : null;
-        const now = new Date();
-        const fiveDaysFromNow = new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000);
-        const startsWithinFiveDays = !scheduledStart || scheduledStart <= fiveDaysFromNow;
-
-        paymentResult = startsWithinFiveDays
-          ? await stripeService.createPaymentIntentForGig({
-              payerId: gig.user_id,
-              payeeId: helperId,
-              gigId,
-              amount: amountCents,
-              homeId: gig?.origin_home_id || null,
-            })
-          : await stripeService.createSetupIntent({
-              payerId: gig.user_id,
-              payeeId: helperId,
-              gigId,
-              amount: amountCents,
-              homeId: gig?.origin_home_id || null,
-            });
-      } catch (paymentErr) {
-        logger.error('Instant accept: payment setup failed', {
-          gigId,
-          helperId,
-          error: paymentErr?.message,
-        });
-        return res.status(400).json({
-          error: 'Payment setup failed. Please add a payment method before accepting this task.',
-          code: 'payer_payment_required',
-        });
-      }
-    }
-
-    // 6. Atomically assign — .eq('status', 'open') prevents race conditions
-    const now = new Date().toISOString();
-    const paymentStatus = paymentResult?.payment?.payment_status
-      || (paymentResult?.setupIntentId ? PAYMENT_STATES.SETUP_PENDING : PAYMENT_STATES.AUTHORIZE_PENDING);
-    const updatePayload = {
-      status: 'assigned',
-      accepted_by: helperId,
-      accepted_at: now,
-      ...(paymentResult?.paymentId
-        ? {
-            payment_id: paymentResult.paymentId,
-            payment_status: paymentStatus,
-          }
-        : {}),
-    };
-    const { data: updated, error: updateErr } = await supabaseAdmin
-      .from('Gig')
-      .update(updatePayload)
-      .eq('id', gigId)
-      .eq('status', 'open') // optimistic concurrency guard
-      .select('id, status, accepted_by, accepted_at, title, user_id, price, payment_id, payment_status')
-      .single();
-
-    if (updateErr || !updated) {
-      // Another helper won the race
-      return res.status(409).json({
-        error: 'This task has already been assigned',
-      });
-    }
-
-    // 7. Notify poster
     try {
+      if (await blockService.isBlocked(gig.user_id, helperId)) {
+        return res.status(403).json({ code: 'blocked', error: 'You cannot accept this task' });
+      }
+    } catch {
+      return res.status(503).json({ error: 'Task acceptance is temporarily unavailable. Please retry.' });
+    }
+    const gigPrice = Number(gig.price);
+    let customerId = null;
+    let platformFee = null;
+    if (!replay && gig.deadline && Date.parse(gig.deadline) <= Date.now()) {
+      return res.status(409).json({ code: 'expired', error: 'This task is no longer accepting helpers' });
+    }
+    if (gigPrice > 0 && !replay) {
+      const { data: stripeAcct, error: stripeErr } = await supabaseAdmin
+        .from('StripeAccount').select('details_submitted').eq('user_id', helperId).maybeSingle();
+      if (stripeErr) return res.status(503).json({ error: 'Payout verification is temporarily unavailable' });
+      if (!stripeAcct?.details_submitted) {
+        return res.status(403).json({ code: 'payout_required', error: 'Please complete payout onboarding before accepting paid tasks' });
+      }
+      try {
+        customerId = await stripeService.getOrCreateCustomer(gig.user_id);
+        const rate = await stripeService.getEffectiveFeeRate(helperId);
+        platformFee = stripeService.calculateFees(Math.round(gigPrice * 100), rate).platformFee;
+      } catch (paymentErr) {
+        logger.error('Instant accept: payer setup unavailable', { gigId, error: paymentErr.message });
+        return res.status(503).json({ code: 'payer_payment_required', error: 'The task owner’s payment setup is unavailable. Please try again later.' });
+      }
+    }
+
+    // Reserve the payment and assignment in one transaction before any intent.
+    // Only the owner may start checkout through assigned authorization recovery.
+    const { data: reservation, error: reserveError } = await supabaseAdmin.rpc('reserve_instant_gig', {
+      p_gig_id: gigId, p_helper_id: helperId, p_updated_at: gig.updated_at,
+      p_customer_id: customerId, p_platform_fee: platformFee,
+    });
+    if (reserveError || !reservation) {
+      logger.error('Instant accept reservation failed', { gigId, error: reserveError?.message });
+      return res.status(503).json({ error: 'Task acceptance is temporarily unavailable. Please retry.' });
+    }
+    if (reservation.code) {
+      const errors = {
+        not_found: [404, 'Gig not found'],
+        wrong_mode: [400, 'This task does not use instant accept'],
+        self_accept: [400, 'You cannot accept your own task'],
+        blocked: [403, 'You cannot accept this task'],
+        payout_required: [403, 'Please complete payout onboarding before accepting paid tasks'],
+        assigned: [409, 'This task has already been assigned'],
+        changed: [409, 'This task has changed. Refresh it before accepting.'],
+        expired: [409, 'This task is no longer accepting helpers'],
+        payment_pending: [409, 'This task has a payment in progress. Please try again later.'],
+        invalid_price: [409, 'This task’s price needs to be updated by its owner'],
+      };
+      const [status, message] = errors[reservation.code] || [503, 'Task acceptance is temporarily unavailable'];
+      return res.status(status).json({ code: reservation.code, error: message });
+    }
+    const updated = reservation.gig;
+
+    // A successful retry returns the existing assignment without duplicate alerts.
+    if (!reservation.reused) try {
       await createNotification({
         userId: gig.user_id,
         type: 'task_accepted',
@@ -193,7 +171,7 @@ router.post('/:gigId/instant-accept', verifyToken, async (req, res) => {
         metadata: { gig_id: gigId },
       });
 
-      if (paymentResult?.clientSecret) {
+      if (gigPrice > 0) {
         await createNotification({
           userId: gig.user_id,
           type: 'payment_action_required',
@@ -215,20 +193,13 @@ router.post('/:gigId/instant-accept', verifyToken, async (req, res) => {
       message: 'Task accepted successfully',
       gig: updated,
       paymentRequired: gigPrice > 0,
-      requiresPaymentSetup: Boolean(paymentResult?.clientSecret),
-      isSetupIntent: Boolean(paymentResult?.setupIntentId),
-      payment: paymentResult
-        ? {
-            clientSecret: paymentResult.clientSecret || null,
-            paymentId: paymentResult.paymentId || null,
-            setupIntentId: paymentResult.setupIntentId || null,
-            paymentIntentId: paymentResult.paymentIntentId || null,
-          }
-        : null,
+      requiresPaymentSetup: gigPrice > 0 && updated.payment_status !== PAYMENT_STATES.AUTHORIZED,
+      isSetupIntent: false,
+      payment: null,
       assignment: {
         gig_id: gigId,
         helper_id: helperId,
-        accepted_at: now,
+        accepted_at: updated.accepted_at,
       },
     });
   } catch (err) {

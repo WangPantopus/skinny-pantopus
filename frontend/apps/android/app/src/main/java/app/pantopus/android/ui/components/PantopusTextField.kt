@@ -123,10 +123,12 @@ fun PantopusTextField(
                 )
             }
         }
+        // The whole bordered box counts as the text box: a tap on its padding keeps the keyboard up.
         Row(
             modifier =
                 Modifier
                     .heightIn(min = 44.dp)
+                    .keepsKeyboard()
                     .clip(RoundedCornerShape(Radii.md))
                     .background(containerColor)
                     .border(

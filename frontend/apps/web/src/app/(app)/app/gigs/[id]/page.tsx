@@ -759,7 +759,8 @@ export default function GigDetailsPage() {
             {/* ─── Q&A Section ─── */}
             {/* Launch cut #4 (Open Gigs): task Q&A is hidden. */}
             {launchFeatures.openGigs && <ErrorBoundary>
-              <QASection gigId={gigId} isMyGig={isMyGig} currentUserId={currentUserId} />
+              <QASection gigId={gigId} isMyGig={isMyGig} currentUserId={currentUserId}
+                canAsk={['open', 'assigned', 'in_progress'].includes(gig.status)} />
             </ErrorBoundary>}
 
             {/* ─── Change Orders Section ─── */}

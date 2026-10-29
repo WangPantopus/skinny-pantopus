@@ -49,6 +49,9 @@ public struct SearchListShell<Result: Hashable & Sendable, Row: View>: View {
     /// doesn't see an empty-result flash on every keystroke.
     @State private var debouncedQuery: String = ""
     @FocusState private var fieldFocused: Bool
+    /// The field takes the keyboard when the search opens, not again on the
+    /// way back from a result (it came back by itself, founder report 2026-10-29).
+    @State private var focusedOnOpen = false
 
     public init(
         placeholder: String,
@@ -93,7 +96,11 @@ public struct SearchListShell<Result: Hashable & Sendable, Row: View>: View {
             try? await Task.sleep(nanoseconds: 250_000_000)
             debouncedQuery = query
         }
-        .onAppear { fieldFocused = true }
+        .onAppear {
+            guard !focusedOnOpen else { return }
+            focusedOnOpen = true
+            fieldFocused = true
+        }
     }
 
     // MARK: - Header (cancel + search field + clear)
@@ -135,6 +142,8 @@ public struct SearchListShell<Result: Hashable & Sendable, Row: View>: View {
             .padding(.vertical, Spacing.s2)
             .background(Theme.Color.appSurfaceSunken)
             .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
+            // Clearing the field keeps typing.
+            .keepsKeyboardOnTap()
         }
         .padding(.horizontal, Spacing.s2)
         .padding(.vertical, Spacing.s2)
@@ -210,6 +219,7 @@ public struct SearchListShell<Result: Hashable & Sendable, Row: View>: View {
                 }
             }
         }
+        .scrollDismissesKeyboard(.immediately)
         .background(Theme.Color.appBg)
         .accessibilityIdentifier("searchListRecentSection")
     }
@@ -244,7 +254,11 @@ public struct SearchListShell<Result: Hashable & Sendable, Row: View>: View {
                     row(result)
                 }
             }
+            // While the field has the keyboard, a tap on the results only
+            // closes it (founder request 2026-10-29); tap again to open one.
+            .closesKeyboardFirst(fieldFocused)
         }
+        .scrollDismissesKeyboard(.immediately)
         .background(Theme.Color.appBg)
         .accessibilityIdentifier("searchListResults")
     }

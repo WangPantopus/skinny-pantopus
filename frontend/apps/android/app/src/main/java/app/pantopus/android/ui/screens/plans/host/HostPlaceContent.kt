@@ -43,6 +43,7 @@ import app.pantopus.android.data.plans.PlanFormat
 import app.pantopus.android.data.plans.PlanKind
 import app.pantopus.android.data.plans.PlanPlaceQuery
 import app.pantopus.android.data.plans.planMessage
+import app.pantopus.android.ui.components.firstTapClosesKeyboard
 import app.pantopus.android.ui.screens.plans.colors
 import app.pantopus.android.ui.screens.plans.components.PlanAreaGlow
 import app.pantopus.android.ui.screens.plans.components.PlanAvatar
@@ -317,7 +318,8 @@ internal fun PublicPlacePicker(
                     PlaceSuggestionsSection(state = state, ask = ask, onSuggest = { onSuggest(ask) }, onPick = onPick)
                 }
             }
-            Column {
+            // While typing in the search box, the first tap on a place only puts the keyboard away.
+            Column(modifier = Modifier.firstTapClosesKeyboard()) {
                 PlanOverline(if (searching) "Results" else "Public places near you", modifier = Modifier.padding(bottom = 2.dp))
                 var first = true
                 if (onHereNow != null) {

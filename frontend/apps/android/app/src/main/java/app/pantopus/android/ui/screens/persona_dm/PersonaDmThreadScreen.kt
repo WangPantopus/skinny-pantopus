@@ -43,6 +43,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -383,8 +384,9 @@ private fun Composer(
                         .testTag("personaDmThreadSendError"),
             )
         }
+        // The composer: Send is used while typing, as in chat.
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s3, vertical = Spacing.s2),
+            modifier = Modifier.fillMaxWidth().keepsKeyboard().padding(horizontal = Spacing.s3, vertical = Spacing.s2),
             horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
             verticalAlignment = Alignment.Bottom,
         ) {

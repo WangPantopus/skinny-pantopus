@@ -43,6 +43,8 @@ import app.pantopus.android.data.api.models.homediscovery.DiscoveredHomeDto
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.OfflineBannerHost
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.firstTapClosesKeyboard
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -109,7 +111,8 @@ fun FindHomeScreen(
                 onSubmit = viewModel::submitSearch,
                 onClear = viewModel::clearQuery,
             )
-            Box(modifier = Modifier.weight(1f)) {
+            // While typing in the search box, the first tap on a home only puts the keyboard away.
+            Box(modifier = Modifier.weight(1f).firstTapClosesKeyboard()) {
                 when (val current = state) {
                     is FindHomeUiState.Idle ->
                         FindHomeIdleFrame(onAddMissing = viewModel::addMissingHome)
@@ -195,6 +198,7 @@ private fun FindHomeSearchHeader(
         Row(
             modifier =
                 Modifier
+                    .keepsKeyboard()
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(Radii.md))
                     .background(PantopusColors.appSurface)
@@ -570,6 +574,7 @@ private fun FindHomeInviteSection(
                 Box(
                     modifier =
                         Modifier
+                            .keepsKeyboard()
                             .weight(1f)
                             .heightIn(min = Spacing.s12)
                             .clip(RoundedCornerShape(Radii.md))
