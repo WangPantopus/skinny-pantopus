@@ -112,11 +112,12 @@ const json = async (sql) => JSON.parse(await query(sql).done);
     assert.equal(JSON.parse(assigned[1]).reused, true); assert.equal(JSON.parse(assigned[2]).reused, true);
     assert.equal(JSON.parse(assigned[3]).error, 'CONFLICT');
     assert.equal(await query(`SELECT count(*) FROM public."GigBid" WHERE gig_id='${gig}' AND status='accepted';`).done, '1');
+    // The worker's acceptance and payout-setup nudge, plus one standby notice for each of the two other bidders.
     const eventCount = await query(`SELECT count(*) FROM public."GigAcceptanceDelivery" WHERE acceptance_id='${attempt.id}';`).done;
-    assert.equal(eventCount, '3');
+    assert.equal(eventCount, '4');
     const claims = (await Promise.all(Array.from({ length: 6 }, () => query('SELECT public.claim_gig_acceptance_delivery();').done)))
       .filter(Boolean).map(JSON.parse);
-    assert.equal(claims.length, 3); assert.equal(new Set(claims.map((e) => e.id)).size, 3);
+    assert.equal(claims.length, 4); assert.equal(new Set(claims.map((e) => e.id)).size, 4);
     const first = claims[0];
     await query(`UPDATE public."GigAcceptanceDelivery" SET lease_until=now()-interval '1 minute' WHERE id='${first.id}';`).done;
     const reclaimed = await json('SELECT public.claim_gig_acceptance_delivery();');
