@@ -380,7 +380,7 @@ public final class PulseComposeViewModel {
     public private(set) var shouldDismiss: Bool = false
 
     /// Post id when editing an existing post; `nil` in create mode.
-    public let editingPostId: String?
+    public private(set) var editingPostId: String?
 
     /// Edit-mode prefill state. `.ready` for create mode and after a
     /// successful fetch.
@@ -799,6 +799,13 @@ public final class PulseComposeViewModel {
 
     // MARK: - Submit
 
+    private func retainSavedPost(_ postId: String, visibility savedVisibility: String?) {
+        editingPostId = postId
+        if let savedVisibility, let value = PulseComposeVisibility(rawValue: savedVisibility) {
+            visibility = value
+        }
+    }
+
     /// Send the create or update body. Returns true on success.
     @discardableResult
     public func submit() async -> Bool {
@@ -832,6 +839,7 @@ public final class PulseComposeViewModel {
         }
         do {
             let postId: String?
+            var createdVisibility: String?
             // A Connections post isn't in the Nearby feed (nor, being yours, in Connections): the toast says where it went.
             var postedToConnections = false
             if let editingPostId {
@@ -847,6 +855,7 @@ public final class PulseComposeViewModel {
                     BusinessPostsEndpoints.createPost(businessId: businessAuthorId, body: request)
                 )
                 postId = response.postId
+                createdVisibility = request.visibility
                 postedToConnections = request.visibility == "connections"
             } else {
                 var request = buildRequest()
@@ -855,6 +864,7 @@ public final class PulseComposeViewModel {
                     PostsEndpoints.createPost(body: request)
                 )
                 postId = response.postId
+                createdVisibility = request.visibility
                 postedToConnections = request.visibility == "connections"
             }
             guard let postId, !postId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -878,8 +888,12 @@ public final class PulseComposeViewModel {
                 do {
                     _ = try await multipartUploader.uploadPostMedia(postId: postId, files: files, media: metadata)
                 } catch {
+                    let wasEditing = isEditing
+                    // Creation succeeded: keep the draft and retry as an edit of the confirmed post.
+                    // A new create would reject edits to the already-saved draft.
+                    retainSavedPost(postId, visibility: createdVisibility)
                     toast = ToastMessage(
-                        text: isEditing
+                        text: wasEditing
                             ? "Saved. Attachments could not be confirmed. Try again."
                             : "Post saved. Attachments could not be confirmed. Try again.",
                         kind: .error

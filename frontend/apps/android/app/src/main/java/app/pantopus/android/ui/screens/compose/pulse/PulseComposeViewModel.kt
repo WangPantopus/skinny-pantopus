@@ -253,7 +253,7 @@ class PulseComposeViewModel
         private val networkMonitor: NetworkMonitor,
         private val postsRefresh: PulsePostsRefreshNotifier,
         private val locationProvider: LocationProvider,
-        savedStateHandle: SavedStateHandle,
+        private val savedStateHandle: SavedStateHandle,
         /** C2 — "post as this business" create route. */
         private val businessPosts: BusinessPostsRepository,
         /** Pre-post safety precheck — `POST /api/posts/precheck`. */
@@ -263,7 +263,8 @@ class PulseComposeViewModel
         val state: StateFlow<PulseComposeUiState> = _state.asStateFlow()
 
         /** Post id when editing an existing post; `null` in create mode. */
-        val editingPostId: String? = savedStateHandle.get<String>(POST_ID_KEY)
+        var editingPostId: String? = savedStateHandle.get<String>(POST_ID_KEY)
+            private set
 
         private val initialIntent: PulseComposeIntent =
             PulseComposeIntent.fromKey(savedStateHandle.get<String>(INTENT_KEY) ?: PulseComposeIntent.Ask.key)
@@ -1322,6 +1323,14 @@ class PulseComposeViewModel
                     }
                     val (toastText, toastError) = uploadPhotosIfNeeded(postId, isEditing = false)
                     if (toastError) {
+                        // Creation succeeded: retain the draft and retry through the existing edit path.
+                        // Repeating create would reject edits to the already-saved draft.
+                        editingPostId = postId
+                        savedStateHandle[POST_ID_KEY] = postId
+                        savedAudienceLabel =
+                            PulseComposeVisibility.entries.firstOrNull { it.key == request.visibility }?.label
+                                ?: PulseAnnounceAudience.entries.firstOrNull { it.backendVisibility == request.visibility }?.label
+                                ?: "original audience"
                         _state.value = PulseComposeUiState.Error(toastText)
                         _toast.value = PulseComposeToast(toastText, isError = true)
                         postsRefresh.notifyPostsDidChange()
