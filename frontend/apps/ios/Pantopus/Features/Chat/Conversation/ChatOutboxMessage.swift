@@ -24,6 +24,8 @@ struct ChatOutboxMessage: Codable, Identifiable {
     var status: Status = .queued
     var attempts = 0
     var retryAt: Date?
+    // Optional so queues saved before cooldown tracking still decode.
+    var rateLimited: Bool?
     var failure: String?
 
     var threadKey: String {

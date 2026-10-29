@@ -24,7 +24,8 @@ interface MessageActionMenuProps {
   open: boolean;
   onClose: () => void;
   onAction: (key: string) => void;
-  onReact: (emoji: string) => void;
+  /** Leave out where the chat takes no reactions: the menu then lists its actions only. */
+  onReact?: (emoji: string) => void;
   actions?: MessageAction[];
   /** Position the menu near the message */
   anchorPosition?: { top: number; left: number };
@@ -73,20 +74,24 @@ export default function MessageActionMenu({
 
       <div ref={menuRef} style={style} className="bg-app-surface rounded-xl shadow-2xl border border-app-border overflow-hidden min-w-[200px]">
         {/* Quick reactions */}
-        <div className="flex items-center justify-center gap-1 px-3 py-2.5">
-          {QUICK_REACTIONS.map((emoji) => (
-            <button key={emoji} type="button" onClick={() => { onReact(emoji); onClose(); }}
-              className="w-9 h-9 rounded-full bg-app-surface-sunken hover:bg-app-hover flex items-center justify-center text-lg transition">
-              {emoji}
-            </button>
-          ))}
-          <button aria-label="Add reaction" type="button" onClick={() => { onAction('emoji_picker'); onClose(); }}
-            className="w-9 h-9 rounded-full bg-app-surface-sunken hover:bg-app-hover flex items-center justify-center transition">
-            <Smile className="w-4 h-4 text-app-text-secondary" />
-          </button>
-        </div>
+        {onReact && (
+          <>
+            <div className="flex items-center justify-center gap-1 px-3 py-2.5">
+              {QUICK_REACTIONS.map((emoji) => (
+                <button key={emoji} type="button" onClick={() => { onReact(emoji); onClose(); }}
+                  className="w-9 h-9 rounded-full bg-app-surface-sunken hover:bg-app-hover flex items-center justify-center text-lg transition">
+                  {emoji}
+                </button>
+              ))}
+              <button aria-label="Add reaction" type="button" onClick={() => { onAction('emoji_picker'); onClose(); }}
+                className="w-9 h-9 rounded-full bg-app-surface-sunken hover:bg-app-hover flex items-center justify-center transition">
+                <Smile className="w-4 h-4 text-app-text-secondary" />
+              </button>
+            </div>
 
-        <div className="h-px bg-app-border" />
+            <div className="h-px bg-app-border" />
+          </>
+        )}
 
         {/* Action list */}
         <div className="py-1">

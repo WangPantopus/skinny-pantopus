@@ -93,6 +93,17 @@ export default function ChatRoomView({
   }, [roomInfo, currentUserId, asBusinessUserId]);
 
   const chat = useChatMessages({ roomId, asBusinessUserId, currentUserId, initialMessageId, receiptPeerId });
+  const ownMembership = roomInfo?.participants?.find((participant) =>
+    (participant.user_id || participant.user?.id) === (asBusinessUserId || currentUserId));
+  // Room details are refreshed even when history restores through a cached delta. A closed room, or a group the
+  // reader left, keeps its history but takes no messages or reactions; one's own messages can still be deleted.
+  // A Plan's chat has no one person to message instead, so it says only that it closed, as the server does.
+  const roomReadOnlyNote = roomInfo?.is_active === false
+    ? (roomInfo?.type === 'plan' ? 'This chat has closed.' : 'This chat has closed. Message them directly to keep talking.')
+    : roomInfo?.type === 'group' && (ownMembership?.is_active === false || ownMembership?.left_at)
+      ? 'You are no longer in this conversation. You can still read earlier messages.'
+      : null;
+  const lockedNote = roomReadOnlyNote || chat.sendRefusal;
 
 
   // ── Business identity resolution ──────────────────────
@@ -213,6 +224,7 @@ export default function ChatRoomView({
   // ── Send with pre-bid check ───────────────────────────
   const handleSend = useCallback(
     async (text: string, files?: File[], draft?: ChatDraftCommit) => {
+      if (lockedNote) throw new Error(lockedNote);
       if (preBidStatus?.is_pre_bid && (preBidStatus.messages_remaining || 0) <= 0) {
         chat.setError(PRE_BID_LIMIT_MESSAGE);
         throw new Error(PRE_BID_LIMIT_MESSAGE);
@@ -230,7 +242,7 @@ export default function ChatRoomView({
         throw e;
       }
     },
-    [chat, preBidStatus, loadPreBidStatus],
+    [chat, preBidStatus, loadPreBidStatus, lockedNote],
   );
 
   // ── Attachment action handlers ───────────────────────────
@@ -476,7 +488,7 @@ export default function ChatRoomView({
           messages={chat.messages}
           loading={chat.loading}
           // A conversation that takes no messages says why in place of the composer instead.
-          error={chat.sendRefusal ? null : chat.error}
+          error={lockedNote ? null : chat.error}
           hasMore={chat.hasMore}
           loadingOlder={chat.loadingOlder}
           onLoadOlder={chat.loadOlder}
@@ -486,13 +498,13 @@ export default function ChatRoomView({
           isOwnMessage={isOwnMessage}
           headerContent={historicalHeader}
           onImageClick={handleImageClick}
-          onReact={handleReact}
+          onReact={roomReadOnlyNote ? undefined : handleReact}
           onRetry={chat.retryMessage}
           onRemovePending={chat.removePendingMessage}
-          onEdit={chat.sendRefusal ? undefined : chat.beginEdit}
+          onEdit={lockedNote ? undefined : chat.beginEdit}
           onDelete={chat.deleteMessage}
           canChangeMessage={chat.canChangeMessage}
-          onReply={inputDisabled || chat.sendRefusal ? undefined : chat.beginReply}
+          onReply={inputDisabled || lockedNote ? undefined : chat.beginReply}
         />
       </div>
 
@@ -543,7 +555,7 @@ export default function ChatRoomView({
         editingMessage={chat.editingMessage}
         onCancelEdit={chat.cancelEdit}
         onSaveEdit={chat.saveEdit}
-        lockedNote={chat.sendRefusal}
+        lockedNote={lockedNote}
       />
       </>
       )}
