@@ -484,6 +484,9 @@ router.get('/drawer/:drawer', verifyToken, async (req, res) => {
 // never logged or stored.
 const SEARCH_FIELDS = ['subject', 'display_title', 'sender_display', 'sender_business_name', 'preview_text', 'content',
   'mail_extracted->>summary'];
+// Pages one search reads while every match on them is left out (a search for someone's old name would otherwise read
+// the whole mailbox in one request); the answer's nextOffset lets the app go on from there.
+const SEARCH_MAX_PAGES = 10;
 router.get('/search', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
@@ -522,7 +525,7 @@ router.get('/search', verifyToken, async (req, res) => {
     const matches = (item, term) => [item.sender_display, item.sender_business_name && !item.sender_user_id ? item.sender_business_name : null,
       item.subject, item.display_title, item.preview_text, item.content, item.mail_extracted?.summary]
       .some((value) => typeof value === 'string' && value.toLowerCase().includes(term));
-    let kept = [], nextOffset = offset, count = 0, excluded = 0;
+    let kept = [], nextOffset = offset, count = 0, excluded = 0, pages = 0;
     query = query.order('delivered_at', { ascending: false }).order('id', { ascending: false });
     do {
       const result = await query.range(nextOffset, nextOffset + limit - 1);
@@ -539,8 +542,9 @@ router.get('/search', verifyToken, async (req, res) => {
         ? terms.every((term) => matches(item, term) || matchesStem(item, term)) : true);
       excluded += named.length - kept.length;
       if (!found.length) break;
+      pages += 1;
       // A page matched only retired sender names. Keep looking without showing those names or claiming no matches.
-    } while (!kept.length && nextOffset < count);
+    } while (!kept.length && nextOffset < count && pages < SEARCH_MAX_PAGES);
     const timeZone = (await mailDelivery.personTimeZone(userId)) || mailDelivery.FALLBACK_TIME_ZONE;
     const rows = kept.map((m) => mailPiece.present(presentMailSender({
       ...m,
