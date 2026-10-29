@@ -609,7 +609,8 @@ class GigDetailViewModel
          */
         fun viewerIsPartOfTask(): Boolean = viewerIsOwner || viewerIsWorker || viewerActsForBusiness
 
-        fun canAskQuestion(): Boolean = currentUserId() != null && !viewerIsOwner
+        fun canAskQuestion(): Boolean =
+            currentUserId() != null && !viewerIsOwner && rawGig?.status in setOf("open", "assigned", "in_progress")
 
         fun setNewQuestionText(value: String) {
             _newQuestionText.value = value.take(1000)

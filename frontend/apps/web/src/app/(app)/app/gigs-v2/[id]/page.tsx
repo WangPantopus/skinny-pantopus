@@ -766,6 +766,7 @@ function GigDetailV2Content() {
             gigId={gigId!}
             isMyGig={isMyGig}
             currentUserId={currentUserId}
+            canAsk={['open', 'assigned', 'in_progress'].includes(gigStatus)}
           />}
 
           {/* Only the poster and the worker can read change requests (the API

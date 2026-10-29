@@ -29,15 +29,12 @@ export default function InstantAcceptButton({ gigId, onAccepted }: InstantAccept
     } catch (err: any) {
       // The API client reports the HTTP status as `statusCode`.
       const status = err?.statusCode || err?.status || err?.response?.status;
-      if (status === 409) {
-        setErrorMsg('This task was just taken by someone else');
-        toast.warning('This task was just taken by someone else');
-      } else if (status === 403) {
-        setErrorMsg('Set up your wallet to accept tasks');
-        toast.error('Set up your wallet to accept tasks');
-      } else {
-        setErrorMsg(err?.message || 'Something went wrong');
-      }
+      const message = err?.message || (status === 409
+        ? 'This task is no longer available. Refresh and try again.'
+        : 'Something went wrong. Please try again.');
+      setErrorMsg(message);
+      if (status === 409) toast.warning(message);
+      else toast.error(message);
       setState('error');
     }
   };

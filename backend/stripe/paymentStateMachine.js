@@ -214,9 +214,9 @@ function getPaymentStateInfo(status) {
       description: 'Card is being saved for future authorization.',
     },
     [PAYMENT_STATES.READY_TO_AUTHORIZE]: {
-      label: 'Card Saved',
+      label: 'Authorization needed',
       color: 'blue',
-      description: 'Card is saved. Payment will be authorized before the gig starts.',
+      description: 'Payment must be authorized before work starts.',
     },
     [PAYMENT_STATES.AUTHORIZE_PENDING]: {
       label: 'Authorizing',

@@ -29,6 +29,8 @@ const {
   remoteDetailsSchema,
   urgentDetailsSchema,
   eventDetailsSchema,
+  gigAmountSchema,
+  gigScheduleError,
 } = require('../utils/moduleSchemas');
 const stripeService = require('../stripe/stripeService');
 const blockService = require('../services/blockService');
@@ -672,6 +674,34 @@ function emitGigUpdate(req, gigId, eventType) {
 
 // ============ VALIDATION SCHEMAS ============
 
+const bidAmountSchema = gigAmountSchema.custom((value, helpers) => value > 0 ? value : helpers.error('any.invalid'))
+  .messages({ 'any.invalid': '{{#label}} must be between $0.50 and $999,999.99, with at most two decimal places.' });
+const bidFields = {
+  bid_amount: bidAmountSchema,
+  amount: bidAmountSchema,
+  message: Joi.string().trim().max(2000).allow('', null),
+  // This is a human-readable availability note, not an ISO timestamp.
+  proposed_time: Joi.string().trim().max(500).allow('', null),
+};
+const createBidSchema = Joi.object(bidFields).xor('bid_amount', 'amount');
+const editBidSchema = Joi.object(bidFields).oxor('bid_amount', 'amount').min(1);
+const counterBidSchema = Joi.object({ amount: bidAmountSchema.required(), message: bidFields.message });
+const questionAttachmentsSchema = Joi.array().max(10).items(
+  Joi.string().trim().max(4096).uri({ scheme: ['http', 'https'] })
+).allow(null).default([]);
+const questionSchema = Joi.object({
+  question: Joi.string().trim().min(5).max(1000).required(),
+  attachments: questionAttachmentsSchema,
+});
+const answerSchema = Joi.object({
+  answer: Joi.string().trim().min(1).max(2000).required(),
+  attachments: questionAttachmentsSchema,
+});
+
+function gigBiddingClosed(gig) {
+  return gig.status !== 'open' || (gig.deadline && Date.parse(gig.deadline) <= Date.now());
+}
+
 const createGigSchema = Joi.object({
   home_task_source: Joi.object({
     home_id: Joi.string().uuid().required(), task_id: Joi.string().uuid().required(),
@@ -680,7 +710,7 @@ const createGigSchema = Joi.object({
   }).optional(),
   title: Joi.string().min(5).max(255).required(),
   description: Joi.string().min(10).required(),
-  price: Joi.number().min(0).when('home_task_source', { is: Joi.exist(), then: Joi.number().precision(2).max(99999999.99).strict() }).required(),
+  price: gigAmountSchema.when('home_task_source', { is: Joi.exist(), then: Joi.number().precision(2).max(999999.99).strict() }).required(),
   // Clients send an optional field they left empty as null; treat it as not provided.
   category: Joi.string().max(100).allow(null).optional(),
   deadline: Joi.date().iso().allow(null).when('home_task_source', { is: Joi.exist(), then: Joi.optional(), otherwise: Joi.date().min('now').allow(null).optional() }),
@@ -897,7 +927,7 @@ function computeCancellationInfo(gig, cancellingUserId) {
 const updateGigSchema = Joi.object({
   title: Joi.string().min(5).max(255),
   description: Joi.string().min(10),
-  price: Joi.number().min(0),
+  price: gigAmountSchema,
   // null clears an optional field the editor emptied.
   category: Joi.string().max(100).allow(null),
   deadline: Joi.date().iso().min('now').allow(null),
@@ -1110,6 +1140,10 @@ router.get('/cancellation-policies', (req, res) => {
  * Create a new gig
  */
 router.post('/', verifyToken, validate(createGigSchema), async (req, res) => {
+  // Home-task publication has its own frozen command and replay validation;
+  // an original retry must not start failing merely because time has passed.
+  const scheduleError = !req.body.home_task_source && gigScheduleError(req.body);
+  if (scheduleError) return res.status(400).json({ error: scheduleError, code: 'INVALID_SCHEDULE' });
   const {
     title,
     description,
@@ -3914,7 +3948,7 @@ router.patch('/:id', verifyToken, validate(updateGigSchema), async (req, res) =>
     // Use admin client for existence lookup so RLS visibility does not cause false 404s.
     const { data: existingGig, error: fetchError } = await supabaseAdmin
       .from('Gig')
-      .select('id, user_id, created_by, beneficiary_user_id, status')
+      .select('id, user_id, created_by, beneficiary_user_id, status, updated_at, scheduled_start, time_window_start, time_window_end')
       .eq('id', id)
       .single();
 
@@ -3932,6 +3966,8 @@ router.patch('/:id', verifyToken, validate(updateGigSchema), async (req, res) =>
     }
 
     const updateData = { ...req.body };
+    const scheduleError = gigScheduleError({ ...existingGig, ...updateData }, updateData);
+    if (scheduleError) return res.status(400).json({ error: scheduleError, code: 'INVALID_SCHEDULE' });
     if (typeof updateData.category === 'string') updateData.category = canonicalGigCategory(updateData.category);
 
     // Handle location
@@ -3968,17 +4004,27 @@ router.patch('/:id', verifyToken, validate(updateGigSchema), async (req, res) =>
       delete updateData.location;
     }
 
+    // Nothing else moves updated_at on an edit, so stamp it here: a second edit
+    // that read the same version then fails the comparison below instead of saving over this one.
+    updateData.updated_at = new Date().toISOString();
+
     const { data: updatedGig, error } = await supabaseAdmin
       .from('Gig')
       .update(updateData)
       .eq('id', id)
+      .eq('status', 'open')
+      .eq('updated_at', existingGig.updated_at)
       .select()
-      .single();
+      .maybeSingle();
 
     if (error) {
       logger.error('Error updating gig', { error: error.message, gigId: id });
       return res.status(500).json({ error: 'Failed to update gig' });
     }
+    if (!updatedGig) return res.status(409).json({ error: 'This task changed. Refresh before editing again.' });
+
+    browseCache.clear();
+    emitGigUpdate(req, id, 'status-change');
 
     res.json({ gig: savedGigReply(updatedGig, true) });
   } catch (err) {
@@ -4019,13 +4065,13 @@ router.delete('/:id', verifyToken, stopCommand('close'));
  * POST /api/gigs/:gigId/bids
  * Place a bid on a gig
  */
-router.post('/:gigId/bids', verifyToken, async (req, res) => {
+router.post('/:gigId/bids', verifyToken, validate(createBidSchema), async (req, res) => {
   try {
     const { gigId } = req.params;
     const userId = req.user.id;
 
     const bidAmountRaw = req.body.bid_amount ?? req.body.amount;
-    const bidAmount = typeof bidAmountRaw === 'string' ? parseFloat(bidAmountRaw) : bidAmountRaw;
+    const bidAmount = bidAmountRaw;
 
     const { message, proposed_time } = req.body;
 
@@ -4046,7 +4092,7 @@ router.post('/:gigId/bids', verifyToken, async (req, res) => {
       return res.status(404).json({ error: 'Gig not found' });
     }
 
-    if (gig.status !== 'open') {
+    if (gigBiddingClosed(gig)) {
       return res.status(400).json({ error: 'This gig is no longer accepting bids' });
     }
 
@@ -4060,16 +4106,16 @@ router.post('/:gigId/bids', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'Cannot bid on this task' });
     }
 
-    // For paid gigs, bidder must have started payout onboarding (Stripe account created).
+    // A paid proposal needs payout onboarding even when the advertised budget is zero.
     // They don't need to be fully verified — just need to have begun the process.
-    const gigPrice = parseFloat(gig.price || 0);
-    if (gigPrice > 0) {
-      const { data: stripeAccount } = await supabaseAdmin
+    if (bidAmount > 0) {
+      const { data: stripeAccount, error: stripeAccountError } = await supabaseAdmin
         .from('StripeAccount')
         .select('stripe_account_id, details_submitted')
         .eq('user_id', userId)
         .maybeSingle();
 
+      if (stripeAccountError) return res.status(503).json({ error: 'Payout setup could not be checked. Please retry.' });
       if (!stripeAccount || !stripeAccount.stripe_account_id) {
         return res.status(400).json({
           error:
@@ -4092,10 +4138,10 @@ router.post('/:gigId/bids', verifyToken, async (req, res) => {
     }
 
     const activeBid = (existingBids || []).find(
-      (b) => b.status === 'pending' || b.status === 'accepted'
+      (b) => ['pending', 'countered', 'pending_payment', 'accepted'].includes(b.status)
     );
     if (activeBid) {
-      return res.status(400).json({ error: 'You already have an active bid on this gig' });
+      return res.status(409).json({ code: 'GIG_BID_EXISTS', error: 'You already have an active bid on this gig' });
     }
 
     // Re-bid cooldown: 5 minutes after withdrawal
@@ -4138,8 +4184,15 @@ router.post('/:gigId/bids', verifyToken, async (req, res) => {
       .single();
 
     if (bidError) {
+      const refusals = {
+        GIG_BID_EXISTS: [409, 'You already have an active bid on this gig'],
+        GIG_BID_CLOSED: [409, 'This gig is no longer accepting bids'],
+        GIG_BID_BLOCKED: [403, 'Cannot bid on this task'],
+      };
+      const refusal = refusals[bidError.message];
+      if (refusal) return res.status(refusal[0]).json({ code: bidError.message, error: refusal[1] });
       logger.error('Error creating bid', { bidError });
-      return res.status(500).json({ error: 'Failed to place bid' });
+      return res.status(503).json({ error: 'Your bid could not be saved. Please retry.' });
     }
 
     logger.info('Bid placed successfully', { bidId: bid.id, gigId, userId });
@@ -4385,12 +4438,12 @@ router.get('/:gigId/bids', verifyToken, async (req, res) => {
  * PUT /api/gigs/:gigId/bids/:bidId
  * Update own active bid (pending/countered).
  */
-router.put('/:gigId/bids/:bidId', verifyToken, async (req, res) => {
+router.put('/:gigId/bids/:bidId', verifyToken, validate(createBidSchema), async (req, res) => {
   try {
     const { gigId, bidId } = req.params;
     const userId = req.user.id;
     const bidAmountRaw = req.body.bid_amount ?? req.body.amount;
-    const bidAmount = typeof bidAmountRaw === 'string' ? parseFloat(bidAmountRaw) : bidAmountRaw;
+    const bidAmount = bidAmountRaw;
     const { message, proposed_time } = req.body;
 
     if (!bidAmount || Number.isNaN(bidAmount) || bidAmount <= 0) {
@@ -4399,7 +4452,7 @@ router.put('/:gigId/bids/:bidId', verifyToken, async (req, res) => {
 
     const { data: bid, error: bidErr } = await supabaseAdmin
       .from('GigBid')
-      .select('id, gig_id, user_id, status')
+      .select('id, gig_id, user_id, status, expires_at, updated_at')
       .eq('id', bidId)
       .eq('gig_id', gigId)
       .single();
@@ -4411,13 +4464,17 @@ router.put('/:gigId/bids/:bidId', verifyToken, async (req, res) => {
     if (!['pending', 'countered'].includes(String(bid.status || ''))) {
       return res.status(400).json({ error: 'Only pending or countered bids can be updated' });
     }
+    if (bid.expires_at && Date.parse(bid.expires_at) <= Date.now()) {
+      return res.status(409).json({ error: 'This bid expired. Refresh before bidding again.' });
+    }
 
     const { data: gig, error: gigErr } = await supabaseAdmin
       .from('Gig')
-      .select('user_id')
+      .select('user_id, status, deadline')
       .eq('id', gigId)
       .single();
     if (gigErr || !gig) return res.status(404).json({ error: 'Gig not found' });
+    if (gigBiddingClosed(gig)) return res.status(409).json({ error: 'This gig is no longer accepting bids' });
     if (await canActAsBusiness(gig.user_id, userId)) {
       return res.status(400).json({ error: 'You cannot bid on your own gig' });
     }
@@ -4432,13 +4489,16 @@ router.put('/:gigId/bids/:bidId', verifyToken, async (req, res) => {
       })
       .eq('id', bidId)
       .eq('gig_id', gigId)
+      .eq('status', bid.status)
+      .eq('updated_at', bid.updated_at)
       .select('*')
-      .single();
+      .maybeSingle();
 
     if (updErr) {
       logger.error('Update bid error', { error: updErr.message, gigId, bidId, userId });
       return res.status(500).json({ error: 'Failed to update bid' });
     }
+    if (!updatedBid) return res.status(409).json({ error: 'This bid changed. Refresh before editing again.' });
 
     emitGigUpdate(req, req.params.gigId, 'bid-update');
     return res.json({ bid: updatedBid });
@@ -4912,7 +4972,7 @@ router.post('/:gigId/bids/:bidId/reject', verifyToken, async (req, res) => {
  * POST /api/gigs/:gigId/bids/:bidId/counter
  * Requester sends a counter-offer to a bidder (one counter per bid)
  */
-router.post('/:gigId/bids/:bidId/counter', verifyToken, async (req, res) => {
+router.post('/:gigId/bids/:bidId/counter', verifyToken, validate(counterBidSchema), async (req, res) => {
   try {
     const { gigId, bidId } = req.params;
     const userId = req.user.id;
@@ -4925,7 +4985,7 @@ router.post('/:gigId/bids/:bidId/counter', verifyToken, async (req, res) => {
     // Verify gig ownership
     const { data: gig, error: gigErr } = await supabaseAdmin
       .from('Gig')
-      .select('id, user_id, status, title')
+      .select('id, user_id, status, title, deadline')
       .eq('id', gigId)
       .single();
 
@@ -4934,14 +4994,14 @@ router.post('/:gigId/bids/:bidId/counter', verifyToken, async (req, res) => {
     if (!ownerAccess.allowed) {
       return res.status(403).json({ error: 'Only the gig poster can send counter-offers' });
     }
-    if (gig.status !== 'open') {
+    if (gigBiddingClosed(gig)) {
       return res.status(400).json({ error: 'Gig is no longer open for bidding' });
     }
 
     // Verify bid is pending and belongs to this gig
     const { data: bid, error: bidErr } = await supabaseAdmin
       .from('GigBid')
-      .select('id, gig_id, user_id, status, counter_status, bid_amount')
+      .select('id, gig_id, user_id, status, counter_status, bid_amount, expires_at, updated_at')
       .eq('id', bidId)
       .single();
 
@@ -4951,6 +5011,9 @@ router.post('/:gigId/bids/:bidId/counter', verifyToken, async (req, res) => {
     }
     if (bid.status !== 'pending') {
       return res.status(400).json({ error: 'Can only counter pending bids' });
+    }
+    if (bid.expires_at && Date.parse(bid.expires_at) <= Date.now()) {
+      return res.status(409).json({ error: 'This bid expired. Refresh before countering again.' });
     }
     if (bid.counter_status === 'pending') {
       return res.status(400).json({ error: 'A counter-offer is already pending on this bid' });
@@ -4972,9 +5035,11 @@ router.post('/:gigId/bids/:bidId/counter', verifyToken, async (req, res) => {
       .eq('id', bidId)
       .in('status', ['pending', 'countered'])
       .eq('status', bid.status)
+      .eq('updated_at', bid.updated_at)
       .select()
-      .single();
+      .maybeSingle();
 
+    if (!updateErr && !updatedBid) return res.status(409).json({ error: 'This counter-offer changed. Refresh before responding.' });
     if (updateErr || !updatedBid) {
       logger.error('Counter-offer failed', { error: updateErr?.message || 'Bid changed' });
       return res.status(500).json({ error: 'Failed to send counter-offer' });
@@ -5025,11 +5090,15 @@ router.post('/:gigId/bids/:bidId/counter/accept', verifyToken, async (req, res) 
 
     const { data: gig, error: gigErr } = await supabaseAdmin
       .from('Gig')
-      .select('user_id, title')
+      .select('user_id, title, status, deadline')
       .eq('id', gigId)
       .single();
 
     if (gigErr || !gig) return res.status(404).json({ error: 'Gig not found' });
+    if (gigBiddingClosed(gig) || (bid.expires_at && Date.parse(bid.expires_at) <= Date.now())) {
+      return res.status(409).json({ error: 'This counter-offer is no longer available. Refresh the task.' });
+    }
+    if (await blockService.isBlocked(gig.user_id, userId)) return res.status(403).json({ error: 'Cannot respond to this task' });
     if (await canActAsBusiness(gig.user_id, userId)) {
       return res.status(400).json({ error: 'You cannot bid on your own gig' });
     }
@@ -5046,9 +5115,11 @@ router.post('/:gigId/bids/:bidId/counter/accept', verifyToken, async (req, res) 
       .eq('id', bidId)
       .in('status', ['pending', 'countered'])
       .eq('status', bid.status)
+      .eq('updated_at', bid.updated_at)
       .select()
-      .single();
+      .maybeSingle();
 
+    if (!updateErr && !updatedBid) return res.status(409).json({ error: 'This counter-offer changed. Refresh before responding.' });
     if (updateErr || !updatedBid) {
       logger.error('Accept counter failed', { error: updateErr?.message || 'Bid changed' });
       return res.status(500).json({ error: 'Failed to accept counter-offer' });
@@ -5072,6 +5143,7 @@ router.post('/:gigId/bids/:bidId/counter/accept', verifyToken, async (req, res) 
     emitGigUpdate(req, gigId, 'bid-update');
     res.json({ bid: updatedBid });
   } catch (err) {
+    if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
     logger.error('Accept counter error', { error: err.message });
     res.status(500).json({ error: 'Failed to accept counter-offer' });
   }
@@ -5123,9 +5195,11 @@ router.post('/:gigId/bids/:bidId/counter/decline', verifyToken, async (req, res)
       .eq('id', bidId)
       .in('status', ['pending', 'countered'])
       .eq('status', bid.status)
+      .eq('updated_at', bid.updated_at)
       .select()
-      .single();
+      .maybeSingle();
 
+    if (!updateErr && !updatedBid) return res.status(409).json({ error: 'This counter-offer changed. Refresh before responding.' });
     if (updateErr || !updatedBid) {
       logger.error('Decline counter failed', { error: updateErr?.message || 'Bid changed' });
       return res.status(500).json({ error: 'Failed to decline counter-offer' });
@@ -5203,9 +5277,11 @@ router.post('/:gigId/bids/:bidId/counter/withdraw', verifyToken, async (req, res
       .eq('id', bidId)
       .in('status', ['pending', 'countered'])
       .eq('status', bid.status)
+      .eq('updated_at', bid.updated_at)
       .select()
-      .single();
+      .maybeSingle();
 
+    if (!updateErr && !updatedBid) return res.status(409).json({ error: 'This counter-offer changed. Refresh before responding.' });
     if (updateErr || !updatedBid) {
       logger.error('Withdraw counter failed', { error: updateErr?.message || 'Bid changed' });
       return res.status(500).json({ error: 'Failed to withdraw counter-offer' });
@@ -5763,8 +5839,16 @@ router.post('/:gigId/mark-completed', verifyToken, async (req, res) => {
       if (matchesWorkerCompletion(gig, userId, proof)) return res.json({ gig: savedGigReply(gig, true), reused: true });
       return res.status(409).json({ code: 'COMPLETION_CHANGED', error: 'This task already has different completion details. Refresh its details.' });
     }
+    let hasProofPhoto = false;
     for (let i = 0; i < safePhotos.length; i++) {
-      safePhotos[i] = await storage.verifyGigCompletionFile(safePhotos[i], userId, gig.id);
+      const verified = await storage.verifyGigCompletionFile(safePhotos[i], userId, gig.id, gig.delivery_proof_required === true);
+      if (gig.delivery_proof_required === true) {
+        safePhotos[i] = verified.url;
+        hasProofPhoto ||= verified.mimeType.startsWith('image/');
+      } else safePhotos[i] = verified;
+    }
+    if (gig.delivery_proof_required && !hasProofPhoto) {
+      return res.status(400).json({ code: 'COMPLETION_PHOTO_REQUIRED', error: 'Add at least one proof photo before marking this task complete.' });
     }
 
     const { data: result, error: updateError } = await supabaseAdmin.rpc('mark_gig_completed', {
@@ -5773,6 +5857,9 @@ router.post('/:gigId/mark-completed', verifyToken, async (req, res) => {
         .map(field => [field, gig[field] ?? null])),
       p_proof: proof,
     });
+    if (updateError?.message === 'GIG_COMPLETION_PHOTO_REQUIRED') {
+      return res.status(400).json({ code: 'COMPLETION_PHOTO_REQUIRED', error: 'Add at least one proof photo before marking this task complete.' });
+    }
     if (updateError || !result) {
       logger.error('Error marking gig completed', { error: updateError?.message, gigId, userId });
       return res.status(503).json({ error: 'Completion could not be confirmed. Please retry.' });
@@ -6830,27 +6917,28 @@ router.post('/:gigId/questions', verifyToken, async (req, res) => {
   try {
     const { gigId } = req.params;
     const userId = req.user.id;
-    const { question, attachments } = req.body;
-
-    if (!question || typeof question !== 'string' || question.trim().length < 5) {
-      return res.status(400).json({ error: 'Question must be at least 5 characters' });
-    }
-    if (question.length > 1000) {
-      return res.status(400).json({ error: 'Question must be under 1000 characters' });
-    }
-    const normalizedAttachments = Array.isArray(attachments)
-      ? attachments.filter((url) => typeof url === 'string' && url.trim()).slice(0, 10)
-      : [];
+    const parsed = questionSchema.validate(req.body);
+    if (parsed.error) return res.status(400).json({ error: parsed.error.details[0].message });
+    const { question } = parsed.value;
+    const normalizedAttachments = parsed.value.attachments || [];
 
     // Verify gig exists
     const { data: gig, error: gigErr } = await supabaseAdmin
       .from('Gig')
       .select('id, user_id, title, status')
       .eq('id', gigId)
-      .single();
+      .maybeSingle();
 
-    if (gigErr || !gig) return res.status(404).json({ error: 'Gig not found' });
+    if (gigErr) return res.status(503).json({ error: 'Questions are temporarily unavailable. Please retry.' });
+    if (!gig) return res.status(404).json({ error: 'Gig not found' });
+    if (!['open', 'assigned', 'in_progress'].includes(gig.status)) {
+      return res.status(409).json({ error: 'This task is closed to new questions' });
+    }
+    if (await blockService.isBlocked(gig.user_id, userId)) {
+      return res.status(403).json({ error: 'Cannot ask questions on this task' });
+    }
 
+    // Friendly preflight; the database also serializes admission with task changes.
     // Rate limit: max 5 questions per user per gig
     const { count, error: countErr } = await supabaseAdmin
       .from('GigQuestion')
@@ -6882,6 +6970,12 @@ router.post('/:gigId/questions', verifyToken, async (req, res) => {
       .single();
 
     if (insertErr) {
+      const admission = {
+        GIG_QUESTION_CLOSED: [409, 'This task is closed to new questions'],
+        GIG_QUESTION_BLOCKED: [403, 'Cannot ask questions on this task'],
+        GIG_QUESTION_LIMIT: [429, 'You can ask up to 5 questions per gig'],
+      }[insertErr.message];
+      if (admission) return res.status(admission[0]).json({ error: admission[1] });
       logger.error('Error creating question', { error: insertErr.message });
       return res.status(500).json({ error: 'Failed to post question' });
     }
@@ -6906,6 +7000,9 @@ router.post('/:gigId/questions', verifyToken, async (req, res) => {
     res.status(201).json({ question: serializeGigQuestionForViewer(q) });
   } catch (err) {
     logger.error('Question create error', { error: err.message });
+    if (err.code === 'BLOCK_CHECK_UNAVAILABLE') {
+      return res.status(503).json({ error: 'Questions are temporarily unavailable. Please retry.' });
+    }
     res.status(500).json({ error: 'Failed to post question' });
   }
 });
@@ -6919,17 +7016,10 @@ router.post('/:gigId/questions/:questionId/answer', verifyToken, async (req, res
   try {
     const { gigId, questionId } = req.params;
     const userId = req.user.id;
-    const { answer, attachments } = req.body;
-
-    if (!answer || typeof answer !== 'string' || answer.trim().length < 1) {
-      return res.status(400).json({ error: 'Answer is required' });
-    }
-    if (answer.length > 2000) {
-      return res.status(400).json({ error: 'Answer must be under 2000 characters' });
-    }
-    const normalizedAttachments = Array.isArray(attachments)
-      ? attachments.filter((url) => typeof url === 'string' && url.trim()).slice(0, 10)
-      : [];
+    const parsed = answerSchema.validate(req.body);
+    if (parsed.error) return res.status(400).json({ error: parsed.error.details[0].message });
+    const { answer } = parsed.value;
+    const normalizedAttachments = parsed.value.attachments || [];
 
     // Verify poster
     const { data: gig, error: gigFetchErr } = await supabaseAdmin
@@ -6938,7 +7028,7 @@ router.post('/:gigId/questions/:questionId/answer', verifyToken, async (req, res
         'id, user_id, title, owner:user_id(id, username, name, first_name, last_name, account_type)'
       )
       .eq('id', gigId)
-      .single();
+      .maybeSingle();
 
     if (gigFetchErr) {
       return res.status(500).json({ error: 'Failed to fetch gig' });
@@ -6947,6 +7037,13 @@ router.post('/:gigId/questions/:questionId/answer', verifyToken, async (req, res
     const ownerAccess = await getGigOwnerAccess(gig.user_id, userId, 'gigs.manage');
     if (!ownerAccess.allowed) {
       return res.status(403).json({ error: 'Only the gig poster can answer questions' });
+    }
+    const { data: question, error: questionError } = await supabaseAdmin.from('GigQuestion')
+      .select('id, asked_by').eq('id', questionId).eq('gig_id', gigId).maybeSingle();
+    if (questionError) return res.status(503).json({ error: 'Questions are temporarily unavailable. Please retry.' });
+    if (!question) return res.status(404).json({ error: 'Question not found' });
+    if (await blockService.isBlocked(gig.user_id, question.asked_by)) {
+      return res.status(403).json({ error: 'Cannot answer this question' });
     }
 
     const nowIso = new Date().toISOString();
@@ -6969,12 +7066,13 @@ router.post('/:gigId/questions/:questionId/answer', verifyToken, async (req, res
         answerer:answered_by ( id, username, name )
       `
       )
-      .single();
+      .maybeSingle();
 
     if (error) {
       logger.error('Error answering question', { error: error.message });
       return res.status(500).json({ error: 'Failed to answer question' });
     }
+    if (!updated) return res.status(404).json({ error: 'Question not found' });
 
     // Notify the asker
     if (updated?.asker && String(updated.asker.id) !== String(userId)) {
@@ -7009,6 +7107,9 @@ router.post('/:gigId/questions/:questionId/answer', verifyToken, async (req, res
     });
   } catch (err) {
     logger.error('Answer question error', { error: err.message });
+    if (err.code === 'BLOCK_CHECK_UNAVAILABLE') {
+      return res.status(503).json({ error: 'Questions are temporarily unavailable. Please retry.' });
+    }
     res.status(500).json({ error: 'Failed to answer question' });
   }
 });
@@ -7610,18 +7711,22 @@ router.get('/:id/my-bid', verifyToken, async (req, res) => {
 // PATCH /api/gigs/:id/my-bid
 // body: { bid_amount?, message?, proposed_time? }
 // ================================
-router.patch('/:id/my-bid', verifyToken, async (req, res) => {
+router.patch('/:id/my-bid', verifyToken, validate(editBidSchema), async (req, res) => {
   const gigId = req.params.id;
   const userId = req.user.id;
-  const { bid_amount, message, proposed_time } = req.body || {};
+  const { message, proposed_time } = req.body;
+  const bid_amount = req.body.bid_amount ?? req.body.amount;
 
   try {
     // Only allow editing while pending
     const { data: existing, error: exErr } = await supabaseAdmin
       .from('GigBid')
-      .select('id, status')
+      .select('id, status, expires_at, updated_at')
       .eq('gig_id', gigId)
       .eq('user_id', userId)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     if (exErr) {
@@ -7632,13 +7737,17 @@ router.patch('/:id/my-bid', verifyToken, async (req, res) => {
     if (!existing) return res.status(404).json({ error: 'Bid not found' });
     if (existing.status !== 'pending')
       return res.status(400).json({ error: 'Only pending bids can be edited' });
+    if (existing.expires_at && Date.parse(existing.expires_at) <= Date.now()) {
+      return res.status(409).json({ error: 'This bid expired. Refresh before bidding again.' });
+    }
 
     const { data: gig, error: gigErr } = await supabaseAdmin
       .from('Gig')
-      .select('user_id')
+      .select('user_id, status, deadline')
       .eq('id', gigId)
       .single();
     if (gigErr || !gig) return res.status(404).json({ error: 'Gig not found' });
+    if (gigBiddingClosed(gig)) return res.status(409).json({ error: 'This gig is no longer accepting bids' });
     if (await canActAsBusiness(gig.user_id, userId)) {
       return res.status(400).json({ error: 'You cannot bid on your own gig' });
     }
@@ -7654,14 +7763,17 @@ router.patch('/:id/my-bid', verifyToken, async (req, res) => {
       .update(patch)
       .eq('id', existing.id)
       .eq('status', 'pending')
+      .eq('updated_at', existing.updated_at)
       .select('*')
-      .single();
+      .maybeSingle();
 
-    if (error || !data) {
+    if (error) {
       logger.error('Error updating bid', { error: error?.message || 'Bid changed', gigId, userId });
       return res.status(500).json({ error: 'Failed to update bid' });
     }
+    if (!data) return res.status(409).json({ error: 'This bid changed. Refresh before editing again.' });
 
+    emitGigUpdate(req, gigId, 'bid-update');
     return res.json({ bid: data });
   } catch (err) {
     logger.error('Bid update error', { error: err.message, gigId, userId });

@@ -332,12 +332,13 @@ function normalizeGigCompletionFile(url, userId, gigId) {
 }
 
 /** Verify an existing completion upload without fetching a caller-supplied URL. */
-async function verifyGigCompletionFile(url, userId, gigId) {
+async function verifyGigCompletionFile(url, userId, gigId, includeMetadata = false) {
   const fileId = privateGigCompletionId(url, gigId);
   if (fileId) {
     const { file } = await readAuthorizedGigCompletionFile(gigId, userId, fileId);
     if (file.user_id !== userId) throw completionStorageError(400);
-    return privateGigCompletionReference(gigId, fileId);
+    const reference = privateGigCompletionReference(gigId, fileId);
+    return includeMetadata ? { url: reference, mimeType: file.mime_type } : reference;
   }
   const key = gigCompletionKey(url, userId, gigId);
   const invalid = () => Object.assign(new Error('Choose proof files uploaded by you for this task.'), { statusCode: 400 });
@@ -367,7 +368,8 @@ async function verifyGigCompletionFile(url, userId, gigId) {
   if (!category || !Number.isSafeInteger(object.ContentLength) || object.ContentLength <= 0
     || object.ContentLength > MAX_FILE_SIZES[category]
     || (file && (Number(file.file_size) !== object.ContentLength || file.mime_type !== mimeType))) throw invalid();
-  return getPublicUrl(key);
+  const reference = getPublicUrl(key);
+  return includeMetadata ? { url: reference, mimeType } : reference;
 }
 
 async function uploadHomeTaskMedia(buffer, originalFilename, userId, taskId, mimeType) {

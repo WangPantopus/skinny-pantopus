@@ -124,7 +124,7 @@ fun GigQuestionsSection(
                 }
             questions.isEmpty() ->
                 Text(
-                    text = "No questions yet. Be the first to ask!",
+                    text = if (canAsk) "No questions yet. Be the first to ask!" else "No questions yet.",
                     fontSize = 13.sp,
                     color = PantopusColors.appTextSecondary,
                     modifier =
