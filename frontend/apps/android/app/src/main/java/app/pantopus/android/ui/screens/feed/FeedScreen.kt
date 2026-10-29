@@ -204,7 +204,9 @@ fun FeedScreen(
         rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
             if (results.values.any { it }) contextBarViewModel.useMyLocation() else contextBarViewModel.locationPermissionDenied()
         }
-    var showsSearch by remember { mutableStateOf(false) }
+    // Saved, so coming back from a post (or another tab) shows the search box with its words, as on iOS, instead of
+    // hiding it while the posts stay filtered by them.
+    var showsSearch by rememberSaveable { mutableStateOf(false) }
     var searchFocused by remember { mutableStateOf(false) }
     var showsIntentPicker by remember { mutableStateOf(false) }
     // List / Map segment — mirrors RN `FeedHeader.tsx:35-52`. Saved, so coming back from a post opened on the map (or
