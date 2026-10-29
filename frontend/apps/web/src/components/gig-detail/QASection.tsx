@@ -18,11 +18,12 @@ interface QASectionProps {
   gigId: string;
   isMyGig: boolean;
   currentUserId?: string;
+  canAsk: boolean;
 }
 
 // ─── Component ───
 
-export default function QASection({ gigId, isMyGig, currentUserId }: QASectionProps) {
+export default function QASection({ gigId, isMyGig, currentUserId, canAsk }: QASectionProps) {
   const [questions, setQuestions] = useState<GigQuestion[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -213,7 +214,7 @@ export default function QASection({ gigId, isMyGig, currentUserId }: QASectionPr
       )}
 
       {/* Ask a question form */}
-      {currentUserId && !isMyGig && (
+      {currentUserId && !isMyGig && canAsk && (
         <div className="mb-5 border border-app-border rounded-lg p-3">
           <textarea
             value={newQuestion}

@@ -284,6 +284,7 @@ public final class GigDetailViewModel {
 
     public var canAskQuestion: Bool {
         Self.currentSignedInUserId() != nil && !viewerIsOwner
+            && ["open", "assigned", "in_progress"].contains(rawGig?.status ?? "")
     }
 
     /// Pinned answers render in their own block above the thread, exactly

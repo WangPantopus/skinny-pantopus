@@ -695,6 +695,17 @@ const bidFields = {
 const createBidSchema = Joi.object(bidFields).xor('bid_amount', 'amount');
 const editBidSchema = Joi.object(bidFields).oxor('bid_amount', 'amount').min(1);
 const counterBidSchema = Joi.object({ amount: bidAmountSchema.required(), message: bidFields.message });
+const questionAttachmentsSchema = Joi.array().max(10).items(
+  Joi.string().trim().max(4096).uri({ scheme: ['http', 'https'] })
+).allow(null).default([]);
+const questionSchema = Joi.object({
+  question: Joi.string().trim().min(5).max(1000).required(),
+  attachments: questionAttachmentsSchema,
+});
+const answerSchema = Joi.object({
+  answer: Joi.string().trim().min(1).max(2000).required(),
+  attachments: questionAttachmentsSchema,
+});
 
 function gigScheduleError(schedule, changed = schedule) {
   for (const field of ['scheduled_start', 'time_window_start', 'time_window_end']) {
@@ -6893,27 +6904,28 @@ router.post('/:gigId/questions', verifyToken, async (req, res) => {
   try {
     const { gigId } = req.params;
     const userId = req.user.id;
-    const { question, attachments } = req.body;
-
-    if (!question || typeof question !== 'string' || question.trim().length < 5) {
-      return res.status(400).json({ error: 'Question must be at least 5 characters' });
-    }
-    if (question.length > 1000) {
-      return res.status(400).json({ error: 'Question must be under 1000 characters' });
-    }
-    const normalizedAttachments = Array.isArray(attachments)
-      ? attachments.filter((url) => typeof url === 'string' && url.trim()).slice(0, 10)
-      : [];
+    const parsed = questionSchema.validate(req.body);
+    if (parsed.error) return res.status(400).json({ error: parsed.error.details[0].message });
+    const { question } = parsed.value;
+    const normalizedAttachments = parsed.value.attachments || [];
 
     // Verify gig exists
     const { data: gig, error: gigErr } = await supabaseAdmin
       .from('Gig')
       .select('id, user_id, title, status')
       .eq('id', gigId)
-      .single();
+      .maybeSingle();
 
-    if (gigErr || !gig) return res.status(404).json({ error: 'Gig not found' });
+    if (gigErr) return res.status(503).json({ error: 'Questions are temporarily unavailable. Please retry.' });
+    if (!gig) return res.status(404).json({ error: 'Gig not found' });
+    if (!['open', 'assigned', 'in_progress'].includes(gig.status)) {
+      return res.status(409).json({ error: 'This task is closed to new questions' });
+    }
+    if (await blockService.isBlocked(gig.user_id, userId)) {
+      return res.status(403).json({ error: 'Cannot ask questions on this task' });
+    }
 
+    // Friendly preflight; the database also serializes admission with task changes.
     // Rate limit: max 5 questions per user per gig
     const { count, error: countErr } = await supabaseAdmin
       .from('GigQuestion')
@@ -6945,6 +6957,12 @@ router.post('/:gigId/questions', verifyToken, async (req, res) => {
       .single();
 
     if (insertErr) {
+      const admission = {
+        GIG_QUESTION_CLOSED: [409, 'This task is closed to new questions'],
+        GIG_QUESTION_BLOCKED: [403, 'Cannot ask questions on this task'],
+        GIG_QUESTION_LIMIT: [429, 'You can ask up to 5 questions per gig'],
+      }[insertErr.message];
+      if (admission) return res.status(admission[0]).json({ error: admission[1] });
       logger.error('Error creating question', { error: insertErr.message });
       return res.status(500).json({ error: 'Failed to post question' });
     }
@@ -6969,6 +6987,9 @@ router.post('/:gigId/questions', verifyToken, async (req, res) => {
     res.status(201).json({ question: serializeGigQuestionForViewer(q) });
   } catch (err) {
     logger.error('Question create error', { error: err.message });
+    if (err.code === 'BLOCK_CHECK_UNAVAILABLE') {
+      return res.status(503).json({ error: 'Questions are temporarily unavailable. Please retry.' });
+    }
     res.status(500).json({ error: 'Failed to post question' });
   }
 });
@@ -6982,17 +7003,10 @@ router.post('/:gigId/questions/:questionId/answer', verifyToken, async (req, res
   try {
     const { gigId, questionId } = req.params;
     const userId = req.user.id;
-    const { answer, attachments } = req.body;
-
-    if (!answer || typeof answer !== 'string' || answer.trim().length < 1) {
-      return res.status(400).json({ error: 'Answer is required' });
-    }
-    if (answer.length > 2000) {
-      return res.status(400).json({ error: 'Answer must be under 2000 characters' });
-    }
-    const normalizedAttachments = Array.isArray(attachments)
-      ? attachments.filter((url) => typeof url === 'string' && url.trim()).slice(0, 10)
-      : [];
+    const parsed = answerSchema.validate(req.body);
+    if (parsed.error) return res.status(400).json({ error: parsed.error.details[0].message });
+    const { answer } = parsed.value;
+    const normalizedAttachments = parsed.value.attachments || [];
 
     // Verify poster
     const { data: gig, error: gigFetchErr } = await supabaseAdmin
@@ -7001,7 +7015,7 @@ router.post('/:gigId/questions/:questionId/answer', verifyToken, async (req, res
         'id, user_id, title, owner:user_id(id, username, name, first_name, last_name, account_type)'
       )
       .eq('id', gigId)
-      .single();
+      .maybeSingle();
 
     if (gigFetchErr) {
       return res.status(500).json({ error: 'Failed to fetch gig' });
@@ -7010,6 +7024,13 @@ router.post('/:gigId/questions/:questionId/answer', verifyToken, async (req, res
     const ownerAccess = await getGigOwnerAccess(gig.user_id, userId, 'gigs.manage');
     if (!ownerAccess.allowed) {
       return res.status(403).json({ error: 'Only the gig poster can answer questions' });
+    }
+    const { data: question, error: questionError } = await supabaseAdmin.from('GigQuestion')
+      .select('id, asked_by').eq('id', questionId).eq('gig_id', gigId).maybeSingle();
+    if (questionError) return res.status(503).json({ error: 'Questions are temporarily unavailable. Please retry.' });
+    if (!question) return res.status(404).json({ error: 'Question not found' });
+    if (await blockService.isBlocked(gig.user_id, question.asked_by)) {
+      return res.status(403).json({ error: 'Cannot answer this question' });
     }
 
     const nowIso = new Date().toISOString();
@@ -7032,12 +7053,13 @@ router.post('/:gigId/questions/:questionId/answer', verifyToken, async (req, res
         answerer:answered_by ( id, username, name )
       `
       )
-      .single();
+      .maybeSingle();
 
     if (error) {
       logger.error('Error answering question', { error: error.message });
       return res.status(500).json({ error: 'Failed to answer question' });
     }
+    if (!updated) return res.status(404).json({ error: 'Question not found' });
 
     // Notify the asker
     if (updated?.asker && String(updated.asker.id) !== String(userId)) {
@@ -7072,6 +7094,9 @@ router.post('/:gigId/questions/:questionId/answer', verifyToken, async (req, res
     });
   } catch (err) {
     logger.error('Answer question error', { error: err.message });
+    if (err.code === 'BLOCK_CHECK_UNAVAILABLE') {
+      return res.status(503).json({ error: 'Questions are temporarily unavailable. Please retry.' });
+    }
     res.status(500).json({ error: 'Failed to answer question' });
   }
 });

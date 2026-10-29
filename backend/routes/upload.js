@@ -26,6 +26,7 @@ const { writeIdentityAuditLog } = require('../utils/identityAudit');
 const { ensureLocalProfile, ownLocalProfileView, syncLocalProfileFromAccount } = require('../utils/identityProfiles');
 const { actingBusinessInRoom, canActAsBusiness } = require('../services/chatBusinessAccess');
 const { isGigRoomClosedTo, isRoomClosedForWrites } = require('../services/chatGigRoomAccess');
+const blockService = require('../services/blockService');
 
 // Rate limit: 30 uploads per 15 minutes per IP
 const uploadLimiter = rateLimit({
@@ -937,18 +938,26 @@ router.post('/gig-question-media/:gigId', uploadLimiter, verifyToken, upload.arr
     // Ensure gig exists.
     const { data: gig, error: gigErr } = await supabaseAdmin
       .from('Gig')
-      .select('id, user_id')
+      .select('id, user_id, status')
       .eq('id', gigId)
-      .single();
+      .maybeSingle();
 
-    if (gigErr || !gig) {
+    if (gigErr) return res.status(503).json({ error: 'Question uploads are temporarily unavailable. Please retry.' });
+    if (!gig) {
       return res.status(404).json({ error: 'Gig not found' });
+    }
+    if (await blockService.isBlocked(gig.user_id, userId)) {
+      return res.status(403).json({ error: 'Cannot upload question files for this task' });
+    }
+    const isPoster = String(gig.user_id) === String(userId) || await canActAsBusiness(gig.user_id, userId);
+    // A poster may still answer an existing question after closing the task.
+    if (!isPoster && !['open', 'assigned', 'in_progress'].includes(gig.status)) {
+      return res.status(409).json({ error: 'This task is closed to new questions' });
     }
 
     // A business's owner and staff answer its task's questions as the business, and these files' addresses are public:
     // they go under the business, so an address never names the person behind it.
-    const keyOwner = String(gig.user_id) !== String(userId) && await canActAsBusiness(gig.user_id, userId)
-      ? gig.user_id : userId;
+    const keyOwner = isPoster ? gig.user_id : userId;
 
     const uploadedFiles = [];
     for (const file of files) {
@@ -986,7 +995,7 @@ router.post('/gig-question-media/:gigId', uploadLimiter, verifyToken, upload.arr
     });
   } catch (err) {
     logger.error('Gig question media upload error', { error: err.message });
-    return res.status(500).json({ error: err.message || 'Failed to upload files' });
+    return res.status(503).json({ error: 'Question files could not be saved. Please retry.' });
   }
 });
 
