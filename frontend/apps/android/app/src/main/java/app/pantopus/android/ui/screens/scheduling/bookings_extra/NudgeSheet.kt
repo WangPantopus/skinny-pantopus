@@ -38,6 +38,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -121,7 +122,7 @@ internal fun NudgeSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         containerColor = PantopusColors.appSurface,
-        modifier = Modifier.testTag(NUDGE_TAG),
+        modifier = Modifier.closesKeyboardOnTapOrScroll().testTag(NUDGE_TAG),
     ) {
         if (state.didSend) {
             NudgeSuccess(sentCount = state.sentCount)

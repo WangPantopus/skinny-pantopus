@@ -42,6 +42,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingRoutes
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -588,6 +589,7 @@ private fun FtTextField(
     Box(
         modifier =
             Modifier
+                .keepsKeyboard()
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(Radii.md))
                 .background(PantopusColors.appSurface)

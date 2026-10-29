@@ -66,6 +66,7 @@ import app.pantopus.android.ui.components.RefreshFailedLine
 import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.components.Toast
 import app.pantopus.android.ui.components.ToastAppearance
+import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
 import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
 import app.pantopus.android.ui.screens.inbox.newmessage.NewMessageScreen
@@ -568,21 +569,23 @@ private fun OrganizerControls(
             onDismissRequest = { showOrganizerPicker = false },
             properties = DialogProperties(usePlatformDefaultWidth = false),
         ) {
-            NewMessageScreen(
-                title = "Add co-organizer",
-                emptyHeadline = "Find a co-organizer",
-                emptyBody = "Search by name, or invite someone who isn't on Pantopus yet.",
-                onCancel = { showOrganizerPicker = false },
-                onSelect = { destination ->
-                    showOrganizerPicker = false
-                    viewModel.addOrganizer(destination.userId)
-                },
-                onInvite = {
-                    showOrganizerPicker = false
-                    onInviteHelpers?.invoke(content.trainId)
-                },
-                viewModel = hiltViewModel(key = "coOrganizerPicker-$pickerSession"),
-            )
+            Box(modifier = Modifier.closesKeyboardOnTapOrScroll()) {
+                NewMessageScreen(
+                    title = "Add co-organizer",
+                    emptyHeadline = "Find a co-organizer",
+                    emptyBody = "Search by name, or invite someone who isn't on Pantopus yet.",
+                    onCancel = { showOrganizerPicker = false },
+                    onSelect = { destination ->
+                        showOrganizerPicker = false
+                        viewModel.addOrganizer(destination.userId)
+                    },
+                    onInvite = {
+                        showOrganizerPicker = false
+                        onInviteHelpers?.invoke(content.trainId)
+                    },
+                    viewModel = hiltViewModel(key = "coOrganizerPicker-$pickerSession"),
+                )
+            }
         }
     }
 

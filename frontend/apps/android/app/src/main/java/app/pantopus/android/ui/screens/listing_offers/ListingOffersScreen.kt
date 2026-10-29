@@ -49,6 +49,8 @@ import app.pantopus.android.data.api.models.listing_offers.ListingOfferDto
 import app.pantopus.android.data.api.models.listing_offers.ListingOfferUserDto
 import app.pantopus.android.ui.components.ToastController
 import app.pantopus.android.ui.components.ToastHost
+import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.screens.settings.payments.StripePaymentSheets
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsScreen
 import app.pantopus.android.ui.screens.transaction_reviews.TransactionReviewSheetContent
@@ -114,6 +116,7 @@ fun ListingOffersScreen(
         if (target != null) {
             val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
             ModalBottomSheet(
+                modifier = Modifier.closesKeyboardOnTapOrScroll(),
                 onDismissRequest = { viewModel.cancelCounter() },
                 sheetState = sheetState,
                 containerColor = PantopusColors.appSurface,
@@ -130,6 +133,7 @@ fun ListingOffersScreen(
         if (reviewTarget != null) {
             val reviewSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
             ModalBottomSheet(
+                modifier = Modifier.closesKeyboardOnTapOrScroll(),
                 onDismissRequest = { viewModel.cancelLeaveReview() },
                 sheetState = reviewSheetState,
                 containerColor = PantopusColors.appBg,
@@ -280,6 +284,7 @@ private fun CounterAmountField(
         Row(
             modifier =
                 Modifier
+                    .keepsKeyboard()
                     .fillMaxWidth()
                     .heightIn(min = 48.dp)
                     .clip(RoundedCornerShape(Radii.md))
@@ -326,6 +331,7 @@ private fun CounterMessageField(
         Box(
             modifier =
                 Modifier
+                    .keepsKeyboard()
                     .fillMaxWidth()
                     .heightIn(min = 64.dp)
                     .clip(RoundedCornerShape(Radii.md))

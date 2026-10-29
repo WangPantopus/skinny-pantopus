@@ -69,6 +69,8 @@ import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.PantopusTextField
 import app.pantopus.android.ui.components.Toast
 import app.pantopus.android.ui.components.ToastAppearance
+import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.businesses.catalog.BusinessCatalogScreen
 import app.pantopus.android.ui.screens.businesses.page_editor.components.EditBusinessBannerLogoEditor
@@ -261,6 +263,7 @@ private fun CloseBusinessDialog(
 ) {
     var confirmation by remember { mutableStateOf("") }
     AlertDialog(
+        modifier = Modifier.closesKeyboardOnTapOrScroll(),
         onDismissRequest = { if (!isClosing) onCancel() },
         title = { Text("Close $businessName?") },
         text = {
@@ -800,6 +803,7 @@ private fun BizField(
         Row(
             modifier =
                 Modifier
+                    .keepsKeyboard()
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(Radii.md))
                     .background(PantopusColors.appSurface)
@@ -904,6 +908,7 @@ private fun BizTextarea(
     Box(
         modifier =
             Modifier
+                .keepsKeyboard()
                 .fillMaxWidth()
                 .heightIn(min = 124.dp)
                 .clip(RoundedCornerShape(Radii.md))

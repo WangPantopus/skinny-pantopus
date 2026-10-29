@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.sp
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.components.Toast
 import app.pantopus.android.ui.components.ToastAppearance
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -876,6 +877,7 @@ fun AutoTextField(
     Box(
         modifier =
             modifier
+                .keepsKeyboard()
                 .fillMaxWidth()
                 .heightIn(min = 42.dp)
                 .clip(RoundedCornerShape(Radii.md))
@@ -915,6 +917,7 @@ fun AutoTextEditor(
     Box(
         modifier =
             modifier
+                .keepsKeyboard()
                 .fillMaxWidth()
                 .heightIn(min = minHeight)
                 .clip(RoundedCornerShape(Radii.md))

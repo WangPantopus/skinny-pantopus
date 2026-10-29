@@ -89,6 +89,7 @@ import app.pantopus.android.data.analytics.AnalyticsEvent
 import app.pantopus.android.ui.components.PantopusFieldState
 import app.pantopus.android.ui.components.PantopusTextField
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.screens.shared.wizard.WizardShell
 import app.pantopus.android.ui.screens.shared.wizard.blocks.HeadlineBlock
 import app.pantopus.android.ui.screens.shared.wizard.blocks.ReviewSummaryBlock
@@ -1625,6 +1626,7 @@ private fun SuggestedFieldShell(
         Row(
             modifier =
                 Modifier
+                    .keepsKeyboard()
                     .fillMaxWidth()
                     .heightIn(min = 44.dp)
                     .clip(RoundedCornerShape(Radii.lg))

@@ -42,6 +42,7 @@ import app.pantopus.android.push.PushTokenSyncer
 import app.pantopus.android.push.ReminderActionReceiver
 import app.pantopus.android.ui.components.ToastController
 import app.pantopus.android.ui.components.ToastHost
+import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
 import app.pantopus.android.ui.navigation.PantopusNavHost
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusTheme
@@ -159,9 +160,11 @@ class MainActivity : FragmentActivity() {
                 // clear of it without adding its own system-bar padding twice.
                 // The app is always light: paint the band it leaves so a dark system
                 // theme's window background never sits behind dark status-bar icons.
+                // A tap or a scroll outside the text box puts the keyboard away, on every screen.
                 Box(
                     modifier =
                         Modifier
+                            .closesKeyboardOnTapOrScroll()
                             .fillMaxSize()
                             .background(PantopusColors.appSurface)
                             .windowInsetsPadding(WindowInsets.displayCutout)

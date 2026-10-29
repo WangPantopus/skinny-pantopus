@@ -60,6 +60,8 @@ import app.pantopus.android.data.api.models.place.PlacePreviewSectionStatus
 import app.pantopus.android.data.api.models.place.PlaceSectionEnvelope
 import app.pantopus.android.data.api.models.place.PlaceSectionId
 import app.pantopus.android.ui.components.PrimaryButton
+import app.pantopus.android.ui.components.firstTapClosesKeyboard
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.screens.ballot.BallotGovernmentsSheet
 import app.pantopus.android.ui.screens.ballot.BallotPlacement
 import app.pantopus.android.ui.screens.ballot.BallotSeasonBlock
@@ -246,9 +248,10 @@ private fun Hero(
             AddressField(query = query, onChange = viewModel::onQueryChange, onClear = { viewModel.onQueryChange("") })
 
             if (query.isNotBlank() && suggestions.isNotEmpty()) {
+                // While typing the address, the first tap on a suggestion only puts the keyboard away.
                 Column(
                     modifier =
-                        Modifier.fillMaxWidth().clip(
+                        Modifier.fillMaxWidth().firstTapClosesKeyboard().clip(
                             RoundedCornerShape(14.dp),
                         ).background(PantopusColors.appSurface).border(1.dp, PantopusColors.appBorder, RoundedCornerShape(14.dp)),
                 ) {
@@ -404,7 +407,7 @@ private fun AddressField(
 ) {
     Row(
         modifier =
-            Modifier.fillMaxWidth().clip(
+            Modifier.keepsKeyboard().fillMaxWidth().clip(
                 RoundedCornerShape(14.dp),
             ).background(
                 PantopusColors.appSurface,

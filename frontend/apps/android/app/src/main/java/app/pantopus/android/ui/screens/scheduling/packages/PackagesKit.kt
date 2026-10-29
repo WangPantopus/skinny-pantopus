@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.ui.components.Toast
 import app.pantopus.android.ui.components.ToastAppearance
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.screens.scheduling._shared.MoneyAndFlag
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingPillar
 import app.pantopus.android.ui.theme.PantopusColors
@@ -574,6 +575,7 @@ fun PkgTextField(
         Box(
             modifier =
                 Modifier
+                    .keepsKeyboard()
                     .fillMaxWidth()
                     .height(40.dp)
                     .clip(RoundedCornerShape(Radii.md))
@@ -633,6 +635,7 @@ fun PkgMultilineField(
         Box(
             modifier =
                 Modifier
+                    .keepsKeyboard()
                     .fillMaxWidth()
                     .heightIn(min = 48.dp)
                     .clip(RoundedCornerShape(Radii.md))

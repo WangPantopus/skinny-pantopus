@@ -62,6 +62,8 @@ import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.components.Toast
 import app.pantopus.android.ui.components.ToastAppearance
+import app.pantopus.android.ui.components.firstTapClosesKeyboard
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingPillar
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingRoutes
@@ -152,7 +154,8 @@ fun BookingsInboxScreen(
                 onSelect = viewModel::selectSegment,
             )
             HorizontalDivider(thickness = 1.dp, color = PantopusColors.appBorder)
-            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            // While typing in the search box, the first tap on the bookings only puts the keyboard away.
+            Box(modifier = Modifier.weight(1f).fillMaxWidth().firstTapClosesKeyboard()) {
                 when (val s = state) {
                     BookingsInboxUiState.Loading -> InboxSkeleton()
                     is BookingsInboxUiState.Error ->
@@ -266,6 +269,7 @@ private fun InboxSearchField(
         modifier =
             modifier
                 .height(36.dp)
+                .keepsKeyboard()
                 .clip(RoundedCornerShape(Radii.pill))
                 .background(PantopusColors.appSurfaceSunken)
                 .padding(horizontal = Spacing.s3),

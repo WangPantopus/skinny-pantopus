@@ -57,6 +57,7 @@ import app.pantopus.android.data.api.models.mailbox.v2.MailHome
 import app.pantopus.android.data.api.models.mailbox.v2.MailVacationHold
 import app.pantopus.android.data.mailbox.MailboxRepository
 import app.pantopus.android.ui.components.NavigationMenuButton
+import app.pantopus.android.ui.components.firstTapClosesKeyboard
 import app.pantopus.android.ui.screens.ceremonial_mail_open.MailWelcomePorch
 import app.pantopus.android.ui.screens.mailbox.components.MailboxHeroState
 import app.pantopus.android.ui.screens.place.verify.PlaceVerifyMethod
@@ -478,8 +479,11 @@ private fun LazyListScope.vaultSearchItems(
             item(key = "vaultMatches") {
                 MailSectionHeader(if (search.results.size == 1) "1 filed piece matches" else "${search.results.size} filed pieces match")
             }
+            // While typing in the search box, the first tap on a match only puts the keyboard away.
             items(search.results, key = { "match-${it.id}" }, contentType = { "filed" }) { row ->
-                MailFiledRow(row, vault.folderName(row.vaultFolderId), zone) { viewModel.openMail(row.id) }
+                Box(modifier = Modifier.firstTapClosesKeyboard()) {
+                    MailFiledRow(row, vault.folderName(row.vaultFolderId), zone) { viewModel.openMail(row.id) }
+                }
             }
             when {
                 search.error != null ->

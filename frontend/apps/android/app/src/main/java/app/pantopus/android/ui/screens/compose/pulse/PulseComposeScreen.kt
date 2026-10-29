@@ -83,6 +83,7 @@ import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.components.Toast
 import app.pantopus.android.ui.components.ToastKind
 import app.pantopus.android.ui.components.ToastMessage
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.screens.compose.placepicker.MediaLocationExtractor
 import app.pantopus.android.ui.screens.compose.placepicker.PlacePickerSheet
 import app.pantopus.android.ui.screens.compose.placepicker.PostPlaceTag
@@ -1835,6 +1836,7 @@ private fun BodyEditor(
         Box(
             modifier =
                 Modifier
+                    .keepsKeyboard()
                     .fillMaxWidth()
                     .heightIn(min = 96.dp)
                     .clip(RoundedCornerShape(Radii.md))

@@ -49,6 +49,7 @@ import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.components.Toast
 import app.pantopus.android.ui.components.ToastKind
 import app.pantopus.android.ui.components.ToastMessage
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.screens.shared.form.FormFieldGroup
 import app.pantopus.android.ui.screens.shared.form.FormShell
 import app.pantopus.android.ui.theme.PantopusColors
@@ -720,6 +721,7 @@ private fun RoleNoteEditor(
         Box(
             modifier =
                 Modifier
+                    .keepsKeyboard()
                     .fillMaxWidth()
                     .heightIn(min = 92.dp)
                     .clip(RoundedCornerShape(Radii.md))

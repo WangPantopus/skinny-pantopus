@@ -93,6 +93,7 @@ import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
 import app.pantopus.android.ui.components.Toast
 import app.pantopus.android.ui.components.ToastAppearance
+import app.pantopus.android.ui.components.firstTapClosesKeyboard
 import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.feed.map.FeedMapQuery
 import app.pantopus.android.ui.screens.feed.map.FeedMapSection
@@ -203,7 +204,9 @@ fun FeedScreen(
         rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
             if (results.values.any { it }) contextBarViewModel.useMyLocation() else contextBarViewModel.locationPermissionDenied()
         }
-    var showsSearch by remember { mutableStateOf(false) }
+    // Saved, so coming back from a post (or another tab) shows the search box with its words, as on iOS, instead of
+    // hiding it while the posts stay filtered by them.
+    var showsSearch by rememberSaveable { mutableStateOf(false) }
     var searchFocused by remember { mutableStateOf(false) }
     var showsIntentPicker by remember { mutableStateOf(false) }
     // List / Map segment — mirrors RN `FeedHeader.tsx:35-52`. Saved, so coming back from a post opened on the map (or
@@ -429,6 +432,7 @@ fun FeedScreen(
                     FeedMapSection(
                         query = FeedMapQuery(surface = activeSurface, postType = activeIntent.postType),
                         onOpenPost = onOpenPost,
+                        modifier = Modifier.firstTapClosesKeyboard(),
                         topInset = { headerState.mapTopInsetPx(headerProgress.value, reduceMotion, revealFallbackPx) },
                         // Dragging the map counts as scrolling; never with a screen reader on.
                         onVerticalPan =
@@ -1430,7 +1434,8 @@ private fun PopulatedFrame(
         if (header != null && listState.firstVisibleItemIndex <= 1) listState.scrollToItem(0)
     }
     val headerScroll = rememberPulseHeaderScroll(collapsingHeader, listState)
-    Box(modifier = Modifier.fillMaxSize().nestedScroll(headerScroll).pullRefresh(pullState)) {
+    // While typing in Search posts, the first tap on the posts only puts the keyboard away; the next one opens a post.
+    Box(modifier = Modifier.fillMaxSize().firstTapClosesKeyboard().nestedScroll(headerScroll).pullRefresh(pullState)) {
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize().testTag("pulseFeedList"),

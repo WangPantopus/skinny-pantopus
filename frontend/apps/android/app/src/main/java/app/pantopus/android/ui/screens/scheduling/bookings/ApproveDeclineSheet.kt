@@ -32,6 +32,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingPillar
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -67,7 +69,7 @@ fun ApproveDeclineSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         containerColor = PantopusColors.appSurface,
-        modifier = modifier.testTag(APPROVE_DECLINE_SHEET_TAG),
+        modifier = modifier.closesKeyboardOnTapOrScroll().testTag(APPROVE_DECLINE_SHEET_TAG),
     ) {
         Column(
             modifier =
@@ -449,6 +451,7 @@ fun NoteField(
     Box(
         modifier =
             modifier
+                .keepsKeyboard()
                 .fillMaxWidth()
                 .heightIn(min = 56.dp)
                 .clip(RoundedCornerShape(Radii.md))

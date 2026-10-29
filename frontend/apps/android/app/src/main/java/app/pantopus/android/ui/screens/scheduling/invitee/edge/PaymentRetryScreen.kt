@@ -39,6 +39,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.BuildConfig
 import app.pantopus.android.ui.components.GhostButton
 import app.pantopus.android.ui.components.PrimaryButton
+import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
 import app.pantopus.android.ui.screens.scheduling._shared.PaidGate
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingLoadingSkeleton
 import app.pantopus.android.ui.screens.scheduling.invitee.edge.PaymentRetryViewModel.PaymentRetryUiState
@@ -99,7 +100,7 @@ fun PaymentRetrySheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         containerColor = PantopusColors.appSurface,
-        modifier = modifier.testTag(PAYMENT_RETRY_TAG),
+        modifier = modifier.closesKeyboardOnTapOrScroll().testTag(PAYMENT_RETRY_TAG),
     ) {
         PaidGate(
             enabled = viewModel.flags.paidSchedulingEnabled,

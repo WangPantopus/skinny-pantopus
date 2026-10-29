@@ -75,6 +75,7 @@ import app.pantopus.android.data.auth.OAuthProvider
 import app.pantopus.android.data.auth.OAuthSessionStore
 import app.pantopus.android.ui.components.AvatarWithIdentityRing
 import app.pantopus.android.ui.components.IdentityPillar
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.screens.auth.sign_up.ErrorBanner
 import app.pantopus.android.ui.screens.settings.legal.LegalDocument
 import app.pantopus.android.ui.theme.MarkVariant
@@ -676,6 +677,7 @@ private fun EmailField(
         Row(
             modifier =
                 Modifier
+                    .keepsKeyboard()
                     .fillMaxWidth()
                     .height(44.dp)
                     .clip(RoundedCornerShape(Radii.md))
@@ -785,6 +787,7 @@ private fun PasswordFieldWithForgot(
         Row(
             modifier =
                 Modifier
+                    .keepsKeyboard()
                     .fillMaxWidth()
                     .height(44.dp)
                     .clip(RoundedCornerShape(Radii.md))

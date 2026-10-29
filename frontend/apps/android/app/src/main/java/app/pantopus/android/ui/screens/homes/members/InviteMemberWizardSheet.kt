@@ -30,6 +30,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.security.SecureScreenEffect
 import app.pantopus.android.data.homes.HomeInvitationSenderOutcome
 import app.pantopus.android.data.homes.HomeInvitationSenderRecovery
+import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.Spacing
 
@@ -80,7 +81,7 @@ private fun SenderSheetContent(
         onDismissRequest = onClose,
         properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = false),
     ) {
-        Surface(color = PantopusColors.appBg) {
+        Surface(modifier = Modifier.closesKeyboardOnTapOrScroll(), color = PantopusColors.appBg) {
             Column(
                 modifier =
                     Modifier.fillMaxSize().verticalScroll(

@@ -67,6 +67,7 @@ import app.pantopus.android.ui.components.PantopusFieldState
 import app.pantopus.android.ui.components.PantopusTextField
 import app.pantopus.android.ui.components.Toast
 import app.pantopus.android.ui.components.ToastAppearance
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.shared.form.FormShell
 import app.pantopus.android.ui.theme.PantopusColors
@@ -790,6 +791,7 @@ private fun NotesGroup(
             Box(
                 modifier =
                     Modifier
+                        .keepsKeyboard()
                         .fillMaxWidth()
                         .heightIn(min = 88.dp)
                         .clip(RoundedCornerShape(Radii.md))

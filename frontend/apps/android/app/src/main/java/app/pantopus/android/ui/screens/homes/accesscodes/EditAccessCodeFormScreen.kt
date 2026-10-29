@@ -55,6 +55,7 @@ import app.pantopus.android.ui.components.PantopusFieldState
 import app.pantopus.android.ui.components.PantopusTextField
 import app.pantopus.android.ui.components.Toast
 import app.pantopus.android.ui.components.ToastAppearance
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.screens.shared.form.FormFieldGroup
 import app.pantopus.android.ui.screens.shared.form.FormShell
 import app.pantopus.android.ui.theme.MotionTokens
@@ -384,6 +385,7 @@ private fun ValueField(
             horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
             modifier =
                 Modifier
+                    .keepsKeyboard()
                     .heightIn(min = 44.dp)
                     .clip(RoundedCornerShape(Radii.md))
                     .background(PantopusColors.appSurface)
@@ -472,6 +474,7 @@ private fun NotesField(
         Box(
             modifier =
                 Modifier
+                    .keepsKeyboard()
                     .fillMaxWidth()
                     .heightIn(min = 88.dp)
                     .clip(RoundedCornerShape(Radii.md))

@@ -40,6 +40,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingRoutes
 import app.pantopus.android.ui.screens.scheduling._shared.TimezoneOption
 import app.pantopus.android.ui.screens.scheduling._shared.TimezonePickerSheet
@@ -112,7 +113,7 @@ fun SuggestedSlotsScreen(
         ModalBottomSheet(
             onDismissRequest = { showEdit = false },
             sheetState = editSheetState,
-            modifier = Modifier.fillMaxHeight(),
+            modifier = Modifier.closesKeyboardOnTapOrScroll().fillMaxHeight(),
         ) {
             FindATimeSetupScreen(
                 onBack = { showEdit = false },

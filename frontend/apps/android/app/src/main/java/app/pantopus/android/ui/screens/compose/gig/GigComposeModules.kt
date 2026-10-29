@@ -42,6 +42,7 @@ import app.pantopus.android.data.api.models.gigs.LogisticsDetailsDto
 import app.pantopus.android.data.api.models.gigs.RemoteDetailsDto
 import app.pantopus.android.ui.components.PantopusFieldState
 import app.pantopus.android.ui.components.PantopusTextField
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -453,6 +454,7 @@ private fun ModuleMultilineField(
         Box(
             modifier =
                 Modifier
+                    .keepsKeyboard()
                     .fillMaxWidth()
                     .heightIn(min = 80.dp)
                     .clip(RoundedCornerShape(Radii.md))

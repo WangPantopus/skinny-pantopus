@@ -41,6 +41,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
 import app.pantopus.android.ui.screens.scheduling._shared.SlotTimeList
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -76,7 +77,7 @@ fun RescheduleReassignSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         containerColor = PantopusColors.appSurface,
-        modifier = modifier.testTag(RESCHEDULE_SHEET_TAG),
+        modifier = modifier.closesKeyboardOnTapOrScroll().testTag(RESCHEDULE_SHEET_TAG),
     ) {
         if (state.proposed) {
             ProposedSuccess(onDone = onProposedDone)

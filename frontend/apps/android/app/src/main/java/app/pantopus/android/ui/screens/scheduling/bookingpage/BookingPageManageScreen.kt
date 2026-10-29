@@ -40,6 +40,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.MailDraft
 import app.pantopus.android.ui.components.composeMail
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.components.shareText
 import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingLoadingSkeleton
@@ -255,6 +256,7 @@ private fun SlugCard(
         Row(
             modifier =
                 Modifier
+                    .keepsKeyboard()
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(Radii.md))
                     .background(if (enabled) PantopusColors.appSurface else PantopusColors.appSurfaceRaised)

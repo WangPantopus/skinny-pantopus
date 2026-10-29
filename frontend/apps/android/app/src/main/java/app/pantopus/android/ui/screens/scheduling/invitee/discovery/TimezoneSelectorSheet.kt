@@ -33,6 +33,9 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
+import app.pantopus.android.ui.components.firstTapClosesKeyboard
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.screens.scheduling._shared.TimezoneOption
 import app.pantopus.android.ui.screens.scheduling._shared.defaultTimezoneOptions
 import app.pantopus.android.ui.screens.scheduling._shared.searchTimezoneOptions
@@ -87,6 +90,7 @@ fun TimezoneSelectorSheet(
     val isOverridden = overriddenId != null && overriddenId != detectedId
 
     ModalBottomSheet(
+        modifier = Modifier.closesKeyboardOnTapOrScroll(),
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         containerColor = PantopusColors.appSurface,
@@ -164,6 +168,7 @@ private fun OverrideAwareTzContent(
         Row(
             modifier =
                 Modifier
+                    .keepsKeyboard()
                     .fillMaxWidth()
                     .padding(horizontal = Spacing.s4, vertical = Spacing.s2)
                     .clip(RoundedCornerShape(Radii.md))
@@ -352,11 +357,13 @@ private fun TzZoneListCard(
     accent: Color,
     onSelect: (TimezoneOption) -> Unit,
 ) {
+    // While typing in the search box, the first tap on a time zone only puts the keyboard away.
     Column(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .padding(horizontal = Spacing.s4)
+                .firstTapClosesKeyboard()
                 .clip(RoundedCornerShape(Radii.xl))
                 .background(PantopusColors.appSurface)
                 .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.xl)),

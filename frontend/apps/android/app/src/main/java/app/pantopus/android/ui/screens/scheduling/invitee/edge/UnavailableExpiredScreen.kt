@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.data.scheduling.SchedulingError
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.screens.scheduling._shared.PausedExpiredUnavailableState
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingPillar
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingTerminalState
@@ -278,6 +279,7 @@ private fun AccessCodeField(
             Box(
                 modifier =
                     Modifier
+                        .keepsKeyboard()
                         .weight(1f)
                         .clip(RoundedCornerShape(Radii.md))
                         .background(PantopusColors.appSurface)

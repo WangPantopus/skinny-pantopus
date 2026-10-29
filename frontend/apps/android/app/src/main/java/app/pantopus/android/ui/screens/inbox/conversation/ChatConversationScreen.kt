@@ -148,6 +148,9 @@ import app.pantopus.android.ui.components.GhostButton
 import app.pantopus.android.ui.components.KeyboardResizeEffect
 import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
+import app.pantopus.android.ui.components.keepsKeyboard
+import app.pantopus.android.ui.components.keepsKeyboardWhileScrolling
 import app.pantopus.android.ui.screens.inbox.conversation.ai.AiActionCard
 import app.pantopus.android.ui.screens.inbox.conversation.ai.AiCapabilityChip
 import app.pantopus.android.ui.screens.inbox.conversation.ai.AiContextStrip
@@ -540,11 +543,13 @@ fun ChatConversationScreen(
             }
             // A tap on the thread puts the keyboard away, so the whole conversation shows again, as on iOS; buttons,
             // links and cards keep their own taps. Scrolling still scrolls, and Back still closes the keyboard too.
+            // Scrolling the thread leaves the keyboard to the chat (it follows the scroll at the newest message).
             Box(
                 modifier =
                     Modifier
                         .weight(1f)
                         .fillMaxWidth()
+                        .keepsKeyboardWhileScrolling()
                         .nestedScroll(emojiDismissScroll)
                         .pointerInput(state is ChatConversationUiState.Loaded) {
                             // An empty conversation has no scrolling list to dismiss its input.
@@ -3839,6 +3844,7 @@ private fun ComposerContextBanner(
             Modifier
                 .fillMaxWidth()
                 .height(50.dp)
+                .keepsKeyboard()
                 .background(barBackground)
                 .padding(start = Spacing.s3, end = Spacing.s1)
                 .testTag("chatComposerContext"),
@@ -4373,6 +4379,7 @@ private fun ChatReportUserSheet(
     var selectedReason by remember { mutableStateOf<String?>(null) }
     var details by remember { mutableStateOf("") }
     ModalBottomSheet(
+        modifier = Modifier.closesKeyboardOnTapOrScroll(),
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         containerColor = PantopusColors.appSurface,
@@ -4432,6 +4439,7 @@ private fun ChatReportUserSheet(
             Box(
                 modifier =
                     Modifier
+                        .keepsKeyboard()
                         .fillMaxWidth()
                         .heightIn(min = 72.dp)
                         .clip(RoundedCornerShape(Radii.md))
@@ -5429,7 +5437,8 @@ internal fun Composer(
     onFocused: () -> Unit = {},
     onStopAiStream: () -> Unit = {},
 ) {
-    Box(modifier = Modifier.fillMaxWidth().background(PantopusColors.appSurface)) {
+    // Send, attach and emoji are used while typing: a tap on them never puts the keyboard away by itself.
+    Box(modifier = Modifier.fillMaxWidth().keepsKeyboard().background(PantopusColors.appSurface)) {
         Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(PantopusColors.appBorder))
         Row(
             modifier = Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, top = Spacing.s2, bottom = Spacing.s4),
@@ -5617,7 +5626,7 @@ internal fun AttachmentStripView(
     attachments: List<ChatQueuedAttachment>,
     onRemove: (String) -> Unit,
 ) {
-    Box(modifier = Modifier.fillMaxWidth().background(PantopusColors.appSurface).testTag("chatAttachmentStrip")) {
+    Box(modifier = Modifier.fillMaxWidth().keepsKeyboard().background(PantopusColors.appSurface).testTag("chatAttachmentStrip")) {
         Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(PantopusColors.appBorder))
         Row(
             modifier =
