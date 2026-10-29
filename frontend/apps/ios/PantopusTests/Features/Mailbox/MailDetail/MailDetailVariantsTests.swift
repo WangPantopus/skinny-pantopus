@@ -198,7 +198,7 @@ final class MailDetailVariantsTests: XCTestCase {
         XCTAssertEqual(content.certifiedDetail?.referenceNumber, "SP-2026-188742")
         XCTAssertEqual(content.certifiedDetail?.documentType, "Supplemental tax bill")
         XCTAssertEqual(content.certifiedDetail?.chain.count, 3)
-        XCTAssertEqual(content.detailTrust, .verified) // certified always renders the verified dot
+        XCTAssertEqual(content.detailTrust, .neutral) // Certification does not verify the sender.
     }
 
     func testCertifiedIsAcknowledgedFromPayloadFlowsThroughResolvedAck() async {

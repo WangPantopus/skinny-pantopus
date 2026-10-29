@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.data.api.models.mailbox.v2.CertifiedDetailDto
 import app.pantopus.android.ui.screens.mailbox.item_detail.MailItemCategory
+import app.pantopus.android.ui.screens.mailbox.item_detail.MailTrust
 import app.pantopus.android.ui.screens.mailbox.item_detail.bodies.components.CertifiedConfirmGate
 import app.pantopus.android.ui.screens.mailbox.item_detail.bodies.components.CertifiedTermsSheet
 import app.pantopus.android.ui.screens.mailbox.item_detail.bodies.components.CertifiedTermsSummaryCard
@@ -127,7 +128,7 @@ fun CertifiedDetailLayout(
     }
     Box(modifier = Modifier.testTag("mailDetail_certified")) {
         MailItemDetailShell(
-            topBar = makeTopBar(onBack = onBack, onSaveToVault = onSaveToVault, onArchive = onArchive),
+            topBar = makeTopBar(trust = content.detailTrust, onBack = onBack, onSaveToVault = onSaveToVault, onArchive = onArchive),
             aiElf = makeAIElf(content = content),
             attachments = makeAttachments(content = content),
             hero = { HeroCard(content = content, certified = certified) },
@@ -193,13 +194,14 @@ fun CertifiedDetailLayout(
 // ─── Top bar / AI elf / attachments ──────────────────────────
 
 private fun makeTopBar(
+    trust: MailDetailTrust,
     onBack: () -> Unit,
     onSaveToVault: () -> Unit,
     onArchive: () -> Unit,
 ): MailTopBarConfig =
     MailTopBarConfig(
         eyebrow = "Certified mail",
-        trust = MailDetailTrust.Verified,
+        trust = trust,
         onBack = onBack,
         trailingAction =
             MailTopBarTrailingAction(
@@ -457,7 +459,7 @@ private fun HeroCard(
             verticalArrangement = Arrangement.spacedBy(Spacing.s2),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TrustBadge()
+                TrustBadge(trust = content.trust)
                 Spacer(Modifier.width(Spacing.s1))
                 CategoryBadge(category = content.category)
                 Spacer(Modifier.weight(1f))
@@ -579,29 +581,29 @@ private fun ArchivedBanner() {
 }
 
 @Composable
-private fun TrustBadge() {
+private fun TrustBadge(trust: MailTrust) {
     Row(
         modifier =
             Modifier
                 .clip(RoundedCornerShape(Radii.pill))
-                .background(PantopusColors.successBg)
+                .background(trust.background)
                 .padding(horizontal = Spacing.s2, vertical = 3.dp)
-                .semantics { contentDescription = "Verified sender" },
+                .semantics { contentDescription = "${trust.label} sender" },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
     ) {
         PantopusIconImage(
-            icon = PantopusIcon.ShieldCheck,
+            icon = trust.icon,
             contentDescription = null,
             size = 11.dp,
-            tint = PantopusColors.success,
+            tint = trust.foreground,
         )
         Text(
-            text = "Verified",
+            text = trust.label,
             fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
             letterSpacing = 0.3.sp,
-            color = PantopusColors.success,
+            color = trust.foreground,
         )
     }
 }
