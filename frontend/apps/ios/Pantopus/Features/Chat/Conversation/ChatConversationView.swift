@@ -566,7 +566,7 @@ public struct ChatConversationView: View {
                 ChatSelectionDeleteBar(selectedCount: selectedMessageIds.count) {
                     bulkDeleteConfirmPresented = true
                 }
-            } else if let closed = viewModel.roomClosedNote ?? planContext?.closedNote {
+            } else if let closed = planContext?.closedNote ?? viewModel.roomClosedNote {
                 PlanChatClosedLine(text: closed)
             } else {
                 actionBanner

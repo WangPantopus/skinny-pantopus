@@ -2667,30 +2667,42 @@ class ChatConversationViewModel
             response: NetworkResult<ChatMessagesResponse>,
         ) {
             if (before != null || response !is NetworkResult.Success) return
-            _composerClosedNote.value = response.data.sendRefusal?.error
-            refreshRoomAvailability(context)
+            // A room's line waits for the room read, which decides with the page: setting the page's first would
+            // open a closed composer for a moment.
+            if (!refreshRoomAvailability(context)) _composerClosedNote.value = response.data.sendRefusal?.error
         }
 
-        private suspend fun refreshRoomAvailability(context: HistoryReadContext) {
-            val target = context.mode as? ChatThreadMode.Room ?: return
+        /** False when there's no room to read or it couldn't be read; the page's own refusal then stands. */
+        private suspend fun refreshRoomAvailability(context: HistoryReadContext): Boolean {
+            val target = context.mode as? ChatThreadMode.Room ?: return false
             val result = repo.room(target.id, target.asBusinessUserId)
-            if (context != historyContext() || result !is NetworkResult.Success) return
+            if (context != historyContext()) return true
+            if (result !is NetworkResult.Success) return false
             val room = result.data.room
             val membership = room.participants?.firstOrNull { it.userId == messageIdentityId }
             val refusal =
                 when {
+                    // A Plan's chat has no one person to message instead; the server says only that it closed.
+                    room.isActive == false && room.type == "plan" -> ChatSendRefusal("This chat has closed.", "ROOM_CLOSED")
                     room.isActive == false ->
                         ChatSendRefusal("This chat has closed. Message them directly to keep talking.", "ROOM_CLOSED")
+                    // The server's own sentence for a member who left (`sendRefusal`), so the line never changes.
                     room.type == "group" && (membership?.isActive == false || !membership?.leftAt.isNullOrEmpty()) ->
-                        ChatSendRefusal("You are no longer a member of this chat.", "ROOM_MEMBERSHIP_INACTIVE")
+                        ChatSendRefusal(
+                            "You are no longer in this conversation. You can still read earlier messages.",
+                            "ROOM_MEMBERSHIP_INACTIVE",
+                        )
                     else -> null
                 }
-            // Preserve unrelated server refusals, and clear our saved refusal after rejoining.
-            if (refusal != null || historyPage?.sendRefusal?.code in setOf("ROOM_CLOSED", "ROOM_MEMBERSHIP_INACTIVE")) {
-                historyPage = historyPage?.copy(sendRefusal = refusal)
-                _composerClosedNote.value = refusal?.error
+            // An unrelated server refusal (a draft or closed business) stands; the room decides the rest, including
+            // after rejoining.
+            val shown = refusal ?: historyPage?.sendRefusal?.takeUnless { it.code in setOf("ROOM_CLOSED", "ROOM_MEMBERSHIP_INACTIVE") }
+            if (historyPage != null && historyPage?.sendRefusal != shown) {
+                historyPage = historyPage?.copy(sendRefusal = shown)
                 rebuild()
             }
+            _composerClosedNote.value = shown?.error
+            return true
         }
 
         /** A first-page read (or a new thread or topic): the copy writer follows the read's context. */
@@ -3227,12 +3239,12 @@ class ChatConversationViewModel
                     } while (before != null)
                     firstPage?.let { page ->
                         if (contextMessageId == null) historyPage = page else contextHasNewer = page.hasMoreAfter
-                        _composerClosedNote.value = page.sendRefusal?.error
                         updateActiveRooms(page)
                     }
                     retireConfirmedSends(authoritative.values.toList())
                     rebuild()
-                    refreshRoomAvailability(context)
+                    // As for a first page: the room read decides the line with the page, without a flash.
+                    if (!refreshRoomAvailability(context)) firstPage?.let { _composerClosedNote.value = it.sendRefusal?.error }
                     joinActiveRoomsIfPossible()
                     scheduleMarkRead()
                 }

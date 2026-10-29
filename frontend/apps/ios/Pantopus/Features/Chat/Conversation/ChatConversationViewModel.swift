@@ -3277,10 +3277,14 @@ public final class ChatConversationViewModel {
             )
             let membership = response.room.participants?.first { $0.userId == sendingIdentityId }
             if response.room.isActive == false {
-                inactiveRoomNote = "This chat has closed. Message them directly to keep talking."
+                // A Plan's chat has no one person to message instead; the server says only that it closed.
+                inactiveRoomNote = response.room.type == "plan"
+                    ? "This chat has closed."
+                    : "This chat has closed. Message them directly to keep talking."
             } else if response.room.type == "group",
                       membership?.isActive == false || membership?.leftAt?.isEmpty == false {
-                inactiveRoomNote = "You are no longer a member of this chat."
+                // The server's own sentence for a member who left (`sendRefusal`), so the line never changes.
+                inactiveRoomNote = "You are no longer in this conversation. You can still read earlier messages."
             } else {
                 inactiveRoomNote = nil
             }
