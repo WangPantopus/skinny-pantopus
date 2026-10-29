@@ -671,6 +671,28 @@ router.get('/records/suggestions', verifyToken, async (req, res) => {
 //                        MAP ENDPOINTS
 // ====================================================================
 
+// Personal pins stay with their creator even inside a shared Home. A direct
+// link must have the same audience and expiry as the map list.
+function readableMapPins(userId, homeIds) {
+  return supabaseAdmin.from('HomeMapPin').select('*')
+    .in('home_id', homeIds)
+    .or(`visible_to.is.null,visible_to.neq.personal,created_by.eq.${userId}`)
+    .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`);
+}
+
+async function readablePinMail(mailIds, userId, homeIds, select = 'id') {
+  const ids = [...new Set(mailIds.filter(Boolean))];
+  const rows = [];
+  for (let offset = 0; offset < ids.length; offset += 100) {
+    const { data, error } = await onlyDelivered(supabaseAdmin.from('Mail').select(select)
+      .in('id', ids.slice(offset, offset + 100)).or(visibleMailFilter(userId, homeIds)))
+      .is('deleted_at', null).or('lifecycle.is.null,lifecycle.neq.shredded');
+    if (error) throw error;
+    rows.push(...(data || []));
+  }
+  return rows;
+}
+
 // GET /map/pins — get pins within bounds
 router.get('/map/pins', verifyToken, async (req, res) => {
   try {
@@ -682,10 +704,7 @@ router.get('/map/pins', verifyToken, async (req, res) => {
     const homeIds = homeId && isUuid(homeId) ? accessible.filter((id) => id === homeId) : accessible;
     if (!homeIds.length) return res.json({ pins: [] });
 
-    let query = supabaseAdmin
-      .from('HomeMapPin')
-      .select('*')
-      .in('home_id', homeIds)
+    let query = readableMapPins(userId, homeIds)
       .order('created_at', { ascending: false });
 
     if (pinType) query = query.eq('pin_type', pinType);
@@ -699,14 +718,18 @@ router.get('/map/pins', verifyToken, async (req, res) => {
         .lte('lng', parseFloat(req.query.east));
     }
 
-    // Exclude expired
-    query = query.or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`);
-
     const { data: pins, error } = await query;
     if (error) throw error;
 
+    // The list supplies the apps' "View full notice" links. A shared pin
+    // must not offer a link to another person's private or removed letter.
+    const mail = await readablePinMail((pins || []).map(pin => pin.mail_id), userId, homeIds);
+    const readableIds = new Set(mail.map(row => row.id));
+    const visiblePins = (pins || []).map(pin => ({
+      ...pin, mail_id: readableIds.has(pin.mail_id) ? pin.mail_id : null,
+    }));
     logMailEvent(userId, 'map_viewed', null, { homeIds, count: (pins || []).length });
-    res.json({ pins: pins || [] });
+    res.json({ pins: visiblePins });
   } catch (err) {
     logger.error('[P3] GET /map/pins failed', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch pins' });
@@ -757,30 +780,27 @@ router.post('/map/pin', verifyToken, validate(createPinSchema), async (req, res)
 // GET /map/pin/:id — pin detail
 router.get('/map/pin/:id', verifyToken, async (req, res) => {
   try {
-    const { data: pin, error } = await supabaseAdmin
-      .from('HomeMapPin')
-      .select('*')
-      .eq('id', req.params.id)
-      .single();
-
-    if (error || !pin) return res.status(404).json({ error: 'Pin not found' });
-    // Same gate as creating a pin: only the pin's own household may read it.
+    if (!isUuid(req.params.id)) return res.status(404).json({ error: 'Pin not found' });
     const accessible = await getAccessibleHomeIds(req.user.id);
-    if (!accessible.includes(pin.home_id)) return res.status(404).json({ error: 'Pin not found' });
+    if (!accessible.length) return res.status(404).json({ error: 'Pin not found' });
+    const { data: pin, error } = await readableMapPins(req.user.id, accessible)
+      .eq('id', req.params.id)
+      .maybeSingle();
 
-    // If linked to mail, fetch it
+    if (error) throw error;
+    if (!pin) return res.status(404).json({ error: 'Pin not found' });
+
+    // Sharing a pin never grants access to its source letter. Use the same
+    // recipient, delivery and retention rules as the mailbox, and name the
+    // sender through its public-facing identity.
     let linked_mail = null;
     if (pin.mail_id) {
-      const { data: mail } = await supabaseAdmin
-        .from('Mail')
-        .select('id, subject, sender_name, category, delivered_at')
-        .eq('id', pin.mail_id)
-        .is('deleted_at', null)
-        .maybeSingle();
-      linked_mail = mail;
+      const [mail] = await readablePinMail([pin.mail_id], req.user.id, accessible,
+        `id, subject, sender_name:sender_display, category, delivered_at, ${MAIL_SENDER_FIELDS}`);
+      linked_mail = mail ? (await withSenderNames([mail], req.user.id))[0] : null;
     }
 
-    res.json({ pin: { ...pin, linked_mail } });
+    res.json({ pin: { ...pin, mail_id: linked_mail ? pin.mail_id : null, linked_mail } });
   } catch (err) {
     logger.error('[P3] GET /map/pin/:id failed', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch pin' });
