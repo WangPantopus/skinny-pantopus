@@ -147,12 +147,19 @@ class MailboxRepository
         ): NetworkResult<DrawerItemsResponse> =
             safeApiCall { v2Api.drawer(drawer = drawer, tab = tab, limit = limit, offset = offset, folderId = folderId) }
 
-        /** `GET /api/mailbox/v2/search?q=` — searched on the server, over all the mail the person can read. */
+        /**
+         * `GET /api/mailbox/v2/search?q=` — searched on the server, over all the mail the person can read; [vaultOnly]
+         * keeps it to what's filed or archived.
+         */
         suspend fun search(
             query: String,
             limit: Int,
             offset: Int,
-        ): NetworkResult<MailSearchResponse> = safeApiCall { v2Api.search(query = query, limit = limit, offset = offset) }
+            vaultOnly: Boolean = false,
+        ): NetworkResult<MailSearchResponse> =
+            safeApiCall {
+                v2Api.search(query = query, limit = limit, offset = offset, scope = if (vaultOnly) "vault" else null)
+            }
 
         /** `GET /api/mailbox/v2/item/:id`. */
         suspend fun item(mailId: String): NetworkResult<MailboxV2ItemResponse> = safeApiCall { v2Api.item(mailId) }
