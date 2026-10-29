@@ -43,6 +43,7 @@ import app.pantopus.android.data.api.models.homediscovery.DiscoveredHomeDto
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.OfflineBannerHost
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.firstTapClosesKeyboard
 import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -110,7 +111,8 @@ fun FindHomeScreen(
                 onSubmit = viewModel::submitSearch,
                 onClear = viewModel::clearQuery,
             )
-            Box(modifier = Modifier.weight(1f)) {
+            // While typing in the search box, the first tap on a home only puts the keyboard away.
+            Box(modifier = Modifier.weight(1f).firstTapClosesKeyboard()) {
                 when (val current = state) {
                     is FindHomeUiState.Idle ->
                         FindHomeIdleFrame(onAddMissing = viewModel::addMissingHome)

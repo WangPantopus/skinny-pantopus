@@ -50,6 +50,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.RefreshOnStoreChange
+import app.pantopus.android.ui.components.firstTapClosesKeyboard
 import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -109,7 +110,8 @@ fun NewMessageScreen(
             onChange = viewModel::updateSearch,
             onClear = viewModel::clearSearch,
         )
-        Box(modifier = Modifier.fillMaxSize()) {
+        // While typing, the first tap on the people below only puts the keyboard away.
+        Box(modifier = Modifier.fillMaxSize().firstTapClosesKeyboard()) {
             when (val s = state) {
                 NewMessageUiState.Loading -> LoadingFrame()
                 NewMessageUiState.Empty ->

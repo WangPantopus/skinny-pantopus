@@ -64,6 +64,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.firstTapClosesKeyboard
 import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -1412,7 +1413,8 @@ private fun FollowersTab(
                 EmptyFollowersCard()
             }
         } else {
-            Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+            // While typing in the search box, the first tap on a follower only puts the keyboard away.
+            Column(modifier = Modifier.firstTapClosesKeyboard(), verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
                 state.followers.forEach { follower -> FollowerRow(follower, onOpen = { actions.onOpenFollower(follower) }) }
             }
         }

@@ -53,6 +53,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.firstTapClosesKeyboard
 import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -173,7 +174,10 @@ fun <Result : Any> SearchListShell(
         )
         HorizontalDivider(color = PantopusColors.appBorderSubtle, thickness = 1.dp)
         filters()
-        Box(modifier = Modifier.fillMaxSize()) {
+        // While typing, the first tap on the results only puts the keyboard away. Recent searches stay one tap: they
+        // are there to be picked while typing.
+        val resultsShown = errorContent != null || phase != SearchListPhase.Recent
+        Box(modifier = Modifier.fillMaxSize().then(if (resultsShown) Modifier.firstTapClosesKeyboard() else Modifier)) {
             if (errorContent != null) {
                 errorContent()
             } else {

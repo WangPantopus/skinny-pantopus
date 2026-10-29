@@ -56,6 +56,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.identity.MadeUpUsername
 import app.pantopus.android.data.api.models.mail_compose.MailRecipientDto
+import app.pantopus.android.ui.components.firstTapClosesKeyboard
 import app.pantopus.android.ui.screens.shared.wizard.WizardIdentity
 import app.pantopus.android.ui.screens.shared.wizard.WizardShell
 import app.pantopus.android.ui.screens.support_trains.start_train.components.InviteRecipientCard
@@ -496,10 +497,12 @@ private fun ResultList(
     results: List<MailRecipientDto>,
     onSelect: (MailRecipientDto) -> Unit,
 ) {
+    // While typing in the search box, the first tap on a result only puts the keyboard away.
     Column(
         modifier =
             Modifier
                 .fillMaxWidth()
+                .firstTapClosesKeyboard()
                 .clip(RoundedCornerShape(Radii.md))
                 .background(PantopusColors.appSurface),
     ) {

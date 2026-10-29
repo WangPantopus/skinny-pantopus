@@ -59,6 +59,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.firstTapClosesKeyboard
 import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -135,7 +136,8 @@ internal fun UniversalSearchContent(
         )
         HorizontalDivider(color = PantopusColors.appBorderSubtle, thickness = 1.dp)
         TabStrip(activeTab = activeTab, onSelectTab = onSelectTab)
-        Box(modifier = Modifier.fillMaxSize()) {
+        // While typing, the first tap on the results only puts the keyboard away.
+        Box(modifier = Modifier.fillMaxSize().firstTapClosesKeyboard()) {
             when (state) {
                 UniversalSearchUiState.Idle ->
                     PromptSection(

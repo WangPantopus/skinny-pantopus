@@ -58,6 +58,7 @@ import app.pantopus.android.ui.components.PantopusTextField
 import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
+import app.pantopus.android.ui.components.firstTapClosesKeyboard
 import app.pantopus.android.ui.screens.businesses.payments.ActionToast
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailTopBar
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailTopBarAction
@@ -647,10 +648,12 @@ private fun RecipientPicker(
             isRequired = true,
             fieldTestTag = "createInvoice.recipient",
         )
+        // While typing, the first tap on a person only puts the keyboard away.
         Column(
             modifier =
                 Modifier
                     .fillMaxWidth()
+                    .firstTapClosesKeyboard()
                     .clip(RoundedCornerShape(Radii.md))
                     .background(PantopusColors.appSurface)
                     .border(1.dp, PantopusColors.appBorderSubtle, RoundedCornerShape(Radii.md)),

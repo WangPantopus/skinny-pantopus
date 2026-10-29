@@ -47,6 +47,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.api.models.geo.GeoPlace
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
+import app.pantopus.android.ui.components.firstTapClosesKeyboard
 import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -193,10 +194,12 @@ private fun ColumnScope.ListArea(
     onSelect: (PostPlaceTag) -> Unit,
     onRetry: () -> Unit,
 ) {
+    // While typing in the search box, the first tap on a place only puts the keyboard away.
     Column(
         modifier =
             Modifier
                 .weight(1f, fill = false)
+                .firstTapClosesKeyboard()
                 .verticalScroll(rememberScrollState()),
     ) {
         when (val current = state) {

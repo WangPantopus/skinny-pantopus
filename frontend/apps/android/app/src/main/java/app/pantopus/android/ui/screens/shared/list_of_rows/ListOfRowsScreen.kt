@@ -108,6 +108,7 @@ import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.components.StatusChip
 import app.pantopus.android.ui.components.VerifiedBadge
+import app.pantopus.android.ui.components.firstTapClosesKeyboard
 import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -265,7 +266,8 @@ fun ListOfRowsScreen(
             if (refreshNotice != null && state !is ListOfRowsUiState.Loading) {
                 RefreshFailedLine(refreshNotice, modifier = Modifier.padding(horizontal = Spacing.s4))
             }
-            Box(modifier = Modifier.fillMaxSize().pullRefresh(pullState)) {
+            // Under a search box, the first tap on the rows while typing only puts the keyboard away.
+            Box(modifier = Modifier.fillMaxSize().firstTapClosesKeyboard().pullRefresh(pullState)) {
                 when (state) {
                     ListOfRowsUiState.Loading -> LoadingRows()
                     is ListOfRowsUiState.Loaded ->

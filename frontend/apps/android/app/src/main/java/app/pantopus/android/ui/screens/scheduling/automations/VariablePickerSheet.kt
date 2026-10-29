@@ -36,6 +36,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
+import app.pantopus.android.ui.components.firstTapClosesKeyboard
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -74,10 +76,12 @@ fun VariablePickerSheet(
             if (groups.isEmpty()) {
                 NoVariablesMatch()
             } else {
+                // While typing in the search box, the first tap on a variable only puts the keyboard away.
                 Column(
                     modifier =
                         Modifier
                             .weight(1f)
+                            .firstTapClosesKeyboard()
                             .verticalScroll(rememberScrollState())
                             .padding(horizontal = Spacing.s4, vertical = Spacing.s1),
                     verticalArrangement = Arrangement.spacedBy(Spacing.s4),
@@ -110,6 +114,7 @@ private fun VariableSearchField(
             Modifier
                 .padding(horizontal = Spacing.s4)
                 .padding(bottom = Spacing.s2)
+                .keepsKeyboard()
                 .fillMaxWidth()
                 .heightIn(min = 42.dp)
                 .clip(RoundedCornerShape(10.dp))
