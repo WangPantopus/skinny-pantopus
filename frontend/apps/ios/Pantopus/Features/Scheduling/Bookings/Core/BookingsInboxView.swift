@@ -15,6 +15,9 @@ import SwiftUI
 struct BookingsInboxView: View {
     @State private var viewModel: BookingsInboxViewModel
     @Environment(\.dismiss) private var dismiss
+    /// The search box has the keyboard: a tap on the bookings only closes it
+    /// (founder request 2026-10-29).
+    @FocusState private var searchFocused: Bool
 
     init(viewModel: BookingsInboxViewModel) {
         _viewModel = State(wrappedValue: viewModel)
@@ -205,6 +208,7 @@ struct BookingsInboxView: View {
             Icon(.search, size: 15, color: Theme.Color.appTextMuted)
             TextField("Search by name", text: text)
                 .font(Theme.Font.small)
+                .focused($searchFocused)
                 .textInputAutocapitalization(.never)
                 .submitLabel(.search)
                 .onSubmit { Task { await viewModel.submitSearch() } }
@@ -285,7 +289,9 @@ extension BookingsInboxView {
             .padding(.horizontal, Spacing.s4)
             .padding(.top, Spacing.s3)
             .padding(.bottom, 96)
+            .closesKeyboardFirst(searchFocused)
         }
+        .scrollDismissesKeyboard(.immediately)
         .refreshable { await viewModel.refresh() }
         .overlay(alignment: .bottomTrailing) { fab }
     }

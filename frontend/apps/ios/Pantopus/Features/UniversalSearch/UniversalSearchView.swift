@@ -23,6 +23,9 @@ public struct UniversalSearchView: View {
     private let onBack: @MainActor () -> Void
 
     @FocusState private var fieldFocused: Bool
+    /// The field takes the keyboard when search opens, not again on the way
+    /// back from a result (founder report 2026-10-29).
+    @State private var focusedOnOpen = false
 
     init(
         viewModel: UniversalSearchViewModel = UniversalSearchViewModel(),
@@ -46,7 +49,11 @@ public struct UniversalSearchView: View {
         .background(Theme.Color.appBg)
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .toolbar(.hidden, for: .navigationBar)
-        .onAppear { fieldFocused = true }
+        .onAppear {
+            guard !focusedOnOpen else { return }
+            focusedOnOpen = true
+            fieldFocused = true
+        }
         .accessibilityIdentifier("universalSearch")
     }
 
@@ -117,6 +124,8 @@ public struct UniversalSearchView: View {
         .padding(.vertical, Spacing.s2)
         .background(Theme.Color.appSurfaceSunken)
         .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
+        // Clearing the field keeps typing.
+        .keepsKeyboardOnTap()
     }
 
     // MARK: - Tabs
@@ -274,7 +283,11 @@ public struct UniversalSearchView: View {
             }
             .padding(.horizontal, Spacing.s4)
             .padding(.bottom, Spacing.s10)
+            // While the field has the keyboard, a tap on the results only
+            // closes it (founder request 2026-10-29); tap again to open one.
+            .closesKeyboardFirst(fieldFocused)
         }
+        .scrollDismissesKeyboard(.immediately)
         .background(Theme.Color.appBg)
         .accessibilityIdentifier("universalSearchResults")
     }

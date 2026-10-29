@@ -15,6 +15,9 @@ public struct FindHomeView: View {
     @State private var viewModel: FindHomeViewModel
     @State private var presentedInviteToken: FindHomeInviteToken?
     @FocusState private var searchFocused: Bool
+    /// The field takes the keyboard when the screen opens, not again on the
+    /// way back from a claim (founder report 2026-10-29).
+    @State private var focusedOnOpen = false
 
     private let onBack: @MainActor () -> Void
     private let onOpenClaimOwnership: @MainActor (String) -> Void
@@ -43,7 +46,11 @@ public struct FindHomeView: View {
         .navigationBarBackButtonHidden(true)
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .onChange(of: viewModel.pendingEvent) { _, event in handle(event) }
-        .onAppear { searchFocused = true }
+        .onAppear {
+            guard !focusedOnOpen else { return }
+            focusedOnOpen = true
+            searchFocused = true
+        }
         // Reuse the shared T3.5 Token / Accept surface rather than
         // re-implementing accept / decline here.
         .fullScreenCover(item: $presentedInviteToken) { item in
@@ -123,6 +130,8 @@ public struct FindHomeView: View {
                 RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
                     .stroke(Theme.Color.appBorder, lineWidth: 1)
             }
+            // Clearing the field keeps typing.
+            .keepsKeyboardOnTap()
 
             if case let .idle(hint) = viewModel.state, let hint {
                 Text(hint)
@@ -210,7 +219,11 @@ public struct FindHomeView: View {
             .padding(.horizontal, Spacing.s4)
             .padding(.top, Spacing.s2)
             .padding(.bottom, Spacing.s4)
+            // While the field has the keyboard, a tap on the results only
+            // closes it (founder request 2026-10-29); tap again to open one.
+            .closesKeyboardFirst(searchFocused)
         }
+        .scrollDismissesKeyboard(.immediately)
         .refreshable { await viewModel.refresh() }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityIdentifier("findHomeResults")

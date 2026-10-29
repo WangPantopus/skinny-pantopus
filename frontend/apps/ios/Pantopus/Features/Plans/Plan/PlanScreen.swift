@@ -52,6 +52,8 @@ struct PlanScreen: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .background(Theme.Color.appBg)
+        // Opens out of its card on the Plans map; drag it down to close it back in.
+        .itemZoomDestination(.plan, id: viewModel.planId)
         .task {
             await viewModel.load()
             if let notice = PlansNavigator.shared.notice {
@@ -191,7 +193,7 @@ struct PlanScreen: View {
                 onConfirm: { confirmation = $0 }
             )
         }
-        .refreshable { await viewModel.load() }
+        .refreshableUnlessZoomed { await viewModel.load() }
     }
 
     private func topButtons(_ card: PlanCardDTO) -> some View {
