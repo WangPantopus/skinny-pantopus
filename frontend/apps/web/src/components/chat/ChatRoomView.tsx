@@ -406,6 +406,10 @@ export default function ChatRoomView({
 
   const inputDisabled = preBidStatus?.is_pre_bid && (preBidStatus.messages_remaining || 0) <= 0;
 
+  const lockedNote = roomInfo?.is_active === false
+    ? 'This chat has closed. Message them directly to keep talking.'
+    : chat.sendRefusal;
+
   // The conversation could not be opened: say why, and offer no composer.
   const loadFailureMessage = chat.loadFailure && chat.messages.length === 0
     ? chat.loadFailure === 'forbidden'
@@ -476,7 +480,7 @@ export default function ChatRoomView({
           messages={chat.messages}
           loading={chat.loading}
           // A conversation that takes no messages says why in place of the composer instead.
-          error={chat.sendRefusal ? null : chat.error}
+          error={lockedNote ? null : chat.error}
           hasMore={chat.hasMore}
           loadingOlder={chat.loadingOlder}
           onLoadOlder={chat.loadOlder}
@@ -489,10 +493,10 @@ export default function ChatRoomView({
           onReact={handleReact}
           onRetry={chat.retryMessage}
           onRemovePending={chat.removePendingMessage}
-          onEdit={chat.sendRefusal ? undefined : chat.beginEdit}
+          onEdit={lockedNote ? undefined : chat.beginEdit}
           onDelete={chat.deleteMessage}
           canChangeMessage={chat.canChangeMessage}
-          onReply={inputDisabled || chat.sendRefusal ? undefined : chat.beginReply}
+          onReply={inputDisabled || lockedNote ? undefined : chat.beginReply}
         />
       </div>
 
@@ -543,7 +547,7 @@ export default function ChatRoomView({
         editingMessage={chat.editingMessage}
         onCancelEdit={chat.cancelEdit}
         onSaveEdit={chat.saveEdit}
-        lockedNote={chat.sendRefusal}
+        lockedNote={lockedNote}
       />
       </>
       )}
