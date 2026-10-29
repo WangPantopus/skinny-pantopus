@@ -1004,6 +1004,8 @@ export interface AdCampaign {
 
 export interface ChatRoom {
   id: string;
+  /** False when the room no longer accepts messages, including closed Plans. */
+  is_active?: boolean;
   room_type: 'direct' | 'group' | 'gig' | 'home';
   type?: 'direct' | 'group' | 'gig' | 'home' | string;
   room_name?: string;
