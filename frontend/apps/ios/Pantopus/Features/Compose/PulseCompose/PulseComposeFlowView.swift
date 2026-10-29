@@ -75,6 +75,8 @@ public struct PulseComposeFlowView: View {
                     },
                     onBack: { step = .targetPicker }
                 )
+                // Back returns to the first step; a swipe from the edge would close the composer.
+                .swipeBackDisabled()
             case let .draft(target, purpose):
                 draftView(target: target, purpose: purpose)
             }

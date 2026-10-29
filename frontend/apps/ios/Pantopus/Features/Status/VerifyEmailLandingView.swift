@@ -74,6 +74,8 @@ struct VerifyEmailLandingView: View {
         .animation(.easeInOut(duration: 0.2), value: viewModel.toast)
         .background(Theme.Color.appBg)
         .navigationBarHidden(true)
+        // No Back here: the link's result leads on with Continue or a different email.
+        .swipeBackDisabled()
         .accessibilityIdentifier("verifyEmailScreen")
         .task { await viewModel.verifyOnAppearIfNeeded(using: auth) }
     }

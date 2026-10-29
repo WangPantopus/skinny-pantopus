@@ -501,6 +501,7 @@ public struct YouTabRoot: View {
                 onClose: onClose
             )
             .toolbar(.hidden, for: .navigationBar)
+            .swipesBackFromEdge()
             .task {
                 guard !didOpenInitialRoute, let initialRoute else { return }
                 didOpenInitialRoute = true

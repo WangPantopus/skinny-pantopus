@@ -100,6 +100,7 @@ public struct PulseTabRoot: View {
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
+            .swipesBackFromEdge()
             .navigationDestination(for: PulseRoute.self) { route in
                 destination(for: route)
                     .toolbar(.hidden, for: .navigationBar)

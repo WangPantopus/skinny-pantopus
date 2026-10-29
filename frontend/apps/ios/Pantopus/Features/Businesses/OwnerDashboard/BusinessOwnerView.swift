@@ -87,6 +87,9 @@ public struct BusinessOwnerView: View {
             .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
             .overlay(alignment: .bottom) { toastOverlay }
             .accessibilityIdentifier("businessOwner")
+            // Preview, catalog and inbox draw over the dashboard, and their Back
+            // returns to it; a swipe from the edge would close the dashboard too.
+            .swipeBackDisabled(mode != .owner)
             .task { await viewModel.load() }
     }
 

@@ -683,6 +683,7 @@ public struct TodayTabRoot: View {
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
+            .swipesBackFromEdge()
             .accessibilityIdentifier("todayTabRoot")
             .navigationDestination(isPresented: $showsNotificationSettings) {
                 NotificationSettingsView { showsNotificationSettings = false }

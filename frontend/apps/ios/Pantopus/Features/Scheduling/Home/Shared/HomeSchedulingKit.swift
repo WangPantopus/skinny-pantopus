@@ -338,6 +338,7 @@ struct HomeSchedulingRouteHost: View {
                 for: initialRoute,
                 owner: .home(homeId: homeId)
             ) { path.append($0) }
+                .swipesBackFromEdge()
                 .navigationDestination(for: SchedulingRoute.self) { route in
                     SchedulingRouter.destination(
                         for: route,

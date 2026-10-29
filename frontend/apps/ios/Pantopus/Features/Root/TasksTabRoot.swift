@@ -81,6 +81,7 @@ public struct TasksTabRoot: View {
                 onOpenMySupportTrains: { path.append(.supportTrains) }
             )
             .toolbar(.hidden, for: .navigationBar)
+            .swipesBackFromEdge()
             .navigationDestination(for: TasksRoute.self) { route in
                 destination(for: route)
                     .modifier(OwnHeaderBar(drawsOwnHeader: !Self.usesSystemBar(route)))
