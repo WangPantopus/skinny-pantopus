@@ -543,6 +543,7 @@ class ChatOutbox
             if (error !is NetworkError.ClientError || error.code != HTTP_TOO_MANY_REQUESTS) return 0
             val seconds = runCatching { JSONObject(error.body.orEmpty()).optDouble("retryAfter", 0.0) }.getOrDefault(0.0)
             if (!seconds.isFinite() || seconds <= 0) return 0
+            // The limiter asks for at most a minute and retry waits out a cooldown, so a bad value can't hold a message long.
             return (kotlin.math.ceil(seconds).coerceAtMost(MAX_SERVER_RETRY_SECONDS) * INITIAL_BACKOFF_MS).toLong()
         }
 
@@ -566,8 +567,6 @@ class ChatOutbox
             const val MAX_MESSAGES = 200
             const val INITIAL_BACKOFF_MS = 1000L
             const val MAX_BACKOFF_MS = 60_000L
-            // The chat limiter asks for at most a minute; retry stays unavailable during a cooldown,
-            // so a malformed delay must not strand the message for long.
             const val MAX_SERVER_RETRY_SECONDS = 600.0
             const val MAX_EXPONENT = 6
             const val DELIVERY_JOB_ID = 63_109
