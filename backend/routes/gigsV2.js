@@ -172,11 +172,15 @@ router.post('/:gigId/instant-accept', verifyToken, async (req, res) => {
       });
 
       if (gigPrice > 0) {
+        // A payment hold can start only a day before the task, and the hourly job reminds the owner then.
+        const opensLater = Date.parse(gig.scheduled_start) - Date.now() > 24 * 60 * 60 * 1000;
         await createNotification({
           userId: gig.user_id,
           type: 'payment_action_required',
-          title: 'Complete payment authorization',
-          body: `Your task "${gig.title}" has been accepted. Please complete payment authorization so work can start.`,
+          title: opensLater ? 'Payment authorization opens later' : 'Complete payment authorization',
+          body: opensLater
+            ? `Your task "${gig.title}" has been accepted. You can authorize payment starting one day before it begins. We'll remind you then.`
+            : `Your task "${gig.title}" has been accepted. Please complete payment authorization so work can start.`,
           icon: '💳',
           link: `/gigs/${gigId}`,
           metadata: { gig_id: gigId, required_status: PAYMENT_STATES.AUTHORIZED },

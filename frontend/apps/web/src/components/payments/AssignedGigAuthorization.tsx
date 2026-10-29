@@ -135,6 +135,8 @@ export default function AssignedGigAuthorization({ gigId, actorId, payeeId, onAu
           : progress?.recoveryState === 'needs_review' ? progress.canRetry
             ? 'The previous authorization ended. Continue to authorize the same task amount.'
             : 'This payment needs review before another authorization can be started.'
+          : progress?.recoveryState === 'pending' && progress.canRetry && progress.paymentIntentId === null
+            ? 'You can authorize payment now. Complete it before the worker starts.'
           : progress?.recoveryState === 'pending' ? 'Authorization is pending. Check its status before continuing.'
           : 'Complete the card authorization before the worker starts.'}
       </p>
