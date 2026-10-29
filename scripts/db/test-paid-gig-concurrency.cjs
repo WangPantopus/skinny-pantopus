@@ -130,17 +130,24 @@ const json = async (sql) => JSON.parse(await query(sql).done);
     assert.equal(eligibility.eligible, false);
     assert.equal(await query(`SELECT public.finish_gig_acceptance_delivery('${first.id}','${reclaimed.lease_id}','suppressed');`).done, 't');
     await query(`UPDATE public."Gig" SET status='completed',worker_completed_at=now() WHERE id='${gig}';`).done;
+    const original = await json(`SELECT public.prepare_gig_completion_original('${gig}','${payer}',
+      (SELECT to_jsonb(g) FROM public."Gig" g WHERE id='${gig}'),repeat('a',64),5,'Synthetic review');`);
+    assert.equal(original.payment.gig_completion_original.state, 'pending');
     const prepare = `SELECT public.prepare_paid_gig_capture('${payment}');`;
-    await overlap(prepare, [prepare, prepare, prepare]);
-    assert.equal(await query(`SELECT capture_attempts FROM public."Payment" WHERE id='${payment}';`).done, '4');
+    const captureClaims = await overlap(prepare, [prepare, prepare, prepare]);
+    assert.equal(JSON.parse(captureClaims[0].split('\n')[0]).payment.capture_attempts, 1);
+    for (const competing of captureClaims.slice(1)) assert.equal(JSON.parse(competing).error, 'CAPTURE_IN_PROGRESS');
+    assert.equal(await query(`SELECT capture_attempts FROM public."Payment" WHERE id='${payment}';`).done, '1');
     const record = `SELECT public.record_paid_gig_capture('${payment}','pi_concurrency1','ch_concurrency1',1250,'cus_concurrency1','usd');`;
     const captured = await overlap(record, [record, record]);
     const receipt = JSON.parse(captured[0].split('\n')[0]).payment;
     assert.equal(JSON.parse(captured[1]).reused, true); assert.equal(JSON.parse(captured[2]).reused, true);
     assert.equal(JSON.parse(captured[1]).payment.captured_at, receipt.captured_at);
     assert.equal(JSON.parse(captured[2]).payment.cooling_off_ends_at, receipt.cooling_off_ends_at);
+    const confirmedAt = await query(`SELECT owner_confirmed_at FROM public."Gig" WHERE id='${gig}';`).done;
+    assert.ok(confirmedAt, 'The captured original must confirm completion atomically');
     await assert.rejects(query(`BEGIN; UPDATE public."Gig" SET owner_confirmed_at=now() WHERE id='${gig}'; SELECT 1/0; COMMIT;`).done);
-    assert.equal(await query(`SELECT owner_confirmed_at IS NULL FROM public."Gig" WHERE id='${gig}';`).done, 't');
+    assert.equal(await query(`SELECT owner_confirmed_at FROM public."Gig" WHERE id='${gig}';`).done, confirmedAt);
     console.log(`Paid-gig acceptance/capture concurrency passed (${connections} local PostgreSQL connections).`);
   } finally {
     if (created) await query(`BEGIN;
@@ -154,4 +161,4 @@ const json = async (sql) => JSON.parse(await query(sql).done);
       DELETE FROM public."User" WHERE id IN ('${payer}','${worker}','${other}');
       DELETE FROM auth.users WHERE id IN ('${payer}','${worker}','${other}'); COMMIT;`).done;
   }
-})().catch((error) => { console.error(error.message); process.exitCode = 1; });
+})().catch((error) => { console.error(error.stack || error.message); process.exitCode = 1; });
