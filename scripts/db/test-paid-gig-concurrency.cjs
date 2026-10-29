@@ -35,6 +35,8 @@ function query(sql) {
 const payer = 'aae20000-0000-4000-8000-000000000001';
 const worker = 'aae20000-0000-4000-8000-000000000002';
 const other = 'aae20000-0000-4000-8000-000000000003';
+// A person has one active bid per task, so the free bid comes from a fourth person.
+const neighbor = 'aae20000-0000-4000-8000-000000000004';
 const gig = 'aae20000-0000-4000-8000-000000000101';
 const bid = 'aae20000-0000-4000-8000-000000000201';
 const otherBid = 'aae20000-0000-4000-8000-000000000202';
@@ -54,15 +56,16 @@ const json = async (sql) => JSON.parse(await query(sql).done);
   try {
     await query(`BEGIN;
       INSERT INTO auth.users(id,email) VALUES('${payer}','paid-concurrency-payer@example.invalid'),
-        ('${worker}','paid-concurrency-worker@example.invalid'),('${other}','paid-concurrency-other@example.invalid');
+        ('${worker}','paid-concurrency-worker@example.invalid'),('${other}','paid-concurrency-other@example.invalid'),
+        ('${neighbor}','paid-concurrency-neighbor@example.invalid');
       INSERT INTO public."User"(id,email,username,name,stripe_customer_id)
       SELECT id,email,'paid_concurrency_'||right(id::text,1),'Paid concurrency','cus_concurrency'||right(id::text,1)
-      FROM auth.users WHERE id IN ('${payer}','${worker}','${other}');
+      FROM auth.users WHERE id IN ('${payer}','${worker}','${other}','${neighbor}');
       INSERT INTO public."Gig"(id,user_id,created_by,title,description,price)
       VALUES('${gig}','${payer}','${payer}','Paid concurrency','Synthetic contract',20);
       INSERT INTO public."GigBid"(id,gig_id,user_id,bid_amount)
       VALUES('${bid}','${gig}','${worker}',12.50),('${otherBid}','${gig}','${other}',13.50),
-        ('${freeBid}','${gig}','${other}',0); COMMIT;`).done;
+        ('${freeBid}','${gig}','${neighbor}',0); COMMIT;`).done;
     created = true;
     await assert.rejects(query(`BEGIN; ${begin()} SELECT 1/0; COMMIT;`).done);
     assert.equal(await query(`SELECT count(*) FROM public."GigPaymentAcceptance" WHERE gig_id='${gig}';`).done, '0');
@@ -158,7 +161,7 @@ const json = async (sql) => JSON.parse(await query(sql).done);
       UPDATE public."Gig" SET payment_id=NULL WHERE id='${gig}';
       DELETE FROM public."Payment" WHERE id='${payment}';
       DELETE FROM public."Gig" WHERE id='${gig}';
-      DELETE FROM public."User" WHERE id IN ('${payer}','${worker}','${other}');
-      DELETE FROM auth.users WHERE id IN ('${payer}','${worker}','${other}'); COMMIT;`).done;
+      DELETE FROM public."User" WHERE id IN ('${payer}','${worker}','${other}','${neighbor}');
+      DELETE FROM auth.users WHERE id IN ('${payer}','${worker}','${other}','${neighbor}'); COMMIT;`).done;
   }
 })().catch((error) => { console.error(error.stack || error.message); process.exitCode = 1; });
