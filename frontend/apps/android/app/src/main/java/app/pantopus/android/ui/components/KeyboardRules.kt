@@ -29,7 +29,6 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.navigation.NavController
-import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
 
 /**
  * The app's keyboard rules (founder, 2026-10-29) for one window: the activity's, and each sheet or dialog that holds a

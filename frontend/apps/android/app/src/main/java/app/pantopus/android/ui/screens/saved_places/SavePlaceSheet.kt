@@ -97,11 +97,7 @@ fun SavePlaceSheet(
     var name by rememberSaveable(pending) { mutableStateOf(pending.label) }
     var choice by remember(pending) { mutableStateOf(SavePlaceTypeChoice.Other) }
 
-    ModalBottomSheet(
-        onDismissRequest = onClose,
-        sheetState = sheetState,
-        modifier = Modifier.closesKeyboardOnTapOrScroll(),
-    ) {
+    ModalBottomSheet(onDismissRequest = onClose, sheetState = sheetState, modifier = Modifier.closesKeyboardOnTapOrScroll()) {
         Column(
             modifier =
                 Modifier
