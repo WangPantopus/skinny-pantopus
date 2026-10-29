@@ -346,9 +346,6 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
   const submitConfirmation = async () => {
     const scope = completionScope.current;
     if (completionAttempt.current || !isOwner || !isCompleted || !completionScopeIsCurrent(scope)) return;
-    if (gig.delivery_proof_required && !completionFiles.some(file => file.type.startsWith('image/'))) {
-      toast.error('Add at least one proof photo before marking this task complete.'); return;
-    }
     const attempt = {}; completionAttempt.current = attempt;
     const current = () => completionAttempt.current === attempt && completionScopeIsCurrent(scope);
     setSubmittingConfirm(true);
