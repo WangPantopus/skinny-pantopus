@@ -131,6 +131,7 @@ class FeedPreferencesViewModel
             if (_isSaving.value) return
             val before = (_mutedTopics.value as? MutedTopicsUiState.Loaded)?.items ?: return
             _isSaving.value = true
+            _toastMessage.value = null
             _mutedTopics.value = MutedTopicsUiState.Loaded(before - item)
             viewModelScope.launch {
                 try {
@@ -211,6 +212,7 @@ class FeedPreferencesViewModel
             val current = (_state.value as? FeedPreferencesUiState.Loaded)?.preferences ?: return
             if (_isSaving.value) return
             _isSaving.value = true
+            _toastMessage.value = null
             // Optimistic — the row reflects the tap straight away.
             _state.value = FeedPreferencesUiState.Loaded(merged(current, body))
             viewModelScope.launch {
