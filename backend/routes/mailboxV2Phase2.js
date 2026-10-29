@@ -526,17 +526,20 @@ router.post('/bundle/auto-group', async (req, res, next) => {
 
 // ── CERTIFIED MAIL ────────────────────────────────────────
 
+// A certified receipt is available only once the letter reaches the box.
+// Keep the named-recipient check in each route; household access alone never
+// grants permission to sign for somebody else.
+function deliveredCertifiedMail(mailId) {
+  return onlyDelivered(supabaseAdmin.from('Mail').select('*').eq('id', mailId).eq('certified', true))
+    .is('deleted_at', null).or('lifecycle.is.null,lifecycle.neq.shredded');
+}
+
 // GET /certified/:mailId — get certified mail detail
 router.get('/certified/:mailId', async (req, res, next) => {
   try {
     const { mailId } = req.params;
-    const { data: mail } = await supabaseAdmin
-      .from('Mail')
-      .select('*')
-      .eq('id', mailId)
-      .eq('certified', true)
-      .is('deleted_at', null)
-      .single();
+    const { data: mail, error } = await deliveredCertifiedMail(mailId).maybeSingle();
+    if (error) throw error;
 
     if (!mail) return res.status(404).json({ error: 'Certified mail not found' });
 
@@ -557,13 +560,8 @@ router.get('/certified/:mailId', async (req, res, next) => {
 router.post('/certified/acknowledge', validate(acknowledgeSchema), async (req, res, next) => {
   try {
     const { mailId } = req.body;
-    const { data: mail } = await supabaseAdmin
-      .from('Mail')
-      .select('*')
-      .eq('id', mailId)
-      .eq('certified', true)
-      .is('deleted_at', null)
-      .single();
+    const { data: mail, error } = await deliveredCertifiedMail(mailId).maybeSingle();
+    if (error) throw error;
 
     if (!mail) return res.status(404).json({ error: 'Certified mail not found' });
     if (mail.recipient_user_id !== req.user.id) {
@@ -618,13 +616,8 @@ router.post('/certified/acknowledge', validate(acknowledgeSchema), async (req, r
 router.post('/certified/:mailId/reject', async (req, res, next) => {
   try {
     const { mailId } = req.params;
-    const { data: mail } = await supabaseAdmin
-      .from('Mail')
-      .select('*')
-      .eq('id', mailId)
-      .eq('certified', true)
-      .is('deleted_at', null)
-      .single();
+    const { data: mail, error } = await deliveredCertifiedMail(mailId).maybeSingle();
+    if (error) throw error;
 
     if (!mail) return res.status(404).json({ error: 'Certified mail not found' });
     if (mail.recipient_user_id !== req.user.id) {
@@ -654,13 +647,8 @@ router.post('/certified/:mailId/reject', async (req, res, next) => {
 router.get('/certified/:mailId/proof', async (req, res, next) => {
   try {
     const { mailId } = req.params;
-    const { data: stored } = await supabaseAdmin
-      .from('Mail')
-      .select('*')
-      .eq('id', mailId)
-      .eq('certified', true)
-      .is('deleted_at', null)
-      .single();
+    const { data: stored, error } = await deliveredCertifiedMail(mailId).maybeSingle();
+    if (error) throw error;
 
     // The proof names a person who sent it as neighbors see them (their Local Profile).
     const mail = await nameMailSender(stored, req.user.id);
@@ -681,7 +669,7 @@ router.get('/certified/:mailId/proof', async (req, res, next) => {
         mailId,
         sender: mail.sender_display,
         senderTrust: mail.sender_trust,
-        deliveredAt: mail.created_at,
+        deliveredAt: mail.delivered_at,
         acknowledgedAt: mail.acknowledged_at,
         acknowledgedBy: mail.acknowledged_by,
         legalTimestamp: mail.legal_timestamp,
