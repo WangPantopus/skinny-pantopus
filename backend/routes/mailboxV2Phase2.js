@@ -531,17 +531,19 @@ router.post('/bundle/auto-group', async (req, res, next) => {
 
 // A certified receipt is available only once the letter reaches the box.
 // Keep the named-recipient check in each route; household access alone never
-// grants permission to sign for somebody else.
-function deliveredCertifiedMail(mailId) {
+// grants permission to sign for somebody else. An id that isn't one is no
+// letter (not found), rather than a query the database refuses.
+async function deliveredCertifiedMail(mailId) {
+  if (!MAIL_ID.test(String(mailId))) return { data: null, error: null };
   return onlyDelivered(supabaseAdmin.from('Mail').select('*').eq('id', mailId).eq('certified', true))
-    .is('deleted_at', null).or('lifecycle.is.null,lifecycle.neq.shredded');
+    .is('deleted_at', null).or('lifecycle.is.null,lifecycle.neq.shredded').maybeSingle();
 }
 
 // GET /certified/:mailId — get certified mail detail
 router.get('/certified/:mailId', async (req, res, next) => {
   try {
     const { mailId } = req.params;
-    const { data: mail, error } = await deliveredCertifiedMail(mailId).maybeSingle();
+    const { data: mail, error } = await deliveredCertifiedMail(mailId);
     if (error) throw error;
 
     if (!mail) return res.status(404).json({ error: 'Certified mail not found' });
@@ -563,7 +565,7 @@ router.get('/certified/:mailId', async (req, res, next) => {
 router.post('/certified/acknowledge', validate(acknowledgeSchema), async (req, res, next) => {
   try {
     const { mailId } = req.body;
-    const { data: mail, error } = await deliveredCertifiedMail(mailId).maybeSingle();
+    const { data: mail, error } = await deliveredCertifiedMail(mailId);
     if (error) throw error;
 
     if (!mail) return res.status(404).json({ error: 'Certified mail not found' });
@@ -619,7 +621,7 @@ router.post('/certified/acknowledge', validate(acknowledgeSchema), async (req, r
 router.post('/certified/:mailId/reject', async (req, res, next) => {
   try {
     const { mailId } = req.params;
-    const { data: mail, error } = await deliveredCertifiedMail(mailId).maybeSingle();
+    const { data: mail, error } = await deliveredCertifiedMail(mailId);
     if (error) throw error;
 
     if (!mail) return res.status(404).json({ error: 'Certified mail not found' });
@@ -650,7 +652,7 @@ router.post('/certified/:mailId/reject', async (req, res, next) => {
 router.get('/certified/:mailId/proof', async (req, res, next) => {
   try {
     const { mailId } = req.params;
-    const { data: stored, error } = await deliveredCertifiedMail(mailId).maybeSingle();
+    const { data: stored, error } = await deliveredCertifiedMail(mailId);
     if (error) throw error;
 
     // The proof names a person who sent it as neighbors see them (their Local Profile).
