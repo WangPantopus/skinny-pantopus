@@ -239,26 +239,24 @@ struct MailVaultShelf: View {
 
     @ViewBuilder
     private func searchResults(_ results: [MailPieceModel]) -> some View {
-        if let failure = viewModel.vaultSearchFailure {
-            VStack(alignment: .leading, spacing: Spacing.s1) {
-                Text(failure)
-                    .font(.system(size: 14))
-                    .foregroundStyle(Theme.Color.appTextStrong)
-                    .fixedSize(horizontal: false, vertical: true)
-                Button("Try again") { Task { await viewModel.searchVault() } }
-                    .font(.system(size: 14, weight: .semibold))
-                    .frame(minHeight: 44)
-                    .accessibilityIdentifier("mailVaultSearchRetry")
-            }
-        } else if results.isEmpty {
+        if !results.isEmpty {
+            sectionTitle(results.count == 1 ? "1 filed piece matches" : "\(results.count) filed pieces match")
+            pieceRows(results)
+        }
+        if results.isEmpty, !viewModel.vaultSearching, viewModel.vaultSearchFailure == nil {
             Text("Nothing you've filed matches. Try a sender or a word from the letter.")
                 .font(.system(size: 14))
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .accessibilityIdentifier("mailVaultNoMatches")
-        } else {
-            sectionTitle(results.count == 1 ? "1 filed piece matches" : "\(results.count) filed pieces match")
-            pieceRows(results)
         }
+        MailSearchPageControls(
+            isLoading: viewModel.vaultSearching,
+            hasMore: viewModel.vaultHasMore,
+            failure: viewModel.vaultSearchFailure
+        ) {
+            Task { await viewModel.searchVault(loadMore: viewModel.vaultHasMore) }
+        }
+        .accessibilityIdentifier("mailVaultSearchMore")
     }
 
     /// `pagesMore`: the filed list, whose last piece asks for the next page.

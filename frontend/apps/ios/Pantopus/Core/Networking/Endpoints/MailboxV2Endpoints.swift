@@ -33,11 +33,13 @@ public enum MailboxV2Endpoints {
     /// can read (Me, Home after proof, Biz), filed and archived included, in the
     /// drawer list's row shape; `limit` at most 50. Mail build contract v1
     /// (SRV-3), route `backend/routes/mailboxV2.js`.
-    public static func search(query: String, limit: Int = 50, offset: Int = 0) -> Endpoint {
-        Endpoint(
+    public static func search(query: String, limit: Int = 50, offset: Int = 0, vaultOnly: Bool = false) -> Endpoint {
+        var params = ["q": query, "limit": String(limit), "offset": String(offset)]
+        if vaultOnly { params["scope"] = "vault" }
+        return Endpoint(
             method: .get,
             path: "/api/mailbox/v2/search",
-            query: ["q": query, "limit": String(limit), "offset": String(offset)]
+            query: params
         )
     }
 

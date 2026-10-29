@@ -7,6 +7,7 @@
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const { isLaunchFeatureEnabled, skipForLaunchCut } = require('../utils/featureFlags');
+const { onlyDelivered } = require('../utils/homeMailAccess');
 
 // Each stamp is earned when one count (metric) reaches its target; the gallery shows the same progress.
 const ALL_MILESTONES = [
@@ -30,6 +31,20 @@ async function countOf(query, what) {
   return count || 0;
 }
 
+// Awarding and gallery progress must count the same delivered pieces. Bundle
+// containers are not extra letters; deleted/shredded mail is no longer in the
+// mailbox. A stale folder link alone does not mean a piece is still filed.
+async function countStampMetric(userId, metric) {
+  if (!['totalMail', 'packages', 'vaultFiled'].includes(metric)) throw new Error('Unknown stamp metric');
+  const columns = metric === 'packages' ? 'id, package:MailPackage!inner(id)' : 'id';
+  let query = onlyDelivered(supabaseAdmin.from('Mail').select(columns, { count: 'exact', head: true }))
+    .eq('recipient_user_id', userId).is('deleted_at', null)
+    .or('lifecycle.is.null,lifecycle.neq.shredded')
+    .or('mail_object_type.is.null,mail_object_type.neq.bundle');
+  if (metric === 'vaultFiled') query = query.eq('lifecycle', 'filed').not('vault_folder_id', 'is', null);
+  return countOf(query, metric);
+}
+
 /** Awards what one account has earned and returns how many stamps that was. */
 async function awardForUser(userId) {
   const { data: existing, error: existingErr } = await supabaseAdmin
@@ -40,28 +55,15 @@ async function awardForUser(userId) {
   const earnedTypes = new Set((existing || []).map((s) => s.stamp_type));
   if (MILESTONES.every((m) => earnedTypes.has(m.stamp_type))) return 0;
 
-  const totalMail = await countOf(
-    supabaseAdmin.from('Mail').select('*', { count: 'exact', head: true })
-      .eq('recipient_user_id', userId).is('deleted_at', null).lte('delivered_at', new Date().toISOString()),
-    'mail',
-  );
+  const totalMail = await countStampMetric(userId, 'totalMail');
   // Every other milestone counts mail the person received, so none can be met without any.
   if (totalMail === 0) return 0;
 
   const counts = { totalMail, packages: 0, vaultFiled: 0 };
   if (MILESTONES.some((m) => m.stamp_type === 'first_package' && !earnedTypes.has(m.stamp_type))) {
-    // A package belongs to a person through the mail it came with.
-    counts.packages = await countOf(
-      supabaseAdmin.from('MailPackage').select('id, mail:Mail!inner(recipient_user_id)', { count: 'exact', head: true })
-        .eq('mail.recipient_user_id', userId),
-      'package',
-    );
+    counts.packages = await countStampMetric(userId, 'packages');
   }
-  counts.vaultFiled = await countOf(
-    supabaseAdmin.from('Mail').select('*', { count: 'exact', head: true })
-      .eq('recipient_user_id', userId).not('vault_folder_id', 'is', null).is('deleted_at', null),
-    'vault',
-  );
+  counts.vaultFiled = await countStampMetric(userId, 'vaultFiled');
 
   let awarded = 0;
   for (const milestone of MILESTONES) {
@@ -134,3 +136,4 @@ module.exports = stampAwarder;
 module.exports.AWARDED_STAMP_TYPES = new Set(MILESTONES.map((m) => m.stamp_type));
 // What each awardable stamp counts and needs, for the gallery's progress.
 module.exports.STAMP_GOALS = Object.fromEntries(MILESTONES.map((m) => [m.stamp_type, { metric: m.metric, target: m.target }]));
+module.exports.countStampMetric = countStampMetric;

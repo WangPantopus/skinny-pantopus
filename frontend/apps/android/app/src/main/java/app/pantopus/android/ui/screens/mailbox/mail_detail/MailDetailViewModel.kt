@@ -1287,7 +1287,7 @@ class MailDetailViewModel
                 val referenceLabel = referenceLabel(detail.`object`, detail.id)
                 val title = detail.displayTitle ?: detail.subject ?: "Mail"
                 val excerpt = detail.previewText
-                val createdAtLabel = formatLongDate(detail.createdAt)
+                val createdAtLabel = formatLongDate(detail.deliveredAt ?: detail.createdAt)
                 val expiresAtLabel = formatLongDate(detail.expiresAt)
                 val bodyParagraphs = bodyParagraphs(detail.contentText ?: detail.content)
                 val ackRequired = detail.ackRequired == true
@@ -1352,7 +1352,7 @@ class MailDetailViewModel
                 } else {
                     CertifiedDetailDto.pantopus(
                         reference = "Ref ${detail.id.take(PANTOPUS_REFERENCE_LENGTH).uppercase()}",
-                        receivedAt = detail.createdAt,
+                        receivedAt = detail.deliveredAt ?: detail.createdAt,
                         readAt = detail.openedAt ?: detail.viewedAt,
                         signedAt = detail.acknowledgedAt,
                     )

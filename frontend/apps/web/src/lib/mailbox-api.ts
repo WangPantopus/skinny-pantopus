@@ -134,18 +134,20 @@ export async function getDrawers(): Promise<MailboxDrawers> {
  */
 export async function searchMail(
   query: string,
-  params?: { page?: number; limit?: number },
+  params?: { page?: number; limit?: number; offset?: number },
 ): Promise<MailboxPaginatedResponse<MailItemV2>> {
   const limit = Math.min(params?.limit ?? 30, 50);
   const page = params?.page ?? 1;
+  const offset = params?.offset ?? (page - 1) * limit;
   return call(async () => {
-    const res = await get<{ mail?: MailItemV2[]; results?: MailItemV2[]; total?: number }>(
+    const res = await get<{ mail?: MailItemV2[]; results?: MailItemV2[]; total?: number; nextOffset?: number; hasMore?: boolean }>(
       '/api/mailbox/v2/search',
-      { q: query, limit, offset: (page - 1) * limit },
+      { q: query, limit, offset },
     );
     const items = res?.mail ?? res?.results ?? [];
     const total = typeof res?.total === 'number' ? res.total : items.length;
-    return { items, total, page, has_more: page * limit < total };
+    return { items, total, page, has_more: res?.hasMore ?? offset + items.length < total,
+      next_offset: res?.nextOffset ?? offset + limit };
   });
 }
 
