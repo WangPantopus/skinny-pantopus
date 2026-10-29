@@ -135,7 +135,7 @@ public enum FeedSurface: String, Sendable, Hashable, CaseIterable {
             return FeedEmptyContent(
                 icon: .filter,
                 headline: "No posts match this filter",
-                body: "Choose All to see other posts, or create one in this category.",
+                body: "Choose All to see other posts.",
                 ctaLabel: "Create post",
                 ctaIcon: .pencil,
                 footerIcon: .mapPin,

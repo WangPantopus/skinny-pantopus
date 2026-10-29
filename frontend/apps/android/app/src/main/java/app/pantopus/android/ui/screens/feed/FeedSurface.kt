@@ -95,7 +95,7 @@ enum class FeedSurface(
             return FeedEmptyContent(
                 icon = PantopusIcon.Filter,
                 headline = "No posts match this filter",
-                body = "Choose All to see other posts, or create one in this category.",
+                body = "Choose All to see other posts.",
                 ctaLabel = "Create post",
                 ctaIcon = PantopusIcon.Pencil,
                 footerIcon = PantopusIcon.MapPin,
