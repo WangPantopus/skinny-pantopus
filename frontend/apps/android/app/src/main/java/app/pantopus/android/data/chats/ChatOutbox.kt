@@ -566,7 +566,9 @@ class ChatOutbox
             const val MAX_MESSAGES = 200
             const val INITIAL_BACKOFF_MS = 1000L
             const val MAX_BACKOFF_MS = 60_000L
-            const val MAX_SERVER_RETRY_SECONDS = 86_400.0
+            // The chat limiter asks for at most a minute; retry stays unavailable during a cooldown,
+            // so a malformed delay must not strand the message for long.
+            const val MAX_SERVER_RETRY_SECONDS = 600.0
             const val MAX_EXPONENT = 6
             const val DELIVERY_JOB_ID = 63_109
             const val BACKGROUND_DELAY_MS = 5_000L
