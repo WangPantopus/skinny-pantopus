@@ -39,7 +39,7 @@ public final class FeedPreferencesViewModel {
     public private(set) var state: FeedPreferencesState = .loading
     /// True while a `PUT` is in flight — disables the rows.
     public private(set) var isSaving = false
-    /// Transient error banner text.
+    /// Last save error, cleared when the user tries another change.
     public var toastMessage: String?
     /// The muted Pulse topics (Pulse S4).
     public private(set) var mutedTopics: MutedTopicsState = .loading
@@ -112,6 +112,7 @@ public final class FeedPreferencesViewModel {
     /// comes back if the call fails. True once the server took it.
     public func unmute(_ mute: TopicMuteDTO) async -> Bool {
         guard case let .loaded(current) = mutedTopics, !isSaving else { return false }
+        toastMessage = nil
         isSaving = true
         defer { isSaving = false }
         mutedTopics = .loaded(current.filter { $0 != mute })
@@ -135,6 +136,7 @@ public final class FeedPreferencesViewModel {
 
     private func update(_ body: FeedPreferencesUpdateRequest) async {
         guard case let .loaded(current) = state, !isSaving else { return }
+        toastMessage = nil
         isSaving = true
         defer { isSaving = false }
         // Optimistic — the row reflects the tap straight away.
@@ -186,6 +188,14 @@ public struct FeedPreferencesSheet: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s0) {
             header
+            if let message = viewModel.toastMessage {
+                Text(message)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Theme.Color.error)
+                    .padding(.horizontal, Spacing.s5)
+                    .padding(.vertical, Spacing.s2)
+                    .accessibilityIdentifier("pulsePreferencesSaveError")
+            }
             // Scrolls once the muted topics or a large text size need the room.
             ScrollView(.vertical, showsIndicators: true) {
                 content
@@ -284,16 +294,6 @@ public struct FeedPreferencesSheet: View {
                     .foregroundStyle(Theme.Color.appTextMuted)
             }
             .padding(.top, Spacing.s5)
-            if let toast = viewModel.toastMessage {
-                Text(toast)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Theme.Color.error)
-                    .padding(.top, Spacing.s2)
-                    .task(id: toast) {
-                        try? await Task.sleep(nanoseconds: 2_500_000_000)
-                        viewModel.toastMessage = nil
-                    }
-            }
         }
         .padding(.horizontal, Spacing.s5)
         .accessibilityIdentifier("pulsePreferencesLoaded")
