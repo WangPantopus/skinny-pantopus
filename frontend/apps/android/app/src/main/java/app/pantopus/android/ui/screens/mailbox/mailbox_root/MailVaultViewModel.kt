@@ -62,8 +62,7 @@ data class MailVaultSearch(
 /**
  * The Vault tab's cabinet (Mail tab drawings, `R10-Vault`): the server's folders for the open drawer (the person's own
  * for Me and Biz, each readable Home's shared cabinet for Home), and search through everything filed or archived
- * (`GET /api/mailbox/v2/search`, kept to filed and archived pieces). The filed pieces themselves page in the Mailbox's
- * own list.
+ * (`GET /api/mailbox/v2/search?scope=vault`, as on iOS). The filed pieces themselves page in the Mailbox's own list.
  */
 @HiltViewModel
 class MailVaultViewModel
@@ -173,14 +172,16 @@ class MailVaultViewModel
                     val found = mutableListOf<DrawerMail>()
                     var more = true
                     var failure: NetworkError? = null
-                    // Matches come newest first from all the person's mail; look through a few pages for what's filed.
+                    // Filed and archived matches, newest first. A page can come back short (the server leaves out a letter
+                    // only a sender's old name matched), so the server's own next offset says where the next page starts.
                     var pages = 0
                     while (more && found.size < ENOUGH_RESULTS && pages < PAGES_PER_LOOK) {
-                        when (val result = repo.search(text, SEARCH_PAGE, searchOffset)) {
+                        when (val result = repo.search(text, SEARCH_PAGE, searchOffset, vaultOnly = true)) {
                             is NetworkResult.Success -> {
-                                searchOffset += result.data.mail.size
-                                found += result.data.mail.filter(::isFiled)
-                                more = result.data.mail.size >= SEARCH_PAGE && searchOffset < result.data.total
+                                val page = result.data
+                                searchOffset = page.nextOffset ?: (searchOffset + page.mail.size)
+                                found += page.mail.filter(::isFiled)
+                                more = page.hasMore ?: (page.mail.size >= SEARCH_PAGE && searchOffset < page.total)
                             }
                             is NetworkResult.Failure -> {
                                 failure = result.error
