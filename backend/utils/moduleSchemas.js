@@ -58,10 +58,40 @@ const eventDetailsSchema = Joi.object({
   venueDetails: Joi.string().allow('').max(2000).optional(),
 }).allow(null).optional();
 
+// Shared by both task-posting routes (POST /api/gigs and POST /api/gigs/magic-post) and the bid routes.
+// Gig amounts are dollars; Stripe accepts at most eight digits in cents.
+// Do not silently round sub-cent offers or parse a numeric prefix ("12oops").
+const gigAmountSchema = Joi.any().custom((value, helpers) => {
+  if (!['number', 'string'].includes(typeof value)
+    || !/^\d+(?:\.\d{1,2})?$/.test(String(value).trim())) return helpers.error('any.invalid');
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount < 0 || amount > 999999.99 || (amount > 0 && amount < 0.50)) {
+    return helpers.error('any.invalid');
+  }
+  return amount;
+}).messages({ 'any.invalid': '{{#label}} must be zero or between $0.50 and $999,999.99, with at most two decimal places.' });
+
+const GIG_SCHEDULE_FIELDS = { scheduled_start: 'start time', time_window_start: 'start time', time_window_end: 'end time' };
+
+function gigScheduleError(schedule, changed = schedule) {
+  for (const [field, name] of Object.entries(GIG_SCHEDULE_FIELDS)) {
+    if (changed[field] != null && new Date(changed[field]).getTime() <= Date.now()) {
+      return `The ${name} must be in the future.`;
+    }
+  }
+  if (schedule.time_window_start && schedule.time_window_end
+    && new Date(schedule.time_window_end) <= new Date(schedule.time_window_start)) {
+    return 'The time window must end after it starts.';
+  }
+  return null;
+}
+
 module.exports = {
   careDetailsSchema,
   logisticsDetailsSchema,
   remoteDetailsSchema,
   urgentDetailsSchema,
   eventDetailsSchema,
+  gigAmountSchema,
+  gigScheduleError,
 };
