@@ -216,6 +216,7 @@ fun PulseComposeScreen(
             lostFoundKind
             lostFoundContactPref
             announceAudience
+            safetyAlertKind
             askCategory
             recommendRating
             activeIntent
