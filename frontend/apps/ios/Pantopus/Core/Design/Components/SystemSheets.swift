@@ -85,13 +85,20 @@ public enum InviteLinks {
 /// PDF, …).
 public struct SystemShareSheet: UIViewControllerRepresentable {
     private let items: [Any]
+    private let onCompleted: (@MainActor () -> Void)?
 
-    public init(items: [Any]) {
+    public init(items: [Any], onCompleted: (@MainActor () -> Void)? = nil) {
         self.items = items
+        self.onCompleted = onCompleted
     }
 
     public func makeUIViewController(context _: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: items, applicationActivities: nil)
+        let controller = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        controller.completionWithItemsHandler = { _, completed, _, error in
+            guard completed, error == nil else { return }
+            Task { @MainActor in onCompleted?() }
+        }
+        return controller
     }
 
     public func updateUIViewController(_: UIActivityViewController, context _: Context) {}

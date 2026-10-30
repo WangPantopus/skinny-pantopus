@@ -3,9 +3,9 @@
 //  Pantopus
 //
 //  One row in the Pulse vertical feed. Header (avatar + meta + intent
-//  chip), optional title (Event only), body clamped to 3 lines (2 with
-//  a title), intent-shaped reaction strip, optional Event attendee row
-//  with RSVP chip. Pure-render view — all state lives upstream.
+//  chip), optional title (any post that has one), body clamped to 3
+//  lines (2 with a title), intent-shaped reaction strip, optional Event
+//  attendee row with RSVP chip. Pure-render view — all state lives upstream.
 //
 
 import SwiftUI

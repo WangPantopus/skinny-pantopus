@@ -93,6 +93,6 @@ function AttachmentPreview({ file }: { file: File }) {
     return () => URL.revokeObjectURL(value);
   }, [file]);
   if (file.type === 'application/pdf') return <div className="w-16 h-16 rounded-lg bg-surface-muted flex items-center justify-center">PDF</div>;
-  if (file.type.startsWith('video/')) return <video src={url} muted preload="metadata" className="w-16 h-16 rounded-lg object-cover bg-surface-muted" aria-label="Video attachment" />;
+  if (file.type.startsWith('video/')) return <video src={url || undefined} muted preload="metadata" className="w-16 h-16 rounded-lg object-cover bg-surface-muted" aria-label="Video attachment" />;
   return url ? <Image src={url} alt="Photo attachment" className="w-16 h-16 rounded-lg object-cover bg-surface-muted" width={64} height={64} unoptimized /> : null;
 }

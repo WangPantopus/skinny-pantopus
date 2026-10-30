@@ -18,7 +18,7 @@ import { formatDistance, formatTimeAgo as timeAgo, getPostTypeConfig, POST_TYPE_
 import { chosenUsername } from '@pantopus/utils';
 import { confirmStore } from '@/components/ui/confirm-store';
 import PostMetadata from './PostMetadata';
-import { sharePostLink } from './sharePostLink';
+import { canSharePost, sharePostLink } from './sharePostLink';
 import type { AudienceProfile, Post } from '@pantopus/types';
 import { launchFeatures } from '@/lib/featureFlags';
 
@@ -450,22 +450,24 @@ function PostCard({
         </button>
 
         {/* Share */}
-        <button
-          onClick={async () => {
-            try {
-              if (!await sharePostLink(post)) return;
-            } catch {
-              showToast?.('Failed to share post. Please try again.');
-              return;
-            }
-            showToast?.('Post link shared. Only people with access can open it.');
-            void api.posts.sharePost(post.id).catch(() => {});
-          }}
-          aria-label="Share post"
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-app-muted hover-bg-app transition"
-        >
-          <Share className="w-4 h-4" />
-        </button>
+        {canSharePost(post) && (
+          <button
+            onClick={async () => {
+              try {
+                if (!await sharePostLink(post)) return;
+              } catch {
+                showToast?.('Failed to share post. Please try again.');
+                return;
+              }
+              showToast?.('Post link shared. Only people with access can open it.');
+              void api.posts.sharePost(post.id).catch(() => {});
+            }}
+            aria-label="Share post"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-app-muted hover-bg-app transition"
+          >
+            <Share className="w-4 h-4" />
+          </button>
+        )}
 
         {/* Not Helpful — only on Place surface, not own posts */}
         {surface === 'place' && !isOwn && (
