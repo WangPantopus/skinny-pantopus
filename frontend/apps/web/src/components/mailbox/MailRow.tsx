@@ -6,7 +6,7 @@
 // Main board). The row reads as one sentence to screen readers.
 // ============================================================
 
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import type { MailItemV2 } from '@/types/mailbox';
 import { parseDisplayDate } from '@pantopus/ui-utils';
 import MailPiece, { pieceFade, pieceKind, pieceSentence } from './MailPiece';
@@ -64,6 +64,35 @@ function dueLine(item: MailItemV2, timeZone?: string): { text: string; overdue: 
   return overdue ? { text: `Overdue since ${day}`, overdue } : { text: `Due ${day}`, overdue };
 }
 
+/** The words on the line under a piece: when it came, then what it is and what's been done with it. */
+export function pieceLineBits(item: MailItemV2, when: string, read: boolean): string[] {
+  const kind = pieceKind(item);
+  return (item.card ? [
+    when,
+    'Christmas card',
+    item.card.sealed ? 'Opens Christmas morning' : read ? 'Opened' : null,
+  ] : [
+    when,
+    kind === 'postcard' ? 'Postcard' : kind === 'booklet' ? 'Booklet' : read && kind !== 'parcel' ? 'Opened' : null,
+    item.on_counter ? 'On the Counter' : null,
+  ]).filter(Boolean) as string[];
+}
+
+/** The line under a piece, as the Mailbox prints it (the row reads it out in its own sentence). */
+export function PieceLine({ bits, children }: { bits: string[]; children?: ReactNode }) {
+  return (
+    <span className="mt-1.5 flex flex-wrap items-center gap-x-1.5 px-0.5 text-xs leading-4 text-app-text-muted" aria-hidden="true">
+      {bits.map((bit, index) => (
+        <span key={bit} className="flex items-center gap-1.5">
+          {index > 0 ? <span>·</span> : null}
+          <span>{bit}</span>
+        </span>
+      ))}
+      {children}
+    </span>
+  );
+}
+
 export type MailRowProps = {
   item: MailItemV2;
   recipientName: string;
@@ -83,15 +112,7 @@ export default function MailRow({ item, recipientName, recipientLine, timeZone, 
   const kind = pieceKind(item);
   const when = whenLine(item, timeZone);
   const due = dueLine(item, timeZone);
-  const bits = (item.card ? [
-    when,
-    'Christmas card',
-    item.card.sealed ? 'Opens Christmas morning' : read ? 'Opened' : null,
-  ] : [
-    when,
-    kind === 'postcard' ? 'Postcard' : kind === 'booklet' ? 'Booklet' : read && kind !== 'parcel' ? 'Opened' : null,
-    item.on_counter ? 'On the Counter' : null,
-  ]).filter(Boolean) as string[];
+  const bits = pieceLineBits(item, when, read);
   const sentence = [pieceSentence(item, read), when ? `Came ${when}` : null, due?.text, item.on_counter ? 'On the Counter' : null]
     .filter(Boolean).join('. ').replace(/\.\./g, '.');
   const style: CSSProperties | undefined = slideInDelayMs != null ? { animationDelay: `${slideInDelayMs}ms` } : undefined;
@@ -109,13 +130,7 @@ export default function MailRow({ item, recipientName, recipientLine, timeZone, 
       style={style}
     >
       <MailPiece item={item} recipientName={recipientName} recipientLine={recipientLine} opened={read} fade={pieceFade(item, read)} />
-      <span className="mt-1.5 flex flex-wrap items-center gap-x-1.5 px-0.5 text-xs leading-4 text-app-text-muted" aria-hidden="true">
-        {bits.map((bit, index) => (
-          <span key={bit} className="flex items-center gap-1.5">
-            {index > 0 ? <span>·</span> : null}
-            <span>{bit}</span>
-          </span>
-        ))}
+      <PieceLine bits={bits}>
         {due ? (
           <span className="flex items-center gap-1.5">
             {bits.length > 0 ? <span>·</span> : null}
@@ -128,7 +143,7 @@ export default function MailRow({ item, recipientName, recipientLine, timeZone, 
             <span className="font-medium text-primary-600">{expanded ? 'Hide the pieces' : 'Show the pieces'}</span>
           </span>
         ) : null}
-      </span>
+      </PieceLine>
     </button>
   );
 }

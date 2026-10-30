@@ -3,18 +3,19 @@
 // ============================================================
 // Send a Christmas card (holiday_cards; Draft 1's flow around the founder's
 // pictures): who it's for → pick a card → write on the back → seal it for the
-// day. One card a day: once it's sent, this page shows today's card, which
-// can be taken back until the 7 a.m. pickup (by email: until they open it).
+// day → look it over (exactly what they will get) and seal and send. One card
+// a day: once it's sent, this page shows today's card, which can be taken
+// back until the 7 a.m. pickup (by email: until they open it).
 // ============================================================
 
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import type { HolidayCardArrival, HolidayCardDesign, HolidayCards, SentHolidayCard } from '@pantopus/api';
+import type { HolidayCardArrival, HolidayCardDesign, HolidayCardPreview, HolidayCards, SentHolidayCard } from '@pantopus/api';
 import { ChevronLeft, Check, Loader2, Mail, Search, X } from 'lucide-react';
 import type { MailItemV2 } from '@/types/mailbox';
 import type { MailboxApiError } from '@/lib/mailbox-api';
-import { useCardArrivals, useCardRecipients, useHolidayCards, useSendHolidayCard, useTakeBackHolidayCard } from '@/lib/mailbox-queries';
+import { useCardArrivals, useCardRecipients, useHolidayCards, usePreviewHolidayCard, useSendHolidayCard, useTakeBackHolidayCard } from '@/lib/mailbox-queries';
 import { useMe, useOwnLocalProfile } from '@/lib/me';
 import { confirmStore } from '@/components/ui/confirm-store';
 import ErrorState from '@/components/ui/ErrorState';
@@ -23,17 +24,19 @@ import { mailLoadMessage } from '../mailLoadMessage';
 import CardFront from './CardFront';
 import CardBack, { BACK_TEXT, RULED } from './CardBack';
 import CardFlip from './CardFlip';
+import LookItOver from './LookItOver';
 import { cardPicture, clockTime, SERIF, shortDay, WAX } from './cardArt';
 
-type Step = 'to' | 'pick' | 'write' | 'seal' | 'sent';
+type Step = 'to' | 'pick' | 'write' | 'seal' | 'look' | 'sent';
 type Recipient = { kind: 'person'; userId: string; name: string } | { kind: 'email'; email: string };
 
-const STEPS: Step[] = ['to', 'pick', 'write', 'seal'];
+const STEPS: Step[] = ['to', 'pick', 'write', 'seal', 'look'];
 const TITLES: Record<Step, string> = {
   to: 'Who it’s for',
   pick: 'Pick a card',
   write: 'Write on the back',
   seal: 'Seal it for the day',
+  look: 'Look it over',
   sent: 'On its way',
 };
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -45,9 +48,11 @@ const secondary = 'flex h-12 w-full items-center justify-center gap-2 rounded-xl
 const muted = 'text-[#4e5563] [@media(prefers-color-scheme:dark)]:text-app-text-secondary';
 
 /** The server's own sentence when it sent one (a card that can't go yet, a limit), else what went wrong. */
-function sendMessage(error: MailboxApiError | null): string {
+function sendMessage(error: MailboxApiError | null, byEmail = false): string {
   if (error?.serverCode && error.status < 500) return error.message;
   if (error?.serverCode === 'CARD_UNAVAILABLE') return error.message;
+  // The server's own check of the address, stricter than ours (it knows which endings an address can have).
+  if (byEmail && error?.status === 400) return 'That email address doesn’t look right. Go back to “Who it’s for” and check it.';
   return mailLoadMessage(error);
 }
 
@@ -403,9 +408,9 @@ function SealStep({
   fromName,
   arrival,
   onArrival,
-  sending,
+  looking,
   error,
-  onSend,
+  onLook,
 }: {
   cards: HolidayCards;
   to: Recipient;
@@ -415,9 +420,10 @@ function SealStep({
   fromName: string;
   arrival: HolidayCardArrival | null;
   onArrival: (arrival: HolidayCardArrival) => void;
-  sending: boolean;
+  /** Reading what they will get (the next step). */
+  looking: boolean;
   error: string | null;
-  onSend: () => void;
+  onLook: () => void;
 }) {
   const preview = {
     id: `preview-${design.id}`,
@@ -462,7 +468,41 @@ function SealStep({
       </p>
       {error ? <p role="alert" className="mx-auto mt-3 max-w-[420px] text-[14px] font-medium text-[#a81a1a]">{error}</p> : null}
       <div className="mx-auto mt-5 max-w-[420px] pb-4">
-        <button type="button" disabled={!arrival || sending} onClick={onSend} className={primary} style={{ backgroundColor: WAX }}>
+        <button type="button" disabled={!arrival || looking} onClick={onLook} className={primary} style={{ backgroundColor: WAX }}>
+          {looking ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> : null}
+          Look it over
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Step 5: look it over ─────────────────────────────────────
+
+function LookStep({
+  preview,
+  to,
+  sending,
+  error,
+  onSend,
+}: {
+  preview: HolidayCardPreview;
+  to: Recipient;
+  sending: boolean;
+  error: string | null;
+  onSend: () => void;
+}) {
+  return (
+    <div data-testid="sendCardLook">
+      <LookItOver preview={preview} toName={toName(to)} toFirstName={to.kind === 'person' ? firstName(to.name) : ''} byEmail={to.kind === 'email'} />
+      <div className="mx-auto mt-7 max-w-[420px] px-4 pb-4">
+        <p className="rounded-xl border border-[#e7dcc6] bg-[#fbf6ec] px-3.5 py-3 text-[13px] leading-[18px] text-[#374151]">
+          {to.kind === 'email'
+            ? 'You can take it back until they open it.'
+            : 'You can take it back until the carrier picks it up at 7 a.m. their time.'}
+        </p>
+        {error ? <p role="alert" className="mt-3 text-[14px] font-medium text-[#a81a1a]">{error}</p> : null}
+        <button type="button" data-testid="sendCardLookSend" disabled={sending} onClick={onSend} className={`${primary} mt-5`} style={{ backgroundColor: WAX }}>
           {sending ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> : null}
           Seal and send
         </button>
@@ -527,10 +567,15 @@ export default function SendCardFlow() {
   const { data: own } = useOwnLocalProfile();
   const { data: me } = useMe();
   const fromName = own?.profile?.displayName || me?.name || 'You';
+  const preview = usePreviewHolidayCard();
   const send = useSendHolidayCard();
   const takeBack = useTakeBackHolidayCard();
 
   const [step, setStep] = useState<Step>('to');
+  // What they will get, from the server's look (step 5).
+  const [look, setLook] = useState<HolidayCardPreview | null>(null);
+  // A choice that closed while they looked it over: step 4 says so.
+  const [sealError, setSealError] = useState<string | null>(null);
   const [to, setTo] = useState<Recipient | null>(null);
   // A person's arrivals and day go by their clock, read once they're chosen and again on the last step.
   const theirs = useCardArrivals(to?.kind === 'person' ? to.userId : null);
@@ -559,18 +604,43 @@ export default function SendCardFlow() {
     if (!arrival || !options.includes(arrival)) setArrival(options[0]);
   }, [options, arrival]);
 
+  // Back keeps everything chosen and written; only the last answers' errors go.
   const back = () => {
     if (step === 'to' || step === 'sent') { router.push('/app/mailbox/personal'); return; }
     setStep(STEPS[STEPS.indexOf(step) - 1]);
+    setLook(null);
+    setSealError(null);
+    preview.reset();
     send.reset();
   };
 
+  const cardToSend = () => (to && design && arrival
+    ? { design: design.id, message: message.trim(), arrival, to: to.kind === 'person' ? { user_id: to.userId } : { email: to.email } }
+    : null);
+
+  const doLook = () => {
+    const card = cardToSend();
+    if (!card) return;
+    setSealError(null);
+    preview.mutate(card, { onSuccess: (res) => { setLook(res); setStep('look'); } });
+  };
+
   const doSend = () => {
-    if (!to || !design || !arrival) return;
-    send.mutate(
-      { design: design.id, message: message.trim(), arrival, to: to.kind === 'person' ? { user_id: to.userId } : { email: to.email } },
-      { onSuccess: (res) => { setSent(res.card); setStep('sent'); } },
-    );
+    const card = cardToSend();
+    if (!card) return;
+    send.mutate(card, {
+      onSuccess: (res) => { setSent(res.card); setLook(null); setStep('sent'); },
+      onError: (error) => {
+        if (error.serverCode !== 'CARD_ARRIVAL_CLOSED') return;
+        // Their 7 a.m. came while they looked it over: choose again on step 4, with what's open now.
+        setSealError(sendMessage(error));
+        send.reset();
+        setLook(null);
+        setStep('seal');
+        void cards.refetch();
+        if (to?.kind === 'person') void theirs.refetch();
+      },
+    });
   };
 
   const doTakeBack = async () => {
@@ -588,7 +658,7 @@ export default function SendCardFlow() {
       onSuccess: () => {
         setSent(null);
         setTookBack(true);
-        setTo(null); setDesignId(null); setMessage(''); setArrival(null);
+        setTo(null); setDesignId(null); setMessage(''); setArrival(null); setLook(null);
         setStep('to');
       },
       onError: (error) => setTakeBackError(sendMessage(error)),
@@ -610,7 +680,9 @@ export default function SendCardFlow() {
     );
   }
 
-  if (today && step !== 'sent') {
+  // Today's card, once it's sent. A card sent from elsewhere while this one is being written doesn't take over: its
+  // step says why this one can't go (one card a day).
+  if (today && step === 'to') {
     return (
       <div className={page}>
         <div className="mx-auto w-full max-w-[560px]">
@@ -674,9 +746,18 @@ export default function SendCardFlow() {
           design={design}
           fromName={fromName}
           arrival={arrival}
-          onArrival={setArrival}
+          onArrival={(next) => { setArrival(next); setSealError(null); preview.reset(); }}
+          looking={preview.isPending}
+          error={sealError ?? (preview.isError ? sendMessage(preview.error, to.kind === 'email') : null)}
+          onLook={doLook}
+        />
+      ) : null}
+      {step === 'look' && look && to ? (
+        <LookStep
+          preview={look}
+          to={to}
           sending={send.isPending}
-          error={send.isError ? sendMessage(send.error) : null}
+          error={send.isError ? sendMessage(send.error, to.kind === 'email') : null}
           onSend={doSend}
         />
       ) : null}

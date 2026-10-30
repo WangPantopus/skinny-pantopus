@@ -8,7 +8,7 @@
 // ============================================================
 
 import { get, post, uploadFile, apiRequest, mailbox, mailCompose } from '@pantopus/api';
-import type { DeletedMail, HolidayCards, HolidayCardArrival, HolidayCardArrivalsFor, SentHolidayCard, RecipientSearchResult } from '@pantopus/api';
+import type { DeletedMail, HolidayCards, HolidayCardArrival, HolidayCardArrivalsFor, HolidayCardPreview, SentHolidayCard, RecipientSearchResult } from '@pantopus/api';
 
 /** PATCH helper — not barrel-exported from @pantopus/api */
 function patch<T>(url: string, data?: Record<string, any>): Promise<T> {
@@ -136,6 +136,11 @@ export async function sendHolidayCard(data: {
   to: { user_id: string } | { email: string };
 }): Promise<{ card: SentHolidayCard }> {
   return call(() => mailbox.sendHolidayCard(data));
+}
+
+/** What they will get, from the same body and checks as sending it; nothing is stored or sent. */
+export async function previewHolidayCard(data: Parameters<typeof sendHolidayCard>[0]): Promise<HolidayCardPreview> {
+  return call(() => mailbox.previewHolidayCard(data));
 }
 
 export async function takeBackHolidayCard(cardId: string): Promise<{ taken_back: true }> {
