@@ -14,10 +14,14 @@ public extension Notification.Name {
 
 public enum PulsePostsRefresh {
     /// Lists on screen refetch; the store's copies of post lists are marked
-    /// out of date, so a list opened later reads again too.
+    /// out of date, so a list opened later reads again too. A saved post's
+    /// `postId` marks its own page's copy as well, so going back to that
+    /// page after an edit shows the saved values.
     @MainActor
-    public static func notifyPostsDidChange() {
-        ScreenStore.shared.markStale(topics: [ScreenTopic.posts])
+    public static func notifyPostsDidChange(postId: String? = nil) {
+        var topics: Set<String> = [ScreenTopic.posts]
+        if let postId { topics.insert(ScreenTopic.post(postId)) }
+        ScreenStore.shared.markStale(topics: topics)
         NotificationCenter.default.post(name: .pulsePostsDidChange, object: nil)
     }
 }

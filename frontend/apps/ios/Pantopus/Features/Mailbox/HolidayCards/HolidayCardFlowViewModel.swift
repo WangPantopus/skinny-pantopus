@@ -80,6 +80,10 @@ final class HolidayCardFlowViewModel {
         didSet { sendError = nil }
     }
 
+    /// When a card to the person chosen can come, by their clock; nil until
+    /// it's read (the sender's next morning stands in meanwhile).
+    private(set) var theirs: HolidayCardArrivalsFor?
+
     /// The card just sent, shown as "On its way".
     private(set) var sent: SentHolidayCard?
     private(set) var sending = false
@@ -108,6 +112,7 @@ final class HolidayCardFlowViewModel {
 
     private let api: APIClient
     private var searchTask: Task<Void, Never>?
+    private var theirsTask: Task<Void, Never>?
 
     init(api: APIClient = .shared, fromName: String) {
         self.api = api
@@ -130,10 +135,17 @@ final class HolidayCardFlowViewModel {
         cards?.designs.first { $0.id == designId }
     }
 
-    /// The arrivals open for who it's for.
+    /// The arrivals open for who it's for: a person's by their clock once
+    /// read, an email's by the sender's.
     var arrivals: [HolidayCardArrival] {
         guard let cards, let recipient else { return [] }
-        return recipient.isEmail ? cards.emailArrivals : cards.personArrivals
+        if recipient.isEmail { return cards.emailArrivals }
+        return theirs?.arrivals ?? cards.personArrivals
+    }
+
+    /// The day of the person's next 7 a.m. mail where they live, once read.
+    var theirDay: String? {
+        recipient?.isEmail == false ? theirs?.nextRoundOn : nil
     }
 
     var letterCount: Int {
@@ -195,7 +207,9 @@ final class HolidayCardFlowViewModel {
     }
 
     func choose(_ recipient: HolidayCardRecipient) {
+        if recipient != self.recipient { theirs = nil }
         self.recipient = recipient
+        readTheirs()
         // The arrival choices depend on who it's for: the first that's open.
         if arrival.map({ !arrivals.contains($0) }) ?? true { arrival = arrivals.first }
         step = .pick
@@ -215,6 +229,22 @@ final class HolidayCardFlowViewModel {
         guard !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         if arrival.map({ !arrivals.contains($0) }) ?? true { arrival = arrivals.first }
         step = .seal
+        // Read their day again: it moves on at 7 a.m. where they live.
+        readTheirs()
+    }
+
+    /// When a card to the person chosen can come, by their clock. A failure
+    /// keeps the sender's next morning; sending says why if it can't go.
+    private func readTheirs() {
+        theirsTask?.cancel()
+        guard case let .person(userId, _) = recipient else { return }
+        theirsTask = Task { [weak self] in
+            guard let self else { return }
+            let answer: HolidayCardArrivalsFor? = try? await api.request(HolidayCardEndpoints.arrivals(toUserId: userId))
+            guard !Task.isCancelled, let answer, case let .person(current, _) = recipient, current == userId else { return }
+            theirs = answer
+            if arrival.map({ !arrivals.contains($0) }) ?? true { arrival = arrivals.first }
+        }
     }
 
     // MARK: - Search
@@ -285,6 +315,7 @@ final class HolidayCardFlowViewModel {
             sent = nil
             tookBack = true
             recipient = nil
+            theirs = nil
             designId = nil
             message = ""
             arrival = nil

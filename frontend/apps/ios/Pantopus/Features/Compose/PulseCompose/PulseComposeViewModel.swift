@@ -916,7 +916,7 @@ public final class PulseComposeViewModel {
                         kind: .error
                     )
                     state = .error(toast?.text ?? "Attachments could not be confirmed. Try again.")
-                    PulsePostsRefresh.notifyPostsDidChange()
+                    PulsePostsRefresh.notifyPostsDidChange(postId: postId)
                     Analytics.track(.formPulseComposeSubmit(intent: activeIntent.rawValue, result: .error))
                     return false
                 }
@@ -927,7 +927,7 @@ public final class PulseComposeViewModel {
                 kind: .success
             )
             shouldDismiss = true
-            PulsePostsRefresh.notifyPostsDidChange()
+            PulsePostsRefresh.notifyPostsDidChange(postId: postId)
             Analytics.track(.formPulseComposeSubmit(intent: activeIntent.rawValue, result: .success))
             return true
         } catch {

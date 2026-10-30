@@ -1748,6 +1748,26 @@ async function removeCardObject(objectId) {
   }
 }
 
+// Why a card can't go to this person, or null when it can: not to oneself, no block either way, and only someone the
+// card's search shows the sender (a connection, or a person their name search finds). { status, body } to answer with.
+async function personRefusal(senderId, toUserId) {
+  if (String(toUserId) === String(senderId)) {
+    return { status: 400, body: { error: 'Send your card to someone else.', code: 'CARD_TO_SELF' } };
+  }
+  try {
+    if (await isBlocked(senderId, toUserId)) {
+      return { status: 403, body: { error: 'You can’t send a card to this person.', code: 'MAIL_RECIPIENT_BLOCKED' } };
+    }
+  } catch (blockErr) {
+    if (blockErr.code !== 'BLOCK_CHECK_UNAVAILABLE') throw blockErr;
+    return { status: 503, body: { error: blockErr.message, code: blockErr.code } };
+  }
+  if (!(await personFindableBy(senderId, toUserId))) {
+    return { status: 404, body: { error: 'We couldn’t find that person. Search for them again.', code: 'MAIL_RECIPIENT_NOT_FOUND' } };
+  }
+  return null;
+}
+
 /**
  * GET /api/mailbox/cards
  * What the Send a Christmas card screens need: the season's pictures (the apps carry the pictures themselves; this is
@@ -1777,6 +1797,34 @@ router.get('/cards', verifyToken, async (req, res) => {
   } catch (err) {
     logger.error('Cards read error', { error: err.message, userId: req.user.id });
     return res.status(503).json({ error: 'Couldn’t load the Christmas cards. Try again in a moment.', code: 'CARDS_UNAVAILABLE' });
+  }
+});
+
+/**
+ * GET /api/mailbox/cards/arrivals?to=<user_id>
+ * When a card to this person can come, by their clock rather than the sender's: the arrivals open for them and the day
+ * of their next 7 a.m. mail where they live (`next_round_on`, "2026-10-31"), which "Seal it for the day" names. The
+ * same checks as sending to them; their time zone itself isn't sent.
+ */
+router.get('/cards/arrivals', verifyToken, async (req, res) => {
+  if (!cardsOn()) return sendCardsOff(res);
+  const senderId = req.user.id;
+  const { error: badTo, value: toUserId } = Joi.string().uuid().required().validate(req.query.to);
+  if (badTo) {
+    return res.status(404).json({ error: 'We couldn’t find that person. Search for them again.', code: 'MAIL_RECIPIENT_NOT_FOUND' });
+  }
+  try {
+    const refusal = await personRefusal(senderId, toUserId);
+    if (refusal) return res.status(refusal.status).json(refusal.body);
+    const now = new Date();
+    const timeZone = (await mailDelivery.personTimeZone(toUserId)) || mailDelivery.FALLBACK_TIME_ZONE;
+    return res.json({
+      arrivals: holidayCards.arrivalsFor({ byEmail: false, timeZone, now, nextRound: mailDelivery.nextRound }),
+      next_round_on: mailDelivery.localDate(mailDelivery.nextRound(timeZone, now), timeZone),
+    });
+  } catch (err) {
+    logger.error('Card arrivals read error', { error: err.message, userId: senderId });
+    return res.status(503).json({ error: 'Couldn’t check when it would arrive. Try again in a moment.', code: 'CARD_UNAVAILABLE' });
   }
 });
 
@@ -1832,26 +1880,14 @@ router.post('/cards', verifyToken, validate(sendCardSchema), async (req, res) =>
     let escrow = null;
 
     if (toUserId) {
-      if (String(toUserId) === String(senderId)) {
-        return res.status(400).json({ error: 'Send your card to someone else.', code: 'CARD_TO_SELF' });
-      }
-      try {
-        if (await isBlocked(senderId, toUserId)) {
-          return res.status(403).json({ error: 'You can’t send a card to this person.', code: 'MAIL_RECIPIENT_BLOCKED' });
-        }
-      } catch (blockErr) {
-        if (blockErr.code !== 'BLOCK_CHECK_UNAVAILABLE') throw blockErr;
-        return res.status(503).json({ error: blockErr.message, code: blockErr.code });
-      }
-      // Only someone the card's search shows them: a connection, or a person their name search finds.
-      if (!(await personFindableBy(senderId, toUserId))) {
-        return res.status(404).json({ error: 'We couldn’t find that person. Search for them again.', code: 'MAIL_RECIPIENT_NOT_FOUND' });
-      }
+      const refusal = await personRefusal(senderId, toUserId);
+      if (refusal) return res.status(refusal.status).json(refusal.body);
       const recipientZone = (await mailDelivery.personTimeZone(toUserId)) || mailDelivery.FALLBACK_TIME_ZONE;
       const open = holidayCards.arrivalsFor({ byEmail: false, timeZone: recipientZone, now, nextRound: mailDelivery.nextRound });
       if (!open.includes(arrival)) return arrivalClosed();
       const timing = holidayCards.personDelivery({ arrival, timeZone: recipientZone, now, nextRound: mailDelivery.nextRound });
       Object.assign(card, { sealed_until: timing.sealed_until, take_back_until: timing.take_back_until,
+        arrives_on: mailDelivery.localDate(new Date(timing.delivered_at), recipientZone),
         to_name: (await loadChatPeople([toUserId])).get(String(toUserId))?.displayName || null });
       delivery = { delivered_at: timing.delivered_at, special_delivery: false };
     } else {

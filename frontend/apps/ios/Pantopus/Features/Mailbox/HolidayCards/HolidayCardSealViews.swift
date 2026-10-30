@@ -92,7 +92,7 @@ struct HolidayCardSealStep: View {
     }
 
     private func choice(_ arrival: HolidayCardArrival) -> some View {
-        let words = HolidayCardWords.arrivalChoice(arrival, cards: cards, name: name)
+        let words = HolidayCardWords.arrivalChoice(arrival, cards: cards, recipient: recipient, theirDay: viewModel.theirDay)
         let checked = viewModel.arrival == arrival
         return Button {
             viewModel.arrival = arrival
@@ -125,12 +125,6 @@ struct HolidayCardSealStep: View {
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(checked ? [.isButton, .isSelected] : .isButton)
         .accessibilityIdentifier("sendCardArrival.\(arrival.rawValue)")
-    }
-
-    /// Their first name, or "they" for an email address.
-    private var name: String {
-        if case let .person(_, name) = recipient { return HolidayCardWords.firstName(name) }
-        return "they"
     }
 }
 

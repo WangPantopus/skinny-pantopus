@@ -51,10 +51,10 @@ export function inDays(iso: string, now = new Date()): string {
   return `in ${days} days`;
 }
 
-/** "Sat, Dec 19" */
+/** "Sat, Dec 19", from a time or a calendar day ("2026-12-19", read at noon here so no zone moves it a day). */
 export function shortDay(iso: string | null | undefined): string {
   if (!iso) return '';
-  const date = new Date(iso);
+  const date = new Date(iso.length === 10 ? `${iso}T12:00:00` : iso);
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
 

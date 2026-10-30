@@ -486,7 +486,7 @@ private fun arrivalLine(
     zone: ZoneId,
 ): String {
     val who = card.toName ?: "They"
-    val day = HolidayCardTimes.shortDay(card.arrivesAt, zone)
+    val day = HolidayCardTimes.shortDay(card.arrivesOn ?: card.arrivesAt, zone)
     return when {
         card.status == "withdrawn" -> "You took this card back."
         card.byEmail && card.status == "claimed" -> "$who joined Pantopus and has your card."

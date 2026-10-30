@@ -25,7 +25,7 @@ export default function SendCardRow() {
     if (today.by_email) line = today.status === 'claimed' ? 'They joined Pantopus and have it.' : 'Waiting for them to open the email.';
     else if (today.status === 'delivered') line = 'In their mailbox now.';
     else if (today.arrival === 'christmas_morning') line = 'Arrives on Christmas morning.';
-    else line = `Arrives with their 7 a.m. mail on ${shortDay(today.arrives_at)}${today.opens_at ? ', sealed until Christmas' : ''}.`;
+    else line = `Arrives with their 7 a.m. mail on ${shortDay(today.arrives_on ?? today.arrives_at)}${today.opens_at ? ', sealed until Christmas' : ''}.`;
   }
 
   return (

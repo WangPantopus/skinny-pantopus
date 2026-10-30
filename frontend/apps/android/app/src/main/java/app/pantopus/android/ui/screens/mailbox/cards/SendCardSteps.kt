@@ -613,8 +613,7 @@ internal fun SealStep(
     onSend: () -> Unit,
 ) {
     val zone = HolidayCardTimes.zone(cards.timeZone)
-    val options = if (to is CardRecipient.Email) cards.arrivals.email else cards.arrivals.person
-    val name = (to as? CardRecipient.Person)?.firstName ?: "they"
+    val options = if (to is CardRecipient.Email) cards.arrivals.email else (form.theirs?.arrivals ?: cards.arrivals.person)
     Column(modifier = Modifier.padding(start = Spacing.s4, end = Spacing.s4, top = Spacing.s3)) {
         Box(modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s2).rotate(1f)) {
             MailPiece(envelopePreview(design, fromName, to, sealed = form.arrival == "sealed_christmas"))
@@ -632,7 +631,7 @@ internal fun SealStep(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             options.forEach { arrival ->
-                val (title, detail) = arrivalChoice(arrival, cards, name, zone)
+                val (title, detail) = arrivalChoice(arrival, cards, to, form.theirs?.nextRoundOn, zone)
                 ArrivalChoice(title, detail, selected = form.arrival == arrival, tag = "sendCardArrival.$arrival") { onArrival(arrival) }
             }
         }
@@ -700,20 +699,31 @@ private fun ArrivalChoice(
     }
 }
 
-/** A choice's title and its sentence. Their mail comes at 7 a.m. where they live: never turned into this clock's time. */
+/**
+ * A choice's title and its sentence. Their mail comes at 7 a.m. where they live: never turned into this clock's time.
+ * [theirDay] is the day of that mail by their clock (from the server once it's read; until then, the sender's next
+ * morning).
+ */
 private fun arrivalChoice(
     arrival: String,
     cards: HolidayCardsResponse,
-    name: String,
+    to: CardRecipient,
+    theirDay: String?,
     zone: ZoneId,
 ): Pair<String, String> {
-    val day = HolidayCardTimes.shortDay(cards.nextRoundAt, zone)
+    val day = HolidayCardTimes.shortDay(theirDay ?: cards.nextRoundAt, zone)
+    val name = (to as? CardRecipient.Person)?.firstName ?: "they"
     return when (arrival) {
         "next_morning" -> "With the morning mail" to "$day, about 7 a.m. where $name lives. They can open it right away."
         "sealed_christmas" ->
             "Sealed until Christmas" to
-                "It comes with the $day morning mail and waits in their mailbox with a “Do not open until Christmas” seal. " +
-                "It opens on December 25."
+                if (to is CardRecipient.Email) {
+                    "They get an email now. Once they join with that address, it waits in their mailbox with a “Do not open " +
+                        "until Christmas” seal. It opens on December 25."
+                } else {
+                    "It comes with the $day morning mail and waits in their mailbox with a “Do not open until Christmas” seal. " +
+                        "It opens on December 25."
+                }
         "christmas_morning" ->
             "On Christmas morning" to "${HolidayCardTimes.shortDay(cards.christmasMorningAt, zone)}, with the 7 a.m. mail."
         else -> "Right away, by email" to "They get an email now and can open it once they join with that address."

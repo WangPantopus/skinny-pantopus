@@ -25,7 +25,7 @@ import * as api from '@/lib/mailbox-api';
 import { MailboxApiError } from '@/lib/mailbox-api';
 import { businesses as businessesApi, mailboxV2P2 as mailboxV2P2Api } from '@pantopus/api';
 import type { AssetFullDetail } from '@/lib/mailbox-api';
-import type { DeletedMail, HolidayCards, SentHolidayCard, RecipientSearchResult } from '@pantopus/api';
+import type { DeletedMail, HolidayCards, HolidayCardArrivalsFor, SentHolidayCard, RecipientSearchResult } from '@pantopus/api';
 
 import type {
   DrawerMeta,
@@ -72,6 +72,7 @@ export const mailboxKeys = {
   // Christmas cards: the season's pictures and today's card; the card search.
   holidayCards: () => [...mailboxKeys.all, 'holiday-cards'] as const,
   cardRecipients: (query: string) => [...mailboxKeys.all, 'card-recipients', query] as const,
+  cardArrivals: (userId: string) => [...mailboxKeys.all, 'card-arrivals', userId] as const,
   deleted: () => [...mailboxKeys.all, 'deleted'] as const,
 
   // Counter
@@ -186,6 +187,16 @@ export function useCardRecipients(query: string) {
     queryKey: mailboxKeys.cardRecipients(q.toLowerCase()),
     queryFn: () => api.searchCardRecipients(q),
     enabled: q.length >= 2,
+    staleTime: STALE_30S,
+  });
+}
+
+/** When a card to this person can come, by their clock: their arrivals and the day of their next 7 a.m. mail. */
+export function useCardArrivals(userId: string | null) {
+  return useQuery<HolidayCardArrivalsFor, MailboxApiError>({
+    queryKey: mailboxKeys.cardArrivals(userId ?? ''),
+    queryFn: () => api.getHolidayCardArrivals(userId as string),
+    enabled: !!userId,
     staleTime: STALE_30S,
   });
 }

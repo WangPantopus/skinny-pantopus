@@ -99,9 +99,9 @@ private fun prefillPurpose(
 ): PulseComposePurpose? {
     // A deal, a local update or a win is its own purpose, not the first one sharing its form.
     draft?.purposeFor(target)?.let { return it }
-    if (feedIntent == null || feedIntent == PulseIntent.All || feedIntent == PulseIntent.Generic) return null
-    val composeIntent = PulseComposeIntent.fromFeedIntent(feedIntent)
-    val candidate = PulseComposePurpose.entries.firstOrNull { it.legacyIntent == composeIntent } ?: return null
+    // A filtered feed opens its own type's form too (Deals opens Deal); All and Generic have no type.
+    val postType = feedIntent?.postType ?: return null
+    val candidate = PulseComposePurpose.entries.firstOrNull { it.postType == postType } ?: return null
     return if (PulseComposePurpose.allowedFor(target).contains(candidate)) candidate else null
 }
 
