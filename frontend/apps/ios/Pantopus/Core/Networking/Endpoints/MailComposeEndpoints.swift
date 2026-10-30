@@ -15,10 +15,12 @@ import Foundation
 
 public enum MailComposeEndpoints {
     /// `GET /api/mailbox/compose/recipients?q=...&homeId=...`. Route
-    /// `backend/routes/mailCompose.js:166`.
-    public static func recipients(query: String, homeId: String? = nil) -> Endpoint {
+    /// `backend/routes/mailCompose.js:186`. `peopleOnly` (`people=1`) leaves
+    /// out businesses: a Christmas card goes to a person.
+    public static func recipients(query: String, homeId: String? = nil, peopleOnly: Bool = false) -> Endpoint {
         var params: [String: String] = ["q": query]
         if let homeId { params["homeId"] = homeId }
+        if peopleOnly { params["people"] = "1" }
         return Endpoint(method: .get, path: "/api/mailbox/compose/recipients", query: params)
     }
 

@@ -107,6 +107,10 @@ targets:
         # First-launch scope: comma-separated LaunchFeature keys switched back
         # on for this build (empty = every cut feature stays hidden).
         PantopusLaunchFeatures: $(PANTOPUS_LAUNCH_FEATURES)
+        # The hand a Christmas card's caption is printed in (holiday_cards):
+        # Nothing You Could Do, SIL Open Font License (Resources/Fonts).
+        UIAppFonts:
+          - NothingYouCouldDo.ttf
         LSRequiresIPhoneOS: true
         # Phase 6b — active-task Live Activity (PantopusWidgets extension).
         NSSupportsLiveActivities: true

@@ -219,6 +219,11 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
     var onOpenInvoice: (@MainActor (String) -> Void)?
     var onVerifyHome: (@MainActor (String) -> Void)?
     var onOpenWelcome: (@MainActor (DrawerItemsResponse.DrawerMail) -> Void)?
+    /// "Send a Christmas card" (`holiday_cards`): the card flow, or today's card.
+    var onOpenChristmasCards: (@MainActor () -> Void)?
+    /// The Christmas cards answer while sending is open (`holiday_cards` and
+    /// `mailbox` on): the row at the top of Me shows it. Nil hides the row.
+    private(set) var christmasCards: HolidayCardsResponse?
 
     /// The Counter's pieces with their due tags, lines and buttons (board R9).
     var counterItems: [MailCounterItem] {
@@ -533,6 +538,8 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
                 listIsStale = false
                 await reloadActiveCombo(keepingRows: true)
             }
+            // A card may have gone out, or come back, since.
+            await fetchChristmasCards()
             return
         }
         state = .loading
@@ -541,6 +548,7 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
         await reloadActiveCombo()
         // After the mail: Biz shows for owners once this answers.
         await fetchBusinessOwnership()
+        await fetchChristmasCards()
     }
 
     public func refresh() async {
@@ -552,6 +560,7 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
         await fetchDrawerBadges()
         await fetchPendingRouting()
         await reloadActiveCombo(keepingRows: true)
+        await fetchChristmasCards()
     }
 
     public func loadMoreIfNeeded() async {
@@ -718,6 +727,28 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
         } catch {
             ownsBusiness = false
         }
+    }
+
+    /// Christmas cards (`holiday_cards` + `mailbox`): whether sending is open
+    /// and today's card, for the row at the top of Me. Off, closed, or not
+    /// answering: no row.
+    private func fetchChristmasCards() async {
+        guard LaunchFeatures.holidayCards, LaunchFeatures.mailbox, onOpenChristmasCards != nil else {
+            christmasCards = nil
+            return
+        }
+        let response: HolidayCardsResponse? = try? await api.request(HolidayCardEndpoints.cards())
+        christmasCards = response?.open == true ? response : nil
+    }
+
+    /// The row's tap: the card flow, or today's card.
+    func openChristmasCards() {
+        onOpenChristmasCards?()
+    }
+
+    /// The row shows on Me's Incoming while sending is open.
+    var showsChristmasCardRow: Bool {
+        isLive && selectedDrawer == .me && currentTab == .incoming && christmasCards != nil
     }
 
     /// Poll the disambiguation queue on appear / pull-to-refresh, exactly

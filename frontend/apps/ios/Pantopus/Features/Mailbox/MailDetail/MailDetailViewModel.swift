@@ -116,6 +116,10 @@ public final class MailDetailViewModel {
     /// The load failed because the piece isn't this person's (or is gone):
     /// trying again won't help, so the page offers the way back.
     var isNotFound = false
+    /// A Christmas card that hadn't been opened before this visit opens from
+    /// its envelope. Decided on the first load that can open it, then kept
+    /// for the visit (opening it here marks it opened).
+    private(set) var cardFirstOpen: Bool?
 
     let mailId: String
     let api: APIClient
@@ -170,6 +174,10 @@ public final class MailDetailViewModel {
                 return
             }
             let content = Self.project(detail: response.mail, now: now())
+            let item = response.mail.item
+            if cardFirstOpen == nil, let card = item.card, !card.sealed {
+                cardFirstOpen = !item.viewed && item.openedAt == nil
+            }
             needsProof = false
             isNotFound = false
             state = .loaded(content)
@@ -177,8 +185,9 @@ public final class MailDetailViewModel {
             // Certified mail is read like any letter (Received → Read); its
             // Sign for delivery confirmation keys on signed, not on read.
             // Unstructured so leaving the letter at once still records the
-            // read; awaited so the load finishes with it.
-            if !response.mail.item.viewed { await Task { await markViewed() }.value }
+            // read; awaited so the load finishes with it. A Christmas card
+            // sealed until Christmas morning is never marked read.
+            if !item.viewed, item.card?.sealed != true { await Task { await markViewed() }.value }
             await refreshGigPaymentProgress()
         } catch {
             state = .error(message: Self.loadFailure(error))

@@ -408,6 +408,8 @@ public enum YouRoute: Hashable {
     /// Disambiguation queue behind the Mailbox root's
     /// "N items need routing" banner.
     case mailRoutingQueue
+    /// Send a Christmas card, or today's card once it's sent (`holiday_cards`).
+    case christmasCards
     /// Family Mail Party — household co-opening (discover / join / start /
     /// react / hand off). Reached from the Mailbox root overflow menu.
     case mailParty
@@ -662,7 +664,8 @@ public struct YouTabRoot: View {
              .businessOwner, .viewAs, .membershipDetail, .identityCenter, .blockedUsers,
              .creatorAudienceMembers, .broadcastDetail, .creatorInbox,
              .creatorInboxConversation, .fanInbox, .cancelClaim, .editGig,
-             .transferOwnership, .mailRoutingQueue, .mailDay, .propertyDetails, .propertyCorrection:
+             .transferOwnership, .mailRoutingQueue, .mailDay, .propertyDetails, .propertyCorrection,
+             .christmasCards:
             true
         // Forms and wizards with their own Close.
         case .logMaintenance, .editMaintenance, .startPoll, .editAccessCode, .addCalendarEvent,
@@ -1184,34 +1187,43 @@ public struct YouTabRoot: View {
         }
     }
 
+    /// The Mailbox, pushed from You, wired into this stack's routes.
+    private func makeMailboxRootModel() -> MailboxRootViewModel {
+        let model = MailboxRootViewModel(
+            onOpenMail: { mailId in
+                Task { @MainActor in path.append(.mailItemDetail(mailId: mailId)) }
+            },
+            onOpenSearch: { path.append(.mailboxSearch) },
+            onOpenMap: { path.append(.mailboxMap) },
+            onOpenMailDay: { path.append(.mailDay(variant: .populated)) },
+            onOpenEarn: { path.append(.earn) },
+            onOpenVacationHold: { path.append(.vacationHold) },
+            onOpenStamps: { path.append(.stamps) },
+            onOpenUnboxing: { path.append(.unboxing(mailId: nil)) },
+            onOpenCompose: { path.append(.ceremonialMail) },
+            onOpenRoutingQueue: { path.append(.mailRoutingQueue) },
+            onOpenMailParty: { path.append(.mailParty) },
+            onOpenCommunity: { path.append(.communityMail) },
+            onOpenRecords: { path.append(.homeRecords) },
+            onOpenMailTasks: {
+                path.append(.mailTaskList(mailId: nil, mailSubject: nil, mailSender: nil))
+            }
+        )
+        model.onOpenChristmasCards = { path.append(.christmasCards) }
+        return model
+    }
+
     @ViewBuilder
     private func destination(for route: YouRoute) -> some View {
         switch route {
         case .signOutConfirm:
             EmptyView()
         case .mailboxRoot:
-            MailboxRootView(
-                viewModel: MailboxRootViewModel(
-                    onOpenMail: { mailId in
-                        Task { @MainActor in path.append(.mailItemDetail(mailId: mailId)) }
-                    },
-                    onOpenSearch: { path.append(.mailboxSearch) },
-                    onOpenMap: { path.append(.mailboxMap) },
-                    onOpenMailDay: { path.append(.mailDay(variant: .populated)) },
-                    onOpenEarn: { path.append(.earn) },
-                    onOpenVacationHold: { path.append(.vacationHold) },
-                    onOpenStamps: { path.append(.stamps) },
-                    onOpenUnboxing: { path.append(.unboxing(mailId: nil)) },
-                    onOpenCompose: { path.append(.ceremonialMail) },
-                    onOpenRoutingQueue: { path.append(.mailRoutingQueue) },
-                    onOpenMailParty: { path.append(.mailParty) },
-                    onOpenCommunity: { path.append(.communityMail) },
-                    onOpenRecords: { path.append(.homeRecords) },
-                    onOpenMailTasks: {
-                        path.append(.mailTaskList(mailId: nil, mailSubject: nil, mailSender: nil))
-                    }
-                )
-            )
+            MailboxRootView(viewModel: makeMailboxRootModel())
+        case .christmasCards:
+            HolidayCardFlowView(viewModel: HolidayCardFlowViewModel(fromName: MailPieceRecipient.personName)) {
+                Task { @MainActor in pop() }
+            }
         case .communityMail:
             CommunityMailView(
                 viewModel: CommunityMailViewModel { Task { @MainActor in pop() } }
@@ -3167,6 +3179,9 @@ extension YouRoute {
         case .mailboxRoot, .mailboxMap, .mailboxSearch, .mailItemDetail, .vacationHold, .mailRoutingQueue,
              .mailDay, .stamps, .mailTask, .mailTaskList, .homeRecords:
             LaunchFeatures.mailbox
+        // Launch cuts #12 + #10: sending a Christmas card.
+        case .christmasCards:
+            LaunchFeatures.holidayCards && LaunchFeatures.mailbox
         default:
             true
         }
