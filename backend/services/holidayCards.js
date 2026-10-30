@@ -89,6 +89,11 @@ function dayStart(timeZone, now = new Date()) {
   return DateTime.fromJSDate(now, { zone: timeZone }).startOf('day').toJSDate();
 }
 
+/** Whole days from one day to a later one, as YYYY-MM-DD ("2026-12-11" to "2026-12-25" is 14). */
+function daysBetween(fromDay, toDay) {
+  return Math.round(DateTime.fromISO(toDay, { zone: 'utc' }).diff(DateTime.fromISO(fromDay, { zone: 'utc' }), 'days').days);
+}
+
 /**
  * The arrivals open now. A person's: the sealed and Christmas-morning choices only while the next morning round in
  * their time zone comes before Christmas morning. An email's: sealed only before Christmas morning where the sender is.
@@ -167,6 +172,6 @@ function sentSummary(mail, now = new Date()) {
 
 module.exports = {
   CARD_TAG, MESSAGE_LIMIT, SUBJECT, SEALED_NOTE, SEASON, DESIGNS, PERSON_ARRIVALS, EMAIL_ARRIVALS,
-  designById, isCard, isSealed, sealedView, christmasMorning, seasonOpen, dayStart, arrivalsFor, personDelivery,
-  cardView, sentSummary,
+  designById, isCard, isSealed, sealedView, christmasMorning, seasonOpen, dayStart, daysBetween, arrivalsFor,
+  personDelivery, cardView, sentSummary,
 };
