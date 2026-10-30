@@ -296,6 +296,84 @@ If you don't know the sender, you can safely ignore this email.
   return sendEmail({ to: toEmail, subject, html, text });
 }
 
+/**
+ * A Christmas card for someone who isn't on Pantopus yet (POST /api/mailbox/cards). Like the letter's email, it says
+ * only who the card is from: never its picture or its note, which they see in their own mailbox once they join.
+ * @param {Object} opts
+ * @param {string} opts.toEmail - the address the sender typed
+ * @param {string} opts.senderName - who the card is from, as the recipient sees it
+ * @param {string} opts.claimLink - the card's link
+ * @param {string} opts.expiresAt - when the card stops waiting (ISO)
+ * @param {boolean} opts.sealed - sealed until Christmas morning
+ */
+async function sendCardWaitingEmail({ toEmail, senderName, claimLink, expiresAt, sealed }) {
+  const subject = `${senderName} sent you a Christmas card on Pantopus`;
+  const until = new Date(expiresAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+  const safeLink = escapeHtml(claimLink);
+  const sealedLine = sealed ? ' It’s sealed until Christmas morning.' : '';
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0; padding:0; background-color:#f9fafb; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <div style="max-width:480px; margin:40px auto; background:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+
+    <!-- Header -->
+    <div style="background:#8b1d1d; padding:32px 32px 24px; text-align:center;">
+      <div style="font-size:32px; margin-bottom:8px;">✉️</div>
+      <h1 style="color:#fff7ed; font-size:20px; font-weight:600; margin:0;">You have a Christmas card</h1>
+    </div>
+
+    <!-- Body -->
+    <div style="padding:32px;">
+      <p style="color:#374151; font-size:15px; line-height:1.6; margin:0 0 16px;">
+        <strong>${escapeHtml(senderName)}</strong> sent you a Christmas card on Pantopus.${escapeHtml(sealedLine)}
+      </p>
+      <p style="color:#374151; font-size:15px; line-height:1.6; margin:0;">
+        Join Pantopus with this email address to open it and keep it in your own Pantopus mailbox. A Pantopus account is free.
+      </p>
+
+      <!-- CTA -->
+      <div style="text-align:center; margin:28px 0;">
+        <a href="${safeLink}" style="display:inline-block; background:#8b1d1d; color:#fff7ed; font-size:15px; font-weight:600; padding:14px 32px; border-radius:10px; text-decoration:none;">
+          Open your card
+        </a>
+      </div>
+
+      <p style="color:#9ca3af; font-size:12px; text-align:center; margin:20px 0 0;">
+        The card waits for you until ${escapeHtml(until)}. Sign in or create your account with this email address.
+      </p>
+    </div>
+
+    <!-- Footer -->
+    <div style="background:#f9fafb; border-top:1px solid #e5e7eb; padding:16px 32px; text-align:center;">
+      <p style="color:#9ca3af; font-size:11px; margin:0;">
+        Pantopus — Your household, organized.
+      </p>
+      <p style="color:#d1d5db; font-size:10px; margin:8px 0 0;">
+        If you don't know the sender, you can safely ignore this email.
+      </p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  const text = `
+${senderName} sent you a Christmas card on Pantopus.${sealedLine}
+
+Join Pantopus with this email address to open it and keep it in your own Pantopus mailbox: ${claimLink}
+
+The card waits for you until ${until}. Sign in or create your free account with this email address.
+If you don't know the sender, you can safely ignore this email.
+`;
+
+  return sendEmail({ to: toEmail, subject, html, text });
+}
+
 // ============================================================
 //  PASSWORD RESET EMAIL
 // ============================================================
@@ -1219,6 +1297,7 @@ module.exports = {
   sendEmail,
   sendHomeInviteEmail,
   sendLetterWaitingEmail,
+  sendCardWaitingEmail,
   sendPasswordResetEmail,
   sendVerificationEmail,
   sendMonthlyReceipt,

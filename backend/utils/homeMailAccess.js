@@ -431,7 +431,7 @@ async function readableMail(mailId, userId) {
   if (!mailId || !userId) return null;
   const { data: mail, error } = await supabaseAdmin
     .from('Mail')
-    .select('id, recipient_user_id, recipient_home_id, deleted_at, delivered_at, lifecycle, object_id')
+    .select('id, recipient_user_id, recipient_home_id, deleted_at, delivered_at, lifecycle, object_id, mail_extracted')
     .eq('id', mailId)
     .maybeSingle();
   if (error || !mail) return null;

@@ -20,6 +20,8 @@ const failedAt = new Map(); // mailId -> when the last try failed
 
 function eligible(mail) {
   if (!mail?.id || summaryOf(mail) || fromPantopus(mail) || kindOf(mail) === 'bundle') return false;
+  // A Christmas card is a few words from a person: no note about it.
+  if (mail.mail_extracted?.card) return false;
   if (mail.mail_extracted?.summary_source === 'sender') return false;
   const failed = failedAt.get(mail.id);
   if (failed && Date.now() - failed < RETRY_AFTER_FAILURE_MS) return false;

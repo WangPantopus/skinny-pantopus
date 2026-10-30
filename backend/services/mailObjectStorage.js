@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const { Parser } = require('htmlparser2');
 const db = require('../config/supabaseAdmin');
 const s3 = require('./s3Service');
+const holidayCards = require('./holidayCards');
 
 const PROVIDER = 'supabase-storage';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -68,6 +69,15 @@ function clientFields(row) {
   return { id, created_by_user_id, format, mime_type, size_bytes, status, created_at, uploaded_at };
 }
 
+// The piece's mail_extracted, read when the caller didn't select it. A failed read doesn't open the letter.
+async function extractedOf(mail) {
+  if (mail.mail_extracted !== undefined) return mail.mail_extracted;
+  if (!mail.id) return null;
+  const { data, error } = await db.from('Mail').select('mail_extracted').eq('id', mail.id).maybeSingle();
+  if (error) throw failure('The letter could not be read.');
+  return data?.mail_extracted || null;
+}
+
 // A stored letter is the source of its body; older Mail.content rows contain only a preview.
 // Fail visibly when storage cannot be read instead of presenting that preview as the whole letter.
 async function readPayload(objectId) {
@@ -86,6 +96,10 @@ function storedFormat(content) {
 
 async function hydrateMail(mail) {
   if (!mail) return mail;
+  // A Christmas card sealed until Christmas morning keeps its note here until then (services/holidayCards).
+  if (mail.object_id && holidayCards.isSealed({ mail_extracted: await extractedOf(mail) })) {
+    return holidayCards.sealedView(mail);
+  }
   if (!mail.object_id) {
     const format = mail.content_format || storedFormat(mail.content);
     return { ...mail, content_format: format, content_text: textContent(mail.content, format) };

@@ -7,6 +7,9 @@
  * every five minutes; each call decides who is owed a notice now: people whose own clock reads 7:00 to 9:00 a.m. and
  * who have unopened pieces that came in the last 24 hours. The day is claimed in AlertNotificationHistory (unique per
  * person and local date) before the push and released if it doesn't go out, so the next run tries again.
+ *
+ * Christmas cards sealed until Christmas morning were in the box already; the morning they open, the notice counts them
+ * too ("2 sealed cards can be opened now"), so someone with only those still hears.
  */
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
@@ -34,6 +37,18 @@ function newMail(select, options, since, now) {
     .or('mail_object_type.is.null,mail_object_type.neq.bundle');
 }
 
+// Christmas cards whose seal lifted in the window and that nobody has opened yet (services/holidayCards).
+function cardsOpening(select, options, since, now) {
+  return supabaseAdmin.from('Mail').select(select, options)
+    .contains('tags', ['holiday_card'])
+    .gt('mail_extracted->card->>sealed_until', since.toISOString())
+    .lte('mail_extracted->card->>sealed_until', now.toISOString())
+    .lte('delivered_at', now.toISOString())
+    .is('opened_at', null)
+    .is('deleted_at', null)
+    .not('recipient_user_id', 'is', null);
+}
+
 async function pagedRows(build) {
   const rows = [];
   for (let from = 0; from < MAX_ROWS; from += PAGE) {
@@ -49,7 +64,8 @@ async function pagedRows(build) {
 async function candidates(since, now) {
   const own = await pagedRows(() => newMail('recipient_user_id', undefined, since, now).not('recipient_user_id', 'is', null));
   const homes = await pagedRows(() => newMail('recipient_home_id', undefined, since, now).not('recipient_home_id', 'is', null));
-  const people = new Set(own.map((row) => row.recipient_user_id));
+  const opening = await pagedRows(() => cardsOpening('recipient_user_id', undefined, since, now));
+  const people = new Set([...own, ...opening].map((row) => row.recipient_user_id));
   for (const homeId of new Set(homes.map((row) => row.recipient_home_id))) {
     for (const userId of await mailReaderIdsOrThrow(homeId)) people.add(userId);
   }
@@ -61,20 +77,25 @@ async function countFor(userId, since, now) {
   const homeIds = await getAccessibleHomeIds(userId);
   const scoped = (select, options) => newMail(select, options, since, now).or(visibleMailFilter(userId, homeIds));
   // A bundle is one piece, as the box shows it (SRV-5).
-  const [total, special] = await Promise.all([
+  const [total, special, opening] = await Promise.all([
     countPieces(scoped),
     countPieces((select, options) => scoped(select, options).eq('special_delivery', true)),
+    cardsOpening('id', { count: 'exact', head: true }, since, now).eq('recipient_user_id', userId),
   ]);
-  return { total, special };
+  if (opening.error) throw new Error(opening.error.message);
+  return { total, special, cards: opening.count || 0 };
 }
 
 /** The notice's words: plain, no emoji. */
-function noticeText({ total, special }) {
+function noticeText({ total, special, cards = 0 }) {
+  const sealed = cards === 1 ? 'a sealed card' : `${cards} sealed cards`;
+  if (!total) return { title: 'Your mail is here', body: `${cards === 1 ? 'A sealed card' : sealed} can be opened now.` };
   const pieces = total === 1 ? '1 piece came this morning' : `${total} pieces came this morning`;
   let including = '';
   if (special === 1) including = ', including one special delivery';
   else if (special > 1) including = `, including ${special} special deliveries`;
-  return { title: 'Your mail is here', body: `${pieces}${including}.` };
+  const opening = cards ? `, and ${sealed} can be opened now` : '';
+  return { title: 'Your mail is here', body: `${pieces}${including}${opening}.` };
 }
 
 const claimKey = (userId, date) => `mail_summary_${userId}_${date}`;
@@ -111,7 +132,7 @@ async function runMorningNotices({ now = new Date(), send }) {
       const hour = Number(new Intl.DateTimeFormat('en-US', { timeZone, hour: 'numeric', hourCycle: 'h23' }).format(now));
       if (hour < NOTICE_START_HOUR || hour >= NOTICE_END_HOUR) { stats.not_morning += 1; continue; }
       const counts = await countFor(userId, since, now);
-      if (counts.total === 0) { stats.nothing_new += 1; continue; }
+      if (counts.total === 0 && counts.cards === 0) { stats.nothing_new += 1; continue; }
       const date = localDate(now, timeZone);
       if (!(await claimDay(userId, date))) { stats.already_sent += 1; continue; }
       claimedDate = date;
