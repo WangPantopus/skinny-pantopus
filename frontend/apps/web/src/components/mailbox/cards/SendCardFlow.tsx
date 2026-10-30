@@ -14,7 +14,7 @@ import type { HolidayCardArrival, HolidayCardDesign, HolidayCards, SentHolidayCa
 import { ChevronLeft, Check, Loader2, Mail, Search, X } from 'lucide-react';
 import type { MailItemV2 } from '@/types/mailbox';
 import type { MailboxApiError } from '@/lib/mailbox-api';
-import { useCardRecipients, useHolidayCards, useSendHolidayCard, useTakeBackHolidayCard } from '@/lib/mailbox-queries';
+import { useCardArrivals, useCardRecipients, useHolidayCards, useSendHolidayCard, useTakeBackHolidayCard } from '@/lib/mailbox-queries';
 import { useMe, useOwnLocalProfile } from '@/lib/me';
 import { confirmStore } from '@/components/ui/confirm-store';
 import ErrorState from '@/components/ui/ErrorState';
@@ -72,8 +72,8 @@ function arrivalLine(card: SentHolidayCard): string {
       ? 'We emailed them. Once they join with that address, it waits in their mailbox and opens on Christmas morning.'
       : 'We emailed them. It waits for them to join with that address and open it.';
   }
-  // Their mail comes at 7 a.m. where they live, whatever the clock says here.
-  const day = shortDay(card.arrives_at);
+  // Their mail comes at 7 a.m. where they live, whatever the clock says here: the day by their clock.
+  const day = shortDay(card.arrives_on ?? card.arrives_at);
   if (card.status === 'delivered') {
     return card.opens_at ? `It’s in ${who}’s mailbox, sealed until Christmas morning.` : `It’s in ${who}’s mailbox.`;
   }
@@ -367,16 +367,25 @@ function WriteStep({
 
 // ── Step 4: seal it for the day ──────────────────────────────
 
-// Their mail comes at 7 a.m. where they live: never turned into this clock's time.
-function arrivalChoice(arrival: HolidayCardArrival, cards: HolidayCards, name: string): { title: string; detail: string } {
-  const day = shortDay(cards.next_round_at);
+// Their mail comes at 7 a.m. where they live: never turned into this clock's time. `theirDay` is the day of that mail
+// by their clock (from the server once it's read; until then, the sender's next morning).
+function arrivalChoice(
+  arrival: HolidayCardArrival,
+  cards: HolidayCards,
+  to: Recipient,
+  theirDay: string | null,
+): { title: string; detail: string } {
+  const day = shortDay(theirDay ?? cards.next_round_at);
+  const name = to.kind === 'person' ? firstName(to.name) : 'they';
   switch (arrival) {
     case 'next_morning':
       return { title: 'With the morning mail', detail: `${day}, about 7 a.m. where ${name} lives. They can open it right away.` };
     case 'sealed_christmas':
       return {
         title: 'Sealed until Christmas',
-        detail: `It comes with the ${day} morning mail and waits in their mailbox with a “Do not open until Christmas” seal. It opens on December 25.`,
+        detail: to.kind === 'email'
+          ? 'They get an email now. Once they join with that address, it waits in their mailbox with a “Do not open until Christmas” seal. It opens on December 25.'
+          : `It comes with the ${day} morning mail and waits in their mailbox with a “Do not open until Christmas” seal. It opens on December 25.`,
       };
     case 'christmas_morning':
       return { title: 'On Christmas morning', detail: `${shortDay(cards.christmas_morning_at)}, with the 7 a.m. mail.` };
@@ -388,6 +397,8 @@ function arrivalChoice(arrival: HolidayCardArrival, cards: HolidayCards, name: s
 function SealStep({
   cards,
   to,
+  options,
+  theirDay,
   design,
   fromName,
   arrival,
@@ -398,6 +409,8 @@ function SealStep({
 }: {
   cards: HolidayCards;
   to: Recipient;
+  options: HolidayCardArrival[];
+  theirDay: string | null;
   design: HolidayCardDesign;
   fromName: string;
   arrival: HolidayCardArrival | null;
@@ -406,8 +419,6 @@ function SealStep({
   error: string | null;
   onSend: () => void;
 }) {
-  const options = to.kind === 'email' ? cards.arrivals.email : cards.arrivals.person;
-  const name = to.kind === 'person' ? firstName(to.name) : 'they';
   const preview = {
     id: `preview-${design.id}`,
     sender_display: fromName,
@@ -425,7 +436,7 @@ function SealStep({
         <legend className="text-[16px] font-semibold">When should it arrive?</legend>
         <div className="mt-2.5 space-y-2.5">
           {options.map((option) => {
-            const choice = arrivalChoice(option, cards, name);
+            const choice = arrivalChoice(option, cards, to, theirDay);
             const checked = arrival === option;
             return (
               <label
@@ -521,6 +532,8 @@ export default function SendCardFlow() {
 
   const [step, setStep] = useState<Step>('to');
   const [to, setTo] = useState<Recipient | null>(null);
+  // A person's arrivals and day go by their clock, read once they're chosen and again on the last step.
+  const theirs = useCardArrivals(to?.kind === 'person' ? to.userId : null);
   const [designId, setDesignId] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   const [arrival, setArrival] = useState<HolidayCardArrival | null>(null);
@@ -532,16 +545,19 @@ export default function SendCardFlow() {
   const data = cards.data;
   const design = useMemo(() => data?.designs.find((d) => d.id === designId) ?? null, [data, designId]);
   const today = sent ?? (data?.today && data.today.status !== 'withdrawn' ? data.today : null);
+  const options = useMemo<HolidayCardArrival[]>(() => {
+    if (!data || !to) return [];
+    return to.kind === 'email' ? data.arrivals.email : (theirs.data?.arrivals ?? data.arrivals.person);
+  }, [data, to, theirs.data]);
 
   // Each step starts at its heading, for keyboards and screen readers.
   useEffect(() => { headingRef.current?.focus(); }, [step]);
 
   // The arrival choices depend on who it's for; pick the first that's open.
   useEffect(() => {
-    if (!data || !to) return;
-    const options = to.kind === 'email' ? data.arrivals.email : data.arrivals.person;
-    if (!arrival || !options.includes(arrival)) setArrival(options[0] ?? null);
-  }, [data, to, arrival]);
+    if (!options.length) return;
+    if (!arrival || !options.includes(arrival)) setArrival(options[0]);
+  }, [options, arrival]);
 
   const back = () => {
     if (step === 'to' || step === 'sent') { router.push('/app/mailbox/personal'); return; }
@@ -646,13 +662,15 @@ export default function SendCardFlow() {
           limit={data.message_limit}
           message={message}
           onMessage={setMessage}
-          onNext={() => setStep('seal')}
+          onNext={() => { setStep('seal'); if (to?.kind === 'person') void theirs.refetch(); }}
         />
       ) : null}
       {step === 'seal' && design && to ? (
         <SealStep
           cards={data}
           to={to}
+          options={options}
+          theirDay={to.kind === 'person' ? theirs.data?.next_round_on ?? null : null}
           design={design}
           fromName={fromName}
           arrival={arrival}

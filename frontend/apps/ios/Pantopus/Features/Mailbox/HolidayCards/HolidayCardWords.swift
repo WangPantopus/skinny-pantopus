@@ -44,8 +44,9 @@ enum HolidayCardWords {
         }
     }
 
+    /// A time, or a calendar day ("2026-10-31", at noon so no zone moves it a day).
     private static func format(_ iso: String?, _ pattern: String, calendar: Calendar) -> String {
-        guard let date = MailDates.parse(iso) else { return "" }
+        guard let iso, let date = iso.count == 10 ? MailDates.parseDay(iso) : MailDates.parse(iso) else { return "" }
         let formatter = DateFormatter()
         formatter.calendar = calendar
         formatter.timeZone = calendar.timeZone
@@ -78,7 +79,7 @@ enum HolidayCardWords {
                 ? "We emailed them. Once they join with that address, it waits in their mailbox and opens on Christmas morning."
                 : "We emailed them. It waits for them to join with that address and open it."
         }
-        let day = shortDay(card.arrivesAt, calendar: calendar)
+        let day = shortDay(card.arrivesOn ?? card.arrivesAt, calendar: calendar)
         if card.status == "delivered" {
             return card.opensAt != nil ? "It’s in \(who)’s mailbox, sealed until Christmas morning." : "It’s in \(who)’s mailbox."
         }
@@ -106,7 +107,7 @@ enum HolidayCardWords {
         if today.status == "delivered" { return "In their mailbox now." }
         if today.arrival == .christmasMorning { return "Arrives on Christmas morning." }
         let sealed = today.opensAt != nil ? ", sealed until Christmas" : ""
-        return "Arrives with their 7 a.m. mail on \(shortDay(today.arrivesAt, calendar: calendar))\(sealed)."
+        return "Arrives with their 7 a.m. mail on \(shortDay(today.arrivesOn ?? today.arrivesAt, calendar: calendar))\(sealed)."
     }
 
     /// Today's card while it still counts (one taken back doesn't).
@@ -118,17 +119,30 @@ enum HolidayCardWords {
     // MARK: Choosing when it comes
 
     /// A choice on "Seal it for the day": its title and what it means.
+    /// `theirDay` is the day of their 7 a.m. mail by their clock (from the
+    /// server once it's read; until then, the sender's next morning).
     static func arrivalChoice(
         _ arrival: HolidayCardArrival,
         cards: HolidayCardsResponse,
-        name: String,
+        recipient: HolidayCardRecipient,
+        theirDay: String?,
         calendar: Calendar = .current
     ) -> (title: String, detail: String) {
         // Their mail comes at 7 a.m. where they live: never turned into this phone's time.
-        let day = shortDay(cards.nextRoundAt, calendar: calendar)
+        let day = shortDay(theirDay ?? cards.nextRoundAt, calendar: calendar)
+        let name = switch recipient {
+        case let .person(_, full): firstName(full)
+        case .email: "they"
+        }
         switch arrival {
         case .nextMorning:
             return ("With the morning mail", "\(day), about 7 a.m. where \(name) lives. They can open it right away.")
+        case .sealedChristmas where recipient.isEmail:
+            return (
+                "Sealed until Christmas",
+                "They get an email now. Once they join with that address, it waits in their mailbox with a “Do not open "
+                    + "until Christmas” seal. It opens on December 25."
+            )
         case .sealedChristmas:
             return (
                 "Sealed until Christmas",

@@ -18,7 +18,7 @@ public enum HolidayCardArrival: String, Sendable, Hashable, CaseIterable {
     case now
 }
 
-/// `GET /api/mailbox/cards` — route `backend/routes/mailbox.js:1756`: whether
+/// `GET /api/mailbox/cards` — route `backend/routes/mailbox.js:1776`: whether
 /// sending is open, the pictures, the arrivals open now and today's card.
 public struct HolidayCardsResponse: Decodable, Sendable, Hashable {
     public let open: Bool
@@ -72,6 +72,28 @@ public struct HolidayCardsResponse: Decodable, Sendable, Hashable {
     }
 }
 
+/// `GET /api/mailbox/cards/arrivals?to=` — route
+/// `backend/routes/mailbox.js:1809`: when a card to one person can come, by
+/// their clock rather than this phone's.
+public struct HolidayCardArrivalsFor: Decodable, Sendable, Hashable {
+    /// The arrivals open to them now.
+    public let arrivals: [HolidayCardArrival]
+    /// The day of their next 7 a.m. mail where they live (`YYYY-MM-DD`).
+    public let nextRoundOn: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case arrivals
+        case nextRoundOn = "next_round_on"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        arrivals = ((try? c.decodeIfPresent([String].self, forKey: .arrivals)) ?? [])
+            .compactMap(HolidayCardArrival.init(rawValue:))
+        nextRoundOn = try? c.decodeIfPresent(String.self, forKey: .nextRoundOn)
+    }
+}
+
 /// One of the season's pictures: the app carries the picture itself
 /// (`Assets.xcassets/HolidayCards/<id>`); this is its caption and the colour
 /// of its paper.
@@ -93,6 +115,9 @@ public struct SentHolidayCard: Decodable, Sendable, Hashable, Identifiable {
     public let arrival: HolidayCardArrival?
     /// When it goes into their mailbox (nil by email).
     public let arrivesAt: String?
+    /// The day it goes into their mailbox by their clock (`YYYY-MM-DD`; nil
+    /// by email).
+    public let arrivesOn: String?
     /// Sealed until (Christmas morning where they live), or nil.
     public let opensAt: String?
     /// Until when it can be taken back (the carrier's pickup; nil by email).
@@ -107,6 +132,7 @@ public struct SentHolidayCard: Decodable, Sendable, Hashable, Identifiable {
         case toName = "to_name"
         case byEmail = "by_email"
         case arrivesAt = "arrives_at"
+        case arrivesOn = "arrives_on"
         case opensAt = "opens_at"
         case takeBackUntil = "take_back_until"
         case canTakeBack = "can_take_back"
@@ -121,6 +147,7 @@ public struct SentHolidayCard: Decodable, Sendable, Hashable, Identifiable {
         byEmail = (try? c.decodeIfPresent(Bool.self, forKey: .byEmail)) ?? false
         arrival = (try? c.decodeIfPresent(String.self, forKey: .arrival)).flatMap(HolidayCardArrival.init(rawValue:))
         arrivesAt = try? c.decodeIfPresent(String.self, forKey: .arrivesAt)
+        arrivesOn = try? c.decodeIfPresent(String.self, forKey: .arrivesOn)
         opensAt = try? c.decodeIfPresent(String.self, forKey: .opensAt)
         takeBackUntil = try? c.decodeIfPresent(String.self, forKey: .takeBackUntil)
         canTakeBack = (try? c.decodeIfPresent(Bool.self, forKey: .canTakeBack)) ?? false
@@ -129,7 +156,7 @@ public struct SentHolidayCard: Decodable, Sendable, Hashable, Identifiable {
     }
 }
 
-/// `POST /api/mailbox/cards` body — route `backend/routes/mailbox.js:1789`:
+/// `POST /api/mailbox/cards` body — route `backend/routes/mailbox.js:1837`:
 /// the picture, the note, when it comes, and to whom (a person found by name,
 /// or an email address for someone not on Pantopus).
 public struct SendHolidayCardBody: Encodable, Sendable {

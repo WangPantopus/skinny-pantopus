@@ -135,11 +135,22 @@ object HolidayCardTimes {
             runCatching { Instant.parse(raw) }.getOrNull() ?: runCatching { OffsetDateTime.parse(raw).toInstant() }.getOrNull()
         }
 
-    /** "Sat, Dec 19". */
+    /** "Sat, Dec 19", from a time or a calendar day ("2026-12-19"). */
     fun shortDay(
         value: String?,
         zone: ZoneId,
-    ): String = parse(value)?.atZone(zone)?.format(shortDayFormat).orEmpty()
+    ): String = localDay(value, zone)?.format(shortDayFormat).orEmpty()
+
+    /** A time's calendar day in [zone], or a calendar day ("2026-10-30") as it is. */
+    private fun localDay(
+        value: String?,
+        zone: ZoneId,
+    ): LocalDate? =
+        if (value?.length == 10) {
+            runCatching { LocalDate.parse(value) }.getOrNull()
+        } else {
+            parse(value)?.atZone(zone)?.toLocalDate()
+        }
 
     /** "Friday, December 25". */
     fun longDay(
@@ -178,14 +189,5 @@ object HolidayCardTimes {
     fun postmarkDay(
         value: String?,
         zone: ZoneId,
-    ): String {
-        if (value.isNullOrBlank()) return ""
-        val day =
-            if (value.length == 10) {
-                runCatching { LocalDate.parse(value) }.getOrNull()
-            } else {
-                parse(value)?.atZone(zone)?.toLocalDate()
-            }
-        return day?.format(postmarkFormat)?.uppercase(Locale.US).orEmpty()
-    }
+    ): String = localDay(value, zone)?.format(postmarkFormat)?.uppercase(Locale.US).orEmpty()
 }

@@ -109,7 +109,7 @@ private fun todayLine(
         card.arrival == "christmas_morning" -> "Arrives on Christmas morning."
         else -> {
             val sealed = if (card.opensAt != null) ", sealed until Christmas" else ""
-            "Arrives with their 7 a.m. mail on ${HolidayCardTimes.shortDay(card.arrivesAt, zone)}$sealed."
+            "Arrives with their 7 a.m. mail on ${HolidayCardTimes.shortDay(card.arrivesOn ?: card.arrivesAt, zone)}$sealed."
         }
     }
 
