@@ -356,7 +356,7 @@ public final class PulseComposeViewModel {
     /// category has none selected.
     public var askCategory: PulseAskCategory? = .handyman
 
-    /// Star rating for the Recommend intent (1-5).
+    /// Star rating (1-5), or zero when editing a recommendation saved without a rating.
     public var recommendRating: Int = 5
 
     /// Field states keyed by `PulseComposeField`.
@@ -660,6 +660,18 @@ public final class PulseComposeViewModel {
         return isCheckingPost
     }
 
+    private func validator(for field: PulseComposeField) -> FormValidator {
+        let rule = requiredFieldValidator(for: field)
+        // Web and older posts can omit these fields. Unrelated edits preserve that valid state.
+        guard isEditing,
+              [.recommendBusiness, .eventLocation, .lostLastSeenLocation].contains(field),
+              (fields[field]?.originalValue ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return rule }
+        return FormValidator { value in
+            value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : rule.validate(value)
+        }
+    }
+
     // swiftlint:disable cyclomatic_complexity
 
     /// Validators run once per submit; per-field error messages are
@@ -667,7 +679,7 @@ public final class PulseComposeViewModel {
     /// 1:1 to `PulseComposeField` so the complexity is inherent — any
     /// indirection would hide the field-to-rule mapping that mirrors
     /// the iOS / Android validator parity.
-    private func validator(for field: PulseComposeField) -> FormValidator {
+    private func requiredFieldValidator(for field: PulseComposeField) -> FormValidator {
         switch field {
         case .title:
             if titleOptional {
@@ -976,7 +988,7 @@ public final class PulseComposeViewModel {
             baselineAskCategory = askCategory
         case .recommend:
             let (stars, body) = unwrapRecommendBody(post.content)
-            recommendRating = stars ?? 5
+            recommendRating = stars ?? 0
             seedField(.body, value: body)
             seedField(.recommendBusiness, value: post.dealBusinessName ?? "")
             baselineRecommendRating = recommendRating
@@ -1568,6 +1580,8 @@ public final class PulseComposeViewModel {
     }
 
     private func composeRecommendBody(stars: Int, business: String, body: String) -> String {
+        // An unrated saved recommendation stays unrated until the author chooses stars.
+        guard stars != 0 else { return body }
         let clamped = max(1, min(5, stars))
         var row = String(repeating: "★", count: clamped) + String(repeating: "☆", count: 5 - clamped)
         // The place is what a recommendation is about, and no card shows the separate

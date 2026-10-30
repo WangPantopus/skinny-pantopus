@@ -835,8 +835,25 @@ class PulseComposeViewModel
 
         // MARK: - Validation
 
+        private fun validator(field: PulseComposeField): FormValidator {
+            val rule = requiredFieldValidator(field)
+            // Web and older posts can omit these fields. An unrelated edit must preserve that valid state.
+            val optionalSavedFields =
+                listOf(
+                    PulseComposeField.RecommendBusiness,
+                    PulseComposeField.EventLocation,
+                    PulseComposeField.LostLastSeenLocation,
+                )
+            val canKeepMissing = isEditing && field in optionalSavedFields && _fields.value[field]?.originalValue.isNullOrBlank()
+            return if (canKeepMissing) {
+                FormValidator { value -> if (value.isBlank()) null else rule.validate(value) }
+            } else {
+                rule
+            }
+        }
+
         @Suppress("CyclomaticComplexMethod", "LongMethod")
-        private fun validator(field: PulseComposeField): FormValidator =
+        private fun requiredFieldValidator(field: PulseComposeField): FormValidator =
             when (field) {
                 PulseComposeField.Title ->
                     if (titleOptional) {
@@ -1467,7 +1484,7 @@ class PulseComposeViewModel
                 }
                 PulseComposeIntent.Recommend -> {
                     val (stars, body) = unwrapRecommendBody(post.content)
-                    _recommendRating.value = stars ?: DEFAULT_RECOMMEND_RATING
+                    _recommendRating.value = stars ?: 0
                     seedField(PulseComposeField.Body, body)
                     seedField(PulseComposeField.RecommendBusiness, post.dealBusinessName.orEmpty())
                     baselineRecommendRating = _recommendRating.value
@@ -1847,6 +1864,8 @@ class PulseComposeViewModel
             business: String,
             body: String,
         ): String {
+            // An unrated saved recommendation stays unrated until the author chooses stars.
+            if (stars == 0) return body
             val clamped = stars.coerceIn(1, 5)
             // The place is what a recommendation is about, and no card shows the separate
             // business field, so its name rides on the rating line.
