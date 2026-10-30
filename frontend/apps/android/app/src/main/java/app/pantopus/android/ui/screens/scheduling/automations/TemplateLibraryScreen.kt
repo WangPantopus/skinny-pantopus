@@ -43,6 +43,8 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.api.models.scheduling.MessageTemplateDto
+import app.pantopus.android.ui.components.firstTapClosesKeyboard
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -104,7 +106,8 @@ fun TemplateLibraryScreen(
             if (searchActive) {
                 SearchField(query = query, onQueryChange = viewModel::setQuery)
             }
-            Box(modifier = Modifier.weight(1f).fillMaxWidth().pullRefresh(pullState)) {
+            // While typing in the search box, the first tap on the templates only puts the keyboard away.
+            Box(modifier = Modifier.weight(1f).fillMaxWidth().firstTapClosesKeyboard().pullRefresh(pullState)) {
                 when (val s = state) {
                     TemplateLibraryUiState.Loading -> LibraryLoading()
                     is TemplateLibraryUiState.Error ->
@@ -332,6 +335,7 @@ private fun SearchField(
         modifier =
             Modifier
                 .padding(horizontal = Spacing.s3, vertical = Spacing.s2)
+                .keepsKeyboard()
                 .fillMaxWidth()
                 .heightIn(min = 40.dp)
                 .background(PantopusColors.appSurface, RoundedCornerShape(10.dp))

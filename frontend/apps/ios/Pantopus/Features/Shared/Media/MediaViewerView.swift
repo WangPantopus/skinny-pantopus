@@ -16,7 +16,20 @@ import SwiftUI
 public struct MediaViewerView: View {
     private let items: [PostMediaItem]
     @State private var selection: Int
+    /// How far the media has been pulled down: past a short pull the viewer
+    /// closes (founder request 2026-10-29). 0 at rest.
+    @State private var pullDown: CGFloat = 0
+    /// A drag's direction, settled by its first few points: across pages, or
+    /// down to close.
+    @State private var pullAxis: PullAxis = .undecided
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private enum PullAxis {
+        case undecided
+        case vertical
+        case horizontal
+    }
 
     public init(items: [PostMediaItem], startIndex: Int = 0) {
         self.items = items
@@ -25,7 +38,10 @@ public struct MediaViewerView: View {
 
     public var body: some View {
         ZStack(alignment: .top) {
-            Color.black.ignoresSafeArea()
+            // Fades as the media is pulled down, so the screen behind shows.
+            Color.black
+                .opacity(Double(1 - pullProgress * 0.7))
+                .ignoresSafeArea()
 
             TabView(selection: $selection) {
                 ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
@@ -35,10 +51,16 @@ public struct MediaViewerView: View {
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
             .ignoresSafeArea(edges: .bottom)
+            .offset(y: pullDown)
+            .scaleEffect(reduceMotion ? 1 : 1 - pullProgress * 0.15)
+            .simultaneousGesture(pullToClose)
 
             topBar
+                .opacity(Double(1 - pullProgress))
         }
+        .presentationBackground(.clear)
         .statusBarHidden()
+        .accessibilityAction(.escape) { dismiss() }
         .accessibilityIdentifier("mediaViewer")
         .onReceive(NotificationCenter.default.publisher(for: ChatLocalStore.historyRetired)) { _ in
             if items.contains(where: { ChatMediaURL.isChatFile($0.url) }) { dismiss() }
@@ -72,6 +94,40 @@ public struct MediaViewerView: View {
         }
         .padding(.horizontal, Spacing.s4)
         .padding(.top, Spacing.s2)
+    }
+
+    // MARK: - Pull down to close
+
+    /// 0 at rest, 1 once the media is pulled well down.
+    private var pullProgress: CGFloat {
+        min(1, pullDown / 400)
+    }
+
+    /// A document scrolls its own pages, so a drag down there scrolls it.
+    private var closesOnPull: Bool {
+        items.indices.contains(selection) && items[selection].kind != .document
+    }
+
+    /// Drag the media down to close the viewer; sideways still pages. Let go
+    /// early and it settles back.
+    private var pullToClose: some Gesture {
+        DragGesture(minimumDistance: 12)
+            .onChanged { value in
+                if pullAxis == .undecided {
+                    pullAxis = value.translation.height > abs(value.translation.width) ? .vertical : .horizontal
+                }
+                guard pullAxis == .vertical, closesOnPull else { return }
+                pullDown = max(0, value.translation.height)
+            }
+            .onEnded { value in
+                defer { pullAxis = .undecided }
+                guard pullAxis == .vertical, closesOnPull else { return }
+                if value.translation.height > 120 || value.predictedEndTranslation.height > 260 {
+                    dismiss()
+                } else {
+                    withAnimation(reduceMotion ? nil : .snappy(duration: 0.25)) { pullDown = 0 }
+                }
+            }
     }
 
     @ViewBuilder

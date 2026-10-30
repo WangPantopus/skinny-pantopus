@@ -11,7 +11,7 @@ const STATUS_MAP: Record<
 > = {
   none: { label: 'No Payment', bg: 'bg-app-surface-sunken', text: 'text-app-text-secondary', dot: 'bg-gray-400' },
   setup_pending: { label: 'Saving Card', bg: 'bg-yellow-50', text: 'text-yellow-700', dot: 'bg-yellow-400' },
-  ready_to_authorize: { label: 'Card Saved', bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-400' },
+  ready_to_authorize: { label: 'Authorization needed', bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-400' },
   authorize_pending: { label: 'Authorizing', bg: 'bg-yellow-50', text: 'text-yellow-700', dot: 'bg-yellow-400' },
   authorized: { label: 'Authorized', bg: 'bg-green-50', text: 'text-green-700', dot: 'bg-green-500' },
   authorization_failed: { label: 'Auth Failed', bg: 'bg-red-50', text: 'text-red-700', dot: 'bg-red-500' },

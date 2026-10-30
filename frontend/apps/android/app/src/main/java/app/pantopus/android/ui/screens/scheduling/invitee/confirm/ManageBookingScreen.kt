@@ -47,6 +47,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
 import app.pantopus.android.ui.screens.scheduling._shared.ConflictAlternativesSheet
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingLoadingSkeleton
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingPillStatus
@@ -617,7 +618,12 @@ private fun RescheduleSheet(
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState()
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = PantopusColors.appSurface) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = PantopusColors.appSurface,
+        modifier = Modifier.closesKeyboardOnTapOrScroll(),
+    ) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s4).padding(bottom = Spacing.s6),
             verticalArrangement = Arrangement.spacedBy(Spacing.s3),
@@ -661,7 +667,12 @@ private fun CancelSheet(
 ) {
     val sheetState = rememberModalBottomSheetState()
     var reason by remember { mutableStateOf("") }
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = PantopusColors.appSurface) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = PantopusColors.appSurface,
+        modifier = Modifier.closesKeyboardOnTapOrScroll(),
+    ) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s4).padding(bottom = Spacing.s6),
             verticalArrangement = Arrangement.spacedBy(Spacing.s3),

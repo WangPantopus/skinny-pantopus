@@ -38,6 +38,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.pantopus.android.ui.components.PrimaryButton
+import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -75,7 +76,7 @@ internal fun BookingFilterSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         containerColor = PantopusColors.appSurface,
-        modifier = Modifier.testTag(BOOKING_FILTER_TAG),
+        modifier = Modifier.closesKeyboardOnTapOrScroll().testTag(BOOKING_FILTER_TAG),
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s4)) {
             Row(modifier = Modifier.fillMaxWidth().padding(bottom = Spacing.s3), verticalAlignment = Alignment.CenterVertically) {

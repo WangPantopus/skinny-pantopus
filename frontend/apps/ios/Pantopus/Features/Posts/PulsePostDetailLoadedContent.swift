@@ -132,6 +132,15 @@ public struct PulsePostDetailLoadedContent: View {
                         PulsePostStatusPill(status: status, postId: detail.post.id)
                             .padding(.horizontal, Spacing.s4)
                     }
+                    if let title = detail.post.title?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty {
+                        Text(title)
+                            .pantopusTextStyle(.h3)
+                            .foregroundStyle(Theme.Color.appText)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.horizontal, Spacing.s4)
+                            .accessibilityAddTraits(.isHeader)
+                            .accessibilityIdentifier("pulsePostDetail-title")
+                    }
                 }
             },
             body: {
@@ -156,6 +165,7 @@ public struct PulsePostDetailLoadedContent: View {
                     postedRecently: detail.postedWithinHour,
                     hiddenReplyCount: detail.hiddenReplyCount,
                     onShowMoreReplies: onShowMoreReplies,
+                    onRetryComments: onRefresh.map { refresh in { Task { await refresh() } } },
                     replyingToName: replyingToName,
                     onCancelReply: onCancelReply,
                     onCommentReply: detail.post.isRemovedByModerator ? nil : onCommentReply,

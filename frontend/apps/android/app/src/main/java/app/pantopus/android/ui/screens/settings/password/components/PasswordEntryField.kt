@@ -39,6 +39,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.ui.components.PantopusFieldState
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -134,11 +135,13 @@ private fun PasswordInputRow(
 ) {
     val shape = RoundedCornerShape(Radii.md)
 
+    // The whole bordered box counts as the text box: showing the password keeps the keyboard up.
     Row(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .heightIn(min = 46.dp)
+                .keepsKeyboard()
                 .clip(shape)
                 .background(PantopusColors.appSurface)
                 .border(

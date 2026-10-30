@@ -37,6 +37,8 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.SecureFlagPolicy
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
+import app.pantopus.android.ui.components.firstTapClosesKeyboard
 import app.pantopus.android.ui.screens.compose.gig.GigComposeCategory
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.Spacing
@@ -63,7 +65,10 @@ fun HomeTaskGigDialog(
         onDismissRequest = controller::close,
         properties = DialogProperties(usePlatformDefaultWidth = false, securePolicy = SecureFlagPolicy.SecureOn),
     ) {
-        Surface(Modifier.fillMaxWidth().fillMaxHeight(GIG_DIALOG_HEIGHT).testTag("homeTaskGig"), color = PantopusColors.appSurface) {
+        Surface(
+            Modifier.closesKeyboardOnTapOrScroll().fillMaxWidth().fillMaxHeight(GIG_DIALOG_HEIGHT).testTag("homeTaskGig"),
+            color = PantopusColors.appSurface,
+        ) {
             Column(Modifier.padding(Spacing.s4).imePadding(), verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("Find help for this task", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
@@ -182,8 +187,13 @@ private fun HomeTaskGigLocationControls(
         onClick = controller::searchAddress,
         enabled = state.canEdit && state.input.address.trim().length >= MIN_GIG_ADDRESS_QUERY,
     ) { Text("Find location") }
+    // While typing the address, the first tap on a suggestion only puts the keyboard away.
     state.suggestions.forEach { suggestion ->
-        TextButton(onClick = { controller.chooseAddress(suggestion) }, enabled = state.canEdit) { Text(suggestion.label) }
+        TextButton(
+            onClick = { controller.chooseAddress(suggestion) },
+            enabled = state.canEdit,
+            modifier = Modifier.firstTapClosesKeyboard(),
+        ) { Text(suggestion.label) }
     }
     state.location?.let { Text("Selected: ${it.address}", modifier = Modifier.testTag("homeTaskGig.selectedLocation")) }
     Text("City visibility. Exact address is shared after assignment.", style = MaterialTheme.typography.bodySmall)

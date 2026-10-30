@@ -35,6 +35,8 @@ public struct ListOfRowsView<DataSource: ListOfRowsDataSource, Header: View>: Vi
     /// Try again on a later failure refreshes instead, as pull-to-refresh
     /// would: the error banner replaces the list and its pull-to-refresh.
     @State private var hasShownContent = false
+    /// The search bar has the keyboard: a tap on the rows only closes it.
+    @FocusState private var searchFocused: Bool
 
     /// Full init — provide a custom header view that renders between the
     /// chrome strip (search / chip / tab) and the state body.
@@ -50,7 +52,7 @@ public struct ListOfRowsView<DataSource: ListOfRowsDataSource, Header: View>: Vi
         ZStack(alignment: .bottomTrailing) {
             VStack(spacing: Spacing.s0) {
                 if let searchBar = dataSource.searchBar {
-                    SearchBarRow(config: searchBar)
+                    SearchBarRow(config: searchBar, focus: $searchFocused)
                     Divider().background(Theme.Color.appBorderSubtle)
                 }
                 if let chipStrip = dataSource.chipStrip {
@@ -151,7 +153,8 @@ public struct ListOfRowsView<DataSource: ListOfRowsDataSource, Header: View>: Vi
                 onEndReached: { Task { await dataSource.loadMoreIfNeeded() } },
                 onRetryLoadMore: { Task { await dataSource.retryLoadMore() } },
                 onRefresh: { await dataSource.refresh() },
-                reservesFABSpace: dataSource.fab != nil
+                reservesFABSpace: dataSource.fab != nil,
+                isTyping: searchFocused
             )
             .onAppear { hasShownContent = true }
         case let .empty(content):
@@ -172,6 +175,7 @@ public struct ListOfRowsView<DataSource: ListOfRowsDataSource, Header: View>: Vi
                         accent: content.accent ?? Theme.Color.primary600
                     )
                     .frame(minHeight: proxy.size.height)
+                    .closesKeyboardFirst(searchFocused)
                 }
                 .refreshable { await dataSource.refresh() }
             }
@@ -274,6 +278,7 @@ private struct TabStrip: View {
 
 private struct SearchBarRow: View {
     let config: SearchBarConfig
+    let focus: FocusState<Bool>.Binding
     @State private var localText: String = ""
 
     var body: some View {
@@ -291,11 +296,13 @@ private struct SearchBarRow: View {
             .foregroundStyle(Theme.Color.appText)
             .submitLabel(SubmitLabel.search)
             .onSubmit { config.onSubmit?() }
+            .focused(focus)
         }
         .padding(.horizontal, Spacing.s3)
         .padding(.vertical, Spacing.s2)
         .background(Theme.Color.appSurfaceSunken)
         .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
+        .keepsKeyboardOnTap()
         .padding(.horizontal, Spacing.s4)
         .padding(.vertical, Spacing.s2)
         .background(Theme.Color.appSurface)
@@ -402,6 +409,9 @@ private struct LoadedList: View {
     let onRetryLoadMore: () -> Void
     let onRefresh: () async -> Void
     var reservesFABSpace = false
+    /// The search bar above has the keyboard: a tap on a row only closes it
+    /// (founder request 2026-10-29); scrolling still scrolls.
+    var isTyping = false
 
     var body: some View {
         List {
@@ -477,6 +487,7 @@ private struct LoadedList: View {
             if reservesFABSpace { Color.clear.frame(height: Spacing.s16 + Spacing.s5) }
         }
         .refreshable { await onRefresh() }
+        .scrollDismissesKeyboard(.immediately)
         .scrollContentBackground(.hidden)
         .background(Theme.Color.appBg)
     }
@@ -486,6 +497,7 @@ private struct LoadedList: View {
         case .flat:
             ForEach(section.rows) { row in
                 RowView(row: row)
+                    .closesKeyboardFirst(isTyping)
                     .listRowInsets(EdgeInsets())
                     .listRowSeparator(.hidden)
                     .listRowBackground(Color.clear)
@@ -502,6 +514,7 @@ private struct LoadedList: View {
                 VStack(spacing: Spacing.s0) {
                     ForEach(Array(section.rows.enumerated()), id: \.element.id) { index, row in
                         RowView(row: row, cardContext: .grouped(isLast: index == section.rows.count - 1))
+                            .closesKeyboardFirst(isTyping)
                         if index < section.rows.count - 1 {
                             Divider().background(Theme.Color.appBorder)
                         }

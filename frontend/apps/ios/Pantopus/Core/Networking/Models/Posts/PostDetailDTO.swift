@@ -404,11 +404,11 @@ extension PostDetailDTO {
         userHasSaved = post.userHasSaved
         userHasReposted = post.userHasReposted
         comments = []
-        visibility = nil
-        audience = nil
-        readScope = nil
-        allowExternalShare = nil
-        moderationState = nil
+        visibility = post.visibility
+        audience = post.audience
+        readScope = post.readScope
+        allowExternalShare = post.allowExternalShare
+        moderationState = post.moderationState
         eventDate = post.eventDate
         eventEndDate = post.eventEndDate
         eventVenue = post.eventVenue
@@ -435,6 +435,7 @@ public struct PostShareRequest: Encodable, Sendable {
     /// The repost state the person chose (`shareType: "repost"`), so a re-sent request can't
     /// flip it back. Omitted for external shares, and the server toggles when it's absent.
     public var reposted: Bool?
+    public var checkOnly: Bool?
 }
 
 /// Body for `POST /api/posts/:id/like` and the comment like: the state the person chose, so a
@@ -465,6 +466,7 @@ public struct CommentLikeResponse: Decodable, Sendable, Hashable {
 /// `POST /:id/share` response — `shared` for external shares,
 /// `reposted` for repost toggles (`backend/routes/posts.js:2895`).
 public struct PostShareResponse: Decodable, Sendable, Hashable {
+    public let canShare: Bool?
     public let shared: Bool?
     public let reposted: Bool?
     public let shareCount: Int?

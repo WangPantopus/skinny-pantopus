@@ -2,7 +2,8 @@
 // JOB: Authorize Upcoming Gigs
 // Runs hourly. For gigs starting within 24 hours that have a
 // saved card (ready_to_authorize), creates a PaymentIntent
-// off-session. Also enforces auto-cancel for auth failures
+// off-session; an owner without one is told once that they can
+// authorize. Also enforces auto-cancel for auth failures
 // within 2 hours of start.
 // ============================================================
 
@@ -22,7 +23,7 @@ async function authorizeUpcomingGigs() {
     // Find gigs that need authorization
     const { data: gigsToAuthorize, error } = await supabaseAdmin
       .from('Gig')
-      .select('id, user_id, accepted_by, payment_id, title, scheduled_start')
+      .select('id, user_id, accepted_by, accepted_at, payment_id, title, scheduled_start')
       .eq('status', 'assigned')
       .in('payment_status', [PAYMENT_STATES.READY_TO_AUTHORIZE, PAYMENT_STATES.AUTHORIZE_PENDING])
       .not('payment_id', 'is', null)
@@ -62,6 +63,27 @@ async function authorizeUpcomingGigs() {
           });
         }
       } catch (gigErr) {
+        // No saved card for an off-session hold (instant-accept tasks never collect one): only the owner can authorize.
+        if (gigErr.code === 'legacy_authorization_check_required') {
+          // Accepting more than a day ahead told the owner payment would open later, so say once that it has.
+          // The query also reaches older unpaid tasks, so a start that has already passed gets no reminder.
+          const startsAt = Date.parse(gig.scheduled_start);
+          const acceptedWithinDay = startsAt - Date.parse(gig.accepted_at) <= 24 * 60 * 60 * 1000;
+          if (!acceptedWithinDay && startsAt > now.getTime()) {
+            await createNotification({
+              userId: gig.user_id,
+              type: 'payment_action_required',
+              title: 'You can authorize payment now',
+              body: `Authorize payment for "${gig.title || 'your task'}" so work can start.`,
+              icon: '💳',
+              link: `/gigs/${gig.id}`,
+              metadata: { gig_id: gig.id, payment_id: gig.payment_id, required_status: PAYMENT_STATES.AUTHORIZED },
+              idempotencyKey: `payment-authorization-open:${gig.payment_id}`,
+            });
+          }
+          logger.info('authorizeUpcomingGigs: waiting for the owner to authorize', { gigId: gig.id });
+          continue;
+        }
         logger.error('authorizeUpcomingGigs: error authorizing gig', {
           error: gigErr.message,
           gigId: gig.id,

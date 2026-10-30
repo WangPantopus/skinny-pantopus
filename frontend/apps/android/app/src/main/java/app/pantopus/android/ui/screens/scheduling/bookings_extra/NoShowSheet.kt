@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import app.pantopus.android.ui.components.DestructiveButton
 import app.pantopus.android.ui.components.GhostButton
+import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -82,6 +83,7 @@ internal fun NoShowSheet(
         Column(
             modifier =
                 Modifier
+                    .closesKeyboardOnTapOrScroll()
                     .widthIn(max = 320.dp)
                     .clip(RoundedCornerShape(Radii.xl2))
                     .background(PantopusColors.appSurface)

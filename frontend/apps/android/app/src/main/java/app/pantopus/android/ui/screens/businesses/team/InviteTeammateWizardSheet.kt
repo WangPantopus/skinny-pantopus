@@ -41,6 +41,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.api.models.businesses.BusinessSeatDto
 import app.pantopus.android.data.businesses.BusinessTeamRepository
 import app.pantopus.android.ui.components.PantopusTextField
+import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.screens.shared.wizard.WizardShell
 import app.pantopus.android.ui.screens.shared.wizard.blocks.FormFieldsBlock
 import app.pantopus.android.ui.screens.shared.wizard.blocks.HeadlineBlock
@@ -122,6 +124,7 @@ fun InviteTeammateWizardSheet(
         Box(
             modifier =
                 Modifier
+                    .closesKeyboardOnTapOrScroll()
                     .fillMaxSize()
                     .background(PantopusColors.appBg)
                     .testTag(INVITE_TEAMMATE_WIZARD_TAG),
@@ -244,6 +247,7 @@ private fun IdentifyStep(
             Box(
                 modifier =
                     Modifier
+                        .keepsKeyboard()
                         .fillMaxWidth()
                         .heightIn(min = 80.dp)
                         .clip(RoundedCornerShape(Radii.md))

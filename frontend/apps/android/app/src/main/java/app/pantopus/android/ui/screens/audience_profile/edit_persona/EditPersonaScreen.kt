@@ -52,6 +52,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.screens.shared.form.FormShell
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -1094,6 +1095,7 @@ private fun PersonaField(
     Row(
         modifier =
             Modifier
+                .keepsKeyboard()
                 .fillMaxWidth()
                 .heightIn(min = minHeight)
                 .clip(RoundedCornerShape(Radii.md))

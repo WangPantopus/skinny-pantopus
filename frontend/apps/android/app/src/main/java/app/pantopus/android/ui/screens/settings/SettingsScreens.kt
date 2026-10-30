@@ -35,6 +35,7 @@ import app.pantopus.android.core.security.findFragmentActivity
 import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.components.ToastController
 import app.pantopus.android.ui.components.ToastHost
+import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
 import app.pantopus.android.ui.screens.plans.teams.PlanTeamsSheet
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListBanner
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListCallbacks
@@ -237,6 +238,7 @@ fun PrivacySettingsScreen(
 
     if (deleteSheetVisible) {
         ModalBottomSheet(
+            modifier = Modifier.closesKeyboardOnTapOrScroll(),
             onDismissRequest = { viewModel.dismissDeleteSheet() },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
             containerColor = PantopusColors.appSurface,

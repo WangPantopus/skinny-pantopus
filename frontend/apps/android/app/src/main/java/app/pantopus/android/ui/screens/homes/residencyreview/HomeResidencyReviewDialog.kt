@@ -30,6 +30,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.homes.HomeResidencyHistoryReference
 import app.pantopus.android.ui.components.OfflineBannerHost
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
 import app.pantopus.android.ui.screens.homes.tasks.HomeTaskResumeEffect
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.Spacing
@@ -57,7 +58,7 @@ fun HomeResidencyReviewDialog(
         properties = DialogProperties(usePlatformDefaultWidth = false, securePolicy = SecureFlagPolicy.SecureOn),
     ) {
         Surface(
-            Modifier.fillMaxWidth().fillMaxHeight(REVIEW_DIALOG_HEIGHT).testTag("homeResidencyReview")
+            Modifier.closesKeyboardOnTapOrScroll().fillMaxWidth().fillMaxHeight(REVIEW_DIALOG_HEIGHT).testTag("homeResidencyReview")
                 .semantics { testTagsAsResourceId = true },
             color = PantopusColors.appSurface,
         ) {

@@ -61,6 +61,7 @@ import androidx.compose.ui.unit.sp
 import app.pantopus.android.ui.components.AvatarWithIdentityRing
 import app.pantopus.android.ui.components.IdentityPillar
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.screens.feed.pulse.PulseEventDetailRows
 import app.pantopus.android.ui.screens.feed.pulse.PulseEventDetails
 import app.pantopus.android.ui.screens.shared.content_detail.headers.PostIntent
@@ -534,8 +535,9 @@ private fun CommentComposer(
     onSend: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // Send is used while typing, as in chat: a tap on it never puts the keyboard away by itself.
     Row(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth().keepsKeyboard(),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
     ) {

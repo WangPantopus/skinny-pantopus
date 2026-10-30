@@ -314,6 +314,8 @@ private struct FlexibleChipRows: View {
                 QuickReplyChip(prompt: last) { onPromptTap(last) }
             }
         }
+        // A chip fills the reply box: typing carries on.
+        .keepsKeyboardOnTap()
     }
 }
 

@@ -58,6 +58,7 @@ import app.pantopus.android.core.perf.ScreenTiming
 import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.data.ai.AIScreenContext
 import app.pantopus.android.data.mailbox.MailboxRepository
+import app.pantopus.android.ui.components.ClosesKeyboardOnNavigation
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.InviteLinks
 import app.pantopus.android.ui.components.NavigationDrawer
@@ -2250,6 +2251,7 @@ private val SAVED_PAGE_OFFLINE_STRIP_ROUTES =
 @Composable
 fun RootTabScreen(inboxBadgeCount: Int = 0) {
     val navController = rememberNavController()
+    ClosesKeyboardOnNavigation(navController)
     // P6.6 — system share / mail + contacts picker for the placeholder sweep.
     val appContext = androidx.compose.ui.platform.LocalContext.current
     val findPeopleLauncher =

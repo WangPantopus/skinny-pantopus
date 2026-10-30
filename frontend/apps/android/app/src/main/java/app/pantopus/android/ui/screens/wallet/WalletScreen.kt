@@ -74,6 +74,8 @@ import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.OfflineBannerHost
 import app.pantopus.android.ui.components.ToastController
 import app.pantopus.android.ui.components.ToastHost
+import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.screens.wallet.components.ActivityRow
 import app.pantopus.android.ui.screens.wallet.components.HoldBanner
 import app.pantopus.android.ui.screens.wallet.components.InvoicesRow
@@ -221,6 +223,7 @@ fun WalletScreen(
 
     if (showWithdrawSheet) {
         ModalBottomSheet(
+            modifier = Modifier.closesKeyboardOnTapOrScroll(),
             onDismissRequest = { showWithdrawSheet = false },
             sheetState = sheetState,
         ) {
@@ -415,6 +418,7 @@ private fun WithdrawAmountField(
         Row(
             modifier =
                 Modifier
+                    .keepsKeyboard()
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(Radii.md))
                     .background(PantopusColors.appSurfaceSunken)

@@ -93,6 +93,8 @@ struct PlansSheetContent: View {
         PlanRow(model: rowModel(card).withTrailing(.chevron), showsDivider: showsDivider) {
             actions.openPlan(card, card.id, .view)
         }
+        // The plan opens out of this row and closes back into it.
+        .itemZoomSource(.plan, id: card.id)
     }
 
     private var peekTitleText: some View {
@@ -280,6 +282,7 @@ struct PlansListSheet: View {
                 ) {
                     actions.openPlan(card, card.id, .view)
                 }
+                .itemZoomSource(.plan, id: card.id)
             }
         }
     }

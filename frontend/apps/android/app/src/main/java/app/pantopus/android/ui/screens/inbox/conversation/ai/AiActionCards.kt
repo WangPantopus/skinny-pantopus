@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.ui.components.PantopusButton
 import app.pantopus.android.ui.components.PantopusButtonKind
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.screens.inbox.conversation.ChatAIActionCard
 import app.pantopus.android.ui.screens.inbox.conversation.ChatAICardAction
 import app.pantopus.android.ui.screens.inbox.conversation.ChatAICardItem
@@ -471,7 +472,7 @@ internal fun AiContextStrip(label: String) {
     }
 }
 
-/** The screen's starter prompts above the composer, until the person sends something. */
+/** The screen's starter prompts above the composer, until the person sends something. Part of the composer: they keep the keyboard. */
 @Composable
 internal fun AiStarterRow(
     starters: List<String>,
@@ -481,6 +482,7 @@ internal fun AiStarterRow(
         modifier =
             Modifier
                 .fillMaxWidth()
+                .keepsKeyboard()
                 .horizontalScroll(rememberScrollState())
                 .padding(horizontal = Spacing.s3, vertical = Spacing.s1)
                 .testTag("chatAIStarters"),

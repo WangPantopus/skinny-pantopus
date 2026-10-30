@@ -65,6 +65,7 @@ struct PlanComposerRoot: View {
                         }
                     }
                     .toolbar(.hidden, for: .navigationBar)
+                    .swipesBackFromEdge()
                     .navigationDestination(for: PlanComposerStep.self) { step in
                         switch step {
                         case .details:

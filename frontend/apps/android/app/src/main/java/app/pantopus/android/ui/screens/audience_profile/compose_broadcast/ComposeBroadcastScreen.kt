@@ -62,6 +62,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.screens.audience_profile.tierColor
 import app.pantopus.android.ui.screens.compose.placepicker.MediaLocationExtractor
 import app.pantopus.android.ui.screens.compose.placepicker.PlacePickerSheet
@@ -465,6 +466,7 @@ private fun BodyField(
     Box(
         modifier =
             Modifier
+                .keepsKeyboard()
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(Radii.lg))
                 .background(PantopusColors.appSurfaceMuted)

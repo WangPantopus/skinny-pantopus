@@ -68,6 +68,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
+import app.pantopus.android.ui.components.firstTapClosesKeyboard
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.screens.shared.wizard.WizardChrome
 import app.pantopus.android.ui.screens.shared.wizard.WizardLeadingControl
 import app.pantopus.android.ui.screens.shared.wizard.WizardModel
@@ -398,11 +400,12 @@ private fun AddressStep(
                 }) { Text("Open app settings") }
             }
         }
+        // While typing in the search box, the first tap on a suggestion only puts the keyboard away.
         state.searchResults.forEach { suggestion ->
             TextButton(onClick = {
                 focusManager.clearFocus()
                 vm.selectSearchResult(suggestion)
-            }, modifier = Modifier.fillMaxWidth()) {
+            }, modifier = Modifier.fillMaxWidth().firstTapClosesKeyboard()) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Text(suggestion.primaryText, style = PantopusTextStyle.body)
                     Text(suggestion.secondaryText ?: suggestion.label, style = PantopusTextStyle.small)
@@ -1106,6 +1109,7 @@ private fun AddHomeSearchField(
     Row(
         modifier =
             Modifier
+                .keepsKeyboard()
                 .fillMaxWidth()
                 .heightIn(min = 48.dp)
                 .clip(RoundedCornerShape(Radii.lg))

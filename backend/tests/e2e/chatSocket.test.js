@@ -711,6 +711,10 @@ describe('private helper tracking on the existing public task room', () => {
     const gigId = 'dd000000-0000-4000-a000-000000000299';
     seedTable('Gig', [{ id: gigId, user_id: U1, title: 'Synthetic free task', price: 0,
       status: 'open', engagement_mode: 'instant_accept' }]);
+    setRpcMock(async (name) => name === 'reserve_instant_gig'
+      ? { data: { reused: false, gig: { id: gigId, user_id: U1, price: 0,
+        status: 'assigned', accepted_by: U2, accepted_at: new Date().toISOString() } }, error: null }
+      : { data: null, error: { message: 'Unexpected RPC' } });
     const outsider = await connect(TOKEN_U3);
     await setTaskSubscription(outsider, gigId);
     const changed = waitForEvent(outsider, 'gig:status-change');

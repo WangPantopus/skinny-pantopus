@@ -36,6 +36,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import app.pantopus.android.ui.components.firstTapClosesKeyboard
 import app.pantopus.android.ui.screens.businesses.create_business.CategorySearchHit
 import app.pantopus.android.ui.screens.businesses.create_business.CreateBusinessUiState
 import app.pantopus.android.ui.screens.shared.wizard.blocks.HeadlineBlock
@@ -79,7 +80,8 @@ fun PickCategorySearchStep(
         query = query,
     )
 
-    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+    // While typing, the first tap on a result only puts the keyboard away.
+    Column(modifier = Modifier.firstTapClosesKeyboard(), verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
         state.searchHits.forEach { hit ->
             SearchResultRow(
                 hit = hit,

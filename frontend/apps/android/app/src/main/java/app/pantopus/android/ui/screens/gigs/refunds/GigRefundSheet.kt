@@ -36,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.payments.RefundValidation
+import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.Spacing
 
@@ -53,7 +54,11 @@ fun GigRefundSheet(coordinator: GigRefundCoordinator) {
             confirming = false
         }
     }
-    ModalBottomSheet(onDismissRequest = coordinator::close, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+    ModalBottomSheet(
+        onDismissRequest = coordinator::close,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        modifier = Modifier.closesKeyboardOnTapOrScroll(),
+    ) {
         Column(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(Spacing.s5).testTag("gigRefund.sheet"),
             verticalArrangement = Arrangement.spacedBy(Spacing.s3),

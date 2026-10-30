@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.sp
 import app.pantopus.android.data.api.models.mailbox.v2.DrawerMail
 import app.pantopus.android.ui.components.CompactButton
 import app.pantopus.android.ui.components.CompactButtonSize
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.screens.mailbox.components.MailKind
 import app.pantopus.android.ui.screens.mailbox.components.MailPieceMapper
 import app.pantopus.android.ui.screens.shared.list_of_rows.CompactButtonVariant
@@ -88,6 +89,7 @@ fun MailVaultSearchField(
     Row(
         modifier =
             Modifier
+                .keepsKeyboard()
                 .padding(start = Spacing.s4, end = Spacing.s4, top = 14.dp)
                 .fillMaxWidth()
                 .heightIn(min = 48.dp)

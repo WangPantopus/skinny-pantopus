@@ -91,10 +91,12 @@ private fun authorizationMessage(state: GigAssignedAuthorizationState): String {
             val available =
                 Instant.parse(receipt.authorizationAvailableAt).atZone(ZoneId.systemDefault())
                     .format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM))
-            "Your saved card is scheduled for authorization starting $available. No new hold is needed yet."
+            "Authorization opens $available. No new hold will be created before then."
         }
         receipt?.authorizationReady == true -> "The authorization hold is confirmed. The task payment has not been captured yet."
         receipt?.recoveryState == "action_required" -> "Continue to complete payment verification for this exact task amount."
+        receipt?.canRetry == true && receipt.recoveryState == "pending" && receipt.paymentIntentId == null ->
+            "You can authorize payment now. Complete it before the worker starts."
         receipt?.canRetry == true -> "Continue to recover this same payment authorization."
         receipt?.recoveryState == "pending" -> "The authorization is still pending. Check status to confirm its result."
         else -> "Payment needs verification. Check status again or contact support if it remains unresolved."

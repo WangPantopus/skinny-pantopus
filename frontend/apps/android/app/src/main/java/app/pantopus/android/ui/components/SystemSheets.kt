@@ -2,18 +2,31 @@
 
 package app.pantopus.android.ui.components
 
+import android.app.PendingIntent
 import android.content.ActivityNotFoundException
+import android.content.BroadcastReceiver
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.net.Uri
+import android.os.Build
 import android.provider.ContactsContract
+import android.service.chooser.ChooserResult
 import androidx.activity.compose.ManagedActivityResultLauncher
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts.PickContact
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
+import androidx.core.content.IntentCompat
 import app.pantopus.android.BuildConfig
+import java.util.UUID
 
 /**
  * P6.6 — system surfaces port of iOS `Core/Design/Components/SystemSheets.swift`.
@@ -202,6 +215,68 @@ private fun readEmail(
 }
 
 // MARK: - Share + mail invocations ───────────────────────────────────────
+
+/** Reports a chosen target (or Copy on Android 15+), never a dismissed sharesheet. */
+@Composable
+fun rememberShareTextWithCompletion(): (String, () -> Unit) -> Boolean {
+    val context = LocalContext.current
+    val action = remember { "${context.packageName}.SHARE_RESULT.${UUID.randomUUID()}" }
+    var completion by remember { mutableStateOf<(() -> Unit)?>(null) }
+    val sender =
+        remember(context, action) {
+            PendingIntent.getBroadcast(
+                context,
+                0,
+                Intent(action).setPackage(context.packageName),
+                PendingIntent.FLAG_CANCEL_CURRENT or
+                    (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0),
+            )
+        }
+    DisposableEffect(context, sender) {
+        val receiver =
+            object : BroadcastReceiver() {
+                override fun onReceive(
+                    context: Context?,
+                    intent: Intent?,
+                ) {
+                    if (intent?.isCompletedShare() != true) return
+                    val callback = completion
+                    completion = null
+                    callback?.invoke()
+                }
+            }
+        ContextCompat.registerReceiver(context, receiver, IntentFilter(action), ContextCompat.RECEIVER_NOT_EXPORTED)
+        onDispose {
+            completion = null
+            context.unregisterReceiver(receiver)
+            sender.cancel()
+        }
+    }
+    return { text, onCompleted ->
+        completion = onCompleted
+        val send = Intent(Intent.ACTION_SEND).setType(TEXT_PLAIN).putExtra(Intent.EXTRA_TEXT, text)
+        try {
+            context.startActivity(Intent.createChooser(send, "Share post", sender.intentSender))
+            true
+        } catch (_: ActivityNotFoundException) {
+            completion = null
+            false
+        } catch (_: SecurityException) {
+            completion = null
+            false
+        }
+    }
+}
+
+private fun Intent.isCompletedShare(): Boolean {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+        val result = IntentCompat.getParcelableExtra(this, Intent.EXTRA_CHOOSER_RESULT, ChooserResult::class.java)
+        if (result != null) {
+            return result.type == ChooserResult.CHOOSER_RESULT_COPY || result.type == ChooserResult.CHOOSER_RESULT_SELECTED_COMPONENT
+        }
+    }
+    return IntentCompat.getParcelableExtra(this, Intent.EXTRA_CHOSEN_COMPONENT, ComponentName::class.java) != null
+}
 
 /** Fire the system share sheet for plain text ([Intent.ACTION_SEND]). */
 fun Context.shareText(

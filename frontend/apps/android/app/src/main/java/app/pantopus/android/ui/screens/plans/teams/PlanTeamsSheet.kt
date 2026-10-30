@@ -19,6 +19,8 @@ import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.api.models.plans.PlanTeamDto
+import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
+import app.pantopus.android.ui.components.firstTapClosesKeyboard
 import app.pantopus.android.ui.screens.plans.components.PlanChoice
 import app.pantopus.android.ui.screens.plans.components.PlanChoiceGroup
 import app.pantopus.android.ui.screens.plans.components.PlanField
@@ -38,6 +40,7 @@ fun PlanTeamsSheet(
     val ui by vm.ui.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { vm.load() }
     ModalBottomSheet(
+        modifier = Modifier.closesKeyboardOnTapOrScroll(),
         onDismissRequest = onClose,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = PantopusColors.appSurface,
@@ -103,10 +106,12 @@ private fun TeamChoices(
                 color = PantopusColors.appTextSecondary,
             )
         }
+        // While typing in the search box, the first tap on a team only puts the keyboard away.
         PlanChoiceGroup(
             choices = teams.map { PlanChoice(it.id, it.name, !ui.saving && ui.loaded) },
             isSelected = { it.id in ui.preferences.teams.orEmpty() },
             onSelect = { vm.follow(it.id) },
+            modifier = Modifier.firstTapClosesKeyboard(),
             multiSelect = true,
         )
     }

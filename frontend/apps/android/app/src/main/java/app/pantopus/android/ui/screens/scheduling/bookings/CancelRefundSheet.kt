@@ -33,6 +33,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -65,7 +66,7 @@ fun CancelRefundSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         containerColor = PantopusColors.appSurface,
-        modifier = modifier.testTag(CANCEL_REFUND_SHEET_TAG),
+        modifier = modifier.closesKeyboardOnTapOrScroll().testTag(CANCEL_REFUND_SHEET_TAG),
     ) {
         when {
             state.alreadyCancelled ->

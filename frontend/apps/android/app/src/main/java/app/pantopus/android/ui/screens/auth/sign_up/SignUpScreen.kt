@@ -57,6 +57,7 @@ import app.pantopus.android.data.auth.OAuthBrowserCommand
 import app.pantopus.android.data.auth.OAuthProvider
 import app.pantopus.android.ui.components.PantopusFieldState
 import app.pantopus.android.ui.components.PantopusTextField
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.screens.auth.AuthLegalSentence
 import app.pantopus.android.ui.screens.auth.AuthOAuthTermsLine
 import app.pantopus.android.ui.screens.auth.OAuthButtonGroup
@@ -487,6 +488,7 @@ fun PasswordField(
         Row(
             modifier =
                 Modifier
+                    .keepsKeyboard()
                     .fillMaxWidth()
                     .height(44.dp)
                     .clip(RoundedCornerShape(Radii.md))

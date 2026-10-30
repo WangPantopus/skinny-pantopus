@@ -27,6 +27,7 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.BuildConfig
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.scheduling.SchedulingOwner
+import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
 import app.pantopus.android.ui.screens.you.me.MeView
 import app.pantopus.android.ui.theme.PantopusColors
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -298,6 +299,7 @@ fun YouScreen(
 
     if (BuildConfig.DEBUG && debugProfileDialog) {
         AlertDialog(
+            modifier = Modifier.closesKeyboardOnTapOrScroll(),
             onDismissRequest = { debugProfileDialog = false },
             title = { Text("Open profile") },
             text = {
@@ -326,6 +328,7 @@ fun YouScreen(
 
     if (BuildConfig.DEBUG && debugPostDialog) {
         AlertDialog(
+            modifier = Modifier.closesKeyboardOnTapOrScroll(),
             onDismissRequest = { debugPostDialog = false },
             title = { Text("Open post") },
             text = {
@@ -355,6 +358,7 @@ fun YouScreen(
     if (BuildConfig.DEBUG && debugInviteDialog) {
         val currentEmail = signedIn?.user?.email.orEmpty()
         AlertDialog(
+            modifier = Modifier.closesKeyboardOnTapOrScroll(),
             onDismissRequest = { debugInviteDialog = false },
             title = { Text("Invite owner") },
             text = {
@@ -383,6 +387,7 @@ fun YouScreen(
 
     if (BuildConfig.DEBUG && debugDisambiguateDialog) {
         AlertDialog(
+            modifier = Modifier.closesKeyboardOnTapOrScroll(),
             onDismissRequest = { debugDisambiguateDialog = false },
             title = { Text("Disambiguate mail") },
             text = {
@@ -411,6 +416,7 @@ fun YouScreen(
 
     if (BuildConfig.DEBUG && debugHandshakeDialog) {
         AlertDialog(
+            modifier = Modifier.closesKeyboardOnTapOrScroll(),
             onDismissRequest = { debugHandshakeDialog = false },
             title = { Text("Open Privacy Handshake") },
             text = {
@@ -439,6 +445,7 @@ fun YouScreen(
 
     if (BuildConfig.DEBUG && debugInviteTokenDialog) {
         AlertDialog(
+            modifier = Modifier.closesKeyboardOnTapOrScroll(),
             onDismissRequest = { debugInviteTokenDialog = false },
             title = { Text("Open invite by token") },
             text = {
@@ -467,6 +474,7 @@ fun YouScreen(
 
     if (BuildConfig.DEBUG && debugCeremonialMailOpenDialog) {
         AlertDialog(
+            modifier = Modifier.closesKeyboardOnTapOrScroll(),
             onDismissRequest = { debugCeremonialMailOpenDialog = false },
             title = { Text("Open Ceremonial Mail") },
             text = {

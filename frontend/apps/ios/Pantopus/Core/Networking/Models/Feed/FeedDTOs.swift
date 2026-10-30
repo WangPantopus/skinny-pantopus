@@ -18,6 +18,19 @@ public struct FeedPostDTO: Decodable, Sendable, Hashable, Identifiable {
     public let title: String?
     public let content: String
     public let postType: String?
+    public let visibility: String?
+    public let audience: String?
+    public let readScope: String?
+    public let allowExternalShare: Bool?
+    public let moderationState: String?
+
+    public var canShareExternally: Bool {
+        guard !isSeeded, allowExternalShare != false,
+              moderationState == nil || moderationState == "live" else { return false }
+        if let readScope { return readScope == "public" }
+        return visibility == "public" || audience == "public"
+    }
+
     public let createdAt: String
     public let likeCount: Int
     public let commentCount: Int
@@ -68,6 +81,10 @@ public struct FeedPostDTO: Decodable, Sendable, Hashable, Identifiable {
         case userId = "user_id"
         case title, content
         case postType = "post_type"
+        case visibility, audience
+        case readScope = "read_scope"
+        case allowExternalShare = "allow_external_share"
+        case moderationState = "moderation_state"
         case createdAt = "created_at"
         case likeCount = "like_count"
         case commentCount = "comment_count"
@@ -103,6 +120,11 @@ public struct FeedPostDTO: Decodable, Sendable, Hashable, Identifiable {
         title = c.lenient(String.self, forKey: .title)
         content = c.lenient(String.self, forKey: .content) ?? ""
         postType = c.lenient(String.self, forKey: .postType)
+        visibility = c.lenient(String.self, forKey: .visibility)
+        audience = c.lenient(String.self, forKey: .audience)
+        readScope = c.lenient(String.self, forKey: .readScope)
+        allowExternalShare = c.lenient(Bool.self, forKey: .allowExternalShare)
+        moderationState = c.lenient(String.self, forKey: .moderationState)
         createdAt = try c.decode(String.self, forKey: .createdAt)
         likeCount = c.lenient(Int.self, forKey: .likeCount) ?? 0
         commentCount = c.lenient(Int.self, forKey: .commentCount) ?? 0
