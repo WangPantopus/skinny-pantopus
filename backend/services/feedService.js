@@ -849,6 +849,16 @@ function connectionPostsQuery(query, authorIds) {
     .or(`and(user_id.in.(${authorIds.join(',')}),distribution_targets.ov.{connections},or(post_as.is.null,post_as.neq.business)),connection_reposts.not.is.null`);
 }
 
+// A legacy post its author made private keeps its older targets, so the Place query still finds it; it lists only
+// for viewers its own page lets in (readAccess.canReadPost). Other rows skip the per-post check.
+async function withoutUnreadablePrivatePosts(rows, userId) {
+  const isPrivate = (post) => post.read_scope == null && post.visibility === 'private' && post.user_id !== userId;
+  const privateRows = rows.filter(isPrivate);
+  if (!privateRows.length) return rows;
+  const readable = new Set((await readablePosts(privateRows, userId)).map((post) => post.id));
+  return rows.filter((post) => !isPrivate(post) || readable.has(post.id));
+}
+
 async function loadFollowedPersonaMemberships(userId) {
   const { data: memberships, error } = await supabaseAdmin
     .from('PersonaMembership')
@@ -1190,7 +1200,8 @@ async function getListFeed({
 
     // 8. Normalize
     // A connection's repost never grants access to its original audience.
-    const readableRows = surface === 'connections' ? await readablePosts(rawRows, userId) : rawRows;
+    const readableRows = surface === 'connections' ? await readablePosts(rawRows, userId)
+      : await withoutUnreadablePrivatePosts(rawRows, userId);
     const visibleRows = surface === 'personas'
       ? readableRows.filter((post) => personaPostVisibleToViewer(
           post, Number(personaRankById.get(post.identity_context_id) || 0),
@@ -1697,7 +1708,8 @@ async function loadMapPosts({
 
   // 3–4. Normalize and apply mute/hide/block
   const filters = await outcome(filtersRead);
-  const readableRows = authorIds ? await readablePosts(data || [], userId) : data || [];
+  const readableRows = authorIds ? await readablePosts(data || [], userId)
+    : await withoutUnreadablePrivatePosts(data || [], userId);
   let posts = applyMuteHideFilters(
     readableRows.map(row => normalizeFeedPostRow(row, new Set(), new Set())),
     filters,
