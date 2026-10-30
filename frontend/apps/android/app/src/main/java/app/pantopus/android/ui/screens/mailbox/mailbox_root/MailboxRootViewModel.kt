@@ -299,13 +299,11 @@ class MailboxRootViewModel
         private suspend fun readAll(limit: Int = pageSize) {
             lastReadAt = Instant.now()
             val owner = viewModelScope.async { readBusinessOwnership() }
-            // Today's card is read with everything else, so the row says where it is (it's sent once a day).
-            val cardsOn = LaunchFeatures.holidayCards && LaunchFeatures.mailbox
-            val cardsRead = if (cardsOn) viewModelScope.async { holidayCards.load() } else null
+            // Today's card is read alongside, so the row says where it is (it's sent once a day); the mail doesn't wait.
+            if (LaunchFeatures.holidayCards && LaunchFeatures.mailbox) viewModelScope.launch { holidayCards.load() }
             readDrawers()
             readPendingRouting()
             owner.await()
-            cardsRead?.await()
             updateDrawers()
             reloadActiveTab(limit)
             // The round's moment plays once its pieces are there; on the first day the porch with the welcome letter

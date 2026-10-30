@@ -296,7 +296,7 @@ class MailDetailViewModel
 
         /**
          * A Christmas card that hadn't been opened when this page first read it: it opens from its envelope for this
-         * visit, though opening it marks it opened at once. Null until a card is read.
+         * visit, and "Open the envelope" marks it opened. Null until a card is read.
          */
         private var cardFirstOpen: Boolean? = null
 
