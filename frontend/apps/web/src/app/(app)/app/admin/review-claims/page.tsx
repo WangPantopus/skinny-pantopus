@@ -62,6 +62,9 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+// What Request info said before it had a note box; the reviewer can change it.
+const DEFAULT_INFO_NOTE = 'Please upload additional documents.';
+
 export default function AdminReviewClaimsPage() {
   const router = useRouter();
   const [claims, setClaims] = useState<ClaimForReview[]>([]);
@@ -84,10 +87,13 @@ export default function AdminReviewClaimsPage() {
   // Reject modal
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectNote, setRejectNote] = useState('');
+  // Request info modal: the note goes to the claimant in their notice and on their claim.
+  const [showInfoModal, setShowInfoModal] = useState(false);
+  const [infoNote, setInfoNote] = useState(DEFAULT_INFO_NOTE);
 
   const closeDetail = () => {
     detailGeneration.current++;
-    setSelectedClaim(null); setClaimDetail(null); setComparison(null); setShowRejectModal(false);
+    setSelectedClaim(null); setClaimDetail(null); setComparison(null); setShowRejectModal(false); setShowInfoModal(false);
   };
   useEffect(() => () => { detailGeneration.current++; }, []);
 
@@ -281,6 +287,8 @@ export default function AdminReviewClaimsPage() {
       setComparison(null);
       setShowRejectModal(false);
       setRejectNote('');
+      setShowInfoModal(false);
+      setInfoNote(DEFAULT_INFO_NOTE);
       await fetchClaims();
     } catch (err: any) {
       if (request === detailGeneration.current) toast.error(err?.message || 'Failed to review claim');
@@ -323,13 +331,23 @@ export default function AdminReviewClaimsPage() {
             selectedClaim?.id === claim.id ? 'border-violet-500 shadow-md' : 'border-app-border'
           }`}>
           <div className="flex items-center justify-between mb-2">
-            <span className={`text-[11px] font-bold px-2 py-1 rounded-md ${
-              claim.claim_type === 'owner'
-                ? 'bg-violet-100 text-violet-700'
-                : 'bg-amber-100 text-amber-700'
-            }`}>
-              {claim.claim_type === 'owner' ? 'Ownership' : 'Residency'}
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span className={`text-[11px] font-bold px-2 py-1 rounded-md ${
+                claim.claim_type === 'owner'
+                  ? 'bg-violet-100 text-violet-700'
+                  : 'bg-amber-100 text-amber-700'
+              }`}>
+                {claim.claim_type === 'owner' ? 'Ownership' : 'Residency'}
+              </span>
+              {/* After Request info: still waiting on the claimant, or they sent a document since. */}
+              {claim.state === 'needs_more_info' ? (
+                <span className={`text-[11px] font-bold px-2 py-1 rounded-md ${
+                  (claim.documents_since_request ?? 0) > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-app-surface-sunken text-app-text-secondary'
+                }`}>
+                  {(claim.documents_since_request ?? 0) > 0 ? 'Docs sent' : 'Awaiting docs'}
+                </span>
+              ) : null}
+            </div>
             <span className="text-xs text-app-text-muted">{formatTimeAgo(claim.created_at)}</span>
           </div>
 
@@ -522,7 +540,7 @@ export default function AdminReviewClaimsPage() {
                   className="flex items-center justify-center gap-1.5 py-2.5 border-2 border-red-300 bg-red-50 text-red-700 font-semibold rounded-xl hover:bg-red-100 disabled:opacity-50 transition">
                   <XCircle className="w-4.5 h-4.5" /> Reject
                 </button>
-                <button onClick={() => handleReview(claimDetail.claim.id, 'request_more_info', 'Please upload additional documents.')} disabled={!!reviewingAction}
+                <button onClick={() => setShowInfoModal(true)} disabled={!!reviewingAction}
                   className="flex items-center justify-center gap-1.5 py-2.5 border-2 border-amber-300 bg-amber-50 text-amber-700 font-semibold rounded-xl hover:bg-amber-100 disabled:opacity-50 transition">
                   {reviewingAction === 'request_more_info' ? 'Sending...' : <><HelpCircle className="w-4.5 h-4.5" /> Request Info</>}
                 </button>
@@ -565,6 +583,27 @@ export default function AdminReviewClaimsPage() {
 
           {/* Right: detail panel */}
           {renderDetailPanel()}
+        </div>
+      )}
+
+      {/* Request info modal */}
+      {showInfoModal && claimDetail && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center">
+          <div className="w-full max-w-md mx-4 bg-app-surface rounded-xl shadow-2xl border border-app-border p-6">
+            <h3 className="text-lg font-bold text-app-text mb-2">Request info</h3>
+            <p className="text-sm text-app-text-secondary mb-3">Tell them what you need. They see this note in their notification and on their claim.</p>
+            <textarea value={infoNote} onChange={e => setInfoNote(e.target.value)} rows={3} maxLength={1000}
+              placeholder="e.g., Please upload a property tax bill with your name on it."
+              className="w-full text-sm px-3 py-2 border border-app-border rounded-lg bg-app-surface text-app-text placeholder:text-app-text-muted focus:outline-none focus:ring-1 focus:ring-amber-500 resize-none mb-4" />
+            <button onClick={() => handleReview(claimDetail.claim.id, 'request_more_info', infoNote.trim() || undefined)} disabled={!!reviewingAction}
+              className="w-full py-3 bg-amber-600 text-white font-bold rounded-xl hover:bg-amber-700 disabled:opacity-50 transition mb-2">
+              {reviewingAction === 'request_more_info' ? 'Sending...' : 'Send request'}
+            </button>
+            <button onClick={() => { setShowInfoModal(false); setInfoNote(DEFAULT_INFO_NOTE); }}
+              className="w-full py-2.5 text-app-text-secondary font-medium hover:bg-app-hover rounded-xl transition">
+              Cancel
+            </button>
+          </div>
         </div>
       )}
 

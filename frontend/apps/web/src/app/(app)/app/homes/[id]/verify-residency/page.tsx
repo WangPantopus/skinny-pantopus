@@ -9,7 +9,11 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft, FileText, Upload, X } from 'lucide-react';
 import * as api from '@pantopus/api';
+import { useQuery } from '@tanstack/react-query';
 import { useClaimUploadSession } from '@/components/home/useClaimUploadSession';
+import { openInfoRequest } from '@/components/homes/ClaimApprovalChecklist';
+import ClaimInfoRequestNote from '@/components/homes/ClaimInfoRequestNote';
+import { myClaimsQuery } from '@/lib/myHomes';
 import { toast } from '@/components/ui/toast-store';
 
 type EvidenceType = 'utility_bill' | 'lease';
@@ -51,6 +55,12 @@ export default function VerifyResidencyPage() {
   const savedClaim = useRef<string | undefined>(undefined);
   const existingClaimId = searchParams?.get('claimId') || undefined;
   const returnQuery = searchParams?.get('return') === 'place' ? '?return=place' : '';
+
+  // What a Pantopus reviewer asked for on this claim (Request info), until a document answers it.
+  const myClaims = useQuery(myClaimsQuery());
+  const claimForNote = (myClaims.data?.claims ?? []).find((c) => (existingClaimId ? c.id === existingClaimId
+    : sameHomeId(c.home_id, homeId) && c.claim_type === 'resident' && c.status === 'under_review'));
+  const asked = claimForNote ? openInfoRequest(claimForNote) : null;
 
   const [selectedDoc, setSelectedDoc] = useState<EvidenceType | null>(null);
   const [pickedFile, setPickedFile] = useState<File | null>(null);
@@ -182,6 +192,8 @@ export default function VerifyResidencyPage() {
           Upload one document with this address on it. A person reviews it. Nothing you have now is taken away while
           you wait.
         </p>
+
+        {asked ? <ClaimInfoRequestNote request={asked} className="mb-6" /> : null}
 
         <div className="flex gap-3 p-4 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl mb-6">
           <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />

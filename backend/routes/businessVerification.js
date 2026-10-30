@@ -493,6 +493,15 @@ router.post('/:businessId/verify/review', verifyToken, requireAdmin, async (req,
       notes: notes || null,
     });
 
+    // The business's owners hear the decision (a turn-down with the reviewer's note). Best effort: the review stands.
+    try {
+      const { data: business } = await supabaseAdmin.from('User').select('name, username').eq('id', businessId).maybeSingle();
+      await require('../services/notificationService').notifyBusinessVerificationDecision({ businessId,
+        businessName: business?.name || business?.username, approved: decision === 'approved', note: notes });
+    } catch (notifyErr) {
+      logger.warn('Business verification notice failed after review', { businessId, error: notifyErr.message });
+    }
+
     res.status(200).json({
       verification_status: currentVerificationStatus,
       evidence_status: decision,
