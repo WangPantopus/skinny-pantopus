@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import { buildUserProfileShareUrl, chosenUsername } from '@pantopus/utils';
-import type { UserProfile, User, GigListItem, Review } from '@pantopus/types';
+import type { UserProfile, User, GigListItem, Review, Post } from '@pantopus/types';
 import { getAuthToken } from '@pantopus/api';
 import BusinessPublicProfile from '@/components/business/BusinessPublicProfile';
 import { toast } from '@/components/ui/toast-store';
@@ -19,7 +19,7 @@ import {
   OverviewTab,
   MissionsTab,
   PortfolioTab,
-  ActivityTab,
+  PostsTab,
   ReviewsTab,
   OwnerInsightsTab,
   OwnerSettingsTab,
@@ -39,7 +39,7 @@ const OWNER_PREVIEW_LABELS: Record<Exclude<ViewerContext, 'owner'>, string> = {
   neighborhood: 'Neighborhood',
   follower: 'Followers',
 };
-type ProfileTab = 'overview' | 'portfolio' | 'missions' | 'reviews' | 'activity' | 'insights' | 'settings';
+type ProfileTab = 'overview' | 'portfolio' | 'missions' | 'reviews' | 'posts' | 'insights' | 'settings';
 
 /** Extended profile shape returned by the public profile API. */
 type PublicProfileData = UserProfile & {
@@ -133,7 +133,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
   const [portfolio, setPortfolio] = useState<PortfolioEntry[] | null>(() => kept.portfolio ? toPortfolioEntries(kept.portfolio.files) : null);
   const [portfolioFailed, setPortfolioFailed] = useState(false);
   const portfolioRequested = useRef<string | null>(null);
-  const [userPosts, setUserPosts] = useState<Record<string, unknown>[]>(() => kept.posts?.posts || []);
+  const [userPosts, setUserPosts] = useState<Post[]>(() => kept.posts?.posts || []);
   // Posts are requested once per profile, reviews once per profile and viewer (the pending-review
   // check needs the viewer); the tab effect re-runs on every profile or portfolio update.
   const postsRequested = useRef<string | null>(null);
@@ -354,7 +354,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
     if (queryClient.getQueryData(key) === undefined) setPostsLoading(true);
     try {
       const res = await read(key, () => api.posts.getUserPosts(id, { limit: 20 }));
-      setUserPosts((res.posts || []) as unknown as Record<string, unknown>[]);
+      setUserPosts(res.posts || []);
     } catch (err) {
       console.error('Failed to load user posts:', err);
       if (queryClient.getQueryData(key) === undefined) setUserPosts([]);
@@ -408,13 +408,13 @@ export default function PublicProfileClient({ username, initialProfile }: Public
 
   useEffect(() => {
     // Launch cut #4 (Open Gigs): a person's open tasks are not shown, so not loaded.
-    if (launchFeatures.openGigs && profile && ['overview', 'missions', 'activity'].includes(activeTab) && userGigs.length === 0) {
+    if (launchFeatures.openGigs && profile && ['overview', 'missions'].includes(activeTab) && userGigs.length === 0) {
       loadUserGigs();
     }
     if (profile && ['overview', 'portfolio', 'insights'].includes(activeTab) && portfolioRequested.current !== profile.id) {
       loadPortfolio();
     }
-    if (profile && ['overview', 'activity'].includes(activeTab) && postsRequested.current !== profile.id) {
+    if (profile && ['overview', 'posts'].includes(activeTab) && postsRequested.current !== profile.id) {
       postsRequested.current = profile.id;
       loadUserPosts();
     }
@@ -435,6 +435,16 @@ export default function PublicProfileClient({ username, initialProfile }: Public
 
   const handleFollow = async () => {
     if (!currentUser) { router.push('/login'); return; }
+    // A stray click on Following never unfollows: it asks first, as Connected does.
+    if (followState) {
+      const yes = await confirmStore.open({
+        title: `Unfollow ${fullName}?`,
+        description: 'They won\'t be notified.',
+        confirmLabel: 'Unfollow',
+        variant: 'destructive',
+      });
+      if (!yes) return;
+    }
     setActionLoading(true);
     try {
       if (followState) {
@@ -794,7 +804,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
     // Launch cut #4 (Open Gigs): the Missions (Gigs) tab is hidden.
     ...(launchFeatures.openGigs ? [{ key: 'missions' as const, label: 'Missions' }] : []),
     { key: 'reviews', label: `Reviews${displayReviewCount > 0 ? ` (${displayReviewCount})` : ''}` },
-    { key: 'activity', label: 'Activity' },
+    { key: 'posts', label: 'Posts' },
     { key: 'insights', label: 'Insights', ownerOnly: true },
     { key: 'settings', label: 'Settings', ownerOnly: true },
   ];
@@ -917,14 +927,18 @@ export default function PublicProfileClient({ username, initialProfile }: Public
             }}
           />
         )}
-        {activeTab === 'activity' && (
-          <ActivityTab
-            gigs={userGigs}
+        {activeTab === 'posts' && (
+          <PostsTab
             posts={userPosts}
-            reviews={reviews}
-            loading={gigsLoading || reviewsLoading || postsLoading}
+            onPostsChange={(update) => {
+              setUserPosts(update);
+              // The next opening reads the list again rather than showing the old counts.
+              void queryClient.invalidateQueries({ queryKey: queryKeys.personPosts(profile.id) });
+            }}
+            loading={postsLoading}
             blocked={connectionState === 'blocked'}
             firstName={shownFirstName}
+            currentUserId={currentUser?.id}
           />
         )}
         {activeTab === 'insights' && showOwnerOnly && (
