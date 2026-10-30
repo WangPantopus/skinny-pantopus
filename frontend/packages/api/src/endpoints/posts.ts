@@ -320,12 +320,13 @@ export async function getMutedEntities(): Promise<{
     avatar_url: string | null;
     muted_at: string;
   }>;
+  topic_mutes?: Array<{ topic: string; area_id: string | null; muted_at: string }>;
 }> {
   return get('/api/posts/mute');
 }
 
 export async function unmuteEntity(params: {
-  entityType: 'user' | 'business' | 'persona';
+  entityType: 'user' | 'business' | 'persona' | 'topic';
   entityId: string;
 }): Promise<{ message: string }> {
   return del('/api/posts/mute', params);

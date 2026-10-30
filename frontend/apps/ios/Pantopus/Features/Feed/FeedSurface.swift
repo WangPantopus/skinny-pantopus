@@ -130,8 +130,21 @@ public enum FeedSurface: String, Sendable, Hashable, CaseIterable {
         )
     }
 
-    public func emptyContent(scopeLabel: String?, followCount _: Int) -> FeedEmptyContent {
-        switch self {
+    public func emptyContent(scopeLabel: String?, followCount _: Int, hasActiveFilter: Bool = false) -> FeedEmptyContent {
+        if hasActiveFilter {
+            return FeedEmptyContent(
+                icon: .filter,
+                headline: "No posts match this filter",
+                body: "Choose All to see other posts.",
+                ctaLabel: "Create post",
+                ctaIcon: .pencil,
+                footerIcon: .mapPin,
+                footerLead: "",
+                footerEmphasis: nil,
+                footerTrail: ""
+            )
+        }
+        return switch self {
         case .pulse:
             FeedEmptyContent(
                 icon: .radio,

@@ -48,6 +48,28 @@ class FeedModerationStore
         private val _hiddenPostIds = MutableStateFlow<Set<String>>(emptySet())
         val hiddenPostIds: StateFlow<Set<String>> = _hiddenPostIds.asStateFlow()
 
+        /** Shipping category mutes retain their feed surface; preferences can undo them across all feeds. */
+        private var mutedPostTypes: Map<String, Set<String>> = emptyMap()
+
+        fun isPostTypeMuted(
+            postType: String?,
+            surface: String,
+        ): Boolean = postType != null && postType in mutedPostTypes[surface].orEmpty()
+
+        fun addPostTypeMute(
+            postType: String,
+            surface: String,
+        ) {
+            mutedPostTypes = mutedPostTypes + (surface to (mutedPostTypes[surface].orEmpty() + postType))
+        }
+
+        fun removePostTypeMute(
+            postType: String,
+            surface: String? = null,
+        ) {
+            mutedPostTypes = mutedPostTypes.mapValues { (key, types) -> if (surface == null || surface == key) types - postType else types }
+        }
+
         fun isMuted(
             entityType: FeedMuteEntityType,
             entityId: String,
@@ -100,5 +122,6 @@ class FeedModerationStore
         fun clear() {
             _mutedEntities.value = emptySet()
             _hiddenPostIds.value = emptySet()
+            mutedPostTypes = emptyMap()
         }
     }

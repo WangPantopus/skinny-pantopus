@@ -92,11 +92,12 @@ enum class PulseComposeIntent(
          * The four read-only lanes added for RN chip-row parity
          * (`Alert` / `Deal` / `NeighborhoodWin` / `VisitorGuide`) have no
          * dedicated compose form yet, so they pre-fill the generic
-         * Announce / Recommend composers.
+         * Announce / Recommend composers. `Generic` (a `general` post, or
+         * another type with no chip) edits on the Announce form, as on iOS.
          */
         fun fromFeedIntent(feed: PulseIntent): PulseComposeIntent =
             when (feed) {
-                PulseIntent.All, PulseIntent.Generic, PulseIntent.Ask -> Ask
+                PulseIntent.All, PulseIntent.Ask -> Ask
                 PulseIntent.Recommend, PulseIntent.VisitorGuide -> Recommend
                 PulseIntent.Event -> Event
                 PulseIntent.Lost -> Lost
@@ -104,6 +105,7 @@ enum class PulseComposeIntent(
                 PulseIntent.Alert,
                 PulseIntent.Deal,
                 PulseIntent.NeighborhoodWin,
+                PulseIntent.Generic,
                 -> Announce
             }
     }
@@ -254,7 +256,7 @@ class PulseComposeViewModel
         private val networkMonitor: NetworkMonitor,
         private val postsRefresh: PulsePostsRefreshNotifier,
         private val locationProvider: LocationProvider,
-        savedStateHandle: SavedStateHandle,
+        private val savedStateHandle: SavedStateHandle,
         /** C2 — "post as this business" create route. */
         private val businessPosts: BusinessPostsRepository,
         /** Pre-post safety precheck — `POST /api/posts/precheck`. */
@@ -264,7 +266,8 @@ class PulseComposeViewModel
         val state: StateFlow<PulseComposeUiState> = _state.asStateFlow()
 
         /** Post id when editing an existing post; `null` in create mode. */
-        val editingPostId: String? = savedStateHandle.get<String>(POST_ID_KEY)
+        var editingPostId: String? = savedStateHandle.get<String>(POST_ID_KEY)
+            private set
 
         private val initialIntent: PulseComposeIntent =
             PulseComposeIntent.fromKey(savedStateHandle.get<String>(INTENT_KEY) ?: PulseComposeIntent.Ask.key)
@@ -1347,6 +1350,14 @@ class PulseComposeViewModel
                     }
                     val (toastText, toastError) = uploadPhotosIfNeeded(postId, isEditing = false)
                     if (toastError) {
+                        // Creation succeeded: retain the draft and retry through the existing edit path.
+                        // Repeating create would reject edits to the already-saved draft.
+                        editingPostId = postId
+                        savedStateHandle[POST_ID_KEY] = postId
+                        savedAudienceLabel =
+                            PulseComposeVisibility.entries.firstOrNull { it.key == request.visibility }?.label
+                                ?: PulseAnnounceAudience.entries.firstOrNull { it.backendVisibility == request.visibility }?.label
+                                ?: "original audience"
                         _state.value = PulseComposeUiState.Error(toastText)
                         _toast.value = PulseComposeToast(toastText, isError = true)
                         postsRefresh.notifyPostsDidChange()

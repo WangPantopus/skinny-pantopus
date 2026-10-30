@@ -32,10 +32,10 @@ function postTargets(post: Post): string[] {
   return post.distribution_targets ?? [post.visibility === 'connections' ? 'connections' : 'place'];
 }
 
-/** Whether a just-created post belongs in the feed list for this surface and filter (Place filters are post types). */
+/** Whether a just-created post belongs in the feed list for this surface and post-type filter. */
 function postBelongsToList(post: Post, surface: FeedSurface, filter: FilterType): boolean {
   if (!postTargets(post).some((target) => SURFACE_TARGETS[surface].includes(target))) return false;
-  return surface !== 'place' || filter === 'all' || post.post_type === filter;
+  return filter === 'all' || post.post_type === filter;
 }
 
 interface UseFeedDataOptions {
@@ -218,7 +218,7 @@ export function useFeedData({
       // sportsMode instead.
       const isSportsLane = surface === 'place' && topic === 'sports';
 
-      if (surface === 'place' && filter !== 'all' && !isSportsLane) {
+      if (filter !== 'all' && !isSportsLane) {
         params.postType = filter as PostType;
       }
 
@@ -596,14 +596,14 @@ export function useFeedData({
 
   const handleMuteTopic = useCallback(async (postType: string) => {
     try {
-      await api.posts.muteTopicOnSurface({ postType, surface: 'place' });
+      await api.posts.muteTopicOnSurface({ postType, surface });
       setFilter('all');
-      await loadFeed(true);
-      showToast(`${getPostTypeConfig(postType).label} posts muted in Place feed`);
+      await queryClient.resetQueries({ queryKey: ['feed', surface] });
+      showToast(`${getPostTypeConfig(postType).label} posts muted in this feed`);
     } catch {
       showToast('Failed to mute topic');
     }
-  }, [showToast, loadFeed]);
+  }, [showToast, surface, queryClient]);
 
   const handleNotHelpful = useCallback((id: string) => {
     removePostsFromCache((p) => p.id === id);
