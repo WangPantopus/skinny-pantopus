@@ -26,10 +26,22 @@ export function resolveWebNotificationPath(link: string | null | undefined, noti
       return `/app/homes/${home.toLowerCase()}/tasks/${task.toLowerCase()}`;
     }
   }
-  // A claim that was not approved or needs more documents grants no Home
-  // access, so its dashboard link (kept for the native routers) can't show it.
-  // My Homes lists the claim with its next step.
-  if (notification?.type === 'ownership_claim_rejected' || notification?.type === 'ownership_claim_needs_more_info') {
+  // A reviewer's request for more opens the claim's upload page, which shows
+  // the note (the apps open the claim's waiting room from the link). Older
+  // notices name no claim and go to My Homes, which lists it.
+  if (notification?.type === 'ownership_claim_needs_more_info') {
+    const home = notification.metadata?.home_id;
+    const claim = notification.metadata?.claim_id;
+    if (typeof home === 'string' && uuid.test(home) && typeof claim === 'string' && uuid.test(claim)) {
+      const page = notification.metadata?.claim_type === 'resident' ? 'verify-residency' : 'claim-owner/evidence';
+      return `/app/homes/${home.toLowerCase()}/${page}?claimId=${claim.toLowerCase()}`;
+    }
+    return '/app/homes';
+  }
+  // A claim that was not approved grants no Home access, so its dashboard
+  // link (kept for the native routers) can't show it. My Homes lists the
+  // claim with its next step.
+  if (notification?.type === 'ownership_claim_rejected') {
     return '/app/homes';
   }
   if (!link) return null;

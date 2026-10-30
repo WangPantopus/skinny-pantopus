@@ -5,7 +5,11 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft, FileText, Upload, X } from 'lucide-react';
 import * as api from '@pantopus/api';
+import { useQuery } from '@tanstack/react-query';
 import { useClaimUploadSession } from '@/components/home/useClaimUploadSession';
+import { openInfoRequest } from '@/components/homes/ClaimApprovalChecklist';
+import ClaimInfoRequestNote from '@/components/homes/ClaimInfoRequestNote';
+import { myClaimsQuery } from '@/lib/myHomes';
 import { toast } from '@/components/ui/toast-store';
 import { useHomeAccess } from '@/hooks/useHomeAccess';
 
@@ -51,6 +55,12 @@ export default function ClaimEvidencePage() {
   const submitInFlight = useRef(false);
   const savedClaim = useRef<string | undefined>(undefined);
   const existingClaimId = searchParams.get('claimId') || undefined;
+
+  // What a Pantopus reviewer asked for on this claim (Request info), until a document answers it.
+  const myClaims = useQuery(myClaimsQuery());
+  const claimForNote = (myClaims.data?.claims ?? []).find((c) => (existingClaimId ? c.id === existingClaimId
+    : sameHomeId(c.home_id, homeId) && c.claim_type === 'owner' && c.status === 'under_review'));
+  const asked = claimForNote ? openInfoRequest(claimForNote) : null;
 
   const [selectedDoc, setSelectedDoc] = useState<EvidenceType | null>(null);
   const [pickedFile, setPickedFile] = useState<File | null>(null);
@@ -198,6 +208,8 @@ export default function ClaimEvidencePage() {
         <p className="text-app-text-secondary text-[15px] leading-relaxed mb-6">
           Upload a document that supports your ownership claim. A reviewer must inspect and verify it before deciding the claim.
         </p>
+
+        {asked ? <ClaimInfoRequestNote request={asked} className="mb-6" /> : null}
 
         <div className="flex gap-3 p-4 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl mb-6">
           <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />

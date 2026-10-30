@@ -27,6 +27,8 @@ module.exports = function registerHomeClaimEvidenceRoutes(router, { verifyToken,
         const record = await evidence.upload({ ...args(req), uploadId: req.body?.upload_id,
           evidenceType: req.body?.evidence_type }, req.file);
         res.json({ message: 'Private evidence saved for review.', evidence: record });
+        // A document answering Pantopus's request for more tells the review team (best effort, after the reply).
+        require('../services/homeClaimReviewService').tellReviewersAboutReply(req.params.claimId).catch(() => {});
       } catch (error) { evidence.sendError(res, error); }
     });
   router.get('/home-claim-evidence/:homeId/:claimId', verifyToken, async (req, res) => {

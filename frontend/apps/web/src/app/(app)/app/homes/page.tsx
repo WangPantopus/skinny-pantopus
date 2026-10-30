@@ -18,7 +18,8 @@ import { confirmStore } from '@/components/ui/confirm-store';
 import { validateResidencyPage, residencyRequestLabel, residencyReviewLabel } from '@/components/homes/residencyProgressModel';
 import { unitText } from '@/components/homes/creation/homeCreationModel';
 import { useFeatureFlag } from '@/hooks/useFeatureFlag';
-import ClaimApprovalChecklist, { claimStatusLabel } from '@/components/homes/ClaimApprovalChecklist';
+import ClaimApprovalChecklist, { claimStatusLabel, openInfoRequest } from '@/components/homes/ClaimApprovalChecklist';
+import ClaimInfoRequestNote from '@/components/homes/ClaimInfoRequestNote';
 import { EVERYTHING, RECONNECTED, onSyncTopic } from '@/lib/syncSignals';
 type ResidencyRequest = Awaited<ReturnType<typeof api.homes.getMyResidencyRequests>>['requests'][number];
 type PendingClaim = { claim: Claim; addressLine: string; cityLine: string };
@@ -360,6 +361,7 @@ export default function HomesPage() {
                     const href = residency ? `/app/homes/${claim.home_id}/verify-residency${q}`
                       : `/app/homes/${claim.home_id}/claim-owner/evidence${q}`;
                     const busy = deletingClaimId === claim.id;
+                    const asked = openInfoRequest(claim);
                     return (
                       <div
                         key={claim.id}
@@ -378,11 +380,12 @@ export default function HomesPage() {
                           <div className="mt-2 inline-flex items-center rounded-full bg-violet-100 dark:bg-violet-900/50 px-2.5 py-1 text-xs font-semibold text-violet-800 dark:text-violet-200">
                             {claimStatusLabel(claim)}
                           </div>
+                          {asked ? <ClaimInfoRequestNote request={asked} className="mt-3" /> : null}
                           <p className="mt-2 text-xs text-app-text-secondary">
                             This claim does not grant household access.
                             {hasPrivateSetup ? ' Your private tasks remain available while verification is pending.' : ''}
                           </p>
-                          <p className="mt-2 text-sm text-app-text-secondary">Continue →</p>
+                          <p className="mt-2 text-sm text-app-text-secondary">{asked ? 'Upload documents →' : 'Continue →'}</p>
                         </div>
                         <button
                           type="button"
