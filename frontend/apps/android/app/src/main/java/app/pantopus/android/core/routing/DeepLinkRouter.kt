@@ -30,8 +30,9 @@ import java.net.URLDecoder
  * via [PendingDeepLinkStore] for one-shot post-login replay. OAuth
  * callback, auth reset/verify, and [Destination.Unknown] are never stashed.
  */
-// Arrival completion shares this router's account binding and path resolver.
-@Suppress("TooManyFunctions")
+// Arrival completion shares this router's account binding and path resolver, and it reads every link shape the
+// apps accept, so it stays one large object.
+@Suppress("TooManyFunctions", "LargeClass")
 object DeepLinkRouter {
     private const val BUSINESS_CONVERSATION_SEGMENTS = 4
 

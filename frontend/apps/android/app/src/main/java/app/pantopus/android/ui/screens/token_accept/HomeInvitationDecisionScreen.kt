@@ -305,7 +305,8 @@ private fun CurrentAccessContent(
         if (acceptedHere) viewModel.checkAccess()
     }
     LaunchedEffect(state.access?.currentAccess, state.canAcknowledge) {
-        if (acceptedHere && !openedAfterAccept && state.access?.currentAccess == "shared" && state.canAcknowledge) {
+        val canOpen = state.access?.currentAccess == "shared" && state.canAcknowledge
+        if (acceptedHere && !openedAfterAccept && canOpen) {
             openedAfterAccept = true
             openHome()
         }
