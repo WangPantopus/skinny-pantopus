@@ -218,6 +218,15 @@ Sessions you start for one job (Instant Screens, Nearby Plans, single fixes) wor
 - [x] The build's three database changes were approved on October 27, with no new tables. Two turned out to be needed (the morning delivery column and the invoice link); both are in production.
 - [x] No unit tests. Every flow and its edge cases are checked end to end in the web app, the iOS simulator and the Android emulator, and every error tells people what went wrong and what to do.
 
+**Made by the founder on October 30 (Christmas cards).** You approved plan v2 ("Yes, build it"). Progress is in the Christmas cards section below.
+
+- [x] Christmas cards have their own switch, `holiday_cards`, which needs `mailbox` on too. Writing letters stays off behind `mail_extras`.
+- [x] Anyone with a personal account can send a card; no proven home is needed. A card goes to one person found by name (people only, no businesses), or by email to someone not on Pantopus, who joins with that address to get it. The email and its page say only who the card is from; the card itself is seen only in Pantopus.
+- [x] One card a day per person, so there's no card list. Taking a card back frees the day.
+- [x] All 17 of your pictures. Under each, the apps print a cream strip like the originals: the caption by hand, "CHRISTMAS, 2026" and a red postmark with the day it was mailed. The handwriting font is Nothing You Could Do (SIL Open Font License).
+- [x] A card arrives with the 7 a.m. mail where the other person lives, either sealed until Christmas morning or on Christmas morning; by email, right away or sealed. Christmas only: sending closes at the end of December 31, and received cards stay.
+- [x] No new tables and no migration. Cards get no "Pantopus read this for you" note and skip vacation holds. Older app versions show a card as a plain letter.
+
 **Still open. The brief builds the default until you decide.**
 
 - [ ] Confirm the September 26 promise and pilot shape: "Know what matters for your home, and stay on top of it"; first-time homeowners in Vancouver, Camas and Washougal; five households, then 30 to 50, for eight weeks each. Default: as written.
@@ -597,6 +606,40 @@ Decided October 26–27 (section 0). Four sessions (server, iPhone, Android, web
   - [ ] Staging. It still runs `be2158532` from October 15, so push master to `dev` first; that also applies every migration since then to the staging database. Then add `mailbox` to the staging server's `LAUNCH_FEATURES` and the staging web's `NEXT_PUBLIC_LAUNCH_FEATURES` (the web needs a redeploy, since the key is built in), set `MailEnabled=true` on the staging seeder stack, and install staging app builds with `PANTOPUS_LAUNCH_FEATURES=mailbox` in the `.env.staging` they are built from. On your phones, check a morning delivery, its notice and a bill paid in test mode.
   - [ ] Production store builds: set the Actions variable `PANTOPUS_LAUNCH_FEATURES` to `mailbox` (GitHub → Settings → Secrets and variables → Actions → Variables), cut the builds, and once they're approved hold them for manual release on both stores. Every store build cut while the variable is set carries Mail, so clear it if you need a build without Mail before the day.
   - [ ] On the day: release the apps; add `mailbox` to the production server's `LAUNCH_FEATURES` and to Vercel's `NEXT_PUBLIC_LAUNCH_FEATURES`, and redeploy the web; then deploy the seeder stack with `MailEnabled=true` (P8 records the change in the checklist and `samconfig.toml` together). The server doesn't check which app build a person has, so people still on an older build get the morning notice too, with no Mail tab to open it in.
+
+## Christmas cards (added October 30)
+
+Decided October 30 (section 0). Christmas cards are built behind `holiday_cards`, which needs `mailbox` on too, and both are off in every hosted environment and store build, so nobody sees a card until you switch them on. With both keys on:
+- **The way in.** At the top of their own Mail, people get "Send a Christmas card".
+- **Four screens.**
+  1. Who it's for: a person found by name, or an email address.
+  2. Pick a card: one of your 17 pictures.
+  3. Write on the back: a note of up to 300 letters.
+  4. Seal it for the day: with the morning mail, sealed until Christmas, or on Christmas morning.
+- **One card a day.** A card can be taken back until the carrier's 7 a.m. pickup, which frees the day.
+- **Receiving.** The card comes as a red envelope. A sealed one stays shut, with its seal and the days left, until 7 a.m. on December 25 where the other person lives. Opening it slides the card out; turning it over shows the note.
+- **Christmas morning.** The 7 a.m. mail notice also counts the sealed cards that open that morning.
+
+- [x] Built on October 30, one PR per part: the server ([#3012](https://github.com/WangPantopus/skinny-pantopus/pull/3012)), the web ([#3013](https://github.com/WangPantopus/skinny-pantopus/pull/3013)), iPhone ([#3014](https://github.com/WangPantopus/skinny-pantopus/pull/3014)) and Android ([#3017](https://github.com/WangPantopus/skinny-pantopus/pull/3017)). Two follow-ups came from the Android build. A phone build from before cards can't mark a sealed card read, so it still opens from its envelope on Christmas morning ([#3015](https://github.com/WangPantopus/skinny-pantopus/pull/3015)). A card to an email address starts "Dear friend," ([#3016](https://github.com/WangPantopus/skinny-pantopus/pull/3016)). There are no new tables and no migration. Each part was checked in its own app against a local backend, including:
+  - every arrival choice;
+  - one card a day, and taking a card back;
+  - blocked and hidden people;
+  - a sealed card staying shut on every app until its seal was lifted with the test clock;
+  - an email invite through to joining;
+  - the Vault;
+  - the Christmas-morning notice, captured locally: "A sealed card can be opened now."
+- [x] The check across the three apps (October 30, against a local backend), with a card sent from each app and opened first on another:
+  - iPhone → web: opened on the web.
+  - Web → Android: opened first on Android.
+  - Android → iPhone: a sealed card. It showed sealed on the iPhone and stayed unopened; once its seal was lifted, it opened from its envelope there.
+
+  After a cold relaunch on both phones and a web reload, every app showed the same three cards opened, and senders saw "Today's card … In their mailbox now."
+- [ ] Before sending, the last screen can't know the other person's clock. It shows the day from the sender's own next morning, which can be one day off for someone in another time zone during the hours between their two 7 a.m.s. After sending, the card always shows the right day and the exact pickup time.
+- [ ] Not checked: real email delivery, pushes on real phones, physical phones, store review, Release builds with `holiday_cards`, and cards switched on in staging or production.
+- [ ] Yours, to switch cards on. Mail goes on first (the Mail section above). How to set each key is in the [flags doc](docs/launch-scope-flags-2026-10-01.md#switching-a-feature-back-on).
+  - [ ] Store builds by about December 1, so both stores approve by about December 10. Set the Actions variable `PANTOPUS_LAUNCH_FEATURES` to `mailbox,holiday_cards`, then cut and submit the iOS and Android builds and hold them for manual release. Both apps know the key, so the builds accept it.
+  - [ ] On the day: release the apps. Then add `holiday_cards` to the production server's `LAUNCH_FEATURES` and to Vercel's `NEXT_PUBLIC_LAUNCH_FEATURES`, and redeploy the web. Someone still on an older app sees a card as a plain letter; a sealed one says it opens on Christmas morning and stays shut.
+  - [ ] After December 31 sending closes by itself and the "Send a Christmas card" row hides itself. You can take `holiday_cards` off again in January; cards people received stay in their Mail, still shown as cards.
 
 ## Background backlog
 

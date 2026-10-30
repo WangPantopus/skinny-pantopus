@@ -1,8 +1,9 @@
 # First-launch scope flags (2026-10-01)
 
 For the first launch the founder cut eight features (direction of 2026-09-27; see the "LAUNCH SCOPE" block in the
-coordination hub). Three keys came later: `gift_funds` (2026-10-06), `mailbox` (founder decision of 2026-10-09, with
-the Instant Screens work) and `pulse_redesign` (founder decision of 2026-10-15, pausing the Pulse build). They are
+coordination hub). Four keys came later: `gift_funds` (2026-10-06), `mailbox` (founder decision of 2026-10-09, with
+the Instant Screens work), `pulse_redesign` (founder decision of 2026-10-15, pausing the Pulse build) and
+`holiday_cards` (founder decision of 2026-10-30, Christmas cards in Mail; built switched off). They are
 **hidden behind flags, not deleted**: every screen, route, API, job and test is still
 in the code, and any feature comes back by switching its flag on. This document says what each flag hides, how to switch
 one back on, and the calls that were made while hiding them.
@@ -25,6 +26,7 @@ feature on.
 | `gift_funds` | 9. Support Train gift funds (added 2026-10-06 by L3) | The organizer's gift fund: Start a Train's "Gift funds" option, the Manage gift fund section, the "Gift Funds" support type on Train pages, and the fund enable and contribution routes (403 `GIFT_FUNDS_UNAVAILABLE`). No app can take a contribution yet, and the payee, holding, fee and non-member questions wait for the founder (status/FOUNDER.md, L3). **Kept:** everything else about Trains |
 | `mailbox` | 10. Mailbox (added 2026-10-09, founder decision; `docs/product/instant-screens-contract-2026-10-09.md` §9) | The mailbox for received mail: Incoming, Counter and Vault, the Me / Home / Biz drawers, letters and the item detail, My Mail Day, vacation hold, mail search, the Stamps gallery, the Hub's mail tile, "Scan mail" chip and Mailbox shortcut, mail rows in Today, the Hub, the briefings and activity, mail notification settings, and the assistant's mail tools. The tab that read **Mail** reads **Messages** and opens the conversation list; its badge counts unread messages. The server sends no mail notifications, pushes or emails, counts no mail in badges or lists, and skips Mail Day and the other mailbox jobs. **Kept:** address verification by postcard ("Verify your address by mail"), home permissions (`mailbox.view` and the rest), all Mailbox code |
 | `pulse_redesign` | 11. The Pulse redesign (added 2026-10-15, founder decision; the build kit is `docs/product/pulse-build/`) | What the Pulse build added from October 13: the five-tab bar with Pulse and Plans as tabs, the Pulse page (area picker, topic lanes, quiet card, post status), the conversation page, the audience picker, follow and card controls, Pulse preferences, Pulse-mode posting, offers and claims, Helpful and thanks, and the Ask reminder. With the key off the apps are the October 13 apps: four tabs (Place · Today · Nearby · Messages), and Pulse is the October 13 feed that opens from Nearby, with its composer and post page. The server refuses every `/api/pulse` route and a Pulse-mode post (403 `PULSE_REDESIGN_UNAVAILABLE`), stores no follow alert, Helpful, thanks or offer notices, and skips the Ask reminder job. **Kept:** the October 13 Pulse and everything it uses; the rules and fixes in call 15; all redesign code, tables and tests |
+| `holiday_cards` | 12. Christmas cards (added 2026-10-30, founder decision; needs `mailbox` on too; built switched off, see NEXT_STEPS "Christmas cards") | Sending Christmas cards through Mail: the "Send a Christmas card" row at the top of your own mail, its four screens (who it's for, pick one of the 17 pictures, write on the back, seal it for the day), today's card and taking it back. Also the card routes (`GET`/`POST /api/mailbox/cards`, `POST /api/mailbox/cards/:id/take-back`), which answer 404 while either key is off, the email to someone not on Pantopus and the `holiday_card_claimed` notice. **Kept:** cards already received stay in the Mailbox and the Vault and still open as cards; a sealed card stays shut until Christmas morning whatever the key, and the morning notice still counts it; writing letters stays behind `mail_extras` |
 
 A surface that belongs to two cut features shows only when **both** are on.
 
@@ -49,7 +51,8 @@ Example: `LAUNCH_FEATURES=marketplace` on the backend plus the same key in the w
 Marketplace back everywhere. Switch the backend first so notifications and feeds return before the screens do. The
 Mailbox is the exception: release its app builds first, because the backend switch also starts the morning mail notice,
 which reaches people on older builds that have no Mail tab ([NEXT_STEPS](../NEXT_STEPS.md#mail-added-october-28) has the
-order).
+order). Christmas cards come after the Mailbox and follow the same order: release app builds that carry `holiday_cards`,
+then switch the backend and the web ([NEXT_STEPS](../NEXT_STEPS.md#christmas-cards-added-october-30)).
 
 Tests run with every feature on (`backend/jest.config.js`, `frontend/apps/web/tests/setup.ts`, and
 `LaunchFeatures.overrideForTesting` in the native unit tests), so the kept code stays covered.
@@ -65,6 +68,8 @@ Tests run with every feature on (`backend/jest.config.js`, `frontend/apps/web/te
   exist only for a cut feature (bill and calendar reminders, the no-bid nudge, the urgent-task push, booking reminders,
   Mail Day and the other mailbox jobs) are skipped; the AI assistant neither offers nor drafts listings or open tasks.
 - **No API route returns 404 for a cut feature:** the clients hide the UI, and shared endpoints serve kept features.
+  The Christmas card routes are the exception: they answer 404 while `holiday_cards` or `mailbox` is off, and the apps
+  hide the card row on any error.
 
 ## Calls made while hiding (founder's standing instruction: take the recommended option and record it)
 
@@ -118,7 +123,9 @@ Tests run with every feature on (`backend/jest.config.js`, `frontend/apps/web/te
    `mail_claimed` / `mail_escrow_*` notices, go out only with `mailbox` and `mail_extras` both on (a surface of two cut
    features). With either key off, `POST /api/mailbox/send` refuses a letter to an email address or phone number
    (403 `MAIL_EXTRAS_UNAVAILABLE`), and the web page the email's link opens (`/open/<mail id>`, where the person
-   previews the letter and signs in or signs up to claim it) is hidden.
+   previews the letter and signs in or signs up to claim it) is hidden. A Christmas card to an email address needs
+   `mailbox` and `holiday_cards` instead, so that page opens with `mailbox` and either `mail_extras` or
+   `holiday_cards`.
 15. **What stays while `pulse_redesign` is off (2026-10-15, founder decision):**
    - **Two rules from the Pulse build stay in force:**
      - Heads-ups about crime or suspicious people stay refused (`ALERT_KIND_NOT_ALLOWED`). Old posts of those kinds
