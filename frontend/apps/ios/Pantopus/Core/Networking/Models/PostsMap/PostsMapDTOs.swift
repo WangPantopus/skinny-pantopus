@@ -48,17 +48,28 @@ public struct PostsMapCreatorDTO: Decodable, Sendable, Hashable {
     public let username: String?
     public let name: String?
     public let profilePictureURL: String?
+    public let displayName: String?
+    public let handle: String?
 
     private enum CodingKeys: String, CodingKey {
-        case id, username, name
+        case id, username, name, displayName, handle
         case profilePictureURL = "profile_picture_url"
     }
 
-    public init(id: String?, username: String?, name: String?, profilePictureURL: String? = nil) {
+    public init(
+        id: String?,
+        username: String?,
+        name: String?,
+        profilePictureURL: String? = nil,
+        displayName: String? = nil,
+        handle: String? = nil
+    ) {
         self.id = id
         self.username = username
         self.name = name
         self.profilePictureURL = profilePictureURL
+        self.displayName = displayName
+        self.handle = handle
     }
 }
 
