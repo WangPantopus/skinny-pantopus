@@ -297,6 +297,31 @@ If you don't know the sender, you can safely ignore this email.
 }
 
 /**
+ * The words of a Christmas card's email (sendCardWaitingEmail). The sender sees the same words before sending it
+ * (POST /api/mailbox/cards/preview), so the look and the email can't drift apart. The first line starts with the
+ * sender's name.
+ * @param {Object} opts
+ * @param {string} opts.senderName - who the card is from, as the recipient sees it
+ * @param {string} opts.expiresAt - when the card stops waiting (ISO)
+ * @param {boolean} opts.sealed - sealed until Christmas morning
+ * @returns {{ subject: string, heading: string, lines: string[], button: string, footnote: string, footer: string[] }}
+ */
+function cardWaitingEmailContent({ senderName, expiresAt, sealed }) {
+  const until = new Date(expiresAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+  return {
+    subject: `${senderName} sent you a Christmas card on Pantopus`,
+    heading: 'You have a Christmas card',
+    lines: [
+      `${senderName} sent you a Christmas card on Pantopus.${sealed ? ' It’s sealed until Christmas morning.' : ''}`,
+      'Join Pantopus with this email address to open it and keep it in your own Pantopus mailbox. A Pantopus account is free.',
+    ],
+    button: 'Open your card',
+    footnote: `The card waits for you until ${until}. Sign in or create your account with this email address.`,
+    footer: ['Pantopus — Your household, organized.', 'If you don’t know the sender, you can safely ignore this email.'],
+  };
+}
+
+/**
  * A Christmas card for someone who isn't on Pantopus yet (POST /api/mailbox/cards). Like the letter's email, it says
  * only who the card is from: never its picture or its note, which they see in their own mailbox once they join.
  * @param {Object} opts
@@ -307,10 +332,9 @@ If you don't know the sender, you can safely ignore this email.
  * @param {boolean} opts.sealed - sealed until Christmas morning
  */
 async function sendCardWaitingEmail({ toEmail, senderName, claimLink, expiresAt, sealed }) {
-  const subject = `${senderName} sent you a Christmas card on Pantopus`;
-  const until = new Date(expiresAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+  const words = cardWaitingEmailContent({ senderName, expiresAt, sealed });
   const safeLink = escapeHtml(claimLink);
-  const sealedLine = sealed ? ' It’s sealed until Christmas morning.' : '';
+  const nameFirst = `<strong>${escapeHtml(senderName)}</strong>${escapeHtml(words.lines[0].slice(senderName.length))}`;
 
   const html = `
 <!DOCTYPE html>
@@ -325,37 +349,37 @@ async function sendCardWaitingEmail({ toEmail, senderName, claimLink, expiresAt,
     <!-- Header -->
     <div style="background:#8b1d1d; padding:32px 32px 24px; text-align:center;">
       <div style="font-size:32px; margin-bottom:8px;">✉️</div>
-      <h1 style="color:#fff7ed; font-size:20px; font-weight:600; margin:0;">You have a Christmas card</h1>
+      <h1 style="color:#fff7ed; font-size:20px; font-weight:600; margin:0;">${escapeHtml(words.heading)}</h1>
     </div>
 
     <!-- Body -->
     <div style="padding:32px;">
       <p style="color:#374151; font-size:15px; line-height:1.6; margin:0 0 16px;">
-        <strong>${escapeHtml(senderName)}</strong> sent you a Christmas card on Pantopus.${escapeHtml(sealedLine)}
+        ${nameFirst}
       </p>
       <p style="color:#374151; font-size:15px; line-height:1.6; margin:0;">
-        Join Pantopus with this email address to open it and keep it in your own Pantopus mailbox. A Pantopus account is free.
+        ${escapeHtml(words.lines[1])}
       </p>
 
       <!-- CTA -->
       <div style="text-align:center; margin:28px 0;">
         <a href="${safeLink}" style="display:inline-block; background:#8b1d1d; color:#fff7ed; font-size:15px; font-weight:600; padding:14px 32px; border-radius:10px; text-decoration:none;">
-          Open your card
+          ${escapeHtml(words.button)}
         </a>
       </div>
 
       <p style="color:#9ca3af; font-size:12px; text-align:center; margin:20px 0 0;">
-        The card waits for you until ${escapeHtml(until)}. Sign in or create your account with this email address.
+        ${escapeHtml(words.footnote)}
       </p>
     </div>
 
     <!-- Footer -->
     <div style="background:#f9fafb; border-top:1px solid #e5e7eb; padding:16px 32px; text-align:center;">
       <p style="color:#9ca3af; font-size:11px; margin:0;">
-        Pantopus — Your household, organized.
+        ${escapeHtml(words.footer[0])}
       </p>
       <p style="color:#d1d5db; font-size:10px; margin:8px 0 0;">
-        If you don't know the sender, you can safely ignore this email.
+        ${escapeHtml(words.footer[1])}
       </p>
     </div>
   </div>
@@ -363,15 +387,16 @@ async function sendCardWaitingEmail({ toEmail, senderName, claimLink, expiresAt,
 </html>`;
 
   const text = `
-${senderName} sent you a Christmas card on Pantopus.${sealedLine}
+${words.lines[0]}
 
-Join Pantopus with this email address to open it and keep it in your own Pantopus mailbox: ${claimLink}
+${words.lines[1]}
+${words.button}: ${claimLink}
 
-The card waits for you until ${until}. Sign in or create your free account with this email address.
-If you don't know the sender, you can safely ignore this email.
+${words.footnote}
+${words.footer[1]}
 `;
 
-  return sendEmail({ to: toEmail, subject, html, text });
+  return sendEmail({ to: toEmail, subject: words.subject, html, text });
 }
 
 // ============================================================
@@ -1297,6 +1322,7 @@ module.exports = {
   sendEmail,
   sendHomeInviteEmail,
   sendLetterWaitingEmail,
+  cardWaitingEmailContent,
   sendCardWaitingEmail,
   sendPasswordResetEmail,
   sendVerificationEmail,
