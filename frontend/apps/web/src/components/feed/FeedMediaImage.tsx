@@ -5,7 +5,7 @@
 import Image from 'next/image';
 import { useEffect, useMemo, useState } from 'react';
 import { API_BASE_URL } from '@pantopus/utils';
-import type { ImgHTMLAttributes } from 'react';
+import type { ImgHTMLAttributes, ReactNode } from 'react';
 import { isPantopusMediaUrl } from '@/lib/media-hosts';
 
 interface FeedMediaImageProps extends Omit<ImgHTMLAttributes<HTMLImageElement>, 'src'> {
@@ -14,6 +14,8 @@ interface FeedMediaImageProps extends Omit<ImgHTMLAttributes<HTMLImageElement>, 
   width?: number;
   height?: number;
   priority?: boolean;
+  /** Optional recovery UI once every source has failed. */
+  errorFallback?: ReactNode;
 }
 
 function normalizeBaseUrl(base: string): string {
@@ -109,6 +111,7 @@ export default function FeedMediaImage({
   width = 800,
   height = 600,
   priority,
+  errorFallback,
   ...props
 }: FeedMediaImageProps) {
   const candidates = useMemo(() => buildFeedMediaCandidates(src), [src]);
@@ -122,7 +125,7 @@ export default function FeedMediaImage({
   }, [src]);
 
   if (candidates.length === 0 || exhausted) {
-    return <div className={className} aria-hidden="true" />;
+    return errorFallback ?? <div className={className} aria-hidden="true" />;
   }
 
   const handleError = () => {
