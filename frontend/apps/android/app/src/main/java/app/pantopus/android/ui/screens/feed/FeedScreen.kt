@@ -431,6 +431,7 @@ fun FeedScreen(
                 if (mapMode) {
                     FeedMapSection(
                         query = FeedMapQuery(surface = activeSurface, postType = activeIntent.postType),
+                        searchText = searchText,
                         onOpenPost = onOpenPost,
                         modifier = Modifier.firstTapClosesKeyboard(),
                         topInset = { headerState.mapTopInsetPx(headerProgress.value, reduceMotion, revealFallbackPx) },

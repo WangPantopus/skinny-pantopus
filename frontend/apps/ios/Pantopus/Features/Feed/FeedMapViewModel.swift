@@ -93,6 +93,9 @@ public final class FeedMapViewModel {
     private let store: ScreenStore
     private let locationProvider: any LocationProviding
     private var query: FeedMapQuery
+    private var searchText = ""
+    private var allEntities: [ExploreEntity] = []
+    private var searchableTextById: [String: String] = [:]
     private var userCoordinate: UserCoordinate?
     /// The chosen area the camera last moved to; another pick moves it again.
     private var shownArea: ViewingLocationDTO?
@@ -420,8 +423,14 @@ public final class FeedMapViewModel {
                 // RN filters the response down to `layer_type === 'post'`
                 // (`src/hooks/feed/useFeedMap.ts:60`); the shared projector
                 // does the same by ignoring every other layer.
-                let entities = ExploreMapViewModel.projectMarkers(response.markers, anchor: anchor)
+                allEntities = ExploreMapViewModel.projectMarkers(response.markers, anchor: anchor)
                     .filter { $0.kind == .post }
+                    .sorted { $0.distanceMiles < $1.distanceMiles }
+                searchableTextById = response.markers.reduce(into: [:]) { index, marker in
+                    index[marker.id] = [marker.title, marker.content, marker.creator?.name ?? marker.creator?.username]
+                        .compactMap { $0 }.joined(separator: "\n").lowercased()
+                }
+                let entities = matchingEntities
                 let hint = response.nearestActivityCenter.map {
                     FeedMapRegion(
                         latitude: $0.latitude,
@@ -437,7 +446,7 @@ public final class FeedMapViewModel {
                 }
                 fetchedRegion = target
                 state = .loaded(FeedMapLoaded(
-                    entities: entities.sorted { $0.distanceMiles < $1.distanceMiles },
+                    entities: entities,
                     markers: ExploreMapViewModel.cluster(
                         entities: entities,
                         radiusDegrees: clusterRadius(latitudeDelta: clusterLatitudeDelta ?? target.latitudeDelta)
@@ -454,5 +463,28 @@ public final class FeedMapViewModel {
         }
         fetchTask = task
         _ = await task.value
+    }
+}
+
+extension FeedMapViewModel {
+    /// Search the current viewport locally, retaining its camera and avoiding a request per keystroke.
+    public func setSearchText(_ text: String) {
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard normalized != searchText else { return }
+        searchText = normalized
+        guard case let .loaded(loaded) = state else { return }
+        let entities = matchingEntities
+        state = .loaded(loaded.with(
+            entities: entities,
+            markers: ExploreMapViewModel.cluster(
+                entities: entities,
+                radiusDegrees: clusterRadius(latitudeDelta: clusterLatitudeDelta ?? region.latitudeDelta)
+            ),
+            selectedId: nil
+        ))
+    }
+
+    private var matchingEntities: [ExploreEntity] {
+        allEntities.filter { searchText.isEmpty || searchableTextById[$0.id]?.contains(searchText) == true }
     }
 }
