@@ -74,6 +74,9 @@ import app.pantopus.android.ui.theme.Spacing
 import kotlinx.coroutines.delay
 import java.time.Instant
 import java.time.ZoneId
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 
 /** Report reasons mirrored from the iOS reasons dialog. */
 private val reportReasons =
@@ -92,6 +95,18 @@ private val reportReasons =
  */
 internal fun eventDetails(post: PostDetailDto): PulseEventDetails? =
     pulseEventDetails(post.postType, post.eventDate, post.eventEndDate, post.eventVenue, long = true)
+
+/** A Deal’s business and expiry, matching the web detail’s calendar date. */
+internal fun dealDetailLine(post: PostDetailDto): String? {
+    if (post.postType != "deal") return null
+    val business = post.dealBusinessName?.trim()?.takeIf { it.isNotEmpty() }
+    val expiry =
+        PlanFormat.instant(post.dealExpiresAt)
+            ?.atZone(ZoneOffset.UTC)
+            ?.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM))
+            ?.let { "Expires $it" }
+    return listOfNotNull(business, expiry).joinToString(" · ").ifEmpty { null }
+}
 
 /**
  * "Lost · Contact: Phone 5555550123" for a Lost & Found post, as the web card and post page show it;
@@ -546,7 +561,7 @@ fun PulsePostDetailLoadedContent(
         body = {
             BodyReactionsBody(
                 body = content.post.content,
-                detailLine = lostFoundDetailLine(content.post),
+                detailLine = dealDetailLine(content.post) ?: lostFoundDetailLine(content.post),
                 eventDetails = eventDetails(content.post),
                 media = content.media,
                 intent = content.intent,

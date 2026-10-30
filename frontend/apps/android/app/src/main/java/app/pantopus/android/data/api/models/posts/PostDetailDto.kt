@@ -137,6 +137,7 @@ data class PostDetailDto(
     @Json(name = "lost_found_contact_pref") val lostFoundContactPref: String? = null,
     @Json(name = "service_category") val serviceCategory: String? = null,
     @Json(name = "deal_business_name") val dealBusinessName: String? = null,
+    @Json(name = "deal_expires_at") val dealExpiresAt: String? = null,
     /** `moderation` when a moderator removed the post. Only its author can still open it then. */
     @Json(name = "archive_reason") val archiveReason: String? = null,
     /** Manual archive can leave `state` open; an archived post has no lifecycle actions. */

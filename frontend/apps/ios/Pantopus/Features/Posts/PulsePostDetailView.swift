@@ -447,6 +447,22 @@ private struct ErrorLayout: View {
 }
 
 extension PostDetailDTO {
+    /// Deal metadata uses the same existing detail line as Lost & Found.
+    var dealDetailLine: String? {
+        guard postType == "deal" else { return nil }
+        var parts: [String] = []
+        if let business = dealBusinessName?.trimmingCharacters(in: .whitespacesAndNewlines), !business.isEmpty {
+            parts.append(business)
+        }
+        if let expiry = PlanTime.parse(dealExpiresAt) {
+            let formatter = DateFormatter()
+            formatter.dateStyle = .medium
+            formatter.timeZone = TimeZone(secondsFromGMT: 0)
+            parts.append("Expires \(formatter.string(from: expiry))")
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
     /// An Event's when and where ("Sunday, Oct 18 · 7:00–9:00 PM", the place),
     /// as the web post page shows them; nil for other posts.
     var eventDetails: PulseEventDetails? {

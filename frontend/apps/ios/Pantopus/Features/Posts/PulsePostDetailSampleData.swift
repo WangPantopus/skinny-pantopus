@@ -166,7 +166,7 @@ public enum PulsePostDetailSampleData {
         case .ask: "ask"
         case .offer: "offer"
         case .event: "event"
-        case .share, .generic: "share"
+        case .share, .deal, .generic: "share"
         case .alert: "alert"
         }
     }
@@ -174,6 +174,7 @@ public enum PulsePostDetailSampleData {
     private static func postType(for intent: PostIntent) -> String {
         switch intent {
         case .lostFound: "lost_found"
+        case .deal: "deal"
         default: "general"
         }
     }

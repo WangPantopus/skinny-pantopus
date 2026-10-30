@@ -9,7 +9,7 @@
 
 import SwiftUI
 
-/// One of the six intent buckets the design draws for a post. Source:
+/// One of the intent buckets the design draws for a post. Source:
 /// A10.4 `post_author`. The backend's `purpose` enum is wider; the
 /// view-model collapses those onto these intents for display.
 public enum PostIntent: String, Sendable, CaseIterable, Identifiable {
@@ -17,6 +17,7 @@ public enum PostIntent: String, Sendable, CaseIterable, Identifiable {
     case ask
     case offer
     case event
+    case deal
     case share
     case alert
     /// A post whose type this build doesn't know (Pulse S2): a plain "Post" chip.
@@ -33,6 +34,7 @@ public enum PostIntent: String, Sendable, CaseIterable, Identifiable {
         case .ask: "Ask"
         case .offer: "Offer"
         case .event: "Event"
+        case .deal: "Deal"
         case .share: "Share"
         case .alert: "Alert"
         case .generic: "Post"
@@ -46,6 +48,7 @@ public enum PostIntent: String, Sendable, CaseIterable, Identifiable {
         case .ask: .info
         case .offer: .success
         case .event: .personal
+        case .deal: .success
         case .share: .home
         case .alert: .warning
         case .generic: .neutral
@@ -59,6 +62,7 @@ public enum PostIntent: String, Sendable, CaseIterable, Identifiable {
         case .ask: .helpCircle
         case .offer: .hand
         case .event: .calendar
+        case .deal: .tag
         case .share: .messageCircle
         case .alert: .alertCircle
         case .generic: .messageSquare
@@ -84,7 +88,8 @@ public enum PostIntent: String, Sendable, CaseIterable, Identifiable {
         case "offer", "service_offer": .offer
         case "event": .event
         case "alert", "safety", "heads_up": .alert
-        case "deal", "recommend", "recommendation", "share", "showcase", "story",
+        case "deal": .deal
+        case "recommend", "recommendation", "share", "showcase", "story",
              "neighborhood_win", "visitor_guide", "local_update", "learn",
              "announcement", "general":
             .share

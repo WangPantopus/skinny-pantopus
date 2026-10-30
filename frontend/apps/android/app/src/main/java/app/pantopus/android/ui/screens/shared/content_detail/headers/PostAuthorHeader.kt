@@ -36,7 +36,7 @@ import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
 
 /**
- * One of the six intent buckets the design draws for a Pulse post.
+ * One of the intent buckets the design draws for a Pulse post.
  * Backend `Post.purpose` is wider; the view-model collapses those onto
  * these intents for display.
  */
@@ -49,6 +49,7 @@ enum class PostIntent(
     Ask("Ask", StatusChipVariant.Info, PantopusIcon.HelpCircle),
     Offer("Offer", StatusChipVariant.Success, PantopusIcon.Hand),
     Event("Event", StatusChipVariant.Personal, PantopusIcon.Calendar),
+    Deal("Deal", StatusChipVariant.Success, PantopusIcon.Tag),
     Share("Share", StatusChipVariant.Home, PantopusIcon.MessageCircle),
     Alert("Alert", StatusChipVariant.Warning, PantopusIcon.AlertCircle),
     ;
@@ -70,7 +71,8 @@ enum class PostIntent(
                 "offer", "service_offer" -> Offer
                 "event" -> Event
                 "alert", "safety", "heads_up" -> Alert
-                "deal", "recommend", "recommendation", "share", "showcase", "story",
+                "deal" -> Deal
+                "recommend", "recommendation", "share", "showcase", "story",
                 "neighborhood_win", "visitor_guide", "local_update", "learn",
                 "announcement", "general",
                 -> Share

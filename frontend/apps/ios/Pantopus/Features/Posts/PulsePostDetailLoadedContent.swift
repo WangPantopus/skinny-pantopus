@@ -142,7 +142,7 @@ public struct PulsePostDetailLoadedContent: View {
                     reactions: detail.reactions,
                     onReactionTap: onReactionTap,
                     mediaLocationBadge: detail.post.locationName,
-                    detailLine: detail.post.lostFoundDetailLine,
+                    detailLine: detail.post.dealDetailLine ?? detail.post.lostFoundDetailLine,
                     eventDetails: detail.post.eventDetails,
                     selectedReactionEmoji: selectedReactionEmoji,
                     onEmojiSelected: onEmojiSelected,

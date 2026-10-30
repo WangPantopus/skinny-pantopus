@@ -886,7 +886,7 @@ private fun emptySubcopy(intent: PostIntent): String =
         PostIntent.Ask -> "A question, tip, or resource can get the thread moving."
         PostIntent.Offer -> "Ask a detail, claim interest, or help the offer find the right neighbor."
         PostIntent.Event -> "A quick RSVP or offer to bring something helps the host plan."
-        PostIntent.Share -> "Add context, say thanks, or help other neighbors spot why it matters."
+        PostIntent.Share, PostIntent.Deal -> "Add context, say thanks, or help other neighbors spot why it matters."
         PostIntent.Alert -> "Confirm what you are seeing nearby or share a useful next step."
     }
 
@@ -917,7 +917,7 @@ val PostIntent.quickReplyPrompts: List<PostQuickReplyPrompt>
                     PostQuickReplyPrompt("Can bring supplies", PantopusIcon.ShoppingBag),
                     PostQuickReplyPrompt("What time?", PantopusIcon.Clock),
                 )
-            PostIntent.Share ->
+            PostIntent.Share, PostIntent.Deal ->
                 listOf(
                     PostQuickReplyPrompt("Thanks for sharing", PantopusIcon.Heart),
                     PostQuickReplyPrompt("I can add context", PantopusIcon.MessageCircle),
