@@ -105,6 +105,62 @@ enum MailPaper {
     static let mailboxPlate = Color(red: 0xF8 / 255, green: 0xFA / 255, blue: 0xFC / 255)
     static let mailboxFlag = Color(red: 0xC2 / 255, green: 0x41 / 255, blue: 0x0C / 255)
 
+    // MARK: Christmas cards (holiday_cards; the web's `cards/cardArt.ts`)
+
+    /// The red card envelope, its cream ink, and the "Christmas card" label.
+    static let cardEnvelope = dynamic(light: 0x9F2F28, dark: 0x8F2A24)
+    static let cardEnvelopeInk = Color(red: 0xFD / 255, green: 0xF2 / 255, blue: 0xE3 / 255)
+    static let cardEnvelopeAddress = Color(red: 0xFF / 255, green: 0xFA / 255, blue: 0xF0 / 255)
+    static let cardEnvelopeLabel = Color(red: 0xFD / 255, green: 0xE7 / 255, blue: 0xC8 / 255)
+    /// The "Do not open until Christmas" seal: cream, ringed in dark red.
+    static let cardSeal = Color(red: 0xFD / 255, green: 0xF2 / 255, blue: 0xE3 / 255)
+    static let cardSealInk = Color(red: 0x7A / 255, green: 0x14 / 255, blue: 0x14 / 255)
+    /// Wax red: the card flow's buttons, its step dots and headings; and the
+    /// cream of the words on a wax button.
+    static let wax = Color(red: 0x8B / 255, green: 0x1D / 255, blue: 0x1D / 255)
+    static let waxText = Color(red: 0xFF / 255, green: 0xF7 / 255, blue: 0xED / 255)
+    /// The printed strip under the picture: the caption's hand, the year, the
+    /// red postmark; and the soft darker edges of an old card.
+    static let cardCaptionInk = Color(red: 0x1D / 255, green: 0x2B / 255, blue: 0x63 / 255)
+    static let cardYearInk = Color(red: 0x2B / 255, green: 0x26 / 255, blue: 0x22 / 255)
+    static let cardPostmark = Color(red: 0xB2 / 255, green: 0x41 / 255, blue: 0x3A / 255)
+    static let cardEdge = Color(red: 110 / 255, green: 80 / 255, blue: 30 / 255).opacity(0.13)
+    static let cardGrain = Color(red: 120 / 255, green: 95 / 255, blue: 60 / 255).opacity(0.07)
+    static let cardShadow = Color(red: 60 / 255, green: 40 / 255, blue: 10 / 255)
+    /// The back: fountain-pen blue, its faint rules, who it's from, the footer.
+    static let cardInk = Color(red: 0x2C / 255, green: 0x4A / 255, blue: 0x8A / 255)
+    static let cardRuleLine = Color(red: 120 / 255, green: 100 / 255, blue: 70 / 255).opacity(0.22)
+    static let cardFrom = Color(red: 0x4A / 255, green: 0x3F / 255, blue: 0x33 / 255)
+    static let cardFooter = Color(red: 0x8A / 255, green: 0x7A / 255, blue: 0x62 / 255)
+    /// The desk the card flow sits on (the app's own background in dark mode),
+    /// and the cream of its fields, rows and notes, their edges and lines.
+    static let cardDesk = Color(red: 0xF5 / 255, green: 0xF0 / 255, blue: 0xE8 / 255)
+    static let cardField = dynamic(light: 0xFFFDF8, dark: 0xE7E2D6)
+    static let cardFieldEdge = dynamic(light: 0xD6CBB6, dark: 0xB4AA96)
+    static let cardRowEdge = dynamic(light: 0xE3D8C3, dark: 0xBFB49F)
+    static let cardRowLine = dynamic(light: 0xE7DCC6, dark: 0xC4B9A3)
+    static let cardNote = dynamic(light: 0xFBF6EC, dark: 0xE2DCCF)
+    static let cardPressed = dynamic(light: 0xF5EFE3, dark: 0xD9D2C3)
+    /// A person's initial in the search rows.
+    static let cardAvatar = Color(red: 0xEB / 255, green: 0xE3 / 255, blue: 0xD4 / 255)
+    static let cardAvatarInk = Color(red: 0x5B / 255, green: 0x4A / 255, blue: 0x36 / 255)
+    /// Words on the cream: dark, softer, and the soft words on the desk.
+    static let cardText = Color(red: 0x11 / 255, green: 0x18 / 255, blue: 0x27 / 255)
+    static let cardTextSoft = Color(red: 0x37 / 255, green: 0x41 / 255, blue: 0x51 / 255)
+    static let cardTextMuted = Color(red: 0x4E / 255, green: 0x55 / 255, blue: 0x63 / 255)
+    /// The step dots still ahead.
+    static let cardDotAhead = Color(red: 0xD6 / 255, green: 0xCB / 255, blue: 0xB6 / 255)
+
+    /// A card's paper from its design (`#rrggbb`); the season's cream when
+    /// it's missing or unreadable.
+    static func cardPaper(_ hex: String?) -> Color {
+        let digits = (hex ?? "").trimmingCharacters(in: CharacterSet(charactersIn: "# "))
+        guard digits.count == 6, let value = UInt32(digits, radix: 16) else {
+            return Color(uiColor: uiColor(0xF7F0E2))
+        }
+        return Color(uiColor: uiColor(value))
+    }
+
     /// A colour that dims in dark mode (paper under a lamp, not inverted).
     private static func dynamic(light: UInt32, dark: UInt32) -> Color {
         Color(uiColor: UIColor { traits in

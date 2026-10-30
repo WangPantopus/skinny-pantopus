@@ -189,10 +189,17 @@ struct MailPieceModel: Identifiable, Hashable {
     let peekLine: String?
     /// The words under the piece: when it came, opened or not, what's due.
     let meta: MailPieceMeta
+    /// A Christmas card (`holiday_cards`): the red envelope, sealed until
+    /// Christmas morning or with its picture peeking out once opened.
+    var card: MailCard?
 
     /// One sentence: "Bill from Alder Creek Water, verified utility, sealed,
     /// $42.10 due Fri, Nov 7."
     var accessibilityLabel: String {
+        if let card {
+            let state = card.sealed ? ", sealed until Christmas morning" : isOpened ? ", opened" : ", in its envelope"
+            return "Christmas card from \(from)\(state)."
+        }
         let what = isSpecialDelivery ? "Special delivery, \(kind.spokenName.lowercased())" : kind.spokenName
         var parts = ["\(what) from \(from)"]
         if let trust = trust.spokenLabel { parts.append(trust) }
@@ -244,6 +251,8 @@ extension MailPieceModel {
         let calendar = clock.calendar
         let item = mail.item
         let kind = MailPieceKind.of(item)
+        // A sealed Christmas card stays shut until Christmas morning, whatever was marked.
+        let sealedCard = item.card?.sealed == true
         let trust = MailPieceTrust(
             senderTrust: mail.senderTrust,
             fromPantopus: item.fromPantopus,
@@ -252,7 +261,7 @@ extension MailPieceModel {
         let from = Self.firstText(mail.senderDisplay, item.senderBusinessName, mail.sender?.name) ?? "Unknown sender"
         let delivered = MailDates.parse(item.deliveredAt) ?? MailDates.parse(item.createdAt) ?? now
         let postmarked = item.postmark?.date.flatMap(MailDates.parseDay) ?? delivered
-        let isOpened = kind.isEnvelope ? opened : true
+        let isOpened = kind.isEnvelope ? opened && !sealedCard : true
         let ageDays = MailDates.daysBetween(delivered, now, calendar: calendar)
         let subject = Self.firstText(item.displayTitle, item.subject)
         let meta = MailPieceMeta.make(for: mail, kind: kind, delivered: delivered, opened: opened, clock: clock)
@@ -274,8 +283,10 @@ extension MailPieceModel {
         // a sealed envelope stays bright until it's opened.
         isFaded = ageDays >= 1 && isOpened
         stamp = MailStampArt.forPiece(item.id)
-        peekLine = isOpened && kind.isEnvelope ? subject : nil
+        // An opened card shows its picture over the torn top, not a line.
+        peekLine = isOpened && kind.isEnvelope && item.card == nil ? subject : nil
         self.meta = meta
+        card = item.card
     }
 
     private static func note(kind: MailPieceKind, item: MailItem, subject: String?) -> String? {
@@ -315,6 +326,16 @@ extension MailPieceMeta {
         let dueDate = mail.dueDate
         let calendar = clock.calendar
         var parts = [MailDates.arrivalLabel(delivered, now: clock.now, calendar: calendar)]
+        if let card = item.card {
+            // "7:42 a.m. · Christmas card · Opens Christmas morning" (or "· Opened").
+            parts.append("Christmas card")
+            if card.sealed {
+                parts.append("Opens Christmas morning")
+            } else if opened {
+                parts.append("Opened")
+            }
+            return MailPieceMeta(parts: parts, due: nil, dueIsSettled: false)
+        }
         if kind.isEnvelope, opened { parts.append("Opened") }
         if kind == .postcard { parts.append("Postcard") }
         if item.onCounter { parts.append("On the Counter") }

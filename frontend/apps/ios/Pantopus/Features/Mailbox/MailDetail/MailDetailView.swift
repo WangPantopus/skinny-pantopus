@@ -492,6 +492,7 @@ public struct MailDetailView: View {
             bundleFailure: viewModel.bundleFailure,
             removed: viewModel.removed,
             restoreInFlight: viewModel.restoreInFlight,
+            cardFirstOpen: viewModel.cardFirstOpen ?? false,
             onEnvelope: { viewModel.showsSenderSheet = true },
             onAction: { action in
                 if action == .pay {

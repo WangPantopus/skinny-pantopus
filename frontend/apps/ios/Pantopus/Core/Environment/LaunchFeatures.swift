@@ -3,8 +3,9 @@
 //  Pantopus
 //
 //  First-launch scope (founder direction, 2026-09-27; Mailbox added
-//  2026-10-09; the Pulse redesign 2026-10-15). These features are hidden for
-//  the first launch; their code stays so any of them can come back. A feature is OFF unless its key is listed in the Info.plist value
+//  2026-10-09; the Pulse redesign 2026-10-15; Christmas cards 2026-10-30).
+//  These features are hidden for the first launch; their code stays so any
+//  of them can come back. A feature is OFF unless its key is listed in the Info.plist value
 //  `PantopusLaunchFeatures` (build setting `PANTOPUS_LAUNCH_FEATURES`,
 //  comma-separated, or "all"). Debug builds also read the
 //  `PANTOPUS_LAUNCH_FEATURES` environment variable (scheme env, or
@@ -57,6 +58,11 @@ public enum LaunchFeature: String, CaseIterable, Sendable {
     /// the post page. Plans is a tab either way while the `plans` server
     /// switch is on (founder decision, 2026-10-17).
     case pulseRedesign = "pulse_redesign"
+    /// 12. Christmas cards sent through Mail (founder decision, 2026-10-30):
+    /// "Send a Christmas card" at the top of Me in the Mailbox and the
+    /// four-step card flow. Needs `mailbox` on too. A card that comes is
+    /// drawn as a card either way, as on the web.
+    case holidayCards = "holiday_cards"
 }
 
 /// Read-only switches for the features cut from the first launch.
@@ -118,6 +124,10 @@ public enum LaunchFeatures {
 
     public static var pulseRedesign: Bool {
         isEnabled(.pulseRedesign)
+    }
+
+    public static var holidayCards: Bool {
+        isEnabled(.holidayCards)
     }
 
     /// Parses a comma-separated key list ("all" enables every feature).

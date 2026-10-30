@@ -8,7 +8,8 @@
 //  bundle; special deliveries inside the striped border. Each carries a stamp
 //  (people) or printed postage (verified senders and Pantopus), a postmark,
 //  the return address and the address it came to. Sealed until opened; an
-//  opened envelope shows its torn top and the letter peeking out. The drawing
+//  opened envelope shows its torn top and the letter peeking out. A Christmas
+//  card comes in a red envelope (`HolidayCardEnvelopePiece`). The drawing
 //  is an illustration with fixed type, like a photo of the piece; VoiceOver
 //  reads it as one sentence.
 //
@@ -21,11 +22,18 @@ struct MailPieceView: View {
     var body: some View {
         VStack(spacing: Spacing.s0) {
             if model.isOpened, model.kind.isEnvelope {
-                MailPeekSheet(line: model.peekLine)
-                    .padding(.horizontal, Spacing.s5)
-                    .frame(height: 30)
-                    .padding(.bottom, -16)
-                    .zIndex(0)
+                Group {
+                    if let card = model.card {
+                        // An opened Christmas card: its picture peeks out.
+                        HolidayCardPeek(design: card.design)
+                    } else {
+                        MailPeekSheet(line: model.peekLine)
+                    }
+                }
+                .padding(.horizontal, Spacing.s5)
+                .frame(height: 30)
+                .padding(.bottom, -16)
+                .zIndex(0)
             }
             object
                 .zIndex(1)
@@ -37,7 +45,9 @@ struct MailPieceView: View {
 
     @ViewBuilder
     private var object: some View {
-        if model.isSpecialDelivery, model.kind.isEnvelope {
+        if model.card != nil {
+            HolidayCardEnvelopePiece(model: model)
+        } else if model.isSpecialDelivery, model.kind.isEnvelope {
             SpecialDeliveryPiece(model: model)
         } else {
             switch model.kind {

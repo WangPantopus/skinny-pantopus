@@ -435,6 +435,9 @@ public enum HubRoute: Hashable {
     /// Disambiguation queue behind the Mailbox root's
     /// "N items need routing" banner.
     case mailRoutingQueue
+    /// Send a Christmas card, or today's card once it's sent (`holiday_cards`):
+    /// the row at the top of Me in the Mailbox.
+    case christmasCards
     /// Family Mail Party — household co-opening (discover / join / start /
     /// react / hand off). Reached from the Mailbox root overflow menu.
     case mailParty
@@ -929,6 +932,7 @@ public struct HubTabRoot: View {
         model.onOpenInvoice = { invoiceId in push(.invoiceDetail(invoiceId: invoiceId)) }
         model.onVerifyHome = { homeId in showVerifyHome(homeId) }
         model.onOpenWelcome = { mail in push(.mailWelcome(mail)) }
+        model.onOpenChristmasCards = { push(.christmasCards) }
         return model
     }
 
@@ -969,7 +973,7 @@ public struct HubTabRoot: View {
              .walletActivityList, .stamps, .mailTask, .mailTaskList, .mailTranslation,
              .packageGig, .earn, .businessOwner, .viewAs, .cancelClaim, .propertyCorrection,
              .quickPostGig, .editGig, .transferOwnership, .mailRoutingQueue, .mailDay,
-             .homeClaimReview:
+             .homeClaimReview, .christmasCards:
             true
         // Forms and wizards with their own Close.
         case .logMaintenance, .editMaintenance, .startPoll, .editAccessCode, .addCalendarEvent,
@@ -3416,6 +3420,10 @@ public struct HubTabRoot: View {
             )
         case .mailRoutingQueue:
             MailRoutingQueueView { Task { @MainActor in pop() } }
+        case .christmasCards:
+            HolidayCardFlowView(viewModel: HolidayCardFlowViewModel(fromName: MailPieceRecipient.personName)) {
+                Task { @MainActor in pop() }
+            }
         case .mailParty:
             MailPartyView(
                 onOpenMail: { mailId in
@@ -4060,6 +4068,9 @@ extension HubRoute {
         case .mailboxRoot, .mailboxMap, .mailboxSearch, .mailboxVault, .mailItemDetail, .mailWelcome, .vacationHold,
              .mailRoutingQueue, .mailDay, .stamps, .mailTask, .mailTaskList, .homeRecords:
             LaunchFeatures.mailbox
+        // Launch cuts #12 + #10: sending a Christmas card.
+        case .christmasCards:
+            LaunchFeatures.holidayCards && LaunchFeatures.mailbox
         default:
             true
         }

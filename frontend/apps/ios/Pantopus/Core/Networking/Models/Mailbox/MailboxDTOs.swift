@@ -101,6 +101,9 @@ public struct MailItem: Decodable, Sendable, Hashable, Identifiable {
     public let drawer: String?
     /// Where it is in its life: `delivered`, `opened`, `filed` (in the Vault) …
     public let lifecycle: String?
+    /// A Christmas card (`holiday_cards`): its picture, caption and year, and
+    /// whether it's still sealed until Christmas morning. Nil for anything else.
+    public let card: MailCard?
 
     private enum CodingKeys: String, CodingKey {
         case id
@@ -154,6 +157,7 @@ public struct MailItem: Decodable, Sendable, Hashable, Identifiable {
         case firstOpenedAt = "first_opened_at"
         case drawer
         case lifecycle
+        case card
     }
 
     public init(from decoder: any Decoder) throws {
@@ -216,6 +220,7 @@ public struct MailItem: Decodable, Sendable, Hashable, Identifiable {
         firstOpenedAt = try? c.decodeIfPresent(String.self, forKey: .firstOpenedAt)
         drawer = try? c.decodeIfPresent(String.self, forKey: .drawer)
         lifecycle = try? c.decodeIfPresent(String.self, forKey: .lifecycle)
+        card = try? c.decodeIfPresent(MailCard.self, forKey: .card)
     }
 }
 

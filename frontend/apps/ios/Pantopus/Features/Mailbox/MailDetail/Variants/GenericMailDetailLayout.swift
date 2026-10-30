@@ -57,39 +57,16 @@ struct GenericMailDetailLayout: View {
         MailItemDetailShell(
             topBar: letterTopBar,
             hero: {
-                MailEnvelopeButton(piece: letter.piece, onTap: hooks.onEnvelope)
+                if let card = letter.card {
+                    // A Christmas card opens as a card, from its envelope.
+                    HolidayCardView(letter: letter, card: card, firstOpen: hooks.cardFirstOpen, onEnvelope: hooks.onEnvelope)
+                } else {
+                    MailEnvelopeButton(piece: letter.piece, onTap: hooks.onEnvelope)
+                }
             },
             body: {
-                VStack(alignment: .leading, spacing: Spacing.s0) {
-                    if let summary = letter.summary {
-                        // Clipped to the top of the letter, over its edge.
-                        MailReadForYouNote(summary: summary, isBill: letter.kind == .bill)
-                            .padding(.horizontal, 6)
-                            .padding(.top, Spacing.s3)
-                            .padding(.bottom, -18)
-                            .zIndex(1)
-                    }
-                    if let booklet = content.bookletDetail {
-                        // A booklet pages through.
-                        BookletPager(pages: booklet.pages, pageCount: booklet.pageCount, ocrTexts: booklet.ocrTexts)
-                            .padding(.top, Spacing.s2)
-                    } else if letter.kind == .bundle {
-                        MailBundleContents(
-                            pieces: hooks.bundlePieces,
-                            failure: hooks.bundleFailure,
-                            isLoading: hooks.bundleLoading,
-                            onOpen: hooks.onOpenPiece,
-                            onRetry: hooks.onRetryBundle
-                        )
-                        .padding(.top, Spacing.s2)
-                    } else {
-                        MailLetterPaper(
-                            letter: letter,
-                            openingEnclosure: hooks.openingEnclosure,
-                            onOpenEnclosure: hooks.onOpenEnclosure
-                        )
-                        .padding(.top, letter.summary == nil ? Spacing.s2 : Spacing.s0)
-                    }
+                if letter.card == nil {
+                    letterBody(letter, hooks: hooks)
                 }
             },
             actions: {
@@ -104,6 +81,42 @@ struct GenericMailDetailLayout: View {
             }
         )
         .accessibilityIdentifier("mailDetail_letter")
+    }
+
+    /// Pantopus's note clipped to the letter, and the letter (or a booklet's
+    /// pages, or a bundle's pieces).
+    private func letterBody(_ letter: MailLetter, hooks: MailLetterPageHooks) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.s0) {
+            if let summary = letter.summary {
+                // Clipped to the top of the letter, over its edge.
+                MailReadForYouNote(summary: summary, isBill: letter.kind == .bill)
+                    .padding(.horizontal, 6)
+                    .padding(.top, Spacing.s3)
+                    .padding(.bottom, -18)
+                    .zIndex(1)
+            }
+            if let booklet = content.bookletDetail {
+                // A booklet pages through.
+                BookletPager(pages: booklet.pages, pageCount: booklet.pageCount, ocrTexts: booklet.ocrTexts)
+                    .padding(.top, Spacing.s2)
+            } else if letter.kind == .bundle {
+                MailBundleContents(
+                    pieces: hooks.bundlePieces,
+                    failure: hooks.bundleFailure,
+                    isLoading: hooks.bundleLoading,
+                    onOpen: hooks.onOpenPiece,
+                    onRetry: hooks.onRetryBundle
+                )
+                .padding(.top, Spacing.s2)
+            } else {
+                MailLetterPaper(
+                    letter: letter,
+                    openingEnclosure: hooks.openingEnclosure,
+                    onOpenEnclosure: hooks.onOpenEnclosure
+                )
+                .padding(.top, letter.summary == nil ? Spacing.s2 : Spacing.s0)
+            }
+        }
     }
 
     /// Back to the Mail tab, and the "…" menu: Translate and Create task
@@ -805,6 +818,8 @@ struct MailLetterPageHooks {
     /// Shredded (or dismissed for the household): Bring it back instead of the actions.
     var removed: MailRemovedDTO?
     var restoreInFlight: Bool
+    /// A Christmas card not opened before this visit opens from its envelope.
+    var cardFirstOpen = false
     let onEnvelope: () -> Void
     let onAction: (MailLetterAction) -> Void
     let onOpenEnclosure: (MailEnclosure) -> Void
