@@ -25,7 +25,7 @@ struct HolidayCardSealStep: View {
                 .frame(maxWidth: 380)
                 .rotationEffect(.degrees(1))
                 .frame(maxWidth: .infinity)
-                .accessibilityIdentifier("holidayCardEnvelopePreview")
+                .accessibilityIdentifier("sendCardEnvelopePreview")
             Text("When should it arrive?")
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(HolidayCardDesk.text(scheme))
@@ -37,7 +37,7 @@ struct HolidayCardSealStep: View {
                 }
             }
             .padding(.top, 10)
-            Text(HolidayCardWords.sealNote(byEmail: recipient.isEmail, cards: cards))
+            Text(HolidayCardWords.sealNote(byEmail: recipient.isEmail))
                 .font(.system(size: 13))
                 .foregroundStyle(MailPaper.cardTextSoft)
                 .lineSpacing(2)
@@ -54,13 +54,13 @@ struct HolidayCardSealStep: View {
                     .foregroundStyle(MailPaper.warningInk)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, Spacing.s3)
-                    .accessibilityIdentifier("holidayCardSendError")
+                    .accessibilityIdentifier("sendCardError")
             }
             HolidayCardWaxButton(title: "Seal and send", isLoading: viewModel.sending, isEnabled: viewModel.arrival != nil) {
                 Task { await viewModel.send() }
             }
             .padding(.top, Spacing.s5)
-            .accessibilityIdentifier("holidayCardSend")
+            .accessibilityIdentifier("sendCardSend")
         }
     }
 
@@ -124,7 +124,7 @@ struct HolidayCardSealStep: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(checked ? [.isButton, .isSelected] : .isButton)
-        .accessibilityIdentifier("holidayCardArrival.\(arrival.rawValue)")
+        .accessibilityIdentifier("sendCardArrival.\(arrival.rawValue)")
     }
 
     /// Their first name, or "they" for an email address.
@@ -176,7 +176,7 @@ struct HolidayCardSentView: View {
             .background(MailPaper.cardField, in: RoundedRectangle(cornerRadius: Radii.xl, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: Radii.xl, style: .continuous).strokeBorder(MailPaper.cardRowEdge, lineWidth: 1))
             .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("holidayCardSentCard")
+            .accessibilityIdentifier("sendCardSent")
             if let line = HolidayCardWords.takeBackLine(card) {
                 muted(line).padding(.top, Spacing.s3)
             }
@@ -193,17 +193,17 @@ struct HolidayCardSentView: View {
                     HolidayCardPaperButton(title: "Take it back", isLoading: viewModel.takingBack, fullWidth: true) {
                         viewModel.confirmsTakeBack = true
                     }
-                    .accessibilityIdentifier("holidayCardTakeBack")
+                    .accessibilityIdentifier("sendCardTakeBack")
                 }
                 HolidayCardWaxButton(title: "Back to your mail", action: onDone)
-                    .accessibilityIdentifier("holidayCardBackToMail")
+                    .accessibilityIdentifier("sendCardBackToMail")
             }
             .padding(.top, Spacing.s4)
             muted("One card a day. You can send another tomorrow.").padding(.top, Spacing.s3)
         }
         .confirmationDialog("Take your card back?", isPresented: $viewModel.confirmsTakeBack, titleVisibility: .visible) {
             Button("Take it back", role: .destructive) { Task { await viewModel.takeBack() } }
-                .accessibilityIdentifier("holidayCardTakeBackConfirm")
+                .accessibilityIdentifier("sendCardTakeBackConfirm")
             Button("Cancel", role: .cancel) {}
         } message: {
             Text(card.byEmail
@@ -242,6 +242,6 @@ struct HolidayCardsClosedView: View {
         .fixedSize(horizontal: false, vertical: true)
         .padding(.horizontal, Spacing.s2)
         .padding(.top, Spacing.s8)
-        .accessibilityIdentifier("holidayCardsClosed")
+        .accessibilityIdentifier("sendCardClosed")
     }
 }

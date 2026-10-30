@@ -59,7 +59,7 @@ struct HolidayCardNoteText: UIViewRepresentable {
         view.isUserInteractionEnabled = isEditable
         if isEditable {
             view.editor.accessibilityLabel = "Your note on the back of the card"
-            view.editor.accessibilityIdentifier = "holidayCardNote"
+            view.editor.accessibilityIdentifier = "sendCardNote"
         } else {
             view.accessibilityElementsHidden = true
         }

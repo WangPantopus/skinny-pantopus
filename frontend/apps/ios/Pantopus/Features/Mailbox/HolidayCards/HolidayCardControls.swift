@@ -111,7 +111,7 @@ struct HolidayCardRow: View {
         .buttonStyle(MailPieceButtonStyle())
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
-        .accessibilityIdentifier("mailboxSendCard")
+        .accessibilityIdentifier("mailHolidayCardRow")
     }
 
     /// One picture tilted, or three fanned out.

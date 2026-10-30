@@ -124,11 +124,11 @@ enum HolidayCardWords {
         name: String,
         calendar: Calendar = .current
     ) -> (title: String, detail: String) {
+        // Their mail comes at 7 a.m. where they live: never turned into this phone's time.
         let day = shortDay(cards.nextRoundAt, calendar: calendar)
-        let time = clockTime(cards.nextRoundAt, calendar: calendar)
         switch arrival {
         case .nextMorning:
-            return ("With the morning mail", "\(day), about \(time) where \(name) lives. They can open it right away.")
+            return ("With the morning mail", "\(day), about 7 a.m. where \(name) lives. They can open it right away.")
         case .sealedChristmas:
             return (
                 "Sealed until Christmas",
@@ -142,10 +142,16 @@ enum HolidayCardWords {
         }
     }
 
-    /// The take-back note under the choices.
-    static func sealNote(byEmail: Bool, cards: HolidayCardsResponse, calendar: Calendar = .current) -> String {
-        if byEmail { return "You can take it back until they open it." }
-        let until = "\(clockTime(cards.nextRoundAt, calendar: calendar)) \(shortDay(cards.nextRoundAt, calendar: calendar))"
-        return "You can take it back until about \(until), when the carrier picks it up."
+    /// The take-back note under the choices. Before it's sent their clock
+    /// isn't known here; the sent card says the time on this one.
+    static func sealNote(byEmail: Bool) -> String {
+        byEmail ? "You can take it back until they open it." : "You can take it back until the carrier picks it up at 7 a.m. their time."
+    }
+
+    /// A caption as a sentence for VoiceOver: most end in a full stop or a
+    /// question mark already.
+    static func captionSentence(_ caption: String?) -> String {
+        let text = MailPieceModel.firstText(caption) ?? "A Christmas picture"
+        return text.last.map { ".!?".contains($0) } == true ? text : text + "."
     }
 }

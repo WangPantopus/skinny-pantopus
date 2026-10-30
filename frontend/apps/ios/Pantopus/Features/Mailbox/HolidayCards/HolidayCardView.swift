@@ -55,7 +55,7 @@ struct HolidayCardView: View {
         .frame(maxWidth: 420)
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("holidayCard")
+        .accessibilityIdentifier("mailHolidayCard")
     }
 
     // MARK: The envelope
@@ -71,7 +71,7 @@ struct HolidayCardView: View {
         .accessibilityLabel("Christmas card from \(from)\(card.card.sealed ? ", sealed until Christmas morning" : "")")
         .accessibilityHint("Shows who sent it and its trail.")
         .accessibilityAddTraits(.isButton)
-        .accessibilityIdentifier("holidayCardEnvelope")
+        .accessibilityIdentifier("mailLetterEnvelope")
     }
 
     /// "Do not open until Christmas", and when it opens.
@@ -96,7 +96,7 @@ struct HolidayCardView: View {
             .background(MailPaper.cardNote, in: RoundedRectangle(cornerRadius: Radii.xl, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: Radii.xl, style: .continuous).strokeBorder(MailPaper.cardRowLine, lineWidth: 1))
             .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("holidayCardSealed")
+            .accessibilityIdentifier("mailHolidayCardSealed")
         }
     }
 
@@ -119,7 +119,7 @@ struct HolidayCardView: View {
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
             HolidayCardWaxButton(title: "Open the envelope", fullWidth: false) { open() }
-                .accessibilityIdentifier("holidayCardOpen")
+                .accessibilityIdentifier("mailHolidayCardOpen")
         }
     }
 
@@ -164,7 +164,7 @@ struct HolidayCardView: View {
                 HolidayCardPaperButton(title: showBack ? "Turn it back" : "Turn it over", isPressed: showBack) {
                     showBack.toggle()
                 }
-                .accessibilityIdentifier("holidayCardTurn")
+                .accessibilityIdentifier("mailHolidayCardTurn")
                 Button("The envelope", action: onEnvelope)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Theme.Color.appTextSecondary)
@@ -172,7 +172,7 @@ struct HolidayCardView: View {
                     .frame(minHeight: 44)
                     .contentShape(Rectangle())
                     .accessibilityHint("Shows who sent it and its trail.")
-                    .accessibilityIdentifier("holidayCardEnvelopeLink")
+                    .accessibilityIdentifier("mailHolidayCardEnvelope")
             }
         }
     }
@@ -208,8 +208,8 @@ struct HolidayCardView: View {
         // The note for VoiceOver, whichever side is up.
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
-            "Card from \(from): \(HolidayCardWords.withoutPeriod(card.card.caption ?? "a Christmas picture")). On the back: \(card.note)"
+            "Card from \(from): \(HolidayCardWords.captionSentence(card.card.caption)) On the back: \(card.note)"
         )
-        .accessibilityIdentifier("holidayCardFace")
+        .accessibilityIdentifier("mailHolidayCardFace")
     }
 }

@@ -40,7 +40,7 @@ struct HolidayCardFlowView: View {
         .task { await viewModel.load() }
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("holidayCardFlow")
+        .accessibilityIdentifier("sendCard")
     }
 
     // MARK: Header
@@ -62,14 +62,14 @@ struct HolidayCardFlowView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Back")
-            .accessibilityIdentifier("holidayCardBack")
+            .accessibilityIdentifier("sendCardBack")
             Text(heading.title)
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(HolidayCardDesk.text(scheme))
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityAddTraits(.isHeader)
-                .accessibilityIdentifier("holidayCardTitle")
+                .accessibilityIdentifier("sendCardTitle")
             if let step = heading.dots {
                 StepDots(current: step)
                     .padding(.trailing, 14)
@@ -130,14 +130,14 @@ struct HolidayCardFlowView: View {
                             MailPaper.cardRowLine,
                             lineWidth: 1
                         ))
-                        .accessibilityIdentifier("holidayCardTookBack")
+                        .accessibilityIdentifier("sendCardTookBack")
                 }
                 if viewModel.step != .to, let recipient = viewModel.recipient {
                     Text("To \(recipient.name)")
                         .font(.system(size: 14))
                         .foregroundStyle(HolidayCardDesk.muted(scheme))
                         .lineLimit(1)
-                        .accessibilityIdentifier("holidayCardTo")
+                        .accessibilityIdentifier("sendCardTo")
                 }
                 step(cards)
             }
@@ -180,6 +180,6 @@ private struct StepDots: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Step \(index + 1) of \(HolidayCardStep.counted.count)")
-        .accessibilityIdentifier("holidayCardStepDots")
+        .accessibilityIdentifier("sendCardStepDots")
     }
 }

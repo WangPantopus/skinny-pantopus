@@ -55,7 +55,7 @@ struct HolidayCardToStep: View {
                     .submitLabel(.search)
                     .focused($focused)
                     .accessibilityLabel("Search by name")
-                    .accessibilityIdentifier("holidayCardSearchField")
+                    .accessibilityIdentifier("sendCardSearch")
             }
             .padding(.horizontal, 14)
             .frame(minHeight: 48)
@@ -81,7 +81,7 @@ struct HolidayCardToStep: View {
             }
             .buttonStyle(.plain)
             .padding(.top, Spacing.s2)
-            .accessibilityIdentifier("holidayCardByEmail")
+            .accessibilityIdentifier("sendCardByEmail")
         }
         .task {
             // Ready to type, as on the web.
@@ -170,7 +170,7 @@ struct HolidayCardToStep: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
-        .accessibilityIdentifier("holidayCardPerson.\(person.userId)")
+        .accessibilityIdentifier("sendCardPerson.\(person.userId)")
     }
 
     private var byEmail: some View {
@@ -194,7 +194,7 @@ struct HolidayCardToStep: View {
                         .strokeBorder(focused ? MailPaper.wax : MailPaper.cardFieldEdge, lineWidth: 1)
                 )
                 .accessibilityLabel("Their email address")
-                .accessibilityIdentifier("holidayCardEmailField")
+                .accessibilityIdentifier("sendCardEmail")
             Text(
                 "They get an email saying you sent them a Christmas card. They join Pantopus with this address to open it. "
                     + "The email doesn’t show the card."
@@ -207,12 +207,12 @@ struct HolidayCardToStep: View {
                 viewModel.chooseEmail()
             }
             .padding(.top, Spacing.s3)
-            .accessibilityIdentifier("holidayCardEmailContinue")
+            .accessibilityIdentifier("sendCardEmailContinue")
             HolidayCardPaperButton(title: "Search Pantopus instead", fullWidth: true) {
                 viewModel.byEmail = false
             }
             .padding(.top, 2)
-            .accessibilityIdentifier("holidayCardSearchInstead")
+            .accessibilityIdentifier("sendCardSearchInstead")
         }
         .task {
             try? await Task.sleep(nanoseconds: 350_000_000)
@@ -241,14 +241,14 @@ struct HolidayCardPickStep: View {
             VStack(spacing: 10) {
                 if let picked = viewModel.design {
                     HolidayCardPaperButton(title: "See it larger", fullWidth: true) { large = picked }
-                        .accessibilityIdentifier("holidayCardSeeLarger")
+                        .accessibilityIdentifier("sendCardSeeLarger")
                 } else {
                     Text("Tap a picture to choose it.")
                         .font(.system(size: 14))
                         .foregroundStyle(HolidayCardDesk.muted(scheme))
                 }
                 HolidayCardWaxButton(title: "Write on this card", isEnabled: viewModel.design != nil) { viewModel.toWrite() }
-                    .accessibilityIdentifier("holidayCardWrite")
+                    .accessibilityIdentifier("sendCardWriteOn")
             }
         }
         .sheet(item: $large) { design in
@@ -292,7 +292,7 @@ struct HolidayCardPickStep: View {
         .accessibilityLabel(design.caption)
         .accessibilityHint(selected ? "Shows it larger." : "Chooses this card.")
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
-        .accessibilityIdentifier("holidayCardDesign.\(design.id)")
+        .accessibilityIdentifier("sendCardDesign.\(design.id)")
     }
 
     /// The picture large, to choose it or close.
@@ -306,12 +306,12 @@ struct HolidayCardPickStep: View {
                 .accessibilityLabel(design.caption)
             HStack(spacing: 10) {
                 HolidayCardPaperButton(title: "Close", fullWidth: true) { large = nil }
-                    .accessibilityIdentifier("holidayCardLargeClose")
+                    .accessibilityIdentifier("sendCardLargeClose")
                 HolidayCardWaxButton(title: "Choose this card") {
                     viewModel.designId = design.id
                     large = nil
                 }
-                .accessibilityIdentifier("holidayCardLargeChoose")
+                .accessibilityIdentifier("sendCardChooseThis")
             }
             .frame(maxWidth: 420)
         }
@@ -319,6 +319,8 @@ struct HolidayCardPickStep: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(HolidayCardDesk.background(scheme))
         .presentationDragIndicator(.visible)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("sendCardLarge")
     }
 }
 
@@ -358,16 +360,16 @@ struct HolidayCardWriteStep: View {
                     UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                     showBack.toggle()
                 }
-                .accessibilityIdentifier("holidayCardTurnOver")
+                .accessibilityIdentifier("sendCardTurn")
                 Spacer(minLength: Spacing.s2)
                 Text("\(count) of \(cards.messageLimit) letters")
                     .font(.system(size: 13, weight: count >= cards.messageLimit ? .semibold : .regular))
                     .foregroundStyle(count >= cards.messageLimit ? MailPaper.wax : HolidayCardDesk.muted(scheme))
-                    .accessibilityIdentifier("holidayCardLetters")
+                    .accessibilityIdentifier("sendCardCount")
             }
             VStack(spacing: Spacing.s2) {
                 HolidayCardWaxButton(title: "Seal it", isEnabled: !empty) { viewModel.toSeal() }
-                    .accessibilityIdentifier("holidayCardSealIt")
+                    .accessibilityIdentifier("sendCardSealIt")
                 if empty {
                     Text("Write a few words on the back first.")
                         .font(.system(size: 13))

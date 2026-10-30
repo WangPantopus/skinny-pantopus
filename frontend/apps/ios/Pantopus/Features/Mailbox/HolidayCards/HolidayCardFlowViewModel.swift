@@ -146,7 +146,7 @@ final class HolidayCardFlowViewModel {
 
     /// "Dear Maya," on the back before anything's written.
     var placeholder: String {
-        guard case let .person(_, name) = recipient else { return "Dear," }
+        guard case let .person(_, name) = recipient else { return "Dear friend," }
         return "Dear \(HolidayCardWords.firstName(name)),"
     }
 
