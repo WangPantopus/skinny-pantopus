@@ -162,6 +162,81 @@ data class HolidayCardPreviewEmail(
     val footer: List<String> = emptyList(),
 )
 
+/** `GET /api/mailbox/sent` (launch key `mailbox`): what the person has sent, newest first, 25 at a time. */
+@JsonClass(generateAdapter = true)
+data class SentMailResponse(
+    val items: List<SentCard> = emptyList(),
+    /** Where the next page starts; null at the end. */
+    val next: String? = null,
+)
+
+/** `GET /api/mailbox/sent/:id`: one card the person sent, with their own note and its trail. */
+@JsonClass(generateAdapter = true)
+data class SentCardResponse(
+    val item: SentCard,
+)
+
+/**
+ * A card the person sent, as Sent shows it: who it went to and how it's doing, never anything they did with it (opened,
+ * filed, shredded) nor where they live. `status`: `waiting` (to a person, before the 7 a.m. pickup), `picked_up` (it
+ * comes on Christmas morning), `delivered` (in their mailbox), `email_waiting`, `claimed` or `expired` (by email).
+ */
+@JsonClass(generateAdapter = true)
+data class SentCard(
+    val id: String,
+    val kind: String? = null,
+    @Json(name = "sent_at") val sentAt: String? = null,
+    /** Their name when it was sent; by email the masked address, or the name of whoever claimed it. */
+    @Json(name = "to_name") val toName: String? = null,
+    @Json(name = "by_email") val byEmail: Boolean = false,
+    val arrival: String? = null,
+    val status: String? = null,
+    @Json(name = "arrives_at") val arrivesAt: String? = null,
+    /** The day it goes (or went) into their mailbox, by their clock ("2026-12-11"). */
+    @Json(name = "arrives_on") val arrivesOn: String? = null,
+    /** The day a sealed card opens ("2026-12-25"). */
+    @Json(name = "opens_on") val opensOn: String? = null,
+    /** Sealed until Christmas morning. */
+    val sealed: Boolean = false,
+    @Json(name = "can_take_back") val canTakeBack: Boolean = false,
+    @Json(name = "take_back_until") val takeBackUntil: String? = null,
+    val envelope: SentCardEnvelope? = null,
+    val card: SentCardFace? = null,
+    /** The sender's own note (the card's page only). */
+    val note: String? = null,
+    /** Where it's been, in order (the card's page only). */
+    val trail: List<SentCardStep> = emptyList(),
+)
+
+/** The envelope as they got it: who it's from, and the day it was postmarked by their clock (null before the pickup). */
+@JsonClass(generateAdapter = true)
+data class SentCardEnvelope(
+    val from: String? = null,
+    @Json(name = "postmarked_on") val postmarkedOn: String? = null,
+)
+
+/** The card's picture and its printing. */
+@JsonClass(generateAdapter = true)
+data class SentCardFace(
+    val design: String,
+    val number: Int? = null,
+    val caption: String? = null,
+    val paper: String? = null,
+    val year: Int? = null,
+)
+
+/**
+ * One step of a sent card's trail: `sealed`, `picked_up`, `delivered`, `opens`, `emailed`, `joined` or `returned`, when
+ * (a time, [at], or a day by their clock, [on]) and whether it has happened.
+ */
+@JsonClass(generateAdapter = true)
+data class SentCardStep(
+    val step: String,
+    val at: String? = null,
+    val on: String? = null,
+    val done: Boolean = false,
+)
+
 /** The page the email's link opens: who it's from, whether it's sealed, and the address it went to (masked). */
 @JsonClass(generateAdapter = true)
 data class HolidayCardPreviewLinkPage(

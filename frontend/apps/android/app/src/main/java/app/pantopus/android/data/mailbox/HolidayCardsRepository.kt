@@ -6,15 +6,21 @@ import app.pantopus.android.data.api.models.mailbox.HolidayCardPreview
 import app.pantopus.android.data.api.models.mailbox.HolidayCardRecipient
 import app.pantopus.android.data.api.models.mailbox.HolidayCardsResponse
 import app.pantopus.android.data.api.models.mailbox.SendHolidayCardBody
+import app.pantopus.android.data.api.models.mailbox.SentCard
 import app.pantopus.android.data.api.models.mailbox.SentHolidayCard
+import app.pantopus.android.data.api.models.mailbox.SentMailResponse
 import app.pantopus.android.data.api.models.mailbox.TakeBackHolidayCardResponse
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.HolidayCardsApi
 import app.pantopus.android.data.api.services.MailComposeApi
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import javax.inject.Inject
@@ -72,20 +78,35 @@ class HolidayCardsRepository
             return when (val result = safeApiCall { api.send(body) }) {
                 is NetworkResult.Success -> {
                     latestFlow.update { it?.copy(today = result.data.card) }
+                    cardSentFlow.tryEmit(result.data.card.id)
                     NetworkResult.Success(result.data.card)
                 }
                 is NetworkResult.Failure -> result
             }
         }
 
-        /** `POST /api/mailbox/cards/:id/take-back`: the day's card is free again. */
+        /** `POST /api/mailbox/cards/:id/take-back`: the day's card is free again, and it leaves Sent. */
         suspend fun takeBack(cardId: String): NetworkResult<TakeBackHolidayCardResponse> {
             val result = safeApiCall { api.takeBack(cardId) }
             if (result is NetworkResult.Success) {
                 latestFlow.update { cards -> if (cards?.today?.id == cardId) cards.copy(today = null) else cards }
+                takenBackFlow.tryEmit(cardId)
             }
             return result
         }
+
+        /** `GET /api/mailbox/sent`: a page of the cards the person sent, newest first, after [before] (the last `next`). */
+        suspend fun sent(
+            before: String?,
+            limit: Int = SENT_PAGE,
+        ): NetworkResult<SentMailResponse> = safeApiCall { api.sent(before, limit) }
+
+        /** `GET /api/mailbox/sent/:id`: one card the person sent, with their note and its trail. */
+        suspend fun sentCard(id: String): NetworkResult<SentCard> =
+            when (val result = safeApiCall { api.sentCard(id) }) {
+                is NetworkResult.Success -> NetworkResult.Success(result.data.item)
+                is NetworkResult.Failure -> result
+            }
 
         /** People a card can go to, by name (two letters or more): no businesses. */
         suspend fun searchPeople(query: String): NetworkResult<List<MailRecipientDto>> =
@@ -95,9 +116,31 @@ class HolidayCardsRepository
             }
 
         companion object {
+            /** Sent reads 25 cards at a time. */
+            const val SENT_PAGE = 25
+
             private val latestFlow = MutableStateFlow<HolidayCardsResponse?>(null)
 
             val latest: StateFlow<HolidayCardsResponse?> = latestFlow.asStateFlow()
+
+            private val cardSentFlow = MutableSharedFlow<String>(extraBufferCapacity = 8)
+
+            /** A card just sent: Sent reads again, and the Mailbox's flag goes up for a card to a person. */
+            val cardSent: SharedFlow<String> = cardSentFlow.asSharedFlow()
+
+            private val takenBackFlow = MutableSharedFlow<String>(extraBufferCapacity = 8)
+
+            /** A card taken back, from the send screens or from Sent: Sent drops it and the flag comes down. */
+            val takenBack: SharedFlow<String> = takenBackFlow.asSharedFlow()
+
+            private val showSentFlow = MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+
+            /** "See it in Sent": the Mailbox opens Sent. */
+            val showSent: SharedFlow<Unit> = showSentFlow.asSharedFlow()
+
+            fun announceShowSent() {
+                showSentFlow.tryEmit(Unit)
+            }
 
             /** Sign-out: nothing of this account's cards stays for the next one. */
             fun forgetAccount() {

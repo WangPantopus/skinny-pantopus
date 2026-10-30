@@ -54,6 +54,7 @@ import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
 import app.pantopus.android.data.api.models.mailbox.HolidayCardsResponse
+import app.pantopus.android.data.api.models.mailbox.SentCard
 import app.pantopus.android.data.api.models.mailbox.v2.MailHome
 import app.pantopus.android.data.api.models.mailbox.v2.MailVacationHold
 import app.pantopus.android.data.mailbox.MailboxRepository
@@ -61,6 +62,7 @@ import app.pantopus.android.ui.components.NavigationMenuButton
 import app.pantopus.android.ui.components.firstTapClosesKeyboard
 import app.pantopus.android.ui.screens.ceremonial_mail_open.MailWelcomePorch
 import app.pantopus.android.ui.screens.mailbox.cards.HolidayCardRow
+import app.pantopus.android.ui.screens.mailbox.cards.TakeBackDialog
 import app.pantopus.android.ui.screens.mailbox.components.MailboxHeroState
 import app.pantopus.android.ui.screens.place.verify.PlaceVerifyMethod
 import app.pantopus.android.ui.screens.place.verify.PlaceVerifySheet
@@ -107,8 +109,11 @@ fun MailboxRootScreen(
     onOpenVerificationStatus: ((homeId: String) -> Unit)? = null,
     /** "Send a Christmas card" or today's card, at the top of Me (launch keys `holiday_cards` + `mailbox`). */
     onOpenCards: () -> Unit = {},
+    /** A card in Sent: its own page, with its trail and Take it back. */
+    onOpenSentCard: (String) -> Unit = {},
     viewModel: MailboxRootViewModel = hiltViewModel(),
     vault: MailVaultViewModel = hiltViewModel(),
+    sentList: MailSentViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val hero by viewModel.hero.collectAsStateWithLifecycle()
@@ -124,19 +129,28 @@ fun MailboxRootScreen(
     val welcome by viewModel.welcome.collectAsStateWithLifecycle()
     val zone by viewModel.mailZone.collectAsStateWithLifecycle()
     val cards by viewModel.cards.collectAsStateWithLifecycle()
+    val sent by viewModel.sent.collectAsStateWithLifecycle()
     var verifyHome by remember { mutableStateOf<MailHome?>(null) }
+    var confirmTakeBack by remember { mutableStateOf<SentCard?>(null) }
 
     LaunchedEffect(Unit) {
         viewModel.configureNavigation(onOpenMail = onOpenMail)
         viewModel.load()
         Analytics.track(AnalyticsEvent.ScreenMailboxRootViewed)
     }
-    // The Vault's folders for the open drawer, read when the Vault tab shows.
+    // The Vault's folders for the open drawer, read when the Vault tab shows (Sent has no tabs).
     LaunchedEffect(selectedTab, selectedDrawer, homes) {
-        if (selectedTab == MailboxTab.Vault) vault.show(selectedDrawer, homes)
+        if (selectedTab == MailboxTab.Vault && selectedDrawer != MailboxDrawer.Sent) vault.show(selectedDrawer, homes)
+    }
+    // Sent reads what was sent when it opens (again after a while: a pickup or an arrival may have come).
+    LaunchedEffect(selectedDrawer, zone) {
+        if (selectedDrawer == MailboxDrawer.Sent) sentList.show(zone)
     }
     // Back on the Mailbox after a while (or the next morning, or from paying a bill): today's mail, not what was read before.
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refreshIfStale() }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        viewModel.refreshIfStale()
+        if (selectedDrawer == MailboxDrawer.Sent) sentList.show(zone)
+    }
 
     Box(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg).testTag("mailboxRoot")) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -155,7 +169,10 @@ fun MailboxRootScreen(
                 isRefreshing = refreshing,
                 onRefresh = {
                     viewModel.refresh()
-                    if (selectedTab == MailboxTab.Vault) vault.refresh()
+                    when {
+                        selectedDrawer == MailboxDrawer.Sent -> sentList.refresh()
+                        selectedTab == MailboxTab.Vault -> vault.refresh()
+                    }
                 },
                 modifier = Modifier.fillMaxSize(),
             ) {
@@ -181,6 +198,14 @@ fun MailboxRootScreen(
                     onVerify = { home -> verifyHome = home },
                     cards = cards,
                     onOpenCards = onOpenCards,
+                    // The flag is a card part (keys `holiday_cards` + `mailbox`); Sent itself needs only `mailbox`.
+                    sent =
+                        SentContent(
+                            list = sentList,
+                            waiting = if (LaunchFeatures.holidayCards) sent?.waiting ?: 0 else 0,
+                            onOpen = onOpenSentCard,
+                            onTakeBack = { confirmTakeBack = it },
+                        ),
                 )
             }
         }
@@ -219,6 +244,17 @@ fun MailboxRootScreen(
                 onClose = viewModel::welcomeDone,
             )
         }
+    }
+    confirmTakeBack?.let { card ->
+        TakeBackDialog(
+            byEmail = card.byEmail,
+            onTakeBack = {
+                confirmTakeBack = null
+                sentList.takeBack(card.id)
+            },
+            onKeep = { confirmTakeBack = null },
+            freesToday = MailSentWords.sentToday(card, zone),
+        )
     }
     verifyHome?.let { home ->
         if (onStartVerify != null) {
@@ -262,8 +298,12 @@ private fun MailboxList(
     onVerify: (MailHome) -> Unit,
     cards: HolidayCardsResponse?,
     onOpenCards: () -> Unit,
+    sent: SentContent,
 ) {
     val shelf by viewModel.vaultShelf.collectAsStateWithLifecycle()
+    val sentState by sent.list.state.collectAsStateWithLifecycle()
+    val takingBack by sent.list.takingBack.collectAsStateWithLifecycle()
+    val takeBackError by sent.list.takeBackError.collectAsStateWithLifecycle()
     val folders by vault.folders.collectAsStateWithLifecycle()
     val query by vault.query.collectAsStateWithLifecycle()
     val search by vault.search.collectAsStateWithLifecycle()
@@ -280,22 +320,48 @@ private fun MailboxList(
         }
     }
     val searching = selectedTab == MailboxTab.Vault && search != null
-    val endReached by rememberUpdatedState { if (!searching) viewModel.loadMoreIfNeeded() }
-    // Near the end of the pieces: the next page.
-    LaunchedEffect(listState, state) {
+    val showingSent = selectedDrawer == MailboxDrawer.Sent
+    val endReached: () -> Unit by rememberUpdatedState {
+        when {
+            showingSent -> if ((sentState as? MailSentState.Loaded)?.hasMore == true) sent.list.loadMore()
+            !searching && (state as? MailboxUiState.Loaded)?.hasMore == true -> viewModel.loadMoreIfNeeded()
+            else -> Unit
+        }
+    }
+    // Near the end of the pieces (or of Sent): the next page.
+    LaunchedEffect(listState, state, sentState) {
         snapshotFlow {
             val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
             last >= listState.layoutInfo.totalItemsCount - LOAD_MORE_AHEAD
-        }.distinctUntilChanged().filter { it }.collect { if ((state as? MailboxUiState.Loaded)?.hasMore == true) endReached() }
+        }.distinctUntilChanged().filter { it }.collect { endReached() }
     }
     // Home mail opens once the address is proven: with no Home open yet, the drawer is a closed box.
     val waiting = homes.filter { it.mailAccess == "needs_proof" }
     val closedHome = waiting.firstOrNull()?.takeIf { selectedDrawer == MailboxDrawer.Home && homes.none { it.mailAccess == "open" } }
     LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = Spacing.s8)) {
         // Always the first item, so the card coming in after the first frame isn't inserted above the scroll position.
-        item(key = "hero") { if (hero != null) MailboxHeroCard(hero) else MailboxHeroPlaceholder() }
+        item(key = "hero") {
+            if (hero != null) {
+                MailboxHeroCard(hero, waiting = sent.waiting, onOpenSent = viewModel::openSent)
+            } else {
+                MailboxHeroPlaceholder()
+            }
+        }
         if (hold != null) item(key = "hold") { MailHoldBanner(hold, zone, onOpenHold) }
         item(key = "drawers") { MailboxDrawerRow(drawers, selectedDrawer, drawerUnread, viewModel::selectDrawer) }
+        // Sent has no tabs: what was sent, and nothing of the drawers' mail.
+        if (showingSent) {
+            sentItems(
+                state = sentState,
+                takingBack = takingBack,
+                takeBackError = takeBackError,
+                onOpen = { card -> sent.onOpen(card.id) },
+                onTakeBack = sent.onTakeBack,
+                onRetry = sent.list::refresh,
+                onRetryMore = sent.list::retryLoadMore,
+            )
+            return@LazyColumn
+        }
         if (pendingRoutingCount > 0) item(key = "routing") { PendingRoutingBanner(pendingRoutingCount, onOpenRoutingQueue) }
         item(key = "tabs") { MailboxTabRow(MailboxTab.entries, selectedTab, viewModel::selectTab) }
         if (closedHome != null) {
@@ -390,6 +456,14 @@ private fun LazyListScope.counterItems(
         }
     }
 }
+
+/** Sent, for the list: its view model, the cards that put the flag up, opening a card, and Take it back (confirmed). */
+private class SentContent(
+    val list: MailSentViewModel,
+    val waiting: Int,
+    val onOpen: (String) -> Unit,
+    val onTakeBack: (SentCard) -> Unit,
+)
 
 /** What the Vault tab draws from: the filed list, the shelf it shows, the cabinet's folders and the search. */
 private data class VaultContent(

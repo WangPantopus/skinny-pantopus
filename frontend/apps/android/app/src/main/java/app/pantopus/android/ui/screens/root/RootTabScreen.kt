@@ -57,6 +57,7 @@ import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.core.perf.ScreenTiming
 import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.data.ai.AIScreenContext
+import app.pantopus.android.data.mailbox.HolidayCardsRepository
 import app.pantopus.android.data.mailbox.MailboxRepository
 import app.pantopus.android.ui.components.ClosesKeyboardOnNavigation
 import app.pantopus.android.ui.components.ErrorState
@@ -294,6 +295,8 @@ import app.pantopus.android.ui.screens.mailbox.mail_day.MAIL_DAY_VARIANT_KEY
 import app.pantopus.android.ui.screens.mailbox.mail_day.MailDayScreen
 import app.pantopus.android.ui.screens.mailbox.mail_detail.MailDetailScreen
 import app.pantopus.android.ui.screens.mailbox.mail_party.MailPartyScreen
+import app.pantopus.android.ui.screens.mailbox.mail_sent.MAIL_SENT_CARD_ID_KEY
+import app.pantopus.android.ui.screens.mailbox.mail_sent.MailSentCardScreen
 import app.pantopus.android.ui.screens.mailbox.mail_task.MAIL_TASK_LIST_MAIL_ID_KEY
 import app.pantopus.android.ui.screens.mailbox.mail_task.MAIL_TASK_LIST_NONE
 import app.pantopus.android.ui.screens.mailbox.mail_task.MAIL_TASK_LIST_SENDER_KEY
@@ -544,6 +547,9 @@ private object ChildRoutes {
 
     /** Send a Christmas card, or today's card once it's sent (launch keys `holiday_cards` + `mailbox`). */
     const val MAILBOX_CARDS = "mailbox/cards"
+
+    /** A card the person sent, opened from Sent in the Mailbox (launch key `mailbox`). */
+    const val MAILBOX_SENT_CARD = "mailbox/sent/{$MAIL_SENT_CARD_ID_KEY}"
 
     /** T6.5e (P19.5) — Mailbox Vault list. Personal pillar. */
     const val MAILBOX_VAULT = "mailbox/vault"
@@ -1508,6 +1514,8 @@ private object ChildRoutes {
 
     /** Build the concrete path for a mailbox item detail. */
     fun mailboxItemDetail(id: String): String = "mailbox/item/$id"
+
+    fun mailboxSentCard(id: String): String = "mailbox/sent/$id"
 
     /** Build the concrete path for a public profile. */
     fun publicProfile(id: String): String = "users/$id"
@@ -3031,6 +3039,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onStartVerify = { homeId, method -> navController.openPlaceVerify(method, homeId) },
                         onOpenVerificationStatus = { homeId -> navController.navigate(ChildRoutes.waitingRoom(homeId)) },
                         onOpenCards = { navController.navigate(ChildRoutes.MAILBOX_CARDS) },
+                        onOpenSentCard = { id -> navController.navigate(ChildRoutes.mailboxSentCard(id)) },
                     )
                 }
                 composable(PantopusRoute.Pulse.path) {
@@ -4881,7 +4890,23 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     if (!LaunchFeatures.holidayCards || !LaunchFeatures.mailbox) {
                         return@composable LaunchCutPlaceholder("Christmas cards", navController)
                     }
-                    SendCardScreen(onClose = { navController.popBackStack() })
+                    SendCardScreen(
+                        onClose = { navController.popBackStack() },
+                        // "See it in Sent": the Mailbox under it opens Sent, and the card's page goes on top.
+                        onSeeInSent = { id ->
+                            navController.popBackStack()
+                            HolidayCardsRepository.announceShowSent()
+                            navController.navigate(ChildRoutes.mailboxSentCard(id))
+                        },
+                    )
+                }
+                composable(
+                    route = ChildRoutes.MAILBOX_SENT_CARD,
+                    arguments = listOf(navArgument(MAIL_SENT_CARD_ID_KEY) { type = NavType.StringType }),
+                ) {
+                    // Launch cut #10 (Mailbox): Sent is part of it.
+                    if (!LaunchFeatures.mailbox) return@composable LaunchCutPlaceholder("Mailbox", navController)
+                    MailSentCardScreen(onBack = { navController.popBackStack() })
                 }
                 composable(
                     route = ChildRoutes.MAILBOX_ITEM_DETAIL,
