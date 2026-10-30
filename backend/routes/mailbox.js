@@ -421,6 +421,18 @@ function closedEscrowReason(mail) {
   return null;
 }
 
+// Who a letter a person sent in their own name is from on its link's page (GET /claim/:mailId), and on a card's look
+// before it's sent (POST /cards/preview): the name neighbors see (their Local Profile) and whether they still have a
+// verified home.
+async function claimPagePerson(senderUserId, storedDisplay) {
+  const person = (await loadChatPeople([senderUserId])).get(String(senderUserId));
+  return {
+    senderName: person?.displayName || storedDisplay || 'A neighbor',
+    // A personal letter needs a verified home to be sent (POST /send); this says whether the sender still has one.
+    senderVerified: await hasVerifiedSenderHome(senderUserId),
+  };
+}
+
 /**
  * Normalize an escrow contact for consistent storage and comparison.
  * Emails: lowercased. Phones: digits only with leading +.
@@ -1769,6 +1781,79 @@ async function personRefusal(senderId, toUserId) {
 }
 
 /**
+ * Every check a card goes through before it's sent, in this order: the design, the note, a personal account, the season,
+ * one card a day, the person (or the address) and when it can arrive by their clock, and the email limits. POST /cards
+ * and its look (POST /cards/preview) both ask it, so the look never passes a card the send would refuse. Answers
+ * { refusal: { status, body } }, or what the send stores: the card, the trimmed note, when it's delivered, the name it
+ * carries (`senderDisplay`), the zone its day is told by (`zone`: theirs, or the sender's by email) and, by email, when
+ * it stops waiting.
+ */
+async function checkCard(senderId, body, now) {
+  const refuse = (status, error, code) => ({ refusal: { status, body: { error, code } } });
+  const { arrival } = body;
+  const design = holidayCards.designById(body.design);
+  if (!design) return refuse(400, 'Pick one of the Christmas cards.', 'CARD_DESIGN_UNKNOWN');
+  const message = String(body.message || '').replace(/\r\n?/g, '\n').trim();
+  if (!message) return refuse(400, 'Write a few words on the back of the card.', 'CARD_MESSAGE_EMPTY');
+  if ([...message].length > holidayCards.MESSAGE_LIMIT) {
+    return refuse(400, `Keep the note to ${holidayCards.MESSAGE_LIMIT} letters.`, 'CARD_MESSAGE_TOO_LONG');
+  }
+
+  // A person sends Christmas cards; a business account doesn't.
+  const { data: sender, error: senderError } = await supabaseAdmin.from('User')
+    .select('id, email, account_type').eq('id', senderId).maybeSingle();
+  if (senderError) throw new Error(senderError.message);
+  if (!sender || sender.account_type === 'business') {
+    return refuse(403, 'Christmas cards are sent from a personal account.', 'CARD_SENDER_NOT_PERSON');
+  }
+
+  const senderZone = (await mailDelivery.personTimeZone(senderId)) || mailDelivery.FALLBACK_TIME_ZONE;
+  if (!holidayCards.seasonOpen(senderZone, now)) return refuse(410, 'Christmas cards are done for this year.', 'CARDS_CLOSED');
+  if ((await cardsSentToday(senderId, senderZone, now)).length) {
+    return refuse(429, 'You’ve sent today’s card. You can send another tomorrow.', 'CARD_DAILY_LIMIT');
+  }
+
+  const toUserId = body.to.user_id || null;
+  const toEmail = toUserId ? null : normalizeEscrowContact(body.to.email);
+  const arrivalClosed = () => refuse(400, 'That choice isn’t open any more. Choose when it arrives again.', 'CARD_ARRIVAL_CLOSED');
+  const card = {
+    design: design.id, caption: design.caption, holiday: holidayCards.SEASON.holiday, year: holidayCards.SEASON.year,
+    arrival, sealed_until: null, take_back_until: null, to_name: null,
+  };
+
+  if (toUserId) {
+    const refusal = await personRefusal(senderId, toUserId);
+    if (refusal) return { refusal };
+    const recipientZone = (await mailDelivery.personTimeZone(toUserId)) || mailDelivery.FALLBACK_TIME_ZONE;
+    const open = holidayCards.arrivalsFor({ byEmail: false, timeZone: recipientZone, now, nextRound: mailDelivery.nextRound });
+    if (!open.includes(arrival)) return arrivalClosed();
+    const timing = holidayCards.personDelivery({ arrival, timeZone: recipientZone, now, nextRound: mailDelivery.nextRound });
+    const people = await loadChatPeople([senderId, toUserId]);
+    Object.assign(card, { sealed_until: timing.sealed_until, take_back_until: timing.take_back_until,
+      arrives_on: mailDelivery.localDate(new Date(timing.delivered_at), recipientZone),
+      to_name: people.get(String(toUserId))?.displayName || null });
+    return { design, message, arrival, senderZone, toUserId, toEmail: null, card, zone: recipientZone,
+      senderDisplay: people.get(String(senderId))?.displayName || 'Someone',
+      delivery: { delivered_at: timing.delivered_at, special_delivery: false }, escrowExpiresAt: null };
+  }
+
+  if (toEmail === normalizeEscrowContact(sender.email || '')) {
+    return refuse(400, 'Send your card to someone else.', 'CARD_TO_SELF');
+  }
+  const open = holidayCards.arrivalsFor({ byEmail: true, timeZone: senderZone, now, nextRound: mailDelivery.nextRound });
+  if (!open.includes(arrival)) return arrivalClosed();
+  const rateCheck = await checkEscrowRateLimits(senderId, toEmail);
+  if (!rateCheck.allowed) return refuse(429, rateCheck.reason, 'MAIL_SEND_LIMIT');
+  // Sealed by email: until Christmas morning where the sender is, set again where they live once they open it.
+  Object.assign(card, { to_name: maskContact(toEmail),
+    sealed_until: arrival === 'sealed_christmas' ? holidayCards.christmasMorning(senderZone).toISOString() : null });
+  return { design, message, arrival, senderZone, toUserId: null, toEmail, card, zone: senderZone,
+    senderDisplay: (await loadChatPeople([senderId])).get(String(senderId))?.displayName || 'Someone',
+    delivery: { delivered_at: now.toISOString(), special_delivery: false },
+    escrowExpiresAt: new Date(now.getTime() + ESCROW_EXPIRY_DAYS * 24 * 60 * 60 * 1000).toISOString() };
+}
+
+/**
  * GET /api/mailbox/cards
  * What the Send a Christmas card screens need: the season's pictures (the apps carry the pictures themselves; this is
  * their ids, captions and paper), whether sending is open, the arrivals open now, and today's card once it's sent.
@@ -1839,72 +1924,10 @@ router.post('/cards', verifyToken, validate(sendCardSchema), async (req, res) =>
   const senderId = req.user.id;
   try {
     const now = new Date();
-    const { arrival } = req.body;
-    const design = holidayCards.designById(req.body.design);
-    if (!design) {
-      return res.status(400).json({ error: 'Pick one of the Christmas cards.', code: 'CARD_DESIGN_UNKNOWN' });
-    }
-    const message = String(req.body.message || '').replace(/\r\n?/g, '\n').trim();
-    if (!message) {
-      return res.status(400).json({ error: 'Write a few words on the back of the card.', code: 'CARD_MESSAGE_EMPTY' });
-    }
-    if ([...message].length > holidayCards.MESSAGE_LIMIT) {
-      return res.status(400).json({ error: `Keep the note to ${holidayCards.MESSAGE_LIMIT} letters.`, code: 'CARD_MESSAGE_TOO_LONG' });
-    }
-
-    // A person sends Christmas cards; a business account doesn't.
-    const { data: sender, error: senderError } = await supabaseAdmin.from('User')
-      .select('id, email, account_type').eq('id', senderId).maybeSingle();
-    if (senderError) throw new Error(senderError.message);
-    if (!sender || sender.account_type === 'business') {
-      return res.status(403).json({ error: 'Christmas cards are sent from a personal account.', code: 'CARD_SENDER_NOT_PERSON' });
-    }
-
-    const senderZone = (await mailDelivery.personTimeZone(senderId)) || mailDelivery.FALLBACK_TIME_ZONE;
-    if (!holidayCards.seasonOpen(senderZone, now)) {
-      return res.status(410).json({ error: 'Christmas cards are done for this year.', code: 'CARDS_CLOSED' });
-    }
-    if ((await cardsSentToday(senderId, senderZone, now)).length) {
-      return res.status(429).json({ error: 'You’ve sent today’s card. You can send another tomorrow.', code: 'CARD_DAILY_LIMIT' });
-    }
-
-    const toUserId = req.body.to.user_id || null;
-    const toEmail = toUserId ? null : normalizeEscrowContact(req.body.to.email);
-    const arrivalClosed = () => res.status(400).json({
-      error: 'That choice isn’t open any more. Choose when it arrives again.', code: 'CARD_ARRIVAL_CLOSED' });
-    const card = {
-      design: design.id, caption: design.caption, holiday: holidayCards.SEASON.holiday, year: holidayCards.SEASON.year,
-      arrival, sealed_until: null, take_back_until: null, to_name: null,
-    };
-    let delivery;
-    let escrow = null;
-
-    if (toUserId) {
-      const refusal = await personRefusal(senderId, toUserId);
-      if (refusal) return res.status(refusal.status).json(refusal.body);
-      const recipientZone = (await mailDelivery.personTimeZone(toUserId)) || mailDelivery.FALLBACK_TIME_ZONE;
-      const open = holidayCards.arrivalsFor({ byEmail: false, timeZone: recipientZone, now, nextRound: mailDelivery.nextRound });
-      if (!open.includes(arrival)) return arrivalClosed();
-      const timing = holidayCards.personDelivery({ arrival, timeZone: recipientZone, now, nextRound: mailDelivery.nextRound });
-      Object.assign(card, { sealed_until: timing.sealed_until, take_back_until: timing.take_back_until,
-        arrives_on: mailDelivery.localDate(new Date(timing.delivered_at), recipientZone),
-        to_name: (await loadChatPeople([toUserId])).get(String(toUserId))?.displayName || null });
-      delivery = { delivered_at: timing.delivered_at, special_delivery: false };
-    } else {
-      if (toEmail === normalizeEscrowContact(sender.email || '')) {
-        return res.status(400).json({ error: 'Send your card to someone else.', code: 'CARD_TO_SELF' });
-      }
-      const open = holidayCards.arrivalsFor({ byEmail: true, timeZone: senderZone, now, nextRound: mailDelivery.nextRound });
-      if (!open.includes(arrival)) return arrivalClosed();
-      const rateCheck = await checkEscrowRateLimits(senderId, toEmail);
-      if (!rateCheck.allowed) return res.status(429).json({ error: rateCheck.reason, code: 'MAIL_SEND_LIMIT' });
-      // Sealed by email: until Christmas morning where the sender is, set again where they live once they open it.
-      Object.assign(card, { to_name: maskContact(toEmail),
-        sealed_until: arrival === 'sealed_christmas' ? holidayCards.christmasMorning(senderZone).toISOString() : null });
-      escrow = { token: crypto.randomBytes(32).toString('hex'),
-        expiresAt: new Date(now.getTime() + ESCROW_EXPIRY_DAYS * 24 * 60 * 60 * 1000).toISOString() };
-      delivery = { delivered_at: now.toISOString(), special_delivery: false };
-    }
+    const checked = await checkCard(senderId, req.body, now);
+    if (checked.refusal) return res.status(checked.refusal.status).json(checked.refusal.body);
+    const { design, message, arrival, senderZone, toUserId, toEmail, card, delivery } = checked;
+    const escrow = toEmail ? { token: crypto.randomBytes(32).toString('hex'), expiresAt: checked.escrowExpiresAt } : null;
 
     // The note lives only in the card's private stored copy, never in the Mail row (services/holidayCards).
     let objectResult;
@@ -1924,8 +1947,7 @@ router.post('/cards', verifyToken, validate(sendCardSchema), async (req, res) =>
     }
 
     const stored = {
-      sender_user_id: senderId, sender_entity_id: null, sender_display: (await loadChatPeople([senderId]))
-        .get(String(senderId))?.displayName || 'Someone',
+      sender_user_id: senderId, sender_entity_id: null, sender_display: checked.senderDisplay,
       sender_trust: 'pantopus_user', sender_business_name: null, sender_address: null,
       type: 'letter', subject: holidayCards.SUBJECT, display_title: holidayCards.SUBJECT, content: '', content_excerpt: '',
       preview_text: null, attachments: [], payout_amount: null, category: holidayCards.CARD_TAG,
@@ -1977,6 +1999,53 @@ router.post('/cards', verifyToken, validate(sendCardSchema), async (req, res) =>
   } catch (err) {
     logger.error('Card send error', { error: err.message, userId: senderId });
     return sendCardUnavailable(res);
+  }
+});
+
+/**
+ * POST /api/mailbox/cards/preview  (the body of POST /cards)
+ * "Look it over": exactly what the other person will see, before the card is sent. It runs every check the send runs
+ * (checkCard), with the same refusals, and stores, sends and records nothing. `piece` is the card as it will lie in their
+ * Mailbox (named and postmarked by the same lookups, dated by their clock); by email, `email` holds the words the real
+ * email uses and `link_page` what its link's page shows. Never their time zone, address or ids.
+ */
+router.post('/cards/preview', verifyToken, validate(sendCardSchema), async (req, res) => {
+  if (!cardsOn()) return sendCardsOff(res);
+  const senderId = req.user.id;
+  try {
+    const now = new Date();
+    const checked = await checkCard(senderId, req.body, now);
+    if (checked.refusal) return res.status(checked.refusal.status).json(checked.refusal.body);
+    const { message, arrival, toEmail, card, zone, senderDisplay, delivery } = checked;
+    const sealed = arrival === 'sealed_christmas';
+    const arrivesOn = card.arrives_on || null;
+    const opensOn = card.sealed_until ? mailDelivery.localDate(new Date(card.sealed_until), zone) : null;
+    let linkPage = null;
+    if (toEmail) {
+      const { senderName, senderVerified } = await claimPagePerson(senderId, senderDisplay);
+      linkPage = { sender_name: senderName, sender_verified: senderVerified, sealed, sent_to: maskContact(toEmail),
+        sent_on: now.toISOString() };
+    }
+    return res.json({
+      piece: {
+        id: 'preview', kind: 'letter', type: 'letter', mail_object_type: 'envelope', sender_display: senderDisplay,
+        sender_trust: 'pantopus_user', sender_business_name: null, subject: holidayCards.SUBJECT, content: message,
+        created_at: now.toISOString(), delivered_at: toEmail ? null : delivery.delivered_at,
+        postmark: { town: null, date: mailDelivery.localDate(now, zone) },
+        card: holidayCards.cardView({ mail_extracted: { card } }, now),
+      },
+      arrives_on: arrivesOn,
+      opens_on: opensOn,
+      sealed_days: arrivesOn && opensOn ? holidayCards.daysBetween(arrivesOn, opensOn) : null,
+      take_back_until: card.take_back_until,
+      email: toEmail
+        ? emailService.cardWaitingEmailContent({ senderName: senderDisplay, expiresAt: checked.escrowExpiresAt, sealed })
+        : null,
+      link_page: linkPage,
+    });
+  } catch (err) {
+    logger.error('Card preview error', { error: err.message, userId: senderId });
+    return res.status(503).json({ error: 'Couldn’t show you the card just now. Try again in a moment.', code: 'CARD_UNAVAILABLE' });
   }
 });
 
@@ -2870,13 +2939,7 @@ router.get('/claim/:mailId', async (req, res) => {
       sender = { ...claimPageSender(mail), senderKind: 'business' };
     } else {
       // The sender as neighbors see them (their Local Profile), like the email that brought the person here.
-      const person = (await loadChatPeople([mail.sender_user_id])).get(String(mail.sender_user_id));
-      sender = {
-        senderName: person?.displayName || mail.sender_display || 'A neighbor',
-        // A personal letter needs a verified home to be sent (POST /send); this says whether the sender still has one.
-        senderVerified: await hasVerifiedSenderHome(mail.sender_user_id),
-        senderKind: 'person',
-      };
+      sender = { ...(await claimPagePerson(mail.sender_user_id, mail.sender_display)), senderKind: 'person' };
     }
 
     // Build outcome description
