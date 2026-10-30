@@ -249,7 +249,8 @@ END $$;
 DO $$ DECLARE p public."Payment"; d jsonb; e jsonb; r jsonb; original jsonb; note_id uuid; BEGIN
  SELECT * INTO p FROM public."Payment" WHERE id=pg_temp.tip_id(310); d:=p.metadata->'gig_tip_delivery_v1';
  original:=p.metadata->'gig_tip_original_v1'; note_id:=(d->>'notification_id')::uuid;
- PERFORM pg_temp.tip_assert(d->>'state'='pending' AND d->>'push_allowed_at_capture'='false','Capture did not atomically retain its notice and consent');
+ -- The payee has no MailPreferences row yet: the column default (push on) applies, as in notificationService.
+ PERFORM pg_temp.tip_assert(d->>'state'='pending' AND d->>'push_allowed_at_capture'='true','Capture did not atomically retain its notice and consent');
  PERFORM pg_temp.tip_assert((SELECT count(*)=1 FROM public."Notification" WHERE metadata->>'payment_id'=p.id::text),'Capture/replay created duplicate notices');
  PERFORM pg_temp.tip_assert(NOT EXISTS(SELECT FROM public."Payment" WHERE id IN(pg_temp.tip_id(311),pg_temp.tip_id(704)) AND metadata ? 'gig_tip_delivery_v1'),'Canceled/historical capture was backfilled');
  BEGIN UPDATE public."Payment" SET metadata=metadata-'gig_tip_delivery_v1' WHERE id=p.id;
