@@ -43,16 +43,20 @@ async function contextFor(userId, areaId) {
  * `refine` narrows the candidate query and `keep` filters readable rows (async), both
  * before counting or taking, for callers like PC's digest content (content.js).
  */
-async function scan(context, { view, topic, lower, before, readAt, take = Infinity, countOnly = false, refine, keep }) {
+async function scan(context, { view, topic, lower, before, readAt, take = Infinity, countOnly = false, refine, keep, search }) {
   if (!context.area || (view === 'following' && !context.follows.length)) return countOnly ? 0 : [];
   const found = [];
   let count = 0;
   let position = before;
   for (;;) {
-    let query = context.scope.query(legacy.onlyShownPosts(db.rpc('pulse_feed_area_candidates', {
-      p_area_id: context.area.id,
-    }).select(SELECT).is('archived_at', null)))
-      .eq('state', 'open').is('resolution', null).lte('created_at', readAt)
+    // `search` (contract §2.17) also reads conversations that resolved or ended, never held or
+    // removed ones, nor ones their author or a moderator archived.
+    let query = context.scope.query(search
+      ? db.rpc('pulse_search_area_candidates', { p_area_id: context.area.id, p_query: search }).select(SELECT)
+        .eq('moderation_state', 'live').or('archived_at.is.null,archive_reason.in.(expired,resolved)')
+      : legacy.onlyShownPosts(db.rpc('pulse_feed_area_candidates', { p_area_id: context.area.id })
+        .select(SELECT).is('archived_at', null)).eq('state', 'open').is('resolution', null))
+      .lte('created_at', readAt)
       .order('created_at', { ascending: false }).order('id', { ascending: false }).limit(BATCH);
     if (topic) query = query.eq('topic', topic);
     if (lower) query = query.gt('created_at', lower);
