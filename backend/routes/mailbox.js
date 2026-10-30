@@ -2140,7 +2140,8 @@ async function sentContexts(rows, userId) {
 router.get('/sent', verifyToken, async (req, res) => {
   if (!sentOn()) return sendCardsOff(res);
   const userId = req.user.id;
-  const limit = Math.min(50, Math.max(1, Number.parseInt(req.query.limit, 10) || 25));
+  const asked = Number.parseInt(req.query.limit, 10);
+  const limit = Number.isNaN(asked) ? 25 : Math.min(50, Math.max(1, asked));
   const cursor = req.query.before === undefined ? null : readSentCursor(req.query.before);
   if (req.query.before !== undefined && !cursor) {
     return res.status(400).json({ error: 'That part of Sent is out of date. Open Sent again.', code: 'SENT_CURSOR_INVALID' });
