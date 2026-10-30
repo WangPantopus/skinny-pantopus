@@ -513,7 +513,11 @@ class FeedMapViewModel
             searchableTextById =
                 data.markers.associate { marker ->
                     marker.id to
-                        listOfNotNull(marker.title, marker.content, marker.creator?.name ?: marker.creator?.username)
+                        listOfNotNull(
+                            marker.title,
+                            marker.content,
+                            marker.creator?.displayName ?: marker.creator?.name ?: marker.creator?.handle ?: marker.creator?.username,
+                        )
                             .joinToString("\n").lowercase()
                 }
             val entities = matchingEntities()

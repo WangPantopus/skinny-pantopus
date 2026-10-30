@@ -427,7 +427,9 @@ public final class FeedMapViewModel {
                     .filter { $0.kind == .post }
                     .sorted { $0.distanceMiles < $1.distanceMiles }
                 searchableTextById = response.markers.reduce(into: [:]) { index, marker in
-                    index[marker.id] = [marker.title, marker.content, marker.creator?.name ?? marker.creator?.username]
+                    let authorName = marker.creator?.displayName ?? marker.creator?.name
+                        ?? marker.creator?.handle ?? marker.creator?.username
+                    index[marker.id] = [marker.title, marker.content, authorName]
                         .compactMap { $0 }.joined(separator: "\n").lowercased()
                 }
                 let entities = matchingEntities
