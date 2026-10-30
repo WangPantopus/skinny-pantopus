@@ -283,6 +283,7 @@ import app.pantopus.android.ui.screens.inbox.search.ChatSearchScreen
 import app.pantopus.android.ui.screens.listing_offers.ListingOffersScreen
 import app.pantopus.android.ui.screens.listing_offers.ListingOffersViewModel
 import app.pantopus.android.ui.screens.listings.MyListingsScreen
+import app.pantopus.android.ui.screens.mailbox.cards.SendCardScreen
 import app.pantopus.android.ui.screens.mailbox.community.CommunityMailScreen
 import app.pantopus.android.ui.screens.mailbox.disambiguate.DISAMBIGUATE_MAIL_ID_KEY
 import app.pantopus.android.ui.screens.mailbox.disambiguate.DisambiguateMailFormScreen
@@ -540,6 +541,9 @@ private object ChildRoutes {
         "homes/{$POSTCARD_VERIFICATION_HOME_ID_KEY}/verify-postcard"
     const val MAILBOX_SEARCH = "mailbox/search"
     const val MAILBOX_ITEM_DETAIL = "mailbox/item/{$MAILBOX_ITEM_DETAIL_MAIL_ID_KEY}"
+
+    /** Send a Christmas card, or today's card once it's sent (launch keys `holiday_cards` + `mailbox`). */
+    const val MAILBOX_CARDS = "mailbox/cards"
 
     /** T6.5e (P19.5) — Mailbox Vault list. Personal pillar. */
     const val MAILBOX_VAULT = "mailbox/vault"
@@ -3026,6 +3030,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onPay = { invoiceId -> navController.navigate(ChildRoutes.invoiceDetail(invoiceId)) },
                         onStartVerify = { homeId, method -> navController.openPlaceVerify(method, homeId) },
                         onOpenVerificationStatus = { homeId -> navController.navigate(ChildRoutes.waitingRoom(homeId)) },
+                        onOpenCards = { navController.navigate(ChildRoutes.MAILBOX_CARDS) },
                     )
                 }
                 composable(PantopusRoute.Pulse.path) {
@@ -4870,6 +4875,13 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     arguments = listOf(navArgument(PROPERTY_CORRECTION_HOME_ID_KEY) { type = NavType.StringType }),
                 ) {
                     PropertyCorrectionScreen(onBack = { navController.popBackStack() })
+                }
+                composable(ChildRoutes.MAILBOX_CARDS) {
+                    // Launch cut #12 (Christmas cards), with #10 (Mailbox).
+                    if (!LaunchFeatures.holidayCards || !LaunchFeatures.mailbox) {
+                        return@composable LaunchCutPlaceholder("Christmas cards", navController)
+                    }
+                    SendCardScreen(onClose = { navController.popBackStack() })
                 }
                 composable(
                     route = ChildRoutes.MAILBOX_ITEM_DETAIL,

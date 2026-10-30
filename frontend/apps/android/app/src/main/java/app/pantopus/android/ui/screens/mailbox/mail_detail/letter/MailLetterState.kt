@@ -51,4 +51,6 @@ data class LetterActions(
     val onOpenEnclosure: (MailEnclosure) -> Unit,
     val onOpenPiece: (String) -> Unit,
     val onRetryBundle: () -> Unit,
+    /** A Christmas card's "Open the envelope". */
+    val onOpenCard: () -> Unit = {},
 )

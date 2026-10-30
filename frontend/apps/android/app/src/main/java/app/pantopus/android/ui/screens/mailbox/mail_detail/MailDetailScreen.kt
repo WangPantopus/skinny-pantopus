@@ -161,6 +161,7 @@ fun MailDetailScreen(
             onOpenEnclosure = { enclosure -> viewModel.openEnclosure(enclosure, context.cacheDir) },
             onOpenPiece = onOpenPiece,
             onRetryBundle = viewModel::loadBundle,
+            onOpenCard = viewModel::openCard,
         )
     // Back on the page (from paying, say): read the piece again so it shows where it stands.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.onLetterResume() }

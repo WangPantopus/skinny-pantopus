@@ -294,6 +294,12 @@ class MailDetailViewModel
         /** The page has shown once; coming back to it (from paying, say) reads the piece again. */
         private var shownOnce = false
 
+        /**
+         * A Christmas card that hadn't been opened when this page first read it: it opens from its envelope for this
+         * visit, and "Open the envelope" marks it opened. Null until a card is read.
+         */
+        private var cardFirstOpen: Boolean? = null
+
         private val _letterActionInFlight = MutableStateFlow<String?>(null)
 
         /** The letter action being saved (`counter`, `done`, `file`, `unfile`, `shred`); the buttons wait for it. */
@@ -399,12 +405,13 @@ class MailDetailViewModel
                             _ceremonialRedirectMailId.value = mailId
                         } else {
                             lastDetail = result.data.mail
+                            noteCardFirstOpen(result.data.mail)
                             _cantOpen.value = null
                             _state.value = MailDetailUiState.Loaded(withLetter(project(result.data.mail), result.data.mail))
                             if (_state.value.letterIsBundle()) loadBundle()
                             // Certified mail is read like any letter (Received → Read);
                             // its Sign for delivery confirmation keys on signed.
-                            if (!result.data.mail.viewed) markViewed()
+                            if (opensNow(result.data.mail)) markViewed()
                         }
                     is NetworkResult.Failure -> {
                         // The Mail tab says why in its own words: not here, Home mail waiting for proof, or offline.
@@ -431,7 +438,29 @@ class MailDetailViewModel
         private fun letterFor(detail: MailDetail): MailLetter {
             val drawers = MailboxRepository.latestDrawers.value
             val book = MailAddressBook(personName = signedInName(), homes = drawers?.homes.orEmpty())
-            return MailLetter.from(detail, book, MailPieceMapper.zoneOf(drawers?.delivery))
+            return MailLetter.from(detail, book, MailPieceMapper.zoneOf(drawers?.delivery), cardFirstOpen = cardFirstOpen == true)
+        }
+
+        /** The first read of a Christmas card on this page decides whether it opens from its envelope. */
+        private fun noteCardFirstOpen(detail: MailDetail) {
+            if (cardFirstOpen == null && detail.card != null) cardFirstOpen = !detail.viewed && detail.openedAt == null
+        }
+
+        /**
+         * Opening it reads it, unless it's read already. A Christmas card sealed until Christmas morning isn't opened by
+         * its page: the server keeps its note, and it stays unopened until it opens on Christmas morning. A card opening
+         * for the first time is opened by "Open the envelope" ([openCard]).
+         */
+        private fun opensNow(detail: MailDetail): Boolean {
+            if (detail.viewed) return false
+            val card = detail.card ?: return true
+            return !card.sealed && cardFirstOpen != true
+        }
+
+        /** "Open the envelope": the card comes out, and it's opened. */
+        fun openCard() {
+            val detail = lastDetail ?: return
+            if (detail.card?.sealed == false && !detail.viewed) markViewed()
         }
 
         private fun signedInName(): String? =
@@ -475,8 +504,11 @@ class MailDetailViewModel
                 val result = repo.detail(mailId)
                 if (result is NetworkResult.Success) {
                     lastDetail = result.data.mail
+                    noteCardFirstOpen(result.data.mail)
                     _removed.value = result.data.mail.removed
                     _state.value = MailDetailUiState.Loaded(withLetter(project(result.data.mail), result.data.mail))
+                    // A Christmas card read again (after its seal lifted, say) that this visit shows out of its envelope.
+                    if (result.data.mail.card != null && opensNow(result.data.mail)) markViewed()
                 }
                 // A failed read leaves the page as it was: the action already said how it went.
             }

@@ -8,6 +8,7 @@ import app.pantopus.android.data.chats.ChatConversationPreferences
 import app.pantopus.android.data.chats.ChatOutbox
 import app.pantopus.android.data.gigs.GigCameraPhotos
 import app.pantopus.android.data.gigs.GigDraftQueue
+import app.pantopus.android.data.mailbox.HolidayCardsRepository
 import app.pantopus.android.data.mailbox.MailEnclosureFiles
 import app.pantopus.android.data.mailbox.MailboxRepository
 import app.pantopus.android.data.posts.PostCameraPhotos
@@ -57,6 +58,7 @@ class AccountDeviceData
             chatOutbox.clear()
             screenStore.wipe()
             MailboxRepository.forgetAccount()
+            HolidayCardsRepository.forgetAccount()
             chatBadges.reset()
             reservations.reset()
             broadcastSeeds.clear()

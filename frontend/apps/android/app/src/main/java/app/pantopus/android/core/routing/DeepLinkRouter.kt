@@ -571,6 +571,8 @@ object DeepLinkRouter {
             "mail_escrow_expired" to setOf(LaunchFeature.MAIL_EXTRAS),
             "mail_escrow_claimed" to setOf(LaunchFeature.MAIL_EXTRAS),
             "mail_claimed" to setOf(LaunchFeature.MAIL_EXTRAS),
+            // Someone not on Pantopus joined and has the sender's Christmas card.
+            "holiday_card_claimed" to setOf(LaunchFeature.MAILBOX, LaunchFeature.HOLIDAY_CARDS),
         )
 
     /**

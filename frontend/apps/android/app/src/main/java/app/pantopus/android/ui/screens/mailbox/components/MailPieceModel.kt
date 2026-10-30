@@ -116,4 +116,12 @@ data class MailPieceModel(
     val accessibilityLabel: String,
     val bundleCount: Int? = null,
     val pageCount: Int? = null,
+    /** A Christmas card: drawn as its red envelope. */
+    val card: MailPieceCard? = null,
+)
+
+/** A Christmas card on a piece: its picture, and whether it's sealed until Christmas morning (never drawn torn then). */
+data class MailPieceCard(
+    val design: String,
+    val sealed: Boolean,
 )

@@ -6,6 +6,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.LaunchFeatures
+import app.pantopus.android.data.api.models.mailbox.HolidayCardsResponse
 import app.pantopus.android.data.api.models.mailbox.v2.DrawerListResponse
 import app.pantopus.android.data.api.models.mailbox.v2.DrawerMail
 import app.pantopus.android.data.api.models.mailbox.v2.MailHome
@@ -13,6 +14,7 @@ import app.pantopus.android.data.api.models.mailbox.v2.MailVacationHold
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.businesses.BusinessesRepository
+import app.pantopus.android.data.mailbox.HolidayCardsRepository
 import app.pantopus.android.data.mailbox.MailDeliverySeen
 import app.pantopus.android.data.mailbox.MailboxRepository
 import app.pantopus.android.data.network.NetworkMonitor
@@ -126,6 +128,7 @@ class MailboxRootViewModel
         private val auth: AuthRepository,
         private val deliverySeen: MailDeliverySeen,
         private val network: NetworkMonitor,
+        private val holidayCards: HolidayCardsRepository,
     ) : ViewModel() {
         private val _state = MutableStateFlow<MailboxUiState>(MailboxUiState.Loading)
         val state: StateFlow<MailboxUiState> = _state.asStateFlow()
@@ -193,6 +196,12 @@ class MailboxRootViewModel
 
         /** The mailbox's own time zone, which "today" and the rounds follow. */
         val mailZone: StateFlow<ZoneId> = _mailZone.asStateFlow()
+
+        /**
+         * Christmas cards (launch keys `holiday_cards` + `mailbox`): the season and today's card, for the row at the top of
+         * Me. Null while cards are off, before they're read, or when the server has none.
+         */
+        val cards: StateFlow<HolidayCardsResponse?> = holidayCards.latest
 
         private var onOpenMail: (String) -> Unit = {}
 
@@ -290,6 +299,8 @@ class MailboxRootViewModel
         private suspend fun readAll(limit: Int = pageSize) {
             lastReadAt = Instant.now()
             val owner = viewModelScope.async { readBusinessOwnership() }
+            // Today's card is read alongside, so the row says where it is (it's sent once a day); the mail doesn't wait.
+            if (LaunchFeatures.holidayCards && LaunchFeatures.mailbox) viewModelScope.launch { holidayCards.load() }
             readDrawers()
             readPendingRouting()
             owner.await()

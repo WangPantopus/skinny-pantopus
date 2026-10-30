@@ -89,12 +89,19 @@ fun LetterLayout(
                     .padding(horizontal = Spacing.s4, vertical = Spacing.s3),
             verticalArrangement = Arrangement.spacedBy(Spacing.s4),
         ) {
-            Envelope(letter, actions.onEnvelope)
-            letter.note?.let { PantopusNote(it) }
-            LetterSheet(content, letter, enclosureInFlight, actions.onOpenEnclosure)
-            if (letter.isBundle) BundlePieces(bundle, actions.onOpenPiece, actions.onRetryBundle)
-            // A shredded piece offers Bring it back above the letter instead.
-            if (!removed) LetterButtons(letter, actionInFlight, ackInFlight, actions)
+            val card = letter.card
+            if (card != null) {
+                // A Christmas card: the card comes out of its envelope instead of a letter.
+                HolidayCardPage(letter, card, onEnvelope = actions.onEnvelope, onOpen = actions.onOpenCard)
+            } else {
+                Envelope(letter, actions.onEnvelope)
+                letter.note?.let { PantopusNote(it) }
+                LetterSheet(content, letter, enclosureInFlight, actions.onOpenEnclosure)
+                if (letter.isBundle) BundlePieces(bundle, actions.onOpenPiece, actions.onRetryBundle)
+            }
+            // A shredded piece offers Bring it back above the letter instead. A Christmas card is nothing to do, so it
+            // doesn't go on the counter.
+            if (!removed) LetterButtons(letter, actionInFlight, ackInFlight, actions, counter = card == null)
         }
     }
 }
@@ -368,6 +375,7 @@ private fun LetterButtons(
     actionInFlight: String?,
     ackInFlight: Boolean,
     actions: LetterActions,
+    counter: Boolean = true,
 ) {
     val busy = actionInFlight != null
     Column(modifier = Modifier.fillMaxWidth().testTag("mailLetterActions"), verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
@@ -411,27 +419,7 @@ private fun LetterButtons(
                     actions.onUnfile,
                 )
             } else {
-                if (letter.onCounter) {
-                    // On the counter: tapping asks "Done with it?" and files it.
-                    ActionTile(
-                        "On the counter",
-                        PantopusIcon.CheckCircle,
-                        busy,
-                        actionInFlight == "done",
-                        "mailLetterOnCounter",
-                        actions.onDone,
-                        selected = true,
-                    )
-                } else {
-                    ActionTile(
-                        "Put on the counter",
-                        PantopusIcon.Inbox,
-                        busy,
-                        actionInFlight == "counter",
-                        "mailLetterCounter",
-                        actions.onPutOnCounter,
-                    )
-                }
+                if (counter) CounterTile(letter, busy, actionInFlight, actions)
                 ActionTile("File in the Vault", PantopusIcon.FolderPlus, busy, actionInFlight == "file", "mailLetterFile", actions.onFile)
             }
             ActionTile(
@@ -444,6 +432,36 @@ private fun LetterButtons(
                 destructive = true,
             )
         }
+    }
+}
+
+/** Put on the counter; on the counter, tapping asks "Done with it?" and files it. */
+@Composable
+private fun RowScope.CounterTile(
+    letter: MailLetter,
+    busy: Boolean,
+    actionInFlight: String?,
+    actions: LetterActions,
+) {
+    if (letter.onCounter) {
+        ActionTile(
+            "On the counter",
+            PantopusIcon.CheckCircle,
+            busy,
+            actionInFlight == "done",
+            "mailLetterOnCounter",
+            actions.onDone,
+            selected = true,
+        )
+    } else {
+        ActionTile(
+            "Put on the counter",
+            PantopusIcon.Inbox,
+            busy,
+            actionInFlight == "counter",
+            "mailLetterCounter",
+            actions.onPutOnCounter,
+        )
     }
 }
 
