@@ -281,9 +281,10 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
         let subtitle = [unit, roleLabel(for: entry), locality].compactMap { $0 }.joined(separator: " · ")
         var chips: [RowChip] = []
         if entry.accessKind == "private_setup" { chips.append(.init(text: "Private setup", icon: .home, tint: .status(.warning))) }
-        // Requests already say "Verification in progress".
+        // Requests already say "Verification in progress". A claim Pantopus asked more of says so instead.
         if entry.accessKind != "verification", let review = entry.pendingClaimReviewLabel {
-            chips.append(.init(text: review, icon: .clock, tint: .status(.warning)))
+            let asked = claims.contains { $0.homeId == entry.id && $0.openInfoRequest != nil }
+            chips.append(.init(text: asked ? OwnershipClaimDTO.infoRequestLabel : review, icon: .clock, tint: .status(.warning)))
         }
         if entry.hasSharedAccess, entry.ownershipStatus == "verified" { chips.append(.init(
             text: "Ownership verified",
@@ -624,6 +625,9 @@ private extension MyHomesListViewModel {
 }
 
 extension OwnershipClaimDTO {
+    /// A Pantopus reviewer asked for more and no document answered it yet (the web says the same).
+    static let infoRequestLabel = "Pantopus asked for more"
+
     /// "Ownership claim", or "Residency claim" for a renter's residency document.
     var kindLabel: String {
         claimType == "resident" ? "Residency claim" : "Ownership claim"
@@ -631,6 +635,7 @@ extension OwnershipClaimDTO {
 
     /// What the claim waits on, as web My Homes says it.
     var waitingLabel: String {
+        if openInfoRequest != nil { return Self.infoRequestLabel }
         if let approval { return WaitingRoomApproval.summary(approval) }
         switch hasEvidence {
         case false?: return "Document needed"
