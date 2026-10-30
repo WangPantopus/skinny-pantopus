@@ -644,7 +644,8 @@ router.get('/item/:id', verifyToken, async (req, res) => {
         .eq('id', id).is('opened_at', null).is('deleted_at', null).select('id');
       if (openError) throw openError;
       if (written?.length) {
-        Object.assign(mail, opened);
+        // This visit opened it: the apps open a Christmas card from its envelope the first time.
+        Object.assign(mail, opened, { just_opened: true });
         await logMailEvent('mail_opened', id, userId, {
           drawer: mail.drawer,
           time_since_delivered_ms: Date.now() - new Date(mail.delivered_at || mail.created_at).getTime(),
