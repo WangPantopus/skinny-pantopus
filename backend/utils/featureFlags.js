@@ -36,6 +36,7 @@ const LAUNCH_FEATURE_KEYS = [
   'gift_funds', // 9. Support Train gift funds (no app can take a contribution yet)
   'mailbox', // 10. The mailbox: received mail, Mail Day, vault, vacation hold, Stamps (2026-10-09)
   'pulse_redesign', // 11. The Pulse redesign (PR 625), paused for launch (2026-10-15); the October 13 Pulse stays
+  'holiday_cards', // 12. Christmas cards sent through Mail (2026-10-30); needs `mailbox` on too
 ];
 
 function isLaunchFeatureEnabled(key) {
@@ -128,6 +129,8 @@ const LAUNCH_NOTIFICATION_TYPE_FEATURES = {
   mail_urgent: ['mailbox'],
   mail_interrupt: ['mailbox'],
   home_mail_removed: ['mailbox'],
+  // 12. Christmas cards: someone not on Pantopus joined and has the sender's card.
+  holiday_card_claimed: ['mailbox', 'holiday_cards'],
   // 11. The Pulse redesign: follow alerts, Helpful and thanks notices, offer requests and the
   // Ask reminder. The October 13 Pulse's reply and mention notices are not here.
   pulse_follow_reply: ['pulse_redesign'],

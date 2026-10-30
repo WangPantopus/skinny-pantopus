@@ -31,6 +31,8 @@ export interface EscrowedMailView {
     sentTo: string;
     createdAt: string;
     expiresAt: string | null;
+    /** A Christmas card: the page says only that it is one (no picture, no note), and whether it's sealed. */
+    card?: { holiday: string; year: number; sealed: boolean } | null;
   };
 }
 
@@ -85,7 +87,11 @@ export interface SendMailResponse {
 export interface RecipientSearchResult {
   name: string;
   userId: string;
+  /** Their handle, as neighbors see it. */
+  username?: string | null;
   homeId: string | null;
+  /** A housemate's address, or a connection's city and state; null for anyone else. */
+  homeAddress?: string | null;
   isVerified: boolean;
   homeMediaUrl: string | null;
   isOnPantopus: boolean;
@@ -120,9 +126,12 @@ export async function sendComposedMail(
 export async function searchRecipients(
   query: string,
   homeId?: string,
+  options?: { peopleOnly?: boolean },
 ): Promise<RecipientSearchResult[]> {
   const params: Record<string, string> = { q: query };
   if (homeId) params.homeId = homeId;
+  // People only, no businesses (a Christmas card goes to a person).
+  if (options?.peopleOnly) params.people = '1';
   const result = await get<{ recipients: RecipientSearchResult[] }>(
     '/api/mailbox/compose/recipients',
     params,

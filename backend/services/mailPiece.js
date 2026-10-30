@@ -6,13 +6,15 @@
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const { localDate, FALLBACK_TIME_ZONE } = require('./mailDelivery');
+const holidayCards = require('./holidayCards');
 
 const KINDS = ['letter', 'bill', 'notice', 'postcard', 'booklet', 'parcel', 'bundle'];
 
-// mail_extracted keys only the server writes: the kept note, Pantopus's mark, the postmark town and the private
-// enclosures. A sender's own extractedData never sets them (the send route strips them).
+// mail_extracted keys only the server writes: the kept note, Pantopus's mark, the postmark town, the private
+// enclosures and a Christmas card. A sender's own extractedData never sets them (the send route strips them).
 const SERVER_EXTRACTED_KEYS = ['summary', 'summary_source', 'summary_at', 'ai_summary', 'from_pantopus', 'postmark_town',
-  'enclosures', 'pantopus_letter', 'invoice_bill', 'vacation_hold_id', 'natural_delivered_at', 'vacation_bundle_hold_id'];
+  'enclosures', 'pantopus_letter', 'invoice_bill', 'vacation_hold_id', 'natural_delivered_at', 'vacation_bundle_hold_id',
+  'card'];
 
 /** A sender's extractedData without the keys only the server writes. */
 function withoutServerKeys(extracted) {
@@ -88,6 +90,8 @@ function present(mail, { timeZone = FALLBACK_TIME_ZONE } = {}) {
     postmark: { town: postmarkTown(mail), date: posted ? localDate(new Date(posted), timeZone) : null },
     on_counter: onCounter(mail),
     summary: summaryOf(mail),
+    // A Christmas card: its picture, caption and year, and whether it's still sealed (services/holidayCards).
+    card: holidayCards.cardView(mail),
   };
 }
 

@@ -93,6 +93,24 @@ async function isFindableBy(senderId, user, localProfile) {
 }
 
 /**
+ * Whether the sender may address a Christmas card to this account (POST /api/mailbox/cards): a person, not a business,
+ * that the card's recipient search shows them: a connection, or someone their name search finds (isFindableBy).
+ * Neither may have blocked the other. Throws on a read error.
+ */
+async function personFindableBy(senderId, userId) {
+  const { data: user, error } = await supabaseAdmin.from('User').select('id, account_type, profile_visibility')
+    .eq('id', userId).maybeSingle();
+  if (error) throw error;
+  if (!user || user.account_type === 'business') return false;
+  if (await hasBlocked(user.id, senderId) || await hasBlocked(senderId, user.id)) return false;
+  if ((await getConnectionUserIds(senderId)).has(user.id)) return true;
+  const { data: localProfile, error: profileError } = await supabaseAdmin.from('LocalProfile')
+    .select('user_id, search_visibility, profile_visibility').eq('user_id', user.id).maybeSingle();
+  if (profileError) throw profileError;
+  return isFindableBy(senderId, user, localProfile);
+}
+
+/**
  * The accounts a search finds by name outside the sender's household, by the rule GET /api/users/search follows: a
  * person by the name and handle on their Local Profile (what neighbors see), and by their account's name or username
  * only when they let people find them by name (UserPrivacySettings.findable_by_name). A business, or someone with no
@@ -170,6 +188,8 @@ router.get('/recipients', verifyToken, async (req, res) => {
     const senderId = req.user.id;
     const query = (req.query.q || '').trim();
     const homeId = req.query.homeId || null;
+    // people=1: people only, no businesses (a Christmas card goes to a person).
+    const peopleOnly = ['1', 'true'].includes(String(req.query.people || ''));
 
     if (query.length < 2) {
       return res.status(400).json({ error: 'Search query must be at least 2 characters.' });
@@ -242,7 +262,7 @@ router.get('/recipients', verifyToken, async (req, res) => {
       const { data: connectedUsers } = connectionMatches.length
         ? await supabaseAdmin
           .from('User')
-          .select('id, name, username, verified, profile_picture_url')
+          .select('id, name, username, verified, profile_picture_url, account_type')
           .in('id', connectionMatches)
         : { data: [] };
 
@@ -264,6 +284,7 @@ router.get('/recipients', verifyToken, async (req, res) => {
 
         for (const user of connectedUsers) {
           if (seenUserIds.has(user.id)) continue;
+          if (peopleOnly && user.account_type === 'business') continue;
           seenUserIds.add(user.id);
 
           const userHome = homesByUserId[user.id] || null;
@@ -283,7 +304,7 @@ router.get('/recipients', verifyToken, async (req, res) => {
       const { data: generalUsers } = generalMatches.length
         ? await supabaseAdmin
           .from('User')
-          .select('id, name, username, verified, profile_picture_url, profile_visibility')
+          .select('id, name, username, verified, profile_picture_url, profile_visibility, account_type')
           .in('id', generalMatches)
         : { data: [] };
 
@@ -301,6 +322,7 @@ router.get('/recipients', verifyToken, async (req, res) => {
           if (results.length >= 10) break;
           if (seenUserIds.has(user.id)) continue;
           if (unpublishedBusinesses.has(String(user.id))) continue;
+          if (peopleOnly && user.account_type === 'business') continue;
           if (!(await isFindableBy(senderId, user, localProfileByUserId.get(user.id)))) continue;
           seenUserIds.add(user.id);
           results.push(buildRecipientResult(user, null, null, null, 2));
@@ -498,3 +520,4 @@ router.post('/withdraw/:mailId', verifyToken, async (req, res) => {
 });
 
 module.exports = router;
+module.exports.personFindableBy = personFindableBy;

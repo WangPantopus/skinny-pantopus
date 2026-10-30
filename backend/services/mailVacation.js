@@ -92,7 +92,9 @@ async function syncHeldMail(userId, now = new Date()) {
     waiting.push(...(data || []));
     if ((data || []).length < 500) break;
   }
-  const pieces = (waiting || []).filter((m) => m.mail_object_type !== 'bundle' && !m.mail_extracted?.vacation_bundle_hold_id);
+  // A Christmas card comes on the morning its sender chose, hold or not (services/holidayCards).
+  const pieces = (waiting || []).filter((m) => m.mail_object_type !== 'bundle' && !m.mail_extracted?.vacation_bundle_hold_id
+    && !m.mail_extracted?.card);
   // hold id -> { release, pieces }: current holds release on their return morning, others at the next round.
   const groups = new Map(windows.map((w) => [w.hold.id, { release: w.release, pieces: [] }]));
   const round = nextRound(timeZone, now);

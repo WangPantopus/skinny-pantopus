@@ -59,6 +59,7 @@ export const LAUNCH_FEATURE_KEYS = [
   'gift_funds', // 9. Support Train gift funds (no app can take a contribution yet)
   'mailbox', // 10. The digital Mailbox (October 9); the Mail tab becomes Messages
   'pulse_redesign', // 11. The Pulse redesign, paused for launch (October 15); the web has no redesign screens
+  'holiday_cards', // 12. Christmas cards sent through Mail (October 30); needs `mailbox` on too
 ] as const;
 
 export type LaunchFeatureKey = (typeof LAUNCH_FEATURE_KEYS)[number];
@@ -85,6 +86,7 @@ export const launchFeatures = {
   mailExtras: enabledLaunchFeatures.has('mail_extras'),
   giftFunds: enabledLaunchFeatures.has('gift_funds'),
   mailbox: enabledLaunchFeatures.has('mailbox'),
+  holidayCards: enabledLaunchFeatures.has('holiday_cards'),
 };
 
 // Pages that exist only for a hidden feature, matched against the pathname.
@@ -126,8 +128,11 @@ const LAUNCH_CUT_ROUTES: ReadonlyArray<readonly [boolean, RegExp]> = [
   [launchFeatures.openGigs && launchFeatures.householdExtras, /^\/app\/mailbox\/gig(?:\/|$)/],
   // #8 Mail extras, incl. Earn (offers and ad earnings that never reach the withdrawable wallet).
   [launchFeatures.mailExtras, /^\/app\/mailbox\/(?:certified|community|party|translation|earn)(?:\/|$)/],
-  // #8 + #10: the page a letter's emailed link opens for someone not on Pantopus (/open/<mail id>).
-  [launchFeatures.mailExtras && launchFeatures.mailbox, /^\/open(?:\/|$)/],
+  // #8 or #12, with #10: the page a letter's or a Christmas card's emailed link opens for someone not on Pantopus
+  // (/open/<mail id>).
+  [(launchFeatures.mailExtras || launchFeatures.holidayCards) && launchFeatures.mailbox, /^\/open(?:\/|$)/],
+  // #12 + #10: sending a Christmas card.
+  [launchFeatures.holidayCards && launchFeatures.mailbox, /^\/app\/mailbox\/cards(?:\/|$)/],
   // #10 Mailbox: every mailbox page. The middleware sends the mailbox itself to Messages.
   // Postcard verification (/app/homes/<id>/verify-postcard) stays.
   [launchFeatures.mailbox, /^\/app\/mailbox(?:\/|$)/],

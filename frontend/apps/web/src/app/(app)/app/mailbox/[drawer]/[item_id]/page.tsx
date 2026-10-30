@@ -30,6 +30,7 @@ import PackageUnboxing from '@/components/mailbox/PackageUnboxing';
 import GigCreationModal from '@/components/mailbox/GigCreationModal';
 import FamilyMailParty from '@/components/mailbox/FamilyMailParty';
 import CertifiedMailDetail from '@/components/mailbox/CertifiedMailDetail';
+import HolidayCardView from '@/components/mailbox/cards/HolidayCardView';
 import { launchFeatures } from '@/lib/featureFlags';
 import { chosenUsername } from '@pantopus/utils';
 import { fetchMe } from '@/lib/me';
@@ -62,6 +63,14 @@ export default function ItemDetailPage() {
       router.replace(`/app/mailbox/${ownDrawer}/${itemId}`);
     }
   }, [ownDrawer, drawer, itemId, router]);
+
+  // A Christmas card opens from its envelope the first time: the load that opened it says so (just_opened; the
+  // list's tap may have loaded it first). Kept per letter for this visit.
+  const [cardFirstOpen, setCardFirstOpen] = useState<{ id: string; first: boolean } | null>(null);
+  useEffect(() => {
+    if (!detail || detail.wrapper.id !== itemId || cardFirstOpen?.id === itemId) return;
+    setCardFirstOpen({ id: itemId, first: Boolean(detail.piece.just_opened) || !detail.wrapper.opened_at });
+  }, [detail, itemId, cardFirstOpen]);
 
   // Mark as opened on first load
   const markedRef = useRef(false);
@@ -406,6 +415,15 @@ export default function ItemDetailPage() {
               onDownload={bookletData.download_url ? () => { void api.mailboxV2P2.downloadBooklet(piece.id).catch(() => {}); } : undefined}
             />
           </div>
+        ) : piece.card ? (
+          <HolidayCardView
+            key={piece.id}
+            piece={piece}
+            recipientName={to.name}
+            recipientLine={to.line}
+            firstOpen={cardFirstOpen?.id === itemId ? cardFirstOpen.first : Boolean(piece.just_opened) || !detail.wrapper.opened_at}
+            onOpenEnvelope={() => setSheetOpen(true)}
+          />
         ) : (
           <LetterView
             piece={piece}

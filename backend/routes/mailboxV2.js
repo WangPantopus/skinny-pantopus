@@ -14,6 +14,7 @@ const mailDelivery = require('../services/mailDelivery');
 // What the apps read about a piece (SRV-2): kind, from_pantopus, postmark, on_counter, summary; the kept summaries;
 // the Vault's folders (Home folders belong to the Home).
 const mailPiece = require('../services/mailPiece');
+const holidayCards = require('../services/holidayCards');
 const mailSummaries = require('../services/mailSummaries');
 const mailVault = require('../services/mailVault');
 const mailEnclosures = require('../services/mailEnclosures');
@@ -631,10 +632,11 @@ router.get('/item/:id', verifyToken, async (req, res) => {
       }
     }
 
-    // Read the full letter before marking it opened. A storage failure must leave it unread and retryable.
+    // Read the full letter before marking it opened. A storage failure must leave it unread and retryable. A Christmas
+    // card sealed until Christmas morning answers its short note and stays unopened (services/holidayCards).
     Object.assign(mail, await mailObjects.hydrateMail(mail));
     const objectPayload = mail.object_payload || null;
-    if (!mail.opened_at && !mail.removed) {
+    if (!mail.opened_at && !mail.removed && !holidayCards.isSealed(mail)) {
       const now = new Date().toISOString();
       const opened = { opened_at: now, viewed: true, viewed_at: mail.viewed_at || now,
         ...(!mail.lifecycle || mail.lifecycle === 'delivered' ? { lifecycle: 'opened' } : {}) };
@@ -642,7 +644,8 @@ router.get('/item/:id', verifyToken, async (req, res) => {
         .eq('id', id).is('opened_at', null).is('deleted_at', null).select('id');
       if (openError) throw openError;
       if (written?.length) {
-        Object.assign(mail, opened);
+        // This visit opened it: the apps open a Christmas card from its envelope the first time.
+        Object.assign(mail, opened, { just_opened: true });
         await logMailEvent('mail_opened', id, userId, {
           drawer: mail.drawer,
           time_since_delivered_ms: Date.now() - new Date(mail.delivered_at || mail.created_at).getTime(),
