@@ -85,7 +85,7 @@ struct HolidayCardSealStep: View {
             postmarkYear: String(calendar.component(.year, from: now)),
             isOpened: false,
             isFaded: false,
-            stamp: MailStampArt.forPiece(design.id),
+            stamp: MailStampArt.forCard(number: design.number),
             peekLine: nil,
             meta: MailPieceMeta(parts: [], due: nil, dueIsSettled: false),
             card: MailCard(design: design, year: cards.year, sealed: viewModel.arrival == .sealedChristmas)
