@@ -113,13 +113,15 @@ public final class MultipartUploader: @unchecked Sendable {
         var didAttemptRefresh = false
         try checkSession()
         if sessionOwner.isAccessTokenExpiringSoon {
-            didAttemptRefresh = true
             let outcome = await sessionOwner.refreshIfPossible()
             try checkSession()
             if outcome == .authRejected {
                 await sessionOwner.handleUnauthorized()
                 throw APIError.unauthorized
             }
+            // A blip (offline, auth busy) keeps the old token; its 401
+            // refreshes once more below instead of signing out.
+            didAttemptRefresh = outcome == .rotated
         }
 
         let deviceId = sessionOwner.deviceId

@@ -66,8 +66,10 @@ async function authorizeUpcomingGigs() {
         // No saved card for an off-session hold (instant-accept tasks never collect one): only the owner can authorize.
         if (gigErr.code === 'legacy_authorization_check_required') {
           // Accepting more than a day ahead told the owner payment would open later, so say once that it has.
-          const acceptedWithinDay = Date.parse(gig.scheduled_start) - Date.parse(gig.accepted_at) <= 24 * 60 * 60 * 1000;
-          if (!acceptedWithinDay) {
+          // The query also reaches older unpaid tasks, so a start that has already passed gets no reminder.
+          const startsAt = Date.parse(gig.scheduled_start);
+          const acceptedWithinDay = startsAt - Date.parse(gig.accepted_at) <= 24 * 60 * 60 * 1000;
+          if (!acceptedWithinDay && startsAt > now.getTime()) {
             await createNotification({
               userId: gig.user_id,
               type: 'payment_action_required',
