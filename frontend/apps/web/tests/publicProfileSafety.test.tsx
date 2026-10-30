@@ -21,7 +21,7 @@ jest.mock('@/components/ui/confirm-store', () => ({ confirmStore: { open: jest.f
 jest.mock('@/components/business/BusinessPublicProfile', () => ({ __esModule: true, default: () => null }));
 jest.mock('@/components/profile/public/cards', () => ({ ReliabilityPanel: () => null, AboutCard: () => null, SkillsCard: () => null }));
 jest.mock('@/components/profile/public/tabs', () => Object.fromEntries(
-  ['OverviewTab', 'ServicesTab', 'MissionsTab', 'PortfolioTab', 'ActivityTab', 'ReviewsTab', 'OwnerInsightsTab', 'OwnerSettingsTab'].map(k => [k, () => null]),
+  ['OverviewTab', 'ServicesTab', 'MissionsTab', 'PortfolioTab', 'PostsTab', 'ReviewsTab', 'OwnerInsightsTab', 'OwnerSettingsTab'].map(k => [k, () => null]),
 ));
 // The profile keeps what a person shares in the session's query cache.
 let client: QueryClient;

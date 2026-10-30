@@ -11,6 +11,7 @@
  * The apps carry the pictures themselves (one per design id) and print the caption, the year and the postmark.
  */
 const { DateTime } = require('luxon');
+const supabaseAdmin = require('../config/supabaseAdmin');
 
 const CARD_TAG = 'holiday_card';
 const MESSAGE_LIMIT = 300;
@@ -89,6 +90,11 @@ function dayStart(timeZone, now = new Date()) {
   return DateTime.fromJSDate(now, { zone: timeZone }).startOf('day').toJSDate();
 }
 
+/** Whole days from one day to a later one, as YYYY-MM-DD ("2026-12-11" to "2026-12-25" is 14). */
+function daysBetween(fromDay, toDay) {
+  return Math.round(DateTime.fromISO(toDay, { zone: 'utc' }).diff(DateTime.fromISO(fromDay, { zone: 'utc' }), 'days').days);
+}
+
 /**
  * The arrivals open now. A person's: the sealed and Christmas-morning choices only while the next morning round in
  * their time zone comes before Christmas morning. An email's: sealed only before Christmas morning where the sender is.
@@ -135,6 +141,14 @@ function cardView(mail, now = new Date()) {
 }
 
 /**
+ * When the carrier picks up a card to a person: their next 7 a.m. after it was sent, which is also the last moment to
+ * take it back. A morning or sealed card is delivered at its pickup; a Christmas-morning card waits for Dec 25.
+ */
+function pickupAt(mail) {
+  return mail?.mail_extracted?.card?.take_back_until || mail?.delivered_at || null;
+}
+
+/**
  * What the sender sees of a card they sent (today's card and the answer to sending it). `toName` is the person's
  * name as they show it, or the masked email address.
  */
@@ -144,7 +158,7 @@ function sentSummary(mail, now = new Date()) {
   let status;
   if (byEmail) status = mail.escrow_status === 'pending' ? 'waiting' : mail.escrow_status;
   else status = Date.parse(mail.delivered_at) > now.getTime() ? 'waiting' : 'delivered';
-  const takeBackUntil = byEmail ? null : (card.take_back_until || mail.delivered_at || null);
+  const takeBackUntil = byEmail ? null : pickupAt(mail);
   const canTakeBack = byEmail
     ? mail.escrow_status === 'pending'
     : Boolean(takeBackUntil) && Date.parse(takeBackUntil) > now.getTime() && Date.parse(mail.delivered_at) > now.getTime();
@@ -165,8 +179,126 @@ function sentSummary(mail, now = new Date()) {
   };
 }
 
+// ---- Sent: the cards a person sent (GET /api/mailbox/sent, /sent/:id, and the Mailbox flag in v2 drawers) ----
+
+/**
+ * The cards this person sent as themselves (not as a business) that weren't taken back: one to a person that was taken
+ * back is gone, one by email is withdrawn. A query to add filters and order to.
+ */
+function sentCards(userId, select, options) {
+  return supabaseAdmin.from('Mail').select(select, options)
+    .eq('sender_user_id', userId)
+    .contains('tags', [CARD_TAG])
+    .is('sender_entity_id', null)
+    .or('escrow_status.is.null,escrow_status.neq.withdrawn');
+}
+
+/**
+ * Where a card someone sent is now, as their Sent shows it. To a person: `waiting` for the carrier's 7 a.m. pickup,
+ * `picked_up` (a Christmas-morning card on its way) or `delivered`. By email: `email_waiting` until they open it,
+ * `claimed` once they joined and have it, `expired` after its 90 days. Never whether they opened, kept or shredded it.
+ */
+function sentStatus(mail, now = new Date()) {
+  const t = now.getTime();
+  if (mail.escrow_status) {
+    if (mail.escrow_status === 'claimed') return 'claimed';
+    if (mail.escrow_status === 'expired' || Date.parse(mail.escrow_expires_at) <= t) return 'expired';
+    return 'email_waiting';
+  }
+  if (Date.parse(mail.delivered_at) <= t) return 'delivered';
+  return Date.parse(pickupAt(mail)) <= t ? 'picked_up' : 'waiting';
+}
+
+/** This instant's day (YYYY-MM-DD) by this clock, or null. */
+function dayIn(at, timeZone) {
+  return at ? DateTime.fromJSDate(new Date(at), { zone: timeZone }).toISODate() : null;
+}
+
+/** An instant as one ISO form ("2026-12-25T15:00:00.000Z"), whichever way it was stored, or null. */
+function instant(at) {
+  return at ? new Date(at).toISOString() : null;
+}
+
+/**
+ * A card in its sender's Sent. `toName`: the name stored when it was sent, or by email the masked address until it's
+ * claimed, then the name neighbors see the person by. `senderName`: the name on the envelope (the sender's Local Profile,
+ * as the recipient sees it). `zone`: the clock their days are told by (theirs; the sender's own for a card by email
+ * nobody has claimed). Never the recipient's ids, address or time zone, nor anything they did with it.
+ */
+function sentPiece(mail, { toName, senderName, zone, now = new Date() }) {
+  const card = mail.mail_extracted?.card || {};
+  const view = cardView(mail, now) || {};
+  const byEmail = Boolean(mail.escrow_status);
+  const status = sentStatus(mail, now);
+  return {
+    id: mail.id,
+    kind: 'card',
+    sent_at: instant(mail.created_at),
+    to_name: toName || null,
+    by_email: byEmail,
+    arrival: card.arrival || null,
+    status,
+    arrives_at: byEmail ? null : instant(mail.delivered_at),
+    arrives_on: byEmail ? null : card.arrives_on || dayIn(mail.delivered_at, zone),
+    opens_on: dayIn(card.sealed_until, zone),
+    sealed: isSealed(mail, now),
+    // The same rule as take-back: to a person until the pickup, by email until they open it.
+    can_take_back: status === 'waiting' || status === 'email_waiting',
+    take_back_until: byEmail ? null : instant(pickupAt(mail)),
+    // The envelope as it reaches them: postmarked once the carrier has it (by email, the day it was sent).
+    envelope: { from: senderName, postmarked_on: status === 'waiting' ? null : dayIn(mail.created_at, zone) },
+    card: { design: view.design || null, number: view.number ?? null, caption: view.caption || null, paper: view.paper || null,
+      year: view.year || null },
+  };
+}
+
+/**
+ * A sent card's trail, in order: [{ step, at | on, done }], `at` an instant (shown by the sender's clock), `on` a day by
+ * the recipient's (`zone`, as in sentPiece). A step not reached yet is not done. To a person: sealed → delivered, then
+ * opens for a sealed card; a Christmas-morning card: sealed → picked_up → delivered. By email: sealed → emailed →
+ * joined (at the claim) or returned (on the day its 90 days ended).
+ */
+function sentTrail(mail, { zone, now = new Date() }) {
+  const card = mail.mail_extracted?.card || {};
+  const reached = (at) => Boolean(at) && Date.parse(at) <= now.getTime();
+  const trail = [{ step: 'sealed', at: instant(mail.created_at), done: true }];
+  if (mail.escrow_status) {
+    trail.push({ step: 'emailed', at: instant(mail.created_at), done: true });
+    const status = sentStatus(mail, now);
+    if (status === 'claimed') trail.push({ step: 'joined', at: instant(mail.delivered_at), done: true });
+    else if (status === 'expired') trail.push({ step: 'returned', on: dayIn(mail.escrow_expires_at, zone), done: true });
+    else trail.push({ step: 'joined', at: null, done: false });
+    return trail;
+  }
+  if (card.arrival === 'christmas_morning') {
+    trail.push({ step: 'picked_up', on: dayIn(pickupAt(mail), zone), done: reached(pickupAt(mail)) });
+  }
+  trail.push({ step: 'delivered', on: card.arrives_on || dayIn(mail.delivered_at, zone), done: reached(mail.delivered_at) });
+  if (card.arrival === 'sealed_christmas' && card.sealed_until) {
+    trail.push({ step: 'opens', on: dayIn(card.sealed_until, zone), done: reached(card.sealed_until) });
+  }
+  return trail;
+}
+
+/**
+ * The Mailbox's Sent line (GET /api/mailbox/v2/drawers `sent`): whether the person has sent a card (not taken back),
+ * and how many cards to a person still wait for the 7 a.m. pickup (the mailbox's flag is up while any do).
+ */
+async function sentLine(userId, now = new Date()) {
+  const [any, coming] = await Promise.all([
+    sentCards(userId, 'id').limit(1),
+    sentCards(userId, 'id, delivered_at, escrow_status, mail_extracted').is('escrow_status', null)
+      .gt('delivered_at', now.toISOString()),
+  ]);
+  if (any.error || coming.error) throw new Error((any.error || coming.error).message);
+  return {
+    any: Boolean(any.data?.length),
+    waiting: (coming.data || []).filter((mail) => sentStatus(mail, now) === 'waiting').length,
+  };
+}
+
 module.exports = {
   CARD_TAG, MESSAGE_LIMIT, SUBJECT, SEALED_NOTE, SEASON, DESIGNS, PERSON_ARRIVALS, EMAIL_ARRIVALS,
-  designById, isCard, isSealed, sealedView, christmasMorning, seasonOpen, dayStart, arrivalsFor, personDelivery,
-  cardView, sentSummary,
+  designById, isCard, isSealed, sealedView, christmasMorning, seasonOpen, dayStart, daysBetween, arrivalsFor,
+  personDelivery, cardView, pickupAt, sentSummary, sentCards, sentStatus, sentPiece, sentTrail, sentLine,
 };
