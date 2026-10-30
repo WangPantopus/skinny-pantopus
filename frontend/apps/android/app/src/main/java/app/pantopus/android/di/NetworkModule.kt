@@ -44,6 +44,7 @@ import app.pantopus.android.data.api.services.GigReassignmentApi
 import app.pantopus.android.data.api.services.GigSavedSearchesApi
 import app.pantopus.android.data.api.services.GigViewerBidApi
 import app.pantopus.android.data.api.services.GigsApi
+import app.pantopus.android.data.api.services.HolidayCardsApi
 import app.pantopus.android.data.api.services.HomeAdminApi
 import app.pantopus.android.data.api.services.HomeClaimReviewApi
 import app.pantopus.android.data.api.services.HomeDashboardApi
@@ -510,6 +511,9 @@ object NetworkModule {
 
     @Provides @Singleton
     fun provideMailboxApi(retrofit: Retrofit): MailboxApi = retrofit.create(MailboxApi::class.java)
+
+    @Provides @Singleton
+    fun provideHolidayCardsApi(retrofit: Retrofit): HolidayCardsApi = retrofit.create(HolidayCardsApi::class.java)
 
     @Provides @Singleton
     fun provideMailboxV2Api(retrofit: Retrofit): MailboxV2Api = retrofit.create(MailboxV2Api::class.java)

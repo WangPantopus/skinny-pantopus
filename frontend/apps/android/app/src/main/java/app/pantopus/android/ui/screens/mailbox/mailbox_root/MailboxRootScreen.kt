@@ -53,12 +53,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
+import app.pantopus.android.data.api.models.mailbox.HolidayCardsResponse
 import app.pantopus.android.data.api.models.mailbox.v2.MailHome
 import app.pantopus.android.data.api.models.mailbox.v2.MailVacationHold
 import app.pantopus.android.data.mailbox.MailboxRepository
 import app.pantopus.android.ui.components.NavigationMenuButton
 import app.pantopus.android.ui.components.firstTapClosesKeyboard
 import app.pantopus.android.ui.screens.ceremonial_mail_open.MailWelcomePorch
+import app.pantopus.android.ui.screens.mailbox.cards.HolidayCardRow
 import app.pantopus.android.ui.screens.mailbox.components.MailboxHeroState
 import app.pantopus.android.ui.screens.place.verify.PlaceVerifyMethod
 import app.pantopus.android.ui.screens.place.verify.PlaceVerifySheet
@@ -103,6 +105,8 @@ fun MailboxRootScreen(
     /** Verify your home on the closed Home drawer: the Place verify sheet's doors for that Home. */
     onStartVerify: ((homeId: String, method: PlaceVerifyMethod) -> Unit)? = null,
     onOpenVerificationStatus: ((homeId: String) -> Unit)? = null,
+    /** "Send a Christmas card" or today's card, at the top of Me (launch keys `holiday_cards` + `mailbox`). */
+    onOpenCards: () -> Unit = {},
     viewModel: MailboxRootViewModel = hiltViewModel(),
     vault: MailVaultViewModel = hiltViewModel(),
 ) {
@@ -119,6 +123,7 @@ fun MailboxRootScreen(
     val hold by viewModel.vacationHold.collectAsStateWithLifecycle()
     val welcome by viewModel.welcome.collectAsStateWithLifecycle()
     val zone by viewModel.mailZone.collectAsStateWithLifecycle()
+    val cards by viewModel.cards.collectAsStateWithLifecycle()
     var verifyHome by remember { mutableStateOf<MailHome?>(null) }
 
     LaunchedEffect(Unit) {
@@ -174,6 +179,8 @@ fun MailboxRootScreen(
                         onPay(invoiceId)
                     },
                     onVerify = { home -> verifyHome = home },
+                    cards = cards,
+                    onOpenCards = onOpenCards,
                 )
             }
         }
@@ -253,6 +260,8 @@ private fun MailboxList(
     onOpenRoutingQueue: () -> Unit,
     onPay: (String) -> Unit,
     onVerify: (MailHome) -> Unit,
+    cards: HolidayCardsResponse?,
+    onOpenCards: () -> Unit,
 ) {
     val shelf by viewModel.vaultShelf.collectAsStateWithLifecycle()
     val folders by vault.folders.collectAsStateWithLifecycle()
@@ -302,6 +311,7 @@ private fun MailboxList(
         if (selectedDrawer == MailboxDrawer.Home) {
             waiting.firstOrNull()?.let { home -> item(key = "homeWaiting") { MailHomeWaitingBanner(home) { onVerify(home) } } }
         }
+        holidayCardItem(cards, selectedDrawer, selectedTab, onOpenCards)
         when (selectedTab) {
             MailboxTab.Incoming -> incomingItems(state, viewModel)
             MailboxTab.Counter -> counterItems(state, viewModel, onPay)
@@ -313,6 +323,22 @@ private fun MailboxList(
                 )
         }
     }
+}
+
+/**
+ * Christmas cards (launch keys `holiday_cards` + `mailbox`): the way in, at the top of your own mail (Me, Incoming),
+ * while sending is open.
+ */
+private fun LazyListScope.holidayCardItem(
+    cards: HolidayCardsResponse?,
+    drawer: MailboxDrawer,
+    tab: MailboxTab,
+    onOpen: () -> Unit,
+) {
+    if (!LaunchFeatures.holidayCards || !LaunchFeatures.mailbox) return
+    if (drawer != MailboxDrawer.Me || tab != MailboxTab.Incoming) return
+    val open = cards?.takeIf { it.open } ?: return
+    item(key = "holidayCards") { HolidayCardRow(open, onOpen) }
 }
 
 /** Incoming: the pieces by the day they came. */

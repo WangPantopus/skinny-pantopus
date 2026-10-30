@@ -280,6 +280,70 @@ object PantopusColors {
     val mailboxLockedDoor = Color(0xFF64748B)
     val mailboxLockedPlate = Color(0xFFF1F5F9)
 
+    // Christmas cards (launch key `holiday_cards`, 2026-10-30), the web's numbers: the cream desk the send screens sit
+    // on, wax red for their buttons and seals, the red card envelope, and the card's own printing and ink.
+
+    /** The send screens' cream desk — `#F5F0E8`; a row or note on it — `#FBF6EC`, edged `#E7DCC6`. */
+    val cardDesk = Color(0xFFF5F0E8)
+    val cardNotePaper = Color(0xFFFBF6EC)
+    val cardNoteEdge = Color(0xFFE7DCC6)
+
+    /** A field or list on the desk — `#FFFDF8` — edged `#D6CBB6` (also a step dot still ahead); a list's edge `#E3D8C3`. */
+    val cardField = Color(0xFFFFFDF8)
+    val cardFieldEdge = Color(0xFFD6CBB6)
+    val cardListEdge = Color(0xFFE3D8C3)
+
+    /** A pressed row or button on the desk — `#F5EFE3`. */
+    val cardPressed = Color(0xFFF5EFE3)
+
+    /** Wax red — `#8B1D1D`: the send screens' buttons, the current step, the "Do not open until Christmas" words. */
+    val cardWax = Color(0xFF8B1D1D)
+
+    /** Lettering on wax red — `#FFF7ED`. */
+    val cardWaxText = Color(0xFFFFF7ED)
+
+    /** The desk's words: strong `#111827`, body `#374151`, quiet `#4E5563`, a problem `#A81A1A`. */
+    val cardTextStrong = Color(0xFF111827)
+    val cardTextBody = Color(0xFF374151)
+    val cardTextQuiet = Color(0xFF4E5563)
+    val cardTextProblem = Color(0xFFA81A1A)
+
+    /** A person's initial in the search — `#5B4A36` on `#EBE3D4`; the row's chevron — `#8A7A62`. */
+    val cardInitialInk = Color(0xFF5B4A36)
+    val cardInitialPaper = Color(0xFFEBE3D4)
+    val cardChevron = Color(0xFF8A7A62)
+
+    /** The red card envelope — `#9F2F28` — its addresses in cream ink `#FDF2E3` / `#FFFAF0`, "CHRISTMAS CARD" `#FDE7C8`. */
+    val cardEnvelope = Color(0xFF9F2F28)
+    val cardEnvelopeInk = Color(0xFFFDF2E3)
+    val cardEnvelopeAddress = Color(0xFFFFFAF0)
+    val cardEnvelopeLabel = Color(0xFFFDE7C8)
+
+    /** The "Do not open until Christmas" seal: cream `#FDF2E3` ringed and lettered in dark red `#7A1414`. */
+    val cardSealPaper = Color(0xFFFDF2E3)
+    val cardSealInk = Color(0xFF7A1414)
+
+    /** The card's printing: the caption by hand `#1D2B63`, CHRISTMAS, 2026 `#2B2622`, the postmark `#B2413A`. */
+    val cardCaptionInk = Color(0xFF1D2B63)
+    val cardYearInk = Color(0xFF2B2622)
+    val cardPostmark = Color(0xFFB2413A)
+
+    /** The back: the note in fountain-pen blue `#2C4A8A`, FROM `#4A3F33`, PANTOPUS POST `#8A7A62`. */
+    val cardNoteInk = Color(0xFF2C4A8A)
+    val cardFromInk = Color(0xFF4A3F33)
+    val cardFooterInk = Color(0xFF8A7A62)
+
+    /** The card's paper when a design names none — `#F7F0E2`. */
+    val cardPaper = Color(0xFFF7F0E2)
+
+    /** The card's aged edges `rgb(110 80 30 / 13%)`, its paper grain `rgb(120 95 60 / 7%)`, its ruled lines `rgb(120 100 70 / 22%)`. */
+    val cardEdgeShade = Color(0x216E501E)
+    val cardGrain = Color(0x12785F3C)
+    val cardRule = Color(0x38786446)
+
+    /** The red envelope's grain — white at 5%. */
+    val cardEnvelopeGrain = Color(0x0DFFFFFF)
+
     // Ballot illustration — mirrors iOS `Ballot/*` in the asset catalog.
 
     /**

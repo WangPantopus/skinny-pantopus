@@ -5,6 +5,7 @@ package app.pantopus.android.ui.screens.mailbox.mail_detail.letter
 import app.pantopus.android.data.api.models.mailbox.MailDetail
 import app.pantopus.android.data.api.models.mailbox.v2.DrawerMail
 import app.pantopus.android.data.api.models.mailbox.v2.MailEnclosure
+import app.pantopus.android.ui.screens.mailbox.cards.HolidayCardTimes
 import app.pantopus.android.ui.screens.mailbox.components.MailAddressBook
 import app.pantopus.android.ui.screens.mailbox.components.MailKind
 import app.pantopus.android.ui.screens.mailbox.components.MailPieceMapper
@@ -12,6 +13,7 @@ import app.pantopus.android.ui.screens.mailbox.components.MailPieceModel
 import app.pantopus.android.ui.screens.mailbox.components.MailSender
 import java.time.Instant
 import java.time.LocalDate
+import java.time.Year
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
@@ -31,6 +33,28 @@ data class MailLetterNote(
     val text: String,
     val facts: List<Pair<String, String>>,
     val checkAmount: Boolean,
+)
+
+/**
+ * A Christmas card's page (launch key `holiday_cards`): the picture and its printing, the note on the back, and, while
+ * it's sealed until Christmas morning, when it opens.
+ */
+data class MailLetterCard(
+    val design: String,
+    val caption: String?,
+    val paper: String?,
+    val year: Int,
+    val sealed: Boolean,
+    /** "Friday, December 25", while it's sealed. */
+    val opensOn: String?,
+    /** "in 56 days", "tomorrow", "today", while it's sealed. */
+    val opensIn: String?,
+    /** The day it was mailed, for the postmark. */
+    val mailedOn: String?,
+    /** The note on the back (the server keeps it until Christmas morning while it's sealed). */
+    val note: String,
+    /** It hadn't been opened before this visit: it opens from its envelope. */
+    val firstOpen: Boolean,
 )
 
 /**
@@ -72,6 +96,8 @@ data class MailLetter(
     /** How Pantopus checked the sender, in a sentence. */
     val checked: String,
     val trail: List<MailTrailStep>,
+    /** A Christmas card: its page shows the card instead of a letter; null for everything else. */
+    val card: MailLetterCard? = null,
 ) {
     companion object {
         private val dayFormat = DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.US)
@@ -83,9 +109,12 @@ data class MailLetter(
             book: MailAddressBook,
             zone: ZoneId,
             now: Instant = Instant.now(),
+            /** A Christmas card that hadn't been opened before this visit. */
+            cardFirstOpen: Boolean = false,
         ): MailLetter {
-            // The page opened it, so the envelope is drawn torn open, at full strength.
-            val envelope = MailPieceMapper.piece(detail.asRow().copy(viewed = true), book, zone, now).copy(fade = 1f)
+            // The page opened it, so the envelope is drawn torn open, at full strength. A Christmas card's page shows
+            // its envelope whole: the card comes out of it on the page.
+            val envelope = MailPieceMapper.piece(detail.asRow().copy(viewed = detail.card == null), book, zone, now).copy(fade = 1f)
             val kind = envelope.kind
             val invoice = detail.invoice
             val owed = invoice?.takeIf { it.owed }
@@ -118,6 +147,29 @@ data class MailLetter(
                 acknowledged = acknowledged,
                 checked = checkedSentence(envelope.sender),
                 trail = trail(detail, posted, delivered, book, zone),
+                card = card(detail, zone, now, cardFirstOpen),
+            )
+        }
+
+        /** A Christmas card's page; null for anything else. */
+        private fun card(
+            detail: MailDetail,
+            zone: ZoneId,
+            now: Instant,
+            firstOpen: Boolean,
+        ): MailLetterCard? {
+            val card = detail.card ?: return null
+            return MailLetterCard(
+                design = card.design,
+                caption = card.caption,
+                paper = card.paper,
+                year = card.year ?: Year.now(zone).value,
+                sealed = card.sealed,
+                opensOn = HolidayCardTimes.longDay(card.sealedUntil, zone).takeIf { card.sealed && it.isNotEmpty() },
+                opensIn = HolidayCardTimes.inDays(card.sealedUntil, zone, now).takeIf { card.sealed },
+                mailedOn = detail.postmark?.date ?: detail.createdAt,
+                note = (detail.contentText ?: detail.content).orEmpty().trim(),
+                firstOpen = firstOpen,
             )
         }
 
@@ -175,7 +227,14 @@ data class MailLetter(
                     listOf(detail.firstOpenedAt, detail.openedAt, detail.viewedAt)
                         .firstNotNullOfOrNull { parse(it) }
                         ?.atZone(zone)
-                add(MailTrailStep("opened", "Opened", opened?.let(::stampMoment), done = true, readers = true))
+                val sealedUntil = detail.card?.takeIf { it.sealed }?.sealedUntil
+                if (sealedUntil != null) {
+                    // A Christmas card sealed until Christmas morning hasn't been opened, whatever the page did.
+                    val opens = parse(sealedUntil)?.atZone(zone)
+                    add(MailTrailStep("opened", "Opens on Christmas morning", opens?.let(::stampMoment), done = false, readers = false))
+                } else {
+                    add(MailTrailStep("opened", "Opened", opened?.let(::stampMoment), done = true, readers = true))
+                }
                 parse(detail.acknowledgedAt)?.atZone(zone)?.let {
                     add(MailTrailStep("acknowledged", "Acknowledged", stampMoment(it), done = true, readers = true))
                 }
@@ -245,6 +304,7 @@ data class MailLetter(
                 pageCount = pageCount,
                 invoice = invoice,
                 lifecycle = lifecycle,
+                card = card,
             )
     }
 }

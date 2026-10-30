@@ -51,6 +51,13 @@ enum class LaunchFeature(
      * refused and businesses get no feed compose button either way.
      */
     PULSE_REDESIGN("pulse_redesign"),
+
+    /**
+     * 12. Christmas cards (founder decision, 2026-10-30): "Send a Christmas card" at the top of Me in the Mailbox, the
+     * four steps that send one card a day, and today's card. It needs [MAILBOX] on too. Cards that arrive draw as cards
+     * whenever the server sends them.
+     */
+    HOLIDAY_CARDS("holiday_cards"),
 }
 
 /**
@@ -81,6 +88,7 @@ object LaunchFeatures {
     val giftFunds: Boolean get() = isEnabled(LaunchFeature.GIFT_FUNDS)
     val mailbox: Boolean get() = isEnabled(LaunchFeature.MAILBOX)
     val pulseRedesign: Boolean get() = isEnabled(LaunchFeature.PULSE_REDESIGN)
+    val holidayCards: Boolean get() = isEnabled(LaunchFeature.HOLIDAY_CARDS)
 
     /** Parses a comma-separated key list ("all" enables every feature). */
     fun parse(raw: String?): Set<LaunchFeature> {

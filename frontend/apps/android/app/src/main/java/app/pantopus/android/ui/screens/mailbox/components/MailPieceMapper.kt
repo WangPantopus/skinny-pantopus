@@ -3,6 +3,7 @@
 package app.pantopus.android.ui.screens.mailbox.components
 
 import app.pantopus.android.data.api.models.mailbox.v2.DrawerMail
+import app.pantopus.android.data.api.models.mailbox.v2.MailCard
 import app.pantopus.android.data.api.models.mailbox.v2.MailDelivery
 import app.pantopus.android.data.api.models.mailbox.v2.MailHome
 import app.pantopus.android.data.api.net.NetworkError
@@ -90,6 +91,9 @@ object MailPieceMapper {
         val dueWords = owedWords(row, today)
         val whenWords = delivered?.let { whenWords(it, today) }
         val ageDays = delivered?.let { ChronoUnit.DAYS.between(it.toLocalDate(), today) } ?: 0
+        // A Christmas card sealed until Christmas morning stays shut, whatever an older app marked.
+        val opened = row.viewed && row.card?.sealed != true
+        val cameToday = delivered?.toLocalDate() == today
         return MailPieceModel(
             id = row.id,
             kind = kind,
@@ -98,9 +102,9 @@ object MailPieceMapper {
             to = row.recipientName?.takeIf { it.isNotBlank() } ?: book.personName?.takeIf { it.isNotBlank() },
             toLine = if (row.recipientHomeId != null) book.homeAddress(row.recipientHomeId) else book.ownAddress,
             sender = sender,
-            opened = row.viewed,
+            opened = opened,
             special = row.specialDelivery,
-            fade = if (row.viewed) fade(ageDays) else 1f,
+            fade = if (opened) fade(ageDays) else 1f,
             postmarkTown = row.postmark?.town?.takeIf { it.isNotBlank() },
             postmarkDay = postmarkDate?.format(shortDate)?.uppercase(Locale.US) ?: "",
             postmarkYear = postmarkDate?.year?.toString() ?: "",
@@ -108,9 +112,11 @@ object MailPieceMapper {
             note = note(kind, row, title),
             meta = meta(row, kind, whenWords, dueWords),
             accessibilityLabel =
-                spokenLabel(row, kind, from, sender, dueWords, whenWords, cameToday = delivered?.toLocalDate() == today),
+                row.card?.let { cardLabel(it, from, row.viewed, whenWords, cameToday) }
+                    ?: spokenLabel(row, kind, from, sender, dueWords, whenWords, cameToday),
             bundleCount = row.bundleItemCount,
             pageCount = row.pageCount,
+            card = row.card?.let { MailPieceCard(design = it.design, sealed = it.sealed) },
         )
     }
 
@@ -172,14 +178,19 @@ object MailPieceMapper {
             else -> title
         }
 
-    /** The line under the piece: "7:00 a.m. · Opened · Due Fri, Nov 7". */
+    /** The line under the piece: "7:00 a.m. · Opened · Due Fri, Nov 7"; a card's "7:00 a.m. · Christmas card · Opened". */
     private fun meta(
         row: DrawerMail,
         kind: MailKind,
         whenWords: String?,
         dueWords: String?,
-    ): String =
-        listOfNotNull(
+    ): String {
+        val card = row.card
+        if (card != null) {
+            val state = if (card.sealed) "Opens Christmas morning" else "Opened".takeIf { row.viewed }
+            return listOfNotNull(whenWords, "Christmas card", state).joinToString(" · ")
+        }
+        return listOfNotNull(
             whenWords,
             "Opened".takeIf { row.viewed },
             "Paid".takeIf { row.invoice?.status == "paid" },
@@ -189,6 +200,7 @@ object MailPieceMapper {
             row.pageCount?.takeIf { kind == MailKind.Booklet && it > 0 }?.let { if (it == 1) "1 page" else "$it pages" },
             row.bundleItemCount?.takeIf { kind == MailKind.Bundle && it > 0 }?.let { if (it == 1) "1 piece" else "$it pieces" },
         ).joinToString(" · ")
+    }
 
     /** One sentence for a screen reader: what it is, from whom, sealed or opened, special, due, and when it came. */
     private fun spokenLabel(
@@ -220,6 +232,25 @@ object MailPieceMapper {
             // "7:00 a.m." already ends the sentence.
             if (!endsWith(".")) append('.')
         }
+    }
+
+    /** A Christmas card, for a screen reader: from whom, sealed until Christmas morning, opened or in its envelope. */
+    private fun cardLabel(
+        card: MailCard,
+        from: String,
+        viewed: Boolean,
+        whenWords: String?,
+        cameToday: Boolean,
+    ): String {
+        val state =
+            when {
+                card.sealed -> ", sealed until Christmas morning"
+                viewed -> ", opened"
+                else -> ", in its envelope"
+            }
+        val came = whenWords?.let { if (cameToday) ", came today at $it" else ", came $it" }.orEmpty()
+        // "7:00 a.m." already ends the sentence.
+        return "Christmas card from $from$state$came".let { if (it.endsWith(".")) it else "$it." }
     }
 
     /** "$184.00" (a bill's dollars and cents); another currency keeps its code ("12.50 CAD"). */

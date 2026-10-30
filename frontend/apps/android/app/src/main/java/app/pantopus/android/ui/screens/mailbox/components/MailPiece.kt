@@ -23,6 +23,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
@@ -33,17 +34,22 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
@@ -54,9 +60,11 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.ui.components.PerforatedStamp
 import app.pantopus.android.ui.components.Postmark
+import app.pantopus.android.ui.screens.mailbox.cards.HolidayCardArt
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.PantopusMark
+import coil.compose.AsyncImage
 
 /**
  * One piece of mail, drawn as the thing it is (Mail tab drawings, `MailPiece` and `Parts`): a cream envelope for a
@@ -92,6 +100,8 @@ fun MailPiece(
                         },
                     ),
         ) {
+            val card = piece.card
+            if (card != null) return@Box CardOpening(piece, card)
             when (piece.kind) {
                 MailKind.Postcard -> PostcardPiece(piece)
                 MailKind.Booklet -> BookletPiece(piece)
@@ -142,6 +152,42 @@ private fun Opening(
             Box(Modifier.fillMaxWidth(0.30f).height(2.dp).background(PantopusColors.appBorderSubtle))
         }
         Box(modifier = Modifier.padding(top = 14.dp).clip(TornTop)) { envelope() }
+    }
+}
+
+/**
+ * A Christmas card's envelope: whole while it's unopened or sealed until Christmas morning; once opened, torn across the
+ * top with the card's picture peeking out.
+ */
+@Composable
+private fun CardOpening(
+    piece: MailPieceModel,
+    card: MailPieceCard,
+) {
+    if (!piece.opened || card.sealed) return ChristmasEnvelope(piece, card)
+    Box(modifier = Modifier.fillMaxWidth()) {
+        val shape = RoundedCornerShape(2.dp)
+        Box(
+            modifier =
+                Modifier
+                    .padding(horizontal = 20.dp)
+                    .fillMaxWidth()
+                    .height(30.dp)
+                    .shadow(1.dp, shape)
+                    .clip(shape)
+                    .background(PantopusColors.cardPaper)
+                    .border(1.dp, PantopusColors.cardNoteEdge, shape),
+        ) {
+            AsyncImage(
+                model = HolidayCardArt.picture(card.design, thumb = true),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                // The picture's upper middle, as the web's "center 28%".
+                alignment = BiasAlignment(0f, -0.44f),
+                modifier = Modifier.matchParentSize(),
+            )
+        }
+        Box(modifier = Modifier.padding(top = 14.dp).clip(TornTop)) { ChristmasEnvelope(piece, card) }
     }
 }
 
@@ -208,6 +254,93 @@ private fun LetterEnvelope(piece: MailPieceModel) {
         }
         Spacer(Modifier.height(10.dp))
         TrustLine(piece.sender)
+    }
+}
+
+/**
+ * A Christmas card: a red envelope addressed in cream ink, a stamp cancelled by the postmark, and "Do not open until
+ * Christmas" sealing it while it's sealed (else CHRISTMAS CARD printed in the corner).
+ */
+@Composable
+private fun ChristmasEnvelope(
+    piece: MailPieceModel,
+    card: MailPieceCard,
+) {
+    val shape = RoundedCornerShape(6.dp)
+    val ink = handwriting.copy(color = PantopusColors.cardEnvelopeInk)
+    Box(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(150.dp)
+                .shadow(3.dp, shape)
+                .clip(shape)
+                .background(PantopusColors.cardEnvelope)
+                .drawBehind {
+                    with(HolidayCardArt) { paperGrain(PantopusColors.cardEnvelopeGrain, step = 6.dp.toPx(), dot = 2.dp.toPx()) }
+                },
+    ) {
+        Column(modifier = Modifier.padding(start = 16.dp, top = 16.dp).fillMaxWidth(0.48f)) {
+            Text(piece.from, style = ink, fontSize = 13.sp, lineHeight = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            piece.fromLine?.let {
+                Text(it, style = ink, fontSize = 13.sp, lineHeight = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        Box(modifier = Modifier.align(Alignment.TopEnd).padding(top = 12.dp, end = 12.dp)) {
+            Postage(piece, stampWhenUnmarked = true, postmarked = piece.postmarkDay.isNotEmpty() || piece.postmarkTown != null)
+        }
+        Row(modifier = Modifier.padding(top = 72.dp, end = 12.dp)) {
+            Spacer(Modifier.weight(0.38f))
+            Column(modifier = Modifier.weight(0.62f)) {
+                val address = ink.copy(color = PantopusColors.cardEnvelopeAddress)
+                piece.to?.let {
+                    Text(it, style = address, fontSize = 16.sp, lineHeight = 21.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                piece.toLine?.let {
+                    Text(it, style = address, fontSize = 16.sp, lineHeight = 21.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        }
+        if (card.sealed) {
+            ChristmasSeal(modifier = Modifier.align(Alignment.BottomStart).padding(start = 12.dp, bottom = 8.dp))
+        } else {
+            Text(
+                "CHRISTMAS CARD",
+                fontSize = 11.sp,
+                lineHeight = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 0.1.em,
+                color = PantopusColors.cardEnvelopeLabel,
+                modifier = Modifier.align(Alignment.BottomStart).padding(start = 16.dp, bottom = 12.dp),
+            )
+        }
+    }
+}
+
+/** The seal on a card sealed until Christmas morning: cream, ringed in dark red, "DO NOT OPEN / UNTIL / CHRISTMAS". */
+@Composable
+private fun ChristmasSeal(modifier: Modifier = Modifier) {
+    val measurer = rememberTextMeasurer()
+    Canvas(modifier = modifier.size(58.dp)) {
+        val unit = size.width / 58f
+        val center = Offset(29f * unit, 29f * unit)
+        drawCircle(PantopusColors.cardSealPaper, radius = 27f * unit, center = center)
+        drawCircle(PantopusColors.cardSealInk, radius = 27f * unit, center = center, style = Stroke(width = 2f * unit))
+        drawCircle(
+            PantopusColors.cardSealInk,
+            radius = 22.5f * unit,
+            center = center,
+            style = Stroke(width = 0.8f * unit, pathEffect = PathEffect.dashPathEffect(floatArrayOf(2f * unit, 2f * unit))),
+        )
+        val style = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = (6.4f * unit).toSp())
+        listOf("DO NOT OPEN" to 23f, "UNTIL" to 31.5f, "CHRISTMAS" to 40f).forEach { (words, baseline) ->
+            val layout = measurer.measure(words, style)
+            drawText(
+                layout,
+                color = PantopusColors.cardSealInk,
+                topLeft = Offset(center.x - layout.size.width / 2f, baseline * unit - layout.firstBaseline),
+            )
+        }
     }
 }
 
@@ -633,6 +766,8 @@ private fun TypedAddress(
 private fun Postage(
     piece: MailPieceModel,
     stampWhenUnmarked: Boolean,
+    /** A card still being written has no postmark yet. */
+    postmarked: Boolean = true,
 ) {
     val mark = piece.sender.mark
     // Printed marks keep their printed size in their fixed box at any text size; the piece's sentence says the same.
@@ -644,12 +779,14 @@ private fun Postage(
                 mark != null -> PrintedPostage(mark, modifier = Modifier.align(Alignment.TopEnd))
                 stampWhenUnmarked -> Box(Modifier.align(Alignment.TopEnd)) { Stamp(piece.stamp) }
             }
-            Postmark(
-                modifier = Modifier.align(Alignment.CenterStart).offset(x = (-2).dp).size(width = 64.dp, height = 50.dp),
-                ink = PantopusColors.mailInk,
-                topLine = piece.postmarkTown?.uppercase() ?: piece.postmarkDay,
-                bottomLine = if (piece.postmarkTown != null) piece.postmarkDay else piece.postmarkYear,
-            )
+            if (postmarked) {
+                Postmark(
+                    modifier = Modifier.align(Alignment.CenterStart).offset(x = (-2).dp).size(width = 64.dp, height = 50.dp),
+                    ink = PantopusColors.mailInk,
+                    topLine = piece.postmarkTown?.uppercase() ?: piece.postmarkDay,
+                    bottomLine = if (piece.postmarkTown != null) piece.postmarkDay else piece.postmarkYear,
+                )
+            }
         }
     }
 }

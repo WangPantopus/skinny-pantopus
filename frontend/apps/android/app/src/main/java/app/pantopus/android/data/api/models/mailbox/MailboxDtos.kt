@@ -2,6 +2,7 @@ package app.pantopus.android.data.api.models.mailbox
 
 import app.pantopus.android.data.api.models.common.JsonArrayValue
 import app.pantopus.android.data.api.models.common.JsonValue
+import app.pantopus.android.data.api.models.mailbox.v2.MailCard
 import app.pantopus.android.data.api.models.mailbox.v2.MailEnclosure
 import app.pantopus.android.data.api.models.mailbox.v2.MailInvoice
 import app.pantopus.android.data.api.models.mailbox.v2.MailPostmark
@@ -165,6 +166,8 @@ data class MailDetail(
     val enclosures: List<MailEnclosure>? = null,
     /** When anyone in the household first opened it. */
     @Json(name = "first_opened_at") val firstOpenedAt: String? = null,
+    /** A Christmas card (its note is [contentText]); null for everything else. */
+    val card: MailCard? = null,
 ) {
     /** [senderDisplay] when it says something. */
     val printedSender: String?

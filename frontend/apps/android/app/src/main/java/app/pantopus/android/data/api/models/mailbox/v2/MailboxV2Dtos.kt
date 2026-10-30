@@ -73,6 +73,26 @@ data class MailPostmark(
 )
 
 /**
+ * `card` on a piece: a Christmas card (launch key `holiday_cards`). The app carries the picture itself, by [design], and
+ * prints the [caption], the year and the postmark under it. A card is still a letter (`kind` letter). While [sealed]
+ * (until [sealedUntil], 7 a.m. on Christmas morning where the person lives) its note stays on the server.
+ */
+@JsonClass(generateAdapter = true)
+data class MailCard(
+    val design: String,
+    val number: Int? = null,
+    val caption: String? = null,
+    /** The card's paper, a colour like the picture's own border, for the strip printed under the picture. */
+    val paper: String? = null,
+    val holiday: String? = null,
+    val year: Int? = null,
+    /** `next_morning`, `sealed_christmas`, `christmas_morning` or `now`. */
+    val arrival: String? = null,
+    @Json(name = "sealed_until") val sealedUntil: String? = null,
+    val sealed: Boolean = false,
+)
+
+/**
  * `invoice` on a piece (SRV-7): a bill made from a business invoice. `status` is `sent`, `viewed`, `paid`, `void` or
  * `overdue`; Pay goes by [id] on the existing invoice screen. Null for everything else.
  */
@@ -200,6 +220,8 @@ data class DrawerMail(
     val certified: Boolean = false,
     /** When someone in the household acknowledged it; null while nobody has. */
     @Json(name = "acknowledged_at") val acknowledgedAt: String? = null,
+    /** A Christmas card; null for everything else. */
+    val card: MailCard? = null,
 ) {
     @JsonClass(generateAdapter = true)
     data class SenderRef(
@@ -248,6 +270,8 @@ data class MailboxV2Item(
     val attachments: List<String>? = null,
     /** A bundle's pieces this person may read, newest first (SRV-5); null for anything else. */
     val pieces: List<DrawerMail>? = null,
+    /** A Christmas card; null for everything else. */
+    val card: MailCard? = null,
 )
 
 /** `POST /api/mailbox/v2/item/:id/action` — route `backend/routes/mailboxV2.js:459`. */

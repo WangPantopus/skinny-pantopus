@@ -17,11 +17,12 @@ import retrofit2.http.Query
  * `backend/routes/mailbox.js:1697`.
  */
 interface MailComposeApi {
-    /** `GET /api/mailbox/compose/recipients`. */
+    /** `GET /api/mailbox/compose/recipients`; `people=1` finds people only, no businesses (a Christmas card's search). */
     @GET("api/mailbox/compose/recipients")
     suspend fun recipients(
         @Query("q") query: String,
         @Query("homeId") homeId: String? = null,
+        @Query("people") people: String? = null,
     ): MailComposeRecipientsResponse
 
     /** `GET /api/mailbox/compose/home-context/:homeId`. */
