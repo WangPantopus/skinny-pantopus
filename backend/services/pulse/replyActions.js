@@ -45,6 +45,12 @@ async function act(postId, replyId, viewerId, action, helpful) {
       key: `${type}:${data.thanks_id || `${replyId}:${data.helpful_at}`}`,
     });
   }
+  // An Ask that asked a Known entry again refreshes it once a reply helped (contract §2.14).
+  if (action === 'helpful' && helpful && context.post.post_metadata?.known_entry_id) {
+    await require('./known').answered(context.post, replyId).catch(knownError => {
+      require('../../utils/logger').warn('pulse.known.refresh_failed', { postId, error: knownError.message });
+    });
+  }
   if (action === 'thanks') return { thanked: true };
   const result = await conversation.read(postId, viewerId);
   const reply = result.replies.find(row => row.id === replyId);
