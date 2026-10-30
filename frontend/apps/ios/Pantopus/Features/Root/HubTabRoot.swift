@@ -2794,7 +2794,7 @@ public struct HubTabRoot: View {
                     onShareListing: {
                         let name = titleHint ?? "this listing"
                         systemSheet = .share(
-                            items: ["Check out \(name) on Pantopus — \(InviteLinks.downloadURLString)"]
+                            items: ["Check out \(name) on Pantopus — \(InviteLinks.publicPageURLString(path: "/listing/\(listingId)"))"]
                         )
                     },
                     onOpenBuyer: { buyer in
@@ -3041,7 +3041,7 @@ public struct HubTabRoot: View {
                             let draft = MailDraft(
                                 subject: "Join Pantopus",
                                 body: "I'd love to see your business on Pantopus — neighbors near me are "
-                                    + "looking for trusted local pros. \(InviteLinks.downloadURLString)"
+                                    + "looking for trusted local pros. \(PersonalInviteLink.shared.url.absoluteString)"
                             )
                             if MailDraft.canSendMail {
                                 systemSheet = .mail(draft)

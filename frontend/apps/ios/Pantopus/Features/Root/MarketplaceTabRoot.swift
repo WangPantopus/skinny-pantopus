@@ -170,7 +170,7 @@ public struct MarketplaceTabRoot: View {
                     onShareListing: {
                         let name = titleHint ?? "this listing"
                         systemSheet = .share(
-                            items: ["Check out \(name) on Pantopus — \(InviteLinks.downloadURLString)"]
+                            items: ["Check out \(name) on Pantopus — \(InviteLinks.publicPageURLString(path: "/listing/\(listingId)"))"]
                         )
                     },
                     onOpenBuyer: { buyer in

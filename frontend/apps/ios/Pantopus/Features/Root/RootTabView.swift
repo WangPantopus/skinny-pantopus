@@ -194,6 +194,8 @@ public struct RootTabView: View {
                     youModelUserID = signedInUserID
                 }
                 await plansFlags.refresh(account: signedInUserID)
+                // Every invite shares the person's own link; read it before anyone taps one.
+                await PersonalInviteLink.shared.load(account: signedInUserID)
             }
             .onChange(of: signedInUserName, initial: true) { _, name in
                 drawerModel.updateContext(.personal(name: name))
@@ -283,8 +285,10 @@ public struct RootTabView: View {
         case let .invite(token, leaseInvitation):
             pendingInviteToken = InviteSheetToken(token: token, leaseInvitation: leaseInvitation)
             _ = router.consume()
-        case let .joinInvite(code):
-            pendingInviteToken = InviteSheetToken(token: code)
+        case .joinInvite:
+            // A friend's invite link (pantopus.com/join/…) is for someone new to
+            // Pantopus. Signed in, there is nothing to accept: the link just opens
+            // the app. It is never a Home invitation, so no invitation sheet.
             _ = router.consume()
         // The Pulse tab consumes feed, post and Pulse links itself (back to
         // its root, or the post pushed on it). Tasks and Marketplace present
@@ -371,24 +375,30 @@ public struct RootTabView: View {
     }
 
     /// Hands a Plans link to the Plans tab's stack (`route` nil: the composer).
+    /// Right after a first sign-in the switch isn't known yet: wait for it rather
+    /// than dropping the plan someone was sent.
     private func openPlans(_ route: PlansRoute?) {
         _ = router.consume()
-        plansFlags.prime(account: signedInUserID)
-        guard plansFlags.plans else { return }
-        if let route {
-            PlansNavigator.shared.pending = route
-        } else {
-            PlansNavigator.shared.pendingHost = PlansHostRequest(start: nil)
+        Task { @MainActor in
+            await plansFlags.ready(account: signedInUserID)
+            guard plansFlags.plans else { return }
+            if let route {
+                PlansNavigator.shared.pending = route
+            } else {
+                PlansNavigator.shared.pendingHost = PlansHostRequest(start: nil)
+            }
+            model.selected = .plans
         }
-        model.selected = .plans
     }
 
     /// `/plans`: the Plans tab itself, while the switch is on.
     private func openPlansTab() {
         _ = router.consume()
-        plansFlags.prime(account: signedInUserID)
-        guard plansFlags.plans else { return }
-        model.selected = .plans
+        Task { @MainActor in
+            await plansFlags.ready(account: signedInUserID)
+            guard plansFlags.plans else { return }
+            model.selected = .plans
+        }
     }
 
     /// With the Pulse redesign off (launch cut #11): the Nearby tab (founder
