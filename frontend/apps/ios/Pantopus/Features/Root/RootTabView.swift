@@ -30,6 +30,11 @@
 //  drawn bar (`RootTabBar`). With the Mailbox off the system bar stays as it
 //  was.
 //
+//  The drawn bar looks like the system's (founder, 2026-10-30): on iOS 26
+//  and later the floating Liquid Glass capsule. It slides away while a page
+//  scrolls down, for more room to read, and comes back on a scroll up
+//  (`RootTabBarScrollWatcher`).
+//
 
 // swiftlint:disable file_length
 
@@ -129,6 +134,9 @@ public final class RootTabModel {
     var pendingMailRequest: MailTabRequest?
     /// Screens showing that hide the drawn bar (`hidesTabBar()`).
     var barHiders: Set<UUID> = []
+    /// The drawn bar has slid away while a page scrolls down
+    /// (`RootTabBarScrollWatcher`); only `RootTabBar` reads it.
+    var barScrolledAway = false
     /// The selected tab tapped again, for the drawn bar's container.
     var reselection: RootTabReselection?
     public init() {}
@@ -565,7 +573,7 @@ extension RootTabView {
             RootTabContainer(
                 tabs: onBar,
                 selected: model.selected,
-                barHeight: showsBar ? RootTabBar.height : 0,
+                barSpace: showsBar ? RootTabBar.space : .none,
                 environment: RootTabEnvironment(auth: auth, tabs: model, scenePhase: scenePhase),
                 reselection: model.reselection,
                 makeRoot: tabRoot(for:)
@@ -583,6 +591,10 @@ extension RootTabView {
         // The keyboard covers the bar, as it covers the system one; each
         // tab's screens make room for it in their own hosting controller.
         .ignoresSafeArea(.keyboard)
+        // Another tab, or the bar back after a screen that hid it, starts
+        // with the bar in view.
+        .onChange(of: model.selected) { _, _ in model.barScrolledAway = false }
+        .onChange(of: showsBar) { _, _ in model.barScrolledAway = false }
     }
 
     /// A tab's root for the container, made the first time the tab opens.
