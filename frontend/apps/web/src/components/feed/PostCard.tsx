@@ -6,7 +6,7 @@ import {
   MessageCircle, Star, CalendarDays, Search, Megaphone,
   AlertTriangle, PenLine, Pencil, Siren, Tag, Wrench, Newspaper, X,
   Trophy, Compass, User, Heart, Bookmark, Hand, ThumbsUp,
-  MapPin, Store, CheckCircle, Hammer, Plane, Bookmark as BookmarkIcon, Share,
+  MapPin, Store, CheckCircle, Hammer, Plane, Bookmark as BookmarkIcon, Share, Repeat2,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import * as api from '@pantopus/api';
@@ -52,6 +52,17 @@ function getTypeCtaIcon(type: string): ReactNode | null {
     service_offer: <MessageCircle className="w-3.5 h-3.5" />,
   };
   return map[type] || null;
+}
+
+/** Connections: "Ben C. reposted", "Ben C. and Eve H. reposted", "Ben C. and 2 others reposted". */
+function repostedByText(repostedBy: Post['reposted_by']): string | null {
+  const first = repostedBy?.names?.[0];
+  if (!repostedBy || !first || repostedBy.count < 1) return null;
+  if (repostedBy.count === 1) return `${first} reposted`;
+  const second = repostedBy.names[1];
+  if (repostedBy.count === 2 && second) return `${first} and ${second} reposted`;
+  const others = repostedBy.count - 1;
+  return `${first} and ${others} ${others === 1 ? 'other' : 'others'} reposted`;
 }
 
 interface PostCardProps {
@@ -141,14 +152,23 @@ function PostCard({
   const seeded = post.is_seeded === true;
   const tapClass = seeded ? '' : ' cursor-pointer';
   const openFullPost = () => { if (!seeded) onOpenDetail(post.id); };
+  const repostedBy = repostedByText(post.reposted_by);
 
   return (
     <article
       className="group bg-surface rounded-2xl shadow-sm border transition-all duration-200 hover:shadow-md overflow-hidden"
       style={{ borderColor: config.borderColor }}
     >
+      {/* ─── Who among your connections reposted it (Connections) ── */}
+      {repostedBy && (
+        <div className={`flex items-center gap-1.5 px-4 pt-3 text-[11px] font-medium text-app-muted${tapClass}`} onClick={openFullPost}>
+          <Repeat2 className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
+          <span className="truncate">{repostedBy}</span>
+        </div>
+      )}
+
       {/* ─── Type indicator strip ─────────────────────── */}
-      <div className={`flex items-center gap-2 px-4 pt-3 pb-1${tapClass}`} onClick={openFullPost}>
+      <div className={`flex items-center gap-2 px-4 ${repostedBy ? 'pt-2' : 'pt-3'} pb-1${tapClass}`} onClick={openFullPost}>
         <span
           className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider"
           style={{ background: config.bgLight, color: config.textColor }}
@@ -555,6 +575,7 @@ export default React.memo(PostCard, (prev, next) => {
     && prev.post.like_count === next.post.like_count
     && prev.post.comment_count === next.post.comment_count
     && prev.post.userHasSaved === next.post.userHasSaved
+    && repostedByText(prev.post.reposted_by) === repostedByText(next.post.reposted_by)
     && prev.isLiking === next.isLiking
     && prev.isSaving === next.isSaving
     && prev.currentUserId === next.currentUserId

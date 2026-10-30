@@ -19,6 +19,7 @@ const {
 const s3 = require('./s3Service');
 const { readablePosts, postScopeAccess } = require('./pulse/readAccess');
 const { unpublishedBusinessIds } = require('../utils/visibilityPolicy');
+const { localDisplayNames } = require('../utils/identityProfiles');
 const {
   SAFE_CREATOR_SELECT,
   serializeAudienceProfileForViewer,
@@ -128,8 +129,9 @@ const FEED_POST_SELECT = `
   home:home_id (id, address, city)
 `;
 
-// The empty embed filters on reposts without returning other people's sharing records.
-const CONNECTION_POST_SELECT = `${FEED_POST_SELECT}, radius_miles, connection_reposts:PostShare()`;
+// The embed holds the reposts by the viewer's connections (connectionPostsQuery filters it), which the list names in
+// its "reposted" line (repostedByLines). normalizeFeedPostRow copies named fields, so these rows never reach a client.
+const CONNECTION_POST_SELECT = `${FEED_POST_SELECT}, radius_miles, connection_reposts:PostShare(user_id, created_at)`;
 
 // ---------------------------------------------------------------------------
 // Media URL helpers
@@ -849,6 +851,32 @@ function connectionPostsQuery(query, authorIds) {
     .or(`and(user_id.in.(${authorIds.join(',')}),distribution_targets.ov.{connections},or(post_as.is.null,post_as.neq.business)),connection_reposts.not.is.null`);
 }
 
+// "Ben C. and 2 others reposted": a Connections post that some of the viewer's connections reposted names the latest
+// two, by the name they show neighbors (as likers are named), and counts them all. The embed holds only connections
+// the viewer hasn't muted or blocked. Returns post id → { names, count }; none for a post nobody reposted, and none at
+// all when the names can't be read (the posts still list).
+async function repostedByLines(posts, repostsByPostId) {
+  const reposterIds = new Map();
+  for (const post of posts) {
+    const latestFirst = [...(repostsByPostId.get(post.id) || [])]
+      .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+    const ids = [...new Set(latestFirst.map((share) => share.user_id).filter(Boolean))];
+    if (ids.length) reposterIds.set(post.id, ids);
+  }
+  if (!reposterIds.size) return new Map();
+  let names;
+  try {
+    names = await localDisplayNames([...reposterIds.values()].flatMap((ids) => ids.slice(0, 2)));
+  } catch (error) {
+    logger.warn('Failed to name reposters for Connections', { error: error.message });
+    return new Map();
+  }
+  return new Map([...reposterIds].map(([postId, ids]) => [postId, {
+    names: ids.slice(0, 2).map((id) => names.get(String(id)) || 'Pantopus member'),
+    count: ids.length,
+  }]));
+}
+
 // A legacy post its author made private keeps its older targets, so the Place query still finds it; it lists only
 // for viewers its own page lets in (readAccess.canReadPost). Other rows skip the per-post check.
 async function withoutUnreadablePrivatePosts(rows, userId) {
@@ -1139,6 +1167,8 @@ async function getListFeed({
   let loopCursorId = cursorId;
   let loopCursorPinned = initialCursorPinned;
   let dbExhausted = false;
+  // Connections: the reposts each fetched post carries, for its "reposted" line.
+  const repostsByPostId = new Map();
 
   for (let round = 0; round < MAX_ROUNDS && accumulated.length < parsedLimit && !dbExhausted; round++) {
     // 5. Build base query
@@ -1196,6 +1226,9 @@ async function getListFeed({
     const rawRows = data || [];
     if (rawRows.length < overFetchLimit) {
       dbExhausted = true;
+    }
+    if (surface === 'connections') {
+      for (const row of rawRows) repostsByPostId.set(row.id, row.connection_reposts || []);
     }
 
     // 8. Normalize
@@ -1275,13 +1308,19 @@ async function getListFeed({
     }
   }
 
-  // 13. Enrich with like/save status and typed public authors
-  const enriched = await enrichFeedPosts(posts, userId);
+  // 13. Enrich with like/save status and typed public authors; Connections also names who reposted each post
+  const [enriched, repostLines] = await Promise.all([
+    enrichFeedPosts(posts, userId),
+    surface === 'connections' ? repostedByLines(posts, repostsByPostId) : new Map(),
+  ]);
+  const shown = repostLines.size
+    ? enriched.map((post) => (repostLines.has(post.id) ? { ...post, reposted_by: repostLines.get(post.id) } : post))
+    : enriched;
 
   // 14–15. Build pagination and return
-  const lastPost = enriched.length > 0 ? enriched[enriched.length - 1] : null;
+  const lastPost = shown.length > 0 ? shown[shown.length - 1] : null;
   return {
-    posts: enriched,
+    posts: shown,
     pagination: {
       nextCursor: lastPost ? { createdAt: lastPost.created_at, id: lastPost.id } : null,
       hasMore,

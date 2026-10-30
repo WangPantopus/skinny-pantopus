@@ -313,7 +313,7 @@ function createQueryBuilder(tableName) {
   let rows = () => getTable(storageTable);
   let filters = viewAlias ? [membershipVisibleInPersonaFollow] : [];
   let selectFields = '*';
-  const emptyPostShareEmbeds = new Map();
+  const postShareEmbeds = new Map();
   let updatePayload = null;
   let insertPayload = null;
   let isSingle = false;
@@ -336,10 +336,10 @@ function createQueryBuilder(tableName) {
   const builder = {
     select(fields = '*', options) {
       selectFields = fields;
-      // Empty left embeds filter child rows without filtering their parent rows.
+      // Left PostShare embeds filter child rows without filtering their parent rows.
       if (tableName === 'Post') {
-        for (const match of fields.matchAll(/(\w+):PostShare\(\)/g)) {
-          emptyPostShareEmbeds.set(match[1], []);
+        for (const match of fields.matchAll(/(\w+):PostShare\([^)]*\)/g)) {
+          postShareEmbeds.set(match[1], []);
         }
       }
       if (options?.count) isCountMode = true;
@@ -348,8 +348,8 @@ function createQueryBuilder(tableName) {
     },
     eq(field, value) {
       const [embed, childField] = field.split('.');
-      if (emptyPostShareEmbeds.has(embed)) {
-        emptyPostShareEmbeds.get(embed).push(row => row[childField] === value);
+      if (postShareEmbeds.has(embed)) {
+        postShareEmbeds.get(embed).push(row => row[childField] === value);
         return builder;
       }
       const f = fieldFor(field);
@@ -382,8 +382,8 @@ function createQueryBuilder(tableName) {
     },
     in(field, values) {
       const [embed, childField] = field.split('.');
-      if (emptyPostShareEmbeds.has(embed)) {
-        emptyPostShareEmbeds.get(embed).push(row => values.includes(row[childField]));
+      if (postShareEmbeds.has(embed)) {
+        postShareEmbeds.get(embed).push(row => values.includes(row[childField]));
         return builder;
       }
       const f = fieldFor(field);
@@ -485,8 +485,8 @@ function createQueryBuilder(tableName) {
       };
       const parseCondition = (cond) => {
         const embeddedNotNull = cond.match(/^(\w+)\.not\.is\.null$/);
-        if (embeddedNotNull && emptyPostShareEmbeds.has(embeddedNotNull[1])) {
-          const childFilters = emptyPostShareEmbeds.get(embeddedNotNull[1]);
+        if (embeddedNotNull && postShareEmbeds.has(embeddedNotNull[1])) {
+          const childFilters = postShareEmbeds.get(embeddedNotNull[1]);
           return row => getTable('PostShare').some(share => share.post_id === row.id
             && childFilters.every(filter => filter(share)));
         }
