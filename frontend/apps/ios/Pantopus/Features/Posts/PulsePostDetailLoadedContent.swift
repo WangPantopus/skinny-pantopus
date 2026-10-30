@@ -208,7 +208,9 @@ extension PostDetailDTO {
     var alertDetailLine: String? {
         guard postType == "alert", let kind = safetyAlertKind?.trimmingCharacters(in: .whitespacesAndNewlines),
               !kind.isEmpty else { return nil }
-        let label = PulseSafetyAlertKind(rawValue: kind)?.label ?? kind.replacingOccurrences(of: "_", with: " ").capitalized
+        // An older stored kind reads in sentence case, like the known labels and Android ("Crime incident").
+        let words = kind.replacingOccurrences(of: "_", with: " ")
+        let label = PulseSafetyAlertKind(rawValue: kind)?.label ?? words.prefix(1).uppercased() + words.dropFirst()
         return "Alert type: \(label)"
     }
 }
