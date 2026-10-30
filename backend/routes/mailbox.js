@@ -2028,7 +2028,7 @@ router.post('/cards/preview', verifyToken, validate(sendCardSchema), async (req,
     }
     return res.json({
       piece: {
-        id: 'preview', kind: 'letter', mail_object_type: 'envelope', sender_display: senderDisplay,
+        id: 'preview', kind: 'letter', type: 'letter', mail_object_type: 'envelope', sender_display: senderDisplay,
         sender_trust: 'pantopus_user', sender_business_name: null, subject: holidayCards.SUBJECT, content: message,
         created_at: now.toISOString(), delivered_at: toEmail ? null : delivery.delivered_at,
         postmark: { town: null, date: mailDelivery.localDate(now, zone) },
