@@ -14,6 +14,7 @@ import app.pantopus.android.data.feed.FeedActionsRepository
 import app.pantopus.android.data.feed.FeedModerationStore
 import app.pantopus.android.data.store.StoreKind
 import app.pantopus.android.ui.components.RefreshNotice
+import app.pantopus.android.ui.screens.feed.pulse.PulseIntent
 import app.pantopus.android.ui.screens.feed.pulse.PulseTopic
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -45,7 +46,12 @@ data class MutedTopicUi(
     val areaId: String?,
     val key: String = topic?.key.orEmpty(),
 ) {
-    val label: String get() = topic?.label ?: key.split('_').joinToString(" ") { it.replaceFirstChar(Char::titlecase) }
+    /** A post category reads as its feed filter does ("Lost & Found"); one with no filter by its own name. */
+    val label: String
+        get() =
+            topic?.label
+                ?: PulseIntent.fromPostType(key).takeIf { it.postType == key }?.label
+                ?: key.split('_').joinToString(" ") { it.replaceFirstChar(Char::titlecase) }
 }
 
 /** The "Muted topics" section: nothing read yet, the list, or a read that failed. */

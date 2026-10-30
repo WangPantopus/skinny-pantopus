@@ -371,7 +371,10 @@ public struct FeedPreferencesSheet: View {
 
     private func mutedTopicRow(_ mute: TopicMuteDTO) -> some View {
         let topic = PulseTopic(stored: mute.topic)
-        let name = topic?.label ?? mute.topic.replacingOccurrences(of: "_", with: " ").capitalized
+        // A post category reads as its feed filter does ("Lost & Found"); one with no filter by its own name.
+        let category = PulseIntent.from(postType: mute.topic)
+        let name = topic?.label ?? (category.postType == mute.topic ? category.label : nil)
+            ?? mute.topic.replacingOccurrences(of: "_", with: " ").capitalized
         let scope = topic == nil ? "Post category · Unmute in all feeds" : (mute.areaId == nil ? "Everywhere" : "In one area")
         return HStack(alignment: .center, spacing: Spacing.s3) {
             VStack(alignment: .leading, spacing: 2) {

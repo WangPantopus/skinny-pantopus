@@ -2311,8 +2311,9 @@ router.post('/mute', verifyToken, async (req, res) => {
 
 /**
  * GET /api/posts/mute — The people and businesses this person muted (`muted`), and the Pulse topics
- * they muted (`topic_mutes`, each everywhere or in one area), so Settings can list them and undo a
- * mute (DELETE below). Muted kinds of post and Personas (a launch cut) aren't listed.
+ * and kinds of post they muted (`topic_mutes`; a Pulse topic everywhere or in one area, a kind of
+ * post once for all its feeds), so Settings can list them and undo a mute (DELETE below). Personas
+ * (a launch cut) aren't listed.
  */
 router.get('/mute', verifyToken, async (req, res) => {
   try {
