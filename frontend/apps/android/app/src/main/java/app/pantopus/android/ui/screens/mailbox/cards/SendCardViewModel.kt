@@ -133,6 +133,7 @@ data class SendCardForm(
  * /api/mailbox/cards/preview`; sends `POST /api/mailbox/cards`; takes back `POST /api/mailbox/cards/:id/take-back`.
  */
 @HiltViewModel
+@Suppress("TooManyFunctions")
 class SendCardViewModel
     @Inject
     constructor(

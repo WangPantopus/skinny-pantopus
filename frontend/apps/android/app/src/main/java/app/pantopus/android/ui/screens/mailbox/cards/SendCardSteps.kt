@@ -754,7 +754,7 @@ private fun envelopePreview(
         postmarkTown = null,
         postmarkDay = "",
         postmarkYear = "",
-        stamp = MailStamp.forPiece(design.id),
+        stamp = MailStamp.forCard(design.number, design.id) ?: MailStamp.forPiece(design.id),
         note = null,
         meta = "",
         accessibilityLabel =
