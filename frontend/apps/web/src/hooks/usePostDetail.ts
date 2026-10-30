@@ -59,8 +59,14 @@ export function usePostDetail(postId: string | null, options: { enabled?: boolea
     staleTime: POST_FRESH_MS,
   });
 
-  const post = postQuery.data?.post ?? null;
-  const comments = commentsQuery.data ?? post?.comments ?? [];
+  const status = (postQuery.error as { statusCode?: number } | null)?.statusCode;
+  const commentStatus = (commentsQuery.error as { statusCode?: number } | null)?.statusCode;
+  const unavailable = status === 404 || status === 403 || commentStatus === 404 || commentStatus === 403;
+  // A failed refresh retains data in React Query. Once access is refused,
+  // neither the old post nor its cached conversation may remain on screen.
+  // The comments endpoint checks the same post access and may refuse first.
+  const post = unavailable ? null : postQuery.data?.post ?? null;
+  const comments = unavailable ? [] : commentsQuery.data ?? post?.comments ?? [];
 
   // Edits update the kept copies, so coming back shows them.
   const setPost = useCallback((next: Post | null | ((p: Post | null) => Post | null)) => {
@@ -73,7 +79,6 @@ export function usePostDetail(postId: string | null, options: { enabled?: boolea
     queryClient.setQueryData<PostComment[]>(commentsKey, (old) => (typeof next === 'function' ? next(old ?? []) : next));
   }, [queryClient, commentsKey]);
 
-  const status = (postQuery.error as { statusCode?: number } | null)?.statusCode;
   return {
     post,
     comments,
@@ -84,7 +89,7 @@ export function usePostDetail(postId: string | null, options: { enabled?: boolea
     /** Nothing to show yet (no kept or listed copy). */
     loading: postQuery.isPending && enabled && !!postId,
     /** The post is gone or no longer visible to you (404/403). */
-    unavailable: !post && (status === 404 || status === 403),
+    unavailable,
     commentsFailed: commentsQuery.isError && !commentsQuery.data,
   };
 }

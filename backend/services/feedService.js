@@ -86,7 +86,7 @@ async function getGlobalPins(scopeAccess) {
   // cache post rows across viewers or paginate pins before checking their scope.
   const { data, error } = await scopeAccess.query(onlyShownPosts(supabaseAdmin
     .from('Post')
-    .select(`${FEED_POST_SELECT}, allow_external_share, radius_miles, moderation_state`)
+    .select(`${FEED_POST_SELECT}, radius_miles`)
     .eq('is_global_pin', true)
     .is('archived_at', null)))
     .order('created_at', { ascending: false })
@@ -108,7 +108,7 @@ async function getGlobalPins(scopeAccess) {
 const FEED_POST_SELECT = `
   id, user_id, author_user_id, identity_context_type, identity_context_id,
   title, content, media_urls, media_types, media_thumbnails, media_live_urls, post_type, post_format,
-  visibility, visibility_scope, location_precision, tags, read_scope, area_id,
+  visibility, visibility_scope, location_precision, tags, read_scope, area_id, allow_external_share, moderation_state,
   like_count, comment_count, share_count, save_count, is_pinned, is_global_pin, is_edited, created_at, updated_at,
   home_id, latitude, longitude, effective_latitude, effective_longitude, location_name, location_address,
   post_as, audience, business_id, business_author_id, target_place_id,
@@ -127,6 +127,9 @@ const FEED_POST_SELECT = `
   business_author:business_author_id (${SAFE_CREATOR_SELECT}),
   home:home_id (id, address, city)
 `;
+
+// The empty embed filters on reposts without returning other people's sharing records.
+const CONNECTION_POST_SELECT = `${FEED_POST_SELECT}, radius_miles, connection_reposts:PostShare()`;
 
 // ---------------------------------------------------------------------------
 // Media URL helpers
@@ -176,6 +179,9 @@ function normalizeFeedPostRow(row, likedPostIds = new Set(), savedPostIds = new 
     post_type: row.post_type || 'general',
     post_format: row.post_format || 'standard',
     visibility: row.visibility || 'neighborhood',
+    read_scope: row.read_scope ?? null,
+    allow_external_share: row.allow_external_share ?? null,
+    moderation_state: row.moderation_state ?? null,
     visibility_scope: row.visibility_scope || 'neighborhood',
     location_precision: row.location_precision || 'approx_area',
     tags: row.tags || [],
@@ -836,6 +842,13 @@ async function loadConnectionIds(userId) {
   ).filter(Boolean);
 }
 
+function connectionPostsQuery(query, authorIds) {
+  return query
+    .eq('connection_reposts.share_type', 'repost')
+    .in('connection_reposts.user_id', authorIds)
+    .or(`and(user_id.in.(${authorIds.join(',')}),distribution_targets.ov.{connections},or(post_as.is.null,post_as.neq.business)),connection_reposts.not.is.null`);
+}
+
 async function loadFollowedPersonaMemberships(userId) {
   const { data: memberships, error } = await supabaseAdmin
     .from('PersonaMembership')
@@ -1049,8 +1062,8 @@ async function getListFeed({
   const parsedLimit = Number(limit) || 20;
   const overFetchLimit = parsedLimit + 20;
   const isFirstPage = !cursorCreatedAt && !cursorId;
-  // The mute/hide filters and the first page's global pins don't shape the query, so they're
-  // read alongside the cursor, the author graph and the first round of posts.
+  // Read filters alongside the cursor and author graph; Connections also uses them
+  // to keep muted or blocked people from introducing posts through a repost.
   const filtersRead = settle(getMuteAndHideFilters(userId));
   const scopeAccess = await postScopeAccess(userId);
   const globalPinsRead = isFirstPage ? settle(getGlobalPins(scopeAccess)) : null;
@@ -1091,6 +1104,8 @@ async function getListFeed({
     // connections
     distributionTarget = 'connections';
     authorIds = await loadConnectionIds(userId);
+    const filters = await outcome(filtersRead);
+    authorIds = authorIds.filter(id => !filters.mutedUserIds.has(id) && !filters.blockedUserIds.has(id));
     if (!authorIds.length) {
       return { posts: [], pagination: { nextCursor: null, hasMore: false }, emptyGraph: true };
     }
@@ -1117,7 +1132,7 @@ async function getListFeed({
 
   for (let round = 0; round < MAX_ROUNDS && accumulated.length < parsedLimit && !dbExhausted; round++) {
     // 5. Build base query
-    const rows = supabaseAdmin.from('Post').select(FEED_POST_SELECT);
+    const rows = supabaseAdmin.from('Post').select(surface === 'connections' ? CONNECTION_POST_SELECT : FEED_POST_SELECT);
     let query = scopeAccess.query(includeEnded
       ? rows.eq('moderation_state', 'live').or('archive_reason.is.null,archive_reason.neq.moderation')
       : onlyShownPosts(rows.is('archived_at', null)))
@@ -1135,11 +1150,8 @@ async function getListFeed({
         .eq('identity_context_type', 'persona')
         .overlaps('distribution_targets', [distributionTarget]);
     } else {
-      // A business post is the business's, not its writer's: it never reaches the writer's connections.
-      query = query
-        .in('user_id', authorIds)
-        .overlaps('distribution_targets', [distributionTarget])
-        .or('post_as.is.null,post_as.neq.business');
+      // Business posts reach a connection only through an explicit repost, not their writer.
+      query = connectionPostsQuery(query, authorIds);
     }
 
     // Place bounding-box filter
@@ -1177,11 +1189,13 @@ async function getListFeed({
     }
 
     // 8. Normalize
+    // A connection's repost never grants access to its original audience.
+    const readableRows = surface === 'connections' ? await readablePosts(rawRows, userId) : rawRows;
     const visibleRows = surface === 'personas'
-      ? rawRows.filter((post) => personaPostVisibleToViewer(
+      ? readableRows.filter((post) => personaPostVisibleToViewer(
           post, Number(personaRankById.get(post.identity_context_id) || 0),
         ))
-      : rawRows;
+      : readableRows;
     let posts = visibleRows.map(r => normalizeFeedPostRow(r, new Set(), new Set()));
 
     // 8b. Haversine distance filter for place surface (bounding box is a
@@ -1637,7 +1651,7 @@ async function loadMapPosts({
   const normalizedSurface = FEED_SURFACES.includes(surface) ? surface : 'place';
   const scopeAccess = await postScopeAccess(userId);
   const queryLimit = Math.max(Number(limit) || 50, 1);
-  // The mute/hide filters don't shape the query, so they're read alongside it.
+  // Connections also excludes muted or blocked reposters from its author graph.
   const filtersRead = settle(getMuteAndHideFilters(userId));
 
   // 1. Resolve author IDs and distribution target
@@ -1646,6 +1660,8 @@ async function loadMapPosts({
 
   if (normalizedSurface === 'connections') {
     authorIds = await loadConnectionIds(userId);
+    const filters = await outcome(filtersRead);
+    authorIds = authorIds.filter(id => !filters.mutedUserIds.has(id) && !filters.blockedUserIds.has(id));
     distributionTarget = 'connections';
   }
 
@@ -1661,19 +1677,18 @@ async function loadMapPosts({
   const queryBox = widenForDisplayedPoints(box);
   let query = withoutOthersUnplacedPosts(scopeAccess.query(onlyShownPosts(supabaseAdmin
     .from('Post')
-    .select(FEED_POST_SELECT)
+    .select(authorIds ? CONNECTION_POST_SELECT : FEED_POST_SELECT)
     .is('archived_at', null)))
     .or(
       `and(effective_latitude.gte.${queryBox.south},effective_latitude.lte.${queryBox.north},effective_longitude.gte.${queryBox.west},effective_longitude.lte.${queryBox.east}),` +
       `and(effective_latitude.is.null,latitude.gte.${queryBox.south},latitude.lte.${queryBox.north},longitude.gte.${queryBox.west},longitude.lte.${queryBox.east})`
     ), userId)
-    .overlaps('distribution_targets', [distributionTarget])
     .order('created_at', { ascending: false })
     .limit(queryLimit + 40);
 
   if (postType) query = query.eq('post_type', postType);
-  // A business post is the business's, not its writer's: it never reaches the writer's connections.
-  if (authorIds) query = query.in('user_id', authorIds).or('post_as.is.null,post_as.neq.business');
+  query = authorIds ? connectionPostsQuery(query, authorIds)
+    : query.overlaps('distribution_targets', [distributionTarget]);
 
   const { data, error } = await query;
   if (error) {
@@ -1682,8 +1697,9 @@ async function loadMapPosts({
 
   // 3–4. Normalize and apply mute/hide/block
   const filters = await outcome(filtersRead);
+  const readableRows = authorIds ? await readablePosts(data || [], userId) : data || [];
   let posts = applyMuteHideFilters(
-    (data || []).map(row => normalizeFeedPostRow(row, new Set(), new Set())),
+    readableRows.map(row => normalizeFeedPostRow(row, new Set(), new Set())),
     filters,
     normalizedSurface,
     userId

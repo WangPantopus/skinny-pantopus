@@ -278,8 +278,10 @@ class PostsRepository
             id: String,
             shareType: String = "external",
             reposted: Boolean? = null,
+            checkOnly: Boolean? = null,
         ): NetworkResult<PostShareResponse> =
-            safeApiCall { api.share(id, PostShareRequest(shareType = shareType, reposted = reposted)) }.also { markPostChanged(id, it) }
+            safeApiCall { api.share(id, PostShareRequest(shareType = shareType, reposted = reposted, checkOnly = checkOnly)) }
+                .also { if (checkOnly != true) markPostChanged(id, it) }
 
         /** `POST /api/posts/:id/report`. */
         suspend fun report(

@@ -313,6 +313,7 @@ function createQueryBuilder(tableName) {
   let rows = () => getTable(storageTable);
   let filters = viewAlias ? [membershipVisibleInPersonaFollow] : [];
   let selectFields = '*';
+  const emptyPostShareEmbeds = new Map();
   let updatePayload = null;
   let insertPayload = null;
   let isSingle = false;
@@ -335,11 +336,22 @@ function createQueryBuilder(tableName) {
   const builder = {
     select(fields = '*', options) {
       selectFields = fields;
+      // Empty left embeds filter child rows without filtering their parent rows.
+      if (tableName === 'Post') {
+        for (const match of fields.matchAll(/(\w+):PostShare\(\)/g)) {
+          emptyPostShareEmbeds.set(match[1], []);
+        }
+      }
       if (options?.count) isCountMode = true;
       if (options?.head) isHeadMode = true;
       return builder;
     },
     eq(field, value) {
+      const [embed, childField] = field.split('.');
+      if (emptyPostShareEmbeds.has(embed)) {
+        emptyPostShareEmbeds.get(embed).push(row => row[childField] === value);
+        return builder;
+      }
       const f = fieldFor(field);
       const [column, jsonKey] = f.split('->>');
       // This JSONB column is filtered by its serialized PostgREST value. PostgreSQL
@@ -369,6 +381,11 @@ function createQueryBuilder(tableName) {
       return builder;
     },
     in(field, values) {
+      const [embed, childField] = field.split('.');
+      if (emptyPostShareEmbeds.has(embed)) {
+        emptyPostShareEmbeds.get(embed).push(row => values.includes(row[childField]));
+        return builder;
+      }
       const f = fieldFor(field);
       filters.push((row) => values.includes(row[f]));
       return builder;
@@ -467,6 +484,12 @@ function createQueryBuilder(tableName) {
         return groups;
       };
       const parseCondition = (cond) => {
+        const embeddedNotNull = cond.match(/^(\w+)\.not\.is\.null$/);
+        if (embeddedNotNull && emptyPostShareEmbeds.has(embeddedNotNull[1])) {
+          const childFilters = emptyPostShareEmbeds.get(embeddedNotNull[1]);
+          return row => getTable('PostShare').some(share => share.post_id === row.id
+            && childFilters.every(filter => filter(share)));
+        }
         const logic = cond.match(/^(and|or)\((.*)\)$/);
         if (logic) {
           const children = splitGroups(logic[2]).map(parseCondition);
@@ -474,7 +497,7 @@ function createQueryBuilder(tableName) {
             ? (row) => children.every((fn) => fn(row))
             : (row) => children.some((fn) => fn(row));
         }
-        const match = cond.match(/^(\w+(?:->>\w+)?)\.(eq|neq|gt|gte|lt|lte|is|cs)\.(.+)$/);
+        const match = cond.match(/^(\w+(?:->>\w+)?)\.(eq|neq|gt|gte|lt|lte|is|cs|in|ov)\.(.+)$/);
         if (!match) return () => true; // Other operators remain legacy no-ops.
         const [, field, op, val] = match;
         const [column, jsonKey] = field.split('->>');
@@ -490,6 +513,9 @@ function createQueryBuilder(tableName) {
           if (actual == null || value == null) return false;
           const compared = typeof actual === 'number' ? Number(value) : value;
           switch (op) {
+            case 'in': return splitGroups(value.slice(1, -1)).includes(String(actual));
+            case 'ov': return Array.isArray(actual)
+              && splitGroups(value.slice(1, -1)).some(item => actual.includes(item));
             case 'eq': return actual === compared;
             case 'neq': return actual !== compared;
             case 'gt': return actual > compared;

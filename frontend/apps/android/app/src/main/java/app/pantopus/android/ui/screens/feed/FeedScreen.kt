@@ -4,7 +4,6 @@ package app.pantopus.android.ui.screens.feed
 
 import android.Manifest
 import android.content.Context
-import android.content.Intent
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -94,6 +93,7 @@ import app.pantopus.android.data.analytics.AnalyticsEvent
 import app.pantopus.android.ui.components.Toast
 import app.pantopus.android.ui.components.ToastAppearance
 import app.pantopus.android.ui.components.firstTapClosesKeyboard
+import app.pantopus.android.ui.components.rememberShareTextWithCompletion
 import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.feed.map.FeedMapQuery
 import app.pantopus.android.ui.screens.feed.map.FeedMapSection
@@ -285,15 +285,11 @@ fun FeedScreen(
         }
     }
 
+    val shareTextWithCompletion = rememberShareTextWithCompletion()
+
     fun launchShareSheet(postId: String) {
-        viewModel.shareExternally(postId) { url ->
-            if (!lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return@shareExternally
-            val send =
-                Intent(Intent.ACTION_SEND).apply {
-                    type = "text/plain"
-                    putExtra(Intent.EXTRA_TEXT, url)
-                }
-            context.startActivity(Intent.createChooser(send, "Share post"))
+        viewModel.shareExternally(postId) { url, onCompleted ->
+            lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) && shareTextWithCompletion(url, onCompleted)
         }
     }
 

@@ -541,18 +541,21 @@ class PulsePostDetailViewModel
         private var sharingPost = false
 
         /** Recheck permission before exposing the link; the audience may have narrowed since this page loaded. */
-        fun shareExternally(onReady: (String) -> Unit) {
+        fun shareExternally(onReady: (String, () -> Unit) -> Boolean) {
             val actor = signedInUserId ?: return
             val post = (_state.value as? PulsePostDetailUiState.Loaded)?.content?.post ?: return
             if (sharingPost || !post.canShareExternally) return
             sharingPost = true
             viewModelScope.launch {
                 try {
-                    when (val result = repo.share(postId, shareType = "external")) {
+                    when (val result = repo.share(postId, shareType = "external", checkOnly = true)) {
                         is NetworkResult.Success -> {
                             val current = (_state.value as? PulsePostDetailUiState.Loaded)?.content?.post
                             if (signedInUserId == actor && current?.canShareExternally == true) {
-                                onReady("https://www.pantopus.com/posts/$postId")
+                                val opened =
+                                    result.data.canShare == true &&
+                                        onReady("https://www.pantopus.com/posts/$postId") { recordCompletedShare(actor) }
+                                if (!opened) _toastMessage.value = "Couldn't share this post. Try again."
                             }
                         }
                         is NetworkResult.Failure ->
@@ -560,6 +563,17 @@ class PulsePostDetailViewModel
                     }
                 } finally {
                     sharingPost = false
+                }
+            }
+        }
+
+        private fun recordCompletedShare(actor: String) {
+            if (signedInUserId != actor) return
+            viewModelScope.launch {
+                when (repo.share(postId, shareType = "external")) {
+                    is NetworkResult.Success -> Unit
+                    is NetworkResult.Failure ->
+                        if (signedInUserId == actor) _toastMessage.value = "Couldn't update the share count."
                 }
             }
         }

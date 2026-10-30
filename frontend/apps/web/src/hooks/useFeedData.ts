@@ -583,6 +583,11 @@ export function useFeedData({
           && !(p.author as AudienceProfile | null)?.viewer?.isOwner
         // The author's user id, as PostCard reads it: post.creator.id is their public profile id.
         : (p.author_user_id || p.user_id) === target.entityId, target.entityType === 'persona');
+      if (target.entityType === 'user') {
+        // Reposts don't expose the reposter's identity. Re-read Connections to remove
+        // posts that reached this viewer only through the person they just muted.
+        await queryClient.resetQueries({ queryKey: ['feed', 'connections'] });
+      }
       showToast(`${target.entityType === 'persona' ? 'Profile' : 'User'} muted — their posts are hidden from your feed`);
     } catch {
       showToast(`Failed to mute ${target.entityType === 'persona' ? 'profile' : 'user'}`);

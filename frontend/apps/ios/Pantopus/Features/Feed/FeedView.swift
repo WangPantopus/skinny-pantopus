@@ -27,6 +27,7 @@ let pulseReportReasons: [(key: String, label: String)] = [
 private struct FeedShareTarget: Identifiable {
     let id: String
     let url: URL
+    let sessionId: String?
 }
 
 /// The Pulse tab's top-right menu (Pulse S3): Nearby's people entries moved
@@ -1238,10 +1239,9 @@ private struct FeedPostActionSurfaces: ViewModifier {
                 Text("It leaves Pulse. You can restore it from My posts.")
             }
             .sheet(item: $shareTarget) { target in
-                SystemShareSheet(items: [target.url])
-                    .onDisappear {
-                        run { await viewModel.recordShare(postId: target.id) }
-                    }
+                SystemShareSheet(items: [target.url]) {
+                    run { await viewModel.recordShare(postId: target.id, sessionId: target.sessionId) }
+                }
             }
             .sheet(isPresented: presentingPreferences) {
                 FeedPreferencesSheet(
@@ -1266,10 +1266,14 @@ private struct FeedPostActionSurfaces: ViewModifier {
                 run { await viewModel.toggleRepost(postId: row.id) }
             }
             .accessibilityIdentifier("pulseFeedOverflowRepost")
-            if let url = viewModel.shareURL(postId: row.id) {
+            if viewModel.shareURL(postId: row.id) != nil {
                 Button("Share…") {
                     dismissOverflow()
-                    shareTarget = FeedShareTarget(id: row.id, url: url)
+                    run {
+                        if let url = await viewModel.authorizeShare(postId: row.id) {
+                            shareTarget = FeedShareTarget(id: row.id, url: url, sessionId: AuthManager.shared.sessionId)
+                        }
+                    }
                 }
                 .accessibilityIdentifier("pulseFeedOverflowShare")
             }

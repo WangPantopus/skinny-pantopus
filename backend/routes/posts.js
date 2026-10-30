@@ -405,6 +405,7 @@ const reportPostSchema = Joi.object({
 
 const sharePostSchema = Joi.object({
   shareType: Joi.string().valid('repost', 'external').default('external'),
+  checkOnly: Joi.boolean().when('shareType', { is: 'repost', then: Joi.forbidden() }),
   // The repost state the client wants; without it, a repost request toggles (older installs).
   reposted: Joi.boolean().allow(null),
 });
@@ -494,8 +495,9 @@ async function ensurePostMute({ userId, entityType, entityId, surface = null, ar
 
 // Old clients omit deleted rows and render a tree from parent_comment_id. Keep
 // their surviving replies reachable without changing the stored Pulse topology.
-// Read only ancestry/deletion state, never the missing parent's identity or text.
-async function legacyReplyParents(comments, postId) {
+// Read ancestry and visibility state, never return the hidden parent's identity or text.
+async function legacyReplyParents(comments, postId, userId, blocked = new Set()) {
+  const hidden = row => !row || row.is_deleted || blocked.has(row.user_id) || !canReadReply(row, userId);
   const known = new Map(comments.map(row => [row.id, row]));
   let missing = [...new Set(comments.map(row => row.parent_comment_id).filter(id => id && !known.has(id)))];
   while (missing.length) {
@@ -503,12 +505,12 @@ async function legacyReplyParents(comments, postId) {
     for (let start = 0; start < missing.length; start += 100) {
       const ids = missing.slice(start, start + 100);
       const { data, error } = await supabaseAdmin.from('PostComment')
-        .select('id, parent_comment_id, is_deleted').eq('post_id', postId).in('id', ids);
+        .select('id, parent_comment_id, is_deleted, user_id, moderation_state').eq('post_id', postId).in('id', ids);
       if (error) throw error;
       for (const id of ids) known.set(id, null);
       for (const row of data || []) known.set(row.id, row);
       for (const row of data || []) {
-        if (row.is_deleted && row.parent_comment_id && !known.has(row.parent_comment_id)) next.add(row.parent_comment_id);
+        if (hidden(row) && row.parent_comment_id && !known.has(row.parent_comment_id)) next.add(row.parent_comment_id);
       }
     }
     missing = [...next].filter(id => !known.has(id));
@@ -516,13 +518,42 @@ async function legacyReplyParents(comments, postId) {
   return comments.map(row => {
     let parent = row.parent_comment_id;
     const visited = new Set([row.id]);
-    while (parent && known.get(parent)?.is_deleted) {
+    while (parent && hidden(known.get(parent))) {
       if (visited.has(parent)) { parent = null; break; }
       visited.add(parent);
-      parent = known.get(parent).parent_comment_id;
+      parent = known.get(parent)?.parent_comment_id || null;
     }
     return parent === row.parent_comment_id ? row : { ...row, parent_comment_id: parent };
   });
+}
+
+// Filter before paging: a page full of blocked authors must not hide later
+// replies. Both detail clients and the paged web reader get the same like state.
+async function readCommentPage(post, userId, blocked, limit, offset) {
+  let query = onlyShownReplies(supabaseAdmin.from('PostComment')
+    .select('*, author:user_id (id, username, name, first_name, last_name, profile_picture_url)')
+    .eq('post_id', post.id).eq('is_deleted', false), userId);
+  if (blocked.size) query = query.not('user_id', 'in', `(${[...blocked].join(',')})`);
+  const { data: comments, error } = await query
+    .order('created_at', { ascending: true }).order('id', { ascending: true })
+    .range(offset, offset + limit - 1);
+  if (error) throw error;
+
+  const ids = (comments || []).map(comment => comment.id);
+  let liked = new Set();
+  if (ids.length) {
+    const { data, error: likesError } = await supabaseAdmin.from('CommentLike')
+      .select('comment_id').eq('user_id', userId).in('comment_id', ids);
+    if (likesError) throw likesError;
+    liked = new Set((data || []).map(like => like.comment_id));
+  }
+  const projected = await legacyReplyParents(
+    await serializeCommentsForViewer(await attachFilesToComments(comments || []), post, userId),
+    post.id, userId, blocked);
+  return {
+    comments: projected.map(comment => ({ ...comment, userHasLiked: liked.has(comment.id) })),
+    readCount: (comments || []).length,
+  };
 }
 
 async function attachFilesToComments(comments) {
@@ -539,7 +570,7 @@ async function attachFilesToComments(comments) {
 
   if (error) {
     logger.warn('Comment attachment fetch error', { error: error.message, commentIds });
-    return comments.map((comment) => ({ ...comment, attachments: [] }));
+    throw error;
   }
 
   const attachmentsByCommentId = new Map();
@@ -2699,14 +2730,15 @@ router.get('/:id', optionalAuth, async (req, res) => {
       });
     }
 
-    const { data: comments } = await onlyShownReplies(supabaseAdmin
-      .from('PostComment')
-      .select(`*, author:user_id (id, username, name, first_name, last_name, profile_picture_url)`)
-      .eq('post_id', id).eq('is_deleted', false), userId)
-      .order('created_at', { ascending: true });
-
-    const commentRows = await legacyReplyParents(
-      await serializeCommentsForViewer(await attachFilesToComments(comments || []), post, userId), id);
+    const blocked = await blockService.blockedUserIds(userId);
+    const commentRows = [];
+    // Native detail screens consume the whole thread. Read bounded pages so
+    // PostgREST's row cap cannot silently cut off a busy conversation.
+    for (let offset = 0; ; offset += 100) {
+      const page = await readCommentPage(post, userId, blocked, 100, offset);
+      commentRows.push(...page.comments);
+      if (page.readCount < 100) break;
+    }
 
     let userLike = null;
     let userSave = null;
@@ -3236,6 +3268,9 @@ router.post('/:id/comments', verifyToken, validate(createCommentSchema), async (
       : supabaseAdmin.from('PostComment').insert(row);
     const { data: newComment, error } = await insert.select(commentSelection).maybeSingle();
 
+    if (error?.message?.includes('POST_COMMENT_RATE_LIMIT')) {
+      return res.status(429).json({ error: 'You are commenting too quickly. Please wait a moment before posting again.' });
+    }
     if (error) { logger.error('Error creating comment', { error: error.message, postId }); return res.status(500).json({ error: 'Failed to create comment' }); }
     if (!newComment && commentId) {
       const existing = await readRetry();
@@ -3306,37 +3341,16 @@ router.get('/:id/comments', verifyToken, async (req, res) => {
   try {
     const { id: postId } = req.params;
     const userId = req.user.id;
-    const { limit = 50, offset = 0 } = req.query;
+    const limit = Number(req.query.limit ?? 50);
+    const offset = Number(req.query.offset ?? 0);
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100 || !Number.isSafeInteger(offset) || offset < 0) {
+      return res.status(400).json({ error: 'Choose a comment page size from 1 to 100 and a nonnegative offset.' });
+    }
     const post = await requireVisiblePost({ postId, userId, res });
     if (!post) return;
-
-    const { data: comments, error } = await onlyShownReplies(supabaseAdmin.from('PostComment')
-      .select(`*, author:user_id (id, username, name, first_name, last_name, profile_picture_url)`)
-      .eq('post_id', postId).eq('is_deleted', false), userId)
-      .order('created_at', { ascending: true })
-      .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
-    if (error) { logger.error('Error fetching comments', { error: error.message, postId }); return res.status(500).json({ error: 'Failed to fetch comments' }); }
-
-    // Enrich comments with userHasLiked
-    const commentIds = (comments || []).map(c => c.id);
-    let userLikedSet = new Set();
-    if (commentIds.length > 0) {
-      const { data: userLikes } = await supabaseAdmin
-        .from('CommentLike')
-        .select('comment_id')
-        .eq('user_id', userId)
-        .in('comment_id', commentIds);
-      if (userLikes) userLikedSet = new Set(userLikes.map(l => l.comment_id));
-    }
-
-    const enrichedComments = await attachFilesToComments(comments || []);
-    const projectedComments = await legacyReplyParents(
-      await serializeCommentsForViewer(enrichedComments, post, userId), postId);
-    const commentsWithLikes = projectedComments.map(c => ({
-      ...c,
-      userHasLiked: userLikedSet.has(c.id),
-    }));
-    res.json({ comments: commentsWithLikes, pagination: { limit: parseInt(limit), offset: parseInt(offset) } });
+    const blocked = await blockService.blockedUserIds(userId);
+    const page = await readCommentPage(post, userId, blocked, limit, offset);
+    res.json({ comments: page.comments, pagination: { limit, offset, nextOffset: offset + page.readCount, hasMore: page.readCount === limit } });
   } catch (err) {
     logger.error('Comments fetch error', { error: err.message, postId: req.params.id });
     res.status(500).json({ error: 'Failed to fetch comments' });
@@ -3369,11 +3383,17 @@ router.post('/:id/share', verifyToken, validate(sharePostSchema), async (req, re
 
     // Only a public post has a link that works outside the app. Reposting stays open to anyone who can
     // see the post, but an external share never lets everyone else read it.
-    if (shareType === 'external' && !isPubliclyShareable(post)) {
+    if (shareType === 'external' && (!isPubliclyShareable(post) || !(await canViewPost(post, null)))) {
       return res.status(403).json({
         error: "This post isn't public, so it can't be shared outside Pantopus.",
         code: 'SHARE_NOT_ALLOWED',
       });
+    }
+
+    // Check current access before opening an external share sheet. A cancelled sheet
+    // must not increment the count, so the client records the share separately.
+    if (shareType === 'external' && req.body.checkOnly) {
+      return res.json({ canShare: true });
     }
 
     if (shareType === 'repost' && typeof req.body.reposted === 'boolean') {
@@ -3591,7 +3611,10 @@ router.post('/:postId/comments/:commentId/like', verifyToken, async (req, res) =
       logger.error('Comment like lookup error', { error: commentErr.message, commentId, postId });
       return res.status(500).json({ error: 'Failed to toggle comment like' });
     }
-    if (!comment || !canReadReply(comment, userId)) return res.status(404).json({ error: 'Comment not found' });
+    if (!comment || !canReadReply(comment, userId)
+      || await blockService.isBlocked(userId, comment.user_id)) {
+      return res.status(404).json({ error: 'Comment not found' });
+    }
 
     // The like state the client wants: a repeated request changes nothing. Without it, the toggle below.
     if (typeof req.body?.liked === 'boolean') {

@@ -2,7 +2,6 @@
 
 package app.pantopus.android.ui.screens.posts
 
-import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -10,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -30,8 +30,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -54,6 +54,7 @@ import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.components.Toast
 import app.pantopus.android.ui.components.ToastKind
 import app.pantopus.android.ui.components.ToastMessage
+import app.pantopus.android.ui.components.rememberShareTextWithCompletion
 import app.pantopus.android.ui.screens.compose.pulse.PulseLostFoundContactPref
 import app.pantopus.android.ui.screens.compose.pulse.PulseLostFoundKind
 import app.pantopus.android.ui.screens.feed.pulse.PostStatusPill
@@ -69,6 +70,7 @@ import app.pantopus.android.ui.screens.shared.content_detail.headers.PostAuthorH
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
+import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
 import kotlinx.coroutines.delay
@@ -132,7 +134,6 @@ fun PulsePostDetailScreen(
     plansOn: Boolean = false,
     viewModel: PulsePostDetailViewModel = hiltViewModel(),
 ) {
-    val context = LocalContext.current
     val state by viewModel.state.collectAsStateWithLifecycle()
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
@@ -183,15 +184,11 @@ fun PulsePostDetailScreen(
         }
     }
 
+    val shareTextWithCompletion = rememberShareTextWithCompletion()
+
     fun launchShareSheet() {
-        viewModel.shareExternally { url ->
-            if (!lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return@shareExternally
-            val send =
-                Intent(Intent.ACTION_SEND).apply {
-                    type = "text/plain"
-                    putExtra(Intent.EXTRA_TEXT, url)
-                }
-            context.startActivity(Intent.createChooser(send, "Share post"))
+        viewModel.shareExternally { url, onCompleted ->
+            lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) && shareTextWithCompletion(url, onCompleted)
         }
     }
 
@@ -273,7 +270,7 @@ fun PulsePostDetailScreen(
                         text = message,
                         kind = if (message in POST_DETAIL_SUCCESS_TOASTS) ToastKind.Success else ToastKind.Error,
                     ),
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 100.dp),
+                modifier = Modifier.align(Alignment.BottomCenter).imePadding().padding(bottom = 100.dp),
             )
         }
     }
@@ -532,6 +529,18 @@ fun PulsePostDetailLoadedContent(
                         status = status,
                         postId = content.post.id,
                         modifier = Modifier.padding(horizontal = Spacing.s4),
+                    )
+                }
+                content.post.title?.trim()?.takeIf { it.isNotEmpty() }?.let { title ->
+                    Text(
+                        text = title,
+                        style = PantopusTextStyle.h3,
+                        color = PantopusColors.appText,
+                        modifier =
+                            Modifier
+                                .padding(horizontal = Spacing.s4)
+                                .semantics { heading() }
+                                .testTag("pulsePostDetail-title"),
                     )
                 }
                 if (actionPending) {
