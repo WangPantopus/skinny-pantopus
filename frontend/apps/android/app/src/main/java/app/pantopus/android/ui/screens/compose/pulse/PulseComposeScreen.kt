@@ -657,7 +657,7 @@ private fun PulseComposeBodySections(
         )
     }
     // The audience is fixed after posting (edits don't send it), so edit mode shows no selector, like web.
-    if (!state.isIntentLocked && (!state.isFlowMode || state.visibility != PulseComposeVisibility.Connections)) {
+    if (!state.isIntentLocked && !state.isNetworkTarget) {
         VisibilitySection(active = state.visibility, onSelect = actions.selection.onSelectVisibility)
     }
 }
