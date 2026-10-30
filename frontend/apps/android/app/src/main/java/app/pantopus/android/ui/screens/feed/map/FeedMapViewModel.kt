@@ -196,6 +196,9 @@ class FeedMapViewModel
 
         private var isReady = false
         private var query = FeedMapQuery(FeedSurface.Pulse, null)
+        private var searchText = ""
+        private var allEntities: List<ExploreEntity> = emptyList()
+        private var searchableTextById: Map<String, String> = emptyMap()
         private var userCoordinate: UserCoordinate? = null
 
         /** Where the person moved the camera (its untilted region), and what the screen showed there. */
@@ -248,6 +251,27 @@ class FeedMapViewModel
                 }
             }
         }
+
+        /** Search the current viewport locally without moving its camera or requesting each keystroke. */
+        fun setSearchText(text: String) {
+            val normalized = text.trim().lowercase()
+            if (normalized == searchText) return
+            searchText = normalized
+            val current = _state.value as? FeedMapUiState.Loaded ?: return
+            val entities = matchingEntities()
+            val markers = ExploreMapViewModel.cluster(entities, clusterRadius(pendingRegion ?: _region.value))
+            _state.value =
+                current.copy(
+                    entities = entities,
+                    markers = markers,
+                    selectedId = null,
+                    clusterPostIds = emptySet(),
+                    clusterStyles = clusterStyles(markers, current.pinStyles),
+                )
+        }
+
+        private fun matchingEntities(): List<ExploreEntity> =
+            allEntities.filter { searchText.isEmpty() || searchableTextById[it.id]?.contains(searchText) == true }
 
         fun refresh() {
             if (!isReady) {
@@ -482,7 +506,21 @@ class FeedMapViewModel
         ) {
             val anchor = userCoordinate ?: UserCoordinate(target.latitude, target.longitude, 0.0)
             val previous = (_state.value as? FeedMapUiState.Loaded)?.takeIf { keepSelection }
-            val entities = ExploreMapViewModel.projectMarkers(data.markers, anchor).filter { it.kind == ExploreKind.Post }
+            allEntities =
+                ExploreMapViewModel.projectMarkers(data.markers, anchor)
+                    .filter { it.kind == ExploreKind.Post }
+                    .sortedBy { it.distanceMiles }
+            searchableTextById =
+                data.markers.associate { marker ->
+                    marker.id to
+                        listOfNotNull(
+                            marker.title,
+                            marker.content,
+                            marker.creator?.displayName ?: marker.creator?.name ?: marker.creator?.handle ?: marker.creator?.username,
+                        )
+                            .joinToString("\n").lowercase()
+                }
+            val entities = matchingEntities()
             val ids = entities.mapTo(HashSet()) { it.id }
             val hint =
                 data.nearestActivityCenter?.let {
@@ -495,7 +533,7 @@ class FeedMapViewModel
             shownQuery = requestedQuery
             _state.value =
                 FeedMapUiState.Loaded(
-                    entities = entities.sortedBy { it.distanceMiles },
+                    entities = entities,
                     markers = markers,
                     userCoordinate = userCoordinate,
                     selectedId = previous?.selectedId?.takeIf { it in ids },

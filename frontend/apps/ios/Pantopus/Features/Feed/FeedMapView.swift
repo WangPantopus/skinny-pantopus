@@ -68,6 +68,7 @@ struct FeedMapView: View {
     /// Active surface + chip-row filter, forwarded onto the marker
     /// request. Changing either re-requests the current viewport.
     let query: FeedMapQuery
+    let searchText: String
     /// How far down from the top of the safe area the Pulse header (or its
     /// reveal capsule) reaches; the "Search this area" pill sits below it.
     let topInset: CGFloat
@@ -97,6 +98,7 @@ struct FeedMapView: View {
     init(
         viewModel: FeedMapViewModel,
         query: FeedMapQuery,
+        searchText: String = "",
         topInset: CGFloat = 0,
         bottomClearance: CGFloat = 0,
         onContentDrag: @escaping @MainActor (CGSize) -> Void = { _ in },
@@ -104,6 +106,7 @@ struct FeedMapView: View {
     ) {
         self.viewModel = viewModel
         self.query = query
+        self.searchText = searchText
         self.topInset = topInset
         self.bottomClearance = bottomClearance
         self.onContentDrag = onContentDrag
@@ -131,6 +134,7 @@ struct FeedMapView: View {
         }
         .mapScope(mapScope)
         .task(id: query) { await viewModel.activate(query: query) }
+        .onChange(of: searchText, initial: true) { _, text in viewModel.setSearchText(text) }
         .onChange(of: viewModel.cameraRequest) { _, request in
             if let request { follow(request) }
         }
@@ -490,7 +494,8 @@ struct FeedMapView: View {
             } else if !loaded.clusterPosts.isEmpty {
                 clusterCard(loaded.clusterPosts)
             } else if loaded.isEmpty {
-                emptyCard(hasHint: loaded.nearestActivityCenter != nil)
+                emptyCard(hasHint: loaded.nearestActivityCenter != nil && searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    .isEmpty)
             }
         }
     }
@@ -561,13 +566,16 @@ struct FeedMapView: View {
     }
 
     private func emptyCard(hasHint: Bool) -> some View {
-        VStack(spacing: Spacing.s2) {
+        let searching = !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        return VStack(spacing: Spacing.s2) {
             Icon(.mapPinOff, size: 22, color: Theme.Color.primaryInk)
-            Text("No posts in this area")
+            Text(searching ? "No posts match your search here" : "No posts in this area")
                 .font(.system(size: 14, weight: .bold))
                 .foregroundStyle(Theme.Color.appText)
             Text(
-                hasHint
+                searching
+                    ? "Try different words or clear your search."
+                    : hasHint
                     ? "Nothing has been posted inside this viewport yet. Jump to the nearest active neighborhood, or drag the map and search again."
                     : "Nothing has been posted inside this viewport yet. Drag the map and search again."
             )

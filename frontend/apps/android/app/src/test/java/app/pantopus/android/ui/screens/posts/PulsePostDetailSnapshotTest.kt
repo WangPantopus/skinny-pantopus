@@ -77,7 +77,7 @@ class PulsePostDetailSnapshotTest {
             Frame {
                 Column(
                     modifier = Modifier.padding(vertical = Spacing.s4),
-                    verticalArrangement = Arrangement.spacedBy(Spacing.s4),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.s1),
                 ) {
                     PostIntent.entries.forEach { intent ->
                         PostAuthorHeader(
@@ -97,6 +97,7 @@ class PulsePostDetailSnapshotTest {
         assertEquals(StatusChipVariant.Info, PostIntent.Ask.chipVariant)
         assertEquals(StatusChipVariant.Success, PostIntent.Offer.chipVariant)
         assertEquals(StatusChipVariant.Personal, PostIntent.Event.chipVariant)
+        assertEquals(StatusChipVariant.Success, PostIntent.Deal.chipVariant)
         assertEquals(StatusChipVariant.Home, PostIntent.Share.chipVariant)
         assertEquals(StatusChipVariant.Warning, PostIntent.Alert.chipVariant)
     }

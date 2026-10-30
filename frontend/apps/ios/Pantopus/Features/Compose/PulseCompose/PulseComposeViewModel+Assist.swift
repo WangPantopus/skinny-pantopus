@@ -27,9 +27,9 @@ public enum PulseComposeAssistState: Equatable, Sendable {
 struct PulseComposeAssistSnapshot {
     let fields: [PulseComposeField: FormFieldState]
     let lostFoundKind: PulseLostFoundKind
-    let safetyAlertKind: PulseSafetyAlertKind
+    let safetyAlertKind: PulseSafetyAlertKind?
     let askCategory: PulseAskCategory?
-    let dealExpiresAt: Date
+    let dealExpiresAt: Date?
 }
 
 /// How many photos a suggestion reads (`postSuggestion.MAX_PHOTOS` on the server).
@@ -189,11 +189,7 @@ public extension PulseComposeViewModel {
 
     /// This form offers Hazard and Other; the server's other heads-up kinds fold into them.
     private static func alertKind(_ raw: String?) -> PulseSafetyAlertKind? {
-        switch raw {
-        case "hazard", "road_hazard", "power_outage", "weather_damage": .hazard
-        case "other", "missing_pet": .other
-        default: nil
-        }
+        raw.flatMap(PulseSafetyAlertKind.init(rawValue:))
     }
 
     private static func assistMessage(for error: any Error) -> String {

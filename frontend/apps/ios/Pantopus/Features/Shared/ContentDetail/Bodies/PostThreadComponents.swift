@@ -291,7 +291,7 @@ struct EmptyThreadState: View {
             "Ask a detail, claim interest, or help the offer find the right neighbor."
         case .event:
             "A quick RSVP or offer to bring something helps the host plan."
-        case .share, .generic:
+        case .share, .deal, .generic:
             "Add context, say thanks, or help other neighbors spot why it matters."
         case .alert:
             "Confirm what you are seeing nearby or share a useful next step."
@@ -375,7 +375,7 @@ public extension PostIntent {
                 PostQuickReplyPrompt(label: "Can bring supplies", icon: .shoppingBag),
                 PostQuickReplyPrompt(label: "What time?", icon: .clock)
             ]
-        case .share, .generic:
+        case .share, .deal, .generic:
             [
                 PostQuickReplyPrompt(label: "Thanks for sharing", icon: .heart),
                 PostQuickReplyPrompt(label: "I can add context", icon: .messageCircle),

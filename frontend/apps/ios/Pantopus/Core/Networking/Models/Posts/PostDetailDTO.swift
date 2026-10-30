@@ -1,13 +1,5 @@
-//
-//  PostDetailDTO.swift
-//  Pantopus
-//
-//  DTOs for `GET /api/posts/:id` — route `backend/routes/posts.js:2142`.
-//
-//  Only one reaction kind exists server-side today (`POST /:id/like`);
-//  the design draws three (Helpful/Heart/Going). UI surfaces all three
-//  but wires only Helpful — see `PulsePostDetailViewModel`.
-//
+// DTOs for GET /api/posts/:id. Only likes are backed by the reaction API;
+// other displayed reaction styles remain read-only in the detail view.
 
 import Foundation
 
@@ -237,8 +229,7 @@ public struct PostDetailDTO: Decodable, Sendable, Hashable, Identifiable {
     public let userHasSaved: Bool
     public let userHasReposted: Bool
     public let comments: [PostCommentDTO]
-    /// Visibility scope — needed by the edit-mode prefill so the compose
-    /// form can show the saved audience.
+    /// Saved audience for edit-mode prefill.
     public let visibility: String?
     public let audience: String?
     public let readScope: String?
@@ -257,10 +248,12 @@ public struct PostDetailDTO: Decodable, Sendable, Hashable, Identifiable {
     public let lostFoundContactPref: String?
     /// Service category — populated for `ask_local` posts.
     public let serviceCategory: String?
-    /// Recommended business name — populated for `recommendation` posts.
+    /// Business name for a Deal or Recommendation.
     public let dealBusinessName: String?
-    /// Post-level place label ("Camas, WA") — preferred over the
-    /// creator's locality for the header meta line.
+    /// Optional end of a Deal, stored by the existing composer.
+    public let dealExpiresAt: String?
+    public let safetyAlertKind: String?
+    /// Post place label, preferred over the creator locality in the header.
     public let locationName: String?
     /// `moderation` when a moderator removed the post. Only its author can
     /// still open it then.
@@ -314,6 +307,8 @@ public struct PostDetailDTO: Decodable, Sendable, Hashable, Identifiable {
         case lostFoundContactPref = "lost_found_contact_pref"
         case serviceCategory = "service_category"
         case dealBusinessName = "deal_business_name"
+        case dealExpiresAt = "deal_expires_at"
+        case safetyAlertKind = "safety_alert_kind"
         case locationName = "location_name"
         case archiveReason = "archive_reason"
         case state, resolution
@@ -365,6 +360,8 @@ public struct PostDetailDTO: Decodable, Sendable, Hashable, Identifiable {
         lostFoundContactPref = c.lenient(String.self, forKey: .lostFoundContactPref)
         serviceCategory = c.lenient(String.self, forKey: .serviceCategory)
         dealBusinessName = c.lenient(String.self, forKey: .dealBusinessName)
+        dealExpiresAt = c.lenient(String.self, forKey: .dealExpiresAt)
+        safetyAlertKind = c.lenient(String.self, forKey: .safetyAlertKind)
         locationName = c.lenient(String.self, forKey: .locationName)
         archiveReason = c.lenient(String.self, forKey: .archiveReason)
         state = c.lenient(String.self, forKey: .state)
@@ -416,6 +413,8 @@ extension PostDetailDTO {
         lostFoundContactPref = nil
         serviceCategory = nil
         dealBusinessName = nil
+        dealExpiresAt = nil
+        safetyAlertKind = nil
         locationName = post.locationName
         archiveReason = nil
         state = post.state

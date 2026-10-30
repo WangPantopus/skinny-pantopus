@@ -27,6 +27,8 @@ data class PostUpdateRequest(
     @Json(name = "lostFoundType") val lostFoundType: String? = null,
     @Json(name = "serviceCategory") val serviceCategory: String? = null,
     @Json(name = "dealBusinessName") val dealBusinessName: String? = null,
+    @Json(name = "dealExpiresAt") val dealExpiresAt: String? = null,
+    @Json(name = "safetyAlertKind") val safetyAlertKind: String? = null,
     val clearEventEndDate: Boolean = false,
 )
 
@@ -52,6 +54,8 @@ class PostUpdateRequestJsonAdapter {
             value.lostFoundType?.let { writer.name("lostFoundType").value(it) }
             value.serviceCategory?.let { writer.name("serviceCategory").value(it) }
             value.dealBusinessName?.let { writer.name("dealBusinessName").value(it) }
+            value.dealExpiresAt?.let { writer.name("dealExpiresAt").value(it) }
+            value.safetyAlertKind?.let { writer.name("safetyAlertKind").value(it) }
             writer.endObject()
         } finally {
             writer.serializeNulls = previous

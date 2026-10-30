@@ -70,7 +70,7 @@ function storedWallClockToInput(value: string | null | undefined, kind: 'datetim
 }
 
 function parseTags(value: string): string[] {
-  return value.split(',').map((t) => t.trim()).filter(Boolean);
+  return [...new Set(value.split(',').map((t) => t.trim()).filter(Boolean))];
 }
 
 function eventTimeError(start: string, end: string): string | null {
@@ -133,7 +133,8 @@ function buildEditPatch(post: Post, seed: Partial<PostFormState>, f: PostFormSta
     patch.serviceCategory = f.serviceCategory.trim() || null;
   }
   const tags = parseTags(f.tags);
-  if (tags.join('\n') !== parseTags(seed.tags ?? '').join('\n')) patch.tags = tags;
+  // Keep an untouched legacy post unchanged, but let an explicit tag edit remove duplicates.
+  if (f.tags !== seed.tags && tags.join('\n') !== (post.tags ?? []).join('\n')) patch.tags = tags;
   return patch;
 }
 
@@ -676,7 +677,7 @@ export default function PostComposer({
     setConfirmingAIPost(false);
 
     const shouldIncludeLocation = Boolean(f.location && showLocationControl(targetPostAs, targetAudience));
-    const parsedTags = f.tags.split(',').map((t) => t.trim()).filter(Boolean);
+    const parsedTags = parseTags(f.tags);
     createCommand.current ??= crypto.randomUUID();
     const saved = await onPost({
       clientRequestId: createCommand.current,

@@ -123,6 +123,7 @@ fun FeedMapSection(
     query: FeedMapQuery,
     onOpenPost: (String) -> Unit,
     modifier: Modifier = Modifier,
+    searchText: String = "",
     topInset: () -> Int = { 0 },
     onVerticalPan: ((contentMovedUp: Boolean) -> Unit)? = null,
     viewModel: FeedMapViewModel = hiltViewModel(),
@@ -132,6 +133,7 @@ fun FeedMapSection(
     val region by viewModel.region.collectAsStateWithLifecycle()
     val viewportDirty by viewModel.viewportDirty.collectAsStateWithLifecycle()
 
+    LaunchedEffect(searchText) { viewModel.setSearchText(searchText) }
     LifecycleResumeEffect(query) {
         viewModel.activate(query)
         onPauseOrDispose { viewModel.suspendContent() }
@@ -243,7 +245,8 @@ fun FeedMapSection(
                             )
                         current.isEmpty ->
                             EmptyCard(
-                                hasHint = current.nearestActivityCenter != null,
+                                hasHint = current.nearestActivityCenter != null && searchText.isBlank(),
+                                searching = searchText.isNotBlank(),
                                 onJump = viewModel::jumpToNearestActivity,
                             )
                         else -> Unit
@@ -692,6 +695,7 @@ private fun ErrorCard(
 @Composable
 private fun EmptyCard(
     hasHint: Boolean,
+    searching: Boolean,
     onJump: () -> Unit,
 ) {
     CardSurface(tag = "pulseMapEmpty") {
@@ -707,12 +711,14 @@ private fun EmptyCard(
                 tint = PantopusColors.primary600,
             )
             Text(
-                "No posts in this area",
+                if (searching) "No posts match your search here" else "No posts in this area",
                 style = PantopusTextStyle.caption.copy(fontSize = 14.sp, fontWeight = FontWeight.Bold),
                 color = PantopusColors.appText,
             )
             Text(
-                if (hasHint) {
+                if (searching) {
+                    "Try different words or clear your search."
+                } else if (hasHint) {
                     "Nothing has been posted inside this viewport yet. Jump to the nearest " +
                         "active neighborhood, or drag the map and search again."
                 } else {

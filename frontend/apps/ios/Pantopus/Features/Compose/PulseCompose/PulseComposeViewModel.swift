@@ -290,8 +290,8 @@ public final class PulseComposeViewModel {
     /// Lost & Found contact preference. `.phone` requires `contactPhone`.
     public var lostFoundContactPref: PulseLostFoundContactPref = .dm
 
-    /// Deal expiry — required by the backend for `postType == deal`.
-    public var dealExpiresAt = Date().addingTimeInterval(7 * 86400)
+    /// New Deals default to one week; existing network posts can omit expiry.
+    public var dealExpiresAt: Date? = Date().addingTimeInterval(7 * 86400)
 
     /// Place-eligibility warning surfaced as a banner on the draft step.
     public private(set) var eligibilityWarning: String?
@@ -350,13 +350,13 @@ public final class PulseComposeViewModel {
     public var announceAudience: PulseAnnounceAudience = .neighbors
 
     /// Heads Up alert sub-type — required when `postType == alert`.
-    public var safetyAlertKind: PulseSafetyAlertKind = .hazard
+    public var safetyAlertKind: PulseSafetyAlertKind? = .hazard
 
     /// Ask category chip selection. New Asks start on Handyman; an edited Ask posted without a
     /// category has none selected.
     public var askCategory: PulseAskCategory? = .handyman
 
-    /// Star rating for the Recommend intent (1-5).
+    /// Star rating (1-5), or zero when editing a recommendation saved without a rating.
     public var recommendRating: Int = 5
 
     /// Field states keyed by `PulseComposeField`.
@@ -398,6 +398,8 @@ public final class PulseComposeViewModel {
     private var baselineAnnounceAudience: PulseAnnounceAudience = .neighbors
     private var baselineAskCategory: PulseAskCategory? = .handyman
     private var baselineRecommendRating: Int = 5
+    private var baselineDealExpiresAt: Date?
+    private var baselineSafetyAlertKind: PulseSafetyAlertKind?
 
     private let createCommandId = UUID().uuidString
     private let api: APIClient
@@ -412,7 +414,7 @@ public final class PulseComposeViewModel {
     public let postingTarget: PulsePostingTarget?
 
     /// Step 2 purpose — nil for connections-only posts.
-    public let composePurpose: PulseComposePurpose?
+    public private(set) var composePurpose: PulseComposePurpose?
 
     /// C2 — when non-nil the create submit goes to
     /// `POST /api/businesses/:businessId/posts` instead of `POST /api/posts`,
@@ -492,6 +494,8 @@ public final class PulseComposeViewModel {
         }
         baselineIdentity = self.identity
         baselineVisibility = visibility
+        baselineDealExpiresAt = dealExpiresAt
+        baselineSafetyAlertKind = safetyAlertKind
     }
 
     /// A Pantopus AI post card's other fields, as current values like its
@@ -629,6 +633,8 @@ public final class PulseComposeViewModel {
         if !isEditing, selectedPlaceTag != nil { return true }
         if identity != baselineIdentity { return true }
         if visibility != baselineVisibility { return true }
+        if composePurpose == .deal, dealExpiresAt != baselineDealExpiresAt { return true }
+        if composePurpose == .headsUp, safetyAlertKind != baselineSafetyAlertKind { return true }
         for field in fieldsActiveForCurrentIntent() where fields[field]?.isDirty ?? false {
             return true
         }
@@ -654,6 +660,18 @@ public final class PulseComposeViewModel {
         return isCheckingPost
     }
 
+    private func validator(for field: PulseComposeField) -> FormValidator {
+        let rule = requiredFieldValidator(for: field)
+        // Web and older posts can omit these fields. Unrelated edits preserve that valid state.
+        guard isEditing,
+              [.recommendBusiness, .eventLocation, .lostLastSeenLocation].contains(field),
+              (fields[field]?.originalValue ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return rule }
+        return FormValidator { value in
+            value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : rule.validate(value)
+        }
+    }
+
     // swiftlint:disable cyclomatic_complexity
 
     /// Validators run once per submit; per-field error messages are
@@ -661,7 +679,7 @@ public final class PulseComposeViewModel {
     /// 1:1 to `PulseComposeField` so the complexity is inherent — any
     /// indirection would hide the field-to-rule mapping that mirrors
     /// the iOS / Android validator parity.
-    private func validator(for field: PulseComposeField) -> FormValidator {
+    private func requiredFieldValidator(for field: PulseComposeField) -> FormValidator {
         switch field {
         case .title:
             if titleOptional {
@@ -763,9 +781,8 @@ public final class PulseComposeViewModel {
         case .event:
             [.title, .eventDate, .eventEndDate, .eventLocation, .eventCapacity, .body]
         case .lost:
-            // An edit shows the saved contact read-only (`buildUpdateRequest` never sends it), so its
-            // phone number neither blocks nor enables Save.
-            isEditing
+            // Only the editable Phone choice shows a phone field. Hidden errors must not block posting.
+            isEditing || lostFoundContactPref != .phone
                 ? [.body, .lostLastSeenLocation, .lostLastSeenDate]
                 : [.body, .lostLastSeenLocation, .lostLastSeenDate, .contactPhone]
         case .announce:
@@ -934,7 +951,17 @@ public final class PulseComposeViewModel {
     /// Seed every field + selector from the saved post. Re-baselines so
     /// the form starts in a non-dirty pose.
     private func apply(prefill post: PostDetailDTO) {
-        let intent = PulseComposeIntent.from(feedIntent: PulseIntent.from(postType: post.postType))
+        composePurpose = PulseComposePurpose.allCases.first { $0.postType == post.postType }
+        let intent = composePurpose?.legacyIntent ?? PulseComposeIntent.from(feedIntent: PulseIntent.from(postType: post.postType))
+        if composePurpose == .headsUp {
+            safetyAlertKind = post.safetyAlertKind.flatMap(PulseSafetyAlertKind.init(rawValue:))
+            baselineSafetyAlertKind = safetyAlertKind
+        }
+        if post.postType == "deal" {
+            seedField(.dealBusinessName, value: post.dealBusinessName ?? "")
+            dealExpiresAt = Self.dealPickerFormatter().date(from: String(formatEventDateForPicker(post.dealExpiresAt).prefix(10)))
+            baselineDealExpiresAt = dealExpiresAt
+        }
         activeIntent = intent
         // Web's default "general" posts have no title and open on the Announcement form.
         titleOptional = (post.title ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -961,7 +988,7 @@ public final class PulseComposeViewModel {
             baselineAskCategory = askCategory
         case .recommend:
             let (stars, body) = unwrapRecommendBody(post.content)
-            recommendRating = stars ?? 5
+            recommendRating = stars ?? 0
             seedField(.body, value: body)
             seedField(.recommendBusiness, value: post.dealBusinessName ?? "")
             baselineRecommendRating = recommendRating
@@ -1143,8 +1170,8 @@ public final class PulseComposeViewModel {
                 postType: postType,
                 visibility: announceVis,
                 postAs: postAs,
-                safetyAlertKind: postType == "alert" ? safetyAlertKind.rawValue : nil,
-                dealExpiresAt: isDeal ? isoTimestamp(from: dealExpiresAt) : nil,
+                safetyAlertKind: postType == "alert" ? safetyAlertKind?.rawValue : nil,
+                dealExpiresAt: isDeal ? dealExpiresAt.map(dealExpiryTimestamp(from:)) : nil,
                 businessName: isDeal && !dealBusiness.isEmpty ? dealBusiness : nil,
                 audience: audience,
                 purpose: purposeTag
@@ -1174,10 +1201,18 @@ public final class PulseComposeViewModel {
         request.geocodePlaceId = tag.placeId
     }
 
-    private func isoTimestamp(from date: Date) -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter.string(from: date)
+    /// A Deal's last calendar day, like the web date input; the archive job gives that day its grace period.
+    private func dealExpiryTimestamp(from date: Date) -> String {
+        Self.dealPickerFormatter().string(from: date) + "T00:00:00Z"
+    }
+
+    private static func dealPickerFormatter() -> DateFormatter {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .iso8601)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
     }
 
     var effectivePostType: String {
@@ -1530,7 +1565,12 @@ public final class PulseComposeViewModel {
         case .announce:
             return PostUpdateRequest(
                 content: bodyValue,
-                title: titleValue.isEmpty ? nil : titleValue
+                title: titleValue.isEmpty ? nil : titleValue,
+                dealBusinessName: composePurpose == .deal ? trimmedValue(.dealBusinessName) : nil,
+                dealExpiresAt: composePurpose == .deal && dealExpiresAt != baselineDealExpiresAt
+                    ? dealExpiresAt.map(dealExpiryTimestamp(from:)) : nil,
+                safetyAlertKind: composePurpose == .headsUp && safetyAlertKind != baselineSafetyAlertKind
+                    ? safetyAlertKind?.rawValue : nil
             )
         }
     }
@@ -1540,6 +1580,8 @@ public final class PulseComposeViewModel {
     }
 
     private func composeRecommendBody(stars: Int, business: String, body: String) -> String {
+        // An unrated saved recommendation stays unrated until the author chooses stars.
+        guard stars != 0 else { return body }
         let clamped = max(1, min(5, stars))
         var row = String(repeating: "★", count: clamped) + String(repeating: "☆", count: 5 - clamped)
         // The place is what a recommendation is about, and no card shows the separate

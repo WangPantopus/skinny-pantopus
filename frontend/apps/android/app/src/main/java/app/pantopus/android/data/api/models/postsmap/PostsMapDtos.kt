@@ -36,6 +36,8 @@ data class PostsMapCreatorDto(
     @Json(name = "username") val username: String? = null,
     @Json(name = "name") val name: String? = null,
     @Json(name = "profile_picture_url") val profilePictureUrl: String? = null,
+    val displayName: String? = null,
+    val handle: String? = null,
 )
 
 /**
