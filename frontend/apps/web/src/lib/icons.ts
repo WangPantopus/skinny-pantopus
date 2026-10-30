@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   Newspaper,
   Search,
+  Send,
   Store,
   Map,
   Plus,
@@ -200,6 +201,7 @@ export const MailboxIcons = {
   stamps: Palette,
   memory: Clock,
   travel: Plane,
+  sent: Send,
 } satisfies Record<string, LucideIcon>;
 
 // ── ProfileToggle icons ──────────────────────────────────────

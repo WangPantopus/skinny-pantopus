@@ -718,6 +718,57 @@ export async function previewHolidayCard(data: Parameters<typeof sendHolidayCard
   return post<HolidayCardPreview>('/api/mailbox/cards/preview', data);
 }
 
+// ============ SENT (launch key mailbox) ============
+
+/**
+ * A card in its sender's Sent: where it is now and how it reached them, never whether it was opened, nor the other
+ * person's ids, address or time zone. Days (`arrives_on`, `opens_on`, `postmarked_on`) are by their clock.
+ */
+export interface SentPiece {
+  id: string;
+  kind: 'card';
+  sent_at: string;
+  /** Their name as it was when sent; by email the masked address, or whoever claimed it. */
+  to_name: string | null;
+  by_email: boolean;
+  arrival: HolidayCardArrival | null;
+  /** To a person: before the 7 a.m. pickup, picked up (a Christmas-morning card on its way), in their mailbox. */
+  status: 'waiting' | 'picked_up' | 'delivered' | 'claimed' | 'expired' | 'email_waiting';
+  arrives_at: string | null;
+  arrives_on: string | null;
+  opens_on: string | null;
+  sealed: boolean;
+  can_take_back: boolean;
+  take_back_until: string | null;
+  /** The envelope as it reaches them: no postmark until the carrier has it. */
+  envelope: { from: string; postmarked_on: string | null };
+  card: { design: string | null; number: number | null; caption: string | null; paper: string | null; year: number | null };
+}
+
+/** A step of a sent card's trail: `at` an instant (shown by the sender's clock), `on` a day by theirs. */
+export interface SentTrailStep {
+  step: 'sealed' | 'emailed' | 'picked_up' | 'delivered' | 'opens' | 'joined' | 'returned';
+  at?: string | null;
+  on?: string | null;
+  done: boolean;
+}
+
+/** One card in Sent, with the sender's own note (also while it's sealed for them) and its trail. */
+export interface SentPieceDetail extends SentPiece {
+  note: string;
+  trail: SentTrailStep[];
+}
+
+/** GET /api/mailbox/sent: newest first, `limit` at a time (25 unless asked); `next` is the cursor for the page after. */
+export async function getSentCards(params?: { before?: string; limit?: number }): Promise<{ items: SentPiece[]; next: string | null }> {
+  return get<{ items: SentPiece[]; next: string | null }>('/api/mailbox/sent', params);
+}
+
+/** GET /api/mailbox/sent/:id (its sender only). */
+export async function getSentCard(id: string): Promise<{ item: SentPieceDetail }> {
+  return get<{ item: SentPieceDetail }>(`/api/mailbox/sent/${encodeURIComponent(id)}`);
+}
+
 /** POST /api/mailbox/cards/:id/take-back: before the 7 a.m. pickup (by email: before they open it). */
 export async function takeBackHolidayCard(cardId: string): Promise<{ taken_back: true }> {
   return post<{ taken_back: true }>(`/api/mailbox/cards/${encodeURIComponent(cardId)}/take-back`);

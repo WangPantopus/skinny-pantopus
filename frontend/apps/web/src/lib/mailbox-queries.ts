@@ -25,7 +25,7 @@ import * as api from '@/lib/mailbox-api';
 import { MailboxApiError } from '@/lib/mailbox-api';
 import { businesses as businessesApi, mailboxV2P2 as mailboxV2P2Api } from '@pantopus/api';
 import type { AssetFullDetail } from '@/lib/mailbox-api';
-import type { DeletedMail, HolidayCards, HolidayCardArrivalsFor, HolidayCardPreview, SentHolidayCard, RecipientSearchResult } from '@pantopus/api';
+import type { DeletedMail, HolidayCards, HolidayCardArrivalsFor, HolidayCardPreview, SentHolidayCard, SentPiece, SentPieceDetail, RecipientSearchResult } from '@pantopus/api';
 
 import type {
   DrawerMeta,
@@ -73,6 +73,9 @@ export const mailboxKeys = {
   holidayCards: () => [...mailboxKeys.all, 'holiday-cards'] as const,
   cardRecipients: (query: string) => [...mailboxKeys.all, 'card-recipients', query] as const,
   cardArrivals: (userId: string) => [...mailboxKeys.all, 'card-arrivals', userId] as const,
+  // Sent: what you've sent (newest first), and one sent card.
+  sent: () => [...mailboxKeys.all, 'sent'] as const,
+  sentCard: (id: string) => [...mailboxKeys.all, 'sent', 'card', id] as const,
   deleted: () => [...mailboxKeys.all, 'deleted'] as const,
 
   // Counter
@@ -201,11 +204,18 @@ export function useCardArrivals(userId: string | null) {
   });
 }
 
+// Sending or taking back a card moves today's card, Sent and the Mailbox's flag (the drawers reply).
+function invalidateSentCards(qc: ReturnType<typeof useQueryClient>) {
+  void qc.invalidateQueries({ queryKey: mailboxKeys.holidayCards() });
+  void qc.invalidateQueries({ queryKey: mailboxKeys.sent() });
+  void qc.invalidateQueries({ queryKey: mailboxKeys.drawers() });
+}
+
 export function useSendHolidayCard() {
   const qc = useQueryClient();
   return useMutation<{ card: SentHolidayCard }, MailboxApiError, Parameters<typeof api.sendHolidayCard>[0]>({
     mutationFn: api.sendHolidayCard,
-    onSettled: () => { void qc.invalidateQueries({ queryKey: mailboxKeys.holidayCards() }); },
+    onSettled: () => invalidateSentCards(qc),
   });
 }
 
@@ -220,7 +230,30 @@ export function useTakeBackHolidayCard() {
   const qc = useQueryClient();
   return useMutation<{ taken_back: true }, MailboxApiError, string>({
     mutationFn: api.takeBackHolidayCard,
-    onSettled: () => { void qc.invalidateQueries({ queryKey: mailboxKeys.holidayCards() }); },
+    onSettled: () => invalidateSentCards(qc),
+  });
+}
+
+/** Sent: the cards you sent, newest first, 25 at a time (the server's cursor pages on). */
+export function useSentCards(options?: { enabled?: boolean }) {
+  return useInfiniteQuery<{ items: SentPiece[]; next: string | null }, MailboxApiError>({
+    queryKey: mailboxKeys.sent(),
+    queryFn: ({ pageParam }) => api.getSentCards(pageParam ? { before: pageParam as string } : undefined),
+    initialPageParam: null,
+    getNextPageParam: (last) => last.next ?? undefined,
+    enabled: options?.enabled ?? true,
+    staleTime: STALE_30S,
+  });
+}
+
+/** One card you sent, with your note and its trail. */
+export function useSentCard(id: string) {
+  return useQuery<SentPieceDetail, MailboxApiError>({
+    queryKey: mailboxKeys.sentCard(id),
+    queryFn: () => api.getSentCard(id),
+    staleTime: STALE_30S,
+    // Not found is an answer (it was taken back, or it isn't yours): no retry.
+    retry: (count, error) => error.status !== 404 && count < 2,
   });
 }
 

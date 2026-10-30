@@ -31,9 +31,17 @@ import GigCreationModal from '@/components/mailbox/GigCreationModal';
 import FamilyMailParty from '@/components/mailbox/FamilyMailParty';
 import CertifiedMailDetail from '@/components/mailbox/CertifiedMailDetail';
 import HolidayCardView from '@/components/mailbox/cards/HolidayCardView';
+import SentPieceView from '@/components/mailbox/sent/SentPieceView';
 import { launchFeatures } from '@/lib/featureFlags';
 import { chosenUsername } from '@pantopus/utils';
 import { fetchMe } from '@/lib/me';
+
+/** A card you sent (Sent), or a piece of your mail. */
+export default function MailItemPage() {
+  const params = useParams<{ drawer: string; item_id: string }>();
+  if (params.drawer === 'sent') return <SentPieceView key={params.item_id} id={params.item_id} />;
+  return <ItemDetailPage />;
+}
 
 /**
  * Mail item detail page — right pane on desktop, full page on mobile.
@@ -44,7 +52,7 @@ import { fetchMe } from '@/lib/me';
  * and certified mail audit trail. Mail translation isn't offered: the
  * backend has no translation provider yet.
  */
-export default function ItemDetailPage() {
+function ItemDetailPage() {
   const router = useRouter();
   const params = useParams<{ drawer: string; item_id: string }>();
   const drawer = params.drawer;

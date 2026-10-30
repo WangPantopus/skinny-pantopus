@@ -12,12 +12,11 @@ import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { HolidayCardArrival, HolidayCardDesign, HolidayCardPreview, HolidayCards, SentHolidayCard } from '@pantopus/api';
-import { ChevronLeft, Check, Loader2, Mail, Search, X } from 'lucide-react';
+import { ChevronLeft, Check, Loader2, Mail, Search, Send, X } from 'lucide-react';
 import type { MailItemV2 } from '@/types/mailbox';
 import type { MailboxApiError } from '@/lib/mailbox-api';
 import { useCardArrivals, useCardRecipients, useHolidayCards, usePreviewHolidayCard, useSendHolidayCard, useTakeBackHolidayCard } from '@/lib/mailbox-queries';
 import { useMe, useOwnLocalProfile } from '@/lib/me';
-import { confirmStore } from '@/components/ui/confirm-store';
 import ErrorState from '@/components/ui/ErrorState';
 import MailPiece from '../MailPiece';
 import { mailLoadMessage } from '../mailLoadMessage';
@@ -25,6 +24,7 @@ import CardFront from './CardFront';
 import CardBack, { BACK_TEXT, RULED } from './CardBack';
 import CardFlip from './CardFlip';
 import LookItOver from './LookItOver';
+import { askTakeBack } from './takeBack';
 import { cardPicture, clockTime, SERIF, shortDay, WAX } from './cardArt';
 
 type Step = 'to' | 'pick' | 'write' | 'seal' | 'look' | 'sent';
@@ -517,6 +517,7 @@ function SentCard({
   card,
   designs,
   title,
+  seeInSent = false,
   onTakeBack,
   takingBack,
   takeBackError,
@@ -524,6 +525,8 @@ function SentCard({
   card: SentHolidayCard;
   designs: HolidayCardDesign[];
   title: string;
+  /** Just sent: a way to it in Sent. */
+  seeInSent?: boolean;
   onTakeBack: () => void;
   takingBack: boolean;
   takeBackError: string | null;
@@ -553,6 +556,16 @@ function SentCard({
           </button>
         ) : null}
         <Link href="/app/mailbox/personal" className={primary} style={{ backgroundColor: WAX }}>Back to your mail</Link>
+        {seeInSent ? (
+          <Link
+            href={`/app/mailbox/sent/${card.id}`}
+            data-testid="sendCardSeeInSent"
+            className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl text-[15px] font-semibold text-[#7c4a2d] hover:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8b1d1d] [@media(prefers-color-scheme:dark)]:text-[#e8b996]"
+          >
+            <Send className="h-4 w-4" aria-hidden />
+            See it in Sent
+          </Link>
+        ) : null}
       </div>
       <p className={`mt-3 text-center text-[13px] ${muted}`}>One card a day. You can send another tomorrow.</p>
     </section>
@@ -645,13 +658,8 @@ export default function SendCardFlow() {
 
   const doTakeBack = async () => {
     if (!today) return;
-    const yes = await confirmStore.open({
-      title: 'Take your card back?',
-      description: today.by_email
-        ? 'The link in their email will say you took it back. You can send a card again today.'
-        : 'It won’t go out with the morning mail. You can send a card again today.',
-      confirmLabel: 'Take it back',
-    });
+    // Today's card: taking it back frees the day.
+    const yes = await askTakeBack({ byEmail: today.by_email, sentToday: true });
     if (!yes) return;
     setTakeBackError(null);
     takeBack.mutate(today.id, {
@@ -762,7 +770,7 @@ export default function SendCardFlow() {
         />
       ) : null}
       {step === 'sent' && sent ? (
-        <SentCard card={sent} designs={data.designs} title="On its way" onTakeBack={() => { void doTakeBack(); }} takingBack={takeBack.isPending} takeBackError={takeBackError} />
+        <SentCard card={sent} designs={data.designs} title="On its way" seeInSent onTakeBack={() => { void doTakeBack(); }} takingBack={takeBack.isPending} takeBackError={takeBackError} />
       ) : null}
       </div>
     </div>
