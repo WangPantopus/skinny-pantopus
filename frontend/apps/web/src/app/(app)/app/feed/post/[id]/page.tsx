@@ -638,7 +638,7 @@ export default function PostDetailPage() {
           {/* Tags */}
           {post.tags && post.tags.length > 0 && (
             <div className="flex flex-wrap gap-1.5 px-5 pb-3">
-              {post.tags.map((tag: string) => (
+              {[...new Set(post.tags)].map((tag: string) => (
                 <span key={tag} className="px-2 py-0.5 bg-sky-50 text-sky-700 text-[11px] font-medium rounded-full">#{tag}</span>
               ))}
             </div>

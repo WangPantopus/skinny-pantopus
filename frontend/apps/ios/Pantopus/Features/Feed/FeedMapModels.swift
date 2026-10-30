@@ -133,14 +133,15 @@ public struct FeedMapLoaded: Sendable, Hashable {
         entities.filter { clusterPostIds.contains($0.id) }
     }
 
-    /// A copy with another selection, cluster list or set of markers.
+    /// A copy with other entities, markers, selection or cluster list.
     func with(
+        entities: [ExploreEntity]? = nil,
         markers: [ExploreMarker]? = nil,
         selectedId: String?,
         clusterPostIds: Set<String> = []
     ) -> FeedMapLoaded {
         FeedMapLoaded(
-            entities: entities,
+            entities: entities ?? self.entities,
             markers: markers ?? self.markers,
             userCoordinate: userCoordinate,
             selectedId: selectedId,

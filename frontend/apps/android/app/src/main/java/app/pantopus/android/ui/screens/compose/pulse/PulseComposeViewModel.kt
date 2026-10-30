@@ -28,6 +28,7 @@ import app.pantopus.android.data.businesses.BusinessPostsRepository
 import app.pantopus.android.data.location.LocationProvider
 import app.pantopus.android.data.location.UserCoordinate
 import app.pantopus.android.data.network.NetworkMonitor
+import app.pantopus.android.data.plans.PlanFormat
 import app.pantopus.android.data.posts.PostPrecheckRepository
 import app.pantopus.android.data.posts.PostsRepository
 import app.pantopus.android.data.posts.PulsePostsRefreshNotifier
@@ -303,13 +304,13 @@ class PulseComposeViewModel
         private val _lostFoundContactPref = MutableStateFlow(PulseLostFoundContactPref.Dm)
         val lostFoundContactPref: StateFlow<PulseLostFoundContactPref> = _lostFoundContactPref.asStateFlow()
 
-        /** Deal expiry — required by the backend for `postType == deal`. */
+        /** New Deals default to one week; existing network posts can omit expiry. */
         private val _dealExpiresAt =
-            MutableStateFlow(
+            MutableStateFlow<LocalDateTime?>(
                 prefillDraft?.dealExpiresAt?.let { PulseComposeDraftFields.localEnd(it) }
                     ?: LocalDateTime.now().plusDays(DEAL_DEFAULT_EXPIRY_DAYS),
             )
-        val dealExpiresAt: StateFlow<LocalDateTime> = _dealExpiresAt.asStateFlow()
+        val dealExpiresAt: StateFlow<LocalDateTime?> = _dealExpiresAt.asStateFlow()
 
         /** Place-eligibility warning surfaced as a banner on the draft step. */
         private val _eligibilityWarning = MutableStateFlow<String?>(null)
@@ -395,8 +396,10 @@ class PulseComposeViewModel
         val announceAudience: StateFlow<PulseAnnounceAudience> = _announceAudience.asStateFlow()
 
         private val _safetyAlertKind =
-            MutableStateFlow(prefillDraft?.safetyAlertKind?.let(PulseSafetyAlertKind::fromKey) ?: PulseSafetyAlertKind.Hazard)
-        val safetyAlertKind: StateFlow<PulseSafetyAlertKind> = _safetyAlertKind.asStateFlow()
+            MutableStateFlow<PulseSafetyAlertKind?>(
+                prefillDraft?.safetyAlertKind?.let(PulseSafetyAlertKind::fromKey) ?: PulseSafetyAlertKind.Hazard,
+            )
+        val safetyAlertKind: StateFlow<PulseSafetyAlertKind?> = _safetyAlertKind.asStateFlow()
 
         // New Asks start on Handyman; an edited Ask posted without a category has none selected.
         private val _askCategory = MutableStateFlow<PulseAskCategory?>(PulseAskCategory.Handyman)
@@ -464,6 +467,8 @@ class PulseComposeViewModel
         private var baselineAnnounceAudience: PulseAnnounceAudience = PulseAnnounceAudience.Neighbors
         private var baselineAskCategory: PulseAskCategory? = PulseAskCategory.Handyman
         private var baselineRecommendRating: Int = DEFAULT_RECOMMEND_RATING
+        private var baselineDealExpiresAt = _dealExpiresAt.value
+        private var baselineSafetyAlertKind = _safetyAlertKind.value
 
         private var postingTarget: PulsePostingTarget? = null
         private var composePurpose: PulseComposePurpose? = null
@@ -776,6 +781,8 @@ class PulseComposeViewModel
                 if (!isEditing && _selectedPlaceTag.value != null) return true
                 if (_identity.value != baselineIdentity) return true
                 if (_visibility.value != baselineVisibility) return true
+                if (composePurpose == PulseComposePurpose.Deal && _dealExpiresAt.value != baselineDealExpiresAt) return true
+                if (composePurpose == PulseComposePurpose.HeadsUp && _safetyAlertKind.value != baselineSafetyAlertKind) return true
                 if (activeIntentFields().any { (_fields.value[it]?.isDirty == true) }) return true
                 return when (_activeIntent.value) {
                     PulseComposeIntent.Ask -> _askCategory.value != baselineAskCategory
@@ -808,14 +815,15 @@ class PulseComposeViewModel
                         PulseComposeField.EventCapacity,
                         PulseComposeField.Body,
                     )
-                // An edit shows the saved contact read-only (buildUpdateRequest never sends it), so its
-                // phone number neither blocks nor enables Save.
+                // Only the editable Phone choice shows a phone field. Hidden errors must not block posting.
                 PulseComposeIntent.Lost ->
                     listOfNotNull(
                         PulseComposeField.Body,
                         PulseComposeField.LostLastSeenLocation,
                         PulseComposeField.LostLastSeenDate,
-                        PulseComposeField.ContactPhone.takeUnless { isEditing },
+                        PulseComposeField.ContactPhone.takeUnless {
+                            isEditing || _lostFoundContactPref.value != PulseLostFoundContactPref.Phone
+                        },
                     )
                 PulseComposeIntent.Announce ->
                     if (composePurpose == PulseComposePurpose.Deal) {
@@ -830,8 +838,25 @@ class PulseComposeViewModel
 
         // MARK: - Validation
 
+        private fun validator(field: PulseComposeField): FormValidator {
+            val rule = requiredFieldValidator(field)
+            // Web and older posts can omit these fields. An unrelated edit must preserve that valid state.
+            val optionalSavedFields =
+                listOf(
+                    PulseComposeField.RecommendBusiness,
+                    PulseComposeField.EventLocation,
+                    PulseComposeField.LostLastSeenLocation,
+                )
+            val canKeepMissing = isEditing && field in optionalSavedFields && _fields.value[field]?.originalValue.isNullOrBlank()
+            return if (canKeepMissing) {
+                FormValidator { value -> if (value.isBlank()) null else rule.validate(value) }
+            } else {
+                rule
+            }
+        }
+
         @Suppress("CyclomaticComplexMethod", "LongMethod")
-        private fun validator(field: PulseComposeField): FormValidator =
+        private fun requiredFieldValidator(field: PulseComposeField): FormValidator =
             when (field) {
                 PulseComposeField.Title ->
                     if (titleOptional) {
@@ -1428,7 +1453,17 @@ class PulseComposeViewModel
         /** Seed every field + selector from the saved post + rebaseline. */
         @Suppress("CyclomaticComplexMethod", "LongMethod")
         private fun applyPrefill(post: PostDetailDto) {
-            val intent = PulseComposeIntent.fromFeedIntent(PulseIntent.fromPostType(post.postType))
+            composePurpose = PulseComposePurpose.entries.firstOrNull { it.postType == post.postType }
+            val intent = composePurpose?.legacyIntent ?: PulseComposeIntent.fromFeedIntent(PulseIntent.fromPostType(post.postType))
+            if (composePurpose == PulseComposePurpose.HeadsUp) {
+                _safetyAlertKind.value = post.safetyAlertKind?.let(PulseSafetyAlertKind::fromKey)
+                baselineSafetyAlertKind = _safetyAlertKind.value
+            }
+            if (post.postType == "deal") {
+                seedField(PulseComposeField.DealBusinessName, post.dealBusinessName.orEmpty())
+                _dealExpiresAt.value = PlanFormat.instant(post.dealExpiresAt)?.atOffset(java.time.ZoneOffset.UTC)?.toLocalDateTime()
+                baselineDealExpiresAt = _dealExpiresAt.value
+            }
             _activeIntent.value = intent
             // Web's default "general" posts have no title and open on the Announcement form.
             titleOptional = post.title.isNullOrBlank()
@@ -1460,7 +1495,7 @@ class PulseComposeViewModel
                 }
                 PulseComposeIntent.Recommend -> {
                     val (stars, body) = unwrapRecommendBody(post.content)
-                    _recommendRating.value = stars ?: DEFAULT_RECOMMEND_RATING
+                    _recommendRating.value = stars ?: 0
                     seedField(PulseComposeField.Body, body)
                     seedField(PulseComposeField.RecommendBusiness, post.dealBusinessName.orEmpty())
                     baselineRecommendRating = _recommendRating.value
@@ -1633,6 +1668,20 @@ class PulseComposeViewModel
                     PostUpdateRequest(
                         content = bodyValue,
                         title = titleValue.ifEmpty { null },
+                        dealBusinessName =
+                            if (composePurpose == PulseComposePurpose.Deal) trimmedValue(PulseComposeField.DealBusinessName) else null,
+                        dealExpiresAt =
+                            if (composePurpose == PulseComposePurpose.Deal && _dealExpiresAt.value != baselineDealExpiresAt) {
+                                _dealExpiresAt.value?.let { "${it.toLocalDate()}T00:00:00Z" }
+                            } else {
+                                null
+                            },
+                        safetyAlertKind =
+                            if (composePurpose == PulseComposePurpose.HeadsUp && _safetyAlertKind.value != baselineSafetyAlertKind) {
+                                _safetyAlertKind.value?.key
+                            } else {
+                                null
+                            },
                     )
             }
         }
@@ -1730,11 +1779,11 @@ class PulseComposeViewModel
                             purpose = purposeTag,
                             safetyAlertKind =
                                 if (postType == "alert") {
-                                    _safetyAlertKind.value.key
+                                    _safetyAlertKind.value?.key
                                 } else {
                                     null
                                 },
-                            dealExpiresAt = if (isDeal) isoTimestamp(_dealExpiresAt.value) else null,
+                            dealExpiresAt = if (isDeal) _dealExpiresAt.value?.let { "${it.toLocalDate()}T00:00:00Z" } else null,
                             businessName = if (isDeal && dealBusiness.isNotEmpty()) dealBusiness else null,
                         )
                     }
@@ -1826,6 +1875,8 @@ class PulseComposeViewModel
             business: String,
             body: String,
         ): String {
+            // An unrated saved recommendation stays unrated until the author chooses stars.
+            if (stars == 0) return body
             val clamped = stars.coerceIn(1, 5)
             // The place is what a recommendation is about, and no card shows the separate
             // business field, so its name rides on the rating line.
@@ -1879,14 +1930,6 @@ class PulseComposeViewModel
         /** The `yyyy-MM-dd HH:mm` shape the date-and-time pickers write. */
         private fun pickerDateTime(value: LocalDateTime): String =
             "%04d-%02d-%02d %02d:%02d".format(value.year, value.monthValue, value.dayOfMonth, value.hour, value.minute)
-
-        /** Encode a local date-time as an ISO-8601 UTC instant. */
-        private fun isoTimestamp(value: LocalDateTime): String =
-            value
-                .atZone(java.time.ZoneId.systemDefault())
-                .toInstant()
-                .truncatedTo(java.time.temporal.ChronoUnit.SECONDS)
-                .toString()
 
         companion object {
             const val INTENT_KEY = "intent"

@@ -218,6 +218,7 @@ public final class PulseFeedViewModel {
     private var loadedItems: [FeedPostDTO] = []
     /// Taps shown at once that the server hasn't confirmed yet, per post.
     private var pendingActions: [String: Set<PulsePendingAction>] = [:]
+    private var actionRevision = 0
     /// A quiet refresh that found new posts while the reader is further down
     /// holds its page here, behind the "N new posts" pill (Instant Screens).
     private var pendingFirstPage: PendingFirstPage?
@@ -401,16 +402,16 @@ public final class PulseFeedViewModel {
     /// per-post `userHasReacted` flag + helpful count, then hits
     /// `POST /api/posts/:id/like`. Rolls back on failure.
     public func tapReaction(postId: String) async {
-        guard let item = loadedItems.first(where: { $0.id == postId }) else { return }
+        guard let item = loadedItems.first(where: { $0.id == postId }),
+              beginAction(.reaction, postId: postId) else { return }
         let current = effectiveHasReacted(item)
         let currentCount = effectiveLikeCount(item)
         let toggled = !current
         overrides[postId, default: PulsePostOverride()].hasReacted = toggled
         overrides[postId, default: PulsePostOverride()].likeCount = max(0, currentCount + (toggled ? 1 : -1))
-        pendingActions[postId, default: []].insert(.reaction)
         rebuildLoadedState()
         defer {
-            pendingActions[postId]?.remove(.reaction)
+            finishAction(.reaction, postId: postId)
             rebuildLoadedState()
         }
 
@@ -421,6 +422,7 @@ public final class PulseFeedViewModel {
             )
             overrides[postId, default: PulsePostOverride()].hasReacted = response.liked
             overrides[postId, default: PulsePostOverride()].likeCount = response.likeCount
+            store.markStale(topics: [ScreenTopic.posts, ScreenTopic.post(postId)])
         } catch {
             overrides[postId, default: PulsePostOverride()].hasReacted = current
             overrides[postId, default: PulsePostOverride()].likeCount = currentCount
@@ -458,38 +460,41 @@ public final class PulseFeedViewModel {
     /// `POST /api/posts/:id/save` — optimistic bookmark toggle with
     /// rollback (RN `useFeedData.ts:126`).
     public func toggleSave(postId: String) async {
-        guard let item = loadedItems.first(where: { $0.id == postId }) else { return }
+        guard let item = loadedItems.first(where: { $0.id == postId }),
+              beginAction(.save, postId: postId) else { return }
         let original = effectiveIsSaved(item)
         overrides[postId, default: PulsePostOverride()].isSaved = !original
-        pendingActions[postId, default: []].insert(.save)
         rebuildLoadedState()
+        defer {
+            finishAction(.save, postId: postId)
+            rebuildLoadedState()
+        }
         do {
             let response = try await api.request(
                 PostsEndpoints.toggleSave(id: postId, saved: !original),
                 as: PostSaveResponse.self
             )
             overrides[postId, default: PulsePostOverride()].isSaved = response.saved
+            store.markStale(topics: [ScreenTopic.posts, ScreenTopic.post(postId)])
             toastMessage = response.saved ? "Saved to your bookmarks." : "Removed from bookmarks."
         } catch {
             overrides[postId, default: PulsePostOverride()].isSaved = original
             toastMessage = "Couldn't update your bookmark."
         }
-        pendingActions[postId]?.remove(.save)
-        rebuildLoadedState()
     }
 
     /// `POST /api/posts/:id/share` with `shareType: "repost"` — optimistic
     /// toggle + count, rolled back on failure (RN `useFeedData.ts:140`).
     public func toggleRepost(postId: String) async {
-        guard let item = loadedItems.first(where: { $0.id == postId }) else { return }
+        guard let item = loadedItems.first(where: { $0.id == postId }),
+              beginAction(.repost, postId: postId) else { return }
         let original = effectiveIsReposted(item)
         let originalCount = effectiveShareCount(item)
         overrides[postId, default: PulsePostOverride()].isReposted = !original
         overrides[postId, default: PulsePostOverride()].shareCount = max(0, originalCount + (original ? -1 : 1))
-        pendingActions[postId, default: []].insert(.repost)
         rebuildLoadedState()
         defer {
-            pendingActions[postId]?.remove(.repost)
+            finishAction(.repost, postId: postId)
             rebuildLoadedState()
         }
         do {
@@ -500,13 +505,38 @@ public final class PulseFeedViewModel {
             let reposted = response.reposted ?? !original
             overrides[postId, default: PulsePostOverride()].isReposted = reposted
             overrides[postId, default: PulsePostOverride()].shareCount = response.shareCount ?? originalCount
+            store.markStale(topics: [ScreenTopic.posts, ScreenTopic.post(postId)])
             toastMessage = reposted ? "Reposted to your network." : "Repost removed."
         } catch {
             overrides[postId, default: PulsePostOverride()].isReposted = original
             overrides[postId, default: PulsePostOverride()].shareCount = originalCount
             toastMessage = "Could not update repost."
         }
-        rebuildLoadedState()
+    }
+
+    private func beginAction(_ action: PulsePendingAction, postId: String) -> Bool {
+        guard pendingActions[postId, default: []].insert(action).inserted else { return false }
+        actionRevision += 1
+        return true
+    }
+
+    private func finishAction(_ action: PulsePendingAction, postId: String) {
+        pendingActions[postId]?.remove(action)
+        actionRevision += 1
+    }
+
+    /// A confirmed read replaces settled action values; an older read cannot undo a newer tap.
+    private func reconcileActions(_ posts: [FeedPostDTO], revision: Int, confirmed: Bool) {
+        guard confirmed, revision == actionRevision else { return }
+        for post in posts where pendingActions[post.id, default: []].isEmpty {
+            guard var value = overrides[post.id] else { continue }
+            value.hasReacted = nil
+            value.likeCount = nil
+            value.isSaved = nil
+            value.isReposted = nil
+            value.shareCount = nil
+            overrides[post.id] = value
+        }
     }
 
     /// Records the external share once the system sheet was used —
@@ -787,13 +817,16 @@ public final class PulseFeedViewModel {
                 state = .loading
             }
             // The first page is a store entry (Nearby: 2 minutes); later pages are not.
-            let response = try await store.load(
+            let revision = actionRevision
+            let snapshot = try await store.load(
                 feedEndpoint(query),
                 as: FeedResponse.self,
                 kind: .nearby,
                 topics: [ScreenTopic.posts],
                 force: force
-            ).value
+            )
+            let response = snapshot.value
+            let confirmed = snapshot.isFresh && !snapshot.refreshFailed
             // A newer fetch (e.g. a filter tapped meanwhile) owns the list.
             guard generation == fetchGeneration else { return }
             // New posts never move what someone is reading: below the top they
@@ -809,6 +842,7 @@ public final class PulseFeedViewModel {
                 // Nothing new: the rows on screen take the server's counts and
                 // edits in place, and the older pages below stay.
                 let refreshed = Dictionary(response.posts.map { ($0.id, $0) }) { first, _ in first }
+                reconcileActions(response.posts, revision: revision, confirmed: confirmed)
                 loadedItems = loadedItems.map { refreshed[$0.id] ?? $0 }
                 seedPostDetails(response.posts)
                 rebuildLoadedState()
@@ -816,6 +850,7 @@ public final class PulseFeedViewModel {
             }
             pendingFirstPage = nil
             newPostsCount = 0
+            reconcileActions(response.posts, revision: revision, confirmed: confirmed)
             applyFirstPage(response, area: area, query: query, viewingLocation: viewingLocation)
         } catch is CancellationError {
             return

@@ -166,7 +166,7 @@ object PulsePostDetailSampleData {
             PostIntent.Ask -> "ask"
             PostIntent.Offer -> "offer"
             PostIntent.Event -> "event"
-            PostIntent.Share -> "share"
+            PostIntent.Share, PostIntent.Deal -> "share"
             PostIntent.Alert -> "alert"
         }
 }

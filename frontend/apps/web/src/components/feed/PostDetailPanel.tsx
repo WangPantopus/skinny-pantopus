@@ -466,7 +466,7 @@ export default function PostDetailPanel({
 
               {post.tags && post.tags.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 px-5 pb-3">
-                  {post.tags.map((tag) => (
+                  {[...new Set(post.tags)].map((tag) => (
                     <span key={tag} className="rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-700">
                       #{tag}
                     </span>

@@ -57,9 +57,9 @@ sealed interface PulseComposeAssistState {
 internal data class PulseComposeAssistSnapshot(
     val fields: Map<PulseComposeField, FormFieldState>,
     val lostFoundKind: PulseLostFoundKind,
-    val safetyAlertKind: PulseSafetyAlertKind,
+    val safetyAlertKind: PulseSafetyAlertKind?,
     val askCategory: PulseAskCategory?,
-    val dealExpiresAt: LocalDateTime,
+    val dealExpiresAt: LocalDateTime?,
 )
 
 /**

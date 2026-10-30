@@ -55,8 +55,10 @@ import app.pantopus.android.ui.components.Toast
 import app.pantopus.android.ui.components.ToastKind
 import app.pantopus.android.ui.components.ToastMessage
 import app.pantopus.android.ui.components.rememberShareTextWithCompletion
+import app.pantopus.android.ui.screens.compose.pulse.PulseComposePurpose
 import app.pantopus.android.ui.screens.compose.pulse.PulseLostFoundContactPref
 import app.pantopus.android.ui.screens.compose.pulse.PulseLostFoundKind
+import app.pantopus.android.ui.screens.compose.pulse.PulseSafetyAlertKind
 import app.pantopus.android.ui.screens.feed.pulse.PostStatusPill
 import app.pantopus.android.ui.screens.feed.pulse.PulseEventDetails
 import app.pantopus.android.ui.screens.feed.pulse.pulseEventDetails
@@ -76,6 +78,9 @@ import app.pantopus.android.ui.theme.Spacing
 import kotlinx.coroutines.delay
 import java.time.Instant
 import java.time.ZoneId
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 
 /** Report reasons mirrored from the iOS reasons dialog. */
 private val reportReasons =
@@ -94,6 +99,25 @@ private val reportReasons =
  */
 internal fun eventDetails(post: PostDetailDto): PulseEventDetails? =
     pulseEventDetails(post.postType, post.eventDate, post.eventEndDate, post.eventVenue, long = true)
+
+/** A Deal’s business and expiry, matching the web detail’s calendar date. */
+internal fun dealDetailLine(post: PostDetailDto): String? {
+    if (post.postType != "deal") return null
+    val business = post.dealBusinessName?.trim()?.takeIf { it.isNotEmpty() }
+    val expiry =
+        PlanFormat.instant(post.dealExpiresAt)
+            ?.atZone(ZoneOffset.UTC)
+            ?.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM))
+            ?.let { "Expires $it" }
+    return listOfNotNull(business, expiry).joinToString(" · ").ifEmpty { null }
+}
+
+internal fun alertDetailLine(post: PostDetailDto): String? {
+    if (post.postType != "alert") return null
+    val kind = post.safetyAlertKind?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    val label = PulseSafetyAlertKind.fromKey(kind)?.label ?: kind.replace('_', ' ').replaceFirstChar { it.titlecase() }
+    return "Alert type: $label"
+}
 
 /**
  * "Lost · Contact: Phone 5555550123" for a Lost & Found post, as the web card and post page show it;
@@ -516,6 +540,8 @@ fun PulsePostDetailLoadedContent(
                     identity = content.authorIdentity,
                     timeAndLocality = content.timeAndLocality,
                     intent = content.intent,
+                    intentLabel =
+                        PulseComposePurpose.entries.firstOrNull { it.postType == content.post.postType }?.label ?: content.intent.label,
                     // A business author opens its page, and only while it has a published one (the web links none).
                     onAvatarTap =
                         if (businessAuthor != null) {
@@ -555,7 +581,7 @@ fun PulsePostDetailLoadedContent(
         body = {
             BodyReactionsBody(
                 body = content.post.content,
-                detailLine = lostFoundDetailLine(content.post),
+                detailLine = dealDetailLine(content.post) ?: lostFoundDetailLine(content.post) ?: alertDetailLine(content.post),
                 eventDetails = eventDetails(content.post),
                 media = content.media,
                 intent = content.intent,

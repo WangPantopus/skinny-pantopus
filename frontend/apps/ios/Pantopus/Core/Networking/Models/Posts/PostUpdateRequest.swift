@@ -24,6 +24,8 @@ public struct PostUpdateRequest: Encodable, Sendable, Hashable {
     public let lostFoundType: String?
     public let serviceCategory: String?
     public let dealBusinessName: String?
+    public let dealExpiresAt: String?
+    public let safetyAlertKind: String?
     public let clearEventEndDate: Bool
 
     public init(
@@ -36,6 +38,8 @@ public struct PostUpdateRequest: Encodable, Sendable, Hashable {
         lostFoundType: String? = nil,
         serviceCategory: String? = nil,
         dealBusinessName: String? = nil,
+        dealExpiresAt: String? = nil,
+        safetyAlertKind: String? = nil,
         clearEventEndDate: Bool = false
     ) {
         self.content = content
@@ -47,6 +51,8 @@ public struct PostUpdateRequest: Encodable, Sendable, Hashable {
         self.lostFoundType = lostFoundType
         self.serviceCategory = serviceCategory
         self.dealBusinessName = dealBusinessName
+        self.dealExpiresAt = dealExpiresAt
+        self.safetyAlertKind = safetyAlertKind
         self.clearEventEndDate = clearEventEndDate
     }
 
@@ -60,6 +66,8 @@ public struct PostUpdateRequest: Encodable, Sendable, Hashable {
         case lostFoundType
         case serviceCategory
         case dealBusinessName
+        case dealExpiresAt
+        case safetyAlertKind
     }
 
     /// Encode dropping `nil` keys so the wire body only carries the
@@ -79,6 +87,8 @@ public struct PostUpdateRequest: Encodable, Sendable, Hashable {
         try container.encodeIfPresent(lostFoundType, forKey: .lostFoundType)
         try container.encodeIfPresent(serviceCategory, forKey: .serviceCategory)
         try container.encodeIfPresent(dealBusinessName, forKey: .dealBusinessName)
+        try container.encodeIfPresent(dealExpiresAt, forKey: .dealExpiresAt)
+        try container.encodeIfPresent(safetyAlertKind, forKey: .safetyAlertKind)
     }
 }
 

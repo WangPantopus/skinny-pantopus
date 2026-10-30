@@ -125,6 +125,7 @@ public struct PulsePostDetailLoadedContent: View {
                         identity: detail.authorIdentity,
                         timeAndLocality: detail.timeAndLocality,
                         intent: detail.intent,
+                        intentLabel: PulseComposePurpose.allCases.first { $0.postType == detail.post.postType }?.label,
                         onAvatarTap: authorProfileTap
                     )
                     // How it ended, or when a Heads-up ends (Pulse S7).
@@ -151,7 +152,7 @@ public struct PulsePostDetailLoadedContent: View {
                     reactions: detail.reactions,
                     onReactionTap: onReactionTap,
                     mediaLocationBadge: detail.post.locationName,
-                    detailLine: detail.post.lostFoundDetailLine,
+                    detailLine: detail.post.dealDetailLine ?? detail.post.lostFoundDetailLine ?? detail.post.alertDetailLine,
                     eventDetails: detail.post.eventDetails,
                     selectedReactionEmoji: selectedReactionEmoji,
                     onEmojiSelected: onEmojiSelected,
@@ -209,5 +210,16 @@ private struct RemovedPostNotice: View {
         )
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("pulsePostDetail-removedNotice")
+    }
+}
+
+extension PostDetailDTO {
+    var alertDetailLine: String? {
+        guard postType == "alert", let kind = safetyAlertKind?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !kind.isEmpty else { return nil }
+        // An older stored kind reads in sentence case, like the known labels and Android ("Crime incident").
+        let words = kind.replacingOccurrences(of: "_", with: " ")
+        let label = PulseSafetyAlertKind(rawValue: kind)?.label ?? words.prefix(1).uppercased() + words.dropFirst()
+        return "Alert type: \(label)"
     }
 }
