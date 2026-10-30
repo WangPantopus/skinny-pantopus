@@ -5,7 +5,7 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const homeRecordService = require('../services/homeRecordService');
 // canAccessMail: the per-item rule, shared with the v2 mailbox routes.
 const { getAccessibleHomeIds, trustedHomeIdsOrThrow, hasVerifiedSenderHome, canSendToMailHome, canAccessMail, readableMail, homeMailFilter, visibleMailFilter,
-  restorableMail, removedMailInfo, sendHomeMailRemovedNotice, MAIL_RESTORE_DAYS,
+  restorableMail, removedMailInfo, sendHomeMailRemovedNotice, MAIL_RESTORE_DAYS, restoreWindowOver,
   sendMailUnavailable, mailHomesOrThrow, MAIL_HOME_NEEDS_PROOF, onlyDelivered } = require('../utils/homeMailAccess');
 // Mail comes in the morning (SRV-1): the delivery rule every writer follows.
 const mailDelivery = require('../services/mailDelivery');
@@ -2096,6 +2096,104 @@ router.post('/cards/:id/take-back', verifyToken, async (req, res) => {
   }
 });
 
+// ============================================================
+// SENT (launch key mailbox; services/holidayCards sentPiece)
+// ============================================================
+// What a person sent: their Christmas cards, newest first, each with where it is now and never whether it was opened.
+// It answers with the mailbox on, so sent cards stay after the cards close. Letters aren't listed yet. Declared before
+// GET /:id.
+
+const SENT_SELECT = 'id, created_at, delivered_at, escrow_status, escrow_expires_at, recipient_user_id, sender_display, object_id, mail_extracted';
+const sentOn = () => areLaunchFeaturesEnabled(['mailbox']);
+const sentNotFound = (res) => res.status(404).json({ error: 'This card isn’t here any more.', code: 'SENT_NOT_FOUND' });
+
+// Sent's paging cursor: the last card's sent time, exactly as stored, and its id.
+const sentCursor = (mail) => Buffer.from(`${mail.created_at}|${mail.id}`).toString('base64url');
+function readSentCursor(value) {
+  const [at, id] = Buffer.from(String(value), 'base64url').toString('utf8').split('|');
+  return at && !Number.isNaN(Date.parse(at)) && UUID_REGEX.test(id || '') ? { at, id } : null;
+}
+
+// What sentPiece needs for each card: the name on its envelope (the sender's Local Profile, as the recipient sees it),
+// the name it went to (by email: the masked address, or whoever claimed it as neighbors see them) and the clock its days
+// are told by (the recipient's; the sender's own for a card by email nobody has claimed).
+async function sentContexts(rows, userId) {
+  const claimers = rows.filter((mail) => mail.escrow_status === 'claimed' && mail.recipient_user_id)
+    .map((mail) => mail.recipient_user_id);
+  const people = await loadChatPeople([userId, ...claimers]);
+  const recipients = [...new Set(rows.filter((mail) => mail.recipient_user_id).map((mail) => String(mail.recipient_user_id)))];
+  const zones = new Map(await Promise.all([userId, ...recipients].map(async (id) =>
+    [String(id), (await mailDelivery.personTimeZone(id)) || mailDelivery.FALLBACK_TIME_ZONE])));
+  return rows.map((mail) => ({
+    toName: (mail.escrow_status === 'claimed' && people.get(String(mail.recipient_user_id))?.displayName)
+      || mail.mail_extracted?.card?.to_name || null,
+    senderName: people.get(String(userId))?.displayName || mail.sender_display || 'Someone',
+    zone: zones.get(String(mail.recipient_user_id || userId)),
+  }));
+}
+
+/**
+ * GET /api/mailbox/sent?before=<cursor>&limit=<1..50, default 25>
+ * Sent: the cards this person sent, newest first ({ items, next }; `next` is the cursor for the page after, or null).
+ * Never the recipient's ids, address or time zone, nor anything they did with a card.
+ */
+router.get('/sent', verifyToken, async (req, res) => {
+  if (!sentOn()) return sendCardsOff(res);
+  const userId = req.user.id;
+  const asked = Number.parseInt(req.query.limit, 10);
+  const limit = Number.isNaN(asked) ? 25 : Math.min(50, Math.max(1, asked));
+  const cursor = req.query.before === undefined ? null : readSentCursor(req.query.before);
+  if (req.query.before !== undefined && !cursor) {
+    return res.status(400).json({ error: 'That part of Sent is out of date. Open Sent again.', code: 'SENT_CURSOR_INVALID' });
+  }
+  try {
+    const now = new Date();
+    let query = holidayCards.sentCards(userId, SENT_SELECT);
+    if (cursor) query = query.or(`created_at.lt."${cursor.at}",and(created_at.eq."${cursor.at}",id.lt.${cursor.id})`);
+    const { data, error } = await query.order('created_at', { ascending: false }).order('id', { ascending: false })
+      .limit(limit + 1);
+    if (error) throw new Error(error.message);
+    const page = (data || []).slice(0, limit);
+    const contexts = await sentContexts(page, userId);
+    return res.json({
+      items: page.map((mail, i) => holidayCards.sentPiece(mail, { ...contexts[i], now })),
+      next: (data || []).length > limit ? sentCursor(page[page.length - 1]) : null,
+    });
+  } catch (err) {
+    logger.error('Sent read error', { error: err.message, userId });
+    return res.status(503).json({ error: 'Couldn’t load what you’ve sent. Try again in a moment.', code: 'MAIL_UNAVAILABLE' });
+  }
+});
+
+/**
+ * GET /api/mailbox/sent/:id
+ * One card in its sender's Sent: the Sent piece with the sender's own note (also while it's sealed for the other person)
+ * and its trail. Anyone else gets not found, as does a card taken back.
+ */
+router.get('/sent/:id', verifyToken, async (req, res) => {
+  if (!sentOn()) return sendCardsOff(res);
+  const userId = req.user.id;
+  const { id } = req.params;
+  if (!UUID_REGEX.test(id)) return sentNotFound(res);
+  try {
+    const now = new Date();
+    const { data: mail, error } = await holidayCards.sentCards(userId, SENT_SELECT).eq('id', id).maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!mail || !holidayCards.isCard(mail) || !mail.object_id) return sentNotFound(res);
+    // The sender's own words live only in the card's private stored copy (services/holidayCards).
+    const { payload } = await mailObjects.readPayload(mail.object_id);
+    const [context] = await sentContexts([mail], userId);
+    return res.json({ item: {
+      ...holidayCards.sentPiece(mail, { ...context, now }),
+      note: typeof payload?.body?.content === 'string' ? payload.body.content : '',
+      trail: holidayCards.sentTrail(mail, { ...context, now }),
+    } });
+  } catch (err) {
+    logger.error('Sent card read error', { error: err.message, mailId: id, userId });
+    return res.status(503).json({ error: 'Couldn’t open your card just now. Try again in a moment.', code: 'MAIL_UNAVAILABLE' });
+  }
+});
+
 router.get('/:id', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
@@ -2115,11 +2213,13 @@ router.get('/:id', verifyToken, async (req, res) => {
       .single();
 
     // A deleted letter still opens for the members who could see it, so its
-    // notice can offer Restore; a dismissed one says so too. A Home letter for
-    // someone who hasn't proven the address answers 403 MAIL_HOME_NEEDS_PROOF;
-    // anything else they can't open is not found (it doesn't say it exists).
-    if (error || !mail || !(await canAccessMail(mail, userId, { includeDeleted: true }))) {
-      return sendMailUnavailable(res, error ? null : mail, userId);
+    // notice can offer Restore; a dismissed one says so too. Past its 30 days
+    // to restore it, it's gone for them. A Home letter for someone who hasn't
+    // proven the address answers 403 MAIL_HOME_NEEDS_PROOF; anything else they
+    // can't open is not found (it doesn't say it exists).
+    const gone = !error && restoreWindowOver(mail);
+    if (error || !mail || gone || !(await canAccessMail(mail, userId, { includeDeleted: true }))) {
+      return sendMailUnavailable(res, error || gone ? null : mail, userId);
     }
     mail.removed = await removedMailInfo(mail);
 
@@ -3539,8 +3639,9 @@ router.patch('/:id/ack', verifyToken, async (req, res) => {
 /**
  * DELETE /api/mailbox/:id
  * Delete mail. It hides for everyone at once and can be restored for
- * MAIL_RESTORE_DAYS (the nightly purge removes it after that). The other
- * members who could see a Home letter get a notice that opens it with Restore.
+ * MAIL_RESTORE_DAYS (the nightly purge removes it after that; a card a person
+ * sent stays stored for its sender's Sent). The other members who could see a
+ * Home letter get a notice that opens it with Restore.
  */
 router.delete('/:id', verifyToken, async (req, res) => {
   try {
@@ -3606,7 +3707,7 @@ router.post('/:id/restore', verifyToken, async (req, res) => {
     let update;
     let guard;
     if (mail.deleted_at) {
-      if (Date.now() - Date.parse(mail.deleted_at) > MAIL_RESTORE_DAYS * 24 * 60 * 60 * 1000) {
+      if (restoreWindowOver(mail)) {
         return res.status(410).json({ error: 'This letter can no longer be restored.' });
       }
       update = { deleted_at: null, deleted_by: null };
