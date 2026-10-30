@@ -24,6 +24,11 @@ enum HolidayCardWords {
         format(iso, "EEEE, MMMM d", calendar: calendar)
     }
 
+    /// "Dec 10, 2026".
+    static func dayWithYear(_ iso: String?, calendar: Calendar = .current) -> String {
+        format(iso, "MMM d, yyyy", calendar: calendar)
+    }
+
     /// "7 a.m.", or "7:30 a.m." when it isn't on the hour.
     static func clockTime(_ iso: String?, calendar: Calendar = .current) -> String {
         guard let date = MailDates.parse(iso) else { return "" }
@@ -36,11 +41,15 @@ enum HolidayCardWords {
     /// "today", "tomorrow" or "in 6 days", counted by calendar day here.
     static func inDays(_ iso: String?, now: Date = Date(), calendar: Calendar = .current) -> String {
         guard let date = MailDates.parse(iso) else { return "" }
-        let days = max(0, MailDates.daysBetween(now, date, calendar: calendar))
-        switch days {
-        case 0: return "today"
-        case 1: return "tomorrow"
-        default: return "in \(days) days"
+        return inDays(count: MailDates.daysBetween(now, date, calendar: calendar))
+    }
+
+    /// "today", "tomorrow" or "in 6 days".
+    static func inDays(count: Int) -> String {
+        switch max(0, count) {
+        case 0: "today"
+        case 1: "tomorrow"
+        default: "in \(count) days"
         }
     }
 
@@ -60,6 +69,11 @@ enum HolidayCardWords {
     /// "Maya" from "Maya O.".
     static func firstName(_ name: String) -> String {
         name.split(whereSeparator: \.isWhitespace).first.map(String.init) ?? name
+    }
+
+    /// "Maya’s".
+    static func possessive(_ name: String) -> String {
+        "\(name)’s"
     }
 
     /// A name without its closing period, for a sentence that ends in one.

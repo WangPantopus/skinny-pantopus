@@ -343,7 +343,7 @@ struct MailPieceRow: View {
         Button(action: onOpen) {
             VStack(alignment: .leading, spacing: 6) {
                 MailPieceView(model: piece)
-                metaLine
+                MailPieceMetaLine(meta: piece.meta)
             }
             .contentShape(Rectangle())
         }
@@ -355,11 +355,16 @@ struct MailPieceRow: View {
         // The letter opens out of this piece and goes back into it.
         .itemZoomSource(.mailPiece, id: piece.id)
     }
+}
 
-    private var metaLine: some View {
-        (Text(piece.meta.parts.joined(separator: " · "))
-            + Text(piece.meta.due.map { " · \($0)" } ?? "")
-            .foregroundColor(piece.meta.dueIsSettled ? Theme.Color.success : Theme.Color.warning)
+/// The line under a piece: when it came, opened or not, what's due.
+struct MailPieceMetaLine: View {
+    let meta: MailPieceMeta
+
+    var body: some View {
+        (Text(meta.parts.joined(separator: " · "))
+            + Text(meta.due.map { " · \($0)" } ?? "")
+            .foregroundColor(meta.dueIsSettled ? Theme.Color.success : Theme.Color.warning)
             .fontWeight(.semibold))
             .font(.system(size: 13))
             .foregroundStyle(Theme.Color.appTextMuted)
