@@ -69,6 +69,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.routing.DeepLinkRouter
+import app.pantopus.android.core.routing.PendingDeepLinkStore
 import app.pantopus.android.data.auth.AccountHint
 import app.pantopus.android.data.auth.OAuthBrowserCommand
 import app.pantopus.android.data.auth.OAuthProvider
@@ -99,6 +101,9 @@ object LoginScreenTags {
     const val CREATE_ACCOUNT_LINK = "loginCreateAccountLink"
     const val RESEND_VERIFICATION_BUTTON = "loginResendVerificationButton"
     const val INFO_BANNER = "loginInfoBanner"
+
+    /** What a shared link opened before signing in will show afterwards ("…the plan you were sent"). */
+    const val WAITING_LINK = "loginWaitingLink"
     const val GOOGLE_BUTTON = "loginGoogleButton"
     const val APPLE_BUTTON = "loginAppleButton"
     const val LEGAL_TERMS_LINE = "loginLegalTermsLine"
@@ -207,6 +212,8 @@ fun LoginScreen(
         )
 
         Box(modifier = Modifier.height(Spacing.s5))
+
+        LoginWaitingLinkNote()
 
         // Persistent login — "You were signed out for security. Sign in
         // again." (or plain expiry) shown once; dismiss / sign-in consumes it.
@@ -874,4 +881,51 @@ fun AuthTrustFooter() {
             color = PantopusColors.appTextSecondary,
         )
     }
+}
+
+/**
+ * A shared link opened before signing in waits in [PendingDeepLinkStore] and opens once the person is in. Say what it
+ * is, so someone new who tapped a neighbor's plan doesn't meet a bare "Welcome back". Mirrors iOS `LoginWaitingLinkNote`.
+ */
+@Composable
+private fun LoginWaitingLinkNote() {
+    val parked by DeepLinkRouter.parkedArrivals.collectAsStateWithLifecycle()
+    val text = remember(parked) { waitingLinkLine(PendingDeepLinkStore.peek()) } ?: return
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(Radii.md))
+                .background(PantopusColors.primary100)
+                .padding(Spacing.s3)
+                .testTag(LoginScreenTags.WAITING_LINK),
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+    ) {
+        PantopusIconImage(
+            icon = PantopusIcon.Link,
+            contentDescription = null,
+            size = Radii.xl,
+            tint = PantopusColors.primary600,
+        )
+        Text(text = text, style = PantopusTextStyle.small, color = PantopusColors.appText)
+    }
+    Box(modifier = Modifier.height(Spacing.s3))
+}
+
+/** The words for a link waiting in [PendingDeepLinkStore] ([path]), or null when none waits. */
+internal fun waitingLinkLine(path: String?): String? {
+    val thing =
+        when (path?.let(DeepLinkRouter::resolveString)) {
+            null, is DeepLinkRouter.Destination.Unknown, is DeepLinkRouter.Destination.ResetPassword,
+            is DeepLinkRouter.Destination.VerifyEmail, is DeepLinkRouter.Destination.JoinInvite,
+            -> return null
+            is DeepLinkRouter.Destination.Plan, is DeepLinkRouter.Destination.PlanRequests -> "open the plan you were sent"
+            is DeepLinkRouter.Destination.Post -> "open the post you were sent"
+            is DeepLinkRouter.Destination.SupportTrain, is DeepLinkRouter.Destination.SupportTrainManage ->
+                "open the Support Train you were sent"
+            is DeepLinkRouter.Destination.Invite -> "answer your invitation"
+            else -> "open the link you were sent"
+        }
+    return "Log in or create an account to $thing."
 }

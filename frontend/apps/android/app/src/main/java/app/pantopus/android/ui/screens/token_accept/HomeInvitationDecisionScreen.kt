@@ -297,6 +297,19 @@ private fun CurrentAccessContent(
             DeepLinkRouter.handle("/homes/${original.request.homeId}/dashboard")
         }
     }
+    // Accepting the invitation opened here goes straight into the Home once its access is shared: read the access
+    // once, then open. The buttons below stay for access that starts later or a failed read.
+    val acceptedHere = draft.request.token == state.token
+    var openedAfterAccept by remember(draft.request.requestId) { mutableStateOf(false) }
+    LaunchedEffect(draft.request.requestId) {
+        if (acceptedHere) viewModel.checkAccess()
+    }
+    LaunchedEffect(state.access?.currentAccess, state.canAcknowledge) {
+        if (acceptedHere && !openedAfterAccept && state.access?.currentAccess == "shared" && state.canAcknowledge) {
+            openedAfterAccept = true
+            openHome()
+        }
+    }
     InvitationButton("Check Home access", "homeInvitationAccess", !state.working, viewModel::checkAccess)
     state.access?.let { access ->
         Text(

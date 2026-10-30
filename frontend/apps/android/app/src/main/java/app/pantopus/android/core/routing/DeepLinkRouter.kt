@@ -422,6 +422,10 @@ object DeepLinkRouter {
     private val _prefersLoginPresentation = MutableStateFlow(false)
     val prefersLoginPresentation: StateFlow<Boolean> = _prefersLoginPresentation.asStateFlow()
 
+    /** Counts links parked for after sign-in, so a screen already up (the login form) can re-read what waits. */
+    private val _parkedArrivals = MutableStateFlow(0)
+    val parkedArrivals: StateFlow<Int> = _parkedArrivals.asStateFlow()
+
     /**
      * Bound once from [app.pantopus.android.data.auth.AuthRepository] so
      * the object router can classify without Hilt.
@@ -440,6 +444,21 @@ object DeepLinkRouter {
     fun bindPlansEnabledProvider(provider: () -> Boolean) {
         plansEnabledProvider = provider
     }
+
+    /** The `plans` answer a Plans link acts on, bound once from `PlansFeature` (see [plansAnswer]). */
+    @Volatile
+    private var plansAnswerProvider: suspend () -> Boolean = { plansEnabledProvider() }
+
+    fun bindPlansAnswerProvider(provider: suspend () -> Boolean) {
+        plansAnswerProvider = provider
+    }
+
+    /**
+     * Whether a Plans link may open now: [plansEnabled], or the server's answer while this device has none kept for
+     * the signed-in person (their first sign-in here). Without the wait, a neighbor's plan link that arrives with a
+     * new person's first sign-in meets the default "off" and is dropped.
+     */
+    suspend fun plansAnswer(): Boolean = plansAnswerProvider()
 
     /** True when [destination] is a Plans page. Those open only while the `plans` flag is on. */
     fun isPlansDestination(destination: Destination): Boolean =
@@ -472,6 +491,7 @@ object DeepLinkRouter {
             val normalized = Paths.normalizeIncoming(path)
             if (resolveString(normalized) is Destination.Unknown) return
             if (PendingDeepLinkStore.stash(Paths.normalized(normalized), expectedUserId)) {
+                _parkedArrivals.value += 1
                 _prefersLoginPresentation.value = true
             }
             return
@@ -683,6 +703,7 @@ object DeepLinkRouter {
                     _pending.value = destination
                 } else {
                     PendingDeepLinkStore.stash(persistencePath)
+                    _parkedArrivals.value += 1
                     _pending.value = null
                     _prefersLoginPresentation.value = true
                 }
