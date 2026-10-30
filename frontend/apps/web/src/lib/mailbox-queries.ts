@@ -25,7 +25,7 @@ import * as api from '@/lib/mailbox-api';
 import { MailboxApiError } from '@/lib/mailbox-api';
 import { businesses as businessesApi, mailboxV2P2 as mailboxV2P2Api } from '@pantopus/api';
 import type { AssetFullDetail } from '@/lib/mailbox-api';
-import type { DeletedMail, HolidayCards, HolidayCardArrivalsFor, SentHolidayCard, RecipientSearchResult } from '@pantopus/api';
+import type { DeletedMail, HolidayCards, HolidayCardArrivalsFor, HolidayCardPreview, SentHolidayCard, RecipientSearchResult } from '@pantopus/api';
 
 import type {
   DrawerMeta,
@@ -206,6 +206,13 @@ export function useSendHolidayCard() {
   return useMutation<{ card: SentHolidayCard }, MailboxApiError, Parameters<typeof api.sendHolidayCard>[0]>({
     mutationFn: api.sendHolidayCard,
     onSettled: () => { void qc.invalidateQueries({ queryKey: mailboxKeys.holidayCards() }); },
+  });
+}
+
+/** Look it over: what they will get, checked as sending it would be; nothing is stored or sent. */
+export function usePreviewHolidayCard() {
+  return useMutation<HolidayCardPreview, MailboxApiError, Parameters<typeof api.previewHolidayCard>[0]>({
+    mutationFn: api.previewHolidayCard,
   });
 }
 

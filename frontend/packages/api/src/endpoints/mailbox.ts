@@ -5,6 +5,7 @@
 
 import { get, post, put, del, patch } from '../client';
 import type { Mail, AdCampaign, ApiResponse } from '@pantopus/types';
+import type { MailItemV2 } from './mailboxV2';
 
 export interface MailboxSummary {
   total_mail: number;
@@ -691,6 +692,30 @@ export async function sendHolidayCard(data: {
   to: { user_id: string } | { email: string };
 }): Promise<{ card: SentHolidayCard }> {
   return post<{ card: SentHolidayCard }>('/api/mailbox/cards', data);
+}
+
+/**
+ * What the other person will get, before it's sent: the same body and the same checks as sending it, with nothing
+ * stored or sent.
+ */
+export interface HolidayCardPreview {
+  /** Their Mailbox's piece for it, as sending it would store it: the name the card carries, its postmark by their clock. */
+  piece: MailItemV2;
+  /** The day it goes into their mailbox, by their clock; null by email. */
+  arrives_on: string | null;
+  /** Sealed cards: the day the seal lifts, and how many days it waits sealed in their mailbox. */
+  opens_on: string | null;
+  sealed_days: number | null;
+  take_back_until: string | null;
+  /** By email: the email they get, in its own words. */
+  email: { subject: string; heading: string; lines: string[]; button: string; footnote: string; footer?: string[] } | null;
+  /** By email: the page its link opens (the address masked, as on that page). */
+  link_page: { sender_name: string; sender_verified: boolean; sealed: boolean; sent_to: string; sent_on: string } | null;
+}
+
+/** POST /api/mailbox/cards/preview */
+export async function previewHolidayCard(data: Parameters<typeof sendHolidayCard>[0]): Promise<HolidayCardPreview> {
+  return post<HolidayCardPreview>('/api/mailbox/cards/preview', data);
 }
 
 /** POST /api/mailbox/cards/:id/take-back: before the 7 a.m. pickup (by email: before they open it). */
