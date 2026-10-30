@@ -458,6 +458,10 @@ export async function sharePost(postId: string): Promise<{ shared: boolean; shar
   return post(`/api/posts/${postId}/share`, { shareType: 'external' });
 }
 
+export async function checkPostSharePermission(postId: string): Promise<{ canShare: boolean }> {
+  return post(`/api/posts/${postId}/share`, { shareType: 'external', checkOnly: true });
+}
+
 // ============ v1.1 FEED PREFERENCES ============
 
 export interface FeedPreferences {
