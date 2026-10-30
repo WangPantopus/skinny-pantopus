@@ -144,8 +144,9 @@ private fun OutOfTheEnvelope(
         }
         onOut()
     }
-    // Read as sentences: "Ivy M." and "Home for Christmas." already end with their full stops.
-    val caption = card.caption?.takeIf { it.isNotBlank() }?.removeSuffix(".") ?: "a Christmas picture"
+    // The caption as a sentence for screen readers: most end in a full stop or a question mark already.
+    val caption = card.caption?.takeIf { it.isNotBlank() } ?: "A Christmas picture"
+    val captionSentence = if (caption.last() in ".!?") caption else "$caption."
     Box(modifier = Modifier.fillMaxWidth()) {
         Box(
             modifier =
@@ -159,7 +160,7 @@ private fun OutOfTheEnvelope(
                         alpha = progress
                     }
                     // Whichever side is up, a screen reader reads the card and the note on its back.
-                    .clearAndSetSemantics { contentDescription = "Card from $from: $caption. On the back: ${card.note}" }
+                    .clearAndSetSemantics { contentDescription = "Card from $from: $captionSentence On the back: ${card.note}" }
                     .testTag("mailHolidayCardFace"),
         ) {
             val shape = RoundedCornerShape(3.dp)

@@ -23,6 +23,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
@@ -31,6 +32,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -48,6 +50,7 @@ import app.pantopus.android.data.api.models.mailbox.v2.DrawerMail
 import app.pantopus.android.ui.components.CompactButton
 import app.pantopus.android.ui.components.CompactButtonSize
 import app.pantopus.android.ui.components.keepsKeyboard
+import app.pantopus.android.ui.screens.mailbox.cards.HolidayCardArt
 import app.pantopus.android.ui.screens.mailbox.components.MailKind
 import app.pantopus.android.ui.screens.mailbox.components.MailPieceMapper
 import app.pantopus.android.ui.screens.shared.list_of_rows.CompactButtonVariant
@@ -55,6 +58,7 @@ import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.Spacing
+import coil.compose.AsyncImage
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -275,6 +279,7 @@ fun MailFiledRow(
     onOpen: () -> Unit,
 ) {
     val kind = MailKind.fromWire(row.kind)
+    val card = row.card
     val title = row.displayTitle?.takeIf { it.isNotBlank() } ?: row.subject?.takeIf { it.isNotBlank() } ?: kind.word
     val from = row.senderDisplay.ifBlank { row.senderBusinessName ?: "Unknown sender" }
     val where = folder ?: if (row.archived && row.lifecycle != "filed") "Archived" else null
@@ -282,7 +287,7 @@ fun MailFiledRow(
     val meta = listOfNotNull(from, where, came).joinToString(" · ")
     val spoken =
         buildString {
-            append("${kind.word} from $from, $title")
+            append(if (card != null) "Christmas card from $from" else "${kind.word} from $from, $title")
             when {
                 folder != null -> append(", filed in $folder")
                 where != null -> append(", archived")
@@ -312,9 +317,21 @@ fun MailFiledRow(
             modifier =
                 Modifier
                     .size(width = 34.dp, height = 24.dp)
-                    .background(paperOf(kind), RoundedCornerShape(3.dp))
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(if (card != null) PantopusColors.cardEnvelope else paperOf(kind))
                     .border(1.dp, PantopusColors.mailPostcardRule, RoundedCornerShape(3.dp)),
-        )
+        ) {
+            // A Christmas card shows its picture once it's been opened; its red envelope before that or while sealed.
+            if (card != null && !card.sealed && row.viewed) {
+                AsyncImage(
+                    model = HolidayCardArt.picture(card.design, thumb = true),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    alignment = BiasAlignment(0f, -0.44f),
+                    modifier = Modifier.matchParentSize(),
+                )
+            }
+        }
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 title,

@@ -636,12 +636,12 @@ internal fun SealStep(
                 ArrivalChoice(title, detail, selected = form.arrival == arrival, tag = "sendCardArrival.$arrival") { onArrival(arrival) }
             }
         }
+        // Before it's sent there's no knowing their clock; the sent card says the time on this one.
         DeskNote(
             if (to is CardRecipient.Email) {
                 "You can take it back until they open it."
             } else {
-                "You can take it back until about ${HolidayCardTimes.clockTime(cards.nextRoundAt, zone)} " +
-                    "${HolidayCardTimes.shortDay(cards.nextRoundAt, zone)}, when the carrier picks it up."
+                "You can take it back until the carrier picks it up at 7 a.m. their time."
             },
             modifier = Modifier.padding(top = 14.dp),
         )
@@ -700,7 +700,7 @@ private fun ArrivalChoice(
     }
 }
 
-/** A choice's title and its sentence. */
+/** A choice's title and its sentence. Their mail comes at 7 a.m. where they live: never turned into this clock's time. */
 private fun arrivalChoice(
     arrival: String,
     cards: HolidayCardsResponse,
@@ -709,9 +709,7 @@ private fun arrivalChoice(
 ): Pair<String, String> {
     val day = HolidayCardTimes.shortDay(cards.nextRoundAt, zone)
     return when (arrival) {
-        "next_morning" ->
-            "With the morning mail" to
-                "$day, about ${HolidayCardTimes.clockTime(cards.nextRoundAt, zone)} where $name lives. They can open it right away."
+        "next_morning" -> "With the morning mail" to "$day, about 7 a.m. where $name lives. They can open it right away."
         "sealed_christmas" ->
             "Sealed until Christmas" to
                 "It comes with the $day morning mail and waits in their mailbox with a “Do not open until Christmas” seal. " +
